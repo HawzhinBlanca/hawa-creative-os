@@ -1,0 +1,25 @@
+workstream,responsible,accountable,consulted,informed
+Architecture and scope,Product owner,Senior engineer,Designer; Operator,Office leadership
+HyCanvas proof,Senior engineer,Product owner,Designer; Language reviewer; Security reviewer,Office leadership
+RTL/Sorani acceptance,Language reviewer,Product owner,Designer; Senior engineer,Office staff
+Database/RLS,Senior engineer,Product owner,Security reviewer,Operator
+Restate workflows,Senior engineer,Product owner,Operator,Office staff
+Hawa Desk UX,Senior engineer,Product owner,Designer; Operator,Office staff
+Telegram adapter,Senior engineer,Product owner,Operator,Office staff
+WAHA admission,Senior engineer,Office leadership,Security reviewer; Operator,Office staff
+Client DNA onboarding,Client DNA manager,Project manager,Designer; Language reviewer,Requester; Operator
+Drive knowledge curation,Project manager,Client DNA manager,Designer,AI engineer
+Retrieval models/evals,AI engineer,Product owner,Language reviewer; Designer,Office leadership
+Model tournament,Model evaluator,Product owner,Designer; Language reviewer,Office leadership
+Creative prompts/method,Creative director,Product owner,Designer; AI engineer,Reviewers
+ComfyUI worker,AI engineer,Senior engineer,Security reviewer; Designer,Operator
+Design templates,Designer,Creative director,Client DNA manager; Language reviewer,Project manager
+Hard QA,Senior engineer,Product owner,Designer; Language reviewer,Operator
+Visual QA evaluation,Model evaluator,Creative director,Designer; Language reviewer,Product owner
+Review policy,Project manager,Office leadership,Client DNA manager; Language reviewer,Office staff
+Google publication,Senior engineer,Product owner,Finance/operations,Office staff
+Feedback governance,Client DNA manager,Project manager,Designer; Model evaluator,Office leadership
+Observability,Senior engineer,Product owner,Operator; Model evaluator,Office leadership
+Security review,Security reviewer,Office leadership,Senior engineer; Operator,Office staff
+Backups/restore,Operator,Office leadership,Senior engineer,Office staff
+Pilot acceptance,Product owner,Office leadership,All pilot roles,Office staff

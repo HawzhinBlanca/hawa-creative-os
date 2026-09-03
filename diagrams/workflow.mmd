@@ -1,0 +1,29 @@
+stateDiagram-v2
+  [*] --> Received
+  Received --> PromotionPending: passive message
+  Received --> Routing: direct/explicit task
+  PromotionPending --> Routing: promote
+  Routing --> RoutingReview: ambiguous/conflict
+  RoutingReview --> Routing: human selection
+  Routing --> BriefDraft: scope locked
+  BriefDraft --> BriefReview: missing facts
+  BriefReview --> BriefDraft: supplied
+  BriefDraft --> ContextReady: approved brief
+  ContextReady --> DesignPlanning
+  DesignPlanning --> AssetProduction
+  AssetProduction --> StudioComposition
+  StudioComposition --> QA
+  QA --> AutoRepair: bounded repair
+  AutoRepair --> StudioComposition
+  QA --> HumanReview: pass or human-required
+  HumanReview --> RevisionRequested
+  RevisionRequested --> DesignPlanning
+  HumanReview --> Approved
+  Approved --> Publishing
+  Publishing --> Complete
+  Received --> Cancelled
+  Routing --> Paused
+  AssetProduction --> FailedRetryable
+  StudioComposition --> FailedOperator
+  FailedRetryable --> AssetProduction: retry/fallback
+  FailedOperator --> StudioComposition: operator repair

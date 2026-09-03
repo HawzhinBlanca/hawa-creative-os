@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/ApprovalDecision.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reviewRequestId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "designRevisionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "qcRunId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "revision_requested",
+        "rejected",
+        "escalated"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pageId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "width": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "height": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "comment": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pageId",
+          "x",
+          "y",
+          "comment"
+        ]
+      }
+    },
+    "preferredAction": {
+      "enum": [
+        "ai_repair",
+        "manual_edit",
+        "human_designer",
+        "request_information",
+        "select_direction",
+        "none"
+      ]
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 16
+    },
+    "decidedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "reviewRequestId",
+    "designRevisionId",
+    "qcRunId",
+    "decision",
+    "categories",
+    "annotations",
+    "preferredAction",
+    "nonce",
+    "decidedAt"
+  ]
+}

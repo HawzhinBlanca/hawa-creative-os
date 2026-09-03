@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/domain" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/integrations" },
+    { "path": "../../packages/retrieval" },
+    { "path": "../../packages/creative" },
+    { "path": "../../packages/qa" },
+    { "path": "../../packages/observability" }
+  ],
+  "include": ["src/**/*"]
+}

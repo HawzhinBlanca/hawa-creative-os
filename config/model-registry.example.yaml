@@ -1,0 +1,53 @@
+schemaVersion: 1
+revision: 1
+policy:
+  rollingAliasesAllowed: false
+  creatorJudgeSameFamilyAllowed: false
+  defaultCanaryPercent: 5
+roles:
+  intake_router:
+    primary:
+      provider: google
+      exactModelId: gemini-3.8-flash
+      deploymentVersion: candidate-2026-09-03
+      promptVersion: 1.0.0
+      admission: candidate
+    fallbacks:
+    - provider: openai
+      exactModelId: resolve-at-implementation
+      admission: candidate
+  brief_builder:
+    primary:
+      provider: google
+      exactModelId: gemini-3.8-flash
+      deploymentVersion: candidate-2026-09-03
+      promptVersion: 1.0.0
+      admission: candidate
+  creative_director:
+    primary:
+      provider: openai
+      exactModelId: gpt-5.6-sol-snapshot
+      deploymentVersion: candidate-2026-09-03
+      promptVersion: 1.0.0
+      admission: candidate
+  visual_judge:
+    primary:
+      provider: anthropic
+      exactModelId: claude-opus-5-exact-version
+      deploymentVersion: candidate-2026-09-03
+      promptVersion: 1.0.0
+      admission: candidate
+  embedding_multimodal:
+    primary:
+      provider: local
+      exactModelId: Qwen/Qwen3-VL-Embedding-2B
+      deploymentVersion: hf-revision-to-pin
+      admission: candidate
+  reranker_multimodal:
+    primary:
+      provider: local
+      exactModelId: Qwen/Qwen3-VL-Reranker-2B
+      deploymentVersion: hf-revision-to-pin
+      admission: candidate
+note: Every candidate field is resolved to an immutable provider snapshot/revision
+  after the office benchmark. This example is not a production admission.

@@ -1,0 +1,38 @@
+version: 1.0.0
+allowUnregisteredWorkflows: false
+defaultMaxAutomaticRepairs: 2
+workers:
+- id: comfy-gpu-1
+  kind: comfyui
+  networkPolicy: deny-by-default
+  credentialScope: signed-object-jobs-only
+workflows:
+- id: general-reference
+  version: 1.0.0
+  purpose: private art-direction reference
+  nodeLock: config/comfy-node-lock.example.json
+  maxRuntimeSeconds: 300
+  maxOutputs: 3
+- id: transparent-cutout
+  version: 1.0.0
+  purpose: subject/product asset without text
+  maxRuntimeSeconds: 300
+  maxOutputs: 2
+- id: continuous-scene
+  version: 1.0.0
+  purpose: shipping scene without required text/logo
+  maxRuntimeSeconds: 480
+  maxOutputs: 2
+- id: vector-asset
+  version: 1.0.0
+  purpose: provider-routed vector graphic asset
+  maxRuntimeSeconds: 300
+  maxOutputs: 4
+requiredProvenance:
+- workflowHash
+- nodeVersions
+- modelHashes
+- providerExactModelId
+- seed
+- inputHashes
+- outputHashes

@@ -1,0 +1,4 @@
+digraph G {rankdir=LR; graph[bgcolor="transparent",pad="0.2"]; node[shape=box,style="rounded,filled",fillcolor="white",fontname="Arial",fontsize=9]; edge[fontname="Arial",fontsize=8];
+ R[label="Received"]; Route[label="Routing"]; Gate[label="Human routing /\nmissing facts"]; Brief[label="Locked brief"]; Ctx[label="Client context"]; Plan[label="Design plan"]; Asset[label="Asset production"]; Edit[label="Editable composition"]; QA[label="QA"]; Repair[label="Targeted repair\nmax 2"]; Review[label="Human review"]; App[label="Approved exact revision"]; Pub[label="Drive + Sheet publication"]; Done[label="Complete"];
+ R->Route; Route->Gate[label="ambiguous"]; Gate->Route; Route->Brief; Brief->Gate[label="missing fact"]; Brief->Ctx; Ctx->Plan; Plan->Asset; Asset->Edit; Edit->QA; QA->Repair[label="bounded defect"]; Repair->Edit; QA->Review; Review->Plan[label="revision"]; Review->App; App->Pub; Pub->Done;
+}

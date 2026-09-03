@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/ClientDNA.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clientId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "inactive",
+        "superseded"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "officialName": {
+          "type": "string"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "aliases"
+            ]
+          }
+        }
+      },
+      "required": [
+        "officialName",
+        "aliases",
+        "products"
+      ]
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approvedAssetIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "deprecatedAssetIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "token": {
+                "type": "string"
+              },
+              "srgb": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6,8}$"
+              },
+              "usage": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "token",
+              "srgb",
+              "usage"
+            ]
+          }
+        },
+        "fonts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "family": {
+                "type": "string"
+              },
+              "styles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "languages": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 35
+                }
+              },
+              "fileHashes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "family",
+              "styles",
+              "languages",
+              "fileHashes"
+            ]
+          }
+        },
+        "layoutRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "imageryRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "approvedAssetIds",
+        "deprecatedAssetIds",
+        "colors",
+        "fonts",
+        "layoutRules",
+        "imageryRules"
+      ]
+    },
+    "languagePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultLanguage": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35
+        },
+        "supportedLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 35
+          }
+        },
+        "numberStyle": {
+          "enum": [
+            "latin",
+            "arabic_indic",
+            "extended_arabic_indic",
+            "source_preserved"
+          ]
+        },
+        "glossaryVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tone": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prohibitedTerms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "defaultLanguage",
+        "supportedLanguages",
+        "numberStyle",
+        "glossaryVersion",
+        "tone",
+        "prohibitedTerms"
+      ]
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultVariants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]*$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "unit": {
+                "enum": [
+                  "px",
+                  "mm",
+                  "in",
+                  "pt"
+                ]
+              },
+              "format": {
+                "enum": [
+                  "png",
+                  "jpg",
+                  "pdf",
+                  "svg",
+                  "webp",
+                  "pptx"
+                ]
+              },
+              "colorSpace": {
+                "enum": [
+                  "srgb",
+                  "display-p3",
+                  "cmyk"
+                ]
+              },
+              "dpi": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "width",
+              "height",
+              "unit",
+              "format",
+              "colorSpace"
+            ]
+          }
+        },
+        "templateIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "approvalPolicyId": {
+          "type": "string"
+        },
+        "drive": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sharedDriveId": {
+              "type": "string"
+            },
+            "knowledgeRootFolderId": {
+              "type": "string"
+            },
+            "productionRootFolderId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sharedDriveId",
+            "knowledgeRootFolderId",
+            "productionRootFolderId"
+          ]
+        },
+        "sheets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "spreadsheetId": {
+              "type": "string"
+            },
+            "sheetId": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "spreadsheetId",
+            "sheetId"
+          ]
+        }
+      },
+      "required": [
+        "defaultVariants",
+        "templateIds",
+        "approvalPolicyId",
+        "drive",
+        "sheets"
+      ]
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelEgressMode": {
+          "enum": [
+            "local_only",
+            "approved_providers",
+            "evaluated_external_allowed"
+          ]
+        },
+        "allowedProviders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rawMessageRetentionDays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "promptRetentionDays": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "modelEgressMode",
+        "allowedProviders",
+        "rawMessageRetentionDays",
+        "promptRetentionDays"
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "one_time",
+              "task_type",
+              "project",
+              "client",
+              "office"
+            ]
+          },
+          "humanRule": {
+            "type": "string"
+          },
+          "machineRule": {
+            "type": "object"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "effectiveFrom": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effectiveUntil": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "active",
+              "inactive",
+              "superseded",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "category",
+          "scope",
+          "humanRule",
+          "machineRule",
+          "priority",
+          "status"
+        ]
+      }
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "tenantId",
+    "clientId",
+    "version",
+    "status",
+    "identity",
+    "brand",
+    "languagePolicy",
+    "production",
+    "privacy",
+    "rules",
+    "contentHash"
+  ]
+}

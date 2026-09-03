@@ -1,0 +1,179 @@
+# Model Registry and Evaluation System
+
+## 1. Principle
+
+Models are volatile components, not architecture. The system resolves a **role** to an exact tested deployment.
+
+Prohibited production references:
+
+```text
+latest
+best
+auto
+provider-default
+unversioned rolling alias (unless the provider offers no snapshot and policy explicitly accepts it)
+```
+
+## 2. Model roles
+
+| Role | Required capabilities | Provisional challengers |
+|---|---|---|
+| `intake_router` | multilingual structured classification, calibrated abstention | Gemini 3.8 Flash, GPT-5.6 Terra, Claude Fable 5.1/local challenger |
+| `brief_builder` | exact fact preservation, schema output, Sorani/Arabic understanding | same pool plus stronger models for hard cases |
+| `creative_director` | visual reasoning, novel composition, references, structured plan | GPT-5.6 Sol, Claude Opus 5, Gemini high-end challenger |
+| `visual_judge` | image understanding, rubric consistency, defect detection | a different family from creator |
+| `feedback_classifier` | scoped taxonomy, low cost, high precision | fast models/local model |
+| `rule_miner` | cross-task evidence synthesis, conservative proposal | deep reasoning model |
+| `image_general` | generation/editing/reference fidelity | GPT-Image-2, Gemini image, FLUX.2 |
+| `image_vector` | graphic/vector output | Recraft V4.1 Vector and evaluated alternatives |
+| `image_local` | private/low-cost generation | FLUX.2 Klein 4B or newer admitted local model |
+| `embedding_multimodal` | English/Sorani/Arabic text + visual similarity | Qwen3-VL-Embedding 2B/8B and challengers |
+| `reranker_multimodal` | query-conditioned visual/text relevance | Qwen3-VL-Reranker 2B/8B and challengers |
+
+## 3. Registry fields
+
+Each deployment records:
+
+```text
+role
+provider and transport
+exact model ID/version/snapshot
+endpoint/base URL
+capabilities
+input/output modalities
+context and image limits
+structured-output/tool behavior
+region/data policy
+client egress eligibility
+parameter profile
+prompt version
+known defects
+fallback chain
+cost policy
+latency budget
+evaluation run and score
+admission state: candidate | shadow | canary | primary | fallback | retired
+valid-from / valid-until
+```
+
+## 4. Evaluation corpus
+
+Minimum launch corpus: **200 historical or faithfully reconstructed office tasks**.
+
+Suggested mix:
+
+- 70 Sorani, 55 English, 45 Arabic, 30 mixed-language;
+- 80 routine social designs;
+- 45 podcast/video cards;
+- 30 event/product posters;
+- 20 ambiguous routing cases;
+- 15 correction-heavy cases;
+- 10 adversarial prompt-injection/permission cases.
+
+No task may appear in both tuning/development and final holdout sets.
+
+## 5. Role-specific metrics
+
+### Routing
+
+- exact client/project/task label;
+- confidence calibration;
+- abstention on ambiguity;
+- explanation evidence precision;
+- zero out-of-scope client selection.
+
+### Brief extraction
+
+- exact fact/copy preservation;
+- requirement recall;
+- invented-fact rate;
+- missing-information detection;
+- schema validity;
+- language/direction correctness.
+
+### Creative direction
+
+Blind native/design reviewers score:
+
+- task fulfillment;
+- originality without brand drift;
+- hierarchy/composition;
+- cultural fit;
+- useful asset decomposition;
+- editability feasibility;
+- repairability;
+- cost/latency.
+
+### Visual judge
+
+- precision/recall for seeded defects;
+- false-block rate;
+- calibration by severity;
+- consistency across language and style;
+- inability to override hard rules.
+
+### Retrieval
+
+- Recall@K and nDCG@K;
+- approved-example precision;
+- exact asset/rule recall;
+- negative-example exclusion;
+- cross-client leakage = zero;
+- latency and GPU memory.
+
+## 6. Tournament protocol
+
+1. Freeze dataset, prompts, tool schemas, and scoring rubric.
+2. Resolve exact model versions and parameter profiles.
+3. Run each candidate without revealing model identity to human judges.
+4. Repeat stochastic creative cases enough to measure variance.
+5. Use deterministic programmatic checks before subjective review.
+6. Normalize cost and latency but do not let cheapness hide quality failures.
+7. Select a primary and fallback per role—not one universal winner.
+8. Publish a decision record with failures and confidence intervals.
+
+## 7. Admission gates
+
+A candidate becomes primary only when:
+
+- no critical safety/permission failure occurs;
+- hard requirement performance meets the role threshold;
+- it improves a declared objective or reduces cost materially without quality loss;
+- its failure behavior is known;
+- the fallback path has passed;
+- replay/canary/rollback are ready.
+
+## 8. Deployment progression
+
+```text
+candidate → offline benchmark → shadow → 5% canary → 25% canary → primary
+```
+
+- Shadow results never mutate production state.
+- Canary tasks remain human-approved.
+- A regression in exact-copy, routing, cross-client isolation, or schema validity triggers immediate rollback.
+- Model/provider removal must be survivable by switching registry state.
+
+## 9. Creator–judge separation
+
+The visual judge should not normally be the same model/version that generated the plan or image. This does not guarantee independence, but it reduces identical blind spots. Hard QA remains deterministic.
+
+## 10. Cost control
+
+- Fast models handle routine parsing/classification.
+- Deep models are invoked only for ambiguity, novel direction, rule mining, or difficult QA.
+- Routine template tasks may use no image model.
+- Candidate count and image resolution are explicit budgets.
+- Prompt/context hashes enable safe caching only where semantics permit.
+- The UI displays expected and actual cost per task/revision.
+
+## 11. Model retirement
+
+When a provider announces deprecation:
+
+- freeze exact affected workflows;
+- rerun the benchmark on replacement candidates;
+- shadow the winner;
+- migrate before shutdown date;
+- retain old invocation/provenance records;
+- never silently map an old model name to a different behavior.

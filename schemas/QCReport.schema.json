@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/QCReport.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "designRevisionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "profileVersion": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "error"
+      ]
+    },
+    "criticalPass": {
+      "type": "boolean"
+    },
+    "repairCycle": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "schema",
+              "copy",
+              "facts",
+              "font",
+              "bidi",
+              "layout",
+              "brand",
+              "image",
+              "visual_model",
+              "source_package",
+              "publication"
+            ]
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "warning",
+              "skipped",
+              "error"
+            ]
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "durationMs",
+          "evidence"
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "hardFailure": {
+            "type": "boolean"
+          },
+          "category": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "nodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "region": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "repair": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ruleId",
+          "severity",
+          "hardFailure",
+          "category",
+          "message",
+          "nodeIds",
+          "evidence"
+        ]
+      }
+    },
+    "judgeDeploymentId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "designRevisionId",
+    "sourceHash",
+    "profile",
+    "profileVersion",
+    "status",
+    "criticalPass",
+    "repairCycle",
+    "checks",
+    "findings",
+    "createdAt",
+    "contentHash"
+  ]
+}

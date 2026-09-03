@@ -1,0 +1,18 @@
+flowchart TB
+  User[Office devices] --> VPN[Tailscale / office VPN]
+  Webhooks[Telegram / optional WAHA webhooks] --> Caddy[Caddy TLS edge]
+  VPN --> Caddy
+  Caddy --> App[Hawa Desk + Hono API]
+  Caddy --> Studio[HyCanvas pinned]
+  App --> Postgres[(PostgreSQL + pgvector)]
+  App --> Restate[Restate]
+  Restate --> Worker[TypeScript workflow workers]
+  Worker --> Postgres
+  Worker --> Studio
+  Worker --> GPU[Optional GPU host\nComfyUI + Qwen retrieval]
+  Worker --> Providers[Evaluated external models]
+  Worker --> Google[Google Drive + Sheets]
+  App -. OTLP .-> Phoenix[Phoenix]
+  Worker -. OTLP .-> Phoenix
+  Postgres --> Backup[pgBackRest + encrypted off-site]
+  App --> FileBackup[restic source/config backup]

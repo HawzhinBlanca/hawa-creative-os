@@ -1,0 +1,22 @@
+flowchart LR
+  Message[Message/task] --> Scope[Client scope lock]
+  Scope --> Brief[Exact DesignBrief]
+  DNA[Client DNA] --> Brief
+  Brief --> Retrieve[Filtered hybrid retrieval]
+  Retrieve --> Context[Context Pack]
+  Context --> Plan[DesignPlan]
+  Plan --> Reference[Private art-direction reference]
+  Reference --> Assets[Shipping assets without required text]
+  Plan --> Source[Editable .hyc source]
+  Assets --> Source
+  Source --> Manifest[Neutral semantic manifest]
+  Source --> Render[Preview/exports]
+  Brief --> QA[Hard QA]
+  DNA --> QA
+  Manifest --> QA
+  Render --> QA
+  QA --> Approval[Approval: source + QC hash]
+  Approval --> Package[Source package]
+  Package --> Drive[Drive]
+  Approval --> Feedback[Structured feedback]
+  Feedback --> DNA

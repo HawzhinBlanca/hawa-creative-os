@@ -1,0 +1,389 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/DesignPlan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "briefHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "clientDnaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "route": {
+      "enum": [
+        "structured_template",
+        "code_native_field",
+        "slot_matrix",
+        "continuous_scene",
+        "cutout_stack",
+        "layered_collage",
+        "human_led_canvas",
+        "hybrid"
+      ]
+    },
+    "routeRationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "studio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "templateId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "templateVersion": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sourceTopology": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "sourceTopology"
+      ]
+    },
+    "artDirection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "referenceRequired": {
+          "type": "boolean"
+        },
+        "referencePrompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "referenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "privatePixelsNeverShip": {
+          "const": true
+        },
+        "compositionReading": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "referenceRequired",
+        "referenceCount",
+        "privatePixelsNeverShip",
+        "compositionReading"
+      ]
+    },
+    "assetSlots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "semanticRole": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "approved_asset",
+              "stock",
+              "generated_raster",
+              "generated_vector",
+              "edited_asset",
+              "code_native",
+              "human"
+            ]
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referenceAssetIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "enum": [
+                  "px",
+                  "percent"
+                ]
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "width",
+              "height",
+              "unit"
+            ]
+          },
+          "layerGroup": {
+            "type": "string"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "providerRole": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backgroundTransparent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "semanticRole",
+          "kind",
+          "target",
+          "layerGroup",
+          "dependencies",
+          "referenceAssetIds",
+          "backgroundTransparent"
+        ]
+      }
+    },
+    "textNodePlan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "copyId": {
+            "type": "string"
+          },
+          "nodeRole": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "direction": {
+            "enum": [
+              "ltr",
+              "rtl",
+              "auto"
+            ]
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "copyId",
+          "nodeRole",
+          "locked",
+          "direction",
+          "region"
+        ]
+      }
+    },
+    "officialAssetPlacements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "ruleIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "assetId",
+          "role",
+          "locked",
+          "ruleIds"
+        ]
+      }
+    },
+    "codeNativeElements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "shape",
+              "path",
+              "pattern",
+              "chart",
+              "table",
+              "qr",
+              "icon",
+              "text_effect",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "editable": {
+            "const": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "description",
+          "editable"
+        ]
+      }
+    },
+    "operationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lockedNodeRoles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxAutomaticRepairCycles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "destructiveOperationsAllowed": {
+          "const": false
+        }
+      },
+      "required": [
+        "lockedNodeRoles",
+        "maxAutomaticRepairCycles",
+        "destructiveOperationsAllowed"
+      ]
+    },
+    "qaProfile": {
+      "type": "string"
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "mitigation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "severity",
+          "mitigation"
+        ]
+      }
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "briefHash",
+    "clientDnaVersion",
+    "route",
+    "routeRationale",
+    "studio",
+    "artDirection",
+    "assetSlots",
+    "textNodePlan",
+    "officialAssetPlacements",
+    "codeNativeElements",
+    "operationPolicy",
+    "qaProfile",
+    "risks",
+    "contentHash"
+  ]
+}

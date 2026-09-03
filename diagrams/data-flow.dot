@@ -1,0 +1,4 @@
+digraph G {rankdir=LR; graph[bgcolor="transparent",pad="0.2"]; node[shape=box,style="rounded,filled",fillcolor="white",fontname="Arial",fontsize=9];
+ M[label="Message/task"]; S[label="Client scope"]; B[label="Exact brief"]; D[label="Client DNA"]; C[label="Context pack"]; P[label="Design plan"]; A[label="Private reference +\nshipping assets"]; E[label="Editable .hyc source"]; Q[label="Source/RTL/brand QA"]; H[label="Human approval"]; O[label="Source package + publication"]; F[label="Feedback evidence"];
+ M->S->B; D->B; B->C; D->C; C->P->A->E->Q->H->O; B->Q; D->Q; H->F->D;
+}

@@ -1,0 +1,30 @@
+flowchart LR
+  subgraph Interfaces[Office interfaces]
+    Desk[Hawa Desk\ncanonical]
+    TG[Telegram Bot + Mini App]
+    WA[WAHA / dedicated account\noptional]
+    Other[Other adapters]
+  end
+  Desk --> Ingress[Verified ingress\nPostgreSQL inbox/outbox]
+  TG --> Ingress
+  WA --> Ingress
+  Other --> Ingress
+  Ingress --> DB[(PostgreSQL 18\nClient DNA + operations + pgvector)]
+  Ingress --> Restate[Restate durable workflow]
+  Restate --> Router[Deterministic routing + typed AI]
+  Router --> Memory[Hybrid client-scoped retrieval]
+  Memory --> Creative[Creative Director]
+  Creative --> Assets[ComfyUI + direct image adapters]
+  Assets --> Studio[DesignStudioAdapter]
+  Studio --> Hy[HyCanvas v0.3.9 candidate]
+  Studio -. fallback .-> Fall[Penpot / focused editor / Chromium]
+  Hy --> QA[Hard QA + independent visual judge]
+  Fall --> QA
+  QA --> Review[Human review in Hawa Desk]
+  Review -->|revise| Restate
+  Review -->|approve exact revision| Publish[Idempotent publisher]
+  Publish --> Drive[Google Shared Drive]
+  Publish --> Sheets[Google Sheets mirror]
+  Review --> Feedback[Feedback ledger + governed rules]
+  Feedback --> DB
+  Restate -. OpenTelemetry .-> Phoenix[Self-hosted Phoenix]

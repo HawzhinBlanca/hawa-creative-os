@@ -1,0 +1,4 @@
+digraph G {rankdir=TB; graph[bgcolor="transparent",pad="0.2"]; node[shape=box,style="rounded,filled",fillcolor="white",fontname="Arial",fontsize=10];
+ User[label="Office devices / VPN"]; Caddy[label="Caddy TLS"]; App[label="Hawa Desk + API"]; Restate[label="Restate + workers"]; PG[shape=cylinder,label="PostgreSQL 18"]; Hy[label="HyCanvas pinned"]; GPU[label="Optional GPU\nComfyUI + Qwen"]; PX[label="Phoenix"]; G[label="Google Drive + Sheets"]; B[label="PITR + restic backup"];
+ User->Caddy; Caddy->App; Caddy->Hy; App->PG; App->Restate; Restate->PG; Restate->Hy; Restate->GPU; Restate->G; App->PX[style=dashed]; Restate->PX[style=dashed]; PG->B; App->B;
+}

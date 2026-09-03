@@ -1,0 +1,58 @@
+version: 1.0.0
+defaults:
+  timeoutMs: 120000
+  maxAttempts: 2
+  storeRawPrompt: false
+  storeRawResponse: false
+clients:
+  default:
+    egressMode: evaluated_external_allowed
+    redactPersonalData: true
+    sendOnlyContextPack: true
+providers:
+  google:
+    enabled: true
+    capabilities:
+    - structured_output
+    - vision
+    - long_context
+    exactModelRequired: true
+  openai:
+    enabled: true
+    capabilities:
+    - structured_output
+    - vision
+    - image_generation
+    - image_editing
+    exactModelRequired: true
+  anthropic:
+    enabled: true
+    capabilities:
+    - structured_output
+    - vision
+    exactModelRequired: true
+  bfl:
+    enabled: true
+    capabilities:
+    - image_generation
+    - image_editing
+    - local_weights
+    exactModelRequired: true
+  recraft:
+    enabled: true
+    capabilities:
+    - image_generation
+    - vector_generation
+    exactModelRequired: true
+  local:
+    enabled: true
+    capabilities:
+    - embedding
+    - reranking
+    - image_generation
+    networkEgress: false
+forbidden:
+- provider-selected-by-prompt
+- unversioned-auto-alias
+- cross-client-context
+- credentials-in-prompt

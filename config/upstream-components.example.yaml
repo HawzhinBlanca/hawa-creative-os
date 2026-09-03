@@ -1,0 +1,37 @@
+version: 1.0.0
+components:
+- name: HyCanvas
+  source: https://github.com/hyscaler/HyCanvas
+  candidate: v0.3.9
+  pin: release checksum and source commit
+  updatePolicy: proof-suite-and-ADR
+  fallback: Penpot/focused editor/Chromium
+- name: Restate
+  source: https://github.com/restatedev/restate
+  candidate: 1.7.x
+  pin: container digest
+  updatePolicy: recovery-and-contract-suite
+- name: PostgreSQL
+  candidate: 18.x
+  pin: container digest/package version
+  updatePolicy: restore-and-migration-suite
+- name: pgvector
+  candidate: 0.8.6
+  pin: extension/container version
+  updatePolicy: retrieval regression
+- name: Phoenix
+  source: https://github.com/Arize-ai/phoenix
+  pin: container digest
+  updatePolicy: trace/eval compatibility
+- name: ComfyUI
+  source: https://github.com/Comfy-Org/ComfyUI
+  pin: commit/container digest plus node lock
+  updatePolicy: asset golden/security scan
+- name: Docling
+  source: https://github.com/docling-project/docling
+  pin: package/container digest
+  updatePolicy: ingestion golden suite
+- name: WAHA
+  source: https://github.com/devlikeapro/waha
+  pin: container digest
+  updatePolicy: isolated adapter test; never automatic

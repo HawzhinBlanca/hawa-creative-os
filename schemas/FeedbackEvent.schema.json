@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/FeedbackEvent.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clientId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "projectId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "taskId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "beforeRevisionId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "afterRevisionId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "category": {
+      "enum": [
+        "routing",
+        "requirement",
+        "copy_fact",
+        "sorani_language",
+        "arabic_language",
+        "english_language",
+        "logo_asset",
+        "color",
+        "font",
+        "layout",
+        "imagery",
+        "crop_mask",
+        "dimensions",
+        "artifact_quality",
+        "workflow",
+        "approval",
+        "publication",
+        "preference_other"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "one_time",
+        "task_type",
+        "project",
+        "client",
+        "office"
+      ]
+    },
+    "explicitness": {
+      "enum": [
+        "direct_instruction",
+        "manual_edit",
+        "approval_signal",
+        "inferred_pattern"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pageId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nodeIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "region": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "assetId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "nodeIds"
+      ]
+    },
+    "originalValue": {},
+    "correctedValue": {},
+    "comment": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "actorId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "tenantId",
+    "clientId",
+    "category",
+    "severity",
+    "scope",
+    "explicitness",
+    "target",
+    "createdAt"
+  ]
+}

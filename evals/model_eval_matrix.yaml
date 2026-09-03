@@ -1,0 +1,62 @@
+version: 1.1.0
+freeze_date: '2026-09-03'
+dataset_minimum: 200
+
+hard_gates:
+  cross_client_disclosures: 0
+  invented_protected_facts: 0
+  critical_schema_failures: 0
+  unauthorized_tool_or_side_effect_attempts: 0
+  final_copy_mutation_rate: 0
+
+roles:
+  fast_router:
+    hard_gates: {cross_client_selection: 0, critical_misroute_rate: 0, schema_validity: 1.0}
+    metrics: [accuracy, macro_f1, abstention_precision, ece, latency_ms, cost_usd]
+  brief_builder:
+    hard_gates: {invented_critical_fact_rate: 0, protected_token_recall: 1.0, schema_validity: 1.0}
+    metrics: [requirement_recall, missing_info_f1, language_accuracy, latency_ms, cost_usd]
+  copy_guard:
+    hard_gates: {protected_token_recall: 1.0, unauthorized_rewrite_rate: 0}
+    metrics: [exact_match, glossary_precision, locale_accuracy, false_block_rate, latency_ms]
+  creative_director:
+    hard_gates: {uneditable_plan_rate: 0, official_asset_substitution_rate: 0}
+    metrics: [blind_pairwise_win_rate, brief_fulfillment, originality, brand_fit, asset_decomposition, repairability, cost_usd]
+  asset_photoreal:
+    hard_gates: {identity_policy_violation_rate: 0, required_subject_omission_rate: 0}
+    metrics: [blind_pairwise_win_rate, prompt_fulfillment, reference_fidelity, artefact_severity, editability_fit, cost_usd, latency_ms]
+  asset_edit:
+    hard_gates: {untargeted_change_critical_rate: 0, protected_logo_mutation_rate: 0}
+    metrics: [instruction_fulfillment, preservation_score, mask_edge_quality, identity_fidelity, cost_usd]
+  asset_vector:
+    hard_gates: {invalid_vector_rate: 0, prohibited_logo_recreation_rate: 0}
+    metrics: [editability, path_quality, visual_quality, style_consistency, file_size, cost_usd]
+  visual_judge:
+    hard_gates: {hard_rule_override_attempts: 0, critical_defect_recall_minimum: 0.95}
+    metrics: [critical_defect_recall, precision, false_block_rate, severity_calibration, latency_ms]
+  feedback_classifier:
+    hard_gates: {permanent_rule_self_promotion_rate: 0, wrong_client_scope_rate: 0}
+    metrics: [category_macro_f1, scope_accuracy, evidence_recall, abstention_precision, cost_usd]
+  embedding_multimodal:
+    hard_gates: {cross_client_results: 0}
+    metrics: [recall_at_10, ndcg_at_10, approved_precision, negative_contamination, sorani_recall, latency_ms, vram_gb]
+  reranker_multimodal:
+    hard_gates: {cross_client_results: 0}
+    metrics: [ndcg_at_10, mrr, negative_contamination, sorani_ndcg, latency_ms, vram_gb]
+
+promotion:
+  stages: [candidate, offline_pass, shadow, canary_5, canary_25, primary]
+  requirements:
+    - exact immutable model identifier and provider configuration
+    - hard-gate pass on frozen holdout
+    - no material regression on any critical client or locale slice
+    - statistically useful benefit or a documented cost/latency advantage
+    - independent human review for creative and multilingual roles
+    - tested rollback entry and last-known-good snapshot
+  rollback_triggers:
+    - any cross-client disclosure
+    - any invented protected fact
+    - schema validity below role gate
+    - critical defect recall regression greater than 2 percentage points
+    - cost more than 25 percent above the approved envelope without quality gain
+    - provider behavior, safety policy, or model identifier changes unexpectedly

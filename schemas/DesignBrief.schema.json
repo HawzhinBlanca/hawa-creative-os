@@ -1,0 +1,404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hawa.local/schemas/DesignBrief.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clientId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "projectId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "clientConfidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "routingEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "value",
+          "weight"
+        ]
+      }
+    },
+    "taskType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "campaign": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 35
+    },
+    "direction": {
+      "enum": [
+        "ltr",
+        "rtl",
+        "auto"
+      ]
+    },
+    "exactCopy": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "headline",
+              "subheadline",
+              "body",
+              "cta",
+              "price",
+              "date",
+              "contact",
+              "legal",
+              "label",
+              "other"
+            ]
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 35
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "role",
+          "locked",
+          "language"
+        ]
+      }
+    },
+    "protectedTokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "person_name",
+              "organization",
+              "product",
+              "price",
+              "date",
+              "time",
+              "phone",
+              "url",
+              "handle",
+              "claim",
+              "legal",
+              "other"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mustMatchExactly": {
+            "type": "boolean",
+            "default": true
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "value",
+          "mustMatchExactly",
+          "source"
+        ]
+      }
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "unit": {
+            "enum": [
+              "px",
+              "mm",
+              "in",
+              "pt"
+            ]
+          },
+          "format": {
+            "enum": [
+              "png",
+              "jpg",
+              "pdf",
+              "svg",
+              "webp",
+              "pptx"
+            ]
+          },
+          "colorSpace": {
+            "enum": [
+              "srgb",
+              "display-p3",
+              "cmyk"
+            ]
+          },
+          "dpi": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "width",
+          "height",
+          "unit",
+          "format",
+          "colorSpace"
+        ]
+      }
+    },
+    "requiredAssetIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "uniqueItems": true
+    },
+    "referenceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "uniqueItems": true
+    },
+    "mustInclude": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mustAvoid": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sensitivity": {
+      "enum": [
+        "normal",
+        "sensitive",
+        "restricted"
+      ]
+    },
+    "reviewPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "role",
+              "required"
+            ]
+          }
+        },
+        "autoApprovalAllowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stages",
+        "autoApprovalAllowed"
+      ]
+    },
+    "missingInformation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "blocking": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field",
+          "question",
+          "blocking"
+        ]
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "value": {},
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "confidence",
+          "source"
+        ]
+      }
+    },
+    "clientDnaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "tenantId",
+    "clientId",
+    "clientConfidence",
+    "routingEvidence",
+    "taskType",
+    "language",
+    "direction",
+    "exactCopy",
+    "protectedTokens",
+    "variants",
+    "requiredAssetIds",
+    "referenceIds",
+    "mustInclude",
+    "mustAvoid",
+    "constraints",
+    "sensitivity",
+    "reviewPolicy",
+    "missingInformation",
+    "assumptions",
+    "clientDnaVersion",
+    "contentHash"
+  ]
+}

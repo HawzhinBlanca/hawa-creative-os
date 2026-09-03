@@ -1,0 +1,41 @@
+id,actor,action,benefit
+US-001,Requester,promote a Telegram message into a design task,the task is captured without copying it into another tool
+US-002,Requester,create a task directly in Hawa Desk,I can provide complete information and attachments
+US-003,Project manager,see why a client was selected,I can trust or correct routing
+US-004,Project manager,choose the client when evidence conflicts,the system never guesses across clients
+US-005,Designer,see the original request beside the brief,I can detect interpretation errors
+US-006,Designer,open the design as editable layers,I can refine one detail without restarting
+US-007,Designer,compare current and prior revisions,I can understand what changed
+US-008,Language reviewer,see exact source copy and rendered output,I can verify Sorani and Arabic accurately
+US-009,Brand manager,upload and version an official logo,automation always uses the approved asset
+US-010,Brand manager,define “must” and “never” rules,future work follows explicit brand policy
+US-011,Brand manager,approve a prior design as an example,retrieval learns the correct direction
+US-012,Brand manager,mark a design as rejected with a reason,it is never retrieved as positive inspiration
+US-013,Reviewer,approve an exact design hash,approval cannot drift after editing
+US-014,Reviewer,request a node-specific revision,the next attempt changes only the intended part
+US-015,Reviewer,mark feedback as one-time or reusable,preference learning remains controlled
+US-016,Operator,pause a failing workflow,external outages do not cause endless costly retries
+US-017,Operator,resume or restart from a safe checkpoint,completed generation is not repeated
+US-018,Operator,see all blocked tasks and the next action,daily production does not hide failures
+US-019,Operator,reconcile Drive and Sheet state,partial publication is repaired safely
+US-020,Administrator,disable a compromised message adapter,the office inbox continues operating
+US-021,Administrator,pin model and component versions,updates cannot silently alter output
+US-022,Administrator,set a client to local-only processing,sensitive data never leaves office infrastructure
+US-023,Administrator,restore the platform onto a clean host,a server failure is recoverable
+US-024,Creative director,generate a private art-direction reference,the system can explore boldly without shipping bad text
+US-025,Creative director,choose the best asset topology,the final design remains flexible and coherent
+US-026,Designer,replace a generated visual ingredient,copy and layout remain intact
+US-027,Designer,create linked square and story variants,changes can be synchronized without forced identical layouts
+US-028,Finance/manager,see model and generation cost per task,expensive retries are visible and governed
+US-029,Project manager,search historic tasks and feedback by client,institutional knowledge is usable
+US-030,Requester,receive the final Drive link in the originating conversation,the loop closes where work started
+US-031,Operator,use the system during a Telegram or WhatsApp outage,the canonical Hawa Desk remains available
+US-032,Designer,export SVG/PDF/PNG plus editable source,"deliverables suit review, print, and future edits"
+US-033,Administrator,test a challenger model in shadow mode,quality can improve without risking live work
+US-034,Brand manager,review proposed learned rules with evidence,automation improves without self-modifying silently
+US-035,Language reviewer,"test mixed Sorani, Latin, prices, dates, and URLs",bidirectional errors are caught before clients see them
+US-036,Operator,see source provenance for every image,licensing and regeneration remain possible
+US-037,Project manager,route difficult tasks to a human from any stage,automation never becomes a trap
+US-038,Administrator,switch the design studio adapter,a young upstream project cannot hold the business hostage
+US-039,Designer,recover an unsaved or interrupted edit,workstation/browser failure does not erase a revision
+US-040,Auditor,"trace who changed a rule, design, approval, or file",accountability is complete

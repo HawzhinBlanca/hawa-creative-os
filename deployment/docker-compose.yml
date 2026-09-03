@@ -1,0 +1,240 @@
+name: hawa-creative-os
+
+# Deployment contract for the application to be built.
+# Supply every third-party image as image@sha256:digest. Run from this directory.
+
+x-hawa-build: &hawa-build
+  context: ..
+  dockerfile: deployment/Dockerfile.hawa
+
+x-hawa-environment: &hawa-environment
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+  RESTATE_ADMIN_URL: ${RESTATE_ADMIN_URL:-http://restate:9070}
+  RESTATE_INGRESS_URL: ${RESTATE_INGRESS_URL:-http://restate:8080}
+  HYCANVAS_ENABLED: ${HYCANVAS_ENABLED:-false}
+  HYCANVAS_BASE_URL: ${HYCANVAS_BASE_URL:-http://hycanvas:8005}
+  PHOENIX_COLLECTOR_ENDPOINT: ${PHOENIX_COLLECTOR_ENDPOINT:-http://phoenix:6006/v1/traces}
+  STAGING_ROOT: /var/lib/hawa/staging
+
+services:
+  caddy:
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE to an immutable digest}
+    restart: unless-stopped
+    ports:
+      - "${HAWA_BIND_IP:?Bind only an office/VPN address}:80:80"
+      - "${HAWA_BIND_IP:?Bind only an office/VPN address}:443:443"
+    environment:
+      HAWA_DOMAIN: ${HAWA_DOMAIN:?Set HAWA_DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?Set CADDY_ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, core]
+    depends_on:
+      app: {condition: service_healthy}
+
+  migrate:
+    build: *hawa-build
+    image: hawa-creative-os:${HAWA_APP_VERSION:-dev}
+    restart: "no"
+    env_file: [.env]
+    environment: *hawa-environment
+    command: ["node", "dist/migrate.mjs"]
+    networks: [core]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  app:
+    build: *hawa-build
+    image: hawa-creative-os:${HAWA_APP_VERSION:-dev}
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      <<: *hawa-environment
+      PORT: 3000
+    volumes:
+      - hawa_staging:/var/lib/hawa/staging
+      - ./runtime-config:/etc/hawa:ro
+    networks: [core, egress]
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.mjs"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      restate: {condition: service_healthy}
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE to PostgreSQL 18 + pgvector at an immutable digest}
+    restart: unless-stopped
+    shm_size: 1gb
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-hawa_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      HAWA_DB_USER: ${HAWA_DB_USER:-hawa_app}
+      HAWA_DB_PASSWORD: ${HAWA_DB_PASSWORD:?Set HAWA_DB_PASSWORD}
+      HYCANVAS_DB_USER: ${HYCANVAS_DB_USER:-hycanvas}
+      HYCANVAS_DB_PASSWORD: ${HYCANVAS_DB_PASSWORD:?Set HYCANVAS_DB_PASSWORD}
+      PHOENIX_DB_USER: ${PHOENIX_DB_USER:-phoenix}
+      PHOENIX_DB_PASSWORD: ${PHOENIX_DB_PASSWORD:?Set PHOENIX_DB_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /var/lib/postgresql/wal-archive/%f && cp %p /var/lib/postgresql/wal-archive/%f
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-2GB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_wal_archive:/var/lib/postgresql/wal-archive
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hawa_owner} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  restate:
+    image: ${RESTATE_IMAGE:?Set RESTATE_IMAGE to pinned Restate 1.7.x at an immutable digest}
+    restart: unless-stopped
+    environment:
+      RESTATE_NODE_NAME: hawa-restate-1
+    volumes:
+      - restate_data:/restate-data
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9070/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Enable only after docs/21_HYCANVAS_PROOF_SPRINT.md passes.
+  hycanvas:
+    profiles: [studio-hycanvas]
+    build:
+      context: .
+      dockerfile: Dockerfile.hycanvas
+    image: hawa-hycanvas:${HYCANVAS_VERSION:-v0.3.9}
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${HYCANVAS_DATABASE_URL:?Set a separate HyCanvas database URL}
+      JWT_SECRET: ${HYCANVAS_JWT_SECRET:?Set HYCANVAS_JWT_SECRET}
+      APP_URL: https://${HAWA_DOMAIN:?Set HAWA_DOMAIN}/studio
+      BIND_HOST: 0.0.0.0
+      PORT: 8005
+      LOCAL_STORAGE_PATH: /var/lib/hycanvas/storage
+      DB_AUTO_MIGRATE: "true"
+    volumes:
+      - hycanvas_storage:/var/lib/hycanvas/storage
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8005/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  phoenix:
+    image: ${PHOENIX_IMAGE:?Set PHOENIX_IMAGE to an immutable digest}
+    restart: unless-stopped
+    environment:
+      PHOENIX_SQL_DATABASE_URL: ${PHOENIX_DATABASE_URL:?Set a separate Phoenix database URL}
+    volumes:
+      - phoenix_data:/root/.phoenix
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6006/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  comfyui:
+    profiles: [gpu]
+    image: ${COMFYUI_IMAGE:?Set COMFYUI_IMAGE to an immutable approved digest}
+    restart: unless-stopped
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    environment:
+      COMFYUI_LISTEN: 0.0.0.0
+      COMFYUI_PORT: 8188
+    volumes:
+      - comfy_models:/opt/comfyui/models:ro
+      - comfy_inputs:/opt/comfyui/input:ro
+      - comfy_outputs:/opt/comfyui/output
+      - ./runtime-config/comfy-node-lock.json:/etc/hawa/comfy-node-lock.json:ro
+    networks: [gpu_jobs]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8188/system_stats || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+  retrieval-worker:
+    profiles: [gpu]
+    image: ${RETRIEVAL_IMAGE:?Set RETRIEVAL_IMAGE to the pinned local embedding/reranker service}
+    restart: unless-stopped
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    environment:
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Qwen/Qwen3-VL-Embedding-2B}
+      RERANKER_MODEL: ${RERANKER_MODEL:-Qwen/Qwen3-VL-Reranker-2B}
+      MODEL_REVISION: ${RETRIEVAL_MODEL_REVISION:?Pin the exact model revision}
+      NETWORK_EGRESS: disabled
+    volumes:
+      - retrieval_models:/models:ro
+    networks: [gpu_jobs]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  edge: {}
+  egress: {}
+  core:
+    internal: true
+  gpu_jobs:
+    internal: true
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  hawa_staging: {}
+  postgres_data: {}
+  postgres_wal_archive: {}
+  restate_data: {}
+  hycanvas_storage: {}
+  phoenix_data: {}
+  comfy_models: {}
+  comfy_inputs: {}
+  comfy_outputs: {}
+  retrieval_models: {}

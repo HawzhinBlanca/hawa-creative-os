@@ -1,0 +1,80 @@
+schemaVersion: 1
+clientCode: ASTER-DEMO
+version: 1
+status: draft
+identity:
+  officialName: Aster Demo
+  aliases:
+  - Aster
+  products:
+  - id: family-box
+    name: Family Box
+    aliases: []
+brand:
+  approvedAssetIds:
+  - replace-with-uuid-after-ingestion
+  deprecatedAssetIds: []
+  colors:
+  - token: forest
+    srgb: '#164A3A'
+    usage: primary dark field
+  - token: cream
+    srgb: '#F4ECDD'
+    usage: background
+  fonts:
+  - id: sorani-primary
+    family: Office Sorani Primary
+    styles:
+    - Regular
+    - Bold
+    languages:
+    - ckb
+    - ar
+    fileHashes:
+    - replace-with-64-char-sha256
+  layoutRules:
+  - Keep official logo clear space equal to its cap-height.
+  imageryRules:
+  - Prefer natural material and real product photography.
+languagePolicy:
+  defaultLanguage: ckb
+  supportedLanguages:
+  - ckb
+  - ar
+  - en
+  numberStyle: source_preserved
+  glossaryVersion: 1
+  tone:
+  - direct
+  - warm
+  - modern
+  prohibitedTerms: []
+production:
+  defaultVariants:
+  - id: feed-portrait
+    name: Instagram Portrait
+    width: 1080
+    height: 1350
+    unit: px
+    format: png
+    colorSpace: srgb
+  templateIds: []
+  approvalPolicyId: native-review-plus-manager
+  drive:
+    sharedDriveId: configure-id
+    knowledgeRootFolderId: configure-id
+    productionRootFolderId: configure-id
+  sheets:
+    spreadsheetId: configure-id
+    sheetId: 0
+privacy:
+  modelEgressMode: approved_providers
+  allowedProviders:
+  - google
+  - openai
+  - anthropic
+  - bfl
+  - recraft
+  rawMessageRetentionDays: 180
+  promptRetentionDays: 90
+rules: []

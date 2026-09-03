@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/header.tsx","./src/components/sidebar.tsx","./src/screens/dnascreen.tsx","./src/screens/evalscreen.tsx","./src/screens/inboxscreen.tsx","./src/screens/libraryscreen.tsx","./src/screens/opsscreen.tsx","./src/screens/reviewscreen.tsx","./src/screens/settingsscreen.tsx"],"version":"5.9.3"}

@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/contracts" },
+    { "path": "packages/domain" },
+    { "path": "packages/db" },
+    { "path": "packages/retrieval" },
+    { "path": "packages/creative" },
+    { "path": "packages/qa" },
+    { "path": "packages/integrations" },
+    { "path": "packages/observability" },
+    { "path": "packages/testkit" },
+    { "path": "packages/evals" },
+    { "path": "apps/core" },
+    { "path": "apps/worker" },
+    { "path": "apps/desk" }
+  ]
+}

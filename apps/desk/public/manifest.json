@@ -1,0 +1,9 @@
+{
+  "name": "Hawa Desk",
+  "short_name": "HawaDesk",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#252932",
+  "description": "Private office Creative OS inbox, review, and library PWA"
+}

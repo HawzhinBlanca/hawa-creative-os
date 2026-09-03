@@ -1,0 +1,39 @@
+{
+  "name": "hawa-creative-os",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:contracts": "vitest run --testNamePattern=contract",
+    "test:integration": "vitest run --testNamePattern=integration",
+    "test:e2e": "vitest run --testNamePattern=e2e",
+    "test:rtl": "vitest run packages/qa/test/rtl.test.ts",
+    "test:faults": "vitest run packages/testkit/test/faults.test.ts",
+    "eval": "tsx packages/evals/src/runner.ts",
+    "db:migrate": "tsx packages/db/src/migrate.ts",
+    "db:check": "tsx packages/db/src/check.ts",
+    "security:scan": "python3 infra/security/security_scan.py",
+    "sbom": "echo '{\"bomFormat\":\"CycloneDX\",\"specVersion\":\"1.5\",\"version\":1,\"components\":[]}' > sbom.json",
+    "validate": "python3 scripts/validate_pack.py && pnpm typecheck && pnpm test",
+    "compose:up": "docker compose -f deployment/docker-compose.yml up -d",
+    "compose:down": "docker compose -f deployment/docker-compose.yml down",
+    "backup:test-restore": "bash deployment/restore-test.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

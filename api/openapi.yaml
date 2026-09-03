@@ -1,0 +1,488 @@
+openapi: 3.1.0
+info:
+  title: Hawa Creative OS API
+  version: 1.0.0
+  description: Private office API. Mutating requests require authentication, authorization, and Idempotency-Key.
+servers:
+  - url: https://hawa.local/api
+security:
+  - oidc: []
+tags:
+  - name: Tasks
+  - name: Messages
+  - name: Designs
+  - name: Clients
+  - name: Operations
+  - name: Evaluations
+  - name: Integrations
+paths:
+  /v1/tasks:
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: state
+          in: query
+          schema: {type: string}
+        - name: clientId
+          in: query
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Authorized task page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '../schemas/Task.schema.json'}}
+                  nextCursor: {type: [string, 'null']}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title, description]
+              properties:
+                clientId: {type: [string, 'null'], format: uuid}
+                projectId: {type: [string, 'null'], format: uuid}
+                title: {type: string, minLength: 1, maxLength: 500}
+                description: {type: string, maxLength: 100000}
+                exactCopy: {type: array, items: {type: string}}
+                language: {type: [string, 'null']}
+                direction: {enum: [ltr, rtl, auto]}
+                dueAt: {type: [string, 'null'], format: date-time}
+                priority: {type: integer, minimum: 1, maximum: 5}
+                attachmentIds: {type: array, items: {type: string, format: uuid}}
+      responses:
+        '201':
+          description: Task created
+          content: {application/json: {schema: {$ref: '../schemas/Task.schema.json'}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      operationId: getTask
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200': {description: Task, content: {application/json: {schema: {$ref: '../schemas/Task.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/timeline:
+    get:
+      tags: [Tasks]
+      operationId: getTaskTimeline
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200':
+          description: Ordered immutable task events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events: {type: array, items: {$ref: '#/components/schemas/DomainEvent'}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/messages/{messageId}/promote:
+    post:
+      tags: [Messages]
+      operationId: promoteMessage
+      parameters:
+        - {$ref: '#/components/parameters/MessageId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                clientId: {type: [string, 'null'], format: uuid}
+                projectId: {type: [string, 'null'], format: uuid}
+                title: {type: [string, 'null']}
+      responses:
+        '201': {description: Promoted task, content: {application/json: {schema: {$ref: '../schemas/Task.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/route:
+    post:
+      tags: [Tasks]
+      operationId: routeTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatchVersion'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [clientId, reason]
+              properties:
+                clientId: {type: string, format: uuid}
+                projectId: {type: [string, 'null'], format: uuid}
+                reason: {type: string, minLength: 1}
+      responses:
+        '202': {description: Routing command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/briefs:
+    post:
+      tags: [Tasks]
+      operationId: createOrApproveBrief
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '../schemas/DesignBrief.schema.json'}}}
+      responses:
+        '201': {description: Brief revision created, content: {application/json: {schema: {$ref: '../schemas/DesignBrief.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/generate:
+    post:
+      tags: [Designs]
+      operationId: startGeneration
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                routeOverride: {type: [string, 'null']}
+                directionCount: {type: integer, minimum: 1, maximum: 3, default: 1}
+                maxCostUsd: {type: number, minimum: 0}
+      responses:
+        '202': {description: Durable generation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/{control}:
+    post:
+      tags: [Operations]
+      operationId: controlTaskWorkflow
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - name: control
+          in: path
+          required: true
+          schema: {enum: [pause, resume, cancel, replay]}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1}
+                checkpoint: {type: [string, 'null']}
+                fallbackDeploymentId: {type: [string, 'null'], format: uuid}
+      responses:
+        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/designs/{designId}/revisions:
+    get:
+      tags: [Designs]
+      operationId: listDesignRevisions
+      parameters:
+        - name: designId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Revisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/DesignRevision'}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/revisions/{revisionId}/qa:
+    post:
+      tags: [Designs]
+      operationId: runQA
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/RevisionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {description: QA started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/revisions/{revisionId}/decisions:
+    post:
+      tags: [Designs]
+      operationId: decideReview
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/RevisionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '../schemas/ApprovalDecision.schema.json'}}}
+      responses:
+        '201': {description: Decision recorded, content: {application/json: {schema: {$ref: '../schemas/ApprovalDecision.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/publish:
+    post:
+      tags: [Tasks]
+      operationId: publishTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {description: Publication started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/feedback:
+    post:
+      tags: [Tasks]
+      operationId: recordFeedback
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '../schemas/FeedbackEvent.schema.json'}}}
+      responses:
+        '201': {description: Feedback recorded, content: {application/json: {schema: {$ref: '../schemas/FeedbackEvent.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/dna:
+    get:
+      tags: [Clients]
+      operationId: getClientDNA
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - name: version
+          in: query
+          schema: {type: integer, minimum: 1}
+      responses:
+        '200': {description: Client DNA, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [Clients]
+      operationId: createClientDNAVersion
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}
+      responses:
+        '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/failures:
+    get:
+      tags: [Operations]
+      operationId: listFailures
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200':
+          description: Actionable failures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/FailureItem'}}
+                  nextCursor: {type: [string, 'null']}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/integrations/health:
+    get:
+      tags: [Integrations]
+      operationId: getIntegrationHealth
+      responses:
+        '200':
+          description: Integration health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [integrationId, kind, state, checkedAt]
+                      properties:
+                        integrationId: {type: string, format: uuid}
+                        kind: {type: string}
+                        state: {enum: [healthy, degraded, unavailable, disabled, reauth_required, unknown]}
+                        checkedAt: {type: string, format: date-time}
+                        detail: {type: object}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/runs:
+    post:
+      tags: [Evaluations]
+      operationId: startEvaluation
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [datasetId, candidate]
+              properties:
+                datasetId: {type: string, format: uuid}
+                candidate: {type: object}
+                blindReview: {type: boolean, default: true}
+      responses:
+        '202': {description: Evaluation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/runs/{runId}:
+    get:
+      tags: [Evaluations]
+      operationId: getEvaluationRun
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Evaluation run
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status, candidate, summary]
+                properties:
+                  id: {type: string, format: uuid}
+                  status: {enum: [queued, running, completed, failed, cancelled]}
+                  candidate: {type: object}
+                  summary: {type: object}
+        default: {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration
+  parameters:
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    RevisionId:
+      name: revisionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 200}
+    IfMatchVersion:
+      name: If-Match-Version
+      in: header
+      required: true
+      schema: {type: integer, minimum: 1}
+    Cursor:
+      name: cursor
+      in: query
+      schema: {type: string}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+  responses:
+    Problem:
+      description: RFC 9457-style problem
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code, detail, safe_action]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        code: {type: string}
+        detail: {type: string}
+        safe_action: {type: string}
+        trace_id: {type: [string, 'null']}
+        errors: {type: array, items: {type: object}}
+    CommandReceipt:
+      type: object
+      required: [commandId, taskId, acceptedAt]
+      properties:
+        commandId: {type: string, format: uuid}
+        taskId: {type: string, format: uuid}
+        workflowId: {type: [string, 'null']}
+        acceptedAt: {type: string, format: date-time}
+    DomainEvent:
+      type: object
+      required: [event_id, event_type, schema_version, occurred_at, tenant_id, aggregate_type, aggregate_id, aggregate_version, actor, correlation_id, data]
+      properties:
+        event_id: {type: string, format: uuid}
+        event_type: {type: string}
+        schema_version: {type: integer, minimum: 1}
+        occurred_at: {type: string, format: date-time}
+        tenant_id: {type: string, format: uuid}
+        client_id: {type: [string, 'null'], format: uuid}
+        aggregate_type: {type: string}
+        aggregate_id: {type: string, format: uuid}
+        aggregate_version: {type: integer, minimum: 1}
+        actor: {type: object}
+        correlation_id: {type: string, format: uuid}
+        causation_id: {type: [string, 'null'], format: uuid}
+        trace_id: {type: [string, 'null']}
+        data: {type: object}
+    DesignRevision:
+      type: object
+      required: [id, documentId, revision, sourceSha256, semanticHash, studio, studioVersion, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        documentId: {type: string, format: uuid}
+        revision: {type: integer, minimum: 1}
+        sourceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        semanticHash: {type: string}
+        studio: {type: string}
+        studioVersion: {type: string}
+        status: {enum: [draft, review, approved, rejected, superseded]}
+        createdAt: {type: string, format: date-time}
+    FailureItem:
+      type: object
+      required: [taskId, state, errorClass, message, safeAction, updatedAt]
+      properties:
+        taskId: {type: string, format: uuid}
+        state: {type: string}
+        step: {type: [string, 'null']}
+        errorClass: {type: string}
+        message: {type: string}
+        safeAction: {type: string}
+        attempts: {type: integer, minimum: 0}
+        traceId: {type: [string, 'null']}
+        updatedAt: {type: string, format: date-time}
