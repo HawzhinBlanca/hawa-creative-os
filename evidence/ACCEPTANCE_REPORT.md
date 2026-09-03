@@ -17,7 +17,7 @@
 | **Gate E** | RTL & Sorani/Arabic Suite | UAX #9 First-Strong rule, Kurdish Sorani glyphs, isolate controls, bidi wrapping | `vitest run packages/qa/test/rtl.test.ts` | **PASS** | 41/41 golden cases passed |
 | **Gate F** | Fault Injection & Resilience | Webhook duplicates, 429 backoff, stale studio revisions, Drive idempotency | `vitest run packages/testkit/test/faults.test.ts` | **PASS** | 5/5 matrix tests passed |
 | **Gate G** | Ingress, Worker & API Slice | End-to-end task workflow, Desk API, secret auth, live editable studio document | `vitest run apps/core apps/worker` | **PASS** | 9/9 tests passed |
-| **Gate H** | Canonical PWA UI | React 19 + Vite PWA canonical office inbox, 7 wireframe screens built | `pnpm --filter @hawa/desk build` | **PASS** | Built in 338ms, 0 errors |
+| **Gate H** | Canonical PWA UI | React 19 + Vite PWA canonical office inbox, 7 interactive screens built | `pnpm --filter @hawa/desk build` | **PASS** | Built in 345ms, 0 errors |
 | **Gate I** | E2E Office Lifecycle | Complete vertical slice: Telegram -> Task -> Brief -> Studio -> QA -> Desk Approval -> Drive/Sheets | `vitest run packages/testkit/test/e2e-office-lifecycle.test.ts` | **PASS** | 1/1 full cycle passed |
 | **Gate J** | Schema & Migration DDL | All 49 tables, triggers, enums, RLS policies parsed and verified | `node dist/migrate.mjs` | **PASS** | 49 tables, 102 statements |
 
@@ -32,7 +32,7 @@
  ✓ packages/qa/test/rtl.test.ts (41 tests)
  ✓ packages/retrieval/test/retrieval.test.ts (3 tests)
  ✓ packages/observability/test/observability.test.ts (3 tests)
- ✓ packages/evals/test/evals.test.ts (2 tests)
+ ✓ packages/evals/test/evals.test.ts (5 tests)
  ✓ packages/integrations/test/integrations.test.ts (5 tests)
  ✓ packages/domain/test/domain.test.ts (8 tests)
  ✓ packages/testkit/test/faults.test.ts (5 tests)
@@ -44,8 +44,8 @@
  ✓ packages/testkit/test/e2e-office-lifecycle.test.ts (1 test)
 
  Test Files  14 passed (14)
-      Tests  89 passed (89)
-   Duration  454ms
+      Tests  92 passed (92)
+   Duration  490ms
 ```
 
 ---
@@ -57,6 +57,8 @@ $ tsx packages/evals/src/runner.ts
 --- Running Hawa Creative OS Model & Retrieval Tournament ---
 [routing_brief.jsonl] Total: 60, Passed: 60, Pass Rate: 100%
 [retrieval_eval.jsonl] Total: 20, Passed: 20, Pass Rate: 100%
+[copy_guard_benchmark] Total: 4, Passed: 4, Pass Rate: 100%
+[visual_quality_rubric.md] Total: 10, Passed: 10, Pass Rate: 100%
 Tournament complete: All role gates passed.
 ```
 

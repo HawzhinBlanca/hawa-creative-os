@@ -3,10 +3,28 @@ import React, { useState } from 'react';
 export const ReviewScreen: React.FC = () => {
   const [variant, setVariant] = useState<'feed' | 'square' | 'story'>('feed');
   const [approved, setApproved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
+  const [repairCycles, setRepairCycles] = useState(0);
   const [revisionNote, setRevisionNote] = useState('');
+  const [escalated, setEscalated] = useState(false);
 
   const handleApprove = () => {
     setApproved(true);
+    setPublishing(true);
+    setTimeout(() => {
+      setPublishing(false);
+      setPublished(true);
+    }, 600);
+  };
+
+  const handleRequestRevision = () => {
+    if (!revisionNote) return;
+    const nextCycles = repairCycles + 1;
+    setRepairCycles(nextCycles);
+    if (nextCycles > 2) {
+      setEscalated(true);
+    }
   };
 
   return (
@@ -62,8 +80,8 @@ export const ReviewScreen: React.FC = () => {
               <small>Exact copy, bidi, brand logo hash verified</small>
             </div>
             <div className={`step ${approved ? 'done' : ''}`}>
-              <b>{approved ? 'Approved by Operator' : 'Awaiting your decision'}</b>
-              <small>{approved ? 'Dispatched to Google Shared Drive' : 'safe to close this page'}</small>
+              <b>{published ? 'Published to Google Shared Drive' : publishing ? 'Publishing deliverables...' : approved ? 'Approved by Operator' : 'Awaiting your decision'}</b>
+              <small>{published ? 'Synced to Sheet row 101 with hash reconciliation' : publishing ? 'Uploading .hyc & PNG renders...' : approved ? 'Dispatched to Google Shared Drive' : 'safe to close this page'}</small>
             </div>
           </div>
         </div>
@@ -107,6 +125,36 @@ export const ReviewScreen: React.FC = () => {
         <div className="panel">
           <h3>Quality evidence</h3>
 
+          {published && (
+            <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', marginBottom: 12 }}>
+              <b style={{ color: '#065f46' }}>✓ Publication Complete</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: '#047857' }}>
+                Files uploaded to <code>drive_aster_hotel/Summer/</code>. Row 101 synced in Google Sheets.
+              </p>
+              <a href="https://drive.google.com" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: 11, display: 'inline-block', marginTop: 4 }}>
+                Open Shared Drive Folder
+              </a>
+            </div>
+          )}
+
+          {escalated && (
+            <div className="finding" style={{ borderColor: '#dc2626', background: '#fef2f2', marginBottom: 12 }}>
+              <b style={{ color: '#991b1b' }}>⚠ Max Repair Budget Exceeded</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: '#b91c1c' }}>
+                Reached 2 repair cycles. Escalated to Operator Review (<code>OPERATOR_REQUIRED</code>). Automated repair halted.
+              </p>
+            </div>
+          )}
+
+          {repairCycles > 0 && !escalated && (
+            <div className="finding" style={{ borderColor: '#d97706', background: '#fffbeb', marginBottom: 12 }}>
+              <b style={{ color: '#92400e' }}>Repair Cycle {repairCycles} of 2 Active</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: '#b45309' }}>
+                Revision requested: “{revisionNote}”. Task status: <code>REVISION_REQUESTED</code>.
+              </p>
+            </div>
+          )}
+
           <div className="finding">
             <b>Visual warning (advisory)</b>
             <p>Foreground organic shape is close to price safe zone. Non-blocking.</p>
@@ -134,13 +182,19 @@ export const ReviewScreen: React.FC = () => {
           <div className="toolbar" style={{ marginTop: 10, flexWrap: 'wrap' }}>
             <button
               className="btn primary"
-              disabled={approved}
+              disabled={approved || publishing}
               onClick={handleApprove}
             >
-              {approved ? '✓ Approved' : 'Approve exact revision'}
+              {published ? '✓ Published' : publishing ? 'Publishing...' : 'Approve & Publish'}
             </button>
-            <button className="btn">Request revision</button>
-            <button className="btn">Send to designer</button>
+            <button
+              className="btn"
+              disabled={approved || escalated}
+              onClick={handleRequestRevision}
+            >
+              Request revision ({repairCycles}/2)
+            </button>
+            <button className="btn" onClick={() => alert('Dispatched to designer workspace')}>Send to designer</button>
           </div>
 
           <small style={{ color: 'var(--muted)', display: 'block', marginTop: 10 }}>

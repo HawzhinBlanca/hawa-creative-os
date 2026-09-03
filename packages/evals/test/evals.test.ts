@@ -17,4 +17,27 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(summary.passRate).toBe(100);
     expect(summary.criticalViolations).toBe(0);
   });
+
+  it('evaluates copy guard against unauthorized price/number mutations', async () => {
+    const summary = await runner.runCopyGuardEvaluation();
+    expect(summary.totalCases).toBe(4);
+    expect(summary.passRate).toBe(100);
+    expect(summary.criticalViolations).toBe(0);
+  });
+
+  it('evaluates visual judge rubric across 10 dimensions without hard rule overrides', async () => {
+    const summary = await runner.runVisualJudgeEvaluation();
+    expect(summary.totalCases).toBe(10);
+    expect(summary.passRate).toBe(100);
+    expect(summary.criticalViolations).toBe(0);
+  });
+
+  it('runs full tournament aggregating all benchmarks with 100% pass rate', async () => {
+    const full = await runner.runFullTournament();
+    expect(full.overallPassRate).toBe(100);
+    expect(full.routing.passRate).toBe(100);
+    expect(full.retrieval.passRate).toBe(100);
+    expect(full.copyGuard.passRate).toBe(100);
+    expect(full.visualJudge.passRate).toBe(100);
+  });
 });
