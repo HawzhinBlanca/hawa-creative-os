@@ -35,6 +35,9 @@ importers:
       '@hawa/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@hawa/evals':
+        specifier: workspace:*
+        version: link:../../packages/evals
       '@hawa/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -201,9 +204,24 @@ importers:
       '@hawa/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@hawa/creative':
+        specifier: workspace:*
+        version: link:../creative
+      '@hawa/db':
+        specifier: workspace:*
+        version: link:../db
       '@hawa/domain':
         specifier: workspace:*
         version: link:../domain
+      '@hawa/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@hawa/qa':
+        specifier: workspace:*
+        version: link:../qa
+      '@hawa/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
 
 packages:
 

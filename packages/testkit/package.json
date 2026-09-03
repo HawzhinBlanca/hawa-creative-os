@@ -17,6 +17,11 @@
   },
   "dependencies": {
     "@hawa/contracts": "workspace:*",
-    "@hawa/domain": "workspace:*"
+    "@hawa/domain": "workspace:*",
+    "@hawa/creative": "workspace:*",
+    "@hawa/qa": "workspace:*",
+    "@hawa/integrations": "workspace:*",
+    "@hawa/retrieval": "workspace:*",
+    "@hawa/db": "workspace:*"
   }
 }

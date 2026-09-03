@@ -98,7 +98,7 @@ export function extractProtectedTokens(text: string): ProtectedToken[] {
   const tokens: ProtectedToken[] = [];
 
   // Price patterns (e.g. $10, 10,000 IQD, 15$, 25,000 د.ع, ٢٥٬٠٠٠ دینار)
-  const priceRegex = /(\$\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|IQD|USD|د\.ع|دینار|هەزار))/gi;
+  const priceRegex = /(\$\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|IQD|USD|د\.ع|دینار|هەزار|%|٪))/gi;
   let match: RegExpExecArray | null;
   while ((match = priceRegex.exec(text)) !== null) {
     tokens.push({

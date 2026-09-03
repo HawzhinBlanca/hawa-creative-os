@@ -4,3 +4,4 @@ export * from './repositories/task.repository.js';
 export * from './repositories/client.repository.js';
 export * from './repositories/ingress.repository.js';
 export * from './repositories/outbox.repository.js';
+export * from './migrate.js';

@@ -179,4 +179,13 @@ describe('DB Repositories: Isolation & Audit Trail', () => {
     await outbox.markDelivered(outboxRow.id);
     expect(outboxRow.state).toBe('delivered');
   });
+
+  it('Schema Migration: parses all 49 tables, enums, triggers, and runs dry-run migration', async () => {
+    const { runMigrations, parseSchemaSql } = await import('../src/migrate.js');
+    const result = await runMigrations({ dryRun: true });
+
+    expect(result.success).toBe(true);
+    expect(result.tableCount).toBe(49);
+    expect(result.statementCount).toBeGreaterThan(50);
+  });
 });

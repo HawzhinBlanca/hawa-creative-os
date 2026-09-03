@@ -20,6 +20,7 @@
     "@hawa/creative": "workspace:*",
     "@hawa/qa": "workspace:*",
     "@hawa/observability": "workspace:*",
+    "@hawa/evals": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "hono": "^4.7.2",
     "zod": "^3.24.2"

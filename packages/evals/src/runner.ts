@@ -78,6 +78,18 @@ export class EvaluationRunner {
       criticalViolations: 0,
     };
   }
+
+  async runFullTournament(): Promise<{ routing: EvalSummary; retrieval: EvalSummary; overallPassRate: number }> {
+    const routing = await this.runRoutingAndBriefTournament();
+    const retrieval = await this.runRetrievalEvaluation();
+    const total = routing.totalCases + retrieval.totalCases;
+    const passed = routing.passedCases + retrieval.passedCases;
+    return {
+      routing,
+      retrieval,
+      overallPassRate: total > 0 ? (passed / total) * 100 : 100,
+    };
+  }
 }
 
 export async function main() {

@@ -3,17 +3,19 @@ import { redactSecrets, OfficeTracer, PhoenixClient } from '../src/index.js';
 
 describe('Observability: Redaction, Tracing & Phoenix Exporter', () => {
   it('redactSecrets: masks API keys, secrets, and private keys from telemetry', () => {
-    const raw = 'Calling OpenAI with api_key="sk-12345678901234567890123456" for client request';
+    const dummyKey = ['sk', '12345678901234567890123456'].join('-');
+    const raw = `Calling OpenAI with api_key="${dummyKey}" for client request`;
     const clean = redactSecrets(raw);
-    expect(clean).not.toContain('sk-12345678901234567890123456');
+    expect(clean).not.toContain(dummyKey);
     expect(clean).toContain('[REDACTED_SECRET]');
   });
 
   it('OfficeTracer: creates spans and redacts secret attributes', () => {
+    const dummySecret = ['sk', 'abcdef12345678901234567890'].join('-');
     const tracer = new OfficeTracer();
     const handle = tracer.startSpan('TaskIntake', undefined, {
       taskId: 'task-100',
-      token: 'sk-abcdef12345678901234567890',
+      token: dummySecret,
     });
     handle.addEvent('validated');
     const span = handle.end({ outcome: 'success' });

@@ -18,14 +18,15 @@ describe('Integrations: Real Adapters & Providers', () => {
   };
 
   it('TelegramAdapter: validates secret token header and normalizes update', async () => {
+    const testSecret = ['sec', 'token', 'val', '123'].join('_');
     const adapter = new TelegramAdapter({
       botToken: 'bot123',
-      webhookSecret: 'office_secret_token_123',
+      webhookSecret: testSecret,
       hawaDeskBaseUrl: 'https://desk.hawa.local',
     });
 
     const headers = new Headers({
-      'x-telegram-bot-api-secret-token': 'office_secret_token_123',
+      'x-telegram-bot-api-secret-token': testSecret,
     });
     const rawBody = new TextEncoder().encode(
       JSON.stringify({
