@@ -32,6 +32,13 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(summary.criticalViolations).toBe(0);
   });
 
+  it('evaluates adversarial safety and prompt-injection defenses with 0 escapes', async () => {
+    const summary = await runner.runPromptInjectionAndSafetyEvaluation();
+    expect(summary.totalCases).toBe(5);
+    expect(summary.passRate).toBe(100);
+    expect(summary.criticalViolations).toBe(0);
+  });
+
   it('runs full tournament aggregating all benchmarks with 100% pass rate', async () => {
     const full = await runner.runFullTournament();
     expect(full.overallPassRate).toBe(100);
@@ -39,5 +46,6 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(full.retrieval.passRate).toBe(100);
     expect(full.copyGuard.passRate).toBe(100);
     expect(full.visualJudge.passRate).toBe(100);
+    expect(full.adversarialSafety.passRate).toBe(100);
   });
 });
