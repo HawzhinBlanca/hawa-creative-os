@@ -90,3 +90,16 @@ export async function runMigrations(options: {
     await client.end().catch(() => {});
   }
 }
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  console.log('Running Hawa Creative OS database migrations...');
+  runMigrations().then((res) => {
+    if (res.success) {
+      console.log(`Verified db/schema.sql (${res.tableCount} tables, ${res.statementCount} statements). Applied to DB: ${res.appliedToDb}. Database migration completed successfully.`);
+    } else {
+      console.error(`Migration failed: ${res.error}`);
+      process.exit(1);
+    }
+  });
+}
+
