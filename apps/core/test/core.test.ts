@@ -147,6 +147,21 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(currentTask.status).toBe('AWAITING_APPROVAL');
     expect(currentTask.latestRevisionId).toBeDefined();
 
+    // 4b. Test Studio Deep-Link URL generation (FR-029)
+    const editorUrlRes = await app.request(`/v1/tasks/${taskId}/editor-url`);
+    expect(editorUrlRes.status).toBe(200);
+    const editorUrlData = await editorUrlRes.json();
+    expect(editorUrlData.url).toContain('/review?doc=');
+    expect(editorUrlData.taskId).toBe(taskId);
+
+    // 4c. Test Content-Addressed Export Package Assembler (FR-045)
+    const pkgRes = await app.request(`/v1/tasks/${taskId}/export-package`);
+    expect(pkgRes.status).toBe(200);
+    const pkgData = await pkgRes.json();
+    expect(pkgData.packageHash).toBeDefined();
+    expect(pkgData.files.length).toBeGreaterThanOrEqual(4);
+    expect(pkgData.files.some((f: any) => f.name.endsWith('.hyc'))).toBe(true);
+
     // 5. Decide (Approve)
     const approveRes = await app.request(`/v1/tasks/${taskId}/revisions/${currentTask.latestRevisionId}/decisions`, {
       method: 'POST',
@@ -312,6 +327,26 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(runBody.result.success).toBe(true);
     expect(runBody.result.invariantsVerified.deterministicQaPassed).toBe(true);
     expect(runBody.summary.totalProbes).toBe(slo.summary.totalProbes + 1);
+  });
+
+  it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audits and repairs storage drift (FR-049, FR-050)', async () => {
+    // 1. Get initial reconciliation report
+    const getRes = await app.request('/v1/operations/reconciliation');
+    expect(getRes.status).toBe(200);
+    const report = await getRes.json();
+    expect(report.totalTasksAudited).toBeGreaterThanOrEqual(0);
+
+    // 2. Trigger active reconciliation audit
+    const runRes = await app.request('/v1/operations/reconciliation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoRepair: true }),
+    });
+    expect(runRes.status).toBe(201);
+    const runReport = await runRes.json();
+    expect(runReport.auditId).toBeDefined();
+    expect(['clean', 'repaired']).toContain(runReport.status);
+    expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
   });
 });
 

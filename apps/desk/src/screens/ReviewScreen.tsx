@@ -111,6 +111,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }
   }, [task]);
 
+  // Handle Studio Deep-Link query params (?doc=...&taskId=...&rev=...)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const docParam = params.get('doc');
+      const taskIdParam = params.get('taskId');
+      const revParam = params.get('rev');
+      if (docParam || taskIdParam) {
+        setStudioToast(`⚡ Studio Deep-Link Active: ${docParam || taskIdParam} (Rev ${revParam || '1'})`);
+        setTimeout(() => setStudioToast(null), 5000);
+      }
+    } catch {
+      // safe fallback
+    }
+  }, []);
+
   const taskId = task?.id;
   const taskTitle = task?.title || 'Summer offer';
   const taskCopy = task?.description || 'بۆ ئاستەر پۆستێکی هاوینە دروست بکە… نرخ: ١٢٬٠٠٠ دینار.';

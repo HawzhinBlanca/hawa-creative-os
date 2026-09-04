@@ -317,10 +317,11 @@ export class HyCanvasStudioAdapter implements DesignStudioAdapter {
   }
 
   async getEditorUrl(_ctx: RequestContext, document: StudioDocumentRef, mode: 'edit' | 'review'): Promise<Result<{ url: string; expiresAt: string }>> {
+    const baseUrl = process.env.HAWA_STUDIO_URL || 'http://localhost:4173/review';
     return {
       ok: true,
       value: {
-        url: `https://studio.hawa.office/editor/${document.documentId}?mode=${mode}&rev=${document.sourceRevision}`,
+        url: `${baseUrl}?doc=${document.documentId}&mode=${mode}&rev=${document.sourceRevision}`,
         expiresAt: new Date(Date.now() + 7200000).toISOString(),
       },
     };

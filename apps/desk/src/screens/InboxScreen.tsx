@@ -338,15 +338,27 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                 </div>
                 <h3>{t.title}</h3>
                 <p dir="rtl" lang="ckb">{t.description || 'Deterministic QA completed. Awaiting decision.'}</p>
-                <button
-                  className="btn primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectReview(t);
-                  }}
-                >
-                  Review Candidate
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    className="btn primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectReview(t);
+                    }}
+                  >
+                    Review Candidate
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38BDF8', borderColor: '#0284C7' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectReview(t);
+                    }}
+                  >
+                    ⚡ Studio
+                  </button>
+                </div>
               </div>
             ))}
 

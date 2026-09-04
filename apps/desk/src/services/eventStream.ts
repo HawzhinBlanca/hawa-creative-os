@@ -71,6 +71,8 @@ class EventStreamService {
         'webhook:received',
         'dna:updated',
         'asset:ingested',
+        'slo:probe_completed',
+        'reconciliation:completed',
       ];
 
       domainEvents.forEach((eventType) => {

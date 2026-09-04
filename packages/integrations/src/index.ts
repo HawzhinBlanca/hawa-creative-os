@@ -4,3 +4,6 @@ export * from './google-publisher.js';
 export * from './hycanvas-adapter.js';
 export * from './circuit-breaker.js';
 export * from './model-gateway.js';
+export * from './reconciliation-service.js';
+export * from './voice-transcriber.js';
+export * from './telegram-bridge.js';

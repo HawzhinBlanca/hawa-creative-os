@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { eventStream } from '../services/eventStream';
 
 interface IntegrationHealth {
   integrationId: string;
@@ -64,23 +65,39 @@ interface SloProbeResult {
   };
 }
 
+export interface ReconciliationReport {
+  auditId: string;
+  timestamp: string;
+  totalTasksAudited: number;
+  totalDriveDeliverablesChecked: number;
+  totalSheetRowsAudited: number;
+  inSyncCount: number;
+  driftCount: number;
+  repairedCount: number;
+  status: 'clean' | 'repaired' | 'divergent';
+}
+
 export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
   const [failures, setFailures] = useState<FailureItem[]>([]);
   const [sloSummary, setSloSummary] = useState<SloSummary | null>(null);
   const [recentProbes, setRecentProbes] = useState<SloProbeResult[]>([]);
+  const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [runningBenchmark, setRunningBenchmark] = useState(false);
+  const [runningReconciliation, setRunningReconciliation] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [benchmarkToast, setBenchmarkToast] = useState<string | null>(null);
+  const [reconcileToast, setReconcileToast] = useState<string | null>(null);
 
   const fetchOpsData = async () => {
     setLoading(true);
     try {
-      const [healthRes, failRes, sloRes] = await Promise.all([
+      const [healthRes, failRes, sloRes, reconRes] = await Promise.all([
         fetch('/v1/integrations/health').then((r) => (r.ok ? r.json() : { items: [] })),
         fetch('/v1/operations/failures').then((r) => (r.ok ? r.json() : { items: [] })),
         fetch('/v1/operations/slo').then((r) => (r.ok ? r.json() : null)),
+        fetch('/v1/operations/reconciliation').then((r) => (r.ok ? r.json() : null)),
       ]);
 
       if (healthRes.items) {
@@ -92,6 +109,9 @@ export const OpsScreen: React.FC = () => {
       if (sloRes?.summary) {
         setSloSummary(sloRes.summary);
         setRecentProbes(sloRes.recentProbes || []);
+      }
+      if (reconRes?.auditId) {
+        setReconciliation(reconRes);
       }
       setLastCheck(new Date().toLocaleTimeString());
     } catch (err) {
@@ -126,8 +146,42 @@ export const OpsScreen: React.FC = () => {
     }
   };
 
+  const runReconciliation = async () => {
+    setRunningReconciliation(true);
+    setReconcileToast(null);
+    try {
+      const res = await fetch('/v1/operations/reconciliation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoRepair: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReconciliation(data);
+        setReconcileToast(`✓ Storage Audit: ${data.inSyncCount} in-sync, ${data.driftCount} drifts detected, ${data.repairedCount} auto-repaired`);
+        setTimeout(() => setReconcileToast(null), 6000);
+      }
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+    } finally {
+      setRunningReconciliation(false);
+    }
+  };
+
   useEffect(() => {
     fetchOpsData();
+
+    const unsubReconcile = eventStream.on('reconciliation:completed', () => {
+      fetchOpsData();
+    });
+    const unsubSlo = eventStream.on('slo:probe_completed', () => {
+      fetchOpsData();
+    });
+
+    return () => {
+      unsubReconcile();
+      unsubSlo();
+    };
   }, []);
 
   const degradedCount = integrations.filter((i) => i.state !== 'healthy').length;
@@ -298,6 +352,62 @@ export const OpsScreen: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Reconciliation & Storage Drift Audit Panel (FR-049, FR-050) */}
+      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid #10B981' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
+              <span>🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger</span>
+              <span className={`pill ${reconciliation?.status === 'divergent' ? 'bad' : 'ok'}`} style={{ fontSize: 11 }}>
+                {reconciliation?.status === 'clean' ? '100% In Sync' : reconciliation?.status === 'repaired' ? 'Auto-Reconciled' : 'Audit Active'}
+              </span>
+            </h2>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              Deterministic audit of PostgreSQL operational truth against Google Drive asset hashes and Google Sheets reporting mirror (FR-049, FR-050)
+            </div>
+          </div>
+          <button
+            className="btn"
+            style={{ fontSize: 12, padding: '4px 10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', borderColor: '#10B981', fontWeight: 600 }}
+            onClick={runReconciliation}
+            disabled={runningReconciliation}
+          >
+            {runningReconciliation ? 'Running Audit…' : 'Run Reconciliation Audit'}
+          </button>
+        </div>
+
+        {reconcileToast && (
+          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10B981', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#10B981' }}>
+            {reconcileToast}
+          </div>
+        )}
+
+        <div className="stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div className="stat" style={{ padding: '8px 10px' }}>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited || 0}</b>
+            <span style={{ fontSize: 11 }}>Tasks Audited</span>
+          </div>
+          <div className="stat" style={{ padding: '8px 10px' }}>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalDriveDeliverablesChecked || 0}</b>
+            <span style={{ fontSize: 11 }}>Drive Files</span>
+          </div>
+          <div className="stat" style={{ padding: '8px 10px' }}>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalSheetRowsAudited || 0}</b>
+            <span style={{ fontSize: 11 }}>Sheet Rows</span>
+          </div>
+          <div className="stat" style={{ padding: '8px 10px' }}>
+            <b style={{ fontSize: 18, color: '#10B981' }}>{reconciliation?.inSyncCount || 0}</b>
+            <span style={{ fontSize: 11 }}>In Sync</span>
+          </div>
+          <div className="stat" style={{ padding: '8px 10px' }}>
+            <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? '#F59E0B' : '#10B981' }}>
+              {reconciliation?.driftCount || 0}
+            </b>
+            <span style={{ fontSize: 11 }}>Drifts Repaired</span>
+          </div>
+        </div>
+      </div>
 
       <div className="ops" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>
