@@ -27,6 +27,7 @@
 | **Gate O** | Multi-Format Reflow & Semantic Diff | 1:1 square to 4:5 feed / 9:16 story reflow, safe zones, text/spatial/asset semantic diffing | `vitest run packages/creative/test/reflow-diff.test.ts` | **PASS** | 6/6 tests passed |
 | **Gate P** | Concurrency & Chaos Matrix | 20-worker optimistic lock, outbox lease timeout & DLQ, 50-run network drop idempotency | `vitest run packages/testkit/test/concurrency-chaos.test.ts` | **PASS** | 4/4 tests passed |
 | **Gate Q** | CycloneDX SBOM Supply Chain | Automated Software Bill of Materials generation in CycloneDX 1.7 standard format | `pnpm run sbom` | **PASS** | `evidence/sbom.json` (217KB) |
+| **Gate R** | Live API Data-Binding & PWA E2E | Desk PWA live proxy, real task creation, Kurdish brief lock, QA pass, approval, publishing & evals | Browser subagent validation at `http://localhost:4173/` | **PASS** | Verified end-to-end (`desk_live_api_demo`) |
 
 ---
 

@@ -14,13 +14,77 @@ export const App: React.FC = () => {
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskCopy, setTaskCopy] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     if (!taskTitle) return;
-    setShowNewTaskModal(false);
-    setTaskTitle('');
-    setTaskCopy('');
-    setCurrentScreen('inbox');
+    setIsSubmitting(true);
+    try {
+      const idempotencyKey = `task-desk-${Date.now()}`;
+      const res = await fetch('/v1/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          clientId: 'client-office-1',
+          title: taskTitle,
+          priority: 'routine',
+          description: taskCopy,
+          source: { platform: 'hawa_desk', externalId: 'operator-desk' },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const taskId = data.id;
+
+        // Auto-route and create brief
+        await fetch(`/v1/tasks/${taskId}/route`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskRoute: 'standard_generation' }),
+        }).catch(() => {});
+
+        await fetch(`/v1/tasks/${taskId}/briefs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            objective: taskTitle,
+            taskRoute: 'standard_generation',
+            primaryLanguage: 'ckb',
+            direction: 'rtl',
+            variants: [{ width: 1080, height: 1350, role: 'feed_post' }],
+            exactCopy: taskCopy ? [{ role: 'headline', text: taskCopy, language: 'ckb', direction: 'rtl', approved: true }] : [],
+            requiredAssetRoles: ['logo_primary'],
+          }),
+        }).catch(() => {});
+
+        // Trigger creative generation
+        await fetch(`/v1/tasks/${taskId}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }).catch(() => {});
+
+        setSelectedTask(data);
+        setRefreshTrigger((k) => k + 1);
+        setShowNewTaskModal(false);
+        setTaskTitle('');
+        setTaskCopy('');
+        setCurrentScreen('review');
+      } else {
+        setShowNewTaskModal(false);
+        setCurrentScreen('inbox');
+      }
+    } catch {
+      setShowNewTaskModal(false);
+      setCurrentScreen('inbox');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -29,8 +93,16 @@ export const App: React.FC = () => {
       <main className="main">
         <Header currentScreen={currentScreen} onNewTask={() => setShowNewTaskModal(true)} />
         <div className="content">
-          {currentScreen === 'inbox' && <InboxScreen onSelectReview={() => setCurrentScreen('review')} />}
-          {currentScreen === 'review' && <ReviewScreen />}
+          {currentScreen === 'inbox' && (
+            <InboxScreen
+              refreshTrigger={refreshTrigger}
+              onSelectReview={(task) => {
+                if (task) setSelectedTask(task);
+                setCurrentScreen('review');
+              }}
+            />
+          )}
+          {currentScreen === 'review' && <ReviewScreen task={selectedTask} />}
           {currentScreen === 'dna' && <DnaScreen />}
           {currentScreen === 'library' && <LibraryScreen />}
           {currentScreen === 'settings' && <SettingsScreen />}
@@ -95,11 +167,11 @@ export const App: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-              <button className="btn" onClick={() => setShowNewTaskModal(false)}>
+              <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
                 Cancel
               </button>
-              <button className="btn primary" onClick={handleCreateTask}>
-                Submit to Ingress
+              <button className="btn primary" disabled={isSubmitting} onClick={handleCreateTask}>
+                {isSubmitting ? 'Submitting & Routing…' : 'Submit to Ingress'}
               </button>
             </div>
           </div>

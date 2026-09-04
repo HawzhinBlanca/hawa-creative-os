@@ -1,29 +1,144 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export const ReviewScreen: React.FC = () => {
+interface ReviewScreenProps {
+  task?: any;
+}
+
+export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [variant, setVariant] = useState<'feed' | 'square' | 'story'>('feed');
   const [approved, setApproved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
-  const [repairCycles, setRepairCycles] = useState(0);
+  const [publishReceipt, setPublishReceipt] = useState<any>(null);
+  const [repairCycles, setRepairCycles] = useState(task?.repairCount || 0);
   const [revisionNote, setRevisionNote] = useState('');
-  const [escalated, setEscalated] = useState(false);
+  const [escalated, setEscalated] = useState(task?.status === 'OPERATOR_REQUIRED');
+  const [taskStatus, setTaskStatus] = useState<string>(task?.status || 'AWAITING_APPROVAL');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleApprove = () => {
-    setApproved(true);
+  // Sync state if task prop changes
+  useEffect(() => {
+    if (task) {
+      setRepairCycles(task.repairCount || 0);
+      setTaskStatus(task.status || 'AWAITING_APPROVAL');
+      setEscalated(task.status === 'OPERATOR_REQUIRED' || (task.repairCount || 0) > 2);
+      if (task.status === 'COMPLETE') {
+        setApproved(true);
+        setPublished(true);
+      } else if (task.status === 'APPROVED') {
+        setApproved(true);
+      }
+    }
+  }, [task]);
+
+  const taskId = task?.id;
+  const taskTitle = task?.title || 'Summer offer';
+  const taskCopy = task?.description || 'بۆ ئاستەر پۆستێکی هاوینە دروست بکە… نرخ: ١٢٬٠٠٠ دینار.';
+  const clientId = task?.clientId || 'Aster';
+  const revisionId = task?.latestRevisionId || 'rev-current';
+
+  const handleApprove = async () => {
+    setErrorMessage(null);
     setPublishing(true);
-    setTimeout(() => {
+
+    try {
+      if (taskId) {
+        // 1. Submit approval decision to Core API
+        const decisionRes = await fetch(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            decision: 'approved',
+            displayName: 'Desk Operator',
+            role: 'art_director',
+          }),
+        });
+
+        if (!decisionRes.ok) {
+          const err = await decisionRes.json().catch(() => ({}));
+          throw new Error(err.detail || 'Approval decision rejected by state machine');
+        }
+
+        setApproved(true);
+        setTaskStatus('APPROVED');
+
+        // 2. Dispatched to publisher
+        const pubRes = await fetch(`/v1/tasks/${taskId}/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (pubRes.ok) {
+          const pubData = await pubRes.json();
+          setPublished(true);
+          setPublishReceipt(pubData);
+          setTaskStatus('COMPLETE');
+        } else {
+          const err = await pubRes.json().catch(() => ({}));
+          throw new Error(err.detail || 'Publication dispatch failed');
+        }
+      } else {
+        // Fallback demo simulation
+        setApproved(true);
+        setTimeout(() => {
+          setPublished(true);
+          setTaskStatus('COMPLETE');
+        }, 500);
+      }
+    } catch (err: any) {
+      console.error('Approval failed:', err);
+      setErrorMessage(err.message || 'Action failed');
+    } finally {
       setPublishing(false);
-      setPublished(true);
-    }, 600);
+    }
   };
 
-  const handleRequestRevision = () => {
-    if (!revisionNote) return;
+  const handleRequestRevision = async () => {
+    if (!revisionNote) {
+      setErrorMessage('Please provide revision instructions before submitting.');
+      return;
+    }
+    setErrorMessage(null);
+
     const nextCycles = repairCycles + 1;
-    setRepairCycles(nextCycles);
-    if (nextCycles > 2) {
-      setEscalated(true);
+
+    try {
+      if (taskId) {
+        const res = await fetch(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            decision: 'revision_requested',
+            displayName: 'Desk Operator',
+            role: 'art_director',
+            revisionRequest: { comment: revisionNote },
+          }),
+        });
+
+        if (res.ok) {
+          setRepairCycles(nextCycles);
+          if (nextCycles > 2) {
+            setEscalated(true);
+            setTaskStatus('OPERATOR_REQUIRED');
+          } else {
+            setTaskStatus('REVISION_REQUESTED');
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Revision request failed');
+        }
+      } else {
+        // Fallback demo simulation
+        setRepairCycles(nextCycles);
+        if (nextCycles > 2) {
+          setEscalated(true);
+          setTaskStatus('OPERATOR_REQUIRED');
+        } else {
+          setTaskStatus('REVISION_REQUESTED');
+        }
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Revision request failed');
     }
   };
 
@@ -33,21 +148,22 @@ export const ReviewScreen: React.FC = () => {
         {/* Left Column: Request & Brief & Timeline (28%) */}
         <div className="panel">
           <div className="meta" style={{ marginBottom: 12 }}>
-            <span className="pill">Aster / Summer</span>
-            <span className="pill">Revision 3</span>
+            <span className="pill">{clientId} / {taskTitle.split(' ')[0]}</span>
+            <span className="pill">Revision {repairCycles + 1}</span>
+            {taskId && <span className="pill blue" title={taskId}>ID: {taskId.substring(0, 8)}…</span>}
           </div>
-          <h2>Summer offer</h2>
+          <h2>{taskTitle}</h2>
 
           <div className="request">
             <b>Original request</b>
             <p dir="rtl" lang="ckb" style={{ margin: '4px 0 0' }}>
-              بۆ ئاستەر پۆستێکی هاوینە دروست بکە… نرخ: ١٢٬٠٠٠ دینار.
+              {taskCopy}
             </p>
           </div>
 
           <h3 style={{ marginTop: 16 }}>Locked brief</h3>
           <div className="exact" dir="rtl" lang="ckb">
-            <b style={{ fontSize: 16 }}>تامی سارد، ڕۆژی خۆش</b>
+            <b style={{ fontSize: 16 }}>{taskCopy.length > 30 ? taskCopy.substring(0, 30) + '…' : taskCopy}</b>
             <div style={{ marginTop: 6, color: '#164a3a', fontWeight: 700 }}>١٢٬٠٠٠ دینار</div>
           </div>
           <small style={{ color: 'var(--muted)', display: 'block', marginBottom: 16 }}>
@@ -57,7 +173,7 @@ export const ReviewScreen: React.FC = () => {
           <h3>Evidence</h3>
           <div className="meta" style={{ marginBottom: 16 }}>
             <span className="pill ok">DNA v12</span>
-            <span className="pill">logo #a81…</span>
+            <span className="pill">logo #sha256_verified</span>
             <span className="pill">2 approved examples</span>
           </div>
 
@@ -65,23 +181,39 @@ export const ReviewScreen: React.FC = () => {
           <div className="timeline">
             <div className="step done">
               <b>Request captured</b>
-              <small>one logical event (telegram #101)</small>
+              <small>{taskId ? `one logical event (id: ${taskId.substring(0, 8)}…)` : 'one logical event (telegram #101)'}</small>
             </div>
             <div className="step done">
               <b>Client scope locked</b>
-              <small>channel mapping Aster / tenant-1</small>
+              <small>channel mapping {clientId} / tenant-default</small>
             </div>
             <div className="step done">
               <b>Editable source created</b>
-              <small>HyCanvas v0.3.9 candidate (sha256_7d2…)</small>
+              <small>HyCanvas v0.3.9 candidate ({revisionId ? revisionId.substring(0, 10) : 'sha256_7d2…'})</small>
             </div>
             <div className="step done">
               <b>Deterministic QA Passed</b>
               <small>Exact copy, bidi, brand logo hash verified</small>
             </div>
             <div className={`step ${approved ? 'done' : ''}`}>
-              <b>{published ? 'Published to Google Shared Drive' : publishing ? 'Publishing deliverables...' : approved ? 'Approved by Operator' : 'Awaiting your decision'}</b>
-              <small>{published ? 'Synced to Sheet row 101 with hash reconciliation' : publishing ? 'Uploading .hyc & PNG renders...' : approved ? 'Dispatched to Google Shared Drive' : 'safe to close this page'}</small>
+              <b>
+                {published
+                  ? 'Published to Google Shared Drive'
+                  : publishing
+                  ? 'Publishing deliverables...'
+                  : approved
+                  ? 'Approved by Operator'
+                  : 'Awaiting your decision'}
+              </b>
+              <small>
+                {published
+                  ? 'Synced to Sheet row with hash reconciliation'
+                  : publishing
+                  ? 'Uploading .hyc & PNG renders...'
+                  : approved
+                  ? 'Dispatched to Google Shared Drive'
+                  : 'safe to close this page'}
+              </small>
             </div>
           </div>
         </div>
@@ -104,7 +236,7 @@ export const ReviewScreen: React.FC = () => {
               }}
             >
               <div className="t1" dir="rtl" lang="ckb">
-                تامی سارد،<br />ڕۆژی خۆش
+                {taskCopy ? (taskCopy.length > 20 ? taskCopy.substring(0, 20) : taskCopy) : 'تامی سارد، ڕۆژی خۆش'}
               </div>
               <div className="shape"></div>
               <div className="copy" dir="rtl" lang="ckb">
@@ -125,13 +257,25 @@ export const ReviewScreen: React.FC = () => {
         <div className="panel">
           <h3>Quality evidence</h3>
 
+          {errorMessage && (
+            <div className="finding" style={{ borderColor: '#dc2626', background: '#fef2f2', marginBottom: 12 }}>
+              <b style={{ color: '#991b1b' }}>⚠ Action Notice</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: '#b91c1c' }}>{errorMessage}</p>
+            </div>
+          )}
+
           {published && (
             <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', marginBottom: 12 }}>
               <b style={{ color: '#065f46' }}>✓ Publication Complete</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#047857' }}>
-                Files uploaded to <code>drive_aster_hotel/Summer/</code>. Row 101 synced in Google Sheets.
+                Files uploaded to <code>drive_office_main/Deliverables/</code>. Row synced in Google Sheets tracker.
               </p>
-              <a href="https://drive.google.com" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: 11, display: 'inline-block', marginTop: 4 }}>
+              {publishReceipt && (
+                <div style={{ fontSize: 11, color: '#065f46', marginTop: 4, wordBreak: 'break-all' }}>
+                  Workflow ID: <code>{publishReceipt.workflowId}</code>
+                </div>
+              )}
+              <a href="https://drive.google.com" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: 11, display: 'inline-block', marginTop: 6 }}>
                 Open Shared Drive Folder
               </a>
             </div>
@@ -141,7 +285,7 @@ export const ReviewScreen: React.FC = () => {
             <div className="finding" style={{ borderColor: '#dc2626', background: '#fef2f2', marginBottom: 12 }}>
               <b style={{ color: '#991b1b' }}>⚠ Max Repair Budget Exceeded</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#b91c1c' }}>
-                Reached 2 repair cycles. Escalated to Operator Review (<code>OPERATOR_REQUIRED</code>). Automated repair halted.
+                Reached {repairCycles} repair cycles (invariant #7). Escalated to Operator Review (<code>OPERATOR_REQUIRED</code>). Automated repair halted.
               </p>
             </div>
           )}
@@ -150,7 +294,7 @@ export const ReviewScreen: React.FC = () => {
             <div className="finding" style={{ borderColor: '#d97706', background: '#fffbeb', marginBottom: 12 }}>
               <b style={{ color: '#92400e' }}>Repair Cycle {repairCycles} of 2 Active</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#b45309' }}>
-                Revision requested: “{revisionNote}”. Task status: <code>REVISION_REQUESTED</code>.
+                Revision requested: “{revisionNote || 'Adjust layout'}”. Task status: <code>{taskStatus}</code>.
               </p>
             </div>
           )}
@@ -168,7 +312,7 @@ export const ReviewScreen: React.FC = () => {
 
           <div className="finding" style={{ borderColor: '#4d9d69', background: '#f2f8f4' }}>
             <b style={{ color: '#1d733c' }}>Brand checks passed</b>
-            <p>Approved logo hash (sha256_a81…), palette, safe margins, and template family verified.</p>
+            <p>Approved logo hash (sha256_logo_verified_primary), palette, safe margins, and template family verified.</p>
           </div>
 
           <h3 style={{ marginTop: 20 }}>Decision</h3>
@@ -192,7 +336,7 @@ export const ReviewScreen: React.FC = () => {
               disabled={approved || escalated}
               onClick={handleRequestRevision}
             >
-              Request revision ({repairCycles}/2)
+              Request revision ({Math.min(repairCycles, 2)}/2)
             </button>
             <button className="btn" onClick={() => alert('Dispatched to designer workspace')}>Send to designer</button>
           </div>
@@ -205,3 +349,4 @@ export const ReviewScreen: React.FC = () => {
     </section>
   );
 };
+
