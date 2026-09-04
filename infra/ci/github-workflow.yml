@@ -1,0 +1,133 @@
+name: Hawa Creative OS — Continuous Assurance CI/CD
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  blueprint-and-security:
+    name: Blueprint & Security Hygiene (Gates A, B)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
+      - name: Gate A — Master Blueprint Validation
+        run: python3 scripts/validate_pack.py
+
+      - name: Gate B — Zero Secret Leakage Scan
+        run: python3 infra/security/security_scan.py
+
+  typecheck-and-tests:
+    name: Typecheck & Test Suite (Gates C, D, E, F, G, H, I, K, L, M, N, O, P)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install monorepo dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate C — Strict TypeScript Build (14 packages)
+        run: pnpm typecheck
+
+      - name: Gates D-P — Full Vitest Suite (21 files, 147 tests)
+        run: pnpm test
+
+      - name: Gate H — Canonical Desk PWA Production Build
+        run: pnpm --filter @hawa/desk build
+
+  database-and-evals:
+    name: Schema Integrity & Model Tournament (Gates J, Evals)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate J — Database Schema, RLS & Migration DDL
+        run: pnpm db:check
+
+      - name: Autonomous Model Tournament Run
+        run: pnpm eval
+
+  supply-chain-and-containers:
+    name: Supply Chain SBOM & Container Topology (Gates Q, S)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate Q — CycloneDX 1.7 SBOM Generation
+        run: pnpm run sbom
+
+      - name: Gate S — Validate Docker Compose Topology
+        run: |
+          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production.example config --quiet
+          echo "Docker Compose declarative topology valid."
