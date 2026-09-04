@@ -899,3 +899,79 @@ button, input, select, textarea {
   cursor: pointer;
 }
 
+/* Marquee Drag Selection Box */
+.marquee-selection-box {
+  position: absolute;
+  border: 1px solid #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 55;
+}
+
+/* Smart Alignment Distance Guides & Badges */
+.smart-guide-line {
+  position: absolute;
+  background: #ec4899;
+  box-shadow: 0 0 4px #ec4899;
+  z-index: 45;
+  pointer-events: none;
+}
+
+.smart-distance-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: #ec4899;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  padding: 1px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 46;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+/* Multi-Selection Group Bounding Box */
+.multi-selection-bbox {
+  position: absolute;
+  border: 1.5px dashed #38bdf8;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 48;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.multi-selection-pill {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Inspector Section Utility */
+.inspector-section {
+  background: var(--soft);
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.inspector-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+

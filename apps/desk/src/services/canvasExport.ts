@@ -18,6 +18,8 @@ export interface CanvasExportState {
   accentColor: string;
   brandKit: BrandKit;
   format: AspectPreset;
+  scale?: 1 | 2 | 4;
+  nodes?: any[];
 }
 
 export interface FormatDimensions {
@@ -49,15 +51,32 @@ function downloadFile(blob: Blob, filename: string) {
 }
 
 /**
- * High-Resolution PNG Export (Offscreen 2D Canvas Rasterizer)
+ * High-Resolution PNG Export (Offscreen 2D Canvas Rasterizer with 1x/2x/4K Scaling)
  */
 export async function exportToHighResPng(state: CanvasExportState): Promise<string> {
-  const { width, height } = FORMAT_DIMENSIONS[state.format];
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const { width: baseW, height: baseH } = FORMAT_DIMENSIONS[state.format];
+  const scale = state.scale || 1;
+  const width = baseW * scale;
+  const height = baseH * scale;
+
+  // Use OffscreenCanvas if available in browser/worker environment
+  let canvas: HTMLCanvasElement | OffscreenCanvas;
+  let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+
+  if (typeof OffscreenCanvas !== 'undefined') {
+    canvas = new OffscreenCanvas(width, height);
+    ctx = canvas.getContext('2d');
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    ctx = canvas.getContext('2d');
+  }
+
   if (!ctx) throw new Error('Could not obtain 2D canvas context');
+  if (scale !== 1) {
+    ctx.scale(scale, scale);
+  }
 
   // 1. Draw Background Gradient
   const grad = ctx.createLinearGradient(0, 0, width, height);
@@ -185,6 +204,66 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   ctx.fillText(displayText, isRtl ? badgeX + badgeW - badgePadX : badgeX + badgePadX, badgeY + 56);
   ctx.restore();
 
+  // 5b. Draw Any Dynamic Custom Layers (text_custom, shape_custom, badge_custom)
+  if (state.nodes && Array.isArray(state.nodes)) {
+    const customNodes = state.nodes.filter(
+      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom'].includes(n.role)
+    ).sort((a: any, b: any) => a.zIndex - b.zIndex);
+
+    for (const cNode of customNodes) {
+      ctx.save();
+      const nodeX = cNode.x;
+      const nodeY = cNode.y;
+      const nodeW = cNode.width;
+      const nodeH = cNode.height;
+
+      if (cNode.rotation) {
+        ctx.translate(nodeX + nodeW / 2, nodeY + nodeH / 2);
+        ctx.rotate((cNode.rotation * Math.PI) / 180);
+        ctx.translate(-(nodeX + nodeW / 2), -(nodeY + nodeH / 2));
+      }
+
+      ctx.globalAlpha = cNode.opacity ?? 1;
+
+      if (cNode.shadow) {
+        ctx.shadowColor = cNode.shadow.color || 'rgba(0,0,0,0.35)';
+        ctx.shadowBlur = cNode.shadow.blur || 14;
+        ctx.shadowOffsetX = cNode.shadow.x || 0;
+        ctx.shadowOffsetY = cNode.shadow.y || 4;
+      }
+
+      if (cNode.role === 'shape_custom') {
+        ctx.fillStyle = cNode.backgroundColor || state.accentColor;
+        ctx.beginPath();
+        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, cNode.borderRadius ?? 12);
+        ctx.fill();
+        if (cNode.borderColor) {
+          ctx.strokeStyle = cNode.borderColor;
+          ctx.lineWidth = cNode.borderWidth || 1;
+          ctx.stroke();
+        }
+      } else if (cNode.role === 'badge_custom') {
+        ctx.fillStyle = cNode.backgroundColor || 'rgba(255, 255, 255, 0.2)';
+        ctx.beginPath();
+        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, cNode.borderRadius ?? 999);
+        ctx.fill();
+        ctx.fillStyle = cNode.color || '#FFFFFF';
+        ctx.font = `bold ${cNode.fontSize || 16}px Inter, Vazirmatn, sans-serif`;
+        ctx.textAlign = 'center';
+        const badgeLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
+        ctx.fillText(badgeLabel || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + 6);
+      } else if (cNode.role === 'text_custom') {
+        ctx.fillStyle = cNode.color || '#FFFFFF';
+        ctx.font = `${cNode.fontWeight || 600} ${cNode.fontSize || 24}px ${cNode.fontFamily || 'Inter'}, sans-serif`;
+        ctx.textAlign = cNode.textAlign || 'center';
+        const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
+        const textLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
+        ctx.fillText(textLabel || '', textX, nodeY + nodeH / 2 + 8);
+      }
+      ctx.restore();
+    }
+  }
+
   // 6. Draw Verified Contact Footprint (Invariant #5 & Brand Tokens)
   ctx.save();
   ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
@@ -194,15 +273,17 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   ctx.fillText(contactText, isRtl ? textMargin : width - textMargin, height - 32);
   ctx.restore();
 
-  // 7. Convert to Blob & Download
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error('Failed to create image blob'));
-      const filename = `hawa-${state.brandKit.id}-${state.format}-${width}x${height}.png`;
-      downloadFile(blob, filename);
-      resolve(filename);
-    }, 'image/png');
-  });
+  // 7. Convert to Blob & Download (supports OffscreenCanvas and HTMLCanvasElement)
+  let blob: Blob | null = null;
+  if ('convertToBlob' in canvas) {
+    blob = await (canvas as OffscreenCanvas).convertToBlob({ type: 'image/png' });
+  } else {
+    blob = await new Promise<Blob | null>((resolve) => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/png'));
+  }
+  if (!blob) throw new Error('Failed to create image blob');
+  const filename = `hawa-${state.brandKit.id}-${state.format}-${scale}x-${width}x${height}.png`;
+  downloadFile(blob, filename);
+  return filename;
 }
 
 /**

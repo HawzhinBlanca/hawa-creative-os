@@ -33,6 +33,14 @@ export interface CanvasNode {
   textAlign?: 'left' | 'center' | 'right';
   textEn?: string;
   textCkb?: string;
+  groupId?: string;
+  aspectRatioLocked?: boolean;
+  shadow?: {
+    x: number;
+    y: number;
+    blur: number;
+    color: string;
+  };
 }
 
 interface HistoryState {
@@ -102,7 +110,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15, opacity: 0.85 },
   ]);
 
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node_headline');
+  // Multi-Selection State
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>(['node_headline']);
+  const selectedNodeId = selectedNodeIds[selectedNodeIds.length - 1] || null;
+
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<'layers' | 'brief'>('layers');
@@ -117,11 +128,23 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const artboardRef = useRef<HTMLDivElement>(null);
 
-  // 6. Magnetic Snap Guides State
+  // 6. Magnetic Snap Guides & Live Distance Badges State
   const [snapGuideX, setSnapGuideX] = useState<number | null>(null);
   const [snapGuideY, setSnapGuideY] = useState<number | null>(null);
+  const [smartGuide, setSmartGuide] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    distance: number;
+    badgeX: number;
+    badgeY: number;
+  } | null>(null);
 
-  // 7. Overlays & Modals
+  // 7. Marquee Drag Selection State
+  const [marquee, setMarquee] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+
+  // 8. Overlays & Modals
   const [showSafeZones, setShowSafeZones] = useState<boolean>(false);
   const [showBidiIsolates, setShowBidiIsolates] = useState<boolean>(false);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
@@ -129,7 +152,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
   const [studioToast, setStudioToast] = useState<string | null>(null);
 
-  // 8. Undo / Redo History Stack
+  // 9. Undo / Redo History Stack
   const historyRef = useRef<HistoryState[]>([]);
   const historyIndexRef = useRef<number>(-1);
 
@@ -149,7 +172,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     };
     const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
     nextHistory.push(currentState);
-    if (nextHistory.length > 30) nextHistory.shift();
+    if (nextHistory.length > 35) nextHistory.shift();
     historyRef.current = nextHistory;
     historyIndexRef.current = nextHistory.length - 1;
   }, [headlineEn, headlineCkb, copyEn, copyCkb, fontFamily, fontWeight, accentColor, selectedBrandKitId, variant, langVariant, nodes]);
@@ -251,7 +274,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       textCkb: 'دەقی نوێ',
     };
     setNodes((prev) => [...prev, newNode]);
-    setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
     setStudioToast('✓ Added New Text Layer');
     setTimeout(() => setStudioToast(null), 2500);
     pushHistory();
@@ -279,7 +302,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       borderWidth: 1,
     };
     setNodes((prev) => [...prev, newNode]);
-    setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
     setStudioToast('✓ Added Accent Shape');
     setTimeout(() => setStudioToast(null), 2500);
     pushHistory();
@@ -313,46 +336,71 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       textCkb: 'داشکاندنی تایبەت',
     };
     setNodes((prev) => [...prev, newNode]);
-    setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
     setStudioToast('✓ Added Promo Badge');
     setTimeout(() => setStudioToast(null), 2500);
     pushHistory();
   };
 
   const handleDuplicateLayer = (targetId?: string) => {
-    const idToDup = targetId || selectedNodeId;
-    if (!idToDup) return;
-    const target = nodes.find((n) => n.id === idToDup);
-    if (!target) return;
+    const idsToDup = targetId ? [targetId] : selectedNodeIds;
+    if (idsToDup.length === 0) return;
 
     const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
-    const clonedId = `${target.id}_copy_${Date.now()}`;
-    const clonedNode: CanvasNode = {
-      ...JSON.parse(JSON.stringify(target)),
-      id: clonedId,
-      name: `${target.name} (Copy)`,
-      x: Math.min(target.x + 20, currentArtboard.width - target.width),
-      y: Math.min(target.y + 20, currentArtboard.height - target.height),
-      zIndex: maxZ + 1,
-    };
-    setNodes((prev) => [...prev, clonedNode]);
-    setSelectedNodeId(clonedId);
-    setStudioToast(`✓ Duplicated: ${target.name}`);
+    const newClones: CanvasNode[] = [];
+    const newIds: string[] = [];
+
+    idsToDup.forEach((id, idx) => {
+      const target = nodes.find((n) => n.id === id);
+      if (!target) return;
+      const clonedId = `${target.id}_copy_${Date.now()}_${idx}`;
+      const clonedNode: CanvasNode = {
+        ...JSON.parse(JSON.stringify(target)),
+        id: clonedId,
+        name: `${target.name} (Copy)`,
+        x: Math.min(target.x + 20, currentArtboard.width - target.width),
+        y: Math.min(target.y + 20, currentArtboard.height - target.height),
+        zIndex: maxZ + 1 + idx,
+      };
+      newClones.push(clonedNode);
+      newIds.push(clonedId);
+    });
+
+    setNodes((prev) => [...prev, ...newClones]);
+    setSelectedNodeIds(newIds);
+    setStudioToast(`✓ Duplicated ${newClones.length} Layer(s)`);
     setTimeout(() => setStudioToast(null), 2000);
     pushHistory();
   };
 
   const handleDeleteLayer = (targetId?: string) => {
-    const idToDel = targetId || selectedNodeId;
-    if (!idToDel) return;
-    const target = nodes.find((n) => n.id === idToDel);
-    if (!target) return;
+    const idsToDel = targetId ? [targetId] : selectedNodeIds;
+    if (idsToDel.length === 0) return;
 
-    setNodes((prev) => prev.filter((n) => n.id !== idToDel));
-    if (selectedNodeId === idToDel) {
-      setSelectedNodeId(null);
-    }
-    setStudioToast(`✓ Deleted: ${target.name}`);
+    setNodes((prev) => prev.filter((n) => !idsToDel.includes(n.id)));
+    setSelectedNodeIds([]);
+    setStudioToast(`✓ Deleted ${idsToDel.length} Layer(s)`);
+    setTimeout(() => setStudioToast(null), 2000);
+    pushHistory();
+  };
+
+  const handleGroup = () => {
+    if (selectedNodeIds.length < 2) return;
+    const newGroupId = `group_${Date.now()}`;
+    setNodes((prev) =>
+      prev.map((n) => (selectedNodeIds.includes(n.id) ? { ...n, groupId: newGroupId } : n))
+    );
+    setStudioToast(`✓ Grouped ${selectedNodeIds.length} Layers (Cmd+G)`);
+    setTimeout(() => setStudioToast(null), 2000);
+    pushHistory();
+  };
+
+  const handleUngroup = () => {
+    if (selectedNodeIds.length === 0) return;
+    setNodes((prev) =>
+      prev.map((n) => (selectedNodeIds.includes(n.id) ? { ...n, groupId: undefined } : n))
+    );
+    setStudioToast('✓ Ungrouped Layers (Cmd+Shift+G)');
     setTimeout(() => setStudioToast(null), 2000);
     pushHistory();
   };
@@ -392,7 +440,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     pushHistory();
   };
 
-  // Keyboard Shortcuts Listener
+  // Keyboard Shortcuts Listener (Full Photoshop / Figma Mastery)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isInputActive = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable;
@@ -411,20 +459,32 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           setShowShortcutsModal(true);
         }
         if (e.key === 'Escape') {
-          setSelectedNodeId(null);
+          setSelectedNodeIds([]);
           setEditingNodeId(null);
           setRenamingNodeId(null);
           setShowDiffModal(false);
           setShowExportMenu(false);
           setShowShortcutsModal(false);
         }
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
           e.preventDefault();
-          handleDeleteLayer(selectedNodeId);
+          handleDeleteLayer();
         }
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedNodeId) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
           e.preventDefault();
-          handleDuplicateLayer(selectedNodeId);
+          handleDuplicateLayer();
+        }
+        // Group / Ungroup
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
+          e.preventDefault();
+          if (e.shiftKey) handleUngroup();
+          else handleGroup();
+        }
+        // Layer Stacking: [ and ]
+        if (selectedNodeId && (e.key === '[' || e.key === ']')) {
+          e.preventDefault();
+          if (e.key === '[') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'back' : 'down');
+          if (e.key === ']') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'front' : 'up');
         }
       }
 
@@ -446,13 +506,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         setPanOffset({ x: 0, y: 0 });
       }
 
-      // Keyboard Nudge for Selected Element
-      if (!isInputActive && selectedNodeId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      // Keyboard Nudge for Selected Elements (Moves all selected together)
+      if (!isInputActive && selectedNodeIds.length > 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const delta = e.shiftKey ? 10 : 1;
         setNodes((prev) =>
           prev.map((n) => {
-            if (n.id !== selectedNodeId || n.locked) return n;
+            if (!selectedNodeIds.includes(n.id) || n.locked) return n;
             let nx = n.x;
             let ny = n.y;
             if (e.key === 'ArrowUp') ny -= delta;
@@ -477,7 +537,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [undo, redo, selectedNodeId, nodes, currentArtboard]);
+  }, [undo, redo, selectedNodeIds, selectedNodeId, nodes, currentArtboard]);
 
   // Brand Kit Selector
   const handleSelectBrandKit = (kitId: string) => {
@@ -525,17 +585,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   };
 
   // =========================================================================
-  // BULLETPROOF DIRECT MANIPULATION & RESIZE HANDLERS (Apple / Photoshop Grade)
-  // Guaranteed zero "sticking": Uses setPointerCapture and moveEvt.buttons === 0 check.
+  // MULTI-SELECTION & MARQUEE ENGINE + DIRECT MANIPULATION
   // =========================================================================
 
   const handleElementPointerDown = (e: React.PointerEvent, nodeId: string) => {
-    // Only primary mouse button (left-click)
     if (e.button !== 0) return;
     if (isSpacePressed || activeTool === 'hand') return;
     e.stopPropagation();
 
-    setSelectedNodeId(nodeId);
+    const isShift = e.shiftKey;
+    let currentSelectedIds = [...selectedNodeIds];
+
+    if (isShift) {
+      if (currentSelectedIds.includes(nodeId)) {
+        currentSelectedIds = currentSelectedIds.filter((id) => id !== nodeId);
+      } else {
+        currentSelectedIds.push(nodeId);
+      }
+    } else {
+      if (!currentSelectedIds.includes(nodeId)) {
+        currentSelectedIds = [nodeId];
+      }
+    }
+    setSelectedNodeIds(currentSelectedIds);
 
     const targetNode = nodes.find((n) => n.id === nodeId);
     if (!targetNode || targetNode.locked) return;
@@ -545,14 +617,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
     try {
       currentTarget.setPointerCapture(pointerId);
-    } catch {
-      // Ignore if pointer capture fails in non-pointer environment
-    }
+    } catch {}
 
     const startClientX = e.clientX;
     const startClientY = e.clientY;
-    const startX = targetNode.x;
-    const startY = targetNode.y;
+
+    // Snapshot start positions of all selected nodes for multi-drag
+    const startPositions: Record<string, { x: number; y: number }> = {};
+    nodes.forEach((n) => {
+      if (currentSelectedIds.includes(n.id)) {
+        startPositions[n.id] = { x: n.x, y: n.y };
+      }
+    });
 
     let hasMoved = false;
 
@@ -568,6 +644,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       } catch {}
       setSnapGuideX(null);
       setSnapGuideY(null);
+      setSmartGuide(null);
       setIsDraggingNode(false);
       if (hasMoved) {
         pushHistory();
@@ -575,7 +652,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     };
 
     const onPointerMove = (moveEvt: PointerEvent) => {
-      // CRITICAL: If mouse button was released outside, clean up instantly! Never stick!
       if (moveEvt.buttons === 0) {
         cleanup();
         return;
@@ -590,36 +666,72 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       }
 
       if (hasMoved) {
-        let nextX = Math.round(startX + dx);
-        let nextY = Math.round(startY + dy);
+        // Multi-drag: move all selected nodes by dx, dy
+        let deltaX = Math.round(dx);
+        let deltaY = Math.round(dy);
 
-        // Magnetic snap to center X (artboard horizontal center)
-        const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
-        if (Math.abs(nextX - centerX) < 8) {
-          nextX = centerX;
-          setSnapGuideX(currentArtboard.width / 2);
-        } else {
-          setSnapGuideX(null);
-        }
+        // Magnetic snap for the primary target node
+        const primaryStart = startPositions[targetNode.id];
+        if (primaryStart) {
+          const nextPrimaryX = Math.round(primaryStart.x + dx);
+          const nextPrimaryY = Math.round(primaryStart.y + dy);
 
-        // Magnetic snap to center Y (artboard vertical center)
-        const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
-        if (Math.abs(nextY - centerY) < 8) {
-          nextY = centerY;
-          setSnapGuideY(currentArtboard.height / 2);
-        } else {
-          setSnapGuideY(null);
+          const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
+          if (Math.abs(nextPrimaryX - centerX) < 8) {
+            deltaX = centerX - primaryStart.x;
+            setSnapGuideX(currentArtboard.width / 2);
+          } else {
+            setSnapGuideX(null);
+          }
+
+          const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
+          if (Math.abs(nextPrimaryY - centerY) < 8) {
+            deltaY = centerY - primaryStart.y;
+            setSnapGuideY(currentArtboard.height / 2);
+          } else {
+            setSnapGuideY(null);
+          }
+
+          // Smart Distance Guide Calculation
+          const otherNodes = nodes.filter((n) => !currentSelectedIds.includes(n.id) && n.visible);
+          let foundGuide = false;
+          for (const other of otherNodes) {
+            if (Math.abs(nextPrimaryY - other.y) < 60) {
+              const gapX = nextPrimaryX - (other.x + other.width);
+              if (gapX > 8 && gapX < 80) {
+                setSmartGuide({
+                  x1: other.x + other.width,
+                  y1: nextPrimaryY + targetNode.height / 2,
+                  x2: nextPrimaryX,
+                  y2: nextPrimaryY + targetNode.height / 2,
+                  distance: Math.round(gapX),
+                  badgeX: other.x + other.width + gapX / 2,
+                  badgeY: nextPrimaryY + targetNode.height / 2 - 12,
+                });
+                foundGuide = true;
+                break;
+              }
+            }
+          }
+          if (!foundGuide) setSmartGuide(null);
         }
 
         setNodes((prev) =>
-          prev.map((n) => (n.id === nodeId ? { ...n, x: nextX, y: nextY } : n))
+          prev.map((n) => {
+            if (startPositions[n.id] && !n.locked) {
+              return {
+                ...n,
+                x: Math.round(startPositions[n.id].x + deltaX),
+                y: Math.round(startPositions[n.id].y + deltaY),
+              };
+            }
+            return n;
+          })
         );
       }
     };
 
-    const onPointerUp = () => {
-      cleanup();
-    };
+    const onPointerUp = () => cleanup();
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
@@ -627,7 +739,64 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     window.addEventListener('blur', onPointerUp);
   };
 
-  // Transform Handle Resize & Rotation Handler (8 Cardinal Handles + 1 Rotation Knob)
+  // Artboard Background Marquee Drag-to-Select
+  const handleArtboardPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if (isSpacePressed || activeTool === 'hand') return;
+
+    const abEl = artboardRef.current;
+    if (!abEl) return;
+    const abRect = abEl.getBoundingClientRect();
+    const startX = Math.round((e.clientX - abRect.left) / zoom);
+    const startY = Math.round((e.clientY - abRect.top) / zoom);
+
+    setMarquee({ startX, startY, currentX: startX, currentY: startY });
+
+    if (!e.shiftKey) {
+      setSelectedNodeIds([]);
+    }
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      if (moveEvt.buttons === 0) {
+        cleanup();
+        return;
+      }
+      const currentX = Math.round((moveEvt.clientX - abRect.left) / zoom);
+      const currentY = Math.round((moveEvt.clientY - abRect.top) / zoom);
+      setMarquee({ startX, startY, currentX, currentY });
+
+      const minX = Math.min(startX, currentX);
+      const maxX = Math.max(startX, currentX);
+      const minY = Math.min(startY, currentY);
+      const maxY = Math.max(startY, currentY);
+
+      const intersecting = nodes
+        .filter((n) => {
+          if (!n.visible || n.locked) return false;
+          const nRight = n.x + n.width;
+          const nBottom = n.y + n.height;
+          return !(n.x > maxX || nRight < minX || n.y > maxY || nBottom < minY);
+        })
+        .map((n) => n.id);
+
+      setSelectedNodeIds((prev) =>
+        e.shiftKey ? Array.from(new Set([...prev, ...intersecting])) : intersecting
+      );
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      setMarquee(null);
+    };
+
+    const onPointerUp = () => cleanup();
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  // Transform Handle Resize & Rotation Handler (With Proportional Shift Lock)
   const handleResizeHandlePointerDown = (e: React.PointerEvent, nodeId: string, handle: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -648,6 +817,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     const startY = targetNode.y;
     const startW = targetNode.width;
     const startH = targetNode.height;
+    const isLockedRatio = targetNode.aspectRatioLocked || e.shiftKey;
 
     let hasResized = false;
 
@@ -675,7 +845,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       hasResized = true;
 
       if (handle === 'rot') {
-        // Rotation handle calculation
         const artboardEl = artboardRef.current;
         if (!artboardEl) return;
         const abRect = artboardEl.getBoundingClientRect();
@@ -685,7 +854,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         let deg = Math.round((rad * 180) / Math.PI) + 90;
         deg = (deg % 360 + 360) % 360;
 
-        // Snap to 0°, 45°, 90°, 180°, 270° with 5° tolerance
         const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315, 360];
         for (const snap of snapAngles) {
           if (Math.abs(deg - snap) < 5) {
@@ -700,7 +868,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         return;
       }
 
-      // Cardinal Handles Resizing
       const dx = (moveEvt.clientX - startClientX) / zoom;
       const dy = (moveEvt.clientY - startClientY) / zoom;
 
@@ -722,14 +889,19 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         newH = candidateH;
       }
 
+      if (isLockedRatio) {
+        const ratio = startW / startH;
+        if (handle === 'se' || handle === 'nw') {
+          newH = Math.round(newW / ratio);
+        }
+      }
+
       setNodes((prev) =>
         prev.map((n) => (n.id === nodeId ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
       );
     };
 
-    const onPointerUp = () => {
-      cleanup();
-    };
+    const onPointerUp = () => cleanup();
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
@@ -767,38 +939,38 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         setIsPanning(false);
       };
 
-      const onPointerUp = () => {
-        cleanup();
-      };
+      const onPointerUp = () => cleanup();
 
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
       window.addEventListener('pointercancel', onPointerUp);
       window.addEventListener('blur', onPointerUp);
     } else if (isDirectViewport) {
-      // Clicking empty workspace background deselects active layer
-      setSelectedNodeId(null);
+      setSelectedNodeIds([]);
       setEditingNodeId(null);
     }
   };
 
-  // Alignment Toolbar Operations (Figma / Photoshop Grade)
+  // Alignment Toolbar Operations
   const handleAlign = (action: 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom') => {
-    if (!selectedNodeId) return;
-    const target = nodes.find((n) => n.id === selectedNodeId);
-    if (!target || target.locked) return;
+    if (selectedNodeIds.length === 0) return;
 
-    let nx = target.x;
-    let ny = target.y;
+    setNodes((prev) =>
+      prev.map((n) => {
+        if (!selectedNodeIds.includes(n.id) || n.locked) return n;
+        let nx = n.x;
+        let ny = n.y;
 
-    if (action === 'left') nx = 20;
-    else if (action === 'centerH') nx = Math.round((currentArtboard.width - target.width) / 2);
-    else if (action === 'right') nx = Math.round(currentArtboard.width - target.width - 20);
-    else if (action === 'top') ny = 20;
-    else if (action === 'centerV') ny = Math.round((currentArtboard.height - target.height) / 2);
-    else if (action === 'bottom') ny = Math.round(currentArtboard.height - target.height - 20);
+        if (action === 'left') nx = 20;
+        else if (action === 'centerH') nx = Math.round((currentArtboard.width - n.width) / 2);
+        else if (action === 'right') nx = Math.round(currentArtboard.width - n.width - 20);
+        else if (action === 'top') ny = 20;
+        else if (action === 'centerV') ny = Math.round((currentArtboard.height - n.height) / 2);
+        else if (action === 'bottom') ny = Math.round(currentArtboard.height - n.height - 20);
 
-    setNodes((prev) => prev.map((n) => (n.id === selectedNodeId ? { ...n, x: nx, y: ny } : n)));
+        return { ...n, x: nx, y: ny };
+      })
+    );
     pushHistory();
   };
 
@@ -809,15 +981,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         {node.name} · {Math.round(node.width)}×{Math.round(node.height)} {node.rotation ? `· ${node.rotation}°` : ''} ({Math.round(node.x)}, {Math.round(node.y)})
       </div>
 
-      {/* Rotation Stem and Knob */}
       <div className="handle-rot-stem" />
       <div
         className="handle-rot"
-        title="Drag to Rotate (hold Shift to snap)"
+        title="Drag to Rotate"
         onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'rot')}
       />
 
-      {/* 8 Cardinal Resize Handles */}
       <div className="transform-handle handle-nw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'nw')} />
       <div className="transform-handle handle-n" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'n')} />
       <div className="transform-handle handle-ne" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'ne')} />
@@ -871,8 +1041,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     });
   }, [activeHeadline, activeCopy, langVariant]);
 
-  // Export handlers
-  const handleExportPng = async () => {
+  // High-Resolution & 4K Export Handlers
+  const handleExportPngWithScale = async (scale: 1 | 2 | 4) => {
     setExporting(true);
     setShowExportMenu(false);
     try {
@@ -887,8 +1057,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         accentColor,
         brandKit: activeBrandKit,
         format: variant,
+        scale,
+        nodes,
       });
-      setStudioToast(`✓ High-Res PNG exported: ${filename}`);
+      const label = scale === 4 ? '4K Ultra HD' : scale === 2 ? '2x Retina' : 'Standard 1080p';
+      setStudioToast(`✓ ${label} PNG exported: ${filename}`);
     } catch (err: any) {
       setErrorMessage(`Export failed: ${err.message}`);
     } finally {
@@ -910,6 +1083,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       accentColor,
       brandKit: activeBrandKit,
       format: variant,
+      nodes,
     });
     setStudioToast(`✓ Standalone Vector SVG exported: ${filename}`);
     setTimeout(() => setStudioToast(null), 5000);
@@ -928,6 +1102,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       accentColor,
       brandKit: activeBrandKit,
       format: variant,
+      nodes,
     }, task);
     setStudioToast(`✓ HyCanvas Package exported: ${filename}`);
     setTimeout(() => setStudioToast(null), 5000);
@@ -1004,9 +1179,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
   const activeSelectedNode = nodes.find((n) => n.id === selectedNodeId);
 
+  // Group Multi-Selection Bounds Calculation
+  const multiSelectedNodes = nodes.filter((n) => selectedNodeIds.includes(n.id) && n.visible);
+  const multiBounds = useMemo(() => {
+    if (multiSelectedNodes.length <= 1) return null;
+    const minX = Math.min(...multiSelectedNodes.map((n) => n.x));
+    const minY = Math.min(...multiSelectedNodes.map((n) => n.y));
+    const maxX = Math.max(...multiSelectedNodes.map((n) => n.x + n.width));
+    const maxY = Math.max(...multiSelectedNodes.map((n) => n.y + n.height));
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }, [multiSelectedNodes]);
+
   // Dynamic Layer Rendering Method
   const renderCanvasNode = (node: CanvasNode) => {
-    const isSelected = selectedNodeId === node.id;
+    const isSelected = selectedNodeIds.includes(node.id);
     const isEditing = editingNodeId === node.id;
 
     // Node Container Styles
@@ -1022,6 +1208,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && isSelected ? 'grabbing' : 'move',
       userSelect: 'none',
       touchAction: 'none',
+      boxShadow: node.shadow
+        ? `${node.shadow.x}px ${node.shadow.y}px ${node.shadow.blur}px ${node.shadow.color}`
+        : undefined,
     };
 
     if (node.role === 'headline') {
@@ -1371,7 +1560,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           style={{
             ...containerStyle,
             borderRadius: node.borderRadius ?? 999,
-            background: node.backgroundColor || 'rgba(255,255,255,0.18)',
+            background: node.backgroundColor || 'rgba(255, 255, 255, 0.18)',
             border: `${node.borderWidth ?? 1}px solid ${node.borderColor ?? 'rgba(255,255,255,0.3)'}`,
             display: 'flex',
             alignItems: 'center',
@@ -1521,7 +1710,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
         {/* Center: Tools & Aspect Presets */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Tool Switcher */}
           <div style={{ display: 'flex', gap: 2, background: 'rgba(0,0,0,0.06)', padding: 2, borderRadius: 6 }}>
             <button
               className={`btn ${activeTool === 'select' ? 'primary' : ''}`}
@@ -1541,7 +1729,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </button>
           </div>
 
-          {/* Aspect Presets */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {(['feed', 'square', 'story', 'landscape'] as AspectPreset[]).map((fmt) => (
               <button
@@ -1556,7 +1743,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
         </div>
 
-        {/* Right: History, Guides & High-Res Export */}
+        {/* Right: History, Guides & Ultra HD 4K Export */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             className="btn"
@@ -1593,7 +1780,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             {t.review.bidiIsolates}
           </button>
 
-          {/* Export Dropdown Button */}
+          {/* Export Dropdown Button with 1x / 2x / 4K / SVG / HYC */}
           <div style={{ position: 'relative' }}>
             <button
               className="btn primary"
@@ -1601,7 +1788,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               onClick={() => setShowExportMenu(!showExportMenu)}
               disabled={exporting}
             >
-              {exporting ? 'Generating...' : '⚡ Export ▾'}
+              {exporting ? 'Exporting...' : '⚡ Export ▾'}
             </button>
 
             {showExportMenu && (
@@ -1615,17 +1802,33 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   borderRadius: 8,
                   padding: 6,
                   zIndex: 200,
-                  width: 220,
-                  boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+                  width: 250,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                 }}
               >
                 <div
-                  onClick={handleExportPng}
+                  onClick={() => handleExportPngWithScale(1)}
                   style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  🖼 Export PNG (1080p High-DPI)
+                  🖼 Export PNG (1080p Standard)
+                </div>
+                <div
+                  onClick={() => handleExportPngWithScale(2)}
+                  style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  💎 Export PNG (2x Retina 2160p)
+                </div>
+                <div
+                  onClick={() => handleExportPngWithScale(4)}
+                  style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, fontWeight: 700, color: '#38BDF8' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56,189,248,0.15)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  🌟 Export PNG (4K Ultra HD 4320p)
                 </div>
                 <div
                   onClick={handleExportSvg}
@@ -1647,7 +1850,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             )}
           </div>
 
-          {/* Keyboard Shortcuts Trigger */}
           <button
             className="btn"
             style={{ fontSize: 11, padding: '4px 7px', borderRadius: '50%' }}
@@ -1660,10 +1862,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       </div>
 
       {/* Main Review Grid: Left Column (Layers & Brief), Center (Canvas), Right (Inspector) */}
-      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '270px 1fr 300px' }}>
+      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '270px 1fr 310px' }}>
         {/* Left Column: Dual Tab Layout (Layers Tree vs Brief & Timeline) */}
         <div className="panel" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {/* Dual Tab Switcher */}
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 10 }}>
             <button
               className={`btn ${leftTab === 'layers' ? 'primary' : ''}`}
@@ -1682,9 +1883,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
 
           {leftTab === 'layers' ? (
-            /* Layer Tree View with Add Layer Toolbar */
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              {/* Quick Add Layer Bar */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginBottom: 8 }}>
                 <button
                   className="btn"
@@ -1712,22 +1911,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </button>
               </div>
 
-              {/* Layers List (Ordered by zIndex descending) */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', flex: 1 }}>
                 {nodes
                   .slice()
                   .sort((a, b) => b.zIndex - a.zIndex)
                   .map((node) => {
-                    const isSelected = selectedNodeId === node.id;
+                    const isSelected = selectedNodeIds.includes(node.id);
                     return (
                       <div
                         key={node.id}
                         className={`layer-item-row ${isSelected ? 'selected' : ''}`}
-                        onClick={() => setSelectedNodeId(node.id)}
+                        onClick={(e) => {
+                          if (e.shiftKey) {
+                            setSelectedNodeIds((prev) =>
+                              prev.includes(node.id) ? prev.filter((id) => id !== node.id) : [...prev, node.id]
+                            );
+                          } else {
+                            setSelectedNodeIds([node.id]);
+                          }
+                        }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: 11, opacity: 0.7 }}>
-                            {node.role === 'headline' || node.role === 'text_custom' ? 'T' : node.role === 'logo' ? '★' : '◻'}
+                            {node.groupId ? '📁' : node.role === 'headline' || node.role === 'text_custom' ? 'T' : node.role === 'logo' ? '★' : '◻'}
                           </span>
 
                           {renamingNodeId === node.id ? (
@@ -1771,7 +1977,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                           )}
                         </div>
 
-                        {/* Layer Actions (Visibility, Lock, Reorder, Delete) */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <button
                             className="btn"
@@ -1795,7 +2000,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                             className="btn"
                             style={{ padding: '1px 4px', fontSize: 9 }}
                             onClick={(e) => handleMoveLayerZIndex(node.id, 'up', e)}
-                            title="Bring Layer Forward"
+                            title="Bring Layer Forward (])"
                           >
                             ▲
                           </button>
@@ -1804,7 +2009,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                             className="btn"
                             style={{ padding: '1px 4px', fontSize: 9 }}
                             onClick={(e) => handleMoveLayerZIndex(node.id, 'down', e)}
-                            title="Send Layer Backward"
+                            title="Send Layer Backward ([)"
                           >
                             ▼
                           </button>
@@ -1826,9 +2031,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   })}
               </div>
 
-              {/* Duplicate Selected Layer Button */}
-              {selectedNodeId && (
+              {selectedNodeIds.length > 0 && (
                 <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                  {selectedNodeIds.length > 1 && (
+                    <button
+                      className="btn"
+                      style={{ flex: 1, fontSize: 10, padding: '4px' }}
+                      onClick={handleGroup}
+                    >
+                      Group (Cmd+G)
+                    </button>
+                  )}
                   <button
                     className="btn"
                     style={{ flex: 1, fontSize: 10, padding: '4px' }}
@@ -1847,7 +2060,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               )}
             </div>
           ) : (
-            /* Brief & Timeline Tab */
             <div style={{ overflowY: 'auto' }}>
               <div className="meta" style={{ marginBottom: 8 }}>
                 <span className="pill ok">{activeBrandKit.name.split(' ')[0]}</span>
@@ -1898,13 +2110,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           )}
         </div>
 
-        {/* Center Column: Pro Studio Interactive Viewport */}
+        {/* Center Column: Pro Studio Interactive Viewport with Marquee & Smart Distance Guides */}
         <div
           ref={viewportRef}
           className={`studio-viewport ${isPanning || isSpacePressed || activeTool === 'hand' ? 'panning' : ''} ${isPanning ? 'is-active-panning' : ''} ${isDraggingNode ? 'is-dragging' : ''}`}
           onPointerDown={handleViewportPointerDown}
         >
-          {/* Snap Guides */}
           {snapGuideX !== null && <div className="snap-guide-x" style={{ left: `calc(50% + ${(snapGuideX - currentArtboard.width / 2) * zoom + panOffset.x}px)` }} />}
           {snapGuideY !== null && <div className="snap-guide-y" style={{ top: `calc(50% + ${(snapGuideY - currentArtboard.height / 2) * zoom + panOffset.y}px)` }} />}
 
@@ -1912,6 +2123,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           <div
             ref={artboardRef}
             className="artboard-container"
+            onPointerDown={handleArtboardPointerDown}
             style={{
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
               width: `${currentArtboard.width}px`,
@@ -1954,6 +2166,60 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               </div>
             )}
 
+            {/* Marquee Selection Drag Box */}
+            {marquee && (
+              <div
+                className="marquee-selection-box"
+                style={{
+                  left: `${Math.min(marquee.startX, marquee.currentX)}px`,
+                  top: `${Math.min(marquee.startY, marquee.currentY)}px`,
+                  width: `${Math.abs(marquee.currentX - marquee.startX)}px`,
+                  height: `${Math.abs(marquee.currentY - marquee.startY)}px`,
+                }}
+              />
+            )}
+
+            {/* Smart Alignment Distance Guides & Dynamic Badges */}
+            {smartGuide && (
+              <>
+                <div
+                  className="smart-guide-line"
+                  style={{
+                    left: `${Math.min(smartGuide.x1, smartGuide.x2)}px`,
+                    top: `${smartGuide.y1}px`,
+                    width: `${Math.max(1, Math.abs(smartGuide.x2 - smartGuide.x1))}px`,
+                    height: '1px',
+                  }}
+                />
+                <div
+                  className="smart-distance-badge"
+                  style={{
+                    left: `${smartGuide.badgeX}px`,
+                    top: `${smartGuide.badgeY}px`,
+                  }}
+                >
+                  {smartGuide.distance}px
+                </div>
+              </>
+            )}
+
+            {/* Multi-Selection Group Bounding Box */}
+            {multiBounds && (
+              <div
+                className="multi-selection-bbox"
+                style={{
+                  left: `${multiBounds.x - 4}px`,
+                  top: `${multiBounds.y - 4}px`,
+                  width: `${multiBounds.width + 8}px`,
+                  height: `${multiBounds.height + 8}px`,
+                }}
+              >
+                <div className="multi-selection-pill">
+                  {multiSelectedNodes.length} Layers Selected
+                </div>
+              </div>
+            )}
+
             {/* Render All Dynamic Canvas Nodes in zIndex Order */}
             {nodes
               .filter((n) => n.visible)
@@ -1978,7 +2244,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </div>
           </div>
 
-          {/* Floating Bottom Studio HUD (Zoom, Tools, Fit) */}
+          {/* Floating Bottom Studio HUD */}
           <div className="zoom-hud studio-glass">
             <button
               className="zoom-btn"
@@ -2017,31 +2283,67 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
         </div>
 
-        {/* Right Column: Pro Inspector & Decision Gate */}
+        {/* Right Column: Pro Inspector & Multi-Selection Support */}
         <div className="panel" style={{ overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>
-              {activeSelectedNode ? `Layer: ${activeSelectedNode.name}` : 'Artboard Inspector'}
+              {selectedNodeIds.length > 1
+                ? `Selection (${selectedNodeIds.length} Layers)`
+                : activeSelectedNode
+                ? `Layer: ${activeSelectedNode.name}`
+                : 'Artboard Inspector'}
             </h3>
-            {activeSelectedNode && (
+            {selectedNodeIds.length > 0 && (
               <button
                 className="btn"
                 style={{ fontSize: 10, padding: '2px 6px' }}
-                onClick={() => setSelectedNodeId(null)}
+                onClick={() => setSelectedNodeIds([])}
               >
                 Deselect
               </button>
             )}
           </div>
 
-          {/* Conditional Layer Inspector */}
-          {activeSelectedNode ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Spatial Positioning & Transform Box */}
-              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                  TRANSFORM & DIMENSIONS
+          {/* Multi-Selection Inspector Mode */}
+          {selectedNodeIds.length > 1 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="inspector-section">
+                <div className="inspector-title">GROUP ACTIONS</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <button className="btn" style={{ flex: 1, fontSize: 11, padding: '5px' }} onClick={handleGroup}>
+                    Group Selection (Cmd+G)
+                  </button>
+                  <button className="btn" style={{ flex: 1, fontSize: 11, padding: '5px' }} onClick={handleUngroup}>
+                    Ungroup
+                  </button>
                 </div>
+                <button
+                  className="btn"
+                  style={{ width: '100%', fontSize: 11, padding: '5px', color: '#EF4444' }}
+                  onClick={() => handleDeleteLayer()}
+                >
+                  Delete Selected ({selectedNodeIds.length})
+                </button>
+              </div>
+
+              {/* Multi Alignment Matrix */}
+              <div className="inspector-section">
+                <div className="inspector-title">ALIGN GROUP TO ARTBOARD</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+                  <button className="btn" title="Align Left" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('left')}>⇤</button>
+                  <button className="btn" title="Align Horizontal Center" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('centerH')}>⇹</button>
+                  <button className="btn" title="Align Right" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('right')}>⇥</button>
+                  <button className="btn" title="Align Top" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('top')}>⤒</button>
+                  <button className="btn" title="Align Vertical Center" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('centerV')}>⬍</button>
+                  <button className="btn" title="Align Bottom" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('bottom')}>⤓</button>
+                </div>
+              </div>
+            </div>
+          ) : activeSelectedNode ? (
+            /* Single Node Inspector */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="inspector-section">
+                <div className="inspector-title">TRANSFORM & DIMENSIONS</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
                   <div>
                     <span style={{ color: 'var(--muted)' }}>X: </span>
@@ -2097,7 +2399,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   </div>
                 </div>
 
-                {/* Rotation & Opacity Sliders */}
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
                     <span>Rotation:</span>
@@ -2136,7 +2437,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   />
                 </div>
 
-                {/* 6 Quick Alignment Actions (Photoshop / Figma Grade) */}
+                {/* Aspect Ratio Lock Toggle */}
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>Aspect Ratio:</span>
+                  <button
+                    className={`btn ${activeSelectedNode.aspectRatioLocked ? 'primary' : ''}`}
+                    style={{ fontSize: 10, padding: '2px 8px' }}
+                    onClick={() => {
+                      setNodes((prev) =>
+                        prev.map((n) =>
+                          n.id === activeSelectedNode.id ? { ...n, aspectRatioLocked: !n.aspectRatioLocked } : n
+                        )
+                      );
+                      pushHistory();
+                    }}
+                  >
+                    {activeSelectedNode.aspectRatioLocked ? '🔒 Locked' : '🔓 Free'}
+                  </button>
+                </div>
+
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
                     ALIGN TO ARTBOARD
@@ -2151,29 +2470,86 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   </div>
                 </div>
 
-                {/* Layer Hierarchy (Z-Index) */}
                 <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
                   <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'up')}>
-                    ▲ Forward
+                    ▲ Forward (])
                   </button>
                   <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'down')}>
-                    ▼ Backward
-                  </button>
-                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'front')}>
-                    ⤒ Front
-                  </button>
-                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'back')}>
-                    ⤓ Back
+                    ▼ Backward ([)
                   </button>
                 </div>
               </div>
 
+              {/* Vector Effects: Drop Shadow & Styling */}
+              <div className="inspector-section">
+                <div className="inspector-title">EFFECTS & SHADOW</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11 }}>Drop Shadow:</span>
+                  <button
+                    className={`btn ${activeSelectedNode.shadow ? 'primary' : ''}`}
+                    style={{ fontSize: 10, padding: '2px 8px' }}
+                    onClick={() => {
+                      const newShadow = activeSelectedNode.shadow
+                        ? undefined
+                        : { x: 0, y: 6, blur: 16, color: 'rgba(0, 0, 0, 0.4)' };
+                      setNodes((prev) =>
+                        prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, shadow: newShadow } : n))
+                      );
+                      pushHistory();
+                    }}
+                  >
+                    {activeSelectedNode.shadow ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
+
+                {activeSelectedNode.shadow && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
+                    <div>
+                      <span style={{ color: 'var(--muted)' }}>Blur: </span>
+                      <input
+                        type="number"
+                        value={activeSelectedNode.shadow.blur}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === activeSelectedNode.id && n.shadow
+                                ? { ...n, shadow: { ...n.shadow, blur: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        onBlur={pushHistory}
+                        style={{ width: 50, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      />
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--muted)' }}>Offset Y: </span>
+                      <input
+                        type="number"
+                        value={activeSelectedNode.shadow.y}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setNodes((prev) =>
+                            prev.map((n) =>
+                              n.id === activeSelectedNode.id && n.shadow
+                                ? { ...n, shadow: { ...n.shadow, y: val } }
+                                : n
+                            )
+                          );
+                        }}
+                        onBlur={pushHistory}
+                        style={{ width: 50, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Layer-Specific Properties: Headline */}
               {activeSelectedNode.role === 'headline' && (
-                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                    HEADLINE CONTENT & COPY
-                  </div>
+                <div className="inspector-section">
+                  <div className="inspector-title">HEADLINE CONTENT & COPY</div>
                   <div style={{ marginBottom: 6 }}>
                     <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Lead:</small>
                     <input
@@ -2200,10 +2576,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
               {/* Layer-Specific Properties: Copy / Badge */}
               {activeSelectedNode.role === 'copy' && (
-                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                    PRICE & BADGE COPY
-                  </div>
+                <div className="inspector-section">
+                  <div className="inspector-title">PRICE & BADGE COPY</div>
                   <div style={{ marginBottom: 6 }}>
                     <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Price:</small>
                     <input
@@ -2230,10 +2604,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
               {/* Layer-Specific Properties: Custom Text */}
               {activeSelectedNode.role === 'text_custom' && (
-                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                    TEXT TYPOGRAPHY & VALUE
-                  </div>
+                <div className="inspector-section">
+                  <div className="inspector-title">TEXT TYPOGRAPHY & VALUE</div>
                   <div style={{ marginBottom: 6 }}>
                     <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Value:</small>
                     <input
@@ -2284,10 +2656,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
               {/* Layer-Specific Properties: Shape & Accent */}
               {(activeSelectedNode.role === 'shape' || activeSelectedNode.role === 'shape_custom' || activeSelectedNode.role === 'badge_custom') && (
-                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                    FILL COLOR & RADIUS
-                  </div>
+                <div className="inspector-section">
+                  <div className="inspector-title">FILL COLOR & RADIUS</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                     {[activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6', '#EC4899', '#ffffff'].map((c) => (
                       <div
@@ -2335,10 +2705,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
               {/* Layer-Specific Properties: Logo */}
               {activeSelectedNode.role === 'logo' && (
-                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
-                    VERIFIED BRAND ASSET
-                  </div>
+                <div className="inspector-section">
+                  <div className="inspector-title">VERIFIED BRAND ASSET</div>
                   <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>
                     {activeBrandKit.logoBadge}
                   </div>
@@ -2349,13 +2717,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               )}
             </div>
           ) : (
-            /* Document Global Inspector (When No Layer is Selected) */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Typography Controls */}
-              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                  GLOBAL TYPOGRAPHY
-                </div>
+            /* Document Global Inspector */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="inspector-section">
+                <div className="inspector-title">GLOBAL TYPOGRAPHY</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 6 }}>
                   {['Inter', 'Plus Jakarta Sans', 'Vazirmatn', 'Noto Sans Arabic'].map((font) => (
                     <button
@@ -2392,11 +2757,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </div>
               </div>
 
-              {/* Accent Palette */}
-              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                  PALETTE PRESETS
-                </div>
+              <div className="inspector-section">
+                <div className="inspector-title">PALETTE PRESETS</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   {[activeBrandKit.palette.primary, activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6'].map((color) => (
                     <div
@@ -2432,7 +2794,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </div>
           </div>
 
-          {/* Diff Modal Trigger */}
           <div style={{ marginBottom: 10 }}>
             <button
               className={`btn ${semanticDiff.hasChanges ? 'primary' : ''}`}
@@ -2443,7 +2804,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </button>
           </div>
 
-          {/* Action Notice & Publish Receipts */}
           {errorMessage && (
             <div className="finding" style={{ borderColor: '#dc2626', background: '#fef2f2', marginBottom: 10 }}>
               <b style={{ color: '#991b1b' }}>⚠ Action Notice</b>
@@ -2465,7 +2825,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </div>
           )}
 
-          {/* Decision Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button
               className="btn primary"
@@ -2620,14 +2979,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>V</kbd> Selection Tool</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>H</kbd> Hand / Pan Tool</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Space + Drag</kbd> Quick Pan</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Wheel</kbd> Smooth Zoom</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + 0</kbd> Reset / Fit View</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Shift + Click</kbd> Multi-Select</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Marquee Drag</kbd> Box Select</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + G</kbd> Group Layers</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Shift + G</kbd> Ungroup</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>[ / ]</kbd> Layer Order Up/Down</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Shift + Resize</kbd> Lock Ratio</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + D</kbd> Duplicate Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Delete / Backspace</kbd> Delete Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Z</kbd> Undo Action</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Shift + Z</kbd> Redo Action</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Shift + Arrows</kbd> Nudge 10px</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px (Shift: 10px)</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd> Deselect Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> Open Cheat Sheet</div>
             </div>
