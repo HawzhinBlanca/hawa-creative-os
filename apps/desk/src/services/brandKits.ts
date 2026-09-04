@@ -128,5 +128,45 @@ export const BRAND_KITS: Record<string, BrandKit> = {
 };
 
 export const getBrandKit = (id: string): BrandKit => {
-  return BRAND_KITS[id] || BRAND_KITS.hawa;
+  const custom = getCustomBrandKits();
+  return custom[id] || BRAND_KITS[id] || BRAND_KITS.hawa;
+};
+
+const CUSTOM_BRAND_KITS_KEY = 'hawa_custom_brand_kits';
+
+/**
+ * Retrieves all user-defined brand kits from local persistence
+ */
+export const getCustomBrandKits = (): Record<string, BrandKit> => {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(CUSTOM_BRAND_KITS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Persists a new or updated custom brand kit
+ */
+export const saveCustomBrandKit = (kit: BrandKit): void => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const current = getCustomBrandKits();
+    current[kit.id] = kit;
+    localStorage.setItem(CUSTOM_BRAND_KITS_KEY, JSON.stringify(current));
+  } catch (err) {
+    console.warn('[BrandKits] Failed to save custom brand kit:', err);
+  }
+};
+
+/**
+ * Combines built-in canonical brand kits with custom client brand kits
+ */
+export const getAllBrandKits = (): Record<string, BrandKit> => {
+  return {
+    ...BRAND_KITS,
+    ...getCustomBrandKits(),
+  };
 };
