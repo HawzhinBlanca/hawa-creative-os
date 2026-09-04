@@ -51,7 +51,7 @@ export interface SourceArtifact {
 
 export interface NeutralManifest {
   pages: Array<{ id: string; name: string; width: number; height: number; unit: string; language?: string; direction?: string }>;
-  nodes: Array<{ id: string; pageId: string; type: string; role?: string; text?: string; assetSha256?: SHA256; font?: string; locked: boolean; zIndex: number }>;
+  nodes: Array<{ id: string; pageId: string; type: string; role?: string; text?: string; assetSha256?: SHA256; font?: string; locked: boolean; zIndex: number; box?: { x: number; y: number; width: number; height: number } }>;
   fonts: Array<{ family: string; style: string; sha256?: SHA256 }>;
   assets: Array<{ sha256: SHA256; mimeType: string; sourceId?: string }>;
   warnings: Array<{ code: string; message: string; nodeIds?: string[] }>;

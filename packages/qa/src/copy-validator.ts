@@ -33,7 +33,7 @@ export function validateExactCopy(
     }
 
     // Check all protected tokens in block
-    for (const token of block.protectedTokens) {
+    for (const token of block.protectedTokens || []) {
       const tokenFound = joinedDocText.includes(normalizeForComparison(token.raw));
       if (!tokenFound) {
         findings.push({

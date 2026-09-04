@@ -96,39 +96,55 @@ export function validateBrief(brief: DesignBrief): Result<DesignBrief, AppError>
 
 export function extractProtectedTokens(text: string): ProtectedToken[] {
   const tokens: ProtectedToken[] = [];
+  const seenRaws = new Set<string>();
 
-  // Price patterns (e.g. $10, 10,000 IQD, 15$, 25,000 د.ع, ٢٥٬٠٠٠ دینار)
-  const priceRegex = /(\$\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|IQD|USD|د\.ع|دینار|هەزار|%|٪))/gi;
-  let match: RegExpExecArray | null;
-  while ((match = priceRegex.exec(text)) !== null) {
+  const addToken = (type: ProtectedToken['type'], raw: string, normalized?: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || seenRaws.has(trimmed)) return;
+    seenRaws.add(trimmed);
     tokens.push({
-      type: 'price',
-      raw: match[0].trim(),
-      normalized: match[0].trim().replace(/\s+/g, ' '),
+      type,
+      raw: trimmed,
+      normalized: normalized ?? trimmed.replace(/\s+/g, ' '),
       mustPreserveExact: true,
     });
+  };
+
+  // Price patterns (e.g. $10, 10,000 IQD, 15$, 25,000 د.ع, ٢٥٬٠٠٠ دینار, 50€, 100 EUR)
+  const priceRegex = /(\$\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|€|IQD|USD|EUR|د\.ع|دینار|هەزار|لیرە|%|٪))/gi;
+  let match: RegExpExecArray | null;
+  while ((match = priceRegex.exec(text)) !== null) {
+    addToken('price', match[0]);
+  }
+
+  // Email patterns
+  const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi;
+  while ((match = emailRegex.exec(text)) !== null) {
+    addToken('url', match[0], match[0].toLowerCase());
   }
 
   // URL patterns
-  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.(?:com|org|net|iq|krd)[^\s]*)/gi;
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.(?:com|org|net|iq|krd|io|me)[^\s]*)/gi;
   while ((match = urlRegex.exec(text)) !== null) {
-    tokens.push({
-      type: 'url',
-      raw: match[0].trim(),
-      normalized: match[0].trim().toLowerCase(),
-      mustPreserveExact: true,
-    });
+    addToken('url', match[0], match[0].toLowerCase());
   }
 
-  // Phone numbers (e.g. +964 750 123 4567, 07501234567)
-  const phoneRegex = /(?:\+?964|0)?\s*7[5789]\d(?:\s*|\-?)\d{3}(?:\s*|\-?)\d{4}/g;
+  // Phone numbers (e.g. +964 750 123 4567, 07501234567, 0770 123 4567)
+  const phoneRegex = /(?:\+?964|00964|0)?\s*7[5789]\d(?:\s*|\-?)\d{3}(?:\s*|\-?)\d{4}/g;
   while ((match = phoneRegex.exec(text)) !== null) {
-    tokens.push({
-      type: 'phone',
-      raw: match[0].trim(),
-      normalized: match[0].trim().replace(/[\s\-]/g, ''),
-      mustPreserveExact: true,
-    });
+    addToken('phone', match[0], match[0].replace(/[\s\-]/g, ''));
+  }
+
+  // Hashtags (e.g. #هاوین٢٠٢٦, #عروض_الصيف, #Hawdesign)
+  const hashtagRegex = /(#[a-zA-Z0-9_\u0600-\u06FF\u0750-\u077F]+)/g;
+  while ((match = hashtagRegex.exec(text)) !== null) {
+    addToken('hashtag', match[0]);
+  }
+
+  // Date patterns (e.g. 2026/09/04, 2026-09-04, 04.09.2026, ٢٠٢٦/٠٩/٠٤)
+  const dateRegex = /([\d\u0660-\u0669\u06F0-\u06F9]{4}[-/.\u060D][\d\u0660-\u0669\u06F0-\u06F9]{1,2}[-/.\u060D][\d\u0660-\u0669\u06F0-\u06F9]{1,2}|[\d\u0660-\u0669\u06F0-\u06F9]{1,2}[-/.\u060D][\d\u0660-\u0669\u06F0-\u06F9]{1,2}[-/.\u060D][\d\u0660-\u0669\u06F0-\u06F9]{4})/g;
+  while ((match = dateRegex.exec(text)) !== null) {
+    addToken('date', match[0]);
   }
 
   return tokens;

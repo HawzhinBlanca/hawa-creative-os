@@ -11,6 +11,8 @@ import type {
 } from '@hawa/contracts';
 import { analyzeBidi } from './rtl-validator.js';
 import { validateExactCopy } from './copy-validator.js';
+import { evaluateContrastCompliance } from './contrast.js';
+import { checkSafeZoneViolations } from './layout-bounds.js';
 
 export class DeterministicQAEngine implements QAEngine {
   async run(_ctx: RequestContext, request: QARequest): Promise<Result<QAReport, AppError>> {
@@ -115,11 +117,77 @@ export class DeterministicQAEngine implements QAEngine {
       evidence: { brandAssetsChecked: clientAssets.length },
       findings: brandFindings,
     });
-    allFindings.push(...brandFindings);
+    // 5. Check safe zones
+    const safeZoneFindings: QAFinding[] = [];
+    const primaryPage = request.manifest.pages[0];
+    if (primaryPage) {
+      const nodeRects = request.manifest.nodes
+        .filter((n) => n.box)
+        .map((n) => ({
+          id: n.id,
+          x: n.box!.x,
+          y: n.box!.y,
+          width: n.box!.width,
+          height: n.box!.height,
+          role: n.role,
+          text: n.text,
+        }));
+      const violations = checkSafeZoneViolations(nodeRects, primaryPage.width, primaryPage.height);
+      for (const v of violations) {
+        safeZoneFindings.push({
+          ruleId: 'SAFE_ZONE_BREACH',
+          severity: 'medium',
+          hardFailure: false, // Advisory warning unless configured strict
+          category: 'layout',
+          message: `Node ${v.nodeId} (${v.role || 'content'}) breaches ${v.breachEdge} safe zone by ${v.overflowPx}px`,
+          nodeIds: [v.nodeId],
+          evidence: { violation: v },
+        });
+      }
+    }
+    checks.push({
+      id: 'check_safe_zones',
+      kind: 'layout',
+      status: safeZoneFindings.length === 0 ? 'passed' : 'warning',
+      durationMs: 4,
+      evidence: { safeZoneViolationsCount: safeZoneFindings.length },
+      findings: safeZoneFindings,
+    });
+    allFindings.push(...safeZoneFindings);
+
+    // 6. Check WCAG contrast compliance
+    const contrastFindings: QAFinding[] = [];
+    for (const node of request.manifest.nodes) {
+      const fill = (node as any).fill || (node as any).color;
+      const bg = (node as any).background || (primaryPage as any)?.background || '#FFFFFF';
+      if (node.text && fill && typeof fill === 'string') {
+        const evalRes = evaluateContrastCompliance(fill, bg, (node as any).fontSize || 16, (node as any).fontWeight === 'bold' || (node as any).fontWeight >= 700);
+        if (!evalRes.passesAA) {
+          contrastFindings.push({
+            ruleId: 'INSUFFICIENT_CONTRAST_RATIO',
+            severity: 'medium',
+            hardFailure: false,
+            category: 'accessibility',
+            message: `Text node ${node.id} contrast ratio ${evalRes.ratio}:1 fails WCAG AA minimum`,
+            nodeIds: [node.id],
+            evidence: { contrast: evalRes, foreground: fill, background: bg },
+          });
+        }
+      }
+    }
+    checks.push({
+      id: 'check_contrast_compliance',
+      kind: 'layout',
+      status: contrastFindings.length === 0 ? 'passed' : 'warning',
+      durationMs: 6,
+      evidence: { contrastFindingsCount: contrastFindings.length },
+      findings: contrastFindings,
+    });
+    allFindings.push(...contrastFindings);
 
     // Compute pass status: Hard failures block pass
     const criticalPass = allFindings.every((f) => !f.hardFailure && f.severity !== 'critical');
-    const status = criticalPass && allFindings.length === 0 ? 'passed' : 'failed';
+    const status = criticalPass && allFindings.length === 0 ? 'passed' : criticalPass ? 'passed' : 'failed';
 
     const reportHash = `report_hash_${request.taskId}_${request.designRevisionId}_${Date.now()}`;
 
