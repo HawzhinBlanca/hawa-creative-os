@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { eventStream } from '../services/eventStream.js';
 
 interface InboxScreenProps {
   refreshTrigger?: number;
@@ -24,6 +25,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
   const [liveTasks, setLiveTasks] = useState<LiveTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastFetched, setLastFetched] = useState<string | null>(null);
+  const [realtimeNotification, setRealtimeNotification] = useState<string | null>(null);
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -32,7 +34,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
       if (res.ok) {
         const data = await res.json();
         setLiveTasks(data.items || []);
-        setLastFetched(new Date().toLocaleTimeString());
+        setLastFetched(`Polled: ${new Date().toLocaleTimeString()}`);
       }
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
@@ -43,6 +45,58 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
   useEffect(() => {
     fetchTasks();
+
+    // Subscribe to live SSE events
+    const unsubCreated = eventStream.on('task:created', (newTask: LiveTask) => {
+      setLiveTasks((prev) => {
+        if (prev.some((t) => t.id === newTask.id)) return prev;
+        return [newTask, ...prev];
+      });
+      setLastFetched(`Real-time push: Task created (${new Date().toLocaleTimeString()})`);
+      setRealtimeNotification(`⚡ Inbound task created: "${newTask.title || newTask.id.slice(0, 8)}"`);
+      setTimeout(() => setRealtimeNotification(null), 4000);
+    });
+
+    const unsubTransition = eventStream.on('task:transitioned', (data: { taskId: string; status: string }) => {
+      setLiveTasks((prev) =>
+        prev.map((t) => (t.id === data.taskId ? { ...t, status: data.status, updatedAt: new Date().toISOString() } : t))
+      );
+      setLastFetched(`Real-time push: Status changed to ${data.status}`);
+    });
+
+    const unsubQA = eventStream.on('task:qa_completed', (data: { taskId: string; qaReport: any }) => {
+      setLiveTasks((prev) =>
+        prev.map((t) => (t.id === data.taskId ? { ...t, latestQAReport: data.qaReport } : t))
+      );
+    });
+
+    const unsubApproved = eventStream.on('task:approved', (data: { taskId: string }) => {
+      setLiveTasks((prev) =>
+        prev.map((t) => (t.id === data.taskId ? { ...t, status: 'APPROVED' } : t))
+      );
+      setLastFetched('Real-time push: Task approved');
+    });
+
+    const unsubPublished = eventStream.on('task:published', (data: { taskId: string }) => {
+      setLiveTasks((prev) =>
+        prev.map((t) => (t.id === data.taskId ? { ...t, status: 'COMPLETE' } : t))
+      );
+      setLastFetched('Real-time push: Task published to Google Drive');
+    });
+
+    const unsubWebhook = eventStream.on('webhook:received', (data: { platform: string; updateId: string }) => {
+      setRealtimeNotification(`⚡ Real-time webhook ingress from ${data.platform.toUpperCase()} (ID: ${data.updateId})`);
+      setTimeout(() => setRealtimeNotification(null), 4000);
+    });
+
+    return () => {
+      unsubCreated();
+      unsubTransition();
+      unsubQA();
+      unsubApproved();
+      unsubPublished();
+      unsubWebhook();
+    };
   }, [refreshTrigger]);
 
   // Group live tasks by workflow stage
@@ -57,9 +111,37 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
   return (
     <section id="inbox" className="screen active">
+      {realtimeNotification && (
+        <div
+          id="realtime-toast"
+          style={{
+            marginBottom: 12,
+            padding: '8px 14px',
+            borderRadius: 6,
+            backgroundColor: 'rgba(56, 189, 248, 0.15)',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            color: '#38BDF8',
+            fontSize: 13,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            animation: 'fadeIn 0.2s ease-in-out',
+          }}
+        >
+          <span>{realtimeNotification}</span>
+          <button
+            onClick={() => setRealtimeNotification(null)}
+            style={{ background: 'none', border: 'none', color: '#38BDF8', cursor: 'pointer', fontSize: 14 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-          {loading ? 'Refreshing board from Core API…' : lastFetched ? `Live sync: ${lastFetched} · ${liveTasks.length} active API tasks` : 'Live API connected'}
+          {loading ? 'Refreshing board from Core API…' : lastFetched ? `${lastFetched} · ${liveTasks.length} active API tasks` : 'Live API & SSE connected'}
         </div>
         <button
           className="btn"

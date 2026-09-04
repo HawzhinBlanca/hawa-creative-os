@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import type {
   RequestContext,
   UUID,
@@ -86,6 +87,33 @@ export function createApp() {
   const clientDnas = new Map<string, ClientDNA>();
   const evalRuns = new Map<string, any>();
   const uploadedAssets = new Map<string, any>();
+
+  // Real-time Event System (Server-Sent Events)
+  type SystemEvent = {
+    id: string;
+    event: string;
+    data: any;
+    timestamp: string;
+  };
+
+  type StreamSubscriber = (event: SystemEvent) => Promise<void> | void;
+  const subscribers = new Set<StreamSubscriber>();
+
+  function broadcast(event: string, data: any) {
+    const systemEvent: SystemEvent = {
+      id: crypto.randomUUID(),
+      event,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+    for (const subscriber of Array.from(subscribers)) {
+      try {
+        subscriber(systemEvent);
+      } catch {
+        subscribers.delete(subscriber);
+      }
+    }
+  }
 
   // Seed default client DNA
   const defaultClientId = 'client-office-1';
@@ -201,6 +229,9 @@ export function createApp() {
       },
     ]);
 
+    broadcast('webhook:received', { platform: 'telegram', updateId: sourceEventId, taskId });
+    broadcast('task:created', task);
+
     return c.json({ ok: true, task }, 201);
   });
 
@@ -209,6 +240,72 @@ export function createApp() {
     (app as any)[method](`/v1${path}`, handler);
     (app as any)[method](`/api/v1${path}`, handler);
   };
+
+  // Real-time Server-Sent Events (SSE) Stream
+  registerRoute('get', '/events/stream', (c: any) => {
+    return streamSSE(c, async (stream) => {
+      let closed = false;
+
+      const subscriber: StreamSubscriber = async (ev) => {
+        if (closed) return;
+        try {
+          await stream.writeSSE({
+            id: ev.id,
+            event: ev.event,
+            data: JSON.stringify(ev.data),
+          });
+        } catch {
+          closed = true;
+          subscribers.delete(subscriber);
+        }
+      };
+
+      subscribers.add(subscriber);
+
+      // 1. Initial Handshake
+      await stream.writeSSE({
+        id: crypto.randomUUID(),
+        event: 'system:connected',
+        data: JSON.stringify({
+          status: 'connected',
+          timestamp: new Date().toISOString(),
+          activeSubscribers: subscribers.size,
+        }),
+      });
+
+      // 2. Heartbeat Ping every 15 seconds
+      const heartbeat = setInterval(async () => {
+        if (closed) {
+          clearInterval(heartbeat);
+          subscribers.delete(subscriber);
+          return;
+        }
+        try {
+          await stream.writeSSE({
+            id: crypto.randomUUID(),
+            event: 'system:ping',
+            data: JSON.stringify({ ping: Date.now() }),
+          });
+        } catch {
+          closed = true;
+          clearInterval(heartbeat);
+          subscribers.delete(subscriber);
+        }
+      }, 15000);
+
+      stream.onAbort(() => {
+        closed = true;
+        clearInterval(heartbeat);
+        subscribers.delete(subscriber);
+      });
+
+      await new Promise<void>((resolve) => {
+        stream.onAbort(() => {
+          resolve();
+        });
+      });
+    });
+  });
 
   // List Tasks
   registerRoute('get', '/tasks', (c: any) => {
@@ -263,6 +360,8 @@ export function createApp() {
         occurredAt: new Date().toISOString(),
       },
     ]);
+
+    broadcast('task:created', task);
 
     return c.json(task, 201);
   });
@@ -319,6 +418,8 @@ export function createApp() {
       },
     ]);
 
+    broadcast('task:created', task);
+
     return c.json(task, 201);
   });
 
@@ -344,6 +445,8 @@ export function createApp() {
     task.status = 'BRIEFING';
     task.updatedAt = new Date().toISOString();
     events.get(taskId)?.push(trans.value);
+
+    broadcast('task:transitioned', { taskId, status: task.status, clientId: task.clientId });
 
     return c.json({
       commandId: crypto.randomUUID(),
@@ -397,6 +500,8 @@ export function createApp() {
       task.status = 'PLANNING';
       events.get(taskId)?.push(trans.value);
     }
+
+    broadcast('task:transitioned', { taskId, status: task.status, briefId: brief.briefId });
 
     return c.json(brief, 201);
   });
@@ -550,6 +655,11 @@ export function createApp() {
     task.latestRevisionId = revisionId;
     task.latestQAReport = qaRes.ok ? qaRes.value : undefined;
 
+    broadcast('task:transitioned', { taskId, status: task.status, revisionId });
+    if (qaRes.ok) {
+      broadcast('task:qa_completed', { taskId, revisionId, qaReport: qaRes.value });
+    }
+
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
@@ -620,6 +730,8 @@ export function createApp() {
       events.get(taskId)?.push(finishTrans.value);
     }
 
+    broadcast('task:published', { taskId, status: task.status });
+
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
@@ -656,6 +768,8 @@ export function createApp() {
     task.status = targetStatus;
     task.updatedAt = new Date().toISOString();
     events.get(taskId)?.push(trans.value);
+
+    broadcast('task:transitioned', { taskId, status: task.status, action: control });
 
     return c.json({
       commandId: crypto.randomUUID(),
@@ -784,6 +898,13 @@ export function createApp() {
       }
     }
 
+    broadcast(decision.decision === 'approved' ? 'task:approved' : 'task:revision_requested', {
+      taskId,
+      revisionId,
+      decision: decision.decision,
+      status: task.status,
+    });
+
     return c.json(decision, 201);
   });
 
@@ -838,6 +959,8 @@ export function createApp() {
       updatedAt: new Date().toISOString(),
     };
     clientDnas.set(clientId, dna);
+
+    broadcast('dna:updated', { clientId, version: dna.version });
 
     return c.json(dna, 201);
   });
@@ -919,6 +1042,8 @@ export function createApp() {
       createdAt: new Date().toISOString(),
     };
     uploadedAssets.set(assetId, record);
+
+    broadcast('asset:ingested', { assetId, filename: record.filename, sha256: record.sha256 });
 
     return c.json(record, 201);
   });

@@ -247,4 +247,48 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const failRes = await app.request('/v1/operations/failures');
     expect(failRes.status).toBe(200);
   });
+
+  it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {
+    const streamRes = await app.request('/v1/events/stream');
+    expect(streamRes.status).toBe(200);
+    expect(streamRes.headers.get('content-type')).toContain('text/event-stream');
+
+    const reader = streamRes.body?.getReader();
+    expect(reader).toBeDefined();
+
+    // 1. Initial Handshake chunk
+    const firstChunk = await reader!.read();
+    expect(firstChunk.done).toBe(false);
+    const firstText = new TextDecoder().decode(firstChunk.value);
+    expect(firstText).toContain('event: system:connected');
+    expect(firstText).toContain('"status":"connected"');
+
+    // 2. Trigger task creation while stream is actively listening
+    const createPromise = app.request('/v1/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `sse-stream-test-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        title: 'SSE Stream Verification Task',
+        priority: 'routine',
+      }),
+    });
+
+    const [postRes, secondChunk] = await Promise.all([
+      createPromise,
+      reader!.read(),
+    ]);
+
+    expect(postRes.status).toBe(201);
+    expect(secondChunk.done).toBe(false);
+    const secondText = new TextDecoder().decode(secondChunk.value);
+    expect(secondText).toContain('event: task:created');
+    expect(secondText).toContain('SSE Stream Verification Task');
+
+    // 3. Clean abort stream
+    await reader!.cancel();
+  });
 });
+
