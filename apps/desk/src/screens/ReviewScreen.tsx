@@ -16,8 +16,11 @@ interface CanvasNode {
   zIndex: number;
   locked: boolean;
   visible: boolean;
-  x: number; // percentage of canvas width (0-100)
-  y: number; // percentage of canvas height (0-100)
+  x: number;      // px within artboard space
+  y: number;      // px within artboard space
+  width: number;  // px
+  height: number; // px
+  rotation?: number;
 }
 
 interface HistoryState {
@@ -34,6 +37,13 @@ interface HistoryState {
   nodes: CanvasNode[];
 }
 
+export const ARTBOARD_CONFIG: Record<AspectPreset, { width: number; height: number; defaultHeadlineY: number; defaultCopyY: number }> = {
+  feed: { width: 480, height: 600, defaultHeadlineY: 100, defaultCopyY: 480 },
+  square: { width: 500, height: 500, defaultHeadlineY: 85, defaultCopyY: 390 },
+  story: { width: 380, height: 675, defaultHeadlineY: 120, defaultCopyY: 530 },
+  landscape: { width: 640, height: 360, defaultHeadlineY: 60, defaultCopyY: 270 },
+};
+
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const { t } = useI18n();
 
@@ -42,6 +52,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [langVariant, setLangVariant] = useState<'en' | 'ckb' | 'bilingual'>('en');
   const [selectedBrandKitId, setSelectedBrandKitId] = useState<string>('hawa');
   const activeBrandKit: BrandKit = useMemo(() => getBrandKit(selectedBrandKitId), [selectedBrandKitId]);
+
+  const currentArtboard = ARTBOARD_CONFIG[variant];
 
   // 2. Lifecycle & Action State
   const [approved, setApproved] = useState(false);
@@ -72,21 +84,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
   // 4. Spatial Node Positioning & Layers State
   const [nodes, setNodes] = useState<CanvasNode[]>([
-    { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 8, y: 16 },
-    { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 8, y: 78 },
-    { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: true, visible: true, x: 6, y: 6 },
-    { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 14, y: 55 },
+    { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110 },
+    { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52 },
+    { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: false, visible: true, x: 32, y: 28, width: 190, height: 42 },
+    { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15 },
   ]);
 
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<CanvasNode['role'] | null>(null);
 
   // 5. Pan & Zoom Engine State
   const [zoom, setZoom] = useState<number>(1.0);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState<boolean>(false);
+  const [isDraggingNode, setIsDraggingNode] = useState<boolean>(false);
+  const [editingNodeRole, setEditingNodeRole] = useState<CanvasNode['role'] | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
   const [activeTool, setActiveTool] = useState<'select' | 'hand'>('select');
-  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const viewportRef = useRef<HTMLDivElement>(null);
 
   // 6. Magnetic Snap Guides State
@@ -174,20 +187,40 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }
   }, [pushHistory]);
 
-  // Keyboard Shortcuts Listener (Pro-Grade Ergonomics)
+  // Native Wheel Event Listener on Viewport (Smooth Zoom without page zoom)
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        const zoomFactor = 1 - e.deltaY * 0.0025;
+        setZoom((prev) => Math.min(3.5, Math.max(0.35, prev * zoomFactor)));
+      } else {
+        setPanOffset((prev) => ({
+          x: Math.round(prev.x - e.deltaX * 0.85),
+          y: Math.round(prev.y - e.deltaY * 0.85),
+        }));
+      }
+    };
+
+    vp.addEventListener('wheel', onNativeWheel, { passive: false });
+    return () => {
+      vp.removeEventListener('wheel', onNativeWheel);
+    };
+  }, []);
+
+  // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when typing in text inputs or contentEditable
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable) {
         return;
       }
 
-      // Spacebar for Hand/Pan tool
       if (e.code === 'Space' && !e.repeat) {
         setIsSpacePressed(true);
       }
-
-      // Tool shortcuts
       if (e.key === 'v' || e.key === 'V') {
         setActiveTool('select');
       }
@@ -196,6 +229,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       }
       if (e.key === '?') {
         setShowShortcutsModal(true);
+      }
+      if (e.key === 'Escape') {
+        setSelectedNodeId(null);
+        setShowLayersModal(false);
+        setShowDiffModal(false);
+        setShowExportMenu(false);
+        setShowShortcutsModal(false);
       }
 
       // Undo / Redo
@@ -209,30 +249,26 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         redo();
       }
 
-      // Zoom Shortcuts: Cmd + 0 (Fit), Cmd + 1 (100%)
-      if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+      // Zoom Reset
+      if ((e.metaKey || e.ctrlKey) && (e.key === '0' || e.key === '1')) {
         e.preventDefault();
         setZoom(1.0);
         setPanOffset({ x: 0, y: 0 });
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === '1') {
-        e.preventDefault();
-        setZoom(1.0);
       }
 
       // Keyboard Nudge for Selected Element
       if (selectedNodeId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
-        const delta = e.shiftKey ? 3 : 1;
+        const delta = e.shiftKey ? 10 : 1;
         setNodes((prev) =>
           prev.map((n) => {
             if (n.role !== selectedNodeId || n.locked) return n;
             let nx = n.x;
             let ny = n.y;
-            if (e.key === 'ArrowUp') ny = Math.max(0, ny - delta);
-            if (e.key === 'ArrowDown') ny = Math.min(90, ny + delta);
-            if (e.key === 'ArrowLeft') nx = Math.max(0, nx - delta);
-            if (e.key === 'ArrowRight') nx = Math.min(90, nx + delta);
+            if (e.key === 'ArrowUp') ny -= delta;
+            if (e.key === 'ArrowDown') ny += delta;
+            if (e.key === 'ArrowLeft') nx -= delta;
+            if (e.key === 'ArrowRight') nx += delta;
             return { ...n, x: nx, y: ny };
           })
         );
@@ -253,7 +289,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     };
   }, [undo, redo, selectedNodeId]);
 
-  // Handle Switch Brand Kit
+  // Brand Kit Selector
   const handleSelectBrandKit = (kitId: string) => {
     const kit = getBrandKit(kitId);
     setSelectedBrandKitId(kitId);
@@ -281,112 +317,221 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }
   };
 
-  // Wheel listener for smooth Pan & Zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      // Zoom
-      const zoomFactor = 1 - e.deltaY * 0.0025;
-      setZoom((prev) => Math.min(3.5, Math.max(0.35, prev * zoomFactor)));
-    } else {
-      // Pan
-      setPanOffset((prev) => ({
-        x: prev.x - e.deltaX * 0.85,
-        y: prev.y - e.deltaY * 0.85,
-      }));
-    }
+  // Switch Aspect Ratio Format (Clamps positions to new artboard bounds)
+  const handleSwitchFormat = (fmt: AspectPreset) => {
+    const newConfig = ARTBOARD_CONFIG[fmt];
+    setVariant(fmt);
+    setNodes((prev) =>
+      prev.map((n) => {
+        let ny = n.y;
+        if (n.role === 'headline') ny = newConfig.defaultHeadlineY;
+        if (n.role === 'copy') ny = newConfig.defaultCopyY;
+        const clampedX = Math.min(n.x, Math.max(20, newConfig.width - n.width - 20));
+        const clampedY = Math.min(ny, Math.max(20, newConfig.height - n.height - 20));
+        return { ...n, x: clampedX, y: clampedY };
+      })
+    );
+    pushHistory();
   };
 
-  // Drag-to-Pan Viewport
-  const handleViewportMouseDown = (e: React.MouseEvent) => {
-    if (isSpacePressed || activeTool === 'hand' || e.button === 1) {
-      e.preventDefault();
-      setIsPanning(true);
-      panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
-    } else if (e.target === viewportRef.current) {
-      setSelectedNodeId(null);
-    }
-  };
+  // =========================================================================
+  // BULLETPROOF DIRECT MANIPULATION & RESIZE HANDLERS (Figma/Photoshop Grade)
+  // =========================================================================
 
-  const handleViewportMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setPanOffset({
-        x: e.clientX - panStartRef.current.x,
-        y: e.clientY - panStartRef.current.y,
-      });
-    }
-  };
-
-  const handleViewportMouseUp = () => {
-    setIsPanning(false);
-  };
-
-  // Direct Drag-to-Reposition Element with Magnetic Snapping
-  const [draggingNodeRole, setDraggingNodeRole] = useState<string | null>(null);
-  const dragNodeStartRef = useRef<{ startX: number; startY: number; initNodeX: number; initNodeY: number }>({
-    startX: 0, startY: 0, initNodeX: 0, initNodeY: 0,
-  });
-
-  const handleNodeMouseDown = (e: React.MouseEvent, role: CanvasNode['role']) => {
+  // Element Drag-to-Move with Magnetic Snapping
+  const handleElementPointerDown = (e: React.PointerEvent, role: CanvasNode['role']) => {
+    // Only primary mouse button (left-click) starts node dragging
+    if (e.button !== 0) return;
     if (isSpacePressed || activeTool === 'hand') return;
     e.stopPropagation();
+    e.preventDefault(); // Prevent browser text selection and ghost drag
+
+    // Select immediately on pointerdown
     setSelectedNodeId(role);
 
     const targetNode = nodes.find((n) => n.role === role);
     if (!targetNode || targetNode.locked) return;
 
-    setDraggingNodeRole(role);
-    dragNodeStartRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initNodeX: targetNode.x,
-      initNodeY: targetNode.y,
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startX = targetNode.x;
+    const startY = targetNode.y;
+
+    let hasMoved = false;
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      moveEvt.preventDefault();
+      const dx = (moveEvt.clientX - startClientX) / zoom;
+      const dy = (moveEvt.clientY - startClientY) / zoom;
+
+      if (!hasMoved && Math.hypot(moveEvt.clientX - startClientX, moveEvt.clientY - startClientY) > 3) {
+        hasMoved = true;
+        setIsDraggingNode(true);
+      }
+
+      if (hasMoved) {
+        let nextX = Math.round(startX + dx);
+        let nextY = Math.round(startY + dy);
+
+        // Magnetic snap to center X (artboard horizontal center)
+        const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
+        if (Math.abs(nextX - centerX) < 10) {
+          nextX = centerX;
+          setSnapGuideX(currentArtboard.width / 2);
+        } else {
+          setSnapGuideX(null);
+        }
+
+        // Magnetic snap to center Y (artboard vertical center)
+        const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
+        if (Math.abs(nextY - centerY) < 10) {
+          nextY = centerY;
+          setSnapGuideY(currentArtboard.height / 2);
+        } else {
+          setSnapGuideY(null);
+        }
+
+        setNodes((prev) =>
+          prev.map((n) => (n.role === role ? { ...n, x: nextX, y: nextY } : n))
+        );
+      }
     };
-  };
 
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (!draggingNodeRole) return;
-
-    const deltaX = (e.clientX - dragNodeStartRef.current.startX) / (6 * zoom);
-    const deltaY = (e.clientY - dragNodeStartRef.current.startY) / (6 * zoom);
-
-    let newX = Math.round(dragNodeStartRef.current.initNodeX + deltaX);
-    let newY = Math.round(dragNodeStartRef.current.initNodeY + deltaY);
-
-    // Magnetic Snap to Center or Safe Zones
-    if (Math.abs(newX - 50) < 2) {
-      newX = 50;
-      setSnapGuideX(50);
-    } else if (Math.abs(newX - 10) < 2) {
-      newX = 10;
-      setSnapGuideX(10);
-    } else {
-      setSnapGuideX(null);
-    }
-
-    if (Math.abs(newY - 50) < 2) {
-      newY = 50;
-      setSnapGuideY(50);
-    } else if (Math.abs(newY - 16) < 2) {
-      newY = 16;
-      setSnapGuideY(16);
-    } else {
-      setSnapGuideY(null);
-    }
-
-    setNodes((prev) =>
-      prev.map((n) => (n.role === draggingNodeRole ? { ...n, x: newX, y: newY } : n))
-    );
-  };
-
-  const handleCanvasMouseUp = () => {
-    if (draggingNodeRole) {
-      setDraggingNodeRole(null);
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
       setSnapGuideX(null);
       setSnapGuideY(null);
-      pushHistory();
+      setIsDraggingNode(false);
+      if (hasMoved) {
+        pushHistory();
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('blur', onPointerUp);
+  };
+
+  // Transform Handle Resize Handler (8 Cardinal Handles)
+  const handleResizeHandlePointerDown = (e: React.PointerEvent, role: CanvasNode['role'], handle: string) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const targetNode = nodes.find((n) => n.role === role);
+    if (!targetNode || targetNode.locked) return;
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startX = targetNode.x;
+    const startY = targetNode.y;
+    const startW = targetNode.width;
+    const startH = targetNode.height;
+
+    let hasResized = false;
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      moveEvt.preventDefault();
+      hasResized = true;
+      const dx = (moveEvt.clientX - startClientX) / zoom;
+      const dy = (moveEvt.clientY - startClientY) / zoom;
+
+      let newX = startX;
+      let newY = startY;
+      let newW = startW;
+      let newH = startH;
+
+      if (handle.includes('e')) newW = Math.max(40, Math.round(startW + dx));
+      if (handle.includes('s')) newH = Math.max(20, Math.round(startH + dy));
+      if (handle.includes('w')) {
+        const candidateW = Math.max(40, Math.round(startW - dx));
+        newX = startX + (startW - candidateW);
+        newW = candidateW;
+      }
+      if (handle.includes('n')) {
+        const candidateH = Math.max(20, Math.round(startH - dy));
+        newY = startY + (startH - candidateH);
+        newH = candidateH;
+      }
+
+      setNodes((prev) =>
+        prev.map((n) => (n.role === role ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
+      );
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
+      if (hasResized) {
+        pushHistory();
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('blur', onPointerUp);
+  };
+
+  // Viewport Pan Pointer Handler
+  const handleViewportPointerDown = (e: React.PointerEvent) => {
+    const isDirectViewport = e.target === viewportRef.current;
+    if (isSpacePressed || activeTool === 'hand' || e.button === 1 || (isDirectViewport && e.button === 0 && e.shiftKey)) {
+      e.preventDefault();
+      setIsPanning(true);
+      const startClientX = e.clientX;
+      const startClientY = e.clientY;
+      const startPanX = panOffset.x;
+      const startPanY = panOffset.y;
+
+      const onPointerMove = (moveEvt: PointerEvent) => {
+        setPanOffset({
+          x: Math.round(startPanX + (moveEvt.clientX - startClientX)),
+          y: Math.round(startPanY + (moveEvt.clientY - startClientY)),
+        });
+      };
+
+      const onPointerUp = () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+        window.removeEventListener('blur', onPointerUp);
+        setIsPanning(false);
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+      window.addEventListener('blur', onPointerUp);
+    } else if (isDirectViewport) {
+      // Clicking empty workspace background deselects active layer
+      setSelectedNodeId(null);
+      setEditingNodeRole(null);
     }
   };
+
+  // Render Transform Bounding Box with Live Dimension Pill and 8 Cardinal Handles
+  const renderTransformBBox = (node: CanvasNode, all8: boolean = true) => (
+    <div className="transform-bbox" style={{ pointerEvents: 'none' }}>
+      <div className="node-dimension-pill">
+        {node.name} · {Math.round(node.width)}×{Math.round(node.height)} ({Math.round(node.x)}, {Math.round(node.y)})
+      </div>
+      <div className="transform-handle handle-nw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'nw')} />
+      {all8 && <div className="transform-handle handle-n" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'n')} />}
+      <div className="transform-handle handle-ne" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'ne')} />
+      {all8 && <div className="transform-handle handle-e" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'e')} />}
+      <div className="transform-handle handle-se" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'se')} />
+      {all8 && <div className="transform-handle handle-s" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 's')} />}
+      <div className="transform-handle handle-sw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'sw')} />
+      {all8 && <div className="transform-handle handle-w" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'w')} />}
+    </div>
+  );
 
   // Active displayed headline & copy based on variant
   const activeHeadline = langVariant === 'ckb' ? headlineCkb : headlineEn;
@@ -566,6 +711,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const copyNode = nodes.find((n) => n.role === 'copy') || nodes[1];
   const logoNode = nodes.find((n) => n.role === 'logo') || nodes[2];
   const shapeNode = nodes.find((n) => n.role === 'shape') || nodes[3];
+  const activeSelectedNode = nodes.find((n) => n.role === selectedNodeId);
 
   return (
     <section id="review" className="screen active" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
@@ -582,7 +728,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          animation: 'fadeIn 0.2s var(--apple-spring)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>🟢</span>
@@ -592,7 +737,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         </div>
       )}
 
-      {/* Studio Top Control Strip (Brand Kits, Formats, Undo/Redo, Export) */}
+      {/* Studio Top Control Strip (Brand Kits, Formats, Tools, Undo/Redo, Export) */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -655,21 +800,41 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
         </div>
 
-        {/* Center: Aspect Presets */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {(['feed', 'square', 'story', 'landscape'] as AspectPreset[]).map((fmt) => (
+        {/* Center: Tools & Aspect Presets */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Tool Switcher */}
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(0,0,0,0.06)', padding: 2, borderRadius: 6 }}>
             <button
-              key={fmt}
-              className={`btn ${variant === fmt ? 'primary' : ''}`}
-              style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
-              onClick={() => {
-                setVariant(fmt);
-                pushHistory();
-              }}
+              className={`btn ${activeTool === 'select' ? 'primary' : ''}`}
+              style={{ fontSize: 11, padding: '4px 8px', fontWeight: 600 }}
+              onClick={() => setActiveTool('select')}
+              title="Pointer / Select Tool (V)"
             >
-              {FORMAT_DIMENSIONS[fmt].label.split(' ')[0]}
+              ↖ Select
             </button>
-          ))}
+            <button
+              className={`btn ${activeTool === 'hand' ? 'primary' : ''}`}
+              style={{ fontSize: 11, padding: '4px 8px', fontWeight: 600 }}
+              onClick={() => setActiveTool('hand')}
+              title="Hand / Pan Tool (H / Space+Drag)"
+            >
+              ✋ Hand
+            </button>
+          </div>
+
+          {/* Aspect Presets */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {(['feed', 'square', 'story', 'landscape'] as AspectPreset[]).map((fmt) => (
+              <button
+                key={fmt}
+                className={`btn ${variant === fmt ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
+                onClick={() => handleSwitchFormat(fmt)}
+              >
+                {FORMAT_DIMENSIONS[fmt].label.split(' ')[0]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Right: History, Guides & High-Res Export */}
@@ -776,7 +941,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       </div>
 
       {/* Main Review Grid */}
-      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '260px 1fr 280px' }}>
+      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '260px 1fr 290px' }}>
         {/* Left Column: Request, Brief & Timeline */}
         <div className="panel" style={{ overflowY: 'auto' }}>
           <div className="meta" style={{ marginBottom: 8 }}>
@@ -829,30 +994,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         {/* Center Column: Pro Studio Interactive Viewport */}
         <div
           ref={viewportRef}
-          className={`studio-viewport ${isSpacePressed || activeTool === 'hand' ? 'panning' : ''}`}
-          onWheel={handleWheel}
-          onMouseDown={handleViewportMouseDown}
-          onMouseMove={(e) => {
-            handleViewportMouseMove(e);
-            handleCanvasMouseMove(e);
-          }}
-          onMouseUp={() => {
-            handleViewportMouseUp();
-            handleCanvasMouseUp();
-          }}
+          className={`studio-viewport ${isPanning || isSpacePressed || activeTool === 'hand' ? 'panning' : ''} ${isPanning ? 'is-active-panning' : ''} ${isDraggingNode ? 'is-dragging' : ''}`}
+          onPointerDown={handleViewportPointerDown}
         >
           {/* Snap Guides */}
-          {snapGuideX !== null && <div className="snap-guide-x" style={{ left: `${snapGuideX}%` }} />}
-          {snapGuideY !== null && <div className="snap-guide-y" style={{ top: `${snapGuideY}%` }} />}
+          {snapGuideX !== null && <div className="snap-guide-x" style={{ left: `calc(50% + ${(snapGuideX - currentArtboard.width / 2) * zoom + panOffset.x}px)` }} />}
+          {snapGuideY !== null && <div className="snap-guide-y" style={{ top: `calc(50% + ${(snapGuideY - currentArtboard.height / 2) * zoom + panOffset.y}px)` }} />}
 
           {/* Scaled & Panned Artboard */}
           <div
             className="artboard-container"
             style={{
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-              aspectRatio: FORMAT_DIMENSIONS[variant].aspectRatio,
-              width: variant === 'story' ? '380px' : variant === 'landscape' ? '680px' : '480px',
-              height: variant === 'story' ? '675px' : variant === 'landscape' ? '382px' : variant === 'feed' ? '600px' : '480px',
+              width: `${currentArtboard.width}px`,
+              height: `${currentArtboard.height}px`,
               background: activeBrandKit.palette.background,
               borderRadius: 8,
               boxShadow: '0 24px 64px rgba(0, 0, 0, 0.45)',
@@ -885,201 +1040,196 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             {/* Accent Organic Shape Node */}
             {shapeNode.visible && (
               <div
-                onClick={(e) => handleNodeMouseDown(e, 'shape')}
+                onPointerDown={(e) => handleElementPointerDown(e, 'shape')}
                 style={{
                   position: 'absolute',
-                  width: '75%',
-                  height: '38%',
+                  left: `${shapeNode.x}px`,
+                  top: `${shapeNode.y}px`,
+                  width: `${shapeNode.width}px`,
+                  height: `${shapeNode.height}px`,
                   borderRadius: '50%',
                   background: accentColor,
-                  left: `${shapeNode.x}%`,
-                  top: `${shapeNode.y}%`,
                   transform: langVariant === 'ckb' ? 'rotate(-15deg)' : 'rotate(15deg)',
                   zIndex: shapeNode.zIndex,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'move',
+                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'shape' ? 'grabbing' : 'move',
                   opacity: 0.85,
-                  transition: 'background 0.2s ease',
+                  userSelect: 'none',
+                  touchAction: 'none',
                 }}
               >
-                {selectedNodeId === 'shape' && (
-                  <div className="transform-bbox">
-                    <div className="transform-handle handle-nw" />
-                    <div className="transform-handle handle-n" />
-                    <div className="transform-handle handle-ne" />
-                    <div className="transform-handle handle-e" />
-                    <div className="transform-handle handle-se" />
-                    <div className="transform-handle handle-s" />
-                    <div className="transform-handle handle-sw" />
-                    <div className="transform-handle handle-w" />
-                    <div className="transform-handle handle-rot" />
-                  </div>
-                )}
+                {selectedNodeId === 'shape' && renderTransformBBox(shapeNode, true)}
               </div>
             )}
 
             {/* Brand Logo Node */}
             {logoNode.visible && (
               <div
-                onClick={(e) => handleNodeMouseDown(e, 'logo')}
+                onPointerDown={(e) => handleElementPointerDown(e, 'logo')}
                 style={{
                   position: 'absolute',
-                  left: langVariant === 'ckb' ? 'auto' : `${logoNode.x}%`,
-                  right: langVariant === 'ckb' ? `${logoNode.x}%` : 'auto',
-                  top: `${logoNode.y}%`,
+                  left: `${logoNode.x}px`,
+                  top: `${logoNode.y}px`,
+                  width: `${logoNode.width}px`,
+                  height: `${logoNode.height}px`,
                   zIndex: logoNode.zIndex,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
+                  justifyContent: 'space-between',
+                  padding: '4px 12px',
                   background: 'rgba(0,0,0,0.5)',
                   borderRadius: 6,
                   border: '1px solid rgba(255,255,255,0.25)',
-                  cursor: 'pointer',
+                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'logo' ? 'grabbing' : 'move',
+                  userSelect: 'none',
+                  touchAction: 'none',
                 }}
                 title={activeBrandKit.verifiedSha256}
               >
                 <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{activeBrandKit.logoText}</span>
                 <span style={{ fontSize: 9, color: '#10B981' }}>✓</span>
 
-                {selectedNodeId === 'logo' && (
-                  <div className="transform-bbox">
-                    <div className="transform-handle handle-nw" />
-                    <div className="transform-handle handle-ne" />
-                    <div className="transform-handle handle-se" />
-                    <div className="transform-handle handle-sw" />
-                  </div>
-                )}
+                {selectedNodeId === 'logo' && renderTransformBBox(logoNode, true)}
               </div>
             )}
 
             {/* Live Editable Headline Node */}
             {headlineNode.visible && (
               <div
-                onClick={(e) => handleNodeMouseDown(e, 'headline')}
+                onPointerDown={(e) => handleElementPointerDown(e, 'headline')}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNodeRole('headline');
+                }}
                 style={{
                   position: 'absolute',
-                  left: `${headlineNode.x}%`,
-                  top: `${headlineNode.y}%`,
-                  right: '8%',
+                  left: `${headlineNode.x}px`,
+                  top: `${headlineNode.y}px`,
+                  width: `${headlineNode.width}px`,
                   zIndex: headlineNode.zIndex,
                   padding: 4,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'move',
+                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'headline' ? 'grabbing' : 'move',
+                  userSelect: 'none',
+                  touchAction: 'none',
                 }}
               >
-                {selectedNodeId === 'headline' && (
-                  <div className="transform-bbox">
-                    <div className="transform-handle handle-nw" />
-                    <div className="transform-handle handle-n" />
-                    <div className="transform-handle handle-ne" />
-                    <div className="transform-handle handle-e" />
-                    <div className="transform-handle handle-se" />
-                    <div className="transform-handle handle-s" />
-                    <div className="transform-handle handle-sw" />
-                    <div className="transform-handle handle-w" />
-                    <div className="transform-handle handle-rot" />
-                  </div>
-                )}
+                {selectedNodeId === 'headline' && renderTransformBBox(headlineNode, true)}
 
-                {/* English Primary */}
-                {langVariant === 'en' && (
-                  <div
-                    dir="ltr"
-                    lang="en"
+                {/* Inline Editing Mode */}
+                {editingNodeRole === 'headline' ? (
+                  <textarea
+                    autoFocus
+                    value={langVariant === 'ckb' ? headlineCkb : headlineEn}
+                    onChange={(e) => {
+                      if (langVariant === 'ckb') setHeadlineCkb(e.target.value);
+                      else setHeadlineEn(e.target.value);
+                    }}
+                    onBlur={() => {
+                      setEditingNodeRole(null);
+                      pushHistory();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) {
+                        e.preventDefault();
+                        setEditingNodeRole(null);
+                        pushHistory();
+                      }
+                    }}
+                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
                     style={{
-                      fontSize: variant === 'story' ? 24 : 28,
+                      width: '100%',
+                      minHeight: 60,
+                      background: 'rgba(15, 23, 42, 0.88)',
                       color: '#ffffff',
+                      border: '2px solid #38BDF8',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                      fontSize: variant === 'story' ? 22 : 25,
                       fontWeight,
                       lineHeight: 1.25,
+                      fontFamily: langVariant === 'ckb' ? 'Vazirmatn, sans-serif' : fontFamily,
+                      resize: 'none',
                       outline: 'none',
-                      textAlign: 'left',
-                      fontFamily,
-                      textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                     }}
-                    contentEditable
-                    suppressContentEditableWarning
-                    onBlur={(e) => {
-                      setHeadlineEn(e.currentTarget.textContent || '');
-                      pushHistory();
-                    }}
-                  >
-                    {headlineEn}
-                  </div>
-                )}
+                  />
+                ) : (
+                  <>
+                    {/* English Primary */}
+                    {langVariant === 'en' && (
+                      <div
+                        dir="ltr"
+                        lang="en"
+                        style={{
+                          fontSize: variant === 'story' ? 24 : 27,
+                          color: '#ffffff',
+                          fontWeight,
+                          lineHeight: 1.25,
+                          outline: 'none',
+                          textAlign: 'left',
+                          fontFamily,
+                          textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        {headlineEn}
+                      </div>
+                    )}
 
-                {/* Kurdish Secondary */}
-                {langVariant === 'ckb' && (
-                  <div
-                    dir="rtl"
-                    lang="ckb"
-                    style={{
-                      fontSize: variant === 'story' ? 24 : 28,
-                      color: '#ffffff',
-                      fontWeight,
-                      lineHeight: 1.3,
-                      outline: 'none',
-                      textAlign: 'right',
-                      fontFamily: 'Vazirmatn, sans-serif',
-                      textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                    }}
-                    contentEditable
-                    suppressContentEditableWarning
-                    onBlur={(e) => {
-                      setHeadlineCkb(e.currentTarget.textContent || '');
-                      pushHistory();
-                    }}
-                  >
-                    {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
-                  </div>
-                )}
+                    {/* Kurdish Secondary */}
+                    {langVariant === 'ckb' && (
+                      <div
+                        dir="rtl"
+                        lang="ckb"
+                        style={{
+                          fontSize: variant === 'story' ? 24 : 27,
+                          color: '#ffffff',
+                          fontWeight,
+                          lineHeight: 1.3,
+                          outline: 'none',
+                          textAlign: 'right',
+                          fontFamily: 'Vazirmatn, sans-serif',
+                          textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
+                      </div>
+                    )}
 
-                {/* Bilingual Overlay */}
-                {langVariant === 'bilingual' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div
-                      dir="ltr"
-                      lang="en"
-                      style={{
-                        fontSize: variant === 'story' ? 22 : 25,
-                        color: '#ffffff',
-                        fontWeight: 800,
-                        lineHeight: 1.2,
-                        outline: 'none',
-                        textAlign: 'left',
-                        fontFamily: 'Inter, sans-serif',
-                        borderBottom: '1px solid rgba(255,255,255,0.2)',
-                        paddingBottom: 4,
-                      }}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) => {
-                        setHeadlineEn(e.currentTarget.textContent || '');
-                        pushHistory();
-                      }}
-                    >
-                      {headlineEn}
-                    </div>
-                    <div
-                      dir="rtl"
-                      lang="ckb"
-                      style={{
-                        fontSize: variant === 'story' ? 18 : 20,
-                        color: accentColor,
-                        fontWeight: 700,
-                        lineHeight: 1.3,
-                        outline: 'none',
-                        textAlign: 'right',
-                        fontFamily: 'Vazirmatn, sans-serif',
-                      }}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) => {
-                        setHeadlineCkb(e.currentTarget.textContent || '');
-                        pushHistory();
-                      }}
-                    >
-                      {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
-                    </div>
-                  </div>
+                    {/* Bilingual Overlay */}
+                    {langVariant === 'bilingual' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div
+                          dir="ltr"
+                          lang="en"
+                          style={{
+                            fontSize: variant === 'story' ? 22 : 25,
+                            color: '#ffffff',
+                            fontWeight: 800,
+                            lineHeight: 1.2,
+                            textAlign: 'left',
+                            fontFamily: 'Inter, sans-serif',
+                            borderBottom: '1px solid rgba(255,255,255,0.2)',
+                            paddingBottom: 4,
+                          }}
+                        >
+                          {headlineEn}
+                        </div>
+                        <div
+                          dir="rtl"
+                          lang="ckb"
+                          style={{
+                            fontSize: variant === 'story' ? 18 : 20,
+                            color: accentColor,
+                            fontWeight: 700,
+                            lineHeight: 1.3,
+                            textAlign: 'right',
+                            fontFamily: 'Vazirmatn, sans-serif',
+                          }}
+                        >
+                          {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1087,55 +1237,84 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             {/* Price & Offer Copy Badge Node */}
             {copyNode.visible && (
               <div
-                onClick={(e) => handleNodeMouseDown(e, 'copy')}
+                onPointerDown={(e) => handleElementPointerDown(e, 'copy')}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNodeRole('copy');
+                }}
                 style={{
                   position: 'absolute',
-                  left: `${copyNode.x}%`,
-                  top: `${copyNode.y}%`,
+                  left: `${copyNode.x}px`,
+                  top: `${copyNode.y}px`,
+                  width: `${copyNode.width}px`,
                   zIndex: copyNode.zIndex,
                   padding: 4,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : 'move',
+                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'copy' ? 'grabbing' : 'move',
+                  userSelect: 'none',
+                  touchAction: 'none',
                 }}
               >
-                {selectedNodeId === 'copy' && (
-                  <div className="transform-bbox">
-                    <div className="transform-handle handle-nw" />
-                    <div className="transform-handle handle-ne" />
-                    <div className="transform-handle handle-se" />
-                    <div className="transform-handle handle-sw" />
+                {selectedNodeId === 'copy' && renderTransformBBox(copyNode, true)}
+
+                {/* Inline Editing Mode */}
+                {editingNodeRole === 'copy' ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={langVariant === 'ckb' ? copyCkb : copyEn}
+                    onChange={(e) => {
+                      if (langVariant === 'ckb') setCopyCkb(e.target.value);
+                      else setCopyEn(e.target.value);
+                    }}
+                    onBlur={() => {
+                      setEditingNodeRole(null);
+                      pushHistory();
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape' || e.key === 'Enter') {
+                        e.preventDefault();
+                        setEditingNodeRole(null);
+                        pushHistory();
+                      }
+                    }}
+                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(15, 23, 42, 0.92)',
+                      color: '#ffffff',
+                      border: '2px solid #38BDF8',
+                      borderRadius: 6,
+                      padding: '4px 8px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      outline: 'none',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    }}
+                  />
+                ) : (
+                  <div
+                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+                    lang={langVariant === 'ckb' ? 'ckb' : 'en'}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      outline: 'none',
+                      textAlign: langVariant === 'ckb' ? 'right' : 'left',
+                      background: activeBrandKit.palette.cardBg,
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      display: 'inline-block',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {langVariant === 'bilingual'
+                      ? `${copyEn} · \u2067${copyCkb}\u2069`
+                      : langVariant === 'ckb'
+                      ? showBidiIsolates ? `⸢\u2067${copyCkb}\u2069⸥` : copyCkb
+                      : copyEn}
                   </div>
                 )}
-
-                <div
-                  dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
-                  lang={langVariant === 'ckb' ? 'ckb' : 'en'}
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    outline: 'none',
-                    textAlign: langVariant === 'ckb' ? 'right' : 'left',
-                    background: activeBrandKit.palette.cardBg,
-                    padding: '6px 14px',
-                    borderRadius: 8,
-                    display: 'inline-block',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                  }}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => {
-                    const text = e.currentTarget.textContent || '';
-                    if (langVariant === 'ckb') setCopyCkb(text);
-                    else setCopyEn(text);
-                    pushHistory();
-                  }}
-                >
-                  {langVariant === 'bilingual'
-                    ? `${copyEn} · \u2067${copyCkb}\u2069`
-                    : langVariant === 'ckb'
-                    ? showBidiIsolates ? `⸢\u2067${copyCkb}\u2069⸥` : copyCkb
-                    : copyEn}
-                </div>
               </div>
             )}
 
@@ -1196,82 +1375,351 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
         </div>
 
-        {/* Right Column: Pro Inspector & Quality Decision Gate */}
+        {/* Right Column: Pro Inspector & Decision Gate */}
         <div className="panel" style={{ overflowY: 'auto' }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Pro Inspector</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 14 }}>
+              {activeSelectedNode ? `Layer: ${activeSelectedNode.name}` : 'Document Inspector'}
+            </h3>
+            {activeSelectedNode && (
+              <button
+                className="btn"
+                style={{ fontSize: 10, padding: '2px 6px' }}
+                onClick={() => setSelectedNodeId(null)}
+              >
+                Deselect
+              </button>
+            )}
+          </div>
 
-          {/* Typography Controls */}
-          <div style={{ background: 'var(--soft)', padding: 10, borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-              TYPOGRAPHY & SCRIPT
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 8 }}>
-              {['Inter', 'Plus Jakarta Sans', 'Vazirmatn', 'Noto Sans Arabic'].map((font) => (
-                <button
-                  key={font}
-                  className={`btn ${fontFamily === font ? 'primary' : ''}`}
-                  style={{ fontSize: 10, padding: '3px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  onClick={() => {
-                    setFontFamily(font);
-                    pushHistory();
-                  }}
-                >
-                  {font.split(' ')[0]}
-                </button>
-              ))}
-            </div>
+          {/* Conditional Layer Inspector */}
+          {activeSelectedNode ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Spatial Positioning Box */}
+              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                  TRANSFORM & DIMENSIONS
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>X: </span>
+                    <input
+                      type="number"
+                      value={activeSelectedNode.x}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: val } : n));
+                      }}
+                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>Y: </span>
+                    <input
+                      type="number"
+                      value={activeSelectedNode.y}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: val } : n));
+                      }}
+                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>W: </span>
+                    <input
+                      type="number"
+                      value={activeSelectedNode.width}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 10;
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, width: val } : n));
+                      }}
+                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--muted)' }}>H: </span>
+                    <input
+                      type="number"
+                      value={activeSelectedNode.height}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 10;
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, height: val } : n));
+                      }}
+                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Weight:</span>
-              <div style={{ display: 'flex', gap: 3 }}>
-                {[400, 600, 700, 800].map((w) => (
+                {/* 6 Quick Alignment Actions (Photoshop / Figma Grade) */}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
+                    ALIGN TO ARTBOARD
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+                    <button
+                      className="btn"
+                      title="Align Left"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: 20 } : n));
+                        pushHistory();
+                      }}
+                    >⇤</button>
+                    <button
+                      className="btn"
+                      title="Align Horizontal Center"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        const cx = Math.round((currentArtboard.width - activeSelectedNode.width) / 2);
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: cx } : n));
+                        pushHistory();
+                      }}
+                    >⇹</button>
+                    <button
+                      className="btn"
+                      title="Align Right"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        const rx = Math.round(currentArtboard.width - activeSelectedNode.width - 20);
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: rx } : n));
+                        pushHistory();
+                      }}
+                    >⇥</button>
+                    <button
+                      className="btn"
+                      title="Align Top"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: 20 } : n));
+                        pushHistory();
+                      }}
+                    >⤒</button>
+                    <button
+                      className="btn"
+                      title="Align Vertical Center"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        const cy = Math.round((currentArtboard.height - activeSelectedNode.height) / 2);
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: cy } : n));
+                        pushHistory();
+                      }}
+                    >⬍</button>
+                    <button
+                      className="btn"
+                      title="Align Bottom"
+                      style={{ fontSize: 11, padding: '3px 0' }}
+                      onClick={() => {
+                        const by = Math.round(currentArtboard.height - activeSelectedNode.height - 20);
+                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: by } : n));
+                        pushHistory();
+                      }}
+                    >⤓</button>
+                  </div>
+                </div>
+
+                {/* Layer Hierarchy (Z-Index) */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   <button
-                    key={w}
-                    className={`btn ${fontWeight === w ? 'primary' : ''}`}
-                    style={{ fontSize: 10, padding: '2px 5px' }}
+                    className="btn"
+                    style={{ flex: 1, fontSize: 10, padding: '4px' }}
                     onClick={() => {
-                      setFontWeight(w);
+                      setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, zIndex: n.zIndex + 1 } : n));
                       pushHistory();
                     }}
                   >
-                    {w}
+                    ↑ Bring Forward
                   </button>
-                ))}
+                  <button
+                    className="btn"
+                    style={{ flex: 1, fontSize: 10, padding: '4px' }}
+                    onClick={() => {
+                      setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, zIndex: Math.max(1, n.zIndex - 1) } : n));
+                      pushHistory();
+                    }}
+                  >
+                    ↓ Send Backward
+                  </button>
+                </div>
+              </div>
+
+              {/* Layer-Specific Properties */}
+              {activeSelectedNode.role === 'headline' && (
+                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                    HEADLINE CONTENT & COPY
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Lead:</small>
+                    <input
+                      type="text"
+                      value={headlineEn}
+                      onChange={(e) => setHeadlineEn(e.target.value)}
+                      onBlur={pushHistory}
+                      style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Kurdish Sorani:</small>
+                    <input
+                      type="text"
+                      dir="rtl"
+                      value={headlineCkb}
+                      onChange={(e) => setHeadlineCkb(e.target.value)}
+                      onBlur={pushHistory}
+                      style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeSelectedNode.role === 'copy' && (
+                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                    PRICE & BADGE COPY
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Price:</small>
+                    <input
+                      type="text"
+                      value={copyEn}
+                      onChange={(e) => setCopyEn(e.target.value)}
+                      onBlur={pushHistory}
+                      style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Kurdish Price (د.ع):</small>
+                    <input
+                      type="text"
+                      dir="rtl"
+                      value={copyCkb}
+                      onChange={(e) => setCopyCkb(e.target.value)}
+                      onBlur={pushHistory}
+                      style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeSelectedNode.role === 'shape' && (
+                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                    ORGANIC ACCENT COLOR
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6', '#EC4899'].map((c) => (
+                      <div
+                        key={c}
+                        onClick={() => {
+                          setAccentColor(c);
+                          pushHistory();
+                        }}
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          background: c,
+                          cursor: 'pointer',
+                          border: accentColor === c ? '2px solid #000' : '1px solid rgba(0,0,0,0.2)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeSelectedNode.role === 'logo' && (
+                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
+                    VERIFIED BRAND ASSET
+                  </div>
+                  <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>
+                    {activeBrandKit.logoBadge}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, wordBreak: 'break-all' }}>
+                    <code>{activeBrandKit.verifiedSha256}</code>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Document Global Inspector */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Typography Controls */}
+              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                  GLOBAL TYPOGRAPHY
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 6 }}>
+                  {['Inter', 'Plus Jakarta Sans', 'Vazirmatn', 'Noto Sans Arabic'].map((font) => (
+                    <button
+                      key={font}
+                      className={`btn ${fontFamily === font ? 'primary' : ''}`}
+                      style={{ fontSize: 10, padding: '3px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      onClick={() => {
+                        setFontFamily(font);
+                        pushHistory();
+                      }}
+                    >
+                      {font.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Weight:</span>
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {[400, 600, 700, 800].map((w) => (
+                      <button
+                        key={w}
+                        className={`btn ${fontWeight === w ? 'primary' : ''}`}
+                        style={{ fontSize: 10, padding: '2px 5px' }}
+                        onClick={() => {
+                          setFontWeight(w);
+                          pushHistory();
+                        }}
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Accent Palette */}
+              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                  PALETTE PRESETS
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {[activeBrandKit.palette.primary, activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6'].map((color) => (
+                    <div
+                      key={color}
+                      onClick={() => {
+                        setAccentColor(color);
+                        pushHistory();
+                      }}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: color,
+                        cursor: 'pointer',
+                        border: accentColor === color ? '2px solid #fff' : '1px solid rgba(0,0,0,0.2)',
+                        boxShadow: accentColor === color ? '0 0 0 2px var(--accent)' : 'none',
+                      }}
+                      title={color}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Color Palette & Accents */}
-          <div style={{ background: 'var(--soft)', padding: 10, borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-              BRAND PALETTE
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {[activeBrandKit.palette.primary, activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6'].map((color) => (
-                <div
-                  key={color}
-                  onClick={() => {
-                    setAccentColor(color);
-                    pushHistory();
-                  }}
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: color,
-                    cursor: 'pointer',
-                    border: accentColor === color ? '2px solid #fff' : '1px solid rgba(0,0,0,0.2)',
-                    boxShadow: accentColor === color ? '0 0 0 2px var(--accent)' : 'none',
-                  }}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Live Diagnostics Card */}
-          <div className="finding" style={{ borderColor: '#38BDF8', background: 'rgba(56, 189, 248, 0.05)', marginBottom: 12 }}>
-            <b style={{ color: '#0284C7' }}>⚡ Real-Time QC Verification</b>
+          <div className="finding" style={{ borderColor: '#38BDF8', background: 'rgba(56, 189, 248, 0.05)', marginTop: 10, marginBottom: 10 }}>
+            <b style={{ color: '#0284C7', fontSize: 12 }}>⚡ Real-Time QC Verification</b>
             <div style={{ fontSize: 11, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span>WCAG Contrast: <b>{qaDiagnostics.wcagContrastRatio}:1 (AAA)</b></span>
               <span>Protected Tokens: <b>{qaDiagnostics.tokensIntact ? '✓ Preserved' : '✗ Altered'}</b></span>
@@ -1280,7 +1728,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
 
           {/* Quick Inspector Actions */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
             <button
               className="btn"
               style={{ fontSize: 11, padding: '5px' }}
@@ -1320,10 +1768,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           )}
 
           {/* Decision Buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button
               className="btn primary"
-              style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 700 }}
+              style={{ width: '100%', padding: '9px', fontSize: 12, fontWeight: 700 }}
               onClick={handleApprove}
               disabled={approved || publishing}
             >
@@ -1336,14 +1784,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
             <button
               className="btn"
-              style={{ width: '100%', padding: '7px', fontSize: 11 }}
+              style={{ width: '100%', padding: '6px', fontSize: 11 }}
               onClick={handleSaveRevision}
             >
               Save Working Revision
             </button>
 
             {!approved && !escalated && (
-              <div style={{ marginTop: 6 }}>
+              <div style={{ marginTop: 4 }}>
                 <textarea
                   style={{
                     width: '100%',
@@ -1360,7 +1808,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 />
                 <button
                   className="btn"
-                  style={{ width: '100%', padding: '6px', fontSize: 11 }}
+                  style={{ width: '100%', padding: '5px', fontSize: 11 }}
                   onClick={handleRequestRevision}
                 >
                   Request Repair ({2 - repairCycles} left)
@@ -1547,7 +1995,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Shift + Z</kbd> Redo Action</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Shift + Arrows</kbd> Nudge 10px</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> Open this Cheat Sheet</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd> Deselect Layer</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> Open Cheat Sheet</div>
             </div>
           </div>
         </div>
