@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { InboxScreen } from './screens/InboxScreen.js';
@@ -8,6 +8,7 @@ import { LibraryScreen } from './screens/LibraryScreen.js';
 import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
+import { draftStore } from './services/draftStore.js';
 
 export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('inbox');
@@ -18,9 +19,56 @@ export const App: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Restore draft when opening modal
+  const handleOpenModal = () => {
+    const existingDraft = draftStore.getActiveDraft();
+    if (existingDraft && !taskTitle && !taskCopy) {
+      setTaskTitle(existingDraft.title || '');
+      setTaskCopy(existingDraft.copy || '');
+    }
+    setShowNewTaskModal(true);
+  };
+
+  // Autosave active draft
+  const handleTitleChange = (val: string) => {
+    setTaskTitle(val);
+    draftStore.saveActiveDraft({ title: val, copy: taskCopy });
+  };
+
+  const handleCopyChange = (val: string) => {
+    setTaskCopy(val);
+    draftStore.saveActiveDraft({ title: taskTitle, copy: val });
+  };
+
+  // Auto-flush queued offline tasks upon reconnection
+  useEffect(() => {
+    const handleOnlineFlush = async () => {
+      const result = await draftStore.flushQueuedTasks();
+      if (result.success > 0) {
+        setRefreshTrigger((k) => k + 1);
+      }
+    };
+
+    window.addEventListener('online', handleOnlineFlush);
+    return () => window.removeEventListener('online', handleOnlineFlush);
+  }, []);
+
   const handleCreateTask = async () => {
     if (!taskTitle) return;
     setIsSubmitting(true);
+
+    // Check if offline: queue locally in IndexedDB
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      draftStore.enqueueTask({ title: taskTitle, copy: taskCopy });
+      draftStore.clearActiveDraft();
+      setShowNewTaskModal(false);
+      setTaskTitle('');
+      setTaskCopy('');
+      setIsSubmitting(false);
+      alert('Offline Mode: Task brief queued in local storage. It will submit automatically upon reconnecting.');
+      return;
+    }
+
     try {
       const idempotencyKey = `task-desk-${Date.now()}`;
       const res = await fetch('/v1/tasks', {
@@ -69,6 +117,7 @@ export const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
         }).catch(() => {});
 
+        draftStore.clearActiveDraft();
         setSelectedTask(data);
         setRefreshTrigger((k) => k + 1);
         setShowNewTaskModal(false);
@@ -80,7 +129,12 @@ export const App: React.FC = () => {
         setCurrentScreen('inbox');
       }
     } catch {
+      // Network failure: queue offline
+      draftStore.enqueueTask({ title: taskTitle, copy: taskCopy });
+      draftStore.clearActiveDraft();
       setShowNewTaskModal(false);
+      setTaskTitle('');
+      setTaskCopy('');
       setCurrentScreen('inbox');
     } finally {
       setIsSubmitting(false);
@@ -91,7 +145,7 @@ export const App: React.FC = () => {
     <div className="shell">
       <Sidebar currentScreen={currentScreen} onNavigate={setCurrentScreen} />
       <main className="main">
-        <Header currentScreen={currentScreen} onNewTask={() => setShowNewTaskModal(true)} />
+        <Header currentScreen={currentScreen} onNewTask={handleOpenModal} />
         <div className="content">
           {currentScreen === 'inbox' && (
             <InboxScreen
@@ -132,10 +186,27 @@ export const App: React.FC = () => {
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
-            <h2 style={{ marginTop: 0 }}>Create Task in Hawa Desk</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4 }}>
-              Canonical office intake with client scope lock and exact copy preservation.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ marginTop: 0, marginBottom: 4 }}>Create Task in Hawa Desk</h2>
+                <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+                  Canonical office intake with client scope lock and exact copy preservation.
+                </p>
+              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: '3px 8px',
+                  borderRadius: 12,
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  color: '#38BDF8',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                }}
+                title="Draft autosaves continuously to IndexedDB / local storage"
+              >
+                💾 Autosaved
+              </span>
+            </div>
 
             <div style={{ margin: '16px 0' }}>
               <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
@@ -145,7 +216,7 @@ export const App: React.FC = () => {
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder="e.g. Summer Campaign Poster"
                 value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
+                onChange={(e) => handleTitleChange(e.target.value)}
               />
             </div>
 
@@ -159,7 +230,7 @@ export const App: React.FC = () => {
                 style={{ width: '100%', height: 90, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder="تێکستی پەسەندکراو بنووسە…"
                 value={taskCopy}
-                onChange={(e) => setTaskCopy(e.target.value)}
+                onChange={(e) => handleCopyChange(e.target.value)}
               />
               <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
                 Exact copy blocks will be locked and cannot be rewritten by creative models.

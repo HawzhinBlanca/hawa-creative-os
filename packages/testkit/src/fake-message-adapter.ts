@@ -70,8 +70,8 @@ export class FakeMessageAdapter implements MessageAdapter {
       source: {
         accountId: 'acc_office_1',
         channelId: (json.channelId as string) || 'tg_group_marketing',
-        messageId: (json.messageId as string) || `msg_${Date.now()}`,
-        eventId: (json.eventId as string) || `evt_${Date.now()}`,
+        messageId: (json.messageId as string) || (typeof (json.message as any)?.message_id !== 'undefined' ? String((json.message as any).message_id) : `msg_${Date.now()}`),
+        eventId: (json.eventId as string) || (json.update_id ? `evt_${json.update_id}` : `evt_${Date.now()}`),
       },
       sender: {
         externalId: (json.senderId as string) || 'user_123',

@@ -19,10 +19,28 @@ const titles: Record<ScreenId, string> = {
 
 export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
   const [streamStatus, setStreamStatus] = useState<StreamConnectionStatus>(eventStream.getStatus());
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
-    return eventStream.onStatusChange(setStreamStatus);
+    const unsub = eventStream.onStatusChange(setStreamStatus);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      unsub();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const badgeColor = !isOnline ? '#f97316' : streamStatus === 'connected' ? '#22c55e' : '#eab308';
+  const badgeBg = !isOnline ? 'rgba(249, 115, 22, 0.12)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(234, 179, 8, 0.12)';
+  const badgeBorder = !isOnline ? 'rgba(249, 115, 22, 0.3)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)';
+  const badgeText = !isOnline ? 'Offline (PWA Cache)' : streamStatus === 'connected' ? 'Live Stream' : 'Connecting…';
 
   return (
     <header className="top">
@@ -37,24 +55,25 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
             fontSize: 12,
             padding: '4px 10px',
             borderRadius: 20,
-            background: streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.12)' : streamStatus === 'connecting' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-            border: `1px solid ${streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.3)' : streamStatus === 'connecting' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-            color: streamStatus === 'connected' ? '#22c55e' : streamStatus === 'connecting' ? '#eab308' : '#ef4444',
+            background: badgeBg,
+            border: `1px solid ${badgeBorder}`,
+            color: badgeColor,
             fontWeight: 500,
+            transition: 'all 0.2s ease',
           }}
-          title={`Real-time SSE event stream: ${streamStatus}`}
+          title={!isOnline ? 'Offline PWA active: fonts and shell cached' : `Real-time SSE event stream: ${streamStatus}`}
         >
           <span
             style={{
               width: 7,
               height: 7,
               borderRadius: '50%',
-              backgroundColor: streamStatus === 'connected' ? '#22c55e' : streamStatus === 'connecting' ? '#eab308' : '#ef4444',
-              boxShadow: streamStatus === 'connected' ? '0 0 6px #22c55e' : 'none',
+              backgroundColor: badgeColor,
+              boxShadow: streamStatus === 'connected' && isOnline ? '0 0 6px #22c55e' : 'none',
               display: 'inline-block',
             }}
           />
-          <span>{streamStatus === 'connected' ? 'Live Stream' : streamStatus === 'connecting' ? 'Connecting…' : 'Offline'}</span>
+          <span>{badgeText}</span>
         </div>
 
         <input
