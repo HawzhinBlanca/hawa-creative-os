@@ -6,7 +6,12 @@
   },
   "references": [
     { "path": "../contracts" },
-    { "path": "../domain" }
+    { "path": "../domain" },
+    { "path": "../creative" },
+    { "path": "../qa" },
+    { "path": "../integrations" },
+    { "path": "../retrieval" },
+    { "path": "../db" }
   ],
   "include": ["src/**/*"]
 }

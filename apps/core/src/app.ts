@@ -24,6 +24,7 @@ import { CreativeDirectorRunner } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import { HyCanvasStudioAdapter, GooglePublisher } from '@hawa/integrations';
 import { EvaluationRunner } from '@hawa/evals';
+import { SyntheticTrafficDaemon } from '@hawa/testkit';
 
 export function createApp() {
   const app = new Hono();
@@ -75,6 +76,7 @@ export function createApp() {
   const studio = new HyCanvasStudioAdapter();
   const publisher = new GooglePublisher();
   const evalRunner = new EvaluationRunner();
+  const sloDaemon = new SyntheticTrafficDaemon(12);
 
   // In-memory data structures
   const tasks = new Map<string, any>();
@@ -985,6 +987,37 @@ export function createApp() {
         { integrationId: 'int_hycanvas', kind: 'hycanvas_studio', state: 'healthy', checkedAt: new Date().toISOString() },
       ],
     });
+  });
+
+  // SLO Performance & Synthetic Heartbeat Telemetry
+  registerRoute('get', '/operations/slo', (c: any) => {
+    const summary = sloDaemon.getSummary();
+    const recent = sloDaemon.getRecentProbes(10);
+    return c.json({
+      summary,
+      recentProbes: recent,
+    });
+  });
+
+  registerRoute('post', '/operations/slo/run', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const scenarioKey = body.scenario || 'nawroz_spring';
+    const result = await sloDaemon.runProbe(scenarioKey);
+    const summary = sloDaemon.getSummary();
+
+    broadcast('slo:probe_completed', {
+      probeId: result.probeId,
+      scenario: result.scenario,
+      totalDurationMs: result.totalDurationMs,
+      success: result.success,
+      p99DurationMs: summary.p99DurationMs,
+      successRate: summary.successRate,
+    });
+
+    return c.json({
+      result,
+      summary,
+    }, 201);
   });
 
   // Evaluation Runs

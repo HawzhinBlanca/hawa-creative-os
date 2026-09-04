@@ -50,6 +50,9 @@ importers:
       '@hawa/retrieval':
         specifier: workspace:*
         version: link:../../packages/retrieval
+      '@hawa/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
       '@hono/node-server':
         specifier: ^1.13.8
         version: 1.19.17(hono@4.13.5)

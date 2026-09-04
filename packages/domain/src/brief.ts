@@ -110,8 +110,8 @@ export function extractProtectedTokens(text: string): ProtectedToken[] {
     });
   };
 
-  // Price patterns (e.g. $10, 10,000 IQD, 15$, 25,000 د.ع, ٢٥٬٠٠٠ دینار, 50€, 100 EUR)
-  const priceRegex = /(\$\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|€|IQD|USD|EUR|د\.ع|دینار|هەزار|لیرە|%|٪))/gi;
+  // Price patterns (e.g. $10, 10,000 IQD, 15$, 25,000 د.ع, ٢٥٬٠٠٠ دینار, 50€, 100 EUR, ٪٢٥, %20)
+  const priceRegex = /((?:\$|€|%|٪)\s*[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?|[\d\u0660-\u0669\u06F0-\u06F9]+(?:[.,٬][\d\u0660-\u0669\u06F0-\u06F9]+)?\s*(?:\$|€|IQD|USD|EUR|د\.ع|دینار|هەزار|لیرە|%|٪))/gi;
   let match: RegExpExecArray | null;
   while ((match = priceRegex.exec(text)) !== null) {
     addToken('price', match[0]);
@@ -129,8 +129,8 @@ export function extractProtectedTokens(text: string): ProtectedToken[] {
     addToken('url', match[0], match[0].toLowerCase());
   }
 
-  // Phone numbers (e.g. +964 750 123 4567, 07501234567, 0770 123 4567)
-  const phoneRegex = /(?:\+?964|00964|0)?\s*7[5789]\d(?:\s*|\-?)\d{3}(?:\s*|\-?)\d{4}/g;
+  // Phone numbers (e.g. +964 750 123 4567, 07501234567, ٠٧٥٠١٢٣٤٥٦٧, 0770 123 4567)
+  const phoneRegex = /(?:\+?964|00964|0|[\u0660\u06F0])?\s*(?:7|[\u0667\u06F7])[5789\u0665\u0667\u0668\u0669\u06F5\u06F7\u06F8\u06F9][\d\u0660-\u0669\u06F0-\u06F9](?:\s*|\-?)[\d\u0660-\u0669\u06F0-\u06F9]{3}(?:\s*|\-?)[\d\u0660-\u0669\u06F0-\u06F9]{4}/g;
   while ((match = phoneRegex.exec(text)) !== null) {
     addToken('phone', match[0], match[0].replace(/[\s\-]/g, ''));
   }

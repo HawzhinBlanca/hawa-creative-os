@@ -290,5 +290,28 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     // 3. Clean abort stream
     await reader!.cancel();
   });
+
+  it('GET /v1/operations/slo & POST /v1/operations/slo/run tracks synthetic latency & percentiles', async () => {
+    // 1. Get initial SLO summary
+    const getRes = await app.request('/v1/operations/slo');
+    expect(getRes.status).toBe(200);
+    const slo = await getRes.json();
+    expect(slo.summary.totalProbes).toBeGreaterThanOrEqual(12);
+    expect(slo.summary.successRate).toBe(100);
+    expect(slo.summary.p99DurationMs).toBeGreaterThan(0);
+    expect(slo.summary.circuitBreakers.length).toBe(4);
+
+    // 2. Trigger on-demand synthetic campaign benchmark
+    const runRes = await app.request('/v1/operations/slo/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario: 'nawroz_spring' }),
+    });
+    expect(runRes.status).toBe(201);
+    const runBody = await runRes.json();
+    expect(runBody.result.success).toBe(true);
+    expect(runBody.result.invariantsVerified.deterministicQaPassed).toBe(true);
+    expect(runBody.summary.totalProbes).toBe(slo.summary.totalProbes + 1);
+  });
 });
 
