@@ -29,39 +29,56 @@
 | **Gate Q** | CycloneDX SBOM Supply Chain | Automated Software Bill of Materials generation in CycloneDX 1.7 standard format | `pnpm run sbom` | **PASS** | `evidence/sbom.json` (217KB) |
 | **Gate R** | Live API Data-Binding & PWA E2E | Desk PWA live proxy, real task creation, Kurdish brief lock, QA pass, approval, publishing & evals | Browser subagent validation at `http://localhost:4173/` | **PASS** | Verified end-to-end (`desk_live_api_demo`) |
 | **Gate S** | Production Container Topology | Multi-stage Dockerfiles (Core, Worker, Desk), Nginx edge proxy, PG17/pgvector/RLS, Restate 1.7.x | `./infra/docker/deploy.sh` pre-flight pipeline | **PASS** | Topology, non-root, and Compose valid |
+| **Gate T** | Bidirectional Telegram Bot & Desk Studio Deep Links | Outbound preview cards with canonical deep links, publication delivery notices, bot commands | `vitest run packages/integrations/test/telegram-bot.test.ts` | **PASS** | 4/4 tests passed |
+| **Gate U** | ComfyUI Asset Lab Sandboxing & Graph Hashing | Pinned node allowlist, SHA-256 graph hashing, custom node quarantine, raster text rejection | `vitest run packages/creative/test/comfy-sandbox.test.ts` | **PASS** | 5/5 tests passed |
+| **Gate V** | Multi-Tenant Adversarial Red-Team & Chaos Matrix | Scope locking injection defense, ZWNJ/tatweel fuzzing, numeral extraction, partition repair | `vitest run packages/evals/test/adversarial-chaos.test.ts packages/evals/test/redteam-chaos.test.ts` | **PASS** | 10/10 tests passed |
+| **Gate W** | Production Database Backup, Wipe & Clean-Host Recovery | 49 tables, 11 enums, 24 RLS policies, atomic snapshot generation, clean-host restoration | `vitest run packages/db/test/backup-restore.test.ts` | **PASS** | 3/3 tests passed, 100% parity |
+| **Gate X** | English-Primary Bilingual UX & Reactive Kurdish Localization | Persistent language switcher, LTR/RTL flipping, localized modals, multi-script ReviewScreen | `pnpm --filter @hawa/desk build` & Chrome DevTools MCP | **PASS** | Verified end-to-end |
+| **Gate Y** | Autonomous Synthetic Traffic & Live SLO Heartbeat | Synthetic load generation, SLA breach detection, SLO heartbeat daemon | `vitest run packages/testkit/test/slo-traffic.test.ts` | **PASS** | 5/5 tests passed |
+| **Gate Z** | Resilient Model Gateway with Circuit Breakers | Provider fallbacks, retry policies, circuit breaker states, Phoenix tracing | `vitest run packages/integrations/test/model-gateway.test.ts` | **PASS** | 11/11 tests passed |
 
 ---
 
-## 2. Full Test Execution Telemetry (All 21 Test Suites)
+## 2. Full Test Execution Telemetry (All 31 Test Suites, 197 Tests)
 
 ```text
  RUN  v3.2.7 /Users/hawzhin/Hawdesign
 
- ✓ packages/creative/test/reflow-diff.test.ts (6 tests)
- ✓ packages/domain/test/sanitizer.test.ts (11 tests)
  ✓ packages/domain/test/property-state-machine.test.ts (6 tests)
- ✓ packages/integrations/test/integrations.test.ts (5 tests)
- ✓ packages/domain/test/domain.test.ts (8 tests)
- ✓ packages/domain/test/orthography.test.ts (11 tests)
- ✓ packages/evals/test/evals.test.ts (6 tests)
  ✓ packages/testkit/test/faults.test.ts (5 tests)
- ✓ packages/testkit/test/concurrency-chaos.test.ts (4 tests)
- ✓ packages/db/test/db.test.ts (4 tests)
- ✓ packages/qa/test/rtl.test.ts (41 tests)
- ✓ packages/qa/test/qa.test.ts (2 tests)
- ✓ packages/qa/test/contrast-layout.test.ts (11 tests)
- ✓ packages/contracts/test/contracts.test.ts (2 tests)
- ✓ packages/retrieval/test/retrieval.test.ts (3 tests)
- ✓ packages/observability/test/observability.test.ts (3 tests)
- ✓ apps/core/test/core.test.ts (8 tests)
- ✓ apps/core/test/security.test.ts (5 tests)
+ ✓ packages/db/test/backup-restore.test.ts (3 tests)
+ ✓ packages/integrations/test/integrations.test.ts (5 tests)
  ✓ packages/creative/test/creative.test.ts (4 tests)
- ✓ apps/worker/test/workflow.test.ts (1 test)
+ ✓ packages/testkit/test/concurrency-chaos.test.ts (4 tests)
+ ✓ packages/evals/test/adversarial-chaos.test.ts (7 tests)
+ ✓ packages/testkit/test/slo-traffic.test.ts (5 tests)
+ ✓ packages/integrations/test/model-gateway.test.ts (11 tests)
+ ✓ packages/domain/test/sanitizer.test.ts (11 tests)
+ ✓ packages/integrations/test/voice-and-bridge.test.ts (4 tests)
+ ✓ packages/qa/test/contrast-layout.test.ts (11 tests)
+ ✓ apps/core/test/security.test.ts (5 tests)
+ ✓ apps/core/test/transcribe.test.ts (2 tests)
+ ✓ packages/domain/test/domain.test.ts (8 tests)
+ ✓ apps/core/test/core.test.ts (11 tests)
+ ✓ packages/creative/test/reflow-diff.test.ts (6 tests)
+ ✓ packages/evals/test/evals.test.ts (6 tests)
+ ✓ packages/evals/test/redteam-chaos.test.ts (3 tests)
  ✓ packages/testkit/test/e2e-office-lifecycle.test.ts (1 test)
+ ✓ packages/qa/test/rtl.test.ts (41 tests)
+ ✓ packages/integrations/test/reconciliation.test.ts (3 tests)
+ ✓ packages/creative/test/comfy-sandbox.test.ts (5 tests)
+ ✓ packages/qa/test/qa.test.ts (2 tests)
+ ✓ packages/integrations/test/telegram-bot.test.ts (4 tests)
+ ✓ packages/retrieval/test/retrieval.test.ts (3 tests)
+ ✓ packages/contracts/test/contracts.test.ts (2 tests)
+ ✓ packages/domain/test/orthography.test.ts (11 tests)
+ ✓ packages/observability/test/observability.test.ts (3 tests)
+ ✓ apps/worker/test/workflow.test.ts (1 test)
+ ✓ packages/db/test/db.test.ts (4 tests)
 
- Test Files  21 passed (21)
-      Tests  147 passed (147)
-   Duration  589ms
+ Test Files  31 passed (31)
+      Tests  197 passed (197)
+   Duration  987ms
 ```
 
 ---
