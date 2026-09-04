@@ -7,3 +7,4 @@ export * from './approval.js';
 export * from './qa.js';
 export * from './feedback.js';
 export * from './orthography.js';
+export * from './sanitizer.js';

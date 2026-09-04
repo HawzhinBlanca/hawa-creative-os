@@ -9,6 +9,8 @@ import {
   TaskStateMachine,
   extractProtectedTokens,
   validateClientDna,
+  validateUploadedAsset,
+  sanitizeSvg,
   type TaskStatus,
   type ClientDNA,
   type DesignBrief,
@@ -45,6 +47,16 @@ export function createApp() {
     c.header('X-Response-Time', `${Date.now() - start}ms`);
   });
 
+  // Security Headers Middleware (OWASP Secure Headers)
+  app.use('*', async (c, next) => {
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('X-Frame-Options', 'DENY');
+    c.header('X-XSS-Protection', '1; mode=block');
+    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    c.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https:; frame-ancestors 'none';");
+    await next();
+  });
+
   // RFC 7807 Problem Helper
   function problem(c: any, status: number, title: string, detail?: string) {
     return c.json({
@@ -73,6 +85,7 @@ export function createApp() {
   const feedbacks = new Map<string, FeedbackEvent[]>();
   const clientDnas = new Map<string, ClientDNA>();
   const evalRuns = new Map<string, any>();
+  const uploadedAssets = new Map<string, any>();
 
   // Seed default client DNA
   const defaultClientId = 'client-office-1';
@@ -873,6 +886,51 @@ export function createApp() {
     const run = evalRuns.get(runId);
     if (!run) return problem(c, 404, 'Evaluation Run Not Found');
     return c.json(run);
+  });
+
+  // Asset Security & Ingestion
+  registerRoute('post', '/assets/upload', async (c: any) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || !body.filename || !body.mimeType) {
+      return problem(c, 400, 'Invalid Asset Request', 'filename and mimeType are required');
+    }
+
+    const validation = validateUploadedAsset({
+      filename: body.filename,
+      mimeType: body.mimeType,
+      sizeBytes: body.sizeBytes || (body.content ? (typeof body.content === 'string' ? Buffer.byteLength(body.content) : body.content.length) : 1024),
+      content: body.content,
+    });
+
+    if (!validation.ok) {
+      return problem(c, 400, 'Asset Security Policy Violation', validation.violations.join('; '));
+    }
+
+    const assetId = crypto.randomUUID();
+    const storageKey = `assets/${validation.sha256}/${body.filename}`;
+    const record = {
+      assetId,
+      filename: body.filename,
+      mimeType: validation.mimeType,
+      sha256: validation.sha256,
+      storageKey,
+      sanitized: Boolean(validation.sanitizedContent),
+      sanitizedContent: validation.sanitizedContent,
+      createdAt: new Date().toISOString(),
+    };
+    uploadedAssets.set(assetId, record);
+
+    return c.json(record, 201);
+  });
+
+  registerRoute('post', '/assets/sanitize-svg', async (c: any) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body.svg !== 'string') {
+      return problem(c, 400, 'Invalid SVG Request', 'svg string is required');
+    }
+
+    const res = sanitizeSvg(body.svg);
+    return c.json(res);
   });
 
   return app;
