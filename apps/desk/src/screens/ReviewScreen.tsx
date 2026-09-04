@@ -11,6 +11,15 @@ import {
   checkKurdishTypographyClearance,
   SORANI_SPECIFIC_CHARS,
 } from '../services/kurdishTypography.ts';
+import {
+  createHistoryTree,
+  pushHistoryTree,
+  undoHistoryTree,
+  redoHistoryTree,
+  jumpToHistoryNode,
+  getHistoryLinearPath,
+  type HistoryTree,
+} from '../services/historyTree.ts';
 
 interface ReviewScreenProps {
   task?: any;
@@ -163,11 +172,26 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
   const [studioToast, setStudioToast] = useState<string | null>(null);
 
-  // 9. Undo / Redo History Stack
-  const historyRef = useRef<HistoryState[]>([]);
-  const historyIndexRef = useRef<number>(-1);
+  // 9. Undo / Redo Structural-Sharing History Tree Engine
+  const [historyTree, setHistoryTree] = useState<HistoryTree | null>(null);
+  const [showTimelineModal, setShowTimelineModal] = useState<boolean>(false);
 
-  const pushHistory = useCallback(() => {
+  const restoreState = useCallback((targetState: HistoryState) => {
+    setHeadlineEn(targetState.headlineEn);
+    setHeadlineCkb(targetState.headlineCkb);
+    setCopyEn(targetState.copyEn);
+    setCopyCkb(targetState.copyCkb);
+    setFontFamily(targetState.fontFamily);
+    setFontWeight(targetState.fontWeight);
+    setAccentColor(targetState.accentColor);
+    setSelectedBrandKitId(targetState.brandKitId);
+    setVariant(targetState.format as AspectPreset);
+    setLangVariant(targetState.langVariant);
+    setNodes(targetState.nodes);
+  }, []);
+
+  const pushHistory = useCallback((actionOrEvent?: string | React.SyntheticEvent) => {
+    const actionName = typeof actionOrEvent === 'string' ? actionOrEvent : 'Edit Canvas';
     const currentState: HistoryState = {
       headlineEn,
       headlineCkb,
@@ -181,59 +205,54 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       langVariant,
       nodes: JSON.parse(JSON.stringify(nodes)),
     };
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(currentState);
-    if (nextHistory.length > 35) nextHistory.shift();
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextHistory.length - 1;
+
+    setHistoryTree((prev) => {
+      if (!prev) {
+        return createHistoryTree(currentState as any, actionName);
+      }
+      return pushHistoryTree(prev, currentState as any, actionName);
+    });
   }, [headlineEn, headlineCkb, copyEn, copyCkb, fontFamily, fontWeight, accentColor, selectedBrandKitId, variant, langVariant, nodes]);
 
   const undo = useCallback(() => {
-    if (historyIndexRef.current > 0) {
-      historyIndexRef.current -= 1;
-      const prev = historyRef.current[historyIndexRef.current];
-      setHeadlineEn(prev.headlineEn);
-      setHeadlineCkb(prev.headlineCkb);
-      setCopyEn(prev.copyEn);
-      setCopyCkb(prev.copyCkb);
-      setFontFamily(prev.fontFamily);
-      setFontWeight(prev.fontWeight);
-      setAccentColor(prev.accentColor);
-      setSelectedBrandKitId(prev.brandKitId);
-      setVariant(prev.format);
-      setLangVariant(prev.langVariant);
-      setNodes(prev.nodes);
+    if (!historyTree) return;
+    const { tree: newTree, state: prevState } = undoHistoryTree(historyTree);
+    if (prevState) {
+      setHistoryTree(newTree);
+      restoreState(prevState as any);
       setStudioToast('↩ Undo');
-      setTimeout(() => setStudioToast(null), 2000);
+      setTimeout(() => setStudioToast(null), 1800);
     }
-  }, []);
+  }, [historyTree, restoreState]);
 
   const redo = useCallback(() => {
-    if (historyIndexRef.current < historyRef.current.length - 1) {
-      historyIndexRef.current += 1;
-      const next = historyRef.current[historyIndexRef.current];
-      setHeadlineEn(next.headlineEn);
-      setHeadlineCkb(next.headlineCkb);
-      setCopyEn(next.copyEn);
-      setCopyCkb(next.copyCkb);
-      setFontFamily(next.fontFamily);
-      setFontWeight(next.fontWeight);
-      setAccentColor(next.accentColor);
-      setSelectedBrandKitId(next.brandKitId);
-      setVariant(next.format);
-      setLangVariant(next.langVariant);
-      setNodes(next.nodes);
+    if (!historyTree) return;
+    const { tree: newTree, state: nextState } = redoHistoryTree(historyTree);
+    if (nextState) {
+      setHistoryTree(newTree);
+      restoreState(nextState as any);
       setStudioToast('↪ Redo');
-      setTimeout(() => setStudioToast(null), 2000);
+      setTimeout(() => setStudioToast(null), 1800);
     }
-  }, []);
+  }, [historyTree, restoreState]);
+
+  const jumpToRevision = useCallback((nodeId: string) => {
+    if (!historyTree) return;
+    const { tree: newTree, state: targetState } = jumpToHistoryNode(historyTree, nodeId);
+    if (targetState) {
+      setHistoryTree(newTree);
+      restoreState(targetState as any);
+      setStudioToast(`⏱ Jumped to ${newTree.nodes[nodeId]?.actionName || 'revision'}`);
+      setTimeout(() => setStudioToast(null), 1800);
+    }
+  }, [historyTree, restoreState]);
 
   // Initialize history on mount
   useEffect(() => {
-    if (historyRef.current.length === 0) {
-      pushHistory();
+    if (!historyTree) {
+      pushHistory('Initial Document');
     }
-  }, [pushHistory]);
+  }, [historyTree, pushHistory]);
 
   // Native Wheel Event Listener on Viewport (Smooth Zoom without page zoom)
   useEffect(() => {
@@ -642,8 +661,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     });
 
     let hasMoved = false;
+    let rafId: number | null = null;
+    let pendingEvt: PointerEvent | null = null;
 
     const cleanup = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
@@ -658,7 +683,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       setSmartGuide(null);
       setIsDraggingNode(false);
       if (hasMoved) {
-        pushHistory();
+        pushHistory('Move Layers');
       }
     };
 
@@ -668,78 +693,87 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         return;
       }
 
-      const dx = (moveEvt.clientX - startClientX) / zoom;
-      const dy = (moveEvt.clientY - startClientY) / zoom;
+      pendingEvt = moveEvt;
+      if (rafId !== null) return;
 
-      if (!hasMoved && Math.hypot(moveEvt.clientX - startClientX, moveEvt.clientY - startClientY) > 2) {
-        hasMoved = true;
-        setIsDraggingNode(true);
-      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!pendingEvt) return;
+        const currentEvt = pendingEvt;
 
-      if (hasMoved) {
-        // Multi-drag: move all selected nodes by dx, dy
-        let deltaX = Math.round(dx);
-        let deltaY = Math.round(dy);
+        const dx = (currentEvt.clientX - startClientX) / zoom;
+        const dy = (currentEvt.clientY - startClientY) / zoom;
 
-        // Magnetic snap for the primary target node
-        const primaryStart = startPositions[targetNode.id];
-        if (primaryStart) {
-          const nextPrimaryX = Math.round(primaryStart.x + dx);
-          const nextPrimaryY = Math.round(primaryStart.y + dy);
-
-          const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
-          if (Math.abs(nextPrimaryX - centerX) < 8) {
-            deltaX = centerX - primaryStart.x;
-            setSnapGuideX(currentArtboard.width / 2);
-          } else {
-            setSnapGuideX(null);
-          }
-
-          const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
-          if (Math.abs(nextPrimaryY - centerY) < 8) {
-            deltaY = centerY - primaryStart.y;
-            setSnapGuideY(currentArtboard.height / 2);
-          } else {
-            setSnapGuideY(null);
-          }
-
-          // Smart Distance Guide Calculation
-          const otherNodes = nodes.filter((n) => !currentSelectedIds.includes(n.id) && n.visible);
-          let foundGuide = false;
-          for (const other of otherNodes) {
-            if (Math.abs(nextPrimaryY - other.y) < 60) {
-              const gapX = nextPrimaryX - (other.x + other.width);
-              if (gapX > 8 && gapX < 80) {
-                setSmartGuide({
-                  x1: other.x + other.width,
-                  y1: nextPrimaryY + targetNode.height / 2,
-                  x2: nextPrimaryX,
-                  y2: nextPrimaryY + targetNode.height / 2,
-                  distance: Math.round(gapX),
-                  badgeX: other.x + other.width + gapX / 2,
-                  badgeY: nextPrimaryY + targetNode.height / 2 - 12,
-                });
-                foundGuide = true;
-                break;
-              }
-            }
-          }
-          if (!foundGuide) setSmartGuide(null);
+        if (!hasMoved && Math.hypot(currentEvt.clientX - startClientX, currentEvt.clientY - startClientY) > 2) {
+          hasMoved = true;
+          setIsDraggingNode(true);
         }
 
-        setNodes((prev) =>
-          prev.map((n) => {
-            if (startPositions[n.id] && !n.locked) {
-              return {
-                ...n,
-                x: Math.round(startPositions[n.id].x + deltaX),
-                y: Math.round(startPositions[n.id].y + deltaY),
-              };
+        if (hasMoved) {
+          // Multi-drag: move all selected nodes by dx, dy
+          let deltaX = Math.round(dx);
+          let deltaY = Math.round(dy);
+
+          // Magnetic snap for the primary target node
+          const primaryStart = startPositions[targetNode.id];
+          if (primaryStart) {
+            const nextPrimaryX = Math.round(primaryStart.x + dx);
+            const nextPrimaryY = Math.round(primaryStart.y + dy);
+
+            const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
+            if (Math.abs(nextPrimaryX - centerX) < 8) {
+              deltaX = centerX - primaryStart.x;
+              setSnapGuideX(currentArtboard.width / 2);
+            } else {
+              setSnapGuideX(null);
             }
-            return n;
-          })
-        );
-      }
+
+            const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
+            if (Math.abs(nextPrimaryY - centerY) < 8) {
+              deltaY = centerY - primaryStart.y;
+              setSnapGuideY(currentArtboard.height / 2);
+            } else {
+              setSnapGuideY(null);
+            }
+
+            // Smart Distance Guide Calculation
+            const otherNodes = nodes.filter((n) => !currentSelectedIds.includes(n.id) && n.visible);
+            let foundGuide = false;
+            for (const other of otherNodes) {
+              if (Math.abs(nextPrimaryY - other.y) < 60) {
+                const gapX = nextPrimaryX - (other.x + other.width);
+                if (gapX > 8 && gapX < 80) {
+                  setSmartGuide({
+                    x1: other.x + other.width,
+                    y1: nextPrimaryY + targetNode.height / 2,
+                    x2: nextPrimaryX,
+                    y2: nextPrimaryY + targetNode.height / 2,
+                    distance: Math.round(gapX),
+                    badgeX: other.x + other.width + gapX / 2,
+                    badgeY: nextPrimaryY + targetNode.height / 2 - 12,
+                  });
+                  foundGuide = true;
+                  break;
+                }
+              }
+            }
+            if (!foundGuide) setSmartGuide(null);
+          }
+
+          setNodes((prev) =>
+            prev.map((n) => {
+              if (startPositions[n.id] && !n.locked) {
+                return {
+                  ...n,
+                  x: Math.round(startPositions[n.id].x + deltaX),
+                  y: Math.round(startPositions[n.id].y + deltaY),
+                };
+              }
+              return n;
+            })
+          );
+        }
+      });
     };
 
     const onPointerUp = () => cleanup();
@@ -767,38 +801,52 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       setSelectedNodeIds([]);
     }
 
+    let rafId: number | null = null;
+    let pendingEvt: PointerEvent | null = null;
+
+    const cleanup = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      setMarquee(null);
+    };
+
     const onPointerMove = (moveEvt: PointerEvent) => {
       if (moveEvt.buttons === 0) {
         cleanup();
         return;
       }
-      const currentX = Math.round((moveEvt.clientX - abRect.left) / zoom);
-      const currentY = Math.round((moveEvt.clientY - abRect.top) / zoom);
-      setMarquee({ startX, startY, currentX, currentY });
+      pendingEvt = moveEvt;
+      if (rafId !== null) return;
 
-      const minX = Math.min(startX, currentX);
-      const maxX = Math.max(startX, currentX);
-      const minY = Math.min(startY, currentY);
-      const maxY = Math.max(startY, currentY);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!pendingEvt) return;
+        const currentX = Math.round((pendingEvt.clientX - abRect.left) / zoom);
+        const currentY = Math.round((pendingEvt.clientY - abRect.top) / zoom);
+        setMarquee({ startX, startY, currentX, currentY });
 
-      const intersecting = nodes
-        .filter((n) => {
-          if (!n.visible || n.locked) return false;
-          const nRight = n.x + n.width;
-          const nBottom = n.y + n.height;
-          return !(n.x > maxX || nRight < minX || n.y > maxY || nBottom < minY);
-        })
-        .map((n) => n.id);
+        const minX = Math.min(startX, currentX);
+        const maxX = Math.max(startX, currentX);
+        const minY = Math.min(startY, currentY);
+        const maxY = Math.max(startY, currentY);
 
-      setSelectedNodeIds((prev) =>
-        e.shiftKey ? Array.from(new Set([...prev, ...intersecting])) : intersecting
-      );
-    };
+        const intersecting = nodes
+          .filter((n) => {
+            if (!n.visible || n.locked) return false;
+            const nRight = n.x + n.width;
+            const nBottom = n.y + n.height;
+            return !(n.x > maxX || nRight < minX || n.y > maxY || nBottom < minY);
+          })
+          .map((n) => n.id);
 
-    const cleanup = () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      setMarquee(null);
+        setSelectedNodeIds((prev) =>
+          e.shiftKey ? Array.from(new Set([...prev, ...intersecting])) : intersecting
+        );
+      });
     };
 
     const onPointerUp = () => cleanup();
@@ -831,8 +879,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     const isLockedRatio = targetNode.aspectRatioLocked || e.shiftKey;
 
     let hasResized = false;
+    let rafId: number | null = null;
+    let pendingEvt: PointerEvent | null = null;
 
     const cleanup = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
@@ -843,7 +897,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         }
       } catch {}
       if (hasResized) {
-        pushHistory();
+        pushHistory(handle === 'rot' ? 'Rotate Layer' : 'Resize Layer');
       }
     };
 
@@ -855,61 +909,70 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       moveEvt.preventDefault();
       hasResized = true;
 
-      if (handle === 'rot') {
-        const artboardEl = artboardRef.current;
-        if (!artboardEl) return;
-        const abRect = artboardEl.getBoundingClientRect();
-        const centerScreenX = abRect.left + (startX + startW / 2) * zoom;
-        const centerScreenY = abRect.top + (startY + startH / 2) * zoom;
-        const rad = Math.atan2(moveEvt.clientY - centerScreenY, moveEvt.clientX - centerScreenX);
-        let deg = Math.round((rad * 180) / Math.PI) + 90;
-        deg = (deg % 360 + 360) % 360;
+      pendingEvt = moveEvt;
+      if (rafId !== null) return;
 
-        const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315, 360];
-        for (const snap of snapAngles) {
-          if (Math.abs(deg - snap) < 5) {
-            deg = snap === 360 ? 0 : snap;
-            break;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!pendingEvt) return;
+        const currentEvt = pendingEvt;
+
+        if (handle === 'rot') {
+          const artboardEl = artboardRef.current;
+          if (!artboardEl) return;
+          const abRect = artboardEl.getBoundingClientRect();
+          const centerScreenX = abRect.left + (startX + startW / 2) * zoom;
+          const centerScreenY = abRect.top + (startY + startH / 2) * zoom;
+          const rad = Math.atan2(currentEvt.clientY - centerScreenY, currentEvt.clientX - centerScreenX);
+          let deg = Math.round((rad * 180) / Math.PI) + 90;
+          deg = (deg % 360 + 360) % 360;
+
+          const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315, 360];
+          for (const snap of snapAngles) {
+            if (Math.abs(deg - snap) < 5) {
+              deg = snap === 360 ? 0 : snap;
+              break;
+            }
+          }
+
+          setNodes((prev) =>
+            prev.map((n) => (n.id === nodeId ? { ...n, rotation: deg } : n))
+          );
+          return;
+        }
+
+        const dx = (currentEvt.clientX - startClientX) / zoom;
+        const dy = (currentEvt.clientY - startClientY) / zoom;
+
+        let newX = startX;
+        let newY = startY;
+        let newW = startW;
+        let newH = startH;
+
+        if (handle.includes('e')) newW = Math.max(30, Math.round(startW + dx));
+        if (handle.includes('s')) newH = Math.max(20, Math.round(startH + dy));
+        if (handle.includes('w')) {
+          const candidateW = Math.max(30, Math.round(startW - dx));
+          newX = startX + (startW - candidateW);
+          newW = candidateW;
+        }
+        if (handle.includes('n')) {
+          const candidateH = Math.max(20, Math.round(startH - dy));
+          newY = startY + (startH - candidateH);
+          newH = candidateH;
+        }
+
+        if (isLockedRatio) {
+          const ratio = startW / startH;
+          if (handle === 'se' || handle === 'nw') {
+            newH = Math.round(newW / ratio);
           }
         }
 
         setNodes((prev) =>
-          prev.map((n) => (n.id === nodeId ? { ...n, rotation: deg } : n))
+          prev.map((n) => (n.id === nodeId ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
         );
-        return;
-      }
-
-      const dx = (moveEvt.clientX - startClientX) / zoom;
-      const dy = (moveEvt.clientY - startClientY) / zoom;
-
-      let newX = startX;
-      let newY = startY;
-      let newW = startW;
-      let newH = startH;
-
-      if (handle.includes('e')) newW = Math.max(30, Math.round(startW + dx));
-      if (handle.includes('s')) newH = Math.max(20, Math.round(startH + dy));
-      if (handle.includes('w')) {
-        const candidateW = Math.max(30, Math.round(startW - dx));
-        newX = startX + (startW - candidateW);
-        newW = candidateW;
-      }
-      if (handle.includes('n')) {
-        const candidateH = Math.max(20, Math.round(startH - dy));
-        newY = startY + (startH - candidateH);
-        newH = candidateH;
-      }
-
-      if (isLockedRatio) {
-        const ratio = startW / startH;
-        if (handle === 'se' || handle === 'nw') {
-          newH = Math.round(newW / ratio);
-        }
-      }
-
-      setNodes((prev) =>
-        prev.map((n) => (n.id === nodeId ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
-      );
+      });
     };
 
     const onPointerUp = () => cleanup();
@@ -931,23 +994,37 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       const startPanX = panOffset.x;
       const startPanY = panOffset.y;
 
-      const onPointerMove = (moveEvt: PointerEvent) => {
-        if (moveEvt.buttons === 0) {
-          cleanup();
-          return;
-        }
-        setPanOffset({
-          x: Math.round(startPanX + (moveEvt.clientX - startClientX)),
-          y: Math.round(startPanY + (moveEvt.clientY - startClientY)),
-        });
-      };
+      let panRafId: number | null = null;
+      let pendingPanEvt: PointerEvent | null = null;
 
       const cleanup = () => {
+        if (panRafId !== null) {
+          cancelAnimationFrame(panRafId);
+          panRafId = null;
+        }
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('pointercancel', onPointerUp);
         window.removeEventListener('blur', onPointerUp);
         setIsPanning(false);
+      };
+
+      const onPointerMove = (moveEvt: PointerEvent) => {
+        if (moveEvt.buttons === 0) {
+          cleanup();
+          return;
+        }
+        pendingPanEvt = moveEvt;
+        if (panRafId !== null) return;
+
+        panRafId = requestAnimationFrame(() => {
+          panRafId = null;
+          if (!pendingPanEvt) return;
+          setPanOffset({
+            x: Math.round(startPanX + (pendingPanEvt.clientX - startClientX)),
+            y: Math.round(startPanY + (pendingPanEvt.clientY - startClientY)),
+          });
+        });
       };
 
       const onPointerUp = () => cleanup();
@@ -1798,6 +1875,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             title="Redo (Cmd+Shift+Z)"
           >
             ↪
+          </button>
+
+          <button
+            className={`btn ${showTimelineModal ? 'primary' : ''}`}
+            style={{ fontSize: 11, padding: '4px 8px' }}
+            onClick={() => setShowTimelineModal(!showTimelineModal)}
+            title="Non-Destructive Version History & Timeline Scrubbing"
+          >
+            ⏱ Timeline
           </button>
 
           <button
@@ -3167,6 +3253,122 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px (Shift: 10px)</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd> Deselect Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> Open Cheat Sheet</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Structural-Sharing History Tree & Timeline Scrubber Modal */}
+      {showTimelineModal && historyTree && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.72)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 400,
+            backdropFilter: 'blur(8px)',
+          }}
+          onClick={() => setShowTimelineModal(false)}
+        >
+          <div
+            className="studio-glass"
+            style={{
+              borderRadius: 14,
+              padding: 24,
+              width: 540,
+              maxWidth: '92vw',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>⏱ Version History & Timeline</span>
+                  <span style={{ fontSize: 11, background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '2px 8px', borderRadius: 12 }}>
+                    {Object.keys(historyTree.nodes).length} Revisions
+                  </span>
+                </h3>
+                <small style={{ color: 'var(--muted)', fontSize: 11 }}>
+                  Non-destructive branching tree with zero-drift deduplication. Click any state to rewind or jump forward.
+                </small>
+              </div>
+              <button className="btn" style={{ fontSize: 11 }} onClick={() => setShowTimelineModal(false)}>✕</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+              {getHistoryLinearPath(historyTree).map((histNode, idx) => {
+                const isCurrent = histNode.id === historyTree.currentNodeId;
+                const timeStr = new Date(histNode.timestamp).toLocaleTimeString();
+                return (
+                  <div
+                    key={histNode.id}
+                    onClick={() => jumpToRevision(histNode.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      background: isCurrent ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                      border: isCurrent ? '1px solid #38BDF8' : '1px solid rgba(255, 255, 255, 0.08)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          background: isCurrent ? '#38BDF8' : 'rgba(255, 255, 255, 0.1)',
+                          color: isCurrent ? '#0F172A' : '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: '#fff' }}>
+                          {histNode.actionName}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                          {timeStr} · {histNode.state.nodes.length} canvas layers · {histNode.state.format.toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isCurrent ? (
+                      <span style={{ fontSize: 10, background: '#10B981', color: '#fff', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                        CURRENT
+                      </span>
+                    ) : (
+                      <button
+                        className="btn"
+                        style={{ fontSize: 10, padding: '3px 8px' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          jumpToRevision(histNode.id);
+                        }}
+                      >
+                        Restore
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
