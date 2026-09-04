@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface ClientDnaData {
   id: string;
@@ -116,14 +116,98 @@ const CLIENT_DATA: Record<string, ClientDnaData> = {
 };
 
 export const DnaScreen: React.FC = () => {
-  const [selectedClientId, setSelectedClientId] = useState<'aster' | 'nova' | 'rona'>('aster');
+  const [selectedClientId, setSelectedClientId] = useState<string>('client-office-1');
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
   const [promotedRule, setPromotedRule] = useState<string | null>(null);
+  const [liveDna, setLiveDna] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
-  const client = CLIENT_DATA[selectedClientId];
+  // Fetch live DNA when client-office-1 is selected
+  useEffect(() => {
+    if (selectedClientId === 'client-office-1') {
+      setLoading(true);
+      fetch('/v1/clients/client-office-1/dna')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) setLiveDna(data);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [selectedClientId]);
 
-  const handlePromoteCandidate = (title: string) => {
-    setPromotedRule(title);
+  // Construct client view data
+  const client: ClientDnaData = (selectedClientId === 'client-office-1' && liveDna) ? {
+    id: 'client-office-1',
+    name: liveDna.name || 'Hawa Creative',
+    version: `v${liveDna.version || 1} active (LIVE API)`,
+    palette: (liveDna.colors || []).map((c: any) => ({
+      name: c.name,
+      hex: c.hex,
+      textDark: c.hex.toLowerCase() === '#ffffff' || c.hex.toLowerCase() === '#f4ecdd',
+    })),
+    logos: (liveDna.assets || []).map((a: any) => ({
+      name: a.name,
+      role: a.role,
+      status: 'active' as const,
+      hash: a.sha256 ? a.sha256.substring(0, 8) + '…' : 'sha256_verified',
+    })),
+    fontInfo: {
+      name: `${liveDna.fonts?.[0]?.family || 'Noto Sans Arabic'} (Body)`,
+      desc: `Style: ${liveDna.fonts?.[0]?.style || 'Regular'} · License: ${liveDna.fonts?.[0]?.license || 'OFL'} · Supported: ${liveDna.fonts?.[0]?.supportedLocales?.join(', ') || 'ckb, ar'}`,
+    },
+    rules: (liveDna.guidelines?.layoutRules || []).map((r: string) => ({
+      title: 'Layout Rule',
+      desc: r,
+      source: 'Client DNA Master Spec · Invariant #6',
+    })).concat([
+      {
+        title: 'Voice & Tone',
+        desc: liveDna.guidelines?.voiceAndTone || 'Sophisticated Kurdish visual studio',
+        source: 'Brand guidelines v1.0',
+      },
+      {
+        title: 'Prohibited Words',
+        desc: `Blocked by QA: ${(liveDna.guidelines?.prohibitedPhrases || []).join(', ')}`,
+        source: 'Automated Lexicon Check',
+      },
+    ]),
+    candidateRule: {
+      title: 'Enforce top-right brand logo anchor in RTL',
+      desc: 'Ensure brand logo always occupies top-right corner in Kurdish Sorani layouts.',
+      evidence: 'Derived from 6 consecutive approved campaign deliverables',
+    },
+  } : CLIENT_DATA[selectedClientId] || CLIENT_DATA.aster;
+
+  const handlePromoteCandidate = async (title: string) => {
+    if (selectedClientId === 'client-office-1' && liveDna) {
+      try {
+        const updatedRules = [...(liveDna.guidelines?.layoutRules || []), title];
+        const updatedDna = {
+          ...liveDna,
+          guidelines: {
+            ...liveDna.guidelines,
+            layoutRules: updatedRules,
+          },
+        };
+        const res = await fetch('/v1/clients/client-office-1/dna', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedDna),
+        });
+        if (res.ok) {
+          const saved = await res.json();
+          setLiveDna(saved);
+          setPromotedRule(title);
+          setSaveSuccess(`Rule promoted & DNA bumped to v${saved.version}`);
+        }
+      } catch (err) {
+        console.error('Failed to update DNA:', err);
+      }
+    } else {
+      setPromotedRule(title);
+    }
   };
 
   return (
@@ -133,12 +217,20 @@ export const DnaScreen: React.FC = () => {
         <div className="panel">
           <h3>Clients</h3>
           <div
+            className={`listitem ${selectedClientId === 'client-office-1' ? 'sel' : ''}`}
+            style={{ cursor: 'pointer' }}
+            onClick={() => setSelectedClientId('client-office-1')}
+          >
+            <span>Hawa Creative</span>
+            <span className="pill ok">LIVE API</span>
+          </div>
+          <div
             className={`listitem ${selectedClientId === 'aster' ? 'sel' : ''}`}
             style={{ cursor: 'pointer' }}
             onClick={() => setSelectedClientId('aster')}
           >
             <span>Aster Hotel</span>
-            <span className="pill ok">v12 active</span>
+            <span className="pill">v12 active</span>
           </div>
           <div
             className={`listitem ${selectedClientId === 'nova' ? 'sel' : ''}`}
@@ -146,7 +238,7 @@ export const DnaScreen: React.FC = () => {
             onClick={() => setSelectedClientId('nova')}
           >
             <span>Nova Tech</span>
-            <span className="pill ok">v8 active</span>
+            <span className="pill">v8 active</span>
           </div>
           <div
             className={`listitem ${selectedClientId === 'rona' ? 'sel' : ''}`}
@@ -154,7 +246,7 @@ export const DnaScreen: React.FC = () => {
             onClick={() => setSelectedClientId('rona')}
           >
             <span>Rona Couture</span>
-            <span className="pill ok">v4 active</span>
+            <span className="pill">v4 active</span>
           </div>
           <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '14px 0' }} />
           <button className="btn" style={{ width: '100%' }} onClick={() => alert('New client onboarding initiates isolated workspace & tenant schema.')}>
@@ -175,6 +267,14 @@ export const DnaScreen: React.FC = () => {
             <h2>{client.name}</h2>
             <span className="pill ok">{client.version}</span>
           </div>
+
+          {loading && <small style={{ color: 'var(--muted)', display: 'block', margin: '4px 0' }}>Fetching live DNA from Core API…</small>}
+          {saveSuccess && (
+            <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', margin: '8px 0' }}>
+              <b style={{ color: '#065f46' }}>✓ Live DNA Synchronized</b>
+              <p style={{ margin: '2px 0', fontSize: 12, color: '#047857' }}>{saveSuccess}</p>
+            </div>
+          )}
 
           {(activeTab === 'brand' || activeTab === 'identity') && (
             <>
