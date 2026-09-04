@@ -4,6 +4,13 @@ import { computeSemanticDiff, type SemanticDiffResult, type DocumentSnapshot } f
 import { useI18n } from '../services/i18n.js';
 import { BRAND_KITS, getBrandKit, type BrandKit } from '../services/brandKits.js';
 import { exportToHighResPng, exportToSvg, exportToHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
+import {
+  toEasternKurdishDigits,
+  toWesternDigits,
+  isolateKurdishText,
+  checkKurdishTypographyClearance,
+  SORANI_SPECIFIC_CHARS,
+} from '../services/kurdishTypography.ts';
 
 interface ReviewScreenProps {
   task?: any;
@@ -30,6 +37,10 @@ export interface CanvasNode {
   fontSize?: number;
   fontWeight?: number;
   fontFamily?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  direction?: 'rtl' | 'ltr' | 'auto';
+  digitScript?: 'western' | 'eastern';
   textAlign?: 'left' | 'center' | 'right';
   textEn?: string;
   textCkb?: string;
@@ -1273,12 +1284,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                     fontSize: variant === 'story' ? 24 : 27,
                     color: '#ffffff',
                     fontWeight,
-                    lineHeight: 1.25,
+                    lineHeight: 1.28,
                     outline: 'none',
                     textAlign: 'left',
                     fontFamily,
                     textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                  }}
+                    textWrap: 'balance',
+                    lineBreak: 'loose',
+                    overflowWrap: 'break-word',
+                  } as React.CSSProperties}
                 >
                   {headlineEn}
                 </div>
@@ -1292,12 +1306,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                     fontSize: variant === 'story' ? 24 : 27,
                     color: '#ffffff',
                     fontWeight,
-                    lineHeight: 1.3,
+                    lineHeight: 1.52,
+                    paddingTop: 3,
+                    paddingBottom: 3,
                     outline: 'none',
                     textAlign: 'right',
-                    fontFamily: 'Vazirmatn, sans-serif',
+                    fontFamily: fontFamily.includes('Noto') ? "'Noto Sans Arabic', Vazirmatn, sans-serif" : 'Vazirmatn, "Noto Sans Arabic", sans-serif',
                     textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                  }}
+                    textWrap: 'balance',
+                    lineBreak: 'loose',
+                    overflowWrap: 'break-word',
+                    fontFeatureSettings: '"kern" 1, "liga" 1, "calt" 1',
+                  } as React.CSSProperties}
                 >
                   {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
                 </div>
@@ -1312,12 +1332,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       fontSize: variant === 'story' ? 22 : 25,
                       color: '#ffffff',
                       fontWeight: 800,
-                      lineHeight: 1.2,
+                      lineHeight: 1.24,
                       textAlign: 'left',
                       fontFamily: 'Inter, sans-serif',
                       borderBottom: '1px solid rgba(255,255,255,0.2)',
                       paddingBottom: 4,
-                    }}
+                      textWrap: 'balance',
+                      lineBreak: 'loose',
+                    } as React.CSSProperties}
                   >
                     {headlineEn}
                   </div>
@@ -1328,10 +1350,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       fontSize: variant === 'story' ? 18 : 20,
                       color: accentColor,
                       fontWeight: 700,
-                      lineHeight: 1.3,
+                      lineHeight: 1.5,
+                      paddingTop: 2,
+                      paddingBottom: 2,
                       textAlign: 'right',
-                      fontFamily: 'Vazirmatn, sans-serif',
-                    }}
+                      fontFamily: fontFamily.includes('Noto') ? "'Noto Sans Arabic', Vazirmatn, sans-serif" : 'Vazirmatn, "Noto Sans Arabic", sans-serif',
+                      textWrap: 'balance',
+                      lineBreak: 'loose',
+                      fontFeatureSettings: '"kern" 1, "liga" 1, "calt" 1',
+                    } as React.CSSProperties}
                   >
                     {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
                   </div>
@@ -1513,17 +1540,28 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             />
           ) : (
             <div
+              dir={node.direction || (langVariant === 'ckb' ? 'rtl' : 'ltr')}
               style={{
                 fontSize: node.fontSize || 18,
                 fontWeight: node.fontWeight || 600,
-                fontFamily: node.fontFamily || 'Inter, sans-serif',
+                fontFamily: node.fontFamily || (langVariant === 'ckb' ? 'Vazirmatn, "Noto Sans Arabic", sans-serif' : 'Inter, sans-serif'),
+                lineHeight: node.lineHeight || 1.48,
+                letterSpacing: node.letterSpacing ? `${node.letterSpacing}px` : undefined,
                 color: node.color || '#ffffff',
                 textAlign: node.textAlign || 'center',
                 textShadow: '0 2px 8px rgba(0,0,0,0.3)',
                 width: '100%',
-              }}
+                textWrap: 'balance',
+                lineBreak: 'loose',
+                overflowWrap: 'break-word',
+                fontFeatureSettings: '"kern" 1, "liga" 1, "calt" 1',
+                paddingTop: 2,
+                paddingBottom: 2,
+              } as React.CSSProperties}
             >
-              {textVal}
+              {showBidiIsolates && (node.direction === 'rtl' || langVariant === 'ckb')
+                ? `⸢\u2067${textVal}\u2069⸥`
+                : textVal}
             </div>
           )}
         </div>
@@ -2651,6 +2689,79 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       </select>
                     </div>
                   </div>
+
+                  {/* Font Family Selection */}
+                  <div style={{ marginBottom: 6 }}>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10, marginBottom: 3 }}>Typeface:</small>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 3 }}>
+                      {['Inter', 'Vazirmatn', 'Noto Sans Arabic'].map((f) => (
+                        <button
+                          key={f}
+                          className={`btn ${(activeSelectedNode.fontFamily || 'Inter') === f ? 'primary' : ''}`}
+                          style={{ fontSize: 9, padding: '2px 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          onClick={() => {
+                            setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, fontFamily: f } : n)));
+                            pushHistory();
+                          }}
+                        >
+                          {f.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Direction & Line Height */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                    <div>
+                      <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Direction:</small>
+                      <div style={{ display: 'flex', gap: 2 }}>
+                        {(['ltr', 'rtl'] as const).map((dir) => (
+                          <button
+                            key={dir}
+                            className={`btn ${(activeSelectedNode.direction || 'ltr') === dir ? 'primary' : ''}`}
+                            style={{ fontSize: 10, padding: '2px 6px', flex: 1 }}
+                            onClick={() => {
+                              setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, direction: dir } : n)));
+                              pushHistory();
+                            }}
+                          >
+                            {dir.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Line Height:</small>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="1.0"
+                        max="2.2"
+                        value={activeSelectedNode.lineHeight || 1.48}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 1.48;
+                          setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, lineHeight: val } : n)));
+                        }}
+                        onBlur={pushHistory}
+                        style={{ width: '100%', padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kurdish Digits Converter */}
+                  <button
+                    className="btn"
+                    style={{ fontSize: 10, padding: '3px 6px', width: '100%' }}
+                    onClick={() => {
+                      const text = activeSelectedNode.textEn || '';
+                      const hasEastern = /[۰-۹]/.test(text);
+                      const converted = hasEastern ? toWesternDigits(text) : toEasternKurdishDigits(text);
+                      setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, textEn: converted } : n)));
+                      pushHistory();
+                    }}
+                  >
+                    Switch Digits: 0-9 ⇄ ۰-۹
+                  </button>
                 </div>
               )}
 
@@ -2737,7 +2848,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 11, color: 'var(--muted)' }}>Weight:</span>
                   <div style={{ display: 'flex', gap: 3 }}>
                     {[400, 600, 700, 800].map((w) => (
@@ -2755,6 +2866,70 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                     ))}
                   </div>
                 </div>
+
+                {/* Kurdish Ligature Clearance Status */}
+                {(() => {
+                  const clearance = checkKurdishTypographyClearance(headlineCkb, 1.52, 4);
+                  const soraniLettersCount = SORANI_SPECIFIC_CHARS.filter((c) => headlineCkb.includes(c)).length;
+                  return (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 10,
+                        color: clearance.safe ? '#10B981' : '#F59E0B',
+                        background: clearance.safe ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                        border: `1px solid ${clearance.safe ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`,
+                        padding: '4px 6px',
+                        borderRadius: 4,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span style={{ fontWeight: 800 }}>{clearance.safe ? '✓' : '⚠'}</span>
+                      <span>
+                        {clearance.safe
+                          ? `Kurdish Clearance Safe (${clearance.recommendedLineHeight}x · ${soraniLettersCount} Sorani Glyphs)`
+                          : clearance.issues[0]}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {/* Kurdish Numeral Converter */}
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: '4px 6px', width: '100%', marginBottom: 4 }}
+                  onClick={() => {
+                    const hasEastern = /[۰-۹]/.test(copyCkb);
+                    setCopyCkb(hasEastern ? toWesternDigits(copyCkb) : toEasternKurdishDigits(copyCkb));
+                    pushHistory();
+                  }}
+                >
+                  {/[۰-۹]/.test(copyCkb) ? 'Convert Price: 0-9 Western' : 'Convert Price: ۰-۹ Kurdish'}
+                </button>
+
+                {/* Enforce UAX #9 Isolation */}
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: '4px 6px', width: '100%', marginBottom: 4 }}
+                  onClick={() => {
+                    setHeadlineCkb((prev) => isolateKurdishText(prev));
+                    setCopyCkb((prev) => isolateKurdishText(prev));
+                    pushHistory();
+                  }}
+                >
+                  Enforce UAX #9 Isolates (U+2067)
+                </button>
+
+                {/* UAX #9 Directional Isolation Toggle */}
+                <button
+                  className={`btn ${showBidiIsolates ? 'primary' : ''}`}
+                  style={{ fontSize: 10, padding: '4px 6px', width: '100%' }}
+                  onClick={() => setShowBidiIsolates(!showBidiIsolates)}
+                >
+                  UAX #9 Bidi Isolates: {showBidiIsolates ? 'VISIBLE (⸢RLI⸥)' : 'HIDDEN'}
+                </button>
               </div>
 
               <div className="inspector-section">

@@ -148,7 +148,11 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
 
   const textMargin = width * 0.08;
   const headlineY = height * 0.22;
-  const fontName = isRtl ? 'Vazirmatn' : state.fontFamily;
+  const fontName = isRtl
+    ? (state.fontFamily.includes('Noto') ? '"Noto Sans Arabic", Vazirmatn, sans-serif' : 'Vazirmatn, "Noto Sans Arabic", sans-serif')
+    : `${state.fontFamily}, sans-serif`;
+
+  ctx.direction = (isRtl ? 'rtl' : 'ltr') as CanvasDirection;
 
   if (state.langVariant === 'bilingual') {
     // English Lead Headline
@@ -254,7 +258,9 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
         ctx.fillText(badgeLabel || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + 6);
       } else if (cNode.role === 'text_custom') {
         ctx.fillStyle = cNode.color || '#FFFFFF';
-        ctx.font = `${cNode.fontWeight || 600} ${cNode.fontSize || 24}px ${cNode.fontFamily || 'Inter'}, sans-serif`;
+        const customFont = cNode.fontFamily || (isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : 'Inter');
+        ctx.font = `${cNode.fontWeight || 600} ${cNode.fontSize || 24}px ${customFont}, sans-serif`;
+        ctx.direction = (cNode.direction || (isRtl ? 'rtl' : 'ltr')) as CanvasDirection;
         ctx.textAlign = cNode.textAlign || 'center';
         const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
         const textLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;

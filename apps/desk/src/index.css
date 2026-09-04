@@ -20,7 +20,33 @@
 }
 
 [lang="ckb"], [lang="ar"], [dir="rtl"] {
-  font-family: Vazirmatn, Inter, sans-serif;
+  font-family: Vazirmatn, "Noto Sans Arabic", Shabnam, Inter, sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+
+/* Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy */
+.balanced-headline {
+  text-wrap: balance;
+  text-wrap: pretty;
+  line-break: loose;
+  overflow-wrap: break-word;
+}
+
+.kurdish-typeset {
+  font-family: Vazirmatn, "Noto Sans Arabic", Shabnam, sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  line-height: 1.52;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  overflow: visible;
+}
+
+.kurdish-noto {
+  font-family: "Noto Sans Arabic", Vazirmatn, sans-serif;
+}
+
+.bidi-isolated {
+  unicode-bidi: isolate;
 }
 
 * {

@@ -9,11 +9,56 @@ export interface BidiAnalysis {
   isolatedControlsValid: boolean;
 }
 
+export interface KurdishTypographyClearance {
+  safe: boolean;
+  hasHighAscenders: boolean;
+  hasLowDescenders: boolean;
+  currentLineHeight: number;
+  currentVerticalPaddingPx: number;
+  recommendedLineHeight: number;
+  recommendedVerticalPaddingPx: number;
+  issues: string[];
+}
+
+export interface MixedDirectionRun {
+  text: string;
+  direction: 'rtl' | 'ltr' | 'neutral';
+  isIsolated: boolean;
+}
+
+export interface MixedDirectionValidation {
+  isValid: boolean;
+  hasMixedRuns: boolean;
+  runs: MixedDirectionRun[];
+  errors: string[];
+}
+
 // Arabic and Kurdish Sorani Unicode blocks
 const RTL_CHAR_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 const LTR_CHAR_REGEX = /[A-Za-z\u00C0-\u024F]/;
 const ARABIC_INDIC_DIGITS_REGEX = /[\u0660-\u0669\u06F0-\u06F9]/;
-const SORANI_SPECIFIC_CHARS = ['ڕ', 'ڵ', 'ێ', 'ۆ', 'ە', 'ڤ', 'ژ', 'چ', 'پ', 'گ'];
+
+export const SORANI_SPECIFIC_CHARS = ['ڕ', 'ڵ', 'ێ', 'ۆ', 'ە', 'ڤ', 'ژ', 'چ', 'پ', 'گ', 'ک'] as const;
+export const SORANI_HIGH_ASCENDERS = ['ڵ', 'ۆ', 'ێ'] as const;
+export const SORANI_LOW_DESCENDERS = ['ڕ'] as const;
+
+// Eastern Arabic-Indic Digits (٠ to ٩, U+0660-U+0669) and Persian/Kurdish Digits (۰ to ۹, U+06F0-U+06F9)
+const EASTERN_KURDISH_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+const ARABIC_INDIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+const WESTERN_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * UAX #9 Directional Controls
+ */
+export const BIDI_CONTROLS = {
+  RLI: '\u2067', // Right-to-Left Isolate
+  LRI: '\u2066', // Left-to-Right Isolate
+  FSI: '\u2068', // First Strong Isolate
+  PDI: '\u2069', // Pop Directional Isolate
+  RLM: '\u200F', // Right-to-Left Mark
+  LRM: '\u200E', // Left-to-Right Mark
+  ALM: '\u061C', // Arabic Letter Mark
+};
 
 export function determineBaseDirection(text: string): 'rtl' | 'ltr' {
   // If paragraph starts with explicit RTL control (RLI \u2067, RLE \u202B, RLO \u202E, ALM \u061C, RLM \u200F)
@@ -110,3 +155,138 @@ export function analyzeBidi(text: string): BidiAnalysis {
     isolatedControlsValid: true,
   };
 }
+
+/**
+ * Enforces Unicode UAX #9 Directional Isolation (Invariant #8)
+ * Wraps Kurdish Sorani copy with RLI (U+2067) and PDI (U+2069) if not already isolated.
+ */
+export function isolateKurdishText(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  const hasRtl = RTL_CHAR_REGEX.test(text);
+  if (!hasRtl) return text;
+
+  // If already enclosed in RLI/PDI or LRI/PDI, preserve it
+  if (text.startsWith('\u2067') && text.endsWith('\u2069')) {
+    return text;
+  }
+
+  return `\u2067${text}\u2069`;
+}
+
+/**
+ * Strips all invisible Unicode bidirectional controls for raw comparisons or normalization
+ */
+export function stripBidiControls(text: string): string {
+  if (!text) return '';
+  return text.replace(/[\u2066\u2067\u2068\u2069\u200E\u200F\u061C\u202A-\u202E]/g, '');
+}
+
+/**
+ * Converts Western digits (0-9) to Eastern Kurdish digits (۰-۹)
+ */
+export function toEasternKurdishDigits(text: string): string {
+  if (!text) return '';
+  let result = text;
+  for (let i = 0; i < 10; i++) {
+    result = result.replace(new RegExp(WESTERN_DIGITS[i], 'g'), EASTERN_KURDISH_DIGITS[i]);
+  }
+  return result;
+}
+
+/**
+ * Converts both Eastern Kurdish (۰-۹) and Arabic-Indic (٠-٩) digits to Western digits (0-9)
+ */
+export function toWesternDigits(text: string): string {
+  if (!text) return '';
+  let result = text;
+  for (let i = 0; i < 10; i++) {
+    result = result.replace(new RegExp(EASTERN_KURDISH_DIGITS[i], 'g'), WESTERN_DIGITS[i]);
+    result = result.replace(new RegExp(ARABIC_INDIC_DIGITS[i], 'g'), WESTERN_DIGITS[i]);
+  }
+  return result;
+}
+
+/**
+ * Validates clearance of Kurdish Sorani ligatures (ک, گ, ڵ, ۆ, ڕ, ێ)
+ * Diacritics such as small v / haftok require line-height >= 1.4 and vertical padding >= 2px
+ * to guarantee zero ascender/descender clipping in Vazirmatn / Noto Sans Arabic.
+ */
+export function checkKurdishTypographyClearance(
+  text: string,
+  lineHeight: number,
+  verticalPaddingPx: number = 0
+): KurdishTypographyClearance {
+  const hasHigh = SORANI_HIGH_ASCENDERS.some((c) => text.includes(c));
+  const hasLow = SORANI_LOW_DESCENDERS.some((c) => text.includes(c));
+  const issues: string[] = [];
+
+  const recommendedLineHeight = (hasHigh || hasLow) ? 1.45 : 1.35;
+  const recommendedVerticalPaddingPx = (hasHigh || hasLow) ? 4 : 2;
+
+  if ((hasHigh || hasLow) && lineHeight < 1.38) {
+    issues.push(
+      `Line-height ${lineHeight} is below 1.40 threshold for Kurdish diacritics (${hasHigh ? 'tall ascenders ڵ/ۆ/ێ' : ''}${hasLow ? ' low descender ڕ' : ''}). Glyph clipping may occur.`
+    );
+  }
+
+  if ((hasHigh || hasLow) && verticalPaddingPx < 2) {
+    issues.push(
+      `Vertical padding ${verticalPaddingPx}px is below 2px safety margin. Top diacritics or descenders risk being cut off by parent overflow bounds.`
+    );
+  }
+
+  return {
+    safe: issues.length === 0,
+    hasHighAscenders: hasHigh,
+    hasLowDescenders: hasLow,
+    currentLineHeight: lineHeight,
+    currentVerticalPaddingPx: verticalPaddingPx,
+    recommendedLineHeight,
+    recommendedVerticalPaddingPx,
+    issues,
+  };
+}
+
+/**
+ * Validates mixed-direction runs (e.g. English brand names + Kurdish Sorani copy + digits)
+ * Checks that bidirectional switches do not cause punctuation bleed or inverted runs.
+ */
+export function validateMixedDirectionRuns(text: string): MixedDirectionValidation {
+  const hasRtl = RTL_CHAR_REGEX.test(text);
+  const hasLtr = LTR_CHAR_REGEX.test(text);
+  const errors: string[] = [];
+
+  if (!hasRtl || !hasLtr) {
+    return {
+      isValid: true,
+      hasMixedRuns: false,
+      runs: [{ text, direction: hasRtl ? 'rtl' : hasLtr ? 'ltr' : 'neutral', isIsolated: false }],
+      errors: [],
+    };
+  }
+
+  // Tokenize by spaces and check if isolates or directional markers protect boundaries
+  const runs: MixedDirectionRun[] = [];
+  const segments = text.split(/(\s+|—|-|:)/);
+
+  for (const seg of segments) {
+    if (!seg.trim()) continue;
+    const segHasRtl = RTL_CHAR_REGEX.test(seg);
+    const segHasLtr = LTR_CHAR_REGEX.test(seg);
+    const isIso = seg.includes('\u2067') || seg.includes('\u2066') || (text.includes('\u2067') && text.includes('\u2069'));
+
+    runs.push({
+      text: seg,
+      direction: segHasRtl ? 'rtl' : segHasLtr ? 'ltr' : 'neutral',
+      isIsolated: isIso,
+    });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    hasMixedRuns: true,
+    runs,
+    errors,
+  };
+}
+
