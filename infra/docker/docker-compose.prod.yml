@@ -1,0 +1,136 @@
+name: hawa-production
+
+services:
+  nginx:
+    image: nginx:1.27-alpine-slim
+    restart: unless-stopped
+    ports:
+      - "${HAWA_BIND_IP:-127.0.0.1}:${HAWA_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - edge
+      - core
+    depends_on:
+      core:
+        condition: service_healthy
+      desk:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  desk:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.desk
+    restart: unless-stopped
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  core:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.core
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hawa_owner}:${POSTGRES_PASSWORD:-hawa_production_secure_pass}@postgres:5432/${POSTGRES_DB:-hawa}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-expected_office_secret}
+    networks:
+      - core
+    depends_on:
+      postgres:
+        condition: service_healthy
+      restate:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 9080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hawa_owner}:${POSTGRES_PASSWORD:-hawa_production_secure_pass}@postgres:5432/${POSTGRES_DB:-hawa}
+      RESTATE_INGRESS_URL: http://restate:8080
+    networks:
+      - core
+    depends_on:
+      core:
+        condition: service_healthy
+      restate:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:9080/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hawa}
+      POSTGRES_USER: ${POSTGRES_USER:-hawa_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hawa_production_secure_pass}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      - ../../db/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hawa_owner} -d ${POSTGRES_DB:-hawa}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  restate:
+    image: ghcr.io/restatedev/restate:1.7.0
+    restart: unless-stopped
+    environment:
+      RESTATE_NODE_NAME: hawa-restate-prod-1
+    volumes:
+      - restate_data:/restate-data
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9070/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  edge: {}
+  core:
+    internal: true
+
+volumes:
+  postgres_data: {}
+  restate_data: {}
