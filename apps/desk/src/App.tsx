@@ -9,12 +9,15 @@ import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
 import { draftStore } from './services/draftStore.js';
+import { useI18n } from './services/i18n.js';
 
 export const App: React.FC = () => {
+  const { t, isRtl } = useI18n();
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('inbox');
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskCopy, setTaskCopy] = useState('');
+  const [taskCopyEn, setTaskCopyEn] = useState('');
+  const [taskCopyCkb, setTaskCopyCkb] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -22,9 +25,9 @@ export const App: React.FC = () => {
   // Restore draft when opening modal
   const handleOpenModal = () => {
     const existingDraft = draftStore.getActiveDraft();
-    if (existingDraft && !taskTitle && !taskCopy) {
+    if (existingDraft && !taskTitle && !taskCopyEn) {
       setTaskTitle(existingDraft.title || '');
-      setTaskCopy(existingDraft.copy || '');
+      setTaskCopyEn(existingDraft.copy || '');
     }
     setShowNewTaskModal(true);
   };
@@ -32,11 +35,11 @@ export const App: React.FC = () => {
   // Autosave active draft
   const handleTitleChange = (val: string) => {
     setTaskTitle(val);
-    draftStore.saveActiveDraft({ title: val, copy: taskCopy });
+    draftStore.saveActiveDraft({ title: val, copy: taskCopyEn });
   };
 
-  const handleCopyChange = (val: string) => {
-    setTaskCopy(val);
+  const handleCopyEnChange = (val: string) => {
+    setTaskCopyEn(val);
     draftStore.saveActiveDraft({ title: taskTitle, copy: val });
   };
 
@@ -57,13 +60,16 @@ export const App: React.FC = () => {
     if (!taskTitle) return;
     setIsSubmitting(true);
 
+    const fullDescription = [taskCopyEn, taskCopyCkb].filter(Boolean).join(' | ');
+
     // Check if offline: queue locally in IndexedDB
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      draftStore.enqueueTask({ title: taskTitle, copy: taskCopy });
+      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription });
       draftStore.clearActiveDraft();
       setShowNewTaskModal(false);
       setTaskTitle('');
-      setTaskCopy('');
+      setTaskCopyEn('');
+      setTaskCopyCkb('');
       setIsSubmitting(false);
       alert('Offline Mode: Task brief queued in local storage. It will submit automatically upon reconnecting.');
       return;
@@ -81,7 +87,7 @@ export const App: React.FC = () => {
           clientId: 'client-office-1',
           title: taskTitle,
           priority: 'routine',
-          description: taskCopy,
+          description: fullDescription || 'Summer Campaign Poster',
           source: { platform: 'hawa_desk', externalId: 'operator-desk' },
         }),
       });
@@ -90,12 +96,32 @@ export const App: React.FC = () => {
         const data = await res.json();
         const taskId = data.id;
 
-        // Auto-route and create brief
+        // Auto-route and create brief (English primary, Kurdish secondary)
         await fetch(`/v1/tasks/${taskId}/route`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ taskRoute: 'standard_generation' }),
         }).catch(() => {});
+
+        const exactCopyBlocks: any[] = [];
+        if (taskCopyEn) {
+          exactCopyBlocks.push({
+            role: 'headline',
+            text: taskCopyEn,
+            language: 'en',
+            direction: 'ltr',
+            approved: true,
+          });
+        }
+        if (taskCopyCkb) {
+          exactCopyBlocks.push({
+            role: taskCopyEn ? 'subheadline' : 'headline',
+            text: taskCopyCkb,
+            language: 'ckb',
+            direction: 'rtl',
+            approved: true,
+          });
+        }
 
         await fetch(`/v1/tasks/${taskId}/briefs`, {
           method: 'POST',
@@ -103,10 +129,10 @@ export const App: React.FC = () => {
           body: JSON.stringify({
             objective: taskTitle,
             taskRoute: 'standard_generation',
-            primaryLanguage: 'ckb',
-            direction: 'rtl',
+            primaryLanguage: taskCopyEn ? 'en' : 'ckb',
+            direction: taskCopyEn ? 'ltr' : 'rtl',
             variants: [{ width: 1080, height: 1350, role: 'feed_post' }],
-            exactCopy: taskCopy ? [{ role: 'headline', text: taskCopy, language: 'ckb', direction: 'rtl', approved: true }] : [],
+            exactCopy: exactCopyBlocks,
             requiredAssetRoles: ['logo_primary'],
           }),
         }).catch(() => {});
@@ -122,7 +148,8 @@ export const App: React.FC = () => {
         setRefreshTrigger((k) => k + 1);
         setShowNewTaskModal(false);
         setTaskTitle('');
-        setTaskCopy('');
+        setTaskCopyEn('');
+        setTaskCopyCkb('');
         setCurrentScreen('review');
       } else {
         setShowNewTaskModal(false);
@@ -130,11 +157,12 @@ export const App: React.FC = () => {
       }
     } catch {
       // Network failure: queue offline
-      draftStore.enqueueTask({ title: taskTitle, copy: taskCopy });
+      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription });
       draftStore.clearActiveDraft();
       setShowNewTaskModal(false);
       setTaskTitle('');
-      setTaskCopy('');
+      setTaskCopyEn('');
+      setTaskCopyCkb('');
       setCurrentScreen('inbox');
     } finally {
       setIsSubmitting(false);
@@ -142,7 +170,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="shell">
+    <div className={`shell ${isRtl ? 'rtl' : 'ltr'}`}>
       <Sidebar currentScreen={currentScreen} onNavigate={setCurrentScreen} />
       <main className="main">
         <Header currentScreen={currentScreen} onNewTask={handleOpenModal} />
@@ -181,16 +209,16 @@ export const App: React.FC = () => {
           <div
             className="panel"
             style={{
-              width: 520,
+              width: 540,
               padding: 24,
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h2 style={{ marginTop: 0, marginBottom: 4 }}>Create Task in Hawa Desk</h2>
+                <h2 style={{ marginTop: 0, marginBottom: 4 }}>{t.modal.title}</h2>
                 <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-                  Canonical office intake with client scope lock and exact copy preservation.
+                  {t.modal.subtitle}
                 </p>
               </div>
               <span
@@ -204,45 +232,67 @@ export const App: React.FC = () => {
                 }}
                 title="Draft autosaves continuously to IndexedDB / local storage"
               >
-                💾 Autosaved
+                {t.modal.autosaved}
               </span>
             </div>
 
             <div style={{ margin: '16px 0' }}>
               <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
-                Task Title
+                {t.modal.taskTitleLabel}
               </label>
               <input
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
-                placeholder="e.g. Summer Campaign Poster"
+                placeholder={t.modal.taskTitlePlaceholder}
                 value={taskTitle}
                 onChange={(e) => handleTitleChange(e.target.value)}
               />
             </div>
 
+            {/* Primary Copy (English) */}
             <div style={{ margin: '16px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
-                Approved Copy (Kurdish Sorani or Arabic)
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ fontWeight: 650, fontSize: 13 }}>
+                  {t.modal.taskCopyEnLabel}
+                </label>
+                <span style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>Primary · LTR</span>
+              </div>
+              <textarea
+                dir="ltr"
+                lang="en"
+                style={{ width: '100%', height: 75, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                placeholder={t.modal.taskCopyEnPlaceholder}
+                value={taskCopyEn}
+                onChange={(e) => handleCopyEnChange(e.target.value)}
+              />
+            </div>
+
+            {/* Secondary Copy (Kurdish Sorani) */}
+            <div style={{ margin: '16px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ fontWeight: 650, fontSize: 13 }}>
+                  {t.modal.taskCopyCkbLabel}
+                </label>
+                <span style={{ fontSize: 11, color: '#eab308', fontWeight: 600 }}>Secondary · RTL</span>
+              </div>
               <textarea
                 dir="rtl"
                 lang="ckb"
-                style={{ width: '100%', height: 90, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
-                placeholder="تێکستی پەسەندکراو بنووسە…"
-                value={taskCopy}
-                onChange={(e) => handleCopyChange(e.target.value)}
+                style={{ width: '100%', height: 75, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                placeholder={t.modal.taskCopyCkbPlaceholder}
+                value={taskCopyCkb}
+                onChange={(e) => setTaskCopyCkb(e.target.value)}
               />
               <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
-                Exact copy blocks will be locked and cannot be rewritten by creative models.
+                {t.modal.copyLockNotice}
               </small>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
-                Cancel
+                {t.modal.cancel}
               </button>
               <button className="btn primary" disabled={isSubmitting} onClick={handleCreateTask}>
-                {isSubmitting ? 'Submitting & Routing…' : 'Submit to Ingress'}
+                {isSubmitting ? t.modal.submitting : t.modal.submit}
               </button>
             </div>
           </div>
@@ -251,3 +301,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+

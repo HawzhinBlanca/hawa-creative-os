@@ -1,8 +1,16 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FakeModelGateway } from '@hawa/testkit';
 import { extractProtectedTokens } from '@hawa/domain';
 import type { RequestContext } from '@hawa/contracts';
+
+function resolveEvalPath(relPath: string): string {
+  const p1 = resolve(process.cwd(), relPath);
+  if (existsSync(p1)) return p1;
+  const p2 = resolve(process.cwd(), '../../', relPath);
+  if (existsSync(p2)) return p2;
+  return p1;
+}
 
 export interface EvalSummary {
   dataset: string;
@@ -17,8 +25,9 @@ export class EvaluationRunner {
   private gateway = new FakeModelGateway();
 
   async runRoutingAndBriefTournament(): Promise<EvalSummary> {
-    const filePath = resolve(process.cwd(), 'evals/routing_brief.jsonl');
+    const filePath = resolveEvalPath('evals/routing_brief.jsonl');
     const content = readFileSync(filePath, 'utf-8');
+
     const lines = content.split('\n').filter((l) => l.trim().length > 0);
     const cases = lines.map((l) => JSON.parse(l));
 
@@ -65,8 +74,9 @@ export class EvaluationRunner {
   }
 
   async runRetrievalEvaluation(): Promise<EvalSummary> {
-    const filePath = resolve(process.cwd(), 'evals/retrieval_eval.jsonl');
+    const filePath = resolveEvalPath('evals/retrieval_eval.jsonl');
     const content = readFileSync(filePath, 'utf-8');
+
     const lines = content.split('\n').filter((l) => l.trim().length > 0);
     const cases = lines.map((l) => JSON.parse(l));
 

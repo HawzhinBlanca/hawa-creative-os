@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { runRealtimeQADiagnostics, type QADiagnosticResult } from '../services/qaDiagnostics.ts';
 import { computeSemanticDiff, type SemanticDiffResult, type DocumentSnapshot } from '../services/semanticDiff.ts';
+import { useI18n } from '../services/i18n.js';
 
 interface ReviewScreenProps {
   task?: any;
@@ -16,7 +17,9 @@ interface CanvasNode {
 }
 
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
+  const { t } = useI18n();
   const [variant, setVariant] = useState<'feed' | 'square' | 'story'>('feed');
+  const [langVariant, setLangVariant] = useState<'en' | 'ckb' | 'bilingual'>('en');
   const [approved, setApproved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -27,18 +30,33 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [taskStatus, setTaskStatus] = useState<string>(task?.status || 'AWAITING_APPROVAL');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Interactive HyCanvas Studio State
-  const initialHeadline = task?.description && task.description.length > 25
-    ? task.description.substring(0, 25)
-    : task?.title || 'تامی سارد، ڕۆژی خۆش';
-  const initialCopy = '١٢٬٠٠٠ دینار';
+  // Interactive HyCanvas Studio State: English Primary + Kurdish Secondary
+  const initialHeadlineEn = task?.title || 'Summer Chill, Joyful Days';
+  const initialHeadlineCkb = 'تامی سارد، ڕۆژی خۆش';
+  const initialCopyEn = '$12.00 USD';
+  const initialCopyCkb = '١٢٬٠٠٠ دینار';
 
-  const [headline, setHeadline] = useState<string>(initialHeadline);
-  const [copyText, setCopyText] = useState<string>(initialCopy);
-  const [fontFamily, setFontFamily] = useState<'Vazirmatn' | 'Noto Sans Arabic'>('Vazirmatn');
+  const [headlineEn, setHeadlineEn] = useState<string>(initialHeadlineEn);
+  const [headlineCkb, setHeadlineCkb] = useState<string>(initialHeadlineCkb);
+  const [copyEn, setCopyEn] = useState<string>(initialCopyEn);
+  const [copyCkb, setCopyCkb] = useState<string>(initialCopyCkb);
+
+  const [fontFamily, setFontFamily] = useState<string>('Inter');
   const [fontWeight, setFontWeight] = useState<number>(700);
   const [accentColor, setAccentColor] = useState<string>('#38BDF8');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Sync font when switching language variant
+  const handleSwitchLangVariant = (mode: 'en' | 'ckb' | 'bilingual') => {
+    setLangVariant(mode);
+    if (mode === 'en') {
+      setFontFamily('Inter');
+    } else if (mode === 'ckb') {
+      setFontFamily('Vazirmatn');
+    } else {
+      setFontFamily('Inter');
+    }
+  };
 
   // Overlays & Modals
   const [showSafeZones, setShowSafeZones] = useState<boolean>(false);
@@ -47,23 +65,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [studioToast, setStudioToast] = useState<string | null>(null);
 
+  // Active displayed headline & copy based on variant
+  const activeHeadline = langVariant === 'ckb' ? headlineCkb : headlineEn;
+  const activeCopy = langVariant === 'ckb' ? copyCkb : copyEn;
+
   // Base snapshot for semantic diffing against Candidate Revision 1
   const baseSnapshot = useMemo<DocumentSnapshot>(() => ({
-    headline: initialHeadline,
-    copy: initialCopy,
-    fontFamily: 'Vazirmatn',
+    headline: initialHeadlineEn,
+    copy: initialCopyEn,
+    fontFamily: 'Inter',
     fontWeight: 700,
     textColor: '#FFFFFF',
     accentColor: '#38BDF8',
     bgColor: '#16362E',
     variant: 'feed',
-  }), [initialHeadline, initialCopy]);
+  }), [initialHeadlineEn, initialCopyEn]);
 
   // Current snapshot
   const currentSnapshot: DocumentSnapshot = {
-    headline,
-    copy: copyText,
-    fontFamily,
+    headline: activeHeadline,
+    copy: activeCopy,
+    fontFamily: fontFamily as any,
     fontWeight,
     textColor: '#FFFFFF',
     accentColor,
@@ -79,14 +101,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   // Compute live real-time deterministic QA diagnostics
   const qaDiagnostics: QADiagnosticResult = useMemo(() => {
     return runRealtimeQADiagnostics({
-      headline,
-      copy: copyText,
+      headline: activeHeadline,
+      copy: activeCopy,
       textColor: '#FFFFFF',
       bgColor: '#16362E',
-      expectedTokens: ['١٢٬٠٠٠ دینار'],
+      expectedTokens: langVariant === 'ckb' ? ['١٢٬٠٠٠ دینار'] : ['$12.00'],
       safeMarginPercent: 10,
     });
-  }, [headline, copyText]);
+  }, [activeHeadline, activeCopy, langVariant]);
+
 
   // Document nodes for layers inspector
   const [layers, setLayers] = useState<CanvasNode[]>([
@@ -349,13 +372,42 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
         {/* Center Column: Live Editable Canvas & Studio Toolbar (44%) */}
         <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
-          {/* Top Format Switcher */}
-          <div className="variantbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Top Format & Language Variant Switcher */}
+          <div className="variantbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div style={{ display: 'flex', gap: 6 }}>
               <button className={`btn ${variant === 'feed' ? 'primary' : ''}`} onClick={() => setVariant('feed')}>Feed 4:5</button>
               <button className={`btn ${variant === 'square' ? 'primary' : ''}`} onClick={() => setVariant('square')}>Square 1:1</button>
               <button className={`btn ${variant === 'story' ? 'primary' : ''}`} onClick={() => setVariant('story')}>Story 9:16</button>
             </div>
+
+            {/* Language Variant Switcher (English Primary, Kurdish Secondary, Bilingual) */}
+            <div style={{ display: 'flex', gap: 4, background: 'rgba(0,0,0,0.15)', padding: 3, borderRadius: 8 }}>
+              <button
+                className={`btn ${langVariant === 'en' ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px', fontWeight: 600 }}
+                onClick={() => handleSwitchLangVariant('en')}
+                title="Primary Creative Variant: English"
+              >
+                🇬🇧 English (Primary)
+              </button>
+              <button
+                className={`btn ${langVariant === 'ckb' ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px', fontWeight: 600 }}
+                onClick={() => handleSwitchLangVariant('ckb')}
+                title="Secondary Creative Variant: Kurdish Sorani"
+              >
+                ☀️ کوردی (Secondary)
+              </button>
+              <button
+                className={`btn ${langVariant === 'bilingual' ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px', fontWeight: 600 }}
+                onClick={() => handleSwitchLangVariant('bilingual')}
+                title="Unified Bilingual Campaign Overlay: English Primary + Kurdish Subtitle"
+              >
+                🔀 Bilingual
+              </button>
+            </div>
+
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className={`btn ${showSafeZones ? 'primary' : ''}`}
@@ -363,7 +415,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 onClick={() => setShowSafeZones(!showSafeZones)}
                 title="Toggle Safe Zone Margin Bounds (10%)"
               >
-                Safe Zones
+                {t.review.safeZones}
               </button>
               <button
                 className={`btn ${showBidiIsolates ? 'primary' : ''}`}
@@ -371,7 +423,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 onClick={() => setShowBidiIsolates(!showBidiIsolates)}
                 title="Toggle UAX #9 Directional Isolate Markers"
               >
-                Bidi Isolates
+                {t.review.bidiIsolates}
               </button>
             </div>
           </div>
@@ -392,11 +444,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               {qaDiagnostics.criticalPass ? '🟢' : '🔴'} {qaDiagnostics.summary}
             </span>
             <span style={{ color: 'var(--muted)', fontSize: 10 }}>
-              WCAG: {qaDiagnostics.wcagContrastRatio}:1 · Tokens: {qaDiagnostics.tokensIntact ? '✓' : '✗'}
+              WCAG: {qaDiagnostics.wcagContrastRatio}:1 · Mode: {langVariant.toUpperCase()} · Tokens: {qaDiagnostics.tokensIntact ? '✓' : '✗'}
             </span>
           </div>
 
-          {/* Interactive Canvas Canvas Area */}
+          {/* Interactive Canvas Area */}
           <div className="canvaswrap" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             <div
               className="canvas"
@@ -433,13 +485,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </div>
               )}
 
-              {/* Brand Logo Node (Top Right in RTL) */}
+              {/* Brand Logo Node */}
               <div
                 onClick={() => setSelectedNodeId('logo')}
                 style={{
                   position: 'absolute',
                   top: '6%',
-                  right: '6%',
+                  right: langVariant === 'ckb' ? '6%' : 'auto',
+                  left: langVariant === 'ckb' ? 'auto' : '6%',
                   zIndex: 10,
                   display: 'flex',
                   alignItems: 'center',
@@ -456,39 +509,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 <span style={{ fontSize: 8, color: '#10B981' }}>✓</span>
               </div>
 
-              {/* Headline Text Node (Interactive & Editable) */}
-              <div
-                onClick={() => setSelectedNodeId('headline')}
-                style={{
-                  position: 'absolute',
-                  top: '12%',
-                  left: '9%',
-                  right: '9%',
-                  zIndex: 15,
-                  padding: 4,
-                  border: selectedNodeId === 'headline' ? '2px dashed var(--accent)' : '1px solid transparent',
-                  borderRadius: 4,
-                  cursor: 'text',
-                }}
-              >
-                <div
-                  dir="rtl"
-                  lang="ckb"
-                  style={{
-                    fontSize: variant === 'story' ? 24 : 28,
-                    color: '#ffffff',
-                    fontWeight,
-                    lineHeight: 1.25,
-                    outline: 'none',
-                  }}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => setHeadline(e.currentTarget.textContent || '')}
-                >
-                  {showBidiIsolates ? `⸢\u2067${headline}\u2069⸥` : headline}
-                </div>
-              </div>
-
               {/* Accent Shape Node */}
               <div
                 onClick={() => setSelectedNodeId('shape')}
@@ -498,9 +518,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   height: '38%',
                   borderRadius: '50%',
                   background: accentColor,
-                  right: '-12%',
+                  right: langVariant === 'ckb' ? '-12%' : 'auto',
+                  left: langVariant === 'ckb' ? 'auto' : '-12%',
                   bottom: '17%',
-                  transform: 'rotate(-15deg)',
+                  transform: langVariant === 'ckb' ? 'rotate(-15deg)' : 'rotate(15deg)',
                   zIndex: 2,
                   cursor: 'pointer',
                   border: selectedNodeId === 'shape' ? '2px dashed #fff' : 'none',
@@ -508,13 +529,120 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 }}
               />
 
+              {/* Headline Text Node (Interactive & Editable) */}
+              <div
+                onClick={() => setSelectedNodeId('headline')}
+                style={{
+                  position: 'absolute',
+                  top: '16%',
+                  left: '8%',
+                  right: '8%',
+                  zIndex: 15,
+                  padding: 4,
+                  border: selectedNodeId === 'headline' ? '2px dashed var(--accent)' : '1px solid transparent',
+                  borderRadius: 4,
+                  cursor: 'text',
+                }}
+              >
+                {/* Mode 1: English Primary */}
+                {langVariant === 'en' && (
+                  <div
+                    dir="ltr"
+                    lang="en"
+                    style={{
+                      fontSize: variant === 'story' ? 24 : 28,
+                      color: '#ffffff',
+                      fontWeight,
+                      lineHeight: 1.25,
+                      outline: 'none',
+                      textAlign: 'left',
+                      fontFamily: fontFamily.includes('Arabic') || fontFamily.includes('Vazirmatn') ? 'Inter, sans-serif' : fontFamily,
+                    }}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => setHeadlineEn(e.currentTarget.textContent || '')}
+                  >
+                    {headlineEn}
+                  </div>
+                )}
+
+                {/* Mode 2: Kurdish Secondary */}
+                {langVariant === 'ckb' && (
+                  <div
+                    dir="rtl"
+                    lang="ckb"
+                    style={{
+                      fontSize: variant === 'story' ? 24 : 28,
+                      color: '#ffffff',
+                      fontWeight,
+                      lineHeight: 1.3,
+                      outline: 'none',
+                      textAlign: 'right',
+                      fontFamily: fontFamily.includes('Inter') ? 'Vazirmatn, sans-serif' : fontFamily,
+                    }}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => setHeadlineCkb(e.currentTarget.textContent || '')}
+                  >
+                    {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
+                  </div>
+                )}
+
+                {/* Mode 3: Bilingual Overlay (English Primary + Kurdish Secondary Subtitle) */}
+                {langVariant === 'bilingual' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {/* Primary English Headline */}
+                    <div
+                      dir="ltr"
+                      lang="en"
+                      style={{
+                        fontSize: variant === 'story' ? 22 : 25,
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                        outline: 'none',
+                        textAlign: 'left',
+                        fontFamily: 'Inter, sans-serif',
+                        borderBottom: '1px solid rgba(255,255,255,0.2)',
+                        paddingBottom: 4,
+                      }}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => setHeadlineEn(e.currentTarget.textContent || '')}
+                    >
+                      {headlineEn}
+                    </div>
+
+                    {/* Secondary Kurdish Subheadline with UAX #9 Directional Isolate */}
+                    <div
+                      dir="rtl"
+                      lang="ckb"
+                      style={{
+                        fontSize: variant === 'story' ? 18 : 20,
+                        color: '#38BDF8',
+                        fontWeight: 600,
+                        lineHeight: 1.3,
+                        outline: 'none',
+                        textAlign: 'right',
+                        fontFamily: 'Vazirmatn, sans-serif',
+                      }}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => setHeadlineCkb(e.currentTarget.textContent || '')}
+                    >
+                      {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Price & Offer Copy Node (Interactive & Editable) */}
               <div
                 onClick={() => setSelectedNodeId('copy')}
                 style={{
                   position: 'absolute',
-                  left: '9%',
-                  right: '9%',
+                  left: '8%',
+                  right: '8%',
                   bottom: '8%',
                   zIndex: 16,
                   padding: 4,
@@ -524,19 +652,33 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 }}
               >
                 <div
-                  dir="rtl"
-                  lang="ckb"
+                  dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+                  lang={langVariant === 'ckb' ? 'ckb' : 'en'}
                   style={{
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: 700,
                     color: '#17191c',
                     outline: 'none',
+                    textAlign: langVariant === 'ckb' ? 'right' : 'left',
+                    background: 'rgba(255, 255, 255, 0.92)',
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    display: 'inline-block',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   }}
                   contentEditable
                   suppressContentEditableWarning
-                  onBlur={(e) => setCopyText(e.currentTarget.textContent || '')}
+                  onBlur={(e) => {
+                    const text = e.currentTarget.textContent || '';
+                    if (langVariant === 'ckb') setCopyCkb(text);
+                    else setCopyEn(text);
+                  }}
                 >
-                  {showBidiIsolates ? `⸢\u2067${copyText}\u2069⸥` : copyText}
+                  {langVariant === 'bilingual'
+                    ? `${copyEn} · \u2067${copyCkb}\u2069`
+                    : langVariant === 'ckb'
+                    ? showBidiIsolates ? `⸢\u2067${copyCkb}\u2069⸥` : copyCkb
+                    : copyEn}
                 </div>
               </div>
             </div>
@@ -554,28 +696,46 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             flexWrap: 'wrap',
             gap: 10,
           }}>
-            {/* Font Switcher */}
+            {/* Font Switcher (English + Kurdish Font Pairings) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>Font:</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{t.review.fontFamily}:</span>
+              <button
+                className={`btn ${fontFamily === 'Inter' ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px' }}
+                onClick={() => setFontFamily('Inter')}
+                title="Primary Latin Typography"
+              >
+                Inter (EN)
+              </button>
+              <button
+                className={`btn ${fontFamily === 'Plus Jakarta Sans' ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 8px' }}
+                onClick={() => setFontFamily('Plus Jakarta Sans')}
+                title="Modern Geometric Latin Typography"
+              >
+                Jakarta (EN)
+              </button>
               <button
                 className={`btn ${fontFamily === 'Vazirmatn' ? 'primary' : ''}`}
                 style={{ fontSize: 11, padding: '3px 8px' }}
                 onClick={() => setFontFamily('Vazirmatn')}
+                title="Primary Kurdish Sorani Typography"
               >
-                Vazirmatn
+                Vazirmatn (کوردی)
               </button>
               <button
                 className={`btn ${fontFamily === 'Noto Sans Arabic' ? 'primary' : ''}`}
                 style={{ fontSize: 11, padding: '3px 8px' }}
                 onClick={() => setFontFamily('Noto Sans Arabic')}
+                title="Universal Arabic/Kurdish Typography"
               >
-                Noto Sans Arabic
+                Noto Sans (کوردی)
               </button>
             </div>
 
             {/* Font Weight */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>Weight:</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{t.review.fontWeight}:</span>
               <button
                 className={`btn ${fontWeight === 400 ? 'primary' : ''}`}
                 style={{ fontSize: 11, padding: '3px 6px' }}
@@ -584,11 +744,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 400
               </button>
               <button
-                className={`btn ${fontWeight === 500 ? 'primary' : ''}`}
+                className={`btn ${fontWeight === 600 ? 'primary' : ''}`}
                 style={{ fontSize: 11, padding: '3px 6px' }}
-                onClick={() => setFontWeight(500)}
+                onClick={() => setFontWeight(600)}
               >
-                500
+                600
               </button>
               <button
                 className={`btn ${fontWeight === 700 ? 'primary' : ''}`}
@@ -597,11 +757,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               >
                 700
               </button>
+              <button
+                className={`btn ${fontWeight === 800 ? 'primary' : ''}`}
+                style={{ fontSize: 11, padding: '3px 6px' }}
+                onClick={() => setFontWeight(800)}
+              >
+                800
+              </button>
             </div>
 
             {/* Accent Color Swatches */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>Accent:</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{t.review.accentColor}:</span>
               {['#38BDF8', '#10B981', '#E9B666', '#8B5CF6'].map((color) => (
                 <div
                   key={color}
@@ -627,14 +794,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 style={{ fontSize: 11, padding: '4px 10px' }}
                 onClick={() => setShowLayersModal(true)}
               >
-                Layers (4)
+                {t.review.layers} (4)
               </button>
               <button
                 className={`btn ${semanticDiff.hasChanges ? 'primary' : ''}`}
                 style={{ fontSize: 11, padding: '4px 10px' }}
                 onClick={() => setShowDiffModal(true)}
               >
-                Compare R2 {semanticDiff.hasChanges ? `(${semanticDiff.totalChanges} Δ)` : ''}
+                {t.review.semanticDiff} {semanticDiff.hasChanges ? `(${semanticDiff.totalChanges} Δ)` : ''}
               </button>
               <button
                 className="btn"
@@ -645,6 +812,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               </button>
             </div>
           </div>
+
         </div>
 
         {/* Right Column: Evidence & Decision (28%) */}
@@ -720,10 +888,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               disabled={approved || publishing}
             >
               {publishing
-                ? 'Publishing to Drive...'
+                ? t.review.approving
                 : approved
-                ? 'Approved & Published'
-                : '✓ Approve & Publish to Drive'}
+                ? '✓ Certified & Published'
+                : `✓ ${t.review.approvePublish}`}
             </button>
 
             {!approved && !escalated && (
@@ -749,10 +917,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   style={{ width: '100%', padding: '8px', fontSize: 12 }}
                   onClick={handleRequestRevision}
                 >
-                  Request Automated Repair ({2 - repairCycles} left)
+                  {t.review.repairTrigger} ({2 - repairCycles} left)
                 </button>
               </div>
             )}
+
           </div>
         </div>
       </div>

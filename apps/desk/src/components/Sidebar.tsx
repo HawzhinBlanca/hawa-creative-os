@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../services/i18n.js';
 
 export type ScreenId = 'inbox' | 'review' | 'dna' | 'library' | 'settings' | 'ops' | 'eval';
 
@@ -8,11 +9,13 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) => {
+  const { t } = useI18n();
+
   return (
     <aside className="side">
       <div className="brand">
         <strong>Hawa Desk</strong>
-        <small>Private Creative OS</small>
+        <small>{t.sidebar.brandSubtitle}</small>
       </div>
 
       <nav className="nav">
@@ -20,55 +23,56 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
           className={currentScreen === 'inbox' ? 'active' : ''}
           onClick={() => onNavigate('inbox')}
         >
-          Inbox
+          {t.screens.inbox.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'review' ? 'active' : ''}
           onClick={() => onNavigate('review')}
         >
-          Task review
+          {t.screens.review.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'dna' ? 'active' : ''}
           onClick={() => onNavigate('dna')}
         >
-          Client DNA
+          {t.screens.dna.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'library' ? 'active' : ''}
           onClick={() => onNavigate('library')}
         >
-          Library
+          {t.screens.library.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'settings' ? 'active' : ''}
           onClick={() => onNavigate('settings')}
         >
-          Settings
+          {t.screens.settings.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'ops' ? 'active' : ''}
           onClick={() => onNavigate('ops')}
         >
-          Operations
+          {t.screens.ops.split('&')[0].trim()}
         </button>
         <button
           className={currentScreen === 'eval' ? 'active' : ''}
           onClick={() => onNavigate('eval')}
         >
-          Evaluations
+          {t.screens.eval.split('&')[0].trim()}
         </button>
       </nav>
 
       <div className="health">
         <div>
           <span className="dot"></span>
-          <b>Core healthy</b>
+          <b>{t.sidebar.coreHealthy}</b>
         </div>
         <small style={{ display: 'block', marginTop: 4 }}>
-          Telegram active · Desk canonical · WAHA quarantined
+          {t.sidebar.healthDetails}
         </small>
       </div>
     </aside>
   );
 };
+

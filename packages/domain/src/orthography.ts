@@ -99,3 +99,63 @@ export function validateScriptCoverage(text: string): {
 
   return { valid: unsupportedChars.length === 0, unsupportedChars };
 }
+
+export type ScriptType = 'latin' | 'arabic_sorani' | 'mixed';
+
+export interface ScriptDetectionResult {
+  script: ScriptType;
+  primaryLanguage: 'en' | 'ckb';
+  direction: 'ltr' | 'rtl';
+  confidence: number;
+}
+
+/**
+ * Detects whether input text is predominantly Latin (English) or Arabic/Kurdish script.
+ * Returns normalized language code ('en' | 'ckb') and CSS text direction ('ltr' | 'rtl').
+ */
+export function detectScriptAndDirection(text: string): ScriptDetectionResult {
+  if (!text || !text.trim()) {
+    return { script: 'latin', primaryLanguage: 'en', direction: 'ltr', confidence: 1.0 };
+  }
+
+  let latinCount = 0;
+  let arabicCount = 0;
+
+  for (const char of text) {
+    const code = char.codePointAt(0) || 0;
+    if (
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      (code >= 0xc0 && code <= 0x24f)
+    ) {
+      latinCount++;
+    } else if (
+      (code >= 0x600 && code <= 0x6ff) ||
+      (code >= 0x750 && code <= 0x77f) ||
+      (code >= 0x8a0 && code <= 0x8ff)
+    ) {
+      arabicCount++;
+    }
+  }
+
+  const total = latinCount + arabicCount;
+  if (total === 0) {
+    return { script: 'latin', primaryLanguage: 'en', direction: 'ltr', confidence: 1.0 };
+  }
+
+  if (arabicCount > latinCount) {
+    return {
+      script: latinCount > 0 ? 'mixed' : 'arabic_sorani',
+      primaryLanguage: 'ckb',
+      direction: 'rtl',
+      confidence: Number((arabicCount / total).toFixed(2)),
+    };
+  } else {
+    return {
+      script: arabicCount > 0 ? 'mixed' : 'latin',
+      primaryLanguage: 'en',
+      direction: 'ltr',
+      confidence: Number((latinCount / total).toFixed(2)),
+    };
+  }
+}

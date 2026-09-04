@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import type { ScreenId } from './Sidebar.js';
 import { eventStream, type StreamConnectionStatus } from '../services/eventStream.js';
+import { useI18n } from '../services/i18n.js';
 
 interface HeaderProps {
   currentScreen: ScreenId;
   onNewTask: () => void;
 }
 
-const titles: Record<ScreenId, string> = {
-  inbox: 'Inbox & Production Board',
-  review: 'Task Review & Approval',
-  dna: 'Client DNA & Brand Governance',
-  library: 'Creative Library & Retrieval Evidence',
-  settings: 'Adapters & Model Registry',
-  ops: 'Actionable Operations & Health',
-  eval: 'Model Evaluations & Canary Tournaments',
-};
-
 export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
+  const { locale, t, toggleLocale } = useI18n();
   const [streamStatus, setStreamStatus] = useState<StreamConnectionStatus>(eventStream.getStatus());
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
@@ -40,12 +32,41 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
   const badgeColor = !isOnline ? '#f97316' : streamStatus === 'connected' ? '#22c55e' : '#eab308';
   const badgeBg = !isOnline ? 'rgba(249, 115, 22, 0.12)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(234, 179, 8, 0.12)';
   const badgeBorder = !isOnline ? 'rgba(249, 115, 22, 0.3)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)';
-  const badgeText = !isOnline ? 'Offline (PWA Cache)' : streamStatus === 'connected' ? 'Live Stream' : 'Connecting…';
+  const badgeText = !isOnline ? t.header.offlineCache : streamStatus === 'connected' ? t.header.liveStream : t.header.connecting;
 
   return (
     <header className="top">
-      <h1>{titles[currentScreen]}</h1>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 20 }}>{t.screens[currentScreen]}</h1>
+        <small style={{ color: 'var(--muted)', fontSize: 12 }}>{t.screenSubtitles[currentScreen]}</small>
+      </div>
+
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        {/* Language Selector Toggle */}
+        <button
+          id="lang-toggle-btn"
+          onClick={toggleLocale}
+          className="btn"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '5px 11px',
+            background: locale === 'en' ? 'rgba(56, 189, 248, 0.1)' : 'rgba(234, 179, 8, 0.12)',
+            color: locale === 'en' ? '#38bdf8' : '#eab308',
+            border: `1px solid ${locale === 'en' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(234, 179, 8, 0.3)'}`,
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+          title={locale === 'en' ? 'Primary: English. Click to switch to Secondary: کوردی سۆرانی' : 'Secondary: کوردی. کلیک بکە بۆ گۆڕین بۆ سەرەکی: English'}
+        >
+          <span>{locale === 'en' ? '🇬🇧 English (Primary)' : '☀️ کوردی (Secondary)'}</span>
+          <span style={{ opacity: 0.6, fontSize: 11 }}>⇄</span>
+          <span style={{ fontSize: 11, opacity: 0.85 }}>{locale === 'en' ? 'کوردی' : 'EN'}</span>
+        </button>
+
         <div
           id="sse-stream-indicator"
           style={{
@@ -79,12 +100,13 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
         <input
           className="search"
           aria-label="Search"
-          placeholder="Search tasks, clients, copy, hashes…"
+          placeholder={t.header.searchPlaceholder}
         />
         <button className="btn primary" onClick={onNewTask}>
-          + New task
+          {t.header.newTask}
         </button>
       </div>
     </header>
   );
 };
+

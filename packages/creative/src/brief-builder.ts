@@ -5,6 +5,7 @@ import {
   type ExactCopyBlock,
   type MissingFact,
   extractProtectedTokens,
+  detectScriptAndDirection,
   validateBrief,
 } from '@hawa/domain';
 
@@ -46,25 +47,27 @@ export class BriefBuilder {
     if (input.providedCopy && input.providedCopy.length > 0) {
       for (const item of input.providedCopy) {
         const tokens = extractProtectedTokens(item.text);
+        const detected = detectScriptAndDirection(item.text);
         exactCopy.push({
           id: crypto.randomUUID(),
           role: item.role,
           text: item.text,
-          language: item.language || 'ckb',
-          direction: item.direction || 'rtl',
+          language: item.language || detected.primaryLanguage,
+          direction: item.direction || detected.direction,
           approved: true,
           protectedTokens: tokens,
         });
       }
     } else {
-      // Extract from raw request text
+      // Extract from raw request text with script detection
       const tokens = extractProtectedTokens(input.rawRequestText);
+      const detected = detectScriptAndDirection(input.rawRequestText);
       exactCopy.push({
         id: crypto.randomUUID(),
         role: 'headline',
         text: input.rawRequestText.trim(),
-        language: 'ckb',
-        direction: 'rtl',
+        language: detected.primaryLanguage,
+        direction: detected.direction,
         approved: true,
         protectedTokens: tokens,
       });
@@ -83,6 +86,10 @@ export class BriefBuilder {
       }
     }
 
+    const detectedObjective = detectScriptAndDirection(input.objective || input.rawRequestText);
+    const primaryLanguage = exactCopy[0]?.language || detectedObjective.primaryLanguage;
+    const direction = exactCopy[0]?.direction || detectedObjective.direction;
+
     const brief: DesignBrief = {
       briefId,
       taskId: input.taskId,
@@ -91,8 +98,8 @@ export class BriefBuilder {
       clientDnaVersion: input.clientDnaVersion,
       objective: input.objective,
       taskRoute: 'template_fill',
-      primaryLanguage: exactCopy[0]?.language || 'ckb',
-      direction: exactCopy[0]?.direction || 'rtl',
+      primaryLanguage,
+      direction,
       variants,
       exactCopy,
       missingFacts,

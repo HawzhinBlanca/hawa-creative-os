@@ -159,6 +159,9 @@ importers:
       '@hawa/domain':
         specifier: workspace:*
         version: link:../domain
+      '@hawa/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@hawa/qa':
         specifier: workspace:*
         version: link:../qa

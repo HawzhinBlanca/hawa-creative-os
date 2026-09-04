@@ -131,6 +131,7 @@ export class CreativeDirectorRunner {
     let currentY = variant.height - 280;
     for (let i = 0; i < brief.exactCopy.length; i++) {
       const block = brief.exactCopy[i];
+      const isEnglish = block.language === 'en' || block.direction === 'ltr';
       ops.push({
         op: 'addText',
         nodeId: `node_text_${i}`,
@@ -144,8 +145,8 @@ export class CreativeDirectorRunner {
         style: {
           fontSize: block.role === 'headline' ? 44 : 26,
           fontWeight: block.role === 'headline' ? 'bold' : 'normal',
-          fontFamily: 'Vazirmatn',
-          textAlign: block.direction === 'rtl' ? 'right' : 'left',
+          fontFamily: isEnglish ? 'Inter' : 'Vazirmatn',
+          textAlign: isEnglish ? 'left' : 'right',
           color: '#FFFFFF',
           lineHeight: 1.3,
         },
@@ -153,6 +154,7 @@ export class CreativeDirectorRunner {
       });
       currentY += 80;
     }
+
 
     return ops;
   }
