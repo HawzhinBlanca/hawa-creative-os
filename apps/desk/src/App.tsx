@@ -13,7 +13,41 @@ import { useI18n } from './services/i18n.js';
 
 export const App: React.FC = () => {
   const { t, isRtl } = useI18n();
-  const [currentScreen, setCurrentScreen] = useState<ScreenId>('inbox');
+
+  const getInitialScreen = (): ScreenId => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      if (validScreens.includes(hash as ScreenId)) return hash as ScreenId;
+      const path = window.location.pathname.replace(/^\//, '').split('/')[0];
+      if (validScreens.includes(path as ScreenId)) return path as ScreenId;
+    }
+    return 'inbox';
+  };
+
+  const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      if (validScreens.includes(hash as ScreenId)) {
+        setCurrentScreen(hash as ScreenId);
+      }
+    };
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, []);
+
+  const handleNavigate = (screen: ScreenId) => {
+    window.location.hash = `#/${screen}`;
+    setCurrentScreen(screen);
+  };
+
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskCopyEn, setTaskCopyEn] = useState('');
@@ -150,10 +184,10 @@ export const App: React.FC = () => {
         setTaskTitle('');
         setTaskCopyEn('');
         setTaskCopyCkb('');
-        setCurrentScreen('review');
+        handleNavigate('review');
       } else {
         setShowNewTaskModal(false);
-        setCurrentScreen('inbox');
+        handleNavigate('inbox');
       }
     } catch {
       // Network failure: queue offline
@@ -163,7 +197,7 @@ export const App: React.FC = () => {
       setTaskTitle('');
       setTaskCopyEn('');
       setTaskCopyCkb('');
-      setCurrentScreen('inbox');
+      handleNavigate('inbox');
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +205,7 @@ export const App: React.FC = () => {
 
   return (
     <div className={`shell ${isRtl ? 'rtl' : 'ltr'}`}>
-      <Sidebar currentScreen={currentScreen} onNavigate={setCurrentScreen} />
+      <Sidebar currentScreen={currentScreen} onNavigate={handleNavigate} />
       <main className="main">
         <Header currentScreen={currentScreen} onNewTask={handleOpenModal} />
         <div className="content">
@@ -180,7 +214,7 @@ export const App: React.FC = () => {
               refreshTrigger={refreshTrigger}
               onSelectReview={(task) => {
                 if (task) setSelectedTask(task);
-                setCurrentScreen('review');
+                handleNavigate('review');
               }}
             />
           )}

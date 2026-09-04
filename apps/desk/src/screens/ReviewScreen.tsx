@@ -9,9 +9,9 @@ interface ReviewScreenProps {
   task?: any;
 }
 
-interface CanvasNode {
+export interface CanvasNode {
   id: string;
-  role: 'headline' | 'copy' | 'shape' | 'logo';
+  role: 'headline' | 'copy' | 'shape' | 'logo' | 'text_custom' | 'shape_custom' | 'badge_custom';
   name: string;
   zIndex: number;
   locked: boolean;
@@ -20,7 +20,19 @@ interface CanvasNode {
   y: number;      // px within artboard space
   width: number;  // px
   height: number; // px
-  rotation?: number;
+  rotation?: number;       // degrees 0-360
+  opacity?: number;        // 0.0 - 1.0
+  borderRadius?: number;   // px
+  backgroundColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  color?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  fontFamily?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  textEn?: string;
+  textCkb?: string;
 }
 
 interface HistoryState {
@@ -82,25 +94,28 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [fontWeight, setFontWeight] = useState<number>(activeBrandKit.typography.headlineWeight);
   const [accentColor, setAccentColor] = useState<string>(activeBrandKit.palette.accent);
 
-  // 4. Spatial Node Positioning & Layers State
+  // 4. Dynamic Canvas Nodes Layer Tree State
   const [nodes, setNodes] = useState<CanvasNode[]>([
-    { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110 },
-    { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52 },
-    { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: false, visible: true, x: 32, y: 28, width: 190, height: 42 },
-    { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15 },
+    { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110, rotation: 0, opacity: 1 },
+    { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52, rotation: 0, opacity: 1 },
+    { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: false, visible: true, x: 32, y: 28, width: 190, height: 42, rotation: 0, opacity: 1 },
+    { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15, opacity: 0.85 },
   ]);
 
-  const [selectedNodeId, setSelectedNodeId] = useState<CanvasNode['role'] | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node_headline');
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const [leftTab, setLeftTab] = useState<'layers' | 'brief'>('layers');
 
   // 5. Pan & Zoom Engine State
   const [zoom, setZoom] = useState<number>(1.0);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [isDraggingNode, setIsDraggingNode] = useState<boolean>(false);
-  const [editingNodeRole, setEditingNodeRole] = useState<CanvasNode['role'] | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
   const [activeTool, setActiveTool] = useState<'select' | 'hand'>('select');
   const viewportRef = useRef<HTMLDivElement>(null);
+  const artboardRef = useRef<HTMLDivElement>(null);
 
   // 6. Magnetic Snap Guides State
   const [snapGuideX, setSnapGuideX] = useState<number | null>(null);
@@ -109,7 +124,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   // 7. Overlays & Modals
   const [showSafeZones, setShowSafeZones] = useState<boolean>(false);
   const [showBidiIsolates, setShowBidiIsolates] = useState<boolean>(false);
-  const [showLayersModal, setShowLayersModal] = useState<boolean>(false);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
@@ -135,7 +149,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     };
     const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
     nextHistory.push(currentState);
-    if (nextHistory.length > 25) nextHistory.shift();
+    if (nextHistory.length > 30) nextHistory.shift();
     historyRef.current = nextHistory;
     historyIndexRef.current = nextHistory.length - 1;
   }, [headlineEn, headlineCkb, copyEn, copyCkb, fontFamily, fontWeight, accentColor, selectedBrandKitId, variant, langVariant, nodes]);
@@ -211,31 +225,207 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     };
   }, []);
 
+  // Layer Management Helpers
+  const handleAddTextLayer = () => {
+    const newId = `text_${Date.now()}`;
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+    const newNode: CanvasNode = {
+      id: newId,
+      role: 'text_custom',
+      name: `Text Layer ${nodes.length + 1}`,
+      zIndex: maxZ + 1,
+      locked: false,
+      visible: true,
+      x: Math.round((currentArtboard.width - 240) / 2),
+      y: Math.round((currentArtboard.height - 50) / 2),
+      width: 240,
+      height: 48,
+      rotation: 0,
+      opacity: 1,
+      fontSize: 20,
+      fontWeight: 700,
+      fontFamily: 'Inter, sans-serif',
+      color: '#ffffff',
+      textAlign: 'center',
+      textEn: 'New Text Layer',
+      textCkb: 'دەقی نوێ',
+    };
+    setNodes((prev) => [...prev, newNode]);
+    setSelectedNodeId(newId);
+    setStudioToast('✓ Added New Text Layer');
+    setTimeout(() => setStudioToast(null), 2500);
+    pushHistory();
+  };
+
+  const handleAddShapeLayer = () => {
+    const newId = `shape_${Date.now()}`;
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+    const newNode: CanvasNode = {
+      id: newId,
+      role: 'shape_custom',
+      name: `Rectangle ${nodes.length + 1}`,
+      zIndex: maxZ + 1,
+      locked: false,
+      visible: true,
+      x: Math.round((currentArtboard.width - 200) / 2),
+      y: Math.round((currentArtboard.height - 140) / 2),
+      width: 200,
+      height: 140,
+      rotation: 0,
+      opacity: 0.9,
+      borderRadius: 12,
+      backgroundColor: accentColor,
+      borderColor: 'rgba(255,255,255,0.2)',
+      borderWidth: 1,
+    };
+    setNodes((prev) => [...prev, newNode]);
+    setSelectedNodeId(newId);
+    setStudioToast('✓ Added Accent Shape');
+    setTimeout(() => setStudioToast(null), 2500);
+    pushHistory();
+  };
+
+  const handleAddBadgeLayer = () => {
+    const newId = `badge_${Date.now()}`;
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+    const newNode: CanvasNode = {
+      id: newId,
+      role: 'badge_custom',
+      name: `Badge ${nodes.length + 1}`,
+      zIndex: maxZ + 1,
+      locked: false,
+      visible: true,
+      x: Math.round((currentArtboard.width - 160) / 2),
+      y: Math.round((currentArtboard.height - 40) / 2),
+      width: 160,
+      height: 38,
+      rotation: 0,
+      opacity: 1,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderColor: 'rgba(255, 255, 255, 0.3)',
+      borderWidth: 1,
+      fontSize: 12,
+      fontWeight: 700,
+      color: '#ffffff',
+      textAlign: 'center',
+      textEn: 'SPECIAL OFFER',
+      textCkb: 'داشکاندنی تایبەت',
+    };
+    setNodes((prev) => [...prev, newNode]);
+    setSelectedNodeId(newId);
+    setStudioToast('✓ Added Promo Badge');
+    setTimeout(() => setStudioToast(null), 2500);
+    pushHistory();
+  };
+
+  const handleDuplicateLayer = (targetId?: string) => {
+    const idToDup = targetId || selectedNodeId;
+    if (!idToDup) return;
+    const target = nodes.find((n) => n.id === idToDup);
+    if (!target) return;
+
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+    const clonedId = `${target.id}_copy_${Date.now()}`;
+    const clonedNode: CanvasNode = {
+      ...JSON.parse(JSON.stringify(target)),
+      id: clonedId,
+      name: `${target.name} (Copy)`,
+      x: Math.min(target.x + 20, currentArtboard.width - target.width),
+      y: Math.min(target.y + 20, currentArtboard.height - target.height),
+      zIndex: maxZ + 1,
+    };
+    setNodes((prev) => [...prev, clonedNode]);
+    setSelectedNodeId(clonedId);
+    setStudioToast(`✓ Duplicated: ${target.name}`);
+    setTimeout(() => setStudioToast(null), 2000);
+    pushHistory();
+  };
+
+  const handleDeleteLayer = (targetId?: string) => {
+    const idToDel = targetId || selectedNodeId;
+    if (!idToDel) return;
+    const target = nodes.find((n) => n.id === idToDel);
+    if (!target) return;
+
+    setNodes((prev) => prev.filter((n) => n.id !== idToDel));
+    if (selectedNodeId === idToDel) {
+      setSelectedNodeId(null);
+    }
+    setStudioToast(`✓ Deleted: ${target.name}`);
+    setTimeout(() => setStudioToast(null), 2000);
+    pushHistory();
+  };
+
+  const handleToggleLayerVisibility = (targetId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setNodes((prev) =>
+      prev.map((n) => (n.id === targetId ? { ...n, visible: !n.visible } : n))
+    );
+    pushHistory();
+  };
+
+  const handleToggleLayerLock = (targetId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setNodes((prev) =>
+      prev.map((n) => (n.id === targetId ? { ...n, locked: !n.locked } : n))
+    );
+    pushHistory();
+  };
+
+  const handleMoveLayerZIndex = (targetId: string, direction: 'up' | 'down' | 'front' | 'back', e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setNodes((prev) => {
+      const target = prev.find((n) => n.id === targetId);
+      if (!target) return prev;
+      let newZ = target.zIndex;
+      const maxZ = prev.reduce((m, n) => Math.max(m, n.zIndex), 0);
+      const minZ = prev.reduce((m, n) => Math.min(m, n.zIndex), 1);
+
+      if (direction === 'front') newZ = maxZ + 1;
+      else if (direction === 'back') newZ = Math.max(1, minZ - 1);
+      else if (direction === 'up') newZ = target.zIndex + 1;
+      else if (direction === 'down') newZ = Math.max(1, target.zIndex - 1);
+
+      return prev.map((n) => (n.id === targetId ? { ...n, zIndex: newZ } : n));
+    });
+    pushHistory();
+  };
+
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable) {
-        return;
-      }
+      const isInputActive = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable;
 
-      if (e.code === 'Space' && !e.repeat) {
-        setIsSpacePressed(true);
-      }
-      if (e.key === 'v' || e.key === 'V') {
-        setActiveTool('select');
-      }
-      if (e.key === 'h' || e.key === 'H') {
-        setActiveTool('hand');
-      }
-      if (e.key === '?') {
-        setShowShortcutsModal(true);
-      }
-      if (e.key === 'Escape') {
-        setSelectedNodeId(null);
-        setShowLayersModal(false);
-        setShowDiffModal(false);
-        setShowExportMenu(false);
-        setShowShortcutsModal(false);
+      if (!isInputActive) {
+        if (e.code === 'Space' && !e.repeat) {
+          setIsSpacePressed(true);
+        }
+        if (e.key === 'v' || e.key === 'V') {
+          setActiveTool('select');
+        }
+        if (e.key === 'h' || e.key === 'H') {
+          setActiveTool('hand');
+        }
+        if (e.key === '?') {
+          setShowShortcutsModal(true);
+        }
+        if (e.key === 'Escape') {
+          setSelectedNodeId(null);
+          setEditingNodeId(null);
+          setRenamingNodeId(null);
+          setShowDiffModal(false);
+          setShowExportMenu(false);
+          setShowShortcutsModal(false);
+        }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+          e.preventDefault();
+          handleDeleteLayer(selectedNodeId);
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedNodeId) {
+          e.preventDefault();
+          handleDuplicateLayer(selectedNodeId);
+        }
       }
 
       // Undo / Redo
@@ -257,12 +447,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       }
 
       // Keyboard Nudge for Selected Element
-      if (selectedNodeId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (!isInputActive && selectedNodeId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const delta = e.shiftKey ? 10 : 1;
         setNodes((prev) =>
           prev.map((n) => {
-            if (n.role !== selectedNodeId || n.locked) return n;
+            if (n.id !== selectedNodeId || n.locked) return n;
             let nx = n.x;
             let ny = n.y;
             if (e.key === 'ArrowUp') ny -= delta;
@@ -287,7 +477,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [undo, redo, selectedNodeId]);
+  }, [undo, redo, selectedNodeId, nodes, currentArtboard]);
 
   // Brand Kit Selector
   const handleSelectBrandKit = (kitId: string) => {
@@ -335,22 +525,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   };
 
   // =========================================================================
-  // BULLETPROOF DIRECT MANIPULATION & RESIZE HANDLERS (Figma/Photoshop Grade)
+  // BULLETPROOF DIRECT MANIPULATION & RESIZE HANDLERS (Apple / Photoshop Grade)
+  // Guaranteed zero "sticking": Uses setPointerCapture and moveEvt.buttons === 0 check.
   // =========================================================================
 
-  // Element Drag-to-Move with Magnetic Snapping
-  const handleElementPointerDown = (e: React.PointerEvent, role: CanvasNode['role']) => {
-    // Only primary mouse button (left-click) starts node dragging
+  const handleElementPointerDown = (e: React.PointerEvent, nodeId: string) => {
+    // Only primary mouse button (left-click)
     if (e.button !== 0) return;
     if (isSpacePressed || activeTool === 'hand') return;
     e.stopPropagation();
-    e.preventDefault(); // Prevent browser text selection and ghost drag
 
-    // Select immediately on pointerdown
-    setSelectedNodeId(role);
+    setSelectedNodeId(nodeId);
 
-    const targetNode = nodes.find((n) => n.role === role);
+    const targetNode = nodes.find((n) => n.id === nodeId);
     if (!targetNode || targetNode.locked) return;
+
+    const currentTarget = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+
+    try {
+      currentTarget.setPointerCapture(pointerId);
+    } catch {
+      // Ignore if pointer capture fails in non-pointer environment
+    }
 
     const startClientX = e.clientX;
     const startClientY = e.clientY;
@@ -359,12 +556,35 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
     let hasMoved = false;
 
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
+      try {
+        if (currentTarget.hasPointerCapture(pointerId)) {
+          currentTarget.releasePointerCapture(pointerId);
+        }
+      } catch {}
+      setSnapGuideX(null);
+      setSnapGuideY(null);
+      setIsDraggingNode(false);
+      if (hasMoved) {
+        pushHistory();
+      }
+    };
+
     const onPointerMove = (moveEvt: PointerEvent) => {
-      moveEvt.preventDefault();
+      // CRITICAL: If mouse button was released outside, clean up instantly! Never stick!
+      if (moveEvt.buttons === 0) {
+        cleanup();
+        return;
+      }
+
       const dx = (moveEvt.clientX - startClientX) / zoom;
       const dy = (moveEvt.clientY - startClientY) / zoom;
 
-      if (!hasMoved && Math.hypot(moveEvt.clientX - startClientX, moveEvt.clientY - startClientY) > 3) {
+      if (!hasMoved && Math.hypot(moveEvt.clientX - startClientX, moveEvt.clientY - startClientY) > 2) {
         hasMoved = true;
         setIsDraggingNode(true);
       }
@@ -375,7 +595,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
         // Magnetic snap to center X (artboard horizontal center)
         const centerX = Math.round((currentArtboard.width - targetNode.width) / 2);
-        if (Math.abs(nextX - centerX) < 10) {
+        if (Math.abs(nextX - centerX) < 8) {
           nextX = centerX;
           setSnapGuideX(currentArtboard.width / 2);
         } else {
@@ -384,7 +604,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
         // Magnetic snap to center Y (artboard vertical center)
         const centerY = Math.round((currentArtboard.height - targetNode.height) / 2);
-        if (Math.abs(nextY - centerY) < 10) {
+        if (Math.abs(nextY - centerY) < 8) {
           nextY = centerY;
           setSnapGuideY(currentArtboard.height / 2);
         } else {
@@ -392,22 +612,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         }
 
         setNodes((prev) =>
-          prev.map((n) => (n.role === role ? { ...n, x: nextX, y: nextY } : n))
+          prev.map((n) => (n.id === nodeId ? { ...n, x: nextX, y: nextY } : n))
         );
       }
     };
 
     const onPointerUp = () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-      window.removeEventListener('blur', onPointerUp);
-      setSnapGuideX(null);
-      setSnapGuideY(null);
-      setIsDraggingNode(false);
-      if (hasMoved) {
-        pushHistory();
-      }
+      cleanup();
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -416,14 +627,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     window.addEventListener('blur', onPointerUp);
   };
 
-  // Transform Handle Resize Handler (8 Cardinal Handles)
-  const handleResizeHandlePointerDown = (e: React.PointerEvent, role: CanvasNode['role'], handle: string) => {
+  // Transform Handle Resize & Rotation Handler (8 Cardinal Handles + 1 Rotation Knob)
+  const handleResizeHandlePointerDown = (e: React.PointerEvent, nodeId: string, handle: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
 
-    const targetNode = nodes.find((n) => n.role === role);
+    const targetNode = nodes.find((n) => n.id === nodeId);
     if (!targetNode || targetNode.locked) return;
+
+    const currentTarget = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+    try {
+      currentTarget.setPointerCapture(pointerId);
+    } catch {}
 
     const startClientX = e.clientX;
     const startClientY = e.clientY;
@@ -434,9 +651,56 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
     let hasResized = false;
 
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
+      try {
+        if (currentTarget.hasPointerCapture(pointerId)) {
+          currentTarget.releasePointerCapture(pointerId);
+        }
+      } catch {}
+      if (hasResized) {
+        pushHistory();
+      }
+    };
+
     const onPointerMove = (moveEvt: PointerEvent) => {
+      if (moveEvt.buttons === 0) {
+        cleanup();
+        return;
+      }
       moveEvt.preventDefault();
       hasResized = true;
+
+      if (handle === 'rot') {
+        // Rotation handle calculation
+        const artboardEl = artboardRef.current;
+        if (!artboardEl) return;
+        const abRect = artboardEl.getBoundingClientRect();
+        const centerScreenX = abRect.left + (startX + startW / 2) * zoom;
+        const centerScreenY = abRect.top + (startY + startH / 2) * zoom;
+        const rad = Math.atan2(moveEvt.clientY - centerScreenY, moveEvt.clientX - centerScreenX);
+        let deg = Math.round((rad * 180) / Math.PI) + 90;
+        deg = (deg % 360 + 360) % 360;
+
+        // Snap to 0°, 45°, 90°, 180°, 270° with 5° tolerance
+        const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315, 360];
+        for (const snap of snapAngles) {
+          if (Math.abs(deg - snap) < 5) {
+            deg = snap === 360 ? 0 : snap;
+            break;
+          }
+        }
+
+        setNodes((prev) =>
+          prev.map((n) => (n.id === nodeId ? { ...n, rotation: deg } : n))
+        );
+        return;
+      }
+
+      // Cardinal Handles Resizing
       const dx = (moveEvt.clientX - startClientX) / zoom;
       const dy = (moveEvt.clientY - startClientY) / zoom;
 
@@ -445,10 +709,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       let newW = startW;
       let newH = startH;
 
-      if (handle.includes('e')) newW = Math.max(40, Math.round(startW + dx));
+      if (handle.includes('e')) newW = Math.max(30, Math.round(startW + dx));
       if (handle.includes('s')) newH = Math.max(20, Math.round(startH + dy));
       if (handle.includes('w')) {
-        const candidateW = Math.max(40, Math.round(startW - dx));
+        const candidateW = Math.max(30, Math.round(startW - dx));
         newX = startX + (startW - candidateW);
         newW = candidateW;
       }
@@ -459,18 +723,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       }
 
       setNodes((prev) =>
-        prev.map((n) => (n.role === role ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
+        prev.map((n) => (n.id === nodeId ? { ...n, x: newX, y: newY, width: newW, height: newH } : n))
       );
     };
 
     const onPointerUp = () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-      window.removeEventListener('blur', onPointerUp);
-      if (hasResized) {
-        pushHistory();
-      }
+      cleanup();
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -491,18 +749,26 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       const startPanY = panOffset.y;
 
       const onPointerMove = (moveEvt: PointerEvent) => {
+        if (moveEvt.buttons === 0) {
+          cleanup();
+          return;
+        }
         setPanOffset({
           x: Math.round(startPanX + (moveEvt.clientX - startClientX)),
           y: Math.round(startPanY + (moveEvt.clientY - startClientY)),
         });
       };
 
-      const onPointerUp = () => {
+      const cleanup = () => {
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('pointercancel', onPointerUp);
         window.removeEventListener('blur', onPointerUp);
         setIsPanning(false);
+      };
+
+      const onPointerUp = () => {
+        cleanup();
       };
 
       window.addEventListener('pointermove', onPointerMove);
@@ -512,24 +778,54 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     } else if (isDirectViewport) {
       // Clicking empty workspace background deselects active layer
       setSelectedNodeId(null);
-      setEditingNodeRole(null);
+      setEditingNodeId(null);
     }
   };
 
-  // Render Transform Bounding Box with Live Dimension Pill and 8 Cardinal Handles
-  const renderTransformBBox = (node: CanvasNode, all8: boolean = true) => (
+  // Alignment Toolbar Operations (Figma / Photoshop Grade)
+  const handleAlign = (action: 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom') => {
+    if (!selectedNodeId) return;
+    const target = nodes.find((n) => n.id === selectedNodeId);
+    if (!target || target.locked) return;
+
+    let nx = target.x;
+    let ny = target.y;
+
+    if (action === 'left') nx = 20;
+    else if (action === 'centerH') nx = Math.round((currentArtboard.width - target.width) / 2);
+    else if (action === 'right') nx = Math.round(currentArtboard.width - target.width - 20);
+    else if (action === 'top') ny = 20;
+    else if (action === 'centerV') ny = Math.round((currentArtboard.height - target.height) / 2);
+    else if (action === 'bottom') ny = Math.round(currentArtboard.height - target.height - 20);
+
+    setNodes((prev) => prev.map((n) => (n.id === selectedNodeId ? { ...n, x: nx, y: ny } : n)));
+    pushHistory();
+  };
+
+  // Render Transform Bounding Box with Live Dimension Pill, 8 Cardinal Handles, and Rotation Stem
+  const renderTransformBBox = (node: CanvasNode) => (
     <div className="transform-bbox" style={{ pointerEvents: 'none' }}>
       <div className="node-dimension-pill">
-        {node.name} · {Math.round(node.width)}×{Math.round(node.height)} ({Math.round(node.x)}, {Math.round(node.y)})
+        {node.name} · {Math.round(node.width)}×{Math.round(node.height)} {node.rotation ? `· ${node.rotation}°` : ''} ({Math.round(node.x)}, {Math.round(node.y)})
       </div>
-      <div className="transform-handle handle-nw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'nw')} />
-      {all8 && <div className="transform-handle handle-n" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'n')} />}
-      <div className="transform-handle handle-ne" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'ne')} />
-      {all8 && <div className="transform-handle handle-e" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'e')} />}
-      <div className="transform-handle handle-se" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'se')} />
-      {all8 && <div className="transform-handle handle-s" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 's')} />}
-      <div className="transform-handle handle-sw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'sw')} />
-      {all8 && <div className="transform-handle handle-w" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.role, 'w')} />}
+
+      {/* Rotation Stem and Knob */}
+      <div className="handle-rot-stem" />
+      <div
+        className="handle-rot"
+        title="Drag to Rotate (hold Shift to snap)"
+        onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'rot')}
+      />
+
+      {/* 8 Cardinal Resize Handles */}
+      <div className="transform-handle handle-nw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'nw')} />
+      <div className="transform-handle handle-n" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'n')} />
+      <div className="transform-handle handle-ne" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'ne')} />
+      <div className="transform-handle handle-e" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'e')} />
+      <div className="transform-handle handle-se" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'se')} />
+      <div className="transform-handle handle-s" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 's')} />
+      <div className="transform-handle handle-sw" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'sw')} />
+      <div className="transform-handle handle-w" onPointerDown={(e) => handleResizeHandlePointerDown(e, node.id, 'w')} />
     </div>
   );
 
@@ -706,12 +1002,435 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     setTimeout(() => setStudioToast(null), 4000);
   };
 
-  // Node Lookups
-  const headlineNode = nodes.find((n) => n.role === 'headline') || nodes[0];
-  const copyNode = nodes.find((n) => n.role === 'copy') || nodes[1];
-  const logoNode = nodes.find((n) => n.role === 'logo') || nodes[2];
-  const shapeNode = nodes.find((n) => n.role === 'shape') || nodes[3];
-  const activeSelectedNode = nodes.find((n) => n.role === selectedNodeId);
+  const activeSelectedNode = nodes.find((n) => n.id === selectedNodeId);
+
+  // Dynamic Layer Rendering Method
+  const renderCanvasNode = (node: CanvasNode) => {
+    const isSelected = selectedNodeId === node.id;
+    const isEditing = editingNodeId === node.id;
+
+    // Node Container Styles
+    const containerStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: `${node.x}px`,
+      top: `${node.y}px`,
+      width: `${node.width}px`,
+      height: `${node.height}px`,
+      zIndex: node.zIndex,
+      transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+      opacity: node.opacity ?? 1,
+      cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && isSelected ? 'grabbing' : 'move',
+      userSelect: 'none',
+      touchAction: 'none',
+    };
+
+    if (node.role === 'headline') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditingNodeId(node.id);
+          }}
+          style={{ ...containerStyle, padding: 4 }}
+        >
+          {isSelected && renderTransformBBox(node)}
+
+          {isEditing ? (
+            <textarea
+              autoFocus
+              value={langVariant === 'ckb' ? headlineCkb : headlineEn}
+              onChange={(e) => {
+                if (langVariant === 'ckb') setHeadlineCkb(e.target.value);
+                else setHeadlineEn(e.target.value);
+              }}
+              onBlur={() => {
+                setEditingNodeId(null);
+                pushHistory();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) {
+                  e.preventDefault();
+                  setEditingNodeId(null);
+                  pushHistory();
+                }
+              }}
+              dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+              style={{
+                width: '100%',
+                minHeight: 60,
+                background: 'rgba(15, 23, 42, 0.88)',
+                color: '#ffffff',
+                border: '2px solid #38BDF8',
+                borderRadius: 6,
+                padding: '4px 8px',
+                fontSize: variant === 'story' ? 22 : 25,
+                fontWeight,
+                lineHeight: 1.25,
+                fontFamily: langVariant === 'ckb' ? 'Vazirmatn, sans-serif' : fontFamily,
+                resize: 'none',
+                outline: 'none',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              }}
+            />
+          ) : (
+            <>
+              {langVariant === 'en' && (
+                <div
+                  dir="ltr"
+                  lang="en"
+                  style={{
+                    fontSize: variant === 'story' ? 24 : 27,
+                    color: '#ffffff',
+                    fontWeight,
+                    lineHeight: 1.25,
+                    outline: 'none',
+                    textAlign: 'left',
+                    fontFamily,
+                    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {headlineEn}
+                </div>
+              )}
+
+              {langVariant === 'ckb' && (
+                <div
+                  dir="rtl"
+                  lang="ckb"
+                  style={{
+                    fontSize: variant === 'story' ? 24 : 27,
+                    color: '#ffffff',
+                    fontWeight,
+                    lineHeight: 1.3,
+                    outline: 'none',
+                    textAlign: 'right',
+                    fontFamily: 'Vazirmatn, sans-serif',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
+                </div>
+              )}
+
+              {langVariant === 'bilingual' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div
+                    dir="ltr"
+                    lang="en"
+                    style={{
+                      fontSize: variant === 'story' ? 22 : 25,
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                      textAlign: 'left',
+                      fontFamily: 'Inter, sans-serif',
+                      borderBottom: '1px solid rgba(255,255,255,0.2)',
+                      paddingBottom: 4,
+                    }}
+                  >
+                    {headlineEn}
+                  </div>
+                  <div
+                    dir="rtl"
+                    lang="ckb"
+                    style={{
+                      fontSize: variant === 'story' ? 18 : 20,
+                      color: accentColor,
+                      fontWeight: 700,
+                      lineHeight: 1.3,
+                      textAlign: 'right',
+                      fontFamily: 'Vazirmatn, sans-serif',
+                    }}
+                  >
+                    {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    if (node.role === 'copy') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditingNodeId(node.id);
+          }}
+          style={{ ...containerStyle, padding: 4 }}
+        >
+          {isSelected && renderTransformBBox(node)}
+
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={langVariant === 'ckb' ? copyCkb : copyEn}
+              onChange={(e) => {
+                if (langVariant === 'ckb') setCopyCkb(e.target.value);
+                else setCopyEn(e.target.value);
+              }}
+              onBlur={() => {
+                setEditingNodeId(null);
+                pushHistory();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                  e.preventDefault();
+                  setEditingNodeId(null);
+                  pushHistory();
+                }
+              }}
+              dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+              style={{
+                width: '100%',
+                background: 'rgba(15, 23, 42, 0.92)',
+                color: '#ffffff',
+                border: '2px solid #38BDF8',
+                borderRadius: 6,
+                padding: '4px 8px',
+                fontSize: 14,
+                fontWeight: 700,
+                outline: 'none',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              }}
+            />
+          ) : (
+            <div
+              dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+              lang={langVariant === 'ckb' ? 'ckb' : 'en'}
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: '#0F172A',
+                outline: 'none',
+                textAlign: langVariant === 'ckb' ? 'right' : 'left',
+                background: activeBrandKit.palette.cardBg,
+                padding: '6px 14px',
+                borderRadius: 8,
+                display: 'inline-block',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+              }}
+            >
+              {langVariant === 'bilingual'
+                ? `${copyEn} · \u2067${copyCkb}\u2069`
+                : langVariant === 'ckb'
+                ? showBidiIsolates ? `⸢\u2067${copyCkb}\u2069⸥` : copyCkb
+                : copyEn}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (node.role === 'logo') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          style={{
+            ...containerStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '4px 12px',
+            background: 'rgba(0,0,0,0.5)',
+            borderRadius: 6,
+            border: '1px solid rgba(255,255,255,0.25)',
+          }}
+          title={activeBrandKit.verifiedSha256}
+        >
+          <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{activeBrandKit.logoText}</span>
+          <span style={{ fontSize: 9, color: '#10B981' }}>✓</span>
+          {isSelected && renderTransformBBox(node)}
+        </div>
+      );
+    }
+
+    if (node.role === 'shape') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          style={{
+            ...containerStyle,
+            borderRadius: '50%',
+            background: accentColor,
+            transform: `rotate(${node.rotation || 15}deg)`,
+            opacity: node.opacity ?? 0.85,
+          }}
+        >
+          {isSelected && renderTransformBBox(node)}
+        </div>
+      );
+    }
+
+    if (node.role === 'text_custom') {
+      const textVal = langVariant === 'ckb' ? (node.textCkb || node.textEn) : node.textEn;
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditingNodeId(node.id);
+          }}
+          style={{
+            ...containerStyle,
+            padding: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: node.textAlign === 'center' ? 'center' : node.textAlign === 'right' ? 'flex-end' : 'flex-start',
+          }}
+        >
+          {isSelected && renderTransformBBox(node)}
+
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={node.textEn || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNodes((prev) => prev.map((n) => (n.id === node.id ? { ...n, textEn: val } : n)));
+              }}
+              onBlur={() => {
+                setEditingNodeId(null);
+                pushHistory();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                  e.preventDefault();
+                  setEditingNodeId(null);
+                  pushHistory();
+                }
+              }}
+              style={{
+                width: '100%',
+                background: 'rgba(15, 23, 42, 0.92)',
+                color: '#ffffff',
+                border: '2px solid #38BDF8',
+                borderRadius: 4,
+                padding: '3px 6px',
+                fontSize: node.fontSize || 18,
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                fontSize: node.fontSize || 18,
+                fontWeight: node.fontWeight || 600,
+                fontFamily: node.fontFamily || 'Inter, sans-serif',
+                color: node.color || '#ffffff',
+                textAlign: node.textAlign || 'center',
+                textShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                width: '100%',
+              }}
+            >
+              {textVal}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (node.role === 'shape_custom') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          style={{
+            ...containerStyle,
+            borderRadius: node.borderRadius ?? 12,
+            background: node.backgroundColor || accentColor,
+            border: `${node.borderWidth ?? 1}px solid ${node.borderColor ?? 'rgba(255,255,255,0.2)'}`,
+          }}
+        >
+          {isSelected && renderTransformBBox(node)}
+        </div>
+      );
+    }
+
+    if (node.role === 'badge_custom') {
+      const textVal = langVariant === 'ckb' ? (node.textCkb || node.textEn) : node.textEn;
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditingNodeId(node.id);
+          }}
+          style={{
+            ...containerStyle,
+            borderRadius: node.borderRadius ?? 999,
+            background: node.backgroundColor || 'rgba(255,255,255,0.18)',
+            border: `${node.borderWidth ?? 1}px solid ${node.borderColor ?? 'rgba(255,255,255,0.3)'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '2px 10px',
+          }}
+        >
+          {isSelected && renderTransformBBox(node)}
+
+          {isEditing ? (
+            <input
+              autoFocus
+              type="text"
+              value={node.textEn || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNodes((prev) => prev.map((n) => (n.id === node.id ? { ...n, textEn: val } : n)));
+              }}
+              onBlur={() => {
+                setEditingNodeId(null);
+                pushHistory();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                  e.preventDefault();
+                  setEditingNodeId(null);
+                  pushHistory();
+                }
+              }}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                color: '#ffffff',
+                border: 'none',
+                textAlign: 'center',
+                fontSize: node.fontSize || 12,
+                fontWeight: 700,
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                fontSize: node.fontSize || 12,
+                fontWeight: node.fontWeight || 700,
+                color: node.color || '#ffffff',
+                letterSpacing: '0.04em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {textVal}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <section id="review" className="screen active" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
@@ -737,7 +1456,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         </div>
       )}
 
-      {/* Studio Top Control Strip (Brand Kits, Formats, Tools, Undo/Redo, Export) */}
+      {/* Studio Top Control Strip */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -940,55 +1659,243 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         </div>
       </div>
 
-      {/* Main Review Grid */}
-      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '260px 1fr 290px' }}>
-        {/* Left Column: Request, Brief & Timeline */}
-        <div className="panel" style={{ overflowY: 'auto' }}>
-          <div className="meta" style={{ marginBottom: 8 }}>
-            <span className="pill ok">{activeBrandKit.name.split(' ')[0]}</span>
-            <span className="pill">Rev {repairCycles + 1}</span>
-            {taskId && <span className="pill blue">ID: {taskId.substring(0, 8)}…</span>}
+      {/* Main Review Grid: Left Column (Layers & Brief), Center (Canvas), Right (Inspector) */}
+      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '270px 1fr 300px' }}>
+        {/* Left Column: Dual Tab Layout (Layers Tree vs Brief & Timeline) */}
+        <div className="panel" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {/* Dual Tab Switcher */}
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 10 }}>
+            <button
+              className={`btn ${leftTab === 'layers' ? 'primary' : ''}`}
+              style={{ flex: 1, fontSize: 11, padding: '4px 6px', fontWeight: 600 }}
+              onClick={() => setLeftTab('layers')}
+            >
+              📑 Layers ({nodes.length})
+            </button>
+            <button
+              className={`btn ${leftTab === 'brief' ? 'primary' : ''}`}
+              style={{ flex: 1, fontSize: 11, padding: '4px 6px', fontWeight: 600 }}
+              onClick={() => setLeftTab('brief')}
+            >
+              📋 Brief & Timeline
+            </button>
           </div>
-          <h2 style={{ fontSize: 17, margin: '0 0 10px' }}>{taskTitle}</h2>
 
-          <div className="request">
-            <b>Client Intent</b>
-            <p dir="rtl" lang="ckb" style={{ margin: '4px 0 0' }}>
-              {taskCopy}
-            </p>
-          </div>
+          {leftTab === 'layers' ? (
+            /* Layer Tree View with Add Layer Toolbar */
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              {/* Quick Add Layer Bar */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginBottom: 8 }}>
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: '4px 2px', fontWeight: 600 }}
+                  onClick={handleAddTextLayer}
+                  title="Add new text layer"
+                >
+                  + Text
+                </button>
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: '4px 2px', fontWeight: 600 }}
+                  onClick={handleAddShapeLayer}
+                  title="Add new shape layer"
+                >
+                  + Shape
+                </button>
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: '4px 2px', fontWeight: 600 }}
+                  onClick={handleAddBadgeLayer}
+                  title="Add new badge layer"
+                >
+                  + Badge
+                </button>
+              </div>
 
-          <h3 style={{ marginTop: 14 }}>Locked Exact Brief</h3>
-          <div className="exact" dir="rtl" lang="ckb">
-            <b style={{ fontSize: 14 }}>{taskCopy.length > 40 ? taskCopy.substring(0, 40) + '…' : taskCopy}</b>
-            <div style={{ marginTop: 6, color: '#016E7D', fontWeight: 700 }}>{activeCopy}</div>
-          </div>
-          <small style={{ color: 'var(--muted)', display: 'block', marginBottom: 14 }}>
-            Invariant #5: exact facts and price tokens preserved
-          </small>
+              {/* Layers List (Ordered by zIndex descending) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', flex: 1 }}>
+                {nodes
+                  .slice()
+                  .sort((a, b) => b.zIndex - a.zIndex)
+                  .map((node) => {
+                    const isSelected = selectedNodeId === node.id;
+                    return (
+                      <div
+                        key={node.id}
+                        className={`layer-item-row ${isSelected ? 'selected' : ''}`}
+                        onClick={() => setSelectedNodeId(node.id)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 11, opacity: 0.7 }}>
+                            {node.role === 'headline' || node.role === 'text_custom' ? 'T' : node.role === 'logo' ? '★' : '◻'}
+                          </span>
 
-          <h3>Durable Timeline</h3>
-          <div className="timeline">
-            <div className="step done">
-              <b>Request Captured</b>
-              <small>Normalized multi-format brief</small>
+                          {renamingNodeId === node.id ? (
+                            <input
+                              autoFocus
+                              type="text"
+                              value={node.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNodes((prev) => prev.map((n) => (n.id === node.id ? { ...n, name: val } : n)));
+                              }}
+                              onBlur={() => {
+                                setRenamingNodeId(null);
+                                pushHistory();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                  setRenamingNodeId(null);
+                                  pushHistory();
+                                }
+                              }}
+                              style={{ width: '100%', fontSize: 11, padding: '1px 4px', borderRadius: 4, border: '1px solid var(--accent)' }}
+                            />
+                          ) : (
+                            <span
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingNodeId(node.id);
+                              }}
+                              style={{
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                textDecoration: !node.visible ? 'line-through' : 'none',
+                                opacity: !node.visible ? 0.45 : 1,
+                              }}
+                              title="Double-click to rename"
+                            >
+                              {node.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Layer Actions (Visibility, Lock, Reorder, Delete) */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            className="btn"
+                            style={{ padding: '1px 4px', fontSize: 10, opacity: node.visible ? 0.9 : 0.3 }}
+                            onClick={(e) => handleToggleLayerVisibility(node.id, e)}
+                            title={node.visible ? 'Hide Layer' : 'Show Layer'}
+                          >
+                            {node.visible ? '👁' : '🚫'}
+                          </button>
+
+                          <button
+                            className="btn"
+                            style={{ padding: '1px 4px', fontSize: 10, opacity: node.locked ? 1 : 0.4 }}
+                            onClick={(e) => handleToggleLayerLock(node.id, e)}
+                            title={node.locked ? 'Unlock Layer' : 'Lock Layer'}
+                          >
+                            {node.locked ? '🔒' : '🔓'}
+                          </button>
+
+                          <button
+                            className="btn"
+                            style={{ padding: '1px 4px', fontSize: 9 }}
+                            onClick={(e) => handleMoveLayerZIndex(node.id, 'up', e)}
+                            title="Bring Layer Forward"
+                          >
+                            ▲
+                          </button>
+
+                          <button
+                            className="btn"
+                            style={{ padding: '1px 4px', fontSize: 9 }}
+                            onClick={(e) => handleMoveLayerZIndex(node.id, 'down', e)}
+                            title="Send Layer Backward"
+                          >
+                            ▼
+                          </button>
+
+                          <button
+                            className="btn"
+                            style={{ padding: '1px 4px', fontSize: 9, color: '#EF4444' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteLayer(node.id);
+                            }}
+                            title="Delete Layer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Duplicate Selected Layer Button */}
+              {selectedNodeId && (
+                <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                  <button
+                    className="btn"
+                    style={{ flex: 1, fontSize: 10, padding: '4px' }}
+                    onClick={() => handleDuplicateLayer()}
+                  >
+                    Duplicate (Cmd+D)
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ flex: 1, fontSize: 10, padding: '4px', color: '#EF4444' }}
+                    onClick={() => handleDeleteLayer()}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="step done">
-              <b>Client Scope Locked</b>
-              <small>Scope: {clientId}</small>
+          ) : (
+            /* Brief & Timeline Tab */
+            <div style={{ overflowY: 'auto' }}>
+              <div className="meta" style={{ marginBottom: 8 }}>
+                <span className="pill ok">{activeBrandKit.name.split(' ')[0]}</span>
+                <span className="pill">Rev {repairCycles + 1}</span>
+                {taskId && <span className="pill blue">ID: {taskId.substring(0, 8)}…</span>}
+              </div>
+              <h2 style={{ fontSize: 16, margin: '0 0 10px' }}>{taskTitle}</h2>
+
+              <div className="request">
+                <b>Client Intent</b>
+                <p dir="rtl" lang="ckb" style={{ margin: '4px 0 0' }}>
+                  {taskCopy}
+                </p>
+              </div>
+
+              <h3 style={{ marginTop: 14 }}>Locked Exact Brief</h3>
+              <div className="exact" dir="rtl" lang="ckb">
+                <b style={{ fontSize: 14 }}>{taskCopy.length > 40 ? taskCopy.substring(0, 40) + '…' : taskCopy}</b>
+                <div style={{ marginTop: 6, color: '#016E7D', fontWeight: 700 }}>{activeCopy}</div>
+              </div>
+              <small style={{ color: 'var(--muted)', display: 'block', marginBottom: 14 }}>
+                Invariant #5: exact facts and price tokens preserved
+              </small>
+
+              <h3>Durable Timeline</h3>
+              <div className="timeline">
+                <div className="step done">
+                  <b>Request Captured</b>
+                  <small>Normalized multi-format brief</small>
+                </div>
+                <div className="step done">
+                  <b>Client Scope Locked</b>
+                  <small>Scope: {clientId}</small>
+                </div>
+                <div className="step done">
+                  <b>HyCanvas v0.4.0 Live</b>
+                  <small>{activeBrandKit.verifiedSha256.substring(0, 16)}…</small>
+                </div>
+                <div className="step done">
+                  <b>Deterministic QA Passed</b>
+                  <small>AAA contrast, safe zone compliance</small>
+                </div>
+                <div className={`step ${approved ? 'done' : ''}`}>
+                  <b>{published ? 'Published to Google Drive' : approved ? 'Approved' : 'Awaiting Decision'}</b>
+                </div>
+              </div>
             </div>
-            <div className="step done">
-              <b>HyCanvas v0.4.0 Live</b>
-              <small>{activeBrandKit.verifiedSha256.substring(0, 16)}…</small>
-            </div>
-            <div className="step done">
-              <b>Deterministic QA Passed</b>
-              <small>AAA contrast, safe zone compliance</small>
-            </div>
-            <div className={`step ${approved ? 'done' : ''}`}>
-              <b>{published ? 'Published to Google Drive' : approved ? 'Approved' : 'Awaiting Decision'}</b>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Center Column: Pro Studio Interactive Viewport */}
@@ -1003,6 +1910,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
           {/* Scaled & Panned Artboard */}
           <div
+            ref={artboardRef}
             className="artboard-container"
             style={{
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
@@ -1010,11 +1918,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               height: `${currentArtboard.height}px`,
               background: activeBrandKit.palette.background,
               borderRadius: 8,
-              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.45)',
+              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)',
               position: 'relative',
               overflow: 'hidden',
             }}
           >
+            {/* Artboard Floating Header Tag */}
+            <div className="artboard-header-tag">
+              <span>{FORMAT_DIMENSIONS[variant].label.split(' ')[0]}</span>
+              <span>·</span>
+              <span>{currentArtboard.width} × {currentArtboard.height}</span>
+              <span>·</span>
+              <span>{Math.round(zoom * 100)}%</span>
+            </div>
+
             {/* Safe Zone Overlay */}
             {showSafeZones && (
               <div
@@ -1024,7 +1941,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   border: '2px dashed rgba(56, 189, 248, 0.75)',
                   borderRadius: 6,
                   pointerEvents: 'none',
-                  zIndex: 30,
+                  zIndex: 40,
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'flex-start',
@@ -1037,286 +1954,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               </div>
             )}
 
-            {/* Accent Organic Shape Node */}
-            {shapeNode.visible && (
-              <div
-                onPointerDown={(e) => handleElementPointerDown(e, 'shape')}
-                style={{
-                  position: 'absolute',
-                  left: `${shapeNode.x}px`,
-                  top: `${shapeNode.y}px`,
-                  width: `${shapeNode.width}px`,
-                  height: `${shapeNode.height}px`,
-                  borderRadius: '50%',
-                  background: accentColor,
-                  transform: langVariant === 'ckb' ? 'rotate(-15deg)' : 'rotate(15deg)',
-                  zIndex: shapeNode.zIndex,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'shape' ? 'grabbing' : 'move',
-                  opacity: 0.85,
-                  userSelect: 'none',
-                  touchAction: 'none',
-                }}
-              >
-                {selectedNodeId === 'shape' && renderTransformBBox(shapeNode, true)}
-              </div>
-            )}
-
-            {/* Brand Logo Node */}
-            {logoNode.visible && (
-              <div
-                onPointerDown={(e) => handleElementPointerDown(e, 'logo')}
-                style={{
-                  position: 'absolute',
-                  left: `${logoNode.x}px`,
-                  top: `${logoNode.y}px`,
-                  width: `${logoNode.width}px`,
-                  height: `${logoNode.height}px`,
-                  zIndex: logoNode.zIndex,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '4px 12px',
-                  background: 'rgba(0,0,0,0.5)',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'logo' ? 'grabbing' : 'move',
-                  userSelect: 'none',
-                  touchAction: 'none',
-                }}
-                title={activeBrandKit.verifiedSha256}
-              >
-                <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{activeBrandKit.logoText}</span>
-                <span style={{ fontSize: 9, color: '#10B981' }}>✓</span>
-
-                {selectedNodeId === 'logo' && renderTransformBBox(logoNode, true)}
-              </div>
-            )}
-
-            {/* Live Editable Headline Node */}
-            {headlineNode.visible && (
-              <div
-                onPointerDown={(e) => handleElementPointerDown(e, 'headline')}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingNodeRole('headline');
-                }}
-                style={{
-                  position: 'absolute',
-                  left: `${headlineNode.x}px`,
-                  top: `${headlineNode.y}px`,
-                  width: `${headlineNode.width}px`,
-                  zIndex: headlineNode.zIndex,
-                  padding: 4,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'headline' ? 'grabbing' : 'move',
-                  userSelect: 'none',
-                  touchAction: 'none',
-                }}
-              >
-                {selectedNodeId === 'headline' && renderTransformBBox(headlineNode, true)}
-
-                {/* Inline Editing Mode */}
-                {editingNodeRole === 'headline' ? (
-                  <textarea
-                    autoFocus
-                    value={langVariant === 'ckb' ? headlineCkb : headlineEn}
-                    onChange={(e) => {
-                      if (langVariant === 'ckb') setHeadlineCkb(e.target.value);
-                      else setHeadlineEn(e.target.value);
-                    }}
-                    onBlur={() => {
-                      setEditingNodeRole(null);
-                      pushHistory();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) {
-                        e.preventDefault();
-                        setEditingNodeRole(null);
-                        pushHistory();
-                      }
-                    }}
-                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
-                    style={{
-                      width: '100%',
-                      minHeight: 60,
-                      background: 'rgba(15, 23, 42, 0.88)',
-                      color: '#ffffff',
-                      border: '2px solid #38BDF8',
-                      borderRadius: 6,
-                      padding: '4px 8px',
-                      fontSize: variant === 'story' ? 22 : 25,
-                      fontWeight,
-                      lineHeight: 1.25,
-                      fontFamily: langVariant === 'ckb' ? 'Vazirmatn, sans-serif' : fontFamily,
-                      resize: 'none',
-                      outline: 'none',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    }}
-                  />
-                ) : (
-                  <>
-                    {/* English Primary */}
-                    {langVariant === 'en' && (
-                      <div
-                        dir="ltr"
-                        lang="en"
-                        style={{
-                          fontSize: variant === 'story' ? 24 : 27,
-                          color: '#ffffff',
-                          fontWeight,
-                          lineHeight: 1.25,
-                          outline: 'none',
-                          textAlign: 'left',
-                          fontFamily,
-                          textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        }}
-                      >
-                        {headlineEn}
-                      </div>
-                    )}
-
-                    {/* Kurdish Secondary */}
-                    {langVariant === 'ckb' && (
-                      <div
-                        dir="rtl"
-                        lang="ckb"
-                        style={{
-                          fontSize: variant === 'story' ? 24 : 27,
-                          color: '#ffffff',
-                          fontWeight,
-                          lineHeight: 1.3,
-                          outline: 'none',
-                          textAlign: 'right',
-                          fontFamily: 'Vazirmatn, sans-serif',
-                          textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                        }}
-                      >
-                        {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : headlineCkb}
-                      </div>
-                    )}
-
-                    {/* Bilingual Overlay */}
-                    {langVariant === 'bilingual' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div
-                          dir="ltr"
-                          lang="en"
-                          style={{
-                            fontSize: variant === 'story' ? 22 : 25,
-                            color: '#ffffff',
-                            fontWeight: 800,
-                            lineHeight: 1.2,
-                            textAlign: 'left',
-                            fontFamily: 'Inter, sans-serif',
-                            borderBottom: '1px solid rgba(255,255,255,0.2)',
-                            paddingBottom: 4,
-                          }}
-                        >
-                          {headlineEn}
-                        </div>
-                        <div
-                          dir="rtl"
-                          lang="ckb"
-                          style={{
-                            fontSize: variant === 'story' ? 18 : 20,
-                            color: accentColor,
-                            fontWeight: 700,
-                            lineHeight: 1.3,
-                            textAlign: 'right',
-                            fontFamily: 'Vazirmatn, sans-serif',
-                          }}
-                        >
-                          {showBidiIsolates ? `⸢\u2067${headlineCkb}\u2069⸥` : `\u2067${headlineCkb}\u2069`}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Price & Offer Copy Badge Node */}
-            {copyNode.visible && (
-              <div
-                onPointerDown={(e) => handleElementPointerDown(e, 'copy')}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingNodeRole('copy');
-                }}
-                style={{
-                  position: 'absolute',
-                  left: `${copyNode.x}px`,
-                  top: `${copyNode.y}px`,
-                  width: `${copyNode.width}px`,
-                  zIndex: copyNode.zIndex,
-                  padding: 4,
-                  cursor: activeTool === 'hand' || isSpacePressed ? 'grab' : isDraggingNode && selectedNodeId === 'copy' ? 'grabbing' : 'move',
-                  userSelect: 'none',
-                  touchAction: 'none',
-                }}
-              >
-                {selectedNodeId === 'copy' && renderTransformBBox(copyNode, true)}
-
-                {/* Inline Editing Mode */}
-                {editingNodeRole === 'copy' ? (
-                  <input
-                    autoFocus
-                    type="text"
-                    value={langVariant === 'ckb' ? copyCkb : copyEn}
-                    onChange={(e) => {
-                      if (langVariant === 'ckb') setCopyCkb(e.target.value);
-                      else setCopyEn(e.target.value);
-                    }}
-                    onBlur={() => {
-                      setEditingNodeRole(null);
-                      pushHistory();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape' || e.key === 'Enter') {
-                        e.preventDefault();
-                        setEditingNodeRole(null);
-                        pushHistory();
-                      }
-                    }}
-                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(15, 23, 42, 0.92)',
-                      color: '#ffffff',
-                      border: '2px solid #38BDF8',
-                      borderRadius: 6,
-                      padding: '4px 8px',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      outline: 'none',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    }}
-                  />
-                ) : (
-                  <div
-                    dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
-                    lang={langVariant === 'ckb' ? 'ckb' : 'en'}
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 700,
-                      color: '#0F172A',
-                      outline: 'none',
-                      textAlign: langVariant === 'ckb' ? 'right' : 'left',
-                      background: activeBrandKit.palette.cardBg,
-                      padding: '6px 14px',
-                      borderRadius: 8,
-                      display: 'inline-block',
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    {langVariant === 'bilingual'
-                      ? `${copyEn} · \u2067${copyCkb}\u2069`
-                      : langVariant === 'ckb'
-                      ? showBidiIsolates ? `⸢\u2067${copyCkb}\u2069⸥` : copyCkb
-                      : copyEn}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Render All Dynamic Canvas Nodes in zIndex Order */}
+            {nodes
+              .filter((n) => n.visible)
+              .sort((a, b) => a.zIndex - b.zIndex)
+              .map((node) => renderCanvasNode(node))}
 
             {/* Verified Contact Token Footprint */}
             <div style={{
@@ -1336,7 +1978,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </div>
           </div>
 
-          {/* Floating Zoom & Canvas HUD */}
+          {/* Floating Bottom Studio HUD (Zoom, Tools, Fit) */}
           <div className="zoom-hud studio-glass">
             <button
               className="zoom-btn"
@@ -1364,13 +2006,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </button>
             <button
               className="zoom-btn"
-              style={{ width: 'auto', padding: '0 6px', borderRadius: 10, fontSize: 10 }}
+              style={{ width: 'auto', padding: '0 8px', borderRadius: 10, fontSize: 10, fontWeight: 600 }}
               onClick={() => {
                 setZoom(1.0);
                 setPanOffset({ x: 0, y: 0 });
               }}
             >
-              Fit
+              Fit View
             </button>
           </div>
         </div>
@@ -1378,8 +2020,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         {/* Right Column: Pro Inspector & Decision Gate */}
         <div className="panel" style={{ overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 14 }}>
-              {activeSelectedNode ? `Layer: ${activeSelectedNode.name}` : 'Document Inspector'}
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>
+              {activeSelectedNode ? `Layer: ${activeSelectedNode.name}` : 'Artboard Inspector'}
             </h3>
             {activeSelectedNode && (
               <button
@@ -1395,7 +2037,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           {/* Conditional Layer Inspector */}
           {activeSelectedNode ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Spatial Positioning Box */}
+              {/* Spatial Positioning & Transform Box */}
               <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
                   TRANSFORM & DIMENSIONS
@@ -1408,9 +2050,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       value={activeSelectedNode.x}
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 0;
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: val } : n));
+                        setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, x: val } : n)));
                       }}
-                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      onBlur={pushHistory}
+                      style={{ width: 64, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
                     />
                   </div>
                   <div>
@@ -1420,9 +2063,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       value={activeSelectedNode.y}
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 0;
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: val } : n));
+                        setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, y: val } : n)));
                       }}
-                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      onBlur={pushHistory}
+                      style={{ width: 64, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
                     />
                   </div>
                   <div>
@@ -1432,9 +2076,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       value={activeSelectedNode.width}
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 10;
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, width: val } : n));
+                        setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, width: val } : n)));
                       }}
-                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      onBlur={pushHistory}
+                      style={{ width: 64, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
                     />
                   </div>
                   <div>
@@ -1444,106 +2089,86 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       value={activeSelectedNode.height}
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 10;
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, height: val } : n));
+                        setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, height: val } : n)));
                       }}
-                      style={{ width: 60, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      onBlur={pushHistory}
+                      style={{ width: 64, padding: '2px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
                     />
                   </div>
                 </div>
 
-                {/* 6 Quick Alignment Actions (Photoshop / Figma Grade) */}
+                {/* Rotation & Opacity Sliders */}
                 <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
+                    <span>Rotation:</span>
+                    <b>{activeSelectedNode.rotation || 0}°</b>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    value={activeSelectedNode.rotation || 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, rotation: val } : n)));
+                    }}
+                    onMouseUp={pushHistory}
+                    className="pro-slider"
+                  />
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
+                    <span>Opacity:</span>
+                    <b>{Math.round((activeSelectedNode.opacity ?? 1) * 100)}%</b>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={100}
+                    value={Math.round((activeSelectedNode.opacity ?? 1) * 100)}
+                    onChange={(e) => {
+                      const val = (parseInt(e.target.value) || 100) / 100;
+                      setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, opacity: val } : n)));
+                    }}
+                    onMouseUp={pushHistory}
+                    className="pro-slider"
+                  />
+                </div>
+
+                {/* 6 Quick Alignment Actions (Photoshop / Figma Grade) */}
+                <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
                     ALIGN TO ARTBOARD
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
-                    <button
-                      className="btn"
-                      title="Align Left"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: 20 } : n));
-                        pushHistory();
-                      }}
-                    >⇤</button>
-                    <button
-                      className="btn"
-                      title="Align Horizontal Center"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        const cx = Math.round((currentArtboard.width - activeSelectedNode.width) / 2);
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: cx } : n));
-                        pushHistory();
-                      }}
-                    >⇹</button>
-                    <button
-                      className="btn"
-                      title="Align Right"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        const rx = Math.round(currentArtboard.width - activeSelectedNode.width - 20);
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, x: rx } : n));
-                        pushHistory();
-                      }}
-                    >⇥</button>
-                    <button
-                      className="btn"
-                      title="Align Top"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: 20 } : n));
-                        pushHistory();
-                      }}
-                    >⤒</button>
-                    <button
-                      className="btn"
-                      title="Align Vertical Center"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        const cy = Math.round((currentArtboard.height - activeSelectedNode.height) / 2);
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: cy } : n));
-                        pushHistory();
-                      }}
-                    >⬍</button>
-                    <button
-                      className="btn"
-                      title="Align Bottom"
-                      style={{ fontSize: 11, padding: '3px 0' }}
-                      onClick={() => {
-                        const by = Math.round(currentArtboard.height - activeSelectedNode.height - 20);
-                        setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, y: by } : n));
-                        pushHistory();
-                      }}
-                    >⤓</button>
+                    <button className="btn" title="Align Left" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('left')}>⇤</button>
+                    <button className="btn" title="Align Horizontal Center" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('centerH')}>⇹</button>
+                    <button className="btn" title="Align Right" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('right')}>⇥</button>
+                    <button className="btn" title="Align Top" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('top')}>⤒</button>
+                    <button className="btn" title="Align Vertical Center" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('centerV')}>⬍</button>
+                    <button className="btn" title="Align Bottom" style={{ fontSize: 11, padding: '3px 0' }} onClick={() => handleAlign('bottom')}>⤓</button>
                   </div>
                 </div>
 
                 {/* Layer Hierarchy (Z-Index) */}
-                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button
-                    className="btn"
-                    style={{ flex: 1, fontSize: 10, padding: '4px' }}
-                    onClick={() => {
-                      setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, zIndex: n.zIndex + 1 } : n));
-                      pushHistory();
-                    }}
-                  >
-                    ↑ Bring Forward
+                <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'up')}>
+                    ▲ Forward
                   </button>
-                  <button
-                    className="btn"
-                    style={{ flex: 1, fontSize: 10, padding: '4px' }}
-                    onClick={() => {
-                      setNodes((prev) => prev.map((n) => n.role === activeSelectedNode.role ? { ...n, zIndex: Math.max(1, n.zIndex - 1) } : n));
-                      pushHistory();
-                    }}
-                  >
-                    ↓ Send Backward
+                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'down')}>
+                    ▼ Backward
+                  </button>
+                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'front')}>
+                    ⤒ Front
+                  </button>
+                  <button className="btn" style={{ flex: 1, fontSize: 10, padding: '4px' }} onClick={() => handleMoveLayerZIndex(activeSelectedNode.id, 'back')}>
+                    ⤓ Back
                   </button>
                 </div>
               </div>
 
-              {/* Layer-Specific Properties */}
+              {/* Layer-Specific Properties: Headline */}
               {activeSelectedNode.role === 'headline' && (
                 <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
@@ -1573,6 +2198,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </div>
               )}
 
+              {/* Layer-Specific Properties: Copy / Badge */}
               {activeSelectedNode.role === 'copy' && (
                 <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
@@ -1602,17 +2228,76 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </div>
               )}
 
-              {activeSelectedNode.role === 'shape' && (
+              {/* Layer-Specific Properties: Custom Text */}
+              {activeSelectedNode.role === 'text_custom' && (
                 <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
-                    ORGANIC ACCENT COLOR
+                    TEXT TYPOGRAPHY & VALUE
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {[activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6', '#EC4899'].map((c) => (
+                  <div style={{ marginBottom: 6 }}>
+                    <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>English Value:</small>
+                    <input
+                      type="text"
+                      value={activeSelectedNode.textEn || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, textEn: val } : n)));
+                      }}
+                      onBlur={pushHistory}
+                      style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                    <div>
+                      <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Font Size:</small>
+                      <input
+                        type="number"
+                        value={activeSelectedNode.fontSize || 18}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 12;
+                          setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, fontSize: val } : n)));
+                        }}
+                        onBlur={pushHistory}
+                        style={{ width: '100%', padding: '3px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      />
+                    </div>
+                    <div>
+                      <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Weight:</small>
+                      <select
+                        value={activeSelectedNode.fontWeight || 600}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 400;
+                          setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, fontWeight: val } : n)));
+                          pushHistory();
+                        }}
+                        style={{ width: '100%', padding: '3px 4px', fontSize: 11, borderRadius: 4, border: '1px solid var(--line)' }}
+                      >
+                        <option value={400}>Regular (400)</option>
+                        <option value={600}>SemiBold (600)</option>
+                        <option value={700}>Bold (700)</option>
+                        <option value={800}>ExtraBold (800)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Layer-Specific Properties: Shape & Accent */}
+              {(activeSelectedNode.role === 'shape' || activeSelectedNode.role === 'shape_custom' || activeSelectedNode.role === 'badge_custom') && (
+                <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
+                    FILL COLOR & RADIUS
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {[activeBrandKit.palette.accent, '#38BDF8', '#10B981', '#E9B666', '#8B5CF6', '#EC4899', '#ffffff'].map((c) => (
                       <div
                         key={c}
                         onClick={() => {
-                          setAccentColor(c);
+                          if (activeSelectedNode.role === 'shape') {
+                            setAccentColor(c);
+                          } else {
+                            setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, backgroundColor: c } : n)));
+                          }
                           pushHistory();
                         }}
                         style={{
@@ -1621,14 +2306,34 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                           borderRadius: '50%',
                           background: c,
                           cursor: 'pointer',
-                          border: accentColor === c ? '2px solid #000' : '1px solid rgba(0,0,0,0.2)',
+                          border: (activeSelectedNode.backgroundColor || accentColor) === c ? '2px solid #000' : '1px solid rgba(0,0,0,0.2)',
+                          boxShadow: (activeSelectedNode.backgroundColor || accentColor) === c ? '0 0 0 2px var(--accent)' : 'none',
                         }}
                       />
                     ))}
                   </div>
+
+                  {activeSelectedNode.role === 'shape_custom' && (
+                    <div>
+                      <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>Corner Radius:</small>
+                      <input
+                        type="range"
+                        min={0}
+                        max={60}
+                        value={activeSelectedNode.borderRadius || 12}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setNodes((prev) => prev.map((n) => (n.id === activeSelectedNode.id ? { ...n, borderRadius: val } : n)));
+                        }}
+                        onMouseUp={pushHistory}
+                        className="pro-slider"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Layer-Specific Properties: Logo */}
               {activeSelectedNode.role === 'logo' && (
                 <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>
@@ -1644,7 +2349,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               )}
             </div>
           ) : (
-            /* Document Global Inspector */
+            /* Document Global Inspector (When No Layer is Selected) */
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Typography Controls */}
               <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 8 }}>
@@ -1727,21 +2432,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             </div>
           </div>
 
-          {/* Quick Inspector Actions */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
-            <button
-              className="btn"
-              style={{ fontSize: 11, padding: '5px' }}
-              onClick={() => setShowLayersModal(true)}
-            >
-              Layers ({nodes.length})
-            </button>
+          {/* Diff Modal Trigger */}
+          <div style={{ marginBottom: 10 }}>
             <button
               className={`btn ${semanticDiff.hasChanges ? 'primary' : ''}`}
-              style={{ fontSize: 11, padding: '5px' }}
+              style={{ width: '100%', fontSize: 11, padding: '6px' }}
               onClick={() => setShowDiffModal(true)}
             >
-              Diff ({semanticDiff.totalChanges})
+              Semantic Diff ({semanticDiff.totalChanges} Δ modifications)
             </button>
           </div>
 
@@ -1818,73 +2516,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </div>
         </div>
       </div>
-
-      {/* Layers Hierarchy Modal */}
-      {showLayersModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 300,
-            backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setShowLayersModal(false)}
-        >
-          <div
-            style={{
-              background: 'var(--panel)',
-              borderRadius: 10,
-              padding: 20,
-              width: 480,
-              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.35)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 16 }}>HyCanvas Vector Layers</h2>
-              <button className="btn" style={{ fontSize: 11 }} onClick={() => setShowLayersModal(false)}>✕</button>
-            </div>
-            <table className="table" style={{ fontSize: 11 }}>
-              <thead>
-                <tr>
-                  <th>Z</th>
-                  <th>Node</th>
-                  <th>Role</th>
-                  <th>State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nodes.map((layer) => (
-                  <tr
-                    key={layer.id}
-                    style={{
-                      background: selectedNodeId === layer.role ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => {
-                      setSelectedNodeId(layer.role);
-                      setShowLayersModal(false);
-                    }}
-                  >
-                    <td><b>{layer.zIndex}</b></td>
-                    <td><b>{layer.name}</b></td>
-                    <td><code>{layer.role}</code></td>
-                    <td>
-                      <span style={{ color: layer.locked ? '#EF4444' : '#10B981', fontSize: 10, fontWeight: 600 }}>
-                        {layer.locked ? '🔒 Locked' : '🔓 Live'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Semantic Revision Diff Modal */}
       {showDiffModal && (
@@ -1975,7 +2606,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             style={{
               borderRadius: 12,
               padding: 24,
-              width: 480,
+              width: 500,
               maxWidth: '90vw',
               boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)',
             }}
@@ -1991,6 +2622,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Space + Drag</kbd> Quick Pan</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Wheel</kbd> Smooth Zoom</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + 0</kbd> Reset / Fit View</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + D</kbd> Duplicate Layer</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Delete / Backspace</kbd> Delete Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Z</kbd> Undo Action</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Shift + Z</kbd> Redo Action</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px</div>

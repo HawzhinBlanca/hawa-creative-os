@@ -640,7 +640,9 @@ button, input, select, textarea {
 .studio-viewport {
   position: relative;
   overflow: hidden;
-  background: #080c14;
+  background-color: #090d16;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
   user-select: none;
   touch-action: none;
 }
@@ -664,6 +666,80 @@ button, input, select, textarea {
   position: relative;
   user-select: none;
   touch-action: none;
+}
+
+.artboard-header-tag {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.layer-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+}
+
+.layer-item-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.layer-item-row.selected {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.pro-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+}
+
+.pro-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #38bdf8;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease;
+}
+
+.pro-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
 }
 
 /* Transform Bounding Box & 8 Handles */
@@ -725,6 +801,37 @@ button, input, select, textarea {
 .handle-s  { bottom: -6px; left: calc(50% - 4.5px); cursor: ns-resize; }
 .handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
 .handle-w  { top: calc(50% - 4.5px); left: -6px; cursor: ew-resize; }
+
+.handle-rot-stem {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  width: 1px;
+  height: 18px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.handle-rot {
+  position: absolute;
+  top: -29px;
+  left: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid var(--accent);
+  cursor: grab;
+  pointer-events: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  touch-action: none;
+}
+
+.handle-rot:hover {
+  transform: scale(1.35);
+  background: var(--accent);
+}
+
 
 /* Magnetic Alignment Snap Guides */
 .snap-guide-x {
