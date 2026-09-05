@@ -2,34 +2,76 @@ import React, { useState, useEffect } from 'react';
 
 interface VerifiedAsset {
   assetId: string;
+  clientId?: string;
+  category?: string;
   filename: string;
   mimeType: string;
   sha256: string;
   sanitized: boolean;
+  sanitizedContent?: string;
   storageKey: string;
+  createdAt?: string;
+}
+
+interface ClientOption {
+  clientId: string;
+  name: string;
+  tier?: string;
 }
 
 export const LibraryScreen: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [assetName, setAssetName] = useState('brand-logo.svg');
+  const [uploadClient, setUploadClient] = useState('client-aster');
+  const [uploadCategory, setUploadCategory] = useState('logo');
   const [assetContent, setAssetContent] = useState('<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">\n  <circle cx="50" cy="50" r="40" fill="#38BDF8"/>\n  <text x="50" y="55" text-anchor="middle" fill="#0B0F19" font-size="14" font-weight="bold">HAWA</text>\n</svg>');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<VerifiedAsset | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedList, setUploadedList] = useState<VerifiedAsset[]>([]);
+  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [clients, setClients] = useState<ClientOption[]>([
+    { clientId: 'client-aster', name: 'Aster Pharmacy', tier: 'enterprise' },
+    { clientId: 'client-zagros', name: 'Zagros Roastery', tier: 'standard' },
+    { clientId: 'client-drustee', name: 'Drustee Official', tier: 'enterprise' },
+  ]);
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'templates' | 'assets' | 'negative'>('all');
   const [showSemanticSourceModal, setShowSemanticSourceModal] = useState(false);
+  const [insertedNotice, setInsertedNotice] = useState<string | null>(null);
 
+  // Fetch available client tenants
   useEffect(() => {
-    fetch('/v1/assets')
+    fetch('/v1/clients')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
+          const list: ClientOption[] = data.map((c: any) => ({
+            clientId: c.clientId,
+            name: c.name || c.clientId,
+            tier: c.tier,
+          }));
+          setClients(list);
+        }
+      })
+      .catch((err) => console.warn('Failed to load clients:', err));
+  }, []);
+
+  // Fetch client-scoped assets
+  const fetchAssets = (cId: string) => {
+    const url = cId && cId !== 'all' ? `/v1/assets?clientId=${cId}` : '/v1/assets';
+    fetch(url)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
           setUploadedList(data);
         }
       })
-      .catch((err) => console.warn('Failed to fetch initial library assets:', err));
-  }, []);
+      .catch((err) => console.warn('Failed to fetch library assets:', err));
+  };
+
+  useEffect(() => {
+    fetchAssets(selectedClient);
+  }, [selectedClient]);
 
   const handleUploadAsset = async () => {
     setIsUploading(true);
@@ -43,6 +85,8 @@ export const LibraryScreen: React.FC = () => {
         body: JSON.stringify({
           filename: assetName,
           mimeType: assetName.endsWith('.svg') ? 'image/svg+xml' : 'image/png',
+          clientId: uploadClient,
+          category: uploadCategory,
           content: assetContent,
         }),
       });
@@ -51,6 +95,7 @@ export const LibraryScreen: React.FC = () => {
         const data = await res.json();
         setUploadResult(data);
         setUploadedList((prev) => [data, ...prev]);
+        fetchAssets(selectedClient);
       } else {
         const err = await res.json().catch(() => ({}));
         setUploadError(err.detail || 'Security policy rejected asset');
@@ -62,12 +107,82 @@ export const LibraryScreen: React.FC = () => {
     }
   };
 
+  const handleInsertIntoCanvas = (asset: VerifiedAsset) => {
+    const payload = {
+      assetId: asset.assetId,
+      filename: asset.filename,
+      svgContent: asset.sanitizedContent || assetContent,
+      sha256: asset.sha256,
+      clientId: asset.clientId,
+    };
+
+    window.dispatchEvent(
+      new CustomEvent('hawa:insert_canvas_asset', { detail: payload })
+    );
+
+    try {
+      sessionStorage.setItem('hawa_pending_insert_asset', JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+
+    setInsertedNotice(`Asset "${asset.filename}" loaded! Redirecting to Studio Artboard…`);
+    setTimeout(() => {
+      window.location.hash = '#/review';
+    }, 800);
+  };
+
   return (
     <section id="library" className="screen active">
-      <div className="toolbar">
+      {insertedNotice && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 9999,
+            background: '#10B981',
+            color: '#FFFFFF',
+            padding: '12px 20px',
+            borderRadius: 8,
+            fontWeight: 600,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          }}
+        >
+          ✓ {insertedNotice}
+        </div>
+      )}
+
+      <div className="toolbar" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn primary" onClick={() => setShowUploadModal(true)}>
           + Upload & Ingest Asset
         </button>
+
+        {/* Multi-Tenant Client Selector (FR-018, Gate A & B) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6, marginRight: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Client Isolation:</span>
+          <select
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--line)',
+              background: 'var(--panel)',
+              color: 'var(--text)',
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+            value={selectedClient}
+            onChange={(e) => setSelectedClient(e.target.value)}
+          >
+            <option value="all">🏢 All Client Corpi</option>
+            {clients.map((c) => (
+              <option key={c.clientId} value={c.clientId}>
+                {c.name} ({c.clientId})
+              </option>
+            ))}
+          </select>
+        </div>
+
         <button
           className={`btn ${libraryFilter === 'all' ? 'primary' : ''}`}
           onClick={() => setLibraryFilter('all')}
@@ -106,28 +221,35 @@ export const LibraryScreen: React.FC = () => {
         {(libraryFilter === 'all' || libraryFilter === 'assets') &&
           uploadedList.map((asset) => (
             <div key={asset.assetId} className="card" style={{ padding: 14, borderLeft: '3px solid #1d733c' }}>
-              <div className="canvaswrap" style={{ minHeight: 200, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="canvaswrap" style={{ minHeight: 180, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
                   <span className="pill ok" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✓ Sanitized & Admitted</span>
                   <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{asset.filename}</div>
                   <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
-                    SHA-256: {asset.sha256.substring(0, 16)}…
+                    SHA-256: {asset.sha256 ? asset.sha256.substring(0, 16) : 'e3b0c442'}…
                   </div>
                 </div>
               </div>
               <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>{asset.filename}</h3>
-              <div className="meta">
+              <div className="meta" style={{ marginBottom: 10 }}>
                 <span className="pill ok">XSS clean</span>
-                <span className="pill blue">LIVE API</span>
-                <span className="pill">{asset.mimeType.split('/')[1]}</span>
+                <span className="pill blue">{asset.clientId || 'Client'}</span>
+                <span className="pill">{asset.category || asset.mimeType.split('/')[1]}</span>
               </div>
+              <button
+                className="btn primary"
+                style={{ width: '100%', fontSize: 12, padding: '6px 10px' }}
+                onClick={() => handleInsertIntoCanvas(asset)}
+              >
+                📥 Insert into Canvas
+              </button>
             </div>
           ))}
 
         {/* Verified Asset Sample - shown in 'assets' */}
         {libraryFilter === 'assets' && (
           <div className="card" style={{ padding: 14 }}>
-            <div className="canvaswrap" style={{ minHeight: 200, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="canvaswrap" style={{ minHeight: 180, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
                 <span className="pill ok" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✓ Vector Asset</span>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>aster-logo-gold.svg</div>
@@ -137,18 +259,34 @@ export const LibraryScreen: React.FC = () => {
               </div>
             </div>
             <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>aster-logo-gold.svg</h3>
-            <div className="meta">
+            <div className="meta" style={{ marginBottom: 10 }}>
               <span className="pill ok">SVG Clean</span>
               <span className="pill">Aster</span>
               <span className="pill">Vector</span>
             </div>
+            <button
+              className="btn primary"
+              style={{ width: '100%', fontSize: 12, padding: '6px 10px' }}
+              onClick={() =>
+                handleInsertIntoCanvas({
+                  assetId: 'ast_preset_01',
+                  filename: 'aster-logo-gold.svg',
+                  mimeType: 'image/svg+xml',
+                  sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+                  sanitized: true,
+                  storageKey: 'assets/aster-logo-gold.svg',
+                })
+              }
+            >
+              📥 Insert into Canvas
+            </button>
           </div>
         )}
 
         {/* Card 1: Podcast guest - shown in 'all' and 'templates' */}
         {(libraryFilter === 'all' || libraryFilter === 'templates') && (
           <div className="card" style={{ padding: 14 }}>
-            <div className="canvaswrap" style={{ minHeight: 240 }}>
+            <div className="canvaswrap" style={{ minHeight: 220 }}>
               <div className="canvas" style={{ width: '55%' }}>
                 <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 24 }}>میوانی نوێ</div>
                 <div className="shape"></div>
@@ -166,7 +304,7 @@ export const LibraryScreen: React.FC = () => {
         {/* Card 2: Retail offer family - shown in 'all' and 'templates' */}
         {(libraryFilter === 'all' || libraryFilter === 'templates') && (
           <div className="card" style={{ padding: 14 }}>
-            <div className="canvaswrap" style={{ minHeight: 240 }}>
+            <div className="canvaswrap" style={{ minHeight: 220 }}>
               <div className="canvas" style={{ width: '55%', background: 'linear-gradient(135deg, #f4ecdd, #e9b666)' }}>
                 <div className="copy" style={{ color: '#17191c', fontSize: 16 }}>SUMMER OFFER</div>
               </div>
@@ -334,8 +472,43 @@ export const LibraryScreen: React.FC = () => {
               OWASP-compliant SVG sanitization, MIME sniff, and SHA-256 fingerprint verification (Gate N).
             </p>
 
-            <div style={{ margin: '16px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, margin: '14px 0' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+                  Target Client Tenant
+                </label>
+                <select
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={uploadClient}
+                  onChange={(e) => setUploadClient(e.target.value)}
+                >
+                  {clients.map((c) => (
+                    <option key={c.clientId} value={c.clientId}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+                  Asset Category
+                </label>
+                <select
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={uploadCategory}
+                  onChange={(e) => setUploadCategory(e.target.value)}
+                >
+                  <option value="logo">Brand Logo</option>
+                  <option value="badge">Promotional Badge</option>
+                  <option value="icon">Vector Icon</option>
+                  <option value="background">Backdrop / Scrim</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ margin: '14px 0' }}>
+              <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                 Asset Filename
               </label>
               <input
@@ -345,14 +518,14 @@ export const LibraryScreen: React.FC = () => {
               />
             </div>
 
-            <div style={{ margin: '16px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
+            <div style={{ margin: '14px 0' }}>
+              <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                 SVG Source or Content
               </label>
               <textarea
                 style={{
                   width: '100%',
-                  height: 100,
+                  height: 95,
                   fontFamily: 'monospace',
                   fontSize: 12,
                   padding: '8px 12px',
@@ -378,12 +551,12 @@ export const LibraryScreen: React.FC = () => {
                   SHA-256: <code>{uploadResult.sha256}</code>
                 </p>
                 <small style={{ color: '#047857', display: 'block' }}>
-                  Storage Key: <code>{uploadResult.storageKey}</code>
+                  Client: <code>{uploadResult.clientId || uploadClient}</code> · Storage Key: <code>{uploadResult.storageKey}</code>
                 </small>
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
               <button className="btn" onClick={() => setShowUploadModal(false)}>
                 {uploadResult ? 'Done' : 'Cancel'}
               </button>
@@ -397,4 +570,3 @@ export const LibraryScreen: React.FC = () => {
     </section>
   );
 };
-

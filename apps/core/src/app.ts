@@ -22,6 +22,9 @@ import {
   type FeedbackEvent,
   type CandidateRule,
   type DomainFailure,
+  TaskWorkflowController,
+  type TaskActor,
+  type WorkflowCheckpoint,
 } from '@hawa/domain';
 import {
   CreativeDirectorRunner,
@@ -44,9 +47,19 @@ import {
   KURDISH_SORANI_GLYPH_TABLE,
   packageKurdishWebFont,
   generateKurdishFontFaceCss,
+  evaluateVisionRubric,
   type FontCoverageResult,
   type KurdishWebFontPackage,
+  type QualityEvaluationCandidate,
+  type QualityRubricReport,
+  type RubricCanvasNode,
 } from '@hawa/qa';
+import {
+  VaultSearchEngine,
+  type SearchableItem,
+  type SearchQuery,
+  type SearchCategory,
+} from '@hawa/retrieval';
 import {
   HyCanvasStudioAdapter,
   GooglePublisher,
@@ -104,6 +117,8 @@ const globalSharedClientDnas = new Map<string, ClientDNA>();
 const globalSharedClientSnapshots = new Map<string, ClientDnaSnapshot[]>();
 const globalSharedEvalRuns = new Map<string, any>();
 const globalSharedUploadedAssets = new Map<string, any>();
+const globalSharedWorkflowControllers = new Map<string, TaskWorkflowController>();
+const globalSharedRubricReports = new Map<string, QualityRubricReport[]>();
 
 export function createApp() {
   const app = new Hono();
@@ -136,6 +151,10 @@ export function createApp() {
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     c.header('Content-Security-Policy', "default-src 'none'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https:; frame-ancestors 'none';");
     await next();
+  });
+
+  app.onError((err, c) => {
+    return c.json({ error: err.message, stack: err.stack }, 500);
   });
 
   // RFC 7807 Problem Helper
@@ -175,6 +194,8 @@ export function createApp() {
 
   const evalRuns = globalSharedEvalRuns;
   const uploadedAssets = globalSharedUploadedAssets;
+  const workflowControllers = globalSharedWorkflowControllers;
+  const rubricReports = globalSharedRubricReports;
 
   // Real-time Event System (Server-Sent Events)
   type SystemEvent = {
@@ -1896,8 +1917,12 @@ export function createApp() {
 
     const assetId = crypto.randomUUID();
     const storageKey = `assets/${validation.sha256}/${body.filename}`;
+    const clientId = body.clientId || defaultClientId;
+    const category = body.category || 'asset';
     const record = {
       assetId,
+      clientId,
+      category,
       filename: body.filename,
       mimeType: validation.mimeType,
       sha256: validation.sha256,
@@ -1908,7 +1933,7 @@ export function createApp() {
     };
     uploadedAssets.set(assetId, record);
 
-    broadcast('asset:ingested', { assetId, filename: record.filename, sha256: record.sha256 });
+    broadcast('asset:ingested', { assetId, clientId, filename: record.filename, sha256: record.sha256 });
 
     return c.json(record, 201);
   });
@@ -1942,9 +1967,14 @@ export function createApp() {
     return c.json(result, 200);
   });
 
-  // List All Admitted & Verified Assets
+  // List All Admitted & Verified Assets (FR-018, Gate A & B)
   registerRoute('get', '/assets', async (c: any) => {
-    return c.json(Array.from(uploadedAssets.values()), 200);
+    const clientId = c.req.query('clientId');
+    let all = Array.from(uploadedAssets.values());
+    if (clientId && clientId !== 'all') {
+      all = all.filter((a: any) => !a.clientId || a.clientId === clientId);
+    }
+    return c.json(all, 200);
   });
 
   // Sandboxed ComfyUI Graph Synthesis & Validation (Invariant #3 & Invariant #4, ADR-0007)
@@ -2296,86 +2326,134 @@ export function createApp() {
     return c.json({ dismissed }, 200);
   });
 
-  // --- Raycast/Linear-Grade Client-Scoped Omnisearch (B-080, FR-077, Invariant #4) ---
-  registerRoute('get', '/search', (c: any) => {
-    const query = (c.req.query('q') || '').trim().toLowerCase();
-    const clientId = c.req.query('clientId');
+  // --- Universal Multi-Tenant Search Engine (FR-077, Invariant #6, Gate B & F) ---
+  function buildSearchEngine(): VaultSearchEngine {
+    const engine = new VaultSearchEngine();
 
-    const results: Array<{ id: string; category: string; title: string; subtitle: string; url: string; badge?: string }> = [];
-
-    // 1. Navigation & Quick Actions
-    const navItems = [
-      { id: 'nav-review', title: 'Studio Review & Artboard', subtitle: 'Interactive vector editor and canvas export', url: '#/review', category: 'Navigation', badge: 'Studio' },
-      { id: 'nav-inbox', title: 'Intake & Task Simulator', subtitle: 'Multi-client inbound requests and pipeline ingress', url: '#/', category: 'Navigation', badge: 'Inbox' },
-      { id: 'nav-dna', title: 'Client DNA & Brand Governance', subtitle: 'Brand kits, fonts, and governed rule promotion', url: '#/dna', category: 'Navigation', badge: 'DNA' },
-      { id: 'nav-ops', title: 'Operations & AI Cost Budgets', subtitle: 'Adapter health, financial quotas, and recovery metrics', url: '#/ops', category: 'Navigation', badge: 'Ops' },
-      { id: 'nav-eval', title: 'AI Model Tournaments & Evals', subtitle: 'Leaderboard, retrieval scoring, and redteam tests', url: '#/eval', category: 'Navigation', badge: 'Evals' },
-      { id: 'act-export', title: 'Export 4-in-1 Campaign', subtitle: 'Generate Feed, Story, Square, Landscape .zip bundle', url: '#/review?action=export4in1', category: 'Actions', badge: 'Export' },
-      { id: 'act-comfy', title: 'Synthesize Sandboxed Backdrop', subtitle: 'Render pure vector SVG backdrop with smart contrast scrim', url: '#/review?action=comfy', category: 'Actions', badge: 'ComfyUI' },
+    // Index navigation items
+    const navItems: SearchableItem[] = [
+      { id: 'nav-review', category: 'copy', clientId: 'all', title: 'Studio Review & Artboard', subtitle: 'Interactive vector editor and canvas export', bodyText: 'Studio Review Artboard vector editor canvas export #/review', tags: ['Studio', 'Navigation'], updatedAt: new Date().toISOString() },
+      { id: 'nav-inbox', category: 'copy', clientId: 'all', title: 'Intake & Task Simulator', subtitle: 'Multi-client inbound requests and pipeline ingress', bodyText: 'Intake Task Simulator inbound requests pipeline ingress #/', tags: ['Inbox', 'Navigation'], updatedAt: new Date().toISOString() },
+      { id: 'nav-dna', category: 'copy', clientId: 'all', title: 'Client DNA & Brand Governance', subtitle: 'Brand kits, fonts, and governed rule promotion', bodyText: 'Client DNA Brand Governance fonts rules brand kits #/dna', tags: ['DNA', 'Navigation'], updatedAt: new Date().toISOString() },
+      { id: 'nav-ops', category: 'copy', clientId: 'all', title: 'Operations & AI Cost Budgets', subtitle: 'Adapter health, financial quotas, and recovery metrics', bodyText: 'Operations AI Cost Budgets Adapter health quotas recovery metrics #/ops', tags: ['Ops', 'Navigation'], updatedAt: new Date().toISOString() },
+      { id: 'nav-eval', category: 'copy', clientId: 'all', title: 'AI Model Tournaments & Evals', subtitle: 'Leaderboard, retrieval scoring, and redteam tests', bodyText: 'AI Model Tournaments Evals Leaderboard retrieval scoring redteam #/eval', tags: ['Evals', 'Navigation'], updatedAt: new Date().toISOString() },
     ];
+    for (const item of navItems) engine.indexItem(item);
 
-    for (const item of navItems) {
-      if (!query || item.title.toLowerCase().includes(query) || item.subtitle.toLowerCase().includes(query) || item.badge.toLowerCase().includes(query)) {
-        results.push(item);
-      }
+    // Index tasks
+    for (const [taskId, task] of tasks.entries()) {
+      const clientId = task.clientId || defaultClientId;
+      const client = clientDnas.get(clientId);
+      const brief = briefs.get(taskId);
+      const briefText = brief?.objective || (task as any).title || '';
+      const rawEv = rawEvents.get((task as any).sourceEventId);
+      const eventText = rawEv?.message?.text || rawEv?.text || '';
+      engine.indexItem({
+        id: taskId,
+        category: 'tasks',
+        clientId,
+        clientName: client?.name,
+        title: (task as any).title || (eventText ? eventText.slice(0, 60) : `Task ${taskId.slice(0, 8)}`),
+        subtitle: `Status: ${task.status} · Phase: ${task.currentPhase || 'INTAKE'}`,
+        bodyText: `${briefText} ${eventText} ${(task as any).objective || ''} ${taskId} ${(task as any).tags?.join(' ') || ''}`,
+        tags: (task as any).tags || [task.status],
+        status: task.status,
+        metadata: { currentPhase: task.currentPhase, status: task.status, latestRevisionId: task.latestRevisionId },
+        updatedAt: task.updatedAt || new Date().toISOString(),
+      });
     }
 
-    // 2. Client-Scoped Tasks (Invariant #4 - strictly isolated when clientId is provided)
-    for (const [id, task] of tasks.entries()) {
-      if (clientId && task.clientId !== clientId) {
-        continue; // Enforce strict tenant isolation
-      }
-      const matchText = `${task.title} ${task.clientId} ${task.brief?.headlineEn || ''} ${task.brief?.headlineCkb || ''}`.toLowerCase();
-      if (!query || matchText.includes(query)) {
-        results.push({
-          id: `task-${id}`,
-          category: 'Tasks',
-          title: task.title,
-          subtitle: `Client: ${task.clientId} • Status: ${task.status}`,
-          url: `#/review?taskId=${id}`,
-          badge: task.status,
+    // Index clients
+    for (const [cId, cData] of clientDnas.entries()) {
+      const primaryHex = cData.colors?.find((c) => c.role === 'primary')?.hex || '#0B192C';
+      const voice = cData.guidelines?.voiceAndTone || 'luxury';
+      engine.indexItem({
+        id: cId,
+        category: 'clients',
+        clientId: cId,
+        clientName: cData.name,
+        title: cData.name || cId,
+        subtitle: `Code: ${cData.code} · Tone: ${voice}`,
+        bodyText: `${cData.name} ${cData.code} ${voice} ${(cData.guidelines?.prohibitedPhrases || []).join(' ')} ${cId}`,
+        tags: [cData.defaultLocale, cData.status],
+        metadata: { version: cData.version, primaryHex },
+        updatedAt: cData.updatedAt || new Date().toISOString(),
+      });
+    }
+
+    // Index assets
+    for (const [assetId, asset] of uploadedAssets.entries()) {
+      const cId = asset.clientId || defaultClientId;
+      engine.indexItem({
+        id: assetId,
+        category: 'assets',
+        clientId: cId,
+        title: asset.filename || assetId,
+        subtitle: `${asset.mimeType} · ${asset.sizeBytes || 1024} B`,
+        bodyText: `${asset.filename} ${asset.mimeType} ${asset.category || ''} ${asset.sha256 || ''}`,
+        tags: [asset.mimeType, asset.category || 'asset'],
+        metadata: { sha256: asset.sha256, storageKey: asset.storageKey },
+        updatedAt: asset.createdAt || new Date().toISOString(),
+      });
+    }
+
+    // Index candidate and promoted rules
+    for (const [cId, _] of clientDnas.entries()) {
+      const rules = globalFeedbackMiner.getCandidateRules(cId);
+      for (const rule of rules) {
+        engine.indexItem({
+          id: rule.id,
+          category: 'rules',
+          clientId: cId,
+          title: rule.title,
+          subtitle: `Confidence: ${Math.round(rule.confidence * 100)}% · Freq: ${rule.frequency}`,
+          bodyText: `${rule.title} ${rule.ruleText} ${rule.category} ${rule.rationale}`,
+          tags: [rule.category, rule.status],
+          metadata: { confidence: rule.confidence, frequency: rule.frequency },
+          updatedAt: rule.promotedAt || new Date().toISOString(),
         });
       }
     }
 
-    // 3. Brand Kits & Client DNA
-    for (const [cId, dna] of clientDnas.entries()) {
-      if (clientId && cId !== clientId) continue;
-      const clientTitle = (dna as any).clientName || dna.name || cId;
-      if (!query || clientTitle.toLowerCase().includes(query) || cId.toLowerCase().includes(query)) {
-        const primaryHex = (dna as any).brandKit?.primaryColor || dna.colors?.[0]?.hex || '#0B192C';
-        const slogan = (dna as any).brandKit?.slogan || dna.guidelines?.voiceAndTone || '';
-        results.push({
-          id: `dna-${cId}`,
-          category: 'Clients',
-          title: clientTitle,
-          subtitle: `Primary: ${primaryHex}${slogan ? ` • ${slogan.slice(0, 35)}...` : ''}`,
-          url: `#/dna?client=${cId}`,
-          badge: 'Client DNA',
-        });
-      }
-    }
+    return engine;
+  }
 
-    // 4. ComfyUI Workflow Templates
-    for (const [tplId, tpl] of Object.entries(COMFY_WORKFLOW_TEMPLATES)) {
-      if (!query || tpl.name.toLowerCase().includes(query) || tpl.description.toLowerCase().includes(query)) {
-        results.push({
-          id: `tpl-${tplId}`,
-          category: 'Templates',
-          title: tpl.name,
-          subtitle: tpl.description,
-          url: `#/review?template=${tplId}`,
-          badge: 'ComfyUI',
-        });
-      }
-    }
+  registerRoute('get', '/search', (c: any) => {
+    const q = (c.req.query('q') || c.req.query('query') || '').trim();
+    const clientId = c.req.query('clientId');
+    const category = (c.req.query('category') || 'all') as SearchCategory;
+    const limit = parseInt(c.req.query('limit') || '25', 10);
+    const offset = parseInt(c.req.query('offset') || '0', 10);
+
+    const engine = buildSearchEngine();
+    const searchRes = engine.search({
+      q,
+      clientId: clientId && clientId !== 'all' ? clientId : undefined,
+      category,
+      limit,
+      offset,
+    });
+
+    const results = searchRes.hits.map((h) => ({
+      id: h.item.id,
+      category: h.item.category.toUpperCase(),
+      title: h.item.title,
+      subtitle: h.item.subtitle || h.snippet,
+      url:
+        h.item.category === 'tasks'
+          ? `#/review?taskId=${h.item.id}`
+          : h.item.category === 'clients'
+            ? `#/dna?client=${h.item.clientId}`
+            : `#/review`,
+      badge: h.item.status || h.item.category,
+    }));
 
     return c.json({
-      query,
+      ...searchRes,
       clientId: clientId || null,
-      resultsCount: results.length,
-      results: results.slice(0, 25),
-      scopeEnforced: Boolean(clientId),
+      results,
+      resultsCount: searchRes.total,
+      scopeEnforced: Boolean(clientId && clientId !== 'all'),
     }, 200);
   });
 
@@ -2603,6 +2681,225 @@ export function createApp() {
       filesCount: files.length,
       publishedAt: new Date().toISOString(),
     }, 200);
+  });
+
+  // =========================================================================
+  // Track B Acceptance Gates: Visual QA Rubric & Durable Workflows
+  // =========================================================================
+
+  // Multilingual Visual QA Vision Rubric Scorer (FR-039, FR-041, Invariant #9, Gate E)
+  registerRoute('post', '/tasks/:taskId/revisions/:revisionId/evaluate-rubric', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const revisionId = c.req.param('revisionId');
+    const task = tasks.get(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+    const clientId = task.clientId || defaultClientId;
+    const client = clientDnas.get(clientId);
+    const brief = briefs.get(taskId);
+
+    const body = await c.req.json().catch(() => ({}));
+
+    const format = body.format || 'story';
+    const dimensions = body.dimensions || (format === 'story' ? { width: 1080, height: 1920 } : { width: 1080, height: 1080 });
+
+    const primaryColor = client?.colors?.find((c) => c.role === 'primary')?.hex || '#111827';
+    const secondaryColor = client?.colors?.find((c) => c.role === 'secondary')?.hex || '#374151';
+    const accentColor = client?.colors?.find((c) => c.role === 'accent')?.hex || '#D97706';
+
+    let nodes: RubricCanvasNode[] = body.nodes;
+    if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
+      const headlineText = brief?.objective || (task as any).title || 'ڕاگەیاندنی فەرمی نوێ';
+      nodes = [
+        {
+          id: 'node-headline',
+          role: 'headline',
+          text: headlineText,
+          x: 100,
+          y: dimensions.height === 1920 ? 300 : 180,
+          width: dimensions.width - 200,
+          height: 140,
+          fontSize: 48,
+          lineHeight: 1.6,
+          fontFamily: 'Noto Sans Arabic, Rabar',
+          color: primaryColor,
+          background: '#FFFFFF',
+        },
+        {
+          id: 'node-sub',
+          role: 'body',
+          text: 'داشکاندنی سەرەتای وەرز لە تەواوی لقەکانمان بەردەستە',
+          x: 100,
+          y: dimensions.height === 1920 ? 480 : 340,
+          width: dimensions.width - 200,
+          height: 80,
+          fontSize: 24,
+          lineHeight: 1.5,
+          fontFamily: 'Noto Sans Arabic, Rabar',
+          color: secondaryColor,
+          background: '#FFFFFF',
+        },
+        {
+          id: 'node-price',
+          role: 'price',
+          text: '25,000 IQD',
+          x: 100,
+          y: dimensions.height === 1920 ? 600 : 440,
+          width: 300,
+          height: 60,
+          fontSize: 32,
+          lineHeight: 1.4,
+          fontFamily: 'Outfit, sans-serif',
+          color: accentColor,
+          background: '#FFFFFF',
+        },
+        {
+          id: 'node-cta',
+          role: 'cta',
+          text: 'داوا بکە لە ڕێگەی واتسئەپەوە',
+          x: (dimensions.width - 360) / 2,
+          y: dimensions.height - (dimensions.height === 1920 ? 350 : 200),
+          width: 360,
+          height: 64,
+          fontSize: 20,
+          lineHeight: 1.5,
+          fontFamily: 'Noto Sans Arabic, Rabar',
+          color: '#FFFFFF',
+          background: primaryColor,
+        },
+      ];
+    }
+
+    const approvedCopy = body.approvedCopy || {
+      headlineCkb: brief?.objective || (task as any).title,
+      prices: ['25,000 IQD'],
+      phones: ['+964 750 000 0000'],
+    };
+
+    const brandColors = body.brandColors || [primaryColor, secondaryColor, accentColor];
+
+    const report = evaluateVisionRubric({
+      taskId,
+      revisionId,
+      clientId,
+      format,
+      nodes,
+      brandColors,
+      approvedCopy,
+      dimensions,
+    });
+
+    const existingReports = rubricReports.get(taskId) || [];
+    existingReports.push(report);
+    rubricReports.set(taskId, existingReports);
+
+    broadcast('qa:rubric_evaluated', { taskId, revisionId, report });
+
+    return c.json(report, 200);
+  });
+
+  registerRoute('get', '/tasks/:taskId/rubric-reports', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const reports = rubricReports.get(taskId) || [];
+    return c.json(reports, 200);
+  });
+
+  // Helper: Retrieve or instantiate Task Durable Workflow Controller (FR-060, Invariant #10 & #12)
+  function getOrCreateWorkflowController(taskId: string): TaskWorkflowController {
+    let controller = workflowControllers.get(taskId);
+    if (!controller) {
+      const task = tasks.get(taskId);
+      const isComplete = task?.status === 'COMPLETE';
+      controller = new TaskWorkflowController(taskId, isComplete ? 'COMPLETE' : 'RUNNING');
+      controller.recordCheckpoint(
+        task?.currentPhase || 'INTAKE',
+        (task?.status as TaskStatus) || 'RECEIVED',
+        `init_${taskId}`,
+        [
+          {
+            type: 'asset_render',
+            key: `render_init_${taskId}`,
+            completedAt: new Date().toISOString(),
+          },
+        ],
+        { taskTitle: (task as any)?.title || taskId, status: task?.status || 'RECEIVED' }
+      );
+      workflowControllers.set(taskId, controller);
+    }
+    return controller;
+  }
+
+  // Worker Durable Execution Recovery Controller Endpoints (FR-060, FR-061, Gate C & H)
+  registerRoute('get', '/tasks/:taskId/workflow/state', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const controller = getOrCreateWorkflowController(taskId);
+    return c.json(controller.getState(), 200);
+  });
+
+  registerRoute('post', '/tasks/:taskId/workflow/:action', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const action = c.req.param('action');
+    const body = await c.req.json().catch(() => ({}));
+    const reason = body.reason || `Operator action: ${action}`;
+    const actor: TaskActor = body.actor || { type: 'user', id: 'operator' };
+
+    const controller = getOrCreateWorkflowController(taskId);
+    const task = tasks.get(taskId);
+
+    if (action === 'pause') {
+      const ok = controller.pause(actor, reason);
+      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot pause workflow in state ${controller.getExecutionState()}`);
+      if (task) task.status = 'PAUSED' as any;
+      broadcast('workflow:state_changed', { taskId, action: 'pause', state: controller.getState() });
+      return c.json({ ok: true, state: controller.getState() }, 200);
+    }
+
+    if (action === 'resume') {
+      const ok = controller.resume(actor, reason);
+      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot resume workflow in state ${controller.getExecutionState()}`);
+      if (task) task.status = 'DESIGN_IN_PROGRESS' as any;
+      broadcast('workflow:state_changed', { taskId, action: 'resume', state: controller.getState() });
+      return c.json({ ok: true, state: controller.getState() }, 200);
+    }
+
+    if (action === 'cancel') {
+      const ok = controller.cancel(actor, reason);
+      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot cancel workflow in state ${controller.getExecutionState()}`);
+      if (task) task.status = 'CANCELLED' as any;
+      broadcast('workflow:state_changed', { taskId, action: 'cancel', state: controller.getState() });
+      return c.json({ ok: true, state: controller.getState() }, 200);
+    }
+
+    if (action === 'crash') {
+      controller.simulateCrash(reason);
+      broadcast('workflow:state_changed', { taskId, action: 'crash', state: controller.getState() });
+      return c.json({ ok: true, simulatedCrash: true, state: controller.getState() }, 200);
+    }
+
+    if (action === 'checkpoint') {
+      const stage = body.stage || task?.currentPhase || 'SYNTHESIS';
+      const status = body.status || task?.status || 'DESIGN_IN_PROGRESS';
+      const idempotencyKey = body.idempotencyKey || `chk_${crypto.randomUUID()}`;
+      const sideEffects = body.completedSideEffects || [];
+      const payload = body.payload || {};
+      const chk = controller.recordCheckpoint(stage, status, idempotencyKey, sideEffects, payload);
+      broadcast('workflow:checkpoint_recorded', { taskId, checkpoint: chk });
+      return c.json({ ok: true, checkpoint: chk, state: controller.getState() }, 201);
+    }
+
+    if (action === 'replay') {
+      const targetCheckpointId = body.targetCheckpointId;
+      const replayResult = controller.replayFromCheckpoint(actor, reason, targetCheckpointId);
+      if (!replayResult.success) {
+        return problem(c, 400, 'Replay Failed', 'Unable to replay from specified checkpoint');
+      }
+      if (task && replayResult.restoredCheckpoint) {
+        task.status = replayResult.restoredCheckpoint.taskStatus;
+      }
+      broadcast('workflow:state_changed', { taskId, action: 'replay', replayResult, state: controller.getState() });
+      return c.json({ ok: true, replayResult, state: controller.getState() }, 200);
+    }
+
+    return problem(c, 400, 'Unknown Action', 'Supported actions: pause, resume, cancel, crash, checkpoint, replay');
   });
 
   return app;

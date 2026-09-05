@@ -6,3 +6,4 @@ export * from './layout-bounds.js';
 export * from './font-inspector.js';
 export * from './font-packager.js';
 export * from './svg-font-inliner.js';
+export * from './vision-rubric.js';
