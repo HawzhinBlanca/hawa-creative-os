@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   DesignStudioAdapter,
   RequestContext,
@@ -46,13 +47,8 @@ export class HyCanvasStudioAdapter implements DesignStudioAdapter {
   private documents = new Map<string, { ref: StudioDocumentRef; doc: HycDocument }>();
 
   private computeSha256(content: unknown): SHA256 {
-    const str = JSON.stringify(content);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return `sha256_${Math.abs(hash).toString(16).padStart(16, '0')}`;
+    const str = typeof content === 'string' ? content : JSON.stringify(content);
+    return `sha256_${createHash('sha256').update(str).digest('hex')}` as SHA256;
   }
 
   async capabilities(_ctx: RequestContext): Promise<Result<CapabilityReport>> {

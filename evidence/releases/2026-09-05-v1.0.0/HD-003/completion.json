@@ -1,0 +1,79 @@
+{
+  "taskId": "HD-003",
+  "title": "Enforce tenant/client/project boundaries end to end",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-011",
+    "FR-021",
+    "FR-077",
+    "NFR-006",
+    "NFR-007"
+  ],
+  "owner": "security/database",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.562Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/db/src/client.ts",
+      "bytes": 1519,
+      "sha256": "4bf7c58d9603986ae259c6601ffe6d7b23e185d5d2174e84b317e30b07c597a5"
+    },
+    {
+      "path": "db/rls.sql",
+      "bytes": 12991,
+      "sha256": "a112d1debac917da5e8255cfdebb61535dc17fef45300b6dde7e0cf9c1f0b8c2"
+    },
+    {
+      "path": "packages/retrieval/src/retrieval-service.ts",
+      "bytes": 5398,
+      "sha256": "63b8a0790acefd991a6fb867de0fd5a260baeeea9193dafdb78ecb0c11c0f6d2"
+    }
+  ],
+  "negativeControls": [
+    "P09-retrieval"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "RLS session variables reconciled (app.tenant_id, hawa.current_tenant_id); clients table RLS policy fixed to scope by id; cross-tenant rule filtering verified.",
+  "limitations": [
+    "Live RLS enforcement requires PostgreSQL connection in runtime environment."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

@@ -29,14 +29,18 @@ export async function withRlsContext<T>(
   callback: (trx: Kysely<Database>) => Promise<T>
 ): Promise<T> {
   return await db.transaction().execute(async (trx) => {
+    await sql`SET LOCAL app.tenant_id = ${ctx.tenantId}`.execute(trx);
     await sql`SET LOCAL hawa.current_tenant_id = ${ctx.tenantId}`.execute(trx);
     if (ctx.clientId) {
+      await sql`SET LOCAL app.client_id = ${ctx.clientId}`.execute(trx);
       await sql`SET LOCAL hawa.current_client_id = ${ctx.clientId}`.execute(trx);
     }
     if (ctx.userId) {
+      await sql`SET LOCAL app.user_id = ${ctx.userId}`.execute(trx);
       await sql`SET LOCAL hawa.current_user_id = ${ctx.userId}`.execute(trx);
     }
     if (ctx.role) {
+      await sql`SET LOCAL app.role = ${ctx.role}`.execute(trx);
       await sql`SET LOCAL hawa.current_role = ${ctx.role}`.execute(trx);
     }
     return await callback(trx);

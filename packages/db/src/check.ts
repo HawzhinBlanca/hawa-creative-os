@@ -64,15 +64,18 @@ export async function checkDatabaseSchema(): Promise<{
       liveDbChecked: true,
     };
   } catch (err: any) {
-    console.warn(`[db:check] Live database check skipped/failed: ${err.message}`);
-    return {
-      valid: true,
-      tableCount: parsedSchema.tables.length,
-      enumsCount: parsedSchema.enums.length,
-      triggersCount: parsedSchema.triggers.length,
-      policiesCount,
-      liveDbChecked: false,
-    };
+    if (process.env.DATABASE_CHECK_OPTIONAL === 'true') {
+      console.warn(`[db:check] Live database check skipped/failed (optional mode): ${err.message}`);
+      return {
+        valid: true,
+        tableCount: parsedSchema.tables.length,
+        enumsCount: parsedSchema.enums.length,
+        triggersCount: parsedSchema.triggers.length,
+        policiesCount,
+        liveDbChecked: false,
+      };
+    }
+    throw new Error(`[db:check] Live database connection/parity verification failed: ${err.message}. To run static schema check only, unset DATABASE_URL.`);
   } finally {
     await client.end().catch(() => {});
   }

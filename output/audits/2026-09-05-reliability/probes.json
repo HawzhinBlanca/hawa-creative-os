@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-05T11:07:22.683Z",
+  "at": "2026-09-05T11:22:36.832Z",
   "scope": "Isolated source-level diagnostics; no real server/process-restart/Google/native-editor proof",
   "externalCallsBlocked": 0,
   "total": 16,
@@ -188,7 +188,7 @@
           "provenance": "deterministic_fallback"
         },
         "deployment": {
-          "deploymentId": "b6ab55e3-8143-41c7-9047-6d6c66b7beb4",
+          "deploymentId": "380b585f-6940-4fb5-a9cd-08dbbb290b1a",
           "role": "visual_judge",
           "provider": "anthropic",
           "exactModelId": "claude-opus-5",

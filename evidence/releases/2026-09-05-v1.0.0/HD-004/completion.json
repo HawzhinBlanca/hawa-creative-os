@@ -1,0 +1,73 @@
+{
+  "taskId": "HD-004",
+  "title": "Treat every imported file and rendered asset as untrusted",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-068",
+    "FR-073",
+    "NFR-006",
+    "NFR-020"
+  ],
+  "owner": "security/editor",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.563Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/desk/src/services/sanitizer.ts",
+      "bytes": 1965,
+      "sha256": "c4458ba0725bb7418a1c37ad53ec7d864b7c064703175c9421e3d8aaab7fdd8d"
+    },
+    {
+      "path": "output/audits/2026-09-05-reliability/browser-import-probe.json",
+      "bytes": 325,
+      "sha256": "a5d70cb9239f6a0a777e8e45f4caf2c34f0b83f1bfc74eff77b5d21ff0e7fd5f"
+    }
+  ],
+  "negativeControls": [
+    "browser-import-probe (onerror event handler in SVG payload)"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "High-assurance DOM sanitization implemented in sanitizer.ts; XML DOCTYPE/entities, script tags, dangerous HTML elements, inline event handlers stripped; headless browser execution probe verified.",
+  "limitations": [
+    "Production CSP headers should be maintained on Nginx/Caddy edge."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

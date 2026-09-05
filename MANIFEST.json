@@ -123,6 +123,11 @@
       "sha256": "1caeb76a7d71e40267ea8b979478c4ed7c866ee1c663cd15288e8425958cedc8"
     },
     {
+      "path": "adrs/015_editor_admission_decision.md",
+      "bytes": 4170,
+      "sha256": "89db1d50bb672bc34c7f8cb6d1c8be75a7e6724984e2525249314941ffeae6fb"
+    },
+    {
       "path": "api/events.md",
       "bytes": 3137,
       "sha256": "9be75a7f90d84222cf734e548a6b38073cad75b5fe5b6e0a96312abe611ccacc"
@@ -204,8 +209,8 @@
     },
     {
       "path": "db/rls.sql",
-      "bytes": 12612,
-      "sha256": "556368fc761ad7d55aab610a5ab9e756732fd2db555c297f42820b573386c2a5"
+      "bytes": 12991,
+      "sha256": "a112d1debac917da5e8255cfdebb61535dc17fef45300b6dde7e0cf9c1f0b8c2"
     },
     {
       "path": "db/schema.sql",

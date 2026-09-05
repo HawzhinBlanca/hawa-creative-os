@@ -1,0 +1,80 @@
+{
+  "taskId": "HD-001",
+  "title": "Remove false success and establish capability truth",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "NFR-017",
+    "NFR-025",
+    "FR-064",
+    "FR-071"
+  ],
+  "owner": "architecture/backend/frontend",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.561Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/integrations/src/google-publisher.ts",
+      "bytes": 3360,
+      "sha256": "8c92d9ae23c96ae69f66a535e8a8cb9fb7a5415afc23fadfa465016cd3365843"
+    },
+    {
+      "path": "packages/integrations/src/model-gateway.ts",
+      "bytes": 14951,
+      "sha256": "c0ac49ae8c749b0781f124304ae69e8767f73cc74c8bd8fad1889c2a600c2927"
+    },
+    {
+      "path": "output/audits/2026-09-05-reliability/probes.json",
+      "bytes": 6065,
+      "sha256": "0a5530534b0f930aa60ec47ac339eefe2ceac9e4c56605313ec3488db1f03a37"
+    }
+  ],
+  "negativeControls": [
+    "P05-publisher",
+    "P06-studio",
+    "P14-model"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "P05, P06, P14 probe defects resolved; Google publisher and vision gateway fail closed when providers are missing; no synthetic passes masquerade as real success.",
+  "limitations": [
+    "External Google Drive and Anthropic/OpenAI live API keys must be provided in production environment."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

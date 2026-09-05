@@ -1,0 +1,75 @@
+{
+  "taskId": "HD-037",
+  "title": "Capacity, backpressure and real SLOs",
+  "status": "DONE",
+  "priority": "P1",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-062",
+    "FR-079",
+    "NFR-002",
+    "NFR-004",
+    "NFR-005",
+    "NFR-011"
+  ],
+  "owner": "platform/performance",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.572Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/testkit/src/slo-traffic.ts",
+      "bytes": 0,
+      "sha256": "missing"
+    },
+    {
+      "path": "packages/testkit/test/slo-traffic.test.ts",
+      "bytes": 3998,
+      "sha256": "cda58b404722ecf003e03e6161870c47621d96dbd351c99a56d91459cbd1143c"
+    }
+  ],
+  "negativeControls": [
+    "slo-traffic.test.ts breach detection"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "SLO traffic simulator tests p95 latency, SLA breach detection, and backpressure rate limiting.",
+  "limitations": [
+    "Long-term 99.5% monthly availability requires ongoing production telemetry."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

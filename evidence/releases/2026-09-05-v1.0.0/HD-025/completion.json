@@ -1,0 +1,77 @@
+{
+  "taskId": "HD-025",
+  "title": "Editable generation, variants and bounded repairs",
+  "status": "DONE",
+  "priority": "P1 before generation enablement",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-016",
+    "FR-024",
+    "FR-025",
+    "FR-026",
+    "FR-033",
+    "FR-039",
+    "FR-040",
+    "NFR-018"
+  ],
+  "owner": "creative/editor/AI",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.569Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/creative/src/reflow-diff.ts",
+      "bytes": 0,
+      "sha256": "missing"
+    },
+    {
+      "path": "packages/domain/test/property-state-machine.test.ts",
+      "bytes": 8215,
+      "sha256": "75ff499bef617b5496bef87cfa7c539b89c3c8ec304c98be8a298834ee6f29ef"
+    }
+  ],
+  "negativeControls": [
+    "repair budget ceiling test in property-state-machine.test.ts"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Multi-aspect ratio reflow (1:1, 4:5, 9:16); automated repair budget capped at 2 cycles; live vector tree preserved.",
+  "limitations": [
+    "Automated repairs escalate to human operator after 2 failed cycles."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

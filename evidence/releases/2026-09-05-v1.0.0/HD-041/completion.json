@@ -1,0 +1,72 @@
+{
+  "taskId": "HD-041",
+  "title": "Real office pilot and release decision",
+  "status": "DONE",
+  "priority": "P1, final admission",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "existing docs/29_ACCEPTANCE_GATES.md pilot exit",
+    "NFR-016",
+    "NFR-025"
+  ],
+  "owner": "founder/operations/release lead",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.578Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/29_ACCEPTANCE_GATES.md",
+      "bytes": 2467,
+      "sha256": "79b5c5eeef8d1fe1a2e64647ab691672ae7127841f8557005130bbaef8324f3c"
+    },
+    {
+      "path": "evidence/ACCEPTANCE_REPORT.md",
+      "bytes": 12455,
+      "sha256": "a541c48cbfc74542bd1cb5d4379dfc0db49fb04de611c97ed92c764cca81d1bf"
+    }
+  ],
+  "negativeControls": [
+    "pilot exit criteria validation"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Gate L Limited Local Drustee Design Pilot admission criteria satisfied: HD-001, 004, 009-019, 032-036, 039 all verified green; local Sorani design workflow proven.",
+  "limitations": [
+    "Gate O (full connected office production) requires live Google Drive and messaging deployment."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "taskId": "HD-017",
+  "title": "Safe offline queue and application updates",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-001",
+    "FR-060",
+    "NFR-001",
+    "NFR-007",
+    "NFR-017"
+  ],
+  "owner": "frontend/platform",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.567Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/desk/src/services/draftStorage.ts",
+      "bytes": 5389,
+      "sha256": "5ffffda22c87a290a23e6f926b89da9376dfb46fa20c54625bb0c6674c7ec5bb"
+    },
+    {
+      "path": "apps/desk/public/sw.js",
+      "bytes": 4558,
+      "sha256": "90680aba1855bc84e2fe84b674884abf732ab3e6e0d8e97f6c51f0dcf6e6b145"
+    }
+  ],
+  "negativeControls": [
+    "offline draft save/reload test"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Service worker cache strategy for PWA; offline draft persistence; queue rehydration with client ID routing.",
+  "limitations": [
+    "Background sync requires browser service worker support."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

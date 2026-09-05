@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-05T11:07:39.064Z",
+  "at": "2026-09-05T11:26:39.592Z",
   "algorithm": "SHA-256",
   "excludes": [
     "evidence-sha256.json"
@@ -82,8 +82,13 @@
     },
     {
       "path": "finalize-evidence.mjs",
-      "bytes": 4553,
-      "sha256": "64c1e876639e0f57a3f225315d2e6e47553b78be55b0d77bfabce5ea67e44a0b"
+      "bytes": 5366,
+      "sha256": "3b9a1ac39afaa01b79fee4a1928c6607732aa121d074f6e1d7f0133d698b0771"
+    },
+    {
+      "path": "generate_task_receipts.mjs",
+      "bytes": 32533,
+      "sha256": "10557c9af500691ec8443f1ddad6fcda04d88b4a8c4ae49f4753fde6eabc8913"
     },
     {
       "path": "laptop.png",
@@ -143,7 +148,7 @@
     {
       "path": "probes.json",
       "bytes": 6065,
-      "sha256": "f8f9208ae06dfef1449c7fafa20a5f840deeb910b77910edc39584d6063a2e4d"
+      "sha256": "0a5530534b0f930aa60ec47ac339eefe2ceac9e4c56605313ec3488db1f03a37"
     },
     {
       "path": "probes.ts",
@@ -152,8 +157,8 @@
     },
     {
       "path": "requirements-coverage.csv",
-      "bytes": 39979,
-      "sha256": "bb0dd42aca32bd31a3234ce34355838caa61de94fe9de51241eb17cee86a1ebc"
+      "bytes": 44599,
+      "sha256": "7f52686d1e944323b6f87e10ba1afcad02b10b70d2364e7aea24cc535d8e2229"
     },
     {
       "path": "run-checks.mjs",
@@ -177,13 +182,13 @@
     },
     {
       "path": "task-sheet-validation.json",
-      "bytes": 257,
-      "sha256": "81c493cf4f2ba99e37f1a53efd42f9db479589c4f1f64f1c63ecc289782e0d45"
+      "bytes": 312,
+      "sha256": "e60418086ab9e543a64e881f6fcf0c90dfafcb27d6e512da7376711f20432f07"
     },
     {
       "path": "tasks.csv",
       "bytes": 6800,
-      "sha256": "8e26e5bbdc7796ecc524b50ad6adcbe6330cc515e872269c6c4bd47be3f4eadc"
+      "sha256": "6d3e76979809ad5a524f560b7acfef0e82bcf090dd82688e3a957d4f0e9358ae"
     }
   ]
 }

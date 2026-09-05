@@ -75,7 +75,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Client-scoped tables with direct client_id.
+-- Client-scoped tables with direct client_id (and clients using id).
 DO $$
 DECLARE t text;
 BEGIN
@@ -86,8 +86,13 @@ BEGIN
   ] LOOP
     EXECUTE format('ALTER TABLE hawa.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE hawa.%I FORCE ROW LEVEL SECURITY', t);
-    EXECUTE format('CREATE POLICY %I_client_select ON hawa.%I FOR SELECT USING (hawa.can_access_client(tenant_id, client_id))', t, t);
-    EXECUTE format('CREATE POLICY %I_client_write ON hawa.%I FOR ALL USING (hawa.can_write_client(tenant_id, client_id)) WITH CHECK (hawa.can_write_client(tenant_id, client_id))', t, t);
+    IF t = 'clients' THEN
+      EXECUTE format('CREATE POLICY %I_client_select ON hawa.%I FOR SELECT USING (hawa.can_access_client(tenant_id, id))', t, t);
+      EXECUTE format('CREATE POLICY %I_client_write ON hawa.%I FOR ALL USING (hawa.can_write_client(tenant_id, id)) WITH CHECK (hawa.can_write_client(tenant_id, id))', t, t);
+    ELSE
+      EXECUTE format('CREATE POLICY %I_client_select ON hawa.%I FOR SELECT USING (hawa.can_access_client(tenant_id, client_id))', t, t);
+      EXECUTE format('CREATE POLICY %I_client_write ON hawa.%I FOR ALL USING (hawa.can_write_client(tenant_id, client_id)) WITH CHECK (hawa.can_write_client(tenant_id, client_id))', t, t);
+    END IF;
   END LOOP;
 END $$;
 

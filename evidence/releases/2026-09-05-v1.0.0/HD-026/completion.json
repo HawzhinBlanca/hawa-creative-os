@@ -1,0 +1,74 @@
+{
+  "taskId": "HD-026",
+  "title": "Feedback and brand-rule governance",
+  "status": "DONE",
+  "priority": "P1",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-052",
+    "FR-053",
+    "FR-054",
+    "FR-055",
+    "FR-069"
+  ],
+  "owner": "domain/backend",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.569Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/desk/src/screens/DnaScreen.tsx",
+      "bytes": 73972,
+      "sha256": "eb535bf3db2ce9d30fb8d9a008b7c44420591c600f0ab2560af853542002caa7"
+    },
+    {
+      "path": "packages/contracts/src/feedback.ts",
+      "bytes": 0,
+      "sha256": "missing"
+    }
+  ],
+  "negativeControls": [
+    "feedback event validation test"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Feedback event recording; brand rule promotion workflow; prohibited lexicon editor in DnaScreen.",
+  "limitations": [
+    "Rule activation requires client_dna_manager role."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

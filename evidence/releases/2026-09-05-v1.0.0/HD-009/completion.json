@@ -1,0 +1,78 @@
+{
+  "taskId": "HD-009",
+  "title": "Real hashes and deterministic identities",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-029",
+    "FR-044",
+    "NFR-014",
+    "NFR-020"
+  ],
+  "owner": "domain/platform",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.565Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/core/src/app.ts",
+      "bytes": 59493,
+      "sha256": "171306181a3f9e84eb6c718e9d5f715d3f5503fc31a227234139831bb28a07d1"
+    },
+    {
+      "path": "packages/integrations/src/hycanvas-adapter.ts",
+      "bytes": 9875,
+      "sha256": "75c3da3c6c2810f81a8c59eb0bfe43bc471b2c750a9dfe986b5f7fe248156b63"
+    },
+    {
+      "path": "output/audits/2026-09-05-reliability/probes.json",
+      "bytes": 6065,
+      "sha256": "0a5530534b0f930aa60ec47ac339eefe2ceac9e4c56605313ec3488db1f03a37"
+    }
+  ],
+  "negativeControls": [
+    "P15-hash"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Deep recursive canonical JSON hashing implemented; nested color changes modify hash; hycanvas-adapter converted to real crypto SHA-256.",
+  "limitations": [
+    "Cryptographic SHA-256 is deterministic across all node/browser runtimes."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

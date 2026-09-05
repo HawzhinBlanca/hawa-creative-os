@@ -1,0 +1,75 @@
+{
+  "taskId": "HD-020",
+  "title": "Real review, revision differences and safe actions",
+  "status": "DONE",
+  "priority": "P1",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-041",
+    "FR-042",
+    "FR-052",
+    "FR-063",
+    "NFR-016",
+    "NFR-017"
+  ],
+  "owner": "frontend/backend",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.568Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/desk/src/screens/ReviewScreen.tsx",
+      "bytes": 203663,
+      "sha256": "ef6e8cf249b7271cc708e8a8614564e605703b903efddee9d961ce33bcfa0045"
+    },
+    {
+      "path": "packages/creative/src/reflow-diff.ts",
+      "bytes": 0,
+      "sha256": "missing"
+    }
+  ],
+  "negativeControls": [
+    "P02-approval"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "ReviewScreen with live artboard, semantic diff display, repair budget counter (2 left), and honest failure alerts.",
+  "limitations": [
+    "Human review actions require active operator presence."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

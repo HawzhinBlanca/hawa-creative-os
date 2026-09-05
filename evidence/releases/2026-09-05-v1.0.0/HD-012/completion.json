@@ -1,0 +1,80 @@
+{
+  "taskId": "HD-012",
+  "title": "Preview/export parity and complete delivery files",
+  "status": "DONE",
+  "priority": "P0",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "FR-033",
+    "FR-038",
+    "FR-045",
+    "NFR-008",
+    "NFR-010",
+    "NFR-014"
+  ],
+  "owner": "rendering/editor",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.565Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "apps/desk/src/services/canvasExport.ts",
+      "bytes": 35327,
+      "sha256": "14735ab083a987d799a0289e640b377d70cd293b3d58ba774a74da7cda387016"
+    },
+    {
+      "path": "apps/desk/src/services/zipBundler.ts",
+      "bytes": 6577,
+      "sha256": "002949c1958ec9827b034e86e787846368fe1e2db44fbe829b49b37ae3f72b70"
+    },
+    {
+      "path": "output/audits/2026-09-05-reliability/probes.json",
+      "bytes": 6065,
+      "sha256": "0a5530534b0f930aa60ec47ac339eefe2ceac9e4c56605313ec3488db1f03a37"
+    }
+  ],
+  "negativeControls": [
+    "P13-export"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Reactive SVG generation reflects headline move and hide operations; Master Kit ZIP bundler delivers PNG, SVG, .hyc, and QA certificate.",
+  "limitations": [
+    "Native CMYK PDF generation is deferred to optional external tooling."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}

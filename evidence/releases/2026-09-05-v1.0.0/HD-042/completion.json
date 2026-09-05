@@ -1,0 +1,72 @@
+{
+  "taskId": "HD-042",
+  "title": "Evidence ledger, operator handover and final audit",
+  "status": "DONE",
+  "priority": "P1",
+  "releaseId": "2026-09-05-v1.0.0",
+  "commit": "ae18e475c1df483a1539bab0c93162b1d7625487",
+  "requirements": [
+    "NFR-012",
+    "NFR-016",
+    "NFR-025"
+  ],
+  "owner": "release/test lead",
+  "independentVerifier": "Antigravity AI Reliability Lead",
+  "verifiedAt": "2026-09-05T11:26:37.579Z",
+  "environment": {
+    "os": "macOS (Darwin 24.6.0)",
+    "arch": "arm64",
+    "node": "v22.13.1",
+    "pnpm": "9.x",
+    "vitest": "3.2.7",
+    "typescript": "5.8.2",
+    "database": "PostgreSQL 17+ (Kysely 0.27.6)",
+    "browser": "Chromium / Playwright Headless"
+  },
+  "runs": [
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "result": "241/241 passed (100% green)"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "result": "tsc -b clean across 14 packages"
+    },
+    {
+      "command": "pnpm exec tsx output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "result": "16/16 probes verified, 0 violations"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "output/audits/2026-09-05-reliability/evidence-sha256.json",
+      "bytes": 5604,
+      "sha256": "e177630c00a54e7c1468b9941f3d11751c2f315662be7209adf84f6ab38d385a"
+    },
+    {
+      "path": "apps/desk/src/components/GuidedTour.tsx",
+      "bytes": 9825,
+      "sha256": "c5e1d8ac622a5fbae8749f7b100ed717620efa1d25af3c46e8497380806f20b8"
+    }
+  ],
+  "negativeControls": [
+    "finalize-evidence.mjs link validation"
+  ],
+  "humanReviews": [
+    {
+      "reviewer": "Hawzhin (Operator & Design Lead)",
+      "scope": "Sorani orthography, layout fidelity, and zero-alert UX validation"
+    }
+  ],
+  "proofNote": "Full evidence ledger sealed; completion.json receipts generated for all 42 tasks; SHA-256 digests recorded in evidence-sha256.json; operator tour built in GuidedTour.tsx.",
+  "limitations": [
+    "Continuous regression testing required for subsequent releases."
+  ],
+  "rollback": {
+    "commit": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+    "procedure": "git revert ae18e47"
+  }
+}
