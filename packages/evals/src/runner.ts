@@ -53,7 +53,7 @@ export class EvaluationRunner {
       // Test routing
       const routeRes = await this.gateway.generateStructured<{ decision: string; confidence: number }>(ctx, {
         role: 'intake_router',
-        inputs: [{ kind: 'text', text: c.input_text }],
+        inputs: [{ kind: 'text', text: c.input_text || c.message || '' }],
         systemPromptVersion: '1.0',
         responseSchema: {},
         budget: { maxCostUsd: 0.01, maxLatencyMs: 1000, maxAttempts: 1 },

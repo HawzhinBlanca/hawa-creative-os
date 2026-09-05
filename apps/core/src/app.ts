@@ -40,6 +40,7 @@ import {
   globalFeedbackMiner,
   type CandidateRuleProposal,
   type ArtboardSnapshot,
+  diffDocumentManifests,
 } from '@hawa/creative';
 import {
   DeterministicQAEngine,
@@ -119,6 +120,8 @@ const globalSharedEvalRuns = new Map<string, any>();
 const globalSharedUploadedAssets = new Map<string, any>();
 const globalSharedWorkflowControllers = new Map<string, TaskWorkflowController>();
 const globalSharedRubricReports = new Map<string, QualityRubricReport[]>();
+const globalSharedTaskComments = new Map<string, any[]>();
+const globalSharedOmnichannelReceipts = new Map<string, any>();
 
 export function createApp() {
   const app = new Hono();
@@ -196,6 +199,8 @@ export function createApp() {
   const uploadedAssets = globalSharedUploadedAssets;
   const workflowControllers = globalSharedWorkflowControllers;
   const rubricReports = globalSharedRubricReports;
+  const taskComments = globalSharedTaskComments;
+  const omnichannelReceipts = globalSharedOmnichannelReceipts;
 
   // Real-time Event System (Server-Sent Events)
   type SystemEvent = {
@@ -1550,9 +1555,9 @@ export function createApp() {
     const task = tasks.get(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
-    const taskRevs = revisions.get(taskId) || [];
-    const revExists = taskRevs.some((r: any) => r.id === revisionId) || revisions.has(revisionId);
-    if (!revExists && (revisionId === 'does-not-exist' || !taskRevs.length)) {
+    const taskRevs = Array.from(revisions.values()).filter((r: any) => r.taskId === taskId);
+    const revExists = revisions.has(revisionId) || taskRevs.some((r: any) => r.revisionId === revisionId || r.id === revisionId);
+    if (!revExists) {
       return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist for task ${taskId}`);
     }
 
@@ -1585,6 +1590,7 @@ export function createApp() {
       const trans = sm.transition('APPROVED', { type: 'user', id: decision.actor.userId }, 'Human approved in Desk');
       if (trans.ok) {
         task.status = 'APPROVED';
+        (task as any).latestApproval = decision;
         events.get(taskId)?.push(trans.value);
       }
     } else if (decision.decision === 'revision_requested') {
@@ -1612,6 +1618,167 @@ export function createApp() {
     });
 
     return c.json(decision, 201);
+  });
+
+  // Register Task Revision (Gate F: Post-Approval Invalidation & Diff Engine)
+  registerRoute('post', '/tasks/:taskId/revisions', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const task = tasks.get(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+
+    const body = await c.req.json().catch(() => ({}));
+    const revisionId = body.revisionId || crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const wasApproved = task.status === 'APPROVED';
+    const previousApprovalId = (task as any).latestApproval?.decisionId;
+
+    const newDoc: any = body.document || {
+      id: crypto.randomUUID(),
+      title: body.title || `${task.title} Revision`,
+      pages: body.pages || [{ id: 'p1', name: 'main', width: 1080, height: 1920, unit: 'px', language: 'ckb', direction: 'rtl' }],
+      nodes: body.nodes || [],
+      sourceSha256: crypto.createHash('sha256').update(JSON.stringify(body.nodes || [])).digest('hex'),
+      version: (revisions.get(task.latestRevisionId)?.document?.version || 1) + 1,
+    };
+
+    const newRev = {
+      revisionId,
+      taskId,
+      document: newDoc,
+      plan: body.plan || null,
+      author: body.author || { userId: 'operator_1', role: 'designer' },
+      createdAt: now,
+      metadata: body.metadata || {},
+    };
+
+    revisions.set(revisionId, newRev);
+    const previousRevId = task.latestRevisionId;
+    task.latestRevisionId = revisionId;
+    task.updatedAt = now;
+
+    // Gate F & Invariant #11: Post-approval edits strictly invalidate approval
+    let approvalInvalidated = false;
+    if (wasApproved) {
+      approvalInvalidated = true;
+      const sm = new TaskStateMachine(taskId, task.status);
+      const trans = sm.transition('AWAITING_APPROVAL', { type: 'user', id: body.author?.userId || 'operator' }, 'Post-approval canvas edit invalidated approval');
+      task.status = trans.ok ? 'AWAITING_APPROVAL' : 'AWAITING_APPROVAL';
+      
+      const invalidationRecord = {
+        invalidatedAt: now,
+        reason: 'post_approval_edit',
+        previousApprovalId,
+        previousRevisionId: previousRevId,
+        newRevisionId: revisionId,
+        actor: body.author || { userId: 'operator', role: 'designer' },
+      };
+      (task as any).invalidationHistory = (task as any).invalidationHistory || [];
+      (task as any).invalidationHistory.push(invalidationRecord);
+      (task as any).latestApproval = { ...((task as any).latestApproval || {}), invalidated: true, invalidationRecord };
+
+      broadcast('task:approval_invalidated', {
+        taskId,
+        previousApprovalId,
+        newRevisionId: revisionId,
+        reason: 'post_approval_edit',
+        status: task.status,
+      });
+    } else {
+      task.status = 'AWAITING_APPROVAL';
+    }
+
+    broadcast('task:revision_created', { taskId, revisionId, approvalInvalidated });
+
+    return c.json({
+      ok: true,
+      revisionId,
+      taskId,
+      status: task.status,
+      approvalInvalidated,
+      document: newDoc,
+      createdAt: now,
+    }, 201);
+  });
+
+  // Register Task Node Reviewer Comment (Gate F: Reviewer comments with role policy)
+  registerRoute('post', '/tasks/:taskId/comments', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const task = tasks.get(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+
+    const body = await c.req.json().catch(() => ({}));
+    const allowedRoles = ['art_director', 'creative_director', 'client_reviewer', 'operator'];
+    const actorRole = body.author?.role || 'art_director';
+
+    if (!allowedRoles.includes(actorRole)) {
+      return problem(c, 403, 'Forbidden', `Role ${actorRole} is not permitted to submit review comments`);
+    }
+
+    const commentId = crypto.randomUUID();
+    const commentRecord = {
+      commentId,
+      taskId,
+      revisionId: body.revisionId || task.latestRevisionId,
+      nodeId: body.nodeId || null,
+      author: {
+        userId: body.author?.userId || 'reviewer_1',
+        role: actorRole,
+        displayName: body.author?.displayName || 'Reviewer',
+      },
+      comment: body.comment || '',
+      category: body.category || 'copy_change',
+      priority: body.priority || 'medium',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!taskComments.has(taskId)) taskComments.set(taskId, []);
+    taskComments.get(taskId)!.push(commentRecord);
+
+    broadcast('task:comment_added', { taskId, comment: commentRecord });
+
+    return c.json({ ok: true, comment: commentRecord }, 201);
+  });
+
+  registerRoute('get', '/tasks/:taskId/comments', (c: any) => {
+    const taskId = c.req.param('taskId');
+    const comments = taskComments.get(taskId) || [];
+    return c.json({ ok: true, taskId, comments });
+  });
+
+  // Semantic Document Revision Diff (Gate F: Structural Diffs)
+  registerRoute('get', '/tasks/:taskId/revisions/diff', (c: any) => {
+    const taskId = c.req.param('taskId');
+    const fromRevId = c.req.query('fromRevisionId');
+    const toRevId = c.req.query('toRevisionId');
+
+    if (!fromRevId || !toRevId) {
+      return problem(c, 400, 'Bad Request', 'fromRevisionId and toRevisionId query params are required');
+    }
+
+    const fromRev = revisions.get(fromRevId);
+    const toRev = revisions.get(toRevId);
+    if (!fromRev || !toRev) {
+      return problem(c, 404, 'Revision Not Found', 'One or both revisions were not found');
+    }
+
+    const baseManifest: any = {
+      pages: fromRev.document?.pages || [{ id: 'p1', name: 'main', width: 1080, height: 1920, unit: 'px' }],
+      nodes: fromRev.document?.nodes || [],
+    };
+    const targetManifest: any = {
+      pages: toRev.document?.pages || [{ id: 'p1', name: 'main', width: 1080, height: 1920, unit: 'px' }],
+      nodes: toRev.document?.nodes || [],
+    };
+
+    const diff = diffDocumentManifests(baseManifest, targetManifest);
+    return c.json({
+      ok: true,
+      taskId,
+      fromRevisionId: fromRevId,
+      toRevisionId: toRevId,
+      diff,
+    });
   });
 
   // Record Operator Feedback
@@ -1819,15 +1986,67 @@ export function createApp() {
       updatedAt: t.updatedAt || new Date().toISOString(),
     }));
 
-    // Existing drive deliverables and sheet rows
-    const driveFiles = [
+    // Existing drive deliverables and sheet rows from omnichannelReceipts
+    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [
       { taskId: 'task-pre-1', fileId: 'f_drive_1', folderId: 'folder_drive_1', sha256: 'sha256_d1', byteSize: 14520 },
     ];
-    const sheetRows = [
+    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [
       { taskId: 'task-pre-1', rowNumber: 1, status: 'COMPLETE', packageHash: 'sha256_d1', syncedAt: new Date().toISOString() },
     ];
 
+    for (const [tId, data] of omnichannelReceipts.entries()) {
+      if (data.files && Array.isArray(data.files)) {
+        driveFiles.push(...data.files);
+      }
+      if (data.sheetRow) {
+        sheetRows.push(data.sheetRow);
+      }
+    }
+
+    if (body.driveFiles && Array.isArray(body.driveFiles)) {
+      driveFiles.push(...body.driveFiles);
+    }
+    if (body.sheetRows && Array.isArray(body.sheetRows)) {
+      sheetRows.push(...body.sheetRows);
+    }
+
+    if (body.simulateDrift) {
+      if (body.simulateDrift.missingDriveTaskId) {
+        const targetId = body.simulateDrift.missingDriveTaskId;
+        const remaining = driveFiles.filter((d) => d.taskId !== targetId);
+        driveFiles.length = 0;
+        driveFiles.push(...remaining);
+      }
+      if (body.simulateDrift.missingSheetTaskId) {
+        const targetId = body.simulateDrift.missingSheetTaskId;
+        const remaining = sheetRows.filter((s) => s.taskId !== targetId);
+        sheetRows.length = 0;
+        sheetRows.push(...remaining);
+      }
+      if (body.simulateDrift.divergentTaskId) {
+        const row = sheetRows.find((s) => s.taskId === body.simulateDrift.divergentTaskId);
+        if (row) {
+          row.status = body.simulateDrift.divergentStatus || 'IN_PROGRESS';
+        }
+      }
+    }
+
     const report = reconciliationService.auditAndReconcile(allTasks, driveFiles, sheetRows, autoRepair);
+
+    if (autoRepair) {
+      for (const anomaly of report.anomalies) {
+        if (anomaly.repaired) {
+          const matchingFiles = driveFiles.filter((d) => d.taskId === anomaly.taskId);
+          const matchingSheet = sheetRows.find((s) => s.taskId === anomaly.taskId);
+          const existing = omnichannelReceipts.get(anomaly.taskId) || {};
+          omnichannelReceipts.set(anomaly.taskId, {
+            ...existing,
+            files: matchingFiles.length > 0 ? matchingFiles : existing.files,
+            sheetRow: matchingSheet || existing.sheetRow,
+          });
+        }
+      }
+    }
 
     broadcast('reconciliation:completed', {
       auditId: report.auditId,
@@ -1870,7 +2089,7 @@ export function createApp() {
 
   registerRoute('get', '/evaluations/datasets', (c: any) => {
     return c.json([
-      { id: 'brief', name: 'Brief Builder', casesCount: 60, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
+      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
       { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
       { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
     ]);
@@ -2668,6 +2887,25 @@ export function createApp() {
     }
 
     const receipt = publishResult.ok ? publishResult.value : null;
+    if (receipt) {
+      omnichannelReceipts.set(taskId, {
+        files: files.map((f) => ({
+          taskId,
+          fileId: f.artifactId,
+          folderId: targetFolderId,
+          sha256: f.sha256,
+          byteSize: f.byteSize,
+        })),
+        sheetRow: {
+          taskId,
+          rowNumber: 101,
+          status: 'COMPLETE',
+          packageHash: publicationKey,
+          syncedAt: new Date().toISOString(),
+        },
+        receipt,
+      });
+    }
     broadcast('task:published', { taskId, status: task.status, receipt });
 
     return c.json({

@@ -7,7 +7,7 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
 
   it('evaluates routing and brief holdout cases with 0 critical violations', async () => {
     const summary = await runner.runRoutingAndBriefTournament();
-    expect(summary.totalCases).toBe(60);
+    expect(summary.totalCases).toBe(200);
     expect(summary.passRate).toBe(100);
     expect(summary.criticalViolations).toBe(0);
   });
