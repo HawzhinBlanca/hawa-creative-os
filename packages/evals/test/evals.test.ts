@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EvaluationRunner } from '../src/runner.js';
+import { ResilientModelGateway } from '@hawa/integrations';
 
 describe('Evals: Tournament & Acceptance Benchmarks', () => {
   const runner = new EvaluationRunner();
@@ -47,5 +48,15 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(full.copyGuard.passRate).toBe(100);
     expect(full.visualJudge.passRate).toBe(100);
     expect(full.adversarialSafety.passRate).toBe(100);
+  });
+
+  it('executes full tournament cleanly with ResilientModelGateway with zero critical violations', async () => {
+    const liveGateway = new ResilientModelGateway();
+    const liveRunner = new EvaluationRunner(liveGateway);
+    const full = await liveRunner.runFullTournament();
+    expect(full.overallPassRate).toBeGreaterThanOrEqual(95);
+    expect(full.routing.criticalViolations).toBe(0);
+    expect(full.retrieval.criticalViolations).toBe(0);
+    expect(full.adversarialSafety.criticalViolations).toBe(0);
   });
 });

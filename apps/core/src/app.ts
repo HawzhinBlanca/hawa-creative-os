@@ -25,7 +25,7 @@ import {
 } from '@hawa/domain';
 import { CreativeDirectorRunner, ComfySandboxValidator, type ComfyWorkflowGraph } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
-import { HyCanvasStudioAdapter, GooglePublisher, ReconciliationService, KurdishVoiceTranscriber } from '@hawa/integrations';
+import { HyCanvasStudioAdapter, GooglePublisher, ReconciliationService, KurdishVoiceTranscriber, ResilientModelGateway } from '@hawa/integrations';
 import { EvaluationRunner } from '@hawa/evals';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 
@@ -118,7 +118,8 @@ export function createApp() {
   const qaEngine = new DeterministicQAEngine();
   const studio = new HyCanvasStudioAdapter();
   const publisher = new GooglePublisher();
-  const evalRunner = new EvaluationRunner();
+  const modelGateway = new ResilientModelGateway();
+  const evalRunner = new EvaluationRunner(modelGateway);
   const sloDaemon = new SyntheticTrafficDaemon(12);
   const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
@@ -784,6 +785,10 @@ export function createApp() {
       priority: body.priority || 'routine',
       title: body.title || 'Untitled Task',
       description: body.description || '',
+      headlineEn: body.headlineEn || body.title || 'Untitled Task',
+      headlineCkb: body.headlineCkb || null,
+      copyEn: body.copyEn || body.description || '',
+      copyCkb: body.copyCkb || null,
       sourcePlatform: 'hawa_desk',
       sourceEventId: taskId,
       sourceChannelId: 'hawa_desk',

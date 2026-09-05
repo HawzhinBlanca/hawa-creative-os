@@ -184,9 +184,10 @@ export class ResilientModelGateway implements ModelGateway {
       // Check for live provider API keys
       const promptText = (request.inputs || []).map((i) => i.text || '').join('\n') || (request as any).prompt || '';
 
-      if (candidate.provider === 'google' && process.env.GEMINI_API_KEY) {
+      const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+      if (candidate.provider === 'google' && googleKey) {
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate.model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate.model}:generateContent?key=${googleKey}`;
           const apiRes = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -264,7 +265,8 @@ export class ResilientModelGateway implements ModelGateway {
         const lowerPrompt = promptText.toLowerCase();
         if (request.role === 'intake_router') {
           let clientId = 'client-office-1';
-          if (lowerPrompt.includes('aster') || lowerPrompt.includes('پۆدکاست')) clientId = 'client-aster';
+          if (lowerPrompt.includes('drustee') || lowerPrompt.includes('دروستی') || lowerPrompt.includes('vitamin') || lowerPrompt.includes('ڤیتامین')) clientId = 'client-drustee';
+          else if (lowerPrompt.includes('aster') || lowerPrompt.includes('پۆدکاست')) clientId = 'client-aster';
           else if (lowerPrompt.includes('nova') || lowerPrompt.includes('ڕووداو')) clientId = 'client-nova';
           else if (lowerPrompt.includes('rona') || lowerPrompt.includes('تەندروستی')) clientId = 'client-rona';
 

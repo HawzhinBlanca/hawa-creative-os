@@ -3,7 +3,7 @@ import { runRealtimeQADiagnostics, type QADiagnosticResult } from '../services/q
 import { computeSemanticDiff, type SemanticDiffResult, type DocumentSnapshot } from '../services/semanticDiff.ts';
 import { useI18n } from '../services/i18n.js';
 import { getBrandKit, getAllBrandKits, saveCustomBrandKit, type BrandKit } from '../services/brandKits.ts';
-import { exportToHighResPng, exportToSvg, exportToHycPackage, exportMasterDeliveryBundle, importFromHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
+import { exportToHighResPng, exportToSvg, exportToHycPackage, exportMasterDeliveryBundle, exportOmnichannelCampaignPack, importFromHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
 import { sanitizeSvgContent } from '../services/sanitizer.js';
 import {
   toEasternKurdishDigits,
@@ -557,10 +557,24 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             setTimeout(() => setStudioToast(null), 2500);
           } else if (task) {
             // Clean state reset for fresh task to prevent cross-task pollution
-            setHeadlineEn(task.title || 'Special Ramadan Offer');
-            setHeadlineCkb(task.titleCkb || 'ئۆفەری تایبەتی ڕەمەزان');
-            setCopyEn(task.description || '50% off on all services across Erbil & Sulaymaniyah.');
-            setCopyCkb(task.descriptionCkb || '٥٠٪ داشکاندن لەسەر هەموو خزمەتگوزارییەکان.');
+            const targetClient = task.clientId === 'client-drustee' || task.clientId === 'drustee'
+              ? 'drustee'
+              : task.clientId === 'client-aster' || task.clientId === 'aster'
+              ? 'aster'
+              : task.clientId === 'client-nova' || task.clientId === 'nova'
+              ? 'nova'
+              : task.clientId === 'client-rona' || task.clientId === 'rona'
+              ? 'rona'
+              : task.clientId || selectedBrandKitId;
+
+            if (availableBrandKits[targetClient]) {
+              setSelectedBrandKitId(targetClient);
+            }
+
+            setHeadlineEn(task.headlineEn || task.title || 'Special Ramadan Offer');
+            setHeadlineCkb(task.headlineCkb || task.titleCkb || 'ئۆفەری تایبەتی ڕەمەزان');
+            setCopyEn(task.copyEn || task.description || '50% off on all services across Erbil & Sulaymaniyah.');
+            setCopyCkb(task.copyCkb || task.descriptionCkb || '٥٠٪ داشکاندن لەسەر هەموو خزمەتگوزارییەکان.');
             setNodes([
               { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110, rotation: 0, opacity: 1 },
               { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52, rotation: 0, opacity: 1 },
@@ -2117,6 +2131,36 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }
   };
 
+  const handleExportOmnichannelCampaign = async () => {
+    setShowExportMenu(false);
+    setExporting(true);
+    try {
+      const filename = await exportOmnichannelCampaignPack({
+        state: {
+          headlineEn,
+          headlineCkb,
+          copyEn,
+          copyCkb,
+          langVariant,
+          fontFamily,
+          fontWeight,
+          accentColor,
+          brandKit: activeBrandKit,
+          format: variant,
+          nodes,
+        },
+        task,
+        qaReport: qaDiagnostics,
+      });
+      setStudioToast(`✓ 4-in-1 Omnichannel Campaign Pack generated & downloaded: ${filename}`);
+    } catch (err: any) {
+      setErrorMessage(`Omnichannel campaign packaging failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+      setTimeout(() => setStudioToast(null), 5000);
+    }
+  };
+
   const handleImportHycFile = async (file: File) => {
     setShowExportMenu(false);
     try {
@@ -3168,6 +3212,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             <span>Master Kit (.zip)</span>
           </button>
 
+          <button
+            className="btn"
+            style={{
+              fontSize: 11,
+              padding: '4px 12px',
+              fontWeight: 700,
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: '#10B981',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+            onClick={handleExportOmnichannelCampaign}
+            disabled={exporting}
+            title="Download complete 4-in-1 Omnichannel Campaign Pack (.zip) with Feed, Story, Square, and Billboard formats"
+          >
+            <span>🚀</span>
+            <span>4-in-1 Campaign (.zip)</span>
+          </button>
+
           {/* Export Dropdown Button with 1x / 2x / 4K / SVG / HYC */}
           <div style={{ position: 'relative' }}>
             <button
@@ -3194,6 +3259,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                 }}
               >
+                <div
+                  onClick={handleExportOmnichannelCampaign}
+                  style={{
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                    fontWeight: 700,
+                    color: '#10B981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    marginBottom: 4,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(16, 185, 129, 0.08)')}
+                >
+                  <span>🚀</span>
+                  <span>Export 4-in-1 Campaign Pack (.zip)</span>
+                </div>
                 <div
                   onClick={handleExportDeliveryKit}
                   style={{

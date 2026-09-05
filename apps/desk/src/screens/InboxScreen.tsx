@@ -18,6 +18,10 @@ interface LiveTask {
   updatedAt?: string;
   latestRevisionId?: string;
   latestQAReport?: any;
+  headlineEn?: string;
+  headlineCkb?: string;
+  copyEn?: string;
+  copyCkb?: string;
 }
 
 export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, onSelectReview }) => {
@@ -35,12 +39,23 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
   // Inbound Brief Simulator State
   const [showSimulator, setShowSimulator] = useState(false);
-  const [simulatorPreset, setSimulatorPreset] = useState<'aster' | 'nova' | 'rona'>('aster');
+  const [simulatorPreset, setSimulatorPreset] = useState<'drustee' | 'aster' | 'nova' | 'rona'>('drustee');
   const [simulating, setSimulating] = useState(false);
   const [simulationStep, setSimulationStep] = useState(0);
   const [simulatedTask, setSimulatedTask] = useState<LiveTask | null>(null);
 
   const SIMULATOR_PRESETS = {
+    drustee: {
+      client: 'client-drustee',
+      clientName: 'Drustee Supplements',
+      platform: 'mobile_desk',
+      icon: '🌿',
+      title: 'Active Vitamin D3 + K2 Launch Drops',
+      headlineEn: 'Pure Vitamin D3 + K2 Drops',
+      headlineCkb: 'ڤیتامین D3 + K2 ی زانستی',
+      copyEn: '5000 IU / 100mcg · Third-Party Lab Tested · GMP Certified',
+      copyCkb: '٥٠٠٠ یەکەی نێودەوڵەتی · پشکنراوی تاقیگەیی باوەڕپێکراو',
+    },
     aster: {
       client: 'client-aster',
       clientName: 'Aster Hotel & Resort',
@@ -100,6 +115,10 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
       source: { platform: p.platform, externalId: `ext_${Date.now()}` },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      headlineEn: p.headlineEn,
+      headlineCkb: p.headlineCkb,
+      copyEn: p.copyEn,
+      copyCkb: p.copyCkb,
     };
 
     try {
@@ -111,6 +130,10 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
           clientId: p.client,
           description: fullDescription,
           priority: 'high',
+          headlineEn: p.headlineEn,
+          headlineCkb: p.headlineCkb,
+          copyEn: p.copyEn,
+          copyCkb: p.copyCkb,
         }),
       });
     } catch {
@@ -301,8 +324,8 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
           </div>
 
           {/* Preset Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            {(['aster', 'nova', 'rona'] as const).map((key) => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+            {(['drustee', 'aster', 'nova', 'rona'] as const).map((key) => {
               const p = SIMULATOR_PRESETS[key];
               const isSelected = simulatorPreset === key;
               return (

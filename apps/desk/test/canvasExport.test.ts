@@ -3,6 +3,7 @@ import {
   generateHycPackageData,
   generateSvgData,
   importFromHycPackage,
+  buildOmnichannelCampaignZip,
   type CanvasExportState,
 } from '../src/services/canvasExport';
 import { BRAND_KITS } from '../src/services/brandKits';
@@ -155,5 +156,44 @@ describe('Canvas Export & HyCanvas Serialization Rigor', () => {
     expect(hiddenSvg).not.toContain('٣٤ دۆلار · کوالێتی باوەڕپێکراو');
     // But custom badge should still be there
     expect(hiddenSvg).toContain('باوەڕپێکراوی GMP');
+  });
+
+  it('generates 4-in-1 Omnichannel Campaign Pack (.zip) with linked variants, SVGs, .hyc, and manifest (FR-033)', async () => {
+    const { bundler, manifest, zipFilename } = await buildOmnichannelCampaignZip({
+      state: sampleState,
+      task: { id: 'task-drustee-campaign-001', title: 'Drustee Vitamin D3 Launch' },
+      qaReport: { status: 'PASSED', violations: 0, wcagRatio: 13.11 },
+    });
+
+    expect(zipFilename).toContain('hawa-omnichannel-drustee');
+    expect(manifest.campaignId).toMatch(/^HAWA-OMNI-/);
+    expect(manifest.client.id).toBe('drustee');
+    expect(manifest.invariants.fr033_aspect_ratios_linked).toBe('VERIFIED_4_CHANNELS');
+    expect(manifest.invariants.invariant2_editable_vector_tree).toBe('VERIFIED_LOSSLESS');
+    expect(manifest.channels.length).toBe(4);
+
+    const expectedPresets = ['feed', 'story', 'square', 'landscape'];
+    expect(manifest.channels.map((c: any) => c.preset)).toEqual(expectedPresets);
+
+    const zipBlob = bundler.generateZipBlob();
+    expect(zipBlob).toBeDefined();
+    expect(zipBlob.type).toBe('application/zip');
+    expect(zipBlob.size).toBeGreaterThan(500);
+
+    const buffer = await zipBlob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const contentText = new TextDecoder().decode(bytes);
+
+    // Verify all directories and key files are present in the ZIP
+    expect(contentText).toContain('01_feed_portrait_4x5/vector_master.svg');
+    expect(contentText).toContain('01_feed_portrait_4x5/editable_tree.hyc');
+    expect(contentText).toContain('02_story_vertical_9x16/vector_master.svg');
+    expect(contentText).toContain('02_story_vertical_9x16/editable_tree.hyc');
+    expect(contentText).toContain('03_square_feed_1x1/vector_master.svg');
+    expect(contentText).toContain('03_square_feed_1x1/editable_tree.hyc');
+    expect(contentText).toContain('04_landscape_billboard_16x9/vector_master.svg');
+    expect(contentText).toContain('04_landscape_billboard_16x9/editable_tree.hyc');
+    expect(contentText).toContain('campaign_manifest.json');
+    expect(contentText).toContain('README_CAMPAIGN.txt');
   });
 });

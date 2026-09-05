@@ -398,5 +398,109 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(updatedList[0].version).toBe(13);
     expect(updatedList[0].snapshotId).toBe(newSnap.snapshotId);
   });
+
+  it('executes complete end-to-end task lifecycle for Drustee (Ingress ➔ Route ➔ Brief ➔ Generate ➔ Approve ➔ Publish)', async () => {
+    // 1. Task Ingress (Desk simulator or internal user)
+    const createRes = await app.request('/v1/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hawa-Desk': 'internal',
+      },
+      body: JSON.stringify({
+        title: 'Active Vitamin D3 + K2 Launch Drops',
+        clientId: 'client-drustee',
+        headlineEn: 'Pure Vitamin D3 + K2 Drops',
+        headlineCkb: 'ڤیتامین D3 + K2 ی زانستی',
+        copyEn: '5000 IU / 100mcg · Third-Party Lab Tested · GMP Certified',
+        copyCkb: '٥٠٠٠ یەکەی نێودەوڵەتی · پشکنراوی تاقیگەیی باوەڕپێکراو',
+        priority: 'high',
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const createdTask = await createRes.json();
+    expect(createdTask.id).toBeDefined();
+    expect(createdTask.status).toBe('RECEIVED');
+    expect(createdTask.clientId).toBe('client-drustee');
+    expect(createdTask.headlineEn).toBe('Pure Vitamin D3 + K2 Drops');
+    expect(createdTask.clientScopeLocked).toBe(false);
+
+    const taskId = createdTask.id;
+
+    // 2. Route Task (Locks Client Scope, Invariant #5)
+    const routeRes = await app.request(`/v1/tasks/${taskId}/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: 'client-drustee', reason: 'Confirmed Drustee Clinical Tenant' }),
+    });
+    expect(routeRes.status).toBe(202);
+
+    const routedTaskRes = await app.request(`/v1/tasks/${taskId}`);
+    const routedTask = await routedTaskRes.json();
+    expect(routedTask.status).toBe('BRIEFING');
+    expect(routedTask.clientScopeLocked).toBe(true);
+
+    // 3. Create Brief
+    const briefRes = await app.request(`/v1/tasks/${taskId}/briefs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        objective: 'Active Vitamin D3+K2 Drops Social Launch',
+        rawRequestText: 'Drustee Vitamin D3 + K2 5000 IU',
+        copyBlocks: [
+          { role: 'headline', text: 'ڤیتامین D3 + K2 ی زانستی' },
+          { role: 'copy', text: '٥٠٠٠ یەکەی نێودەوڵەتی · کوالێتی باوەڕپێکراو' },
+        ],
+      }),
+    });
+    expect(briefRes.status).toBe(201);
+
+    // 4. Generate Studio Revision
+    const genRes = await app.request(`/v1/tasks/${taskId}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'Clinical amber dropper on emerald studio backdrop' }),
+    });
+    expect(genRes.status).toBe(202);
+
+    const taskCheck = await app.request(`/v1/tasks/${taskId}`);
+    const generatedTask = await taskCheck.json();
+    expect(generatedTask.status).toBe('AWAITING_APPROVAL');
+    expect(generatedTask.latestRevisionId).toBeDefined();
+
+    const revisionId = generatedTask.latestRevisionId;
+
+    // 5. Human Decision (Approval)
+    const decisionRes = await app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        outcome: 'approved',
+        reviewerId: 'art_director',
+        notes: 'Passed all visual quality, Kurdish orthography, and WCAG contrast diagnostics.',
+      }),
+    });
+    expect(decisionRes.status).toBe(201);
+
+    // 6. Publish Deliverables (Idempotent Publisher)
+    const pubRes = await app.request(`/v1/tasks/${taskId}/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(pubRes.status).toBe(202);
+    const pubData = await pubRes.json();
+    expect(pubData.taskId).toBe(taskId);
+
+    // Verify task is in COMPLETE terminal status
+    const finalTaskRes = await app.request(`/v1/tasks/${taskId}`);
+    const finalTask = await finalTaskRes.json();
+    expect(finalTask.status).toBe('COMPLETE');
+
+    // Verify timeline has full audit trail
+    const timelineRes = await app.request(`/v1/tasks/${taskId}/timeline`);
+    const timeline = await timelineRes.json();
+    expect(timeline.events.length).toBeGreaterThanOrEqual(5);
+  });
 });
 

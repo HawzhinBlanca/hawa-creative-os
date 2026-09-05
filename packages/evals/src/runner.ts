@@ -4,7 +4,7 @@ import { FakeModelGateway } from '@hawa/testkit';
 import { extractProtectedTokens } from '@hawa/domain';
 import { RetrievalService } from '@hawa/retrieval';
 import { checkKurdishTypographyClearance, validateKurdishOrthography } from '@hawa/qa';
-import type { RequestContext } from '@hawa/contracts';
+import type { RequestContext, ModelGateway } from '@hawa/contracts';
 
 function resolveEvalPath(relPath: string): string {
   const p1 = resolve(process.cwd(), relPath);
@@ -24,7 +24,11 @@ export interface EvalSummary {
 }
 
 export class EvaluationRunner {
-  private gateway = new FakeModelGateway();
+  private gateway: ModelGateway;
+
+  constructor(gateway?: ModelGateway) {
+    this.gateway = gateway || new FakeModelGateway();
+  }
 
   async runRoutingAndBriefTournament(): Promise<EvalSummary> {
     const filePath = resolveEvalPath('evals/routing_brief.jsonl');
