@@ -17,19 +17,26 @@ export const App: React.FC = () => {
   const getInitialScreen = (): ScreenId => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+      if (hash === 'adapters') return 'settings';
       const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
       if (validScreens.includes(hash as ScreenId)) return hash as ScreenId;
       const path = window.location.pathname.replace(/^\//, '').split('/')[0];
+      if (path === 'adapters') return 'settings';
       if (validScreens.includes(path as ScreenId)) return path as ScreenId;
     }
     return 'inbox';
   };
 
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
+  const [appToast, setAppToast] = useState<string | null>(null);
 
   useEffect(() => {
     const handleLocationChange = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+      if (hash === 'adapters') {
+        setCurrentScreen('settings');
+        return;
+      }
       const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
       if (validScreens.includes(hash as ScreenId)) {
         setCurrentScreen(hash as ScreenId);
@@ -105,7 +112,8 @@ export const App: React.FC = () => {
       setTaskCopyEn('');
       setTaskCopyCkb('');
       setIsSubmitting(false);
-      alert('Offline Mode: Task brief queued in local storage. It will submit automatically upon reconnecting.');
+      setAppToast('✓ Offline Mode: Task brief queued in local IndexedDB. It will submit automatically upon reconnecting.');
+      setTimeout(() => setAppToast(null), 5000);
       return;
     }
 
@@ -330,6 +338,30 @@ export const App: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Application Toast */}
+      {appToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 500,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <span>{appToast}</span>
         </div>
       )}
     </div>
