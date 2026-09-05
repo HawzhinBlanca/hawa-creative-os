@@ -348,5 +348,55 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(['clean', 'repaired']).toContain(runReport.status);
     expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
   });
+
+  it('GET /v1/clients lists seeded client tenants with color & rule metrics', async () => {
+    const res = await app.request('/v1/clients');
+    expect(res.status).toBe(200);
+    const clients = await res.json();
+    expect(clients.length).toBeGreaterThanOrEqual(4);
+
+    const aster = clients.find((c: any) => c.clientId === 'client-aster');
+    expect(aster).toBeDefined();
+    expect(aster.name).toBe('Aster Hotel & Resort');
+    expect(aster.code).toBe('ASTER');
+    expect(aster.version).toBe(12);
+    expect(aster.colorsCount).toBe(3);
+    expect(aster.rulesCount).toBe(3);
+    expect(aster.snapshotsCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('GET /v1/clients/:clientId/snapshots & POST /v1/clients/:clientId/snapshots governs immutable audit log', async () => {
+    // 1. Fetch initial snapshots for Aster Hotel
+    const getRes = await app.request('/v1/clients/client-aster/snapshots');
+    expect(getRes.status).toBe(200);
+    const snapshots = await getRes.json();
+    expect(snapshots.length).toBe(2);
+    expect(snapshots[0].version).toBe(12);
+    expect(snapshots[0].sha256).toMatch(/^sha256_[0-9a-f]+/);
+    expect(snapshots[0].createdBy).toBe('art_director');
+
+    // 2. Commit a new immutable governance snapshot
+    const postRes = await app.request('/v1/clients/client-aster/snapshots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commitMessage: 'Certified Nawroz 2026 luxury gold palette and Kurdish typography invariants',
+        createdBy: 'creative_director',
+      }),
+    });
+    expect(postRes.status).toBe(201);
+    const newSnap = await postRes.json();
+    expect(newSnap.version).toBe(13);
+    expect(newSnap.sha256).toMatch(/^sha256_[0-9a-f]+/);
+    expect(newSnap.commitMessage).toContain('Nawroz 2026');
+    expect(newSnap.createdBy).toBe('creative_director');
+
+    // 3. Verify snapshot is in history list
+    const updatedGetRes = await app.request('/v1/clients/client-aster/snapshots');
+    const updatedList = await updatedGetRes.json();
+    expect(updatedList.length).toBe(3);
+    expect(updatedList[0].version).toBe(13);
+    expect(updatedList[0].snapshotId).toBe(newSnap.snapshotId);
+  });
 });
 

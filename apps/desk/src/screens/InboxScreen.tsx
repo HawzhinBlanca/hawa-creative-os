@@ -27,6 +27,12 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
   const [lastFetched, setLastFetched] = useState<string | null>(null);
   const [realtimeNotification, setRealtimeNotification] = useState<string | null>(null);
 
+  // Ambiguity and Fact Resolution Modals State
+  const [showAmbiguityModal, setShowAmbiguityModal] = useState(false);
+  const [resolvedAmbiguityClient, setResolvedAmbiguityClient] = useState<string | null>(null);
+  const [showFactModal, setShowFactModal] = useState(false);
+  const [resolvedFactChoice, setResolvedFactChoice] = useState<string | null>(null);
+
   const fetchTasks = async () => {
     setLoading(true);
     try {
@@ -264,16 +270,44 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
             ))}
 
             <div className="task">
-              <span className="pill bad">routing blocked</span>
+              {resolvedAmbiguityClient ? (
+                <span className="pill ok">routed: {resolvedAmbiguityClient}</span>
+              ) : (
+                <span className="pill bad">routing blocked</span>
+              )}
               <h3>“Make the same one again”</h3>
-              <p>Two clients are allowed; no referenced design.</p>
-              <button className="btn" onClick={() => alert('Ambiguity resolution modal: select client Aster or Nova')}>Choose client</button>
+              <p>
+                {resolvedAmbiguityClient
+                  ? `Scope locked to ${resolvedAmbiguityClient} (Invariant #4 enforced). Ready for asset retrieval.`
+                  : 'Two clients are allowed; no referenced design.'}
+              </p>
+              <button
+                className="btn"
+                style={resolvedAmbiguityClient ? { borderColor: 'var(--ok, #1d733c)', color: '#047857' } : {}}
+                onClick={() => setShowAmbiguityModal(true)}
+              >
+                {resolvedAmbiguityClient ? 'Change client scope' : 'Choose client'}
+              </button>
             </div>
             <div className="task">
-              <span className="pill warn">missing fact</span>
+              {resolvedFactChoice ? (
+                <span className="pill ok">facts verified</span>
+              ) : (
+                <span className="pill warn">missing fact</span>
+              )}
               <h3>Event poster</h3>
-              <p>Location and time conflict between message and attachment.</p>
-              <button className="btn" onClick={() => alert('Fact clarification requested via outbound Telegram message')}>Resolve facts</button>
+              <p>
+                {resolvedFactChoice
+                  ? `Fact reconciled: ${resolvedFactChoice}. Hash logged in outbox.`
+                  : 'Location and time conflict between message and attachment.'}
+              </p>
+              <button
+                className="btn"
+                style={resolvedFactChoice ? { borderColor: 'var(--ok, #1d733c)', color: '#047857' } : {}}
+                onClick={() => setShowFactModal(true)}
+              >
+                {resolvedFactChoice ? 'Edit fact reconciliation' : 'Resolve facts'}
+              </button>
             </div>
           </div>
         )}
@@ -381,6 +415,175 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
           </div>
         )}
       </div>
+
+      {/* Ambiguity Resolution Modal (Invariant #4 Scope Bounding) */}
+      {showAmbiguityModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: 500,
+              padding: 24,
+              boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+              borderRadius: 14,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Client Scope Resolution</h2>
+                <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
+                  Invariant #4: Client scope must be strictly bounded before asset retrieval.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAmbiguityModal(false)}
+                style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+              <b>Inbound Request:</b> “Make the same one again”
+              <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
+                Multiple client tenant workspaces match the sender profile. Select the intended client:
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {[
+                { id: 'client-aster', name: 'Aster Hotel & Resort', code: 'ASTER' },
+                { id: 'client-nova', name: 'Nova Tech Systems', code: 'NOVA' },
+                { id: 'client-rona', name: 'Rona Haute Couture', code: 'RONA' },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  className="btn"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 14px',
+                    textAlign: 'left',
+                    borderColor: resolvedAmbiguityClient === c.name ? 'var(--ok, #1d733c)' : undefined,
+                    background: resolvedAmbiguityClient === c.name ? '#ecfdf5' : undefined,
+                  }}
+                  onClick={() => {
+                    setResolvedAmbiguityClient(c.name);
+                    setShowAmbiguityModal(false);
+                  }}
+                >
+                  <span style={{ fontWeight: 650 }}>{c.name}</span>
+                  <span className="pill">{c.code}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => setShowAmbiguityModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fact Conflict Reconciliation Modal (Invariant #5 Protected Claims) */}
+      {showFactModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: 540,
+              padding: 24,
+              boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
+              borderRadius: 14,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Protected Fact Reconciliation</h2>
+                <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
+                  Invariant #5: Exact claims and schedules must trace to approved ground truth.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFactModal(false)}
+                style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+              <div style={{ color: '#b45309', fontWeight: 650, marginBottom: 4 }}>
+                ⚠ Conflicting venue & schedule detected:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6 }}>
+                <li><b>Telegram Body:</b> “Empire World · 8:00 PM”</li>
+                <li><b>PDF Attachment:</b> “Family Mall Auditorium · 7:30 PM”</li>
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {[
+                { title: 'Use Verified PDF Attachment', detail: 'Family Mall Auditorium · 7:30 PM' },
+                { title: 'Use Explicit Client Telegram Message', detail: 'Empire World · 8:00 PM' },
+                { title: 'Dispatch Inbound Telegram Clarification', detail: 'Request operator confirmation via bot' },
+              ].map((opt, i) => (
+                <button
+                  key={i}
+                  className="btn"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    padding: '10px 14px',
+                    textAlign: 'left',
+                    borderColor: resolvedFactChoice === opt.detail ? 'var(--ok, #1d733c)' : undefined,
+                    background: resolvedFactChoice === opt.detail ? '#ecfdf5' : undefined,
+                  }}
+                  onClick={() => {
+                    setResolvedFactChoice(opt.detail);
+                    setShowFactModal(false);
+                  }}
+                >
+                  <span style={{ fontWeight: 650 }}>{opt.title}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{opt.detail}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => setShowFactModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
