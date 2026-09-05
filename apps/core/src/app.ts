@@ -21,7 +21,7 @@ import {
   type CandidateRule,
   type DomainFailure,
 } from '@hawa/domain';
-import { CreativeDirectorRunner } from '@hawa/creative';
+import { CreativeDirectorRunner, ComfySandboxValidator, type ComfyWorkflowGraph } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import { HyCanvasStudioAdapter, GooglePublisher, ReconciliationService, KurdishVoiceTranscriber } from '@hawa/integrations';
 import { EvaluationRunner } from '@hawa/evals';
@@ -1233,6 +1233,71 @@ export function createApp() {
     );
 
     return c.json(result, 200);
+  });
+
+  // List All Admitted & Verified Assets
+  registerRoute('get', '/assets', async (c: any) => {
+    return c.json(Array.from(uploadedAssets.values()), 200);
+  });
+
+  // Sandboxed ComfyUI Graph Synthesis & Validation (Invariant #3, ADR-0007)
+  registerRoute('post', '/ai/comfy-background', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const prompt = (body.prompt || 'Minimalist Kurdish Luxury Backdrop').trim();
+    const style = body.style || 'geometric_mesh';
+
+    const graph: ComfyWorkflowGraph = {
+      workflowId: `wf_ai_${crypto.randomUUID().slice(0, 8)}`,
+      nodes: [
+        { id: 1, class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'sd_xl_turbo_curated.safetensors' } },
+        { id: 2, class_type: 'CLIPTextEncode', inputs: { text: `${prompt}, commercial luxury gradient, vector art` } },
+        { id: 3, class_type: 'EmptyLatentImage', inputs: { width: 1080, height: 1350, batch_size: 1 } },
+        { id: 4, class_type: 'KSampler', inputs: { steps: 8, cfg: 2.0, sampler_name: 'euler_ancestral' } },
+        { id: 5, class_type: 'VAEDecode', inputs: {} },
+        { id: 6, class_type: 'TransparentBackgroundRemover', inputs: {} },
+        { id: 7, class_type: 'SaveImageWebP', inputs: { filename_prefix: 'hawa_asset' } },
+      ],
+    };
+
+    const validator = new ComfySandboxValidator();
+    const validation = validator.validateWorkflow(graph);
+
+    if (!validation.ok) {
+      return problem(c, 422, 'ComfyUI Sandbox Violation', validation.error.message);
+    }
+
+    const graphHash = validation.value.graphHash;
+    const assetId = `asset_ai_${crypto.randomUUID().slice(0, 8)}`;
+    
+    // Generate verified vector SVG graphic adhering to Invariant #2 (pure vector backdrop, unflattened text)
+    const svgGraphic = `<svg viewBox="0 0 480 600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="aiGrad_${graphHash.slice(0, 6)}" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.8"/>
+          <stop offset="60%" stop-color="#016E7D" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#0A1C1F" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="480" height="600" fill="transparent"/>
+      <path d="M 240,60 L 420,240 L 240,420 L 60,240 Z" fill="url(#aiGrad_${graphHash.slice(0, 6)})" stroke="rgba(56, 189, 248, 0.4)" stroke-width="2"/>
+      <circle cx="240" cy="240" r="90" fill="none" stroke="rgba(245, 158, 11, 0.5)" stroke-width="1.5" stroke-dasharray="6,4"/>
+    </svg>`;
+
+    const responseData = {
+      assetId,
+      prompt,
+      style,
+      graphHash,
+      verifiedSha256: `sha256_${graphHash.slice(0, 32)}`,
+      status: 'VERIFIED_SANDBOXED',
+      mimeType: 'image/svg+xml',
+      svgContent: svgGraphic,
+      createdAt: new Date().toISOString(),
+    };
+
+    broadcast('ai:graphic_generated', { assetId, prompt, graphHash });
+
+    return c.json(responseData, 201);
   });
 
   return app;

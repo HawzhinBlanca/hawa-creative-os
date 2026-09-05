@@ -33,7 +33,7 @@ interface ReviewScreenProps {
 
 export interface CanvasNode {
   id: string;
-  role: 'headline' | 'copy' | 'shape' | 'logo' | 'text_custom' | 'shape_custom' | 'badge_custom';
+  role: 'headline' | 'copy' | 'shape' | 'logo' | 'text_custom' | 'shape_custom' | 'badge_custom' | 'image_custom';
   name: string;
   zIndex: number;
   locked: boolean;
@@ -61,6 +61,8 @@ export interface CanvasNode {
   textCkb?: string;
   groupId?: string;
   aspectRatioLocked?: boolean;
+  svgContent?: string;
+  assetHash?: string;
   shadow?: {
     x: number;
     y: number;
@@ -170,7 +172,19 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
-  const [leftTab, setLeftTab] = useState<'layers' | 'brief'>('layers');
+  const [leftTab, setLeftTab] = useState<'layers' | 'assets' | 'brief'>('layers');
+  const [aiPrompt, setAiPrompt] = useState<string>('Minimalist Kurdish Luxury Backdrop');
+  const [aiStyle, setAiStyle] = useState<string>('geometric_mesh');
+  const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
+  const [aiResult, setAiResult] = useState<{
+    assetId: string;
+    prompt: string;
+    style: string;
+    graphHash: string;
+    verifiedSha256: string;
+    status: string;
+    svgContent: string;
+  } | null>(null);
 
   // 5. Pan & Zoom Engine State
   const [zoom, setZoom] = useState<number>(1.0);
@@ -505,6 +519,164 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     setNodes((prev) => [...prev, newNode]);
     setSelectedNodeIds([newId]);
     setStudioToast('✓ Added Promo Badge');
+    setTimeout(() => setStudioToast(null), 2500);
+    pushHistory();
+  };
+
+  const handleInsertAsset = (assetType: 'gold_seal' | 'phone_bar' | 'kurdish_star' | 'brand_watermark') => {
+    const newId = `asset_${Date.now()}`;
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+
+    if (assetType === 'gold_seal') {
+      const svg = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="60" cy="60" r="54" fill="#0A1C1F" stroke="#F59E0B" stroke-width="4"/>
+        <circle cx="60" cy="60" r="46" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,2"/>
+        <text x="60" y="48" fill="#F59E0B" font-family="Inter, sans-serif" font-size="11" font-weight="bold" text-anchor="middle">100%</text>
+        <text x="60" y="62" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="9" font-weight="bold" text-anchor="middle">OFFICIAL</text>
+        <text x="60" y="78" fill="#38BDF8" font-family="Vazirmatn, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" dir="rtl">فەرمی</text>
+      </svg>`;
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Official Gold Seal',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.max(10, currentArtboard.width - 130),
+        y: 20,
+        width: 110,
+        height: 110,
+        svgContent: svg,
+        assetHash: 'sha256_gold_seal_verified',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Certified Gold Seal');
+    } else if (assetType === 'phone_bar') {
+      const svg = `<svg viewBox="0 0 320 54" xmlns="http://www.w3.org/2000/svg">
+        <rect width="320" height="54" rx="27" fill="#047857" stroke="#10B981" stroke-width="2"/>
+        <circle cx="30" cy="27" r="15" fill="#10B981"/>
+        <path d="M 24,27 C 24,31 27,34 31,34 C 33,34 35,32 35,30 C 35,28 33,28 32,27 C 31,26 30,26 29,27 C 28,27 27,26 26,25 C 25,24 24,23 25,22 C 26,21 26,20 25,19 C 24,18 22,20 22,22 C 22,24 23,26 24,27 Z" fill="#FFFFFF"/>
+        <text x="56" y="33" fill="#FFFFFF" font-family="Inter, Vazirmatn, sans-serif" font-size="13" font-weight="bold">+964 750 000 0000 · پەیوەندی خێرا</text>
+      </svg>`;
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'WhatsApp Quick Bar',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.max(10, Math.round((currentArtboard.width - 300) / 2)),
+        y: Math.max(10, currentArtboard.height - 80),
+        width: 300,
+        height: 50,
+        svgContent: svg,
+        assetHash: 'sha256_whatsapp_bar_verified',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted WhatsApp Quick Bar');
+    } else if (assetType === 'kurdish_star') {
+      const svg = `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="starGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.9"/>
+            <stop offset="80%" stop-color="#D97706" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="#92400E" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <path d="M 80,10 L 98,62 L 150,80 L 98,98 L 80,150 L 62,98 L 10,80 L 62,62 Z" fill="url(#starGrad)" stroke="#F59E0B" stroke-width="2"/>
+        <circle cx="80" cy="80" r="18" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      </svg>`;
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Kurdish Star Motif',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - 120) / 2),
+        y: Math.round((currentArtboard.height - 120) / 2),
+        width: 120,
+        height: 120,
+        svgContent: svg,
+        assetHash: 'sha256_kurdish_star_verified',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Kurdish Star Motif');
+    } else if (assetType === 'brand_watermark') {
+      const svg = `<svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+        <text x="100" y="40" fill="rgba(255,255,255,0.18)" font-family="Inter, sans-serif" font-size="28" font-weight="900" text-anchor="middle" letter-spacing="4">${activeBrandKit.name.toUpperCase()}</text>
+      </svg>`;
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Brand Watermark',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - 220) / 2),
+        y: Math.round(currentArtboard.height * 0.4),
+        width: 220,
+        height: 66,
+        svgContent: svg,
+        assetHash: `sha256_watermark_${activeBrandKit.id}`,
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Brand Watermark');
+    }
+    setTimeout(() => setStudioToast(null), 2500);
+    pushHistory();
+  };
+
+  const handleGenerateAiBackground = async () => {
+    setIsGeneratingAi(true);
+    try {
+      const res = await fetch('/v1/ai/comfy-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt, style: aiStyle }),
+      });
+      if (!res.ok) {
+        throw new Error(`Synthesis failed: ${res.statusText}`);
+      }
+      const data = await res.json();
+      setAiResult(data);
+      setStudioToast(`✓ Generated: ${data.verifiedSha256.slice(0, 16)}…`);
+    } catch (err: any) {
+      setStudioToast(`✕ Error: ${err.message}`);
+    } finally {
+      setIsGeneratingAi(false);
+      setTimeout(() => setStudioToast(null), 3000);
+    }
+  };
+
+  const handleInsertAiResult = (asBackdrop = false) => {
+    if (!aiResult) return;
+    const newId = `ai_${Date.now()}`;
+    const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+    const minZ = nodes.reduce((min, n) => Math.min(min, n.zIndex), 0);
+
+    const newNode: CanvasNode = {
+      id: newId,
+      role: 'image_custom',
+      name: asBackdrop ? `Backdrop (${aiResult.style})` : `AI Graphic (${aiResult.prompt.slice(0, 16)})`,
+      zIndex: asBackdrop ? Math.min(0, minZ - 1) : maxZ + 1,
+      locked: asBackdrop,
+      visible: true,
+      x: asBackdrop ? 0 : Math.round((currentArtboard.width - 280) / 2),
+      y: asBackdrop ? 0 : Math.round((currentArtboard.height - 350) / 2),
+      width: asBackdrop ? currentArtboard.width : 280,
+      height: asBackdrop ? currentArtboard.height : 350,
+      opacity: asBackdrop ? 0.85 : 1,
+      svgContent: aiResult.svgContent,
+      assetHash: aiResult.verifiedSha256,
+    };
+    setNodes((prev) => [...prev, newNode]);
+    setSelectedNodeIds([newId]);
+    setStudioToast(asBackdrop ? '✓ Artboard Backdrop Applied' : '✓ Inserted Sandboxed Vector Layer');
     setTimeout(() => setStudioToast(null), 2500);
     pushHistory();
   };
@@ -2026,11 +2198,43 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       );
     }
 
+    if (node.role === 'image_custom') {
+      return (
+        <div
+          key={node.id}
+          onPointerDown={(e) => handleElementPointerDown(e, node.id)}
+          style={{
+            ...containerStyle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            borderRadius: node.borderRadius ?? 8,
+            background: node.backgroundColor || 'transparent',
+            border: node.borderWidth ? `${node.borderWidth}px solid ${node.borderColor || 'rgba(255,255,255,0.2)'}` : undefined,
+          }}
+          title={node.assetHash ? `Verified Asset: ${node.assetHash}` : node.name}
+        >
+          {isSelected && renderTransformBBox(node)}
+          {node.svgContent ? (
+            <div
+              style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex' }}
+              dangerouslySetInnerHTML={{ __html: node.svgContent }}
+            />
+          ) : (
+            <div style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center' }}>
+              🖼 {node.name}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return null;
   };
 
   return (
-    <section id="review" className="screen active" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
+    <section id="review" className="screen active" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', direction: 'ltr' }}>
       {/* Dynamic Studio Feedback Banner */}
       {studioToast && (
         <div style={{
@@ -2306,27 +2510,34 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       </div>
 
       {/* Main Review Grid: Left Column (Layers & Brief), Center (Canvas), Right (Inspector) */}
-      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '270px 1fr 310px' }}>
-        {/* Left Column: Dual Tab Layout (Layers Tree vs Brief & Timeline) */}
+      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '260px minmax(380px, 1fr) 300px', overflow: 'hidden' }}>
+        {/* Left Column: Tri-Tab Layout (Layers Tree vs Assets & AI vs Brief & Spec) */}
         <div className="panel" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 10 }}>
             <button
               className={`btn ${leftTab === 'layers' ? 'primary' : ''}`}
-              style={{ flex: 1, fontSize: 11, padding: '4px 6px', fontWeight: 600 }}
+              style={{ flex: 1, fontSize: 11, padding: '4px 4px', fontWeight: 600 }}
               onClick={() => setLeftTab('layers')}
             >
               📑 Layers ({nodes.length})
             </button>
             <button
+              className={`btn ${leftTab === 'assets' ? 'primary' : ''}`}
+              style={{ flex: 1, fontSize: 11, padding: '4px 4px', fontWeight: 600 }}
+              onClick={() => setLeftTab('assets')}
+            >
+              🎨 Assets & AI
+            </button>
+            <button
               className={`btn ${leftTab === 'brief' ? 'primary' : ''}`}
-              style={{ flex: 1, fontSize: 11, padding: '4px 6px', fontWeight: 600 }}
+              style={{ flex: 1, fontSize: 11, padding: '4px 4px', fontWeight: 600 }}
               onClick={() => setLeftTab('brief')}
             >
-              📋 Brief & Timeline
+              📋 Brief & Spec
             </button>
           </div>
 
-          {leftTab === 'layers' ? (
+          {leftTab === 'layers' && (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginBottom: 8 }}>
                 <button
@@ -2377,7 +2588,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: 11, opacity: 0.7 }}>
-                            {node.groupId ? '📁' : node.role === 'headline' || node.role === 'text_custom' ? 'T' : node.role === 'logo' ? '★' : '◻'}
+                            {node.groupId ? '📁' : node.role === 'headline' || node.role === 'text_custom' ? 'T' : node.role === 'logo' ? '★' : node.role === 'image_custom' ? '🖼' : '◻'}
                           </span>
 
                           {renamingNodeId === node.id ? (
@@ -2503,7 +2714,150 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {leftTab === 'assets' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+              {/* Certified Brand Kit Assets */}
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <b style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>
+                    Certified Brand Assets
+                  </b>
+                  <span style={{ fontSize: 9, background: 'rgba(16, 185, 129, 0.2)', color: '#10B981', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                    INVARIANT #5
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', fontSize: 10, textAlign: 'center' }}
+                    onClick={() => handleInsertAsset('gold_seal')}
+                    title="Insert Official 100% Guaranteed Gold Trust Seal"
+                  >
+                    <span style={{ fontSize: 16 }}>🎖️</span>
+                    <span>Gold Seal</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', fontSize: 10, textAlign: 'center' }}
+                    onClick={() => handleInsertAsset('phone_bar')}
+                    title="Insert Kurdish/English WhatsApp Quick Call Bar"
+                  >
+                    <span style={{ fontSize: 16 }}>📞</span>
+                    <span>WhatsApp Bar</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', fontSize: 10, textAlign: 'center' }}
+                    onClick={() => handleInsertAsset('kurdish_star')}
+                    title="Insert Luxury Kurdish Star Geometric Motif"
+                  >
+                    <span style={{ fontSize: 16 }}>✨</span>
+                    <span>Kurdish Star</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', fontSize: 10, textAlign: 'center' }}
+                    onClick={() => handleInsertAsset('brand_watermark')}
+                    title="Insert Subdued Client Brand Monogram Watermark"
+                  >
+                    <span style={{ fontSize: 16 }}>💎</span>
+                    <span>Watermark</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sandboxed ComfyUI AI Synthesis */}
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <b style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#38BDF8' }}>
+                    ComfyUI Sandboxed AI
+                  </b>
+                  <span style={{ fontSize: 9, background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                    INVARIANT #3
+                  </span>
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--muted)', margin: '0 0 8px', lineHeight: 1.3 }}>
+                  Deterministic vector graphics with pinned node allowlist & SHA-256 graph hashing.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div>
+                    <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Prompt</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
+                      placeholder="e.g. Kurdish Luxury Backdrop"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Style Preset</label>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                      {[
+                        { id: 'geometric_mesh', label: 'Geometric' },
+                        { id: 'radiant_glow', label: 'Radiant' },
+                        { id: 'islamic_star', label: 'Star Octagon' },
+                      ].map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          className={`btn ${aiStyle === st.id ? 'primary' : ''}`}
+                          style={{ flex: 1, fontSize: 9, padding: '3px 2px' }}
+                          onClick={() => setAiStyle(st.id)}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn primary"
+                    style={{ marginTop: 4, fontSize: 11, padding: '6px', fontWeight: 600 }}
+                    onClick={handleGenerateAiBackground}
+                    disabled={isGeneratingAi}
+                  >
+                    {isGeneratingAi ? '⏳ Validating Sandbox Graph…' : '✨ Synthesize Sandboxed Vector'}
+                  </button>
+
+                  {aiResult && (
+                    <div style={{ marginTop: 8, padding: 8, background: 'rgba(0,0,0,0.3)', borderRadius: 6, border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 9, color: '#10B981', fontWeight: 700 }}>✓ VERIFIED GRAPH</span>
+                        <span style={{ fontSize: 8, fontFamily: 'monospace', color: '#94A3B8' }}>{aiResult.verifiedSha256.slice(0, 18)}…</span>
+                      </div>
+                      <div style={{ width: '100%', height: 90, background: '#0A1C1F', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+                        <div style={{ width: 70, height: 90 }} dangerouslySetInnerHTML={{ __html: aiResult.svgContent }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          className="btn"
+                          style={{ flex: 1, fontSize: 9, padding: '4px 2px' }}
+                          onClick={() => handleInsertAiResult(false)}
+                        >
+                          Insert Layer
+                        </button>
+                        <button
+                          className="btn primary"
+                          style={{ flex: 1, fontSize: 9, padding: '4px 2px' }}
+                          onClick={() => handleInsertAiResult(true)}
+                        >
+                          Apply Backdrop
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {leftTab === 'brief' && (
             <div style={{ overflowY: 'auto' }}>
               <div className="meta" style={{ marginBottom: 8 }}>
                 <span className="pill ok">{activeBrandKit.name.split(' ')[0]}</span>

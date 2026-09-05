@@ -210,7 +210,7 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   // 5b. Draw Any Dynamic Custom Layers with Precise Multi-Resolution Scaling
   if (state.nodes && Array.isArray(state.nodes)) {
     const customNodes = state.nodes.filter(
-      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom'].includes(n.role)
+      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom', 'image_custom'].includes(n.role)
     ).sort((a: any, b: any) => a.zIndex - b.zIndex);
 
     for (const cNode of customNodes) {
@@ -266,6 +266,34 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
         const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
         const textLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
         ctx.fillText(textLabel || '', textX, nodeY + nodeH / 2 + customFontSize * 0.35);
+      } else if (cNode.role === 'image_custom') {
+        if (cNode.svgContent && typeof Image !== 'undefined') {
+          try {
+            await new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  ctx.drawImage(img, nodeX, nodeY, nodeW, nodeH);
+                } catch {
+                  // ignore
+                }
+                resolve();
+              };
+              img.onerror = () => resolve();
+              img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(cNode.svgContent);
+            });
+          } catch {
+            ctx.fillStyle = cNode.backgroundColor || 'rgba(56, 189, 248, 0.15)';
+            ctx.beginPath();
+            ctx.roundRect(nodeX, nodeY, nodeW, nodeH, (cNode.borderRadius ?? 8) * scaleAvg);
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = cNode.backgroundColor || 'rgba(56, 189, 248, 0.15)';
+          ctx.beginPath();
+          ctx.roundRect(nodeX, nodeY, nodeW, nodeH, (cNode.borderRadius ?? 8) * scaleAvg);
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
@@ -319,7 +347,7 @@ export function exportToSvg(state: CanvasExportState): string {
   let customNodesSvg = '';
   if (state.nodes && Array.isArray(state.nodes)) {
     const customNodes = state.nodes.filter(
-      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom'].includes(n.role)
+      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom', 'image_custom'].includes(n.role)
     ).sort((a: any, b: any) => a.zIndex - b.zIndex);
 
     for (const cNode of customNodes) {
@@ -357,6 +385,19 @@ export function exportToSvg(state: CanvasExportState): string {
         const label = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
         const formattedText = (cNode.direction === 'rtl' || isRtl) ? `&#x2067;${label || ''}&#x2069;` : (label || '');
         customNodesSvg += `\n  <text x="${textX}" y="${textY}" fill="${textColor}" font-family="${font}" font-size="${fontSize}" font-weight="${weight}" text-anchor="${anchor}"${dirAttr}${op}${rot}>${formattedText}</text>`;
+      } else if (cNode.role === 'image_custom') {
+        if (cNode.svgContent) {
+          const rawSvg = cNode.svgContent.replace(/<\?xml[^>]*\?>/g, '').trim();
+          customNodesSvg += `\n  <g transform="translate(${nodeX}, ${nodeY})"${rot}${op}>
+    <svg width="${nodeW}" height="${nodeH}" viewBox="0 0 480 600" preserveAspectRatio="none">
+      ${rawSvg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}
+    </svg>
+  </g>`;
+        } else {
+          const bg = cNode.backgroundColor || 'rgba(56, 189, 248, 0.15)';
+          const rx = Math.round((cNode.borderRadius ?? 8) * scaleAvg);
+          customNodesSvg += `\n  <rect x="${nodeX}" y="${nodeY}" width="${nodeW}" height="${nodeH}" rx="${rx}" fill="${bg}"${op}${rot}/>`;
+        }
       }
     }
   }
@@ -425,7 +466,7 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
         id: n.id,
         role: n.role,
         name: n.name,
-        type: n.role.startsWith('text') ? 'text_vector' : n.role === 'shape' || n.role === 'shape_custom' ? 'shape_primitive' : 'badge_vector',
+        type: n.role.startsWith('text') ? 'text_vector' : n.role === 'shape' || n.role === 'shape_custom' ? 'shape_primitive' : n.role === 'image_custom' ? 'asset_vector' : 'badge_vector',
         x: n.x,
         y: n.y,
         width: n.width,
@@ -444,6 +485,8 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
         borderColor: n.borderColor,
         borderWidth: n.borderWidth,
         borderRadius: n.borderRadius,
+        svgContent: n.svgContent,
+        assetHash: n.assetHash,
         contentEn: n.textEn || (n.role === 'headline' ? state.headlineEn : n.role === 'copy' ? state.copyEn : undefined),
         contentCkb: n.textCkb || (n.role === 'headline' ? state.headlineCkb : n.role === 'copy' ? state.copyCkb : undefined),
         direction: n.direction || (state.langVariant === 'ckb' ? 'rtl' : 'ltr'),
