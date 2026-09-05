@@ -93,14 +93,159 @@ export const ARTBOARD_CONFIG: Record<AspectPreset, { width: number; height: numb
   landscape: { width: 640, height: 360, defaultHeadlineY: 60, defaultCopyY: 270 },
 };
 
+export const DRUSTEE_SVGS = {
+  vitD3: `<svg viewBox="0 0 240 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="amberGlass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#451A03"/>
+      <stop offset="25%" stop-color="#78350F"/>
+      <stop offset="50%" stop-color="#B45309"/>
+      <stop offset="75%" stop-color="#78350F"/>
+      <stop offset="100%" stop-color="#260C02"/>
+    </linearGradient>
+    <linearGradient id="goldCollar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#B45309"/>
+      <stop offset="35%" stop-color="#FDE68A"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="80%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+    <linearGradient id="emeraldLabel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#062E1D"/>
+      <stop offset="50%" stop-color="#0D5C3A"/>
+      <stop offset="100%" stop-color="#041E13"/>
+    </linearGradient>
+  </defs>
+  <path d="M 106,12 C 106,4 134,4 134,12 L 130,50 L 110,50 Z" fill="#18181B"/>
+  <rect x="108" y="44" width="24" height="6" rx="2" fill="#27272A"/>
+  <rect x="100" y="50" width="40" height="22" rx="3" fill="url(#goldCollar)"/>
+  <line x1="100" y1="58" x2="140" y2="58" stroke="#78350F" stroke-width="1"/>
+  <line x1="100" y1="64" x2="140" y2="64" stroke="#78350F" stroke-width="1"/>
+  <path d="M 104,72 L 80,105 C 55,120 48,145 48,175 L 48,340 C 48,362 62,374 88,374 L 152,374 C 178,374 192,362 192,340 L 192,175 C 192,145 185,120 160,105 L 136,72 Z" fill="url(#amberGlass)" stroke="#D4AF37" stroke-width="2"/>
+  <path d="M 58,165 L 58,340" stroke="rgba(255,255,255,0.4)" stroke-width="6" stroke-linecap="round"/>
+  <rect x="58" y="150" width="124" height="185" rx="8" fill="url(#emeraldLabel)" stroke="#D4AF37" stroke-width="2"/>
+  <rect x="62" y="154" width="116" height="177" rx="6" fill="none" stroke="#D4AF37" stroke-width="0.8" stroke-dasharray="3,1.5"/>
+  <circle cx="120" cy="180" r="16" fill="#062E1D" stroke="#D4AF37" stroke-width="1.5"/>
+  <path d="M 120,170 C 128,170 131,178 126,186 C 120,192 114,186 114,180 C 114,174 117,170 120,170 Z" fill="#D4AF37"/>
+  <text x="120" y="210" fill="#FFFFFF" font-family="Vazirmatn, sans-serif" font-size="14" font-weight="800" text-anchor="middle">دروستی</text>
+  <text x="120" y="224" fill="#D4AF37" font-family="Inter, sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">DRUSTEE HEALTH</text>
+  <line x1="72" y1="232" x2="168" y2="232" stroke="rgba(212,175,55,0.4)" stroke-width="1"/>
+  <text x="120" y="248" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">VITAMIN D3 + K2</text>
+  <text x="120" y="262" fill="#E5E7EB" font-family="Vazirmatn, sans-serif" font-size="10" font-weight="700" text-anchor="middle" dir="rtl">چالاک و خێرا مژراو</text>
+  <rect x="74" y="272" width="92" height="22" rx="11" fill="#D4AF37"/>
+  <text x="120" y="287" fill="#062E1D" font-family="Inter, sans-serif" font-size="10" font-weight="800" text-anchor="middle">5000 IU / 100 mcg</text>
+  <text x="120" y="312" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="8" font-weight="600" text-anchor="middle">30 ML · DROPPER BOTTLE</text>
+  <text x="120" y="324" fill="#10B981" font-family="Inter, sans-serif" font-size="7" font-weight="700" text-anchor="middle">✓ LAB TESTED · GMP</text>
+</svg>`,
+
+  omega3: `<svg viewBox="0 0 240 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pineGlass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#021E13"/>
+      <stop offset="30%" stop-color="#064E3B"/>
+      <stop offset="50%" stop-color="#0D5C3A"/>
+      <stop offset="70%" stop-color="#064E3B"/>
+      <stop offset="100%" stop-color="#021A10"/>
+    </linearGradient>
+    <linearGradient id="goldCap" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#92400E"/>
+      <stop offset="40%" stop-color="#FDE68A"/>
+      <stop offset="60%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+    <linearGradient id="softgelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="40%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#B45309"/>
+    </linearGradient>
+  </defs>
+  <rect x="76" y="32" width="88" height="38" rx="4" fill="url(#goldCap)" stroke="#B45309" stroke-width="1.5"/>
+  <line x1="84" y1="44" x2="156" y2="44" stroke="#78350F" stroke-width="1"/>
+  <line x1="84" y1="56" x2="156" y2="56" stroke="#78350F" stroke-width="1"/>
+  <path d="M 82,70 L 60,98 C 44,118 42,145 42,175 L 42,336 C 42,362 58,374 84,374 L 156,374 C 182,374 198,362 198,336 L 198,175 C 198,145 196,118 180,98 L 158,70 Z" fill="url(#pineGlass)" stroke="#D4AF37" stroke-width="2"/>
+  <path d="M 52,160 L 52,330" stroke="rgba(255,255,255,0.3)" stroke-width="6" stroke-linecap="round"/>
+  <rect x="52" y="140" width="136" height="195" rx="8" fill="#062E1D" stroke="#D4AF37" stroke-width="2"/>
+  <rect x="56" y="144" width="128" height="187" rx="6" fill="none" stroke="#D4AF37" stroke-width="0.8" stroke-dasharray="3,1.5"/>
+  <ellipse cx="120" cy="180" rx="22" ry="12" fill="url(#softgelGrad)" transform="rotate(-20 120 180)"/>
+  <ellipse cx="116" cy="176" rx="14" ry="5" fill="rgba(255,255,255,0.6)" transform="rotate(-20 116 176)"/>
+  <text x="120" y="214" fill="#FFFFFF" font-family="Vazirmatn, sans-serif" font-size="14" font-weight="800" text-anchor="middle">ئۆمێگا-٣ کێوی</text>
+  <text x="120" y="228" fill="#D4AF37" font-family="Inter, sans-serif" font-size="8.5" font-weight="700" text-anchor="middle" letter-spacing="1">WILD ALASKAN FISH OIL</text>
+  <line x1="68" y1="238" x2="172" y2="238" stroke="rgba(212,175,55,0.4)" stroke-width="1"/>
+  <text x="120" y="256" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="11.5" font-weight="800" text-anchor="middle">EPA 800mg · DHA 400mg</text>
+  <text x="120" y="272" fill="#E5E7EB" font-family="Vazirmatn, sans-serif" font-size="10" font-weight="700" text-anchor="middle" dir="rtl">ڕۆنی ماسی بە خەستی بەرز</text>
+  <rect x="70" y="282" width="100" height="22" rx="11" fill="#D4AF37"/>
+  <text x="120" y="297" fill="#062E1D" font-family="Inter, sans-serif" font-size="10" font-weight="800" text-anchor="middle">TRIGLYCERIDE FORM</text>
+  <text x="120" y="322" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="8" font-weight="600" text-anchor="middle">120 SOFTGELS · ERBIL</text>
+</svg>`,
+
+  magnesium: `<svg viewBox="0 0 240 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="nightBottle" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#02140D"/>
+      <stop offset="30%" stop-color="#0B3824"/>
+      <stop offset="50%" stop-color="#124830"/>
+      <stop offset="70%" stop-color="#0B3824"/>
+      <stop offset="100%" stop-color="#02140D"/>
+    </linearGradient>
+    <linearGradient id="silverCap" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#374151"/>
+      <stop offset="40%" stop-color="#E5E7EB"/>
+      <stop offset="60%" stop-color="#D1D5DB"/>
+      <stop offset="100%" stop-color="#1F2937"/>
+    </linearGradient>
+  </defs>
+  <rect x="74" y="30" width="92" height="40" rx="5" fill="url(#silverCap)" stroke="#9CA3AF" stroke-width="1.5"/>
+  <path d="M 80,70 L 56,102 C 40,122 38,148 38,178 L 38,336 C 38,362 56,374 84,374 L 156,374 C 184,374 202,362 202,336 L 202,178 C 202,148 200,122 184,102 L 160,70 Z" fill="url(#nightBottle)" stroke="#D4AF37" stroke-width="2"/>
+  <path d="M 48,160 L 48,330" stroke="rgba(255,255,255,0.25)" stroke-width="6" stroke-linecap="round"/>
+  <rect x="48" y="142" width="144" height="195" rx="8" fill="#041F14" stroke="#D4AF37" stroke-width="2"/>
+  <circle cx="120" cy="180" r="18" fill="#062E1D" stroke="#D4AF37" stroke-width="1.5"/>
+  <path d="M 124,168 C 117,170 112,176 112,183 C 112,190 117,196 125,198 C 119,196 116,190 116,183 C 116,176 120,170 124,168 Z" fill="#D4AF37"/>
+  <text x="120" y="214" fill="#FFFFFF" font-family="Vazirmatn, sans-serif" font-size="14" font-weight="800" text-anchor="middle">ماگنیزیۆم گلیسایت</text>
+  <text x="120" y="228" fill="#D4AF37" font-family="Inter, sans-serif" font-size="8.5" font-weight="700" text-anchor="middle" letter-spacing="1">MAGNESIUM GLYCINATE</text>
+  <line x1="64" y1="238" x2="176" y2="238" stroke="rgba(212,175,55,0.4)" stroke-width="1"/>
+  <text x="120" y="256" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="12" font-weight="800" text-anchor="middle">400mg CHELATED</text>
+  <text x="120" y="272" fill="#E5E7EB" font-family="Vazirmatn, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle" dir="rtl">بۆ خەوی ئارام و ماسوولکەکان</text>
+  <rect x="66" y="282" width="108" height="22" rx="11" fill="#D4AF37"/>
+  <text x="120" y="297" fill="#041F14" font-family="Inter, sans-serif" font-size="9.5" font-weight="800" text-anchor="middle">MAXIMUM ABSORPTION</text>
+  <text x="120" y="322" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="8" font-weight="600" text-anchor="middle">90 VEGAN CAPSULES</text>
+</svg>`,
+
+  labSeal: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="80" cy="80" r="74" fill="#062E1D" stroke="#D4AF37" stroke-width="3.5"/>
+  <circle cx="80" cy="80" r="66" fill="none" stroke="#D4AF37" stroke-width="1" stroke-dasharray="4,2"/>
+  <path d="M 80,38 L 98,48 L 98,72 C 98,88 80,102 80,102 C 80,102 62,88 62,72 L 62,48 Z" fill="#0D5C3A" stroke="#D4AF37" stroke-width="2"/>
+  <path d="M 72,70 L 78,76 L 88,64" fill="none" stroke="#D4AF37" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="80" y="118" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="9" font-weight="800" text-anchor="middle" letter-spacing="0.5">LAB TESTED</text>
+  <text x="80" y="130" fill="#D4AF37" font-family="Vazirmatn, sans-serif" font-size="8.5" font-weight="700" text-anchor="middle" dir="rtl">تاقیگەی سەربەخۆ</text>
+  <text x="80" y="142" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="7" font-weight="600" text-anchor="middle">100% EVIDENCE FIRST</text>
+</svg>`,
+
+  gmpBadge: `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="80,8 144,44 144,116 80,152 16,116 16,44" fill="#062E1D" stroke="#D4AF37" stroke-width="3"/>
+  <polygon points="80,16 136,48 136,112 80,144 24,112 24,48" fill="none" stroke="#D4AF37" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="80" y="65" fill="#D4AF37" font-family="Inter, sans-serif" font-size="22" font-weight="900" text-anchor="middle">GMP</text>
+  <text x="80" y="85" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="9" font-weight="800" text-anchor="middle">CERTIFIED</text>
+  <text x="80" y="102" fill="#10B981" font-family="Inter, sans-serif" font-size="8" font-weight="700" text-anchor="middle">PHARMACEUTICAL</text>
+  <text x="80" y="120" fill="#D4AF37" font-family="Vazirmatn, sans-serif" font-size="9" font-weight="700" text-anchor="middle" dir="rtl">ستانداردی جیهانی</text>
+</svg>`,
+
+  disclaimer: `<svg viewBox="0 0 460 38" xmlns="http://www.w3.org/2000/svg">
+  <rect width="460" height="38" rx="6" fill="#062E1D" stroke="#0D5C3A" stroke-width="1.5"/>
+  <circle cx="20" cy="19" r="8" fill="#0D5C3A"/>
+  <text x="20" y="23" fill="#D4AF37" font-family="Inter, sans-serif" font-size="10" font-weight="900" text-anchor="middle">!</text>
+  <text x="240" y="23" fill="#E5E7EB" font-family="Vazirmatn, sans-serif" font-size="10" font-weight="600" text-anchor="middle" dir="rtl">تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.</text>
+</svg>`,
+};
+
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const { t } = useI18n();
 
   // 1. Format & Variant State
   const [variant, setVariant] = useState<AspectPreset>('feed');
-  const [langVariant, setLangVariant] = useState<'en' | 'ckb' | 'bilingual'>('en');
+  const [langVariant, setLangVariant] = useState<'en' | 'ckb' | 'bilingual'>('ckb');
   const [availableBrandKits, setAvailableBrandKits] = useState<Record<string, BrandKit>>(() => getAllBrandKits());
-  const [selectedBrandKitId, setSelectedBrandKitId] = useState<string>('hawa');
+  const [selectedBrandKitId, setSelectedBrandKitId] = useState<string>('drustee');
+  const [selectedDrusteeSku, setSelectedDrusteeSku] = useState<'d3_k2' | 'omega3' | 'magnesium' | null>('d3_k2');
   const activeBrandKit: BrandKit = useMemo(
     () => availableBrandKits[selectedBrandKitId] || getBrandKit(selectedBrandKitId),
     [selectedBrandKitId, availableBrandKits]
@@ -155,16 +300,96 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [copyEn, setCopyEn] = useState<string>(initialCopyEn);
   const [copyCkb, setCopyCkb] = useState<string>(initialCopyCkb);
 
-  const [fontFamily, setFontFamily] = useState<string>(activeBrandKit.typography.latinFont);
-  const [fontWeight, setFontWeight] = useState<number>(activeBrandKit.typography.headlineWeight);
+  const [fontFamily, setFontFamily] = useState<string>(activeBrandKit.typography.kurdishFont || 'Vazirmatn');
+  const [fontWeight, setFontWeight] = useState<number>(activeBrandKit.typography.headlineWeight || 800);
   const [accentColor, setAccentColor] = useState<string>(activeBrandKit.palette.accent);
 
-  // 4. Dynamic Canvas Nodes Layer Tree State
+  // 4. Dynamic Canvas Nodes Layer Tree State (Defaulted to Drustee Vitamin D3 + K2 Flagship)
   const [nodes, setNodes] = useState<CanvasNode[]>([
-    { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110, rotation: 0, opacity: 1 },
-    { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52, rotation: 0, opacity: 1 },
-    { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: false, visible: true, x: 32, y: 28, width: 190, height: 42, rotation: 0, opacity: 1 },
-    { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15, opacity: 0.85 },
+    {
+      id: 'node_product_hero',
+      role: 'image_custom',
+      name: 'Drustee Vitamin D3 + K2 Bottle',
+      zIndex: 5,
+      locked: false,
+      visible: true,
+      x: 120,
+      y: 165,
+      width: 240,
+      height: 330,
+      svgContent: DRUSTEE_SVGS.vitD3,
+      assetHash: 'sha256_drustee_vitd3_hero',
+    },
+    {
+      id: 'node_headline',
+      role: 'headline',
+      name: 'Headline (Vector Text)',
+      zIndex: 15,
+      locked: false,
+      visible: true,
+      x: 20,
+      y: 75,
+      width: 440,
+      height: 85,
+      rotation: 0,
+      opacity: 1,
+    },
+    {
+      id: 'node_copy',
+      role: 'copy',
+      name: 'Dosage & Clinical Specs',
+      zIndex: 16,
+      locked: false,
+      visible: true,
+      x: 24,
+      y: 505,
+      width: 432,
+      height: 44,
+      rotation: 0,
+      opacity: 1,
+    },
+    {
+      id: 'node_logo',
+      role: 'logo',
+      name: 'Verified Brand Logo',
+      zIndex: 10,
+      locked: false,
+      visible: true,
+      x: 24,
+      y: 20,
+      width: 190,
+      height: 42,
+      rotation: 0,
+      opacity: 1,
+    },
+    {
+      id: 'node_lab_seal',
+      role: 'image_custom',
+      name: 'Third-Party Lab Tested Seal',
+      zIndex: 12,
+      locked: false,
+      visible: true,
+      x: 375,
+      y: 16,
+      width: 85,
+      height: 85,
+      svgContent: DRUSTEE_SVGS.labSeal,
+      assetHash: 'sha256_drustee_lab_verified',
+    },
+    {
+      id: 'node_disclaimer',
+      role: 'image_custom',
+      name: 'Mandatory Clinical Disclaimer',
+      zIndex: 18,
+      locked: false,
+      visible: true,
+      x: 10,
+      y: 556,
+      width: 460,
+      height: 36,
+      svgContent: DRUSTEE_SVGS.disclaimer,
+      assetHash: 'sha256_drustee_disclaimer_uax9',
+    },
   ]);
 
   // Multi-Selection State
@@ -527,11 +752,277 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     pushHistory();
   };
 
-  const handleInsertAsset = (assetType: 'gold_seal' | 'phone_bar' | 'kurdish_star' | 'brand_watermark') => {
+  const handleLoadDrusteeSku = (sku: 'd3_k2' | 'omega3' | 'magnesium') => {
+    setSelectedDrusteeSku(sku);
+    setSelectedBrandKitId('drustee');
+    setLangVariant('ckb');
+
+    let hCkb = '';
+    let hEn = '';
+    let cCkb = '';
+    let cEn = '';
+    let heroSvg = '';
+    let heroName = '';
+    let heroHash = '';
+    let accent = '#D4AF37';
+
+    if (sku === 'd3_k2') {
+      hCkb = 'ڤیتامین D3 + K2 بە ژەمێکی زانستی و بێگەرد';
+      hEn = 'Pure Active Vitamin D3 + K2';
+      cCkb = '٥٠٠٠ یەکەی نێودەوڵەتی · تاقیگەی سەربەخۆ پەسەندی کردووە';
+      cEn = '5000 IU High Potency · Third-Party Lab Tested';
+      heroSvg = DRUSTEE_SVGS.vitD3;
+      heroName = 'Drustee Vitamin D3 + K2 Bottle';
+      heroHash = 'sha256_drustee_vitd3_hero';
+      accent = '#D4AF37';
+    } else if (sku === 'omega3') {
+      hCkb = 'ئۆمێگا-٣ بە خەستی بەرزی EPA و DHA';
+      hEn = 'Wild Alaskan Omega-3 High Potency';
+      cCkb = 'ڕۆنی ماسی کێوی ئەلاسکا · پاک لە ماددە زیانبەخشەکان';
+      cEn = 'Pure Alaskan Wild Fish Oil · Heavy Metal Tested';
+      heroSvg = DRUSTEE_SVGS.omega3;
+      heroName = 'Drustee Wild Alaskan Omega-3 Bottle';
+      heroHash = 'sha256_drustee_omega3_hero';
+      accent = '#F59E0B';
+    } else if (sku === 'magnesium') {
+      hCkb = 'ماگنیزیۆم گلیسایت بۆ خەوێکی ئارام و پشووی ماسوولکەکان';
+      hEn = 'Chelated Magnesium Glycinate 400mg';
+      cCkb = '٤٠٠ میلیگرام مژینی ئاسان بێ کێشەی گەدە · بێ پێکهاتەی دەستکرد';
+      cEn = '400mg High Absorption · Gentle on Stomach';
+      heroSvg = DRUSTEE_SVGS.magnesium;
+      heroName = 'Drustee Magnesium Glycinate Bottle';
+      heroHash = 'sha256_drustee_magnesium_hero';
+      accent = '#D4AF37';
+    }
+
+    setHeadlineCkb(hCkb);
+    setHeadlineEn(hEn);
+    setCopyCkb(cCkb);
+    setCopyEn(cEn);
+    setAccentColor(accent);
+    setFontFamily('Vazirmatn');
+    setFontWeight(800);
+
+    const ab = currentArtboard;
+    const newNodes: CanvasNode[] = [
+      {
+        id: 'node_product_hero',
+        role: 'image_custom',
+        name: heroName,
+        zIndex: 5,
+        locked: false,
+        visible: true,
+        x: Math.round((ab.width - 240) / 2),
+        y: Math.round(ab.height * 0.28),
+        width: 240,
+        height: 330,
+        svgContent: heroSvg,
+        assetHash: heroHash,
+      },
+      {
+        id: 'node_headline',
+        role: 'headline',
+        name: 'Headline (Vector Text)',
+        zIndex: 15,
+        locked: false,
+        visible: true,
+        x: 20,
+        y: Math.max(20, Math.round(ab.defaultHeadlineY * 0.75)),
+        width: ab.width - 40,
+        height: 85,
+        rotation: 0,
+        opacity: 1,
+      },
+      {
+        id: 'node_copy',
+        role: 'copy',
+        name: 'Dosage & Clinical Specs',
+        zIndex: 16,
+        locked: false,
+        visible: true,
+        x: 24,
+        y: Math.round(ab.height * 0.83),
+        width: ab.width - 48,
+        height: 44,
+        rotation: 0,
+        opacity: 1,
+      },
+      {
+        id: 'node_logo',
+        role: 'logo',
+        name: 'Verified Brand Logo',
+        zIndex: 10,
+        locked: false,
+        visible: true,
+        x: 24,
+        y: 20,
+        width: 190,
+        height: 42,
+        rotation: 0,
+        opacity: 1,
+      },
+      {
+        id: 'node_lab_seal',
+        role: 'image_custom',
+        name: 'Third-Party Lab Tested Seal',
+        zIndex: 12,
+        locked: false,
+        visible: true,
+        x: ab.width - 105,
+        y: 16,
+        width: 85,
+        height: 85,
+        svgContent: DRUSTEE_SVGS.labSeal,
+        assetHash: 'sha256_drustee_lab_verified',
+      },
+      {
+        id: 'node_disclaimer',
+        role: 'image_custom',
+        name: 'Mandatory Clinical Disclaimer',
+        zIndex: 18,
+        locked: false,
+        visible: true,
+        x: 10,
+        y: ab.height - 44,
+        width: ab.width - 20,
+        height: 36,
+        svgContent: DRUSTEE_SVGS.disclaimer,
+        assetHash: 'sha256_drustee_disclaimer_uax9',
+      },
+    ];
+
+    setNodes(newNodes);
+    setSelectedNodeIds(['node_product_hero']);
+    setStudioToast(`✓ Loaded Drustee SKU: ${heroName}`);
+    setTimeout(() => setStudioToast(null), 3000);
+    pushHistory();
+  };
+
+  const handleInsertAsset = (
+    assetType:
+      | 'gold_seal'
+      | 'phone_bar'
+      | 'kurdish_star'
+      | 'brand_watermark'
+      | 'drustee_vitd3'
+      | 'drustee_omega3'
+      | 'drustee_magnesium'
+      | 'drustee_lab_seal'
+      | 'drustee_gmp_seal'
+      | 'drustee_disclaimer'
+  ) => {
     const newId = `asset_${Date.now()}`;
     const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
 
-    if (assetType === 'gold_seal') {
+    if (assetType === 'drustee_vitd3') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Drustee Vitamin D3 + K2 Bottle',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - 200) / 2),
+        y: Math.round((currentArtboard.height - 280) / 2),
+        width: 200,
+        height: 280,
+        svgContent: DRUSTEE_SVGS.vitD3,
+        assetHash: 'sha256_drustee_vitd3_hero',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Vitamin D3 + K2 Vector Bottle');
+    } else if (assetType === 'drustee_omega3') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Drustee Wild Alaskan Omega-3 Bottle',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - 200) / 2),
+        y: Math.round((currentArtboard.height - 280) / 2),
+        width: 200,
+        height: 280,
+        svgContent: DRUSTEE_SVGS.omega3,
+        assetHash: 'sha256_drustee_omega3_hero',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Wild Alaskan Omega-3 Vector Bottle');
+    } else if (assetType === 'drustee_magnesium') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Drustee Magnesium Glycinate Bottle',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - 200) / 2),
+        y: Math.round((currentArtboard.height - 280) / 2),
+        width: 200,
+        height: 280,
+        svgContent: DRUSTEE_SVGS.magnesium,
+        assetHash: 'sha256_drustee_magnesium_hero',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Magnesium Glycinate Vector Bottle');
+    } else if (assetType === 'drustee_lab_seal') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Third-Party Lab Tested Seal',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.max(10, currentArtboard.width - 110),
+        y: 20,
+        width: 100,
+        height: 100,
+        svgContent: DRUSTEE_SVGS.labSeal,
+        assetHash: 'sha256_drustee_lab_verified',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Third-Party Lab Tested Seal');
+    } else if (assetType === 'drustee_gmp_seal') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'GMP Certified Pharmaceutical Seal',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: 20,
+        y: currentArtboard.height - 110,
+        width: 90,
+        height: 90,
+        svgContent: DRUSTEE_SVGS.gmpBadge,
+        assetHash: 'sha256_drustee_gmp_verified',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted GMP Certified Seal');
+    } else if (assetType === 'drustee_disclaimer') {
+      const newNode: CanvasNode = {
+        id: newId,
+        role: 'image_custom',
+        name: 'Mandatory Clinical Disclaimer',
+        zIndex: maxZ + 1,
+        locked: false,
+        visible: true,
+        x: Math.round((currentArtboard.width - Math.min(460, currentArtboard.width - 20)) / 2),
+        y: currentArtboard.height - 46,
+        width: Math.min(460, currentArtboard.width - 20),
+        height: 38,
+        svgContent: DRUSTEE_SVGS.disclaimer,
+        assetHash: 'sha256_drustee_disclaimer_uax9',
+      };
+      setNodes((prev) => [...prev, newNode]);
+      setSelectedNodeIds([newId]);
+      setStudioToast('✓ Inserted Clinical Medical Disclaimer Strip');
+    } else if (assetType === 'gold_seal') {
       const svg = `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
         <circle cx="60" cy="60" r="54" fill="#0A1C1F" stroke="#F59E0B" stroke-width="4"/>
         <circle cx="60" cy="60" r="46" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,2"/>
@@ -2508,6 +2999,79 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               </button>
             ))}
           </div>
+
+          {/* Drustee Hero Clinical SKUs */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              background: 'rgba(13, 92, 58, 0.25)',
+              border: '1px solid rgba(212, 175, 55, 0.45)',
+              borderRadius: 6,
+              padding: '2px 4px',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: '#D4AF37',
+                padding: '0 4px',
+                letterSpacing: '0.04em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              🌿 DRUSTEE:
+            </span>
+            <button
+              className={`btn ${selectedDrusteeSku === 'd3_k2' ? 'primary' : ''}`}
+              style={{
+                fontSize: 10.5,
+                padding: '3px 8px',
+                fontWeight: 700,
+                background: selectedDrusteeSku === 'd3_k2' ? '#0D5C3A' : 'transparent',
+                borderColor: selectedDrusteeSku === 'd3_k2' ? '#D4AF37' : 'transparent',
+                color: '#ffffff',
+              }}
+              onClick={() => handleLoadDrusteeSku('d3_k2')}
+              title="Load Drustee Active Vitamin D3 + K2 (5000 IU / 100mcg) Template"
+            >
+              ☀️ D3+K2
+            </button>
+            <button
+              className={`btn ${selectedDrusteeSku === 'omega3' ? 'primary' : ''}`}
+              style={{
+                fontSize: 10.5,
+                padding: '3px 8px',
+                fontWeight: 700,
+                background: selectedDrusteeSku === 'omega3' ? '#0D5C3A' : 'transparent',
+                borderColor: selectedDrusteeSku === 'omega3' ? '#D4AF37' : 'transparent',
+                color: '#ffffff',
+              }}
+              onClick={() => handleLoadDrusteeSku('omega3')}
+              title="Load Drustee Wild Alaskan Omega-3 (EPA 800 / DHA 400) Template"
+            >
+              🐟 Omega-3
+            </button>
+            <button
+              className={`btn ${selectedDrusteeSku === 'magnesium' ? 'primary' : ''}`}
+              style={{
+                fontSize: 10.5,
+                padding: '3px 8px',
+                fontWeight: 700,
+                background: selectedDrusteeSku === 'magnesium' ? '#0D5C3A' : 'transparent',
+                borderColor: selectedDrusteeSku === 'magnesium' ? '#D4AF37' : 'transparent',
+                color: '#ffffff',
+              }}
+              onClick={() => handleLoadDrusteeSku('magnesium')}
+              title="Load Drustee Chelated Magnesium Glycinate 400mg Template"
+            >
+              🌙 Magnesium
+            </button>
+          </div>
         </div>
 
         {/* Right: History, Guides & Ultra HD 4K Export */}
@@ -2939,6 +3503,63 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   </span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {/* Drustee Clinical Products & Certifications */}
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_vitd3')}
+                    title="Insert Drustee Vitamin D3 + K2 Dropper Bottle Vector"
+                  >
+                    <span style={{ fontSize: 16 }}>☀️</span>
+                    <span style={{ fontWeight: 700, color: '#D4AF37' }}>D3+K2 Drops</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_omega3')}
+                    title="Insert Drustee Wild Alaskan Omega-3 Softgels Bottle Vector"
+                  >
+                    <span style={{ fontSize: 16 }}>🐟</span>
+                    <span style={{ fontWeight: 700, color: '#D4AF37' }}>Omega-3 Softgels</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_magnesium')}
+                    title="Insert Drustee Chelated Magnesium Glycinate Vector"
+                  >
+                    <span style={{ fontSize: 16 }}>🌙</span>
+                    <span style={{ fontWeight: 700, color: '#D4AF37' }}>Magnesium 400</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_lab_seal')}
+                    title="Insert Third-Party Lab Tested Official Seal"
+                  >
+                    <span style={{ fontSize: 16 }}>🛡️</span>
+                    <span style={{ fontWeight: 700, color: '#10B981' }}>Lab Tested</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_gmp_seal')}
+                    title="Insert GMP Certified Pharmaceutical Badge"
+                  >
+                    <span style={{ fontSize: 16 }}>🏭</span>
+                    <span style={{ fontWeight: 700, color: '#D4AF37' }}>GMP Certified</span>
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 4px', fontSize: 10, textAlign: 'center', background: 'rgba(13, 92, 58, 0.2)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
+                    onClick={() => handleInsertAsset('drustee_disclaimer')}
+                    title="Insert Sorani Kurdish Medical Disclaimer Banner"
+                  >
+                    <span style={{ fontSize: 16 }}>📜</span>
+                    <span style={{ fontWeight: 700, color: '#E5E7EB' }}>Disclaimer Strip</span>
+                  </button>
+
+                  {/* General Trust Seals */}
                   <button
                     className="btn"
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 4px', fontSize: 10, textAlign: 'center' }}

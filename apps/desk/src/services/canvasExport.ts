@@ -76,6 +76,8 @@ export async function exportToPngBlob(state: CanvasExportState): Promise<{ blob:
   const scaleX = baseW / artboardBase.width;
   const scaleY = baseH / artboardBase.height;
   const scaleAvg = Math.min(scaleX, scaleY);
+  const isRtl = state.langVariant === 'ckb';
+  const textMargin = width * 0.08;
 
   // Use OffscreenCanvas if available in browser/worker environment
   let canvas: HTMLCanvasElement | OffscreenCanvas;
@@ -134,83 +136,98 @@ export async function exportToPngBlob(state: CanvasExportState): Promise<{ blob:
   ctx.restore();
 
   // 3. Draw Brand Logo Badge (Invariant #5 Cryptographically Protected Asset)
-  ctx.save();
-  const logoW = 280;
-  const logoH = 56;
-  const logoX = state.langVariant === 'ckb' ? width - logoW - 64 : 64;
-  const logoY = height * 0.06;
+  const logoNode = state.nodes?.find((n: any) => n.role === 'logo' || n.id === 'logo' || n.id === 'node_logo');
+  if (!logoNode || logoNode.visible !== false) {
+    ctx.save();
+    const logoW = logoNode && typeof logoNode.width === 'number' ? logoNode.width * scaleX : 280;
+    const logoH = logoNode && typeof logoNode.height === 'number' ? logoNode.height * scaleY : 56;
+    const logoX = logoNode && typeof logoNode.x === 'number' ? logoNode.x * scaleX : (state.langVariant === 'ckb' ? width - logoW - 64 : 64);
+    const logoY = logoNode && typeof logoNode.y === 'number' ? logoNode.y * scaleY : height * 0.06;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(logoX, logoY, logoW, logoH, 8);
-  ctx.fill();
-  ctx.stroke();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(logoX, logoY, logoW, logoH, 8);
+    ctx.fill();
+    ctx.stroke();
 
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 22px Inter, sans-serif';
-  ctx.textAlign = state.langVariant === 'ckb' ? 'right' : 'left';
-  ctx.fillText(state.brandKit.logoText, state.langVariant === 'ckb' ? logoX + logoW - 24 : logoX + 24, logoY + 36);
-  ctx.restore();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px Inter, sans-serif';
+    ctx.textAlign = state.langVariant === 'ckb' ? 'right' : 'left';
+    ctx.fillText(state.brandKit.logoText, state.langVariant === 'ckb' ? logoX + logoW - 24 : logoX + 24, logoY + 36);
+    ctx.restore();
+  }
 
   // 4. Draw Typography (Headline with UAX #9 Directional Isolation)
-  ctx.save();
-  const isRtl = state.langVariant === 'ckb';
-  const textMargin = width * 0.08;
+  const headlineNode = state.nodes?.find((n: any) => n.role === 'headline' || n.id === 'headline' || n.id === 'node_headline');
+  if (!headlineNode || headlineNode.visible !== false) {
+    ctx.save();
+    const isRtl = state.langVariant === 'ckb';
+    const textMargin = width * 0.08;
+    const hlX = headlineNode && typeof headlineNode.x === 'number' ? headlineNode.x * scaleX : (isRtl ? width - textMargin : textMargin);
+    const hlY = headlineNode && typeof headlineNode.y === 'number' ? headlineNode.y * scaleY + (headlineNode.fontSize || 32) * scaleAvg : (height * 0.24);
 
-  if (state.langVariant === 'bilingual') {
-    // English Primary Line
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `800 ${Math.round(width * 0.058)}px Inter, sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText(state.headlineEn, textMargin, height * 0.22);
+    if (state.langVariant === 'bilingual') {
+      // English Primary Line
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `800 ${Math.round(width * 0.058)}px Inter, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.fillText(headlineNode?.textEn || state.headlineEn, textMargin, height * 0.22);
 
-    // Kurdish Secondary Line with Directional Isolation
-    ctx.fillStyle = state.accentColor;
-    ctx.font = `700 ${Math.round(width * 0.046)}px Vazirmatn, "Noto Sans Arabic", sans-serif`;
-    ctx.direction = 'rtl';
-    ctx.textAlign = 'right';
-    ctx.fillText(state.headlineCkb, width - textMargin, height * 0.30);
-  } else {
-    ctx.fillStyle = '#FFFFFF';
-    const chosenFont = isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : state.fontFamily;
-    ctx.font = `${state.fontWeight} ${Math.round(width * 0.062)}px ${chosenFont}, sans-serif`;
-    ctx.direction = isRtl ? 'rtl' : 'ltr';
-    ctx.textAlign = isRtl ? 'right' : 'left';
-    const headlineText = isRtl ? state.headlineCkb : state.headlineEn;
-    ctx.fillText(headlineText, isRtl ? width - textMargin : textMargin, height * 0.24);
+      // Kurdish Secondary Line with Directional Isolation
+      ctx.fillStyle = state.accentColor;
+      ctx.font = `700 ${Math.round(width * 0.046)}px Vazirmatn, "Noto Sans Arabic", sans-serif`;
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'right';
+      ctx.fillText(headlineNode?.textCkb || state.headlineCkb, width - textMargin, height * 0.30);
+    } else {
+      ctx.fillStyle = headlineNode?.color || '#FFFFFF';
+      const chosenFont = isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : (headlineNode?.fontFamily || state.fontFamily);
+      const chosenWeight = headlineNode?.fontWeight || state.fontWeight;
+      const chosenFontSize = headlineNode?.fontSize ? Math.round(headlineNode.fontSize * scaleAvg) : Math.round(width * 0.062);
+      ctx.font = `${chosenWeight} ${chosenFontSize}px ${chosenFont}, sans-serif`;
+      ctx.direction = isRtl ? 'rtl' : 'ltr';
+      ctx.textAlign = headlineNode?.textAlign === 'center' ? 'center' : headlineNode?.textAlign === 'right' ? 'right' : (isRtl ? 'right' : 'left');
+      const headlineText = isRtl ? (headlineNode?.textCkb || state.headlineCkb) : (headlineNode?.textEn || state.headlineEn);
+      ctx.fillText(headlineText, hlX, hlY);
+    }
+    ctx.restore();
   }
-  ctx.restore();
 
   // 5. Draw Price & Offer Badge (Invariant #5 Protected Token Footprint)
-  ctx.save();
-  const badgeW = width * 0.42;
-  const badgeH = 88;
-  const badgeX = isRtl ? width - badgeW - textMargin : textMargin;
-  const badgeY = height * 0.82;
-  const badgePadX = 36;
+  const copyNode = state.nodes?.find((n: any) => n.role === 'copy' || n.id === 'copy' || n.id === 'node_copy');
+  if (!copyNode || copyNode.visible !== false) {
+    ctx.save();
+    const isRtl = state.langVariant === 'ckb';
+    const textMargin = width * 0.08;
+    const badgeW = copyNode && typeof copyNode.width === 'number' ? copyNode.width * scaleX : width * 0.42;
+    const badgeH = copyNode && typeof copyNode.height === 'number' ? copyNode.height * scaleY : 88;
+    const badgeX = copyNode && typeof copyNode.x === 'number' ? copyNode.x * scaleX : (isRtl ? width - badgeW - textMargin : textMargin);
+    const badgeY = copyNode && typeof copyNode.y === 'number' ? copyNode.y * scaleY : height * 0.82;
+    const badgePadX = 36;
 
-  // Badge Container & Shadow
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 8;
-  ctx.fillStyle = state.brandKit.palette.cardBg;
-  ctx.beginPath();
-  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 16);
-  ctx.fill();
+    // Badge Container & Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = copyNode?.backgroundColor || state.brandKit.palette.cardBg;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, (copyNode?.borderRadius ?? 16) * scaleAvg);
+    ctx.fill();
 
-  // Badge Text
-  ctx.shadowColor = 'transparent';
-  ctx.fillStyle = '#0F172A';
-  ctx.textAlign = isRtl ? 'right' : 'left';
-  const displayText = state.langVariant === 'bilingual'
-    ? `${state.copyEn} · ${state.copyCkb}`
-    : isRtl
-    ? state.copyCkb
-    : state.copyEn;
-  ctx.fillText(displayText, isRtl ? badgeX + badgeW - badgePadX : badgeX + badgePadX, badgeY + 56);
-  ctx.restore();
+    // Badge Text
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = copyNode?.color || '#0F172A';
+    ctx.textAlign = isRtl ? 'right' : 'left';
+    const displayText = state.langVariant === 'bilingual'
+      ? `${copyNode?.textEn || state.copyEn} · ${copyNode?.textCkb || state.copyCkb}`
+      : isRtl
+      ? (copyNode?.textCkb || state.copyCkb)
+      : (copyNode?.textEn || state.copyEn);
+    ctx.fillText(displayText, isRtl ? badgeX + badgeW - badgePadX : badgeX + badgePadX, badgeY + 56);
+    ctx.restore();
+  }
 
   // 5b. Draw Any Dynamic Custom Layers with Precise Multi-Resolution Scaling
   if (state.nodes && Array.isArray(state.nodes)) {
@@ -342,12 +359,6 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   const scaleAvg = Math.min(scaleX, scaleY);
   const isRtl = state.langVariant === 'ckb';
 
-  const displayText = state.langVariant === 'bilingual'
-    ? `${state.copyEn} · &#x2067;${state.copyCkb}&#x2069;`
-    : isRtl
-    ? `&#x2067;${state.copyCkb}&#x2069;`
-    : state.copyEn;
-
   const headlineNode = state.nodes?.find((n: any) => n.role === 'headline' || n.id === 'headline' || n.id === 'node_headline');
   let headlineSvg = '';
   if (!headlineNode || headlineNode.visible !== false) {
@@ -423,6 +434,46 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
     }
   }
 
+  const logoNode = state.nodes?.find((n: any) => n.role === 'logo' || n.id === 'logo' || n.id === 'node_logo');
+  let logoSvg = '';
+  if (!logoNode || logoNode.visible !== false) {
+    const logoW = logoNode && typeof logoNode.width === 'number' ? Math.round(logoNode.width * scaleX) : 280;
+    const logoH = logoNode && typeof logoNode.height === 'number' ? Math.round(logoNode.height * scaleY) : 56;
+    const logoX = logoNode && typeof logoNode.x === 'number' ? Math.round(logoNode.x * scaleX) : (isRtl ? width - logoW - 64 : 64);
+    const logoY = logoNode && typeof logoNode.y === 'number' ? Math.round(logoNode.y * scaleY) : Math.round(height * 0.06);
+
+    logoSvg = `
+  <!-- Brand Logo Badge -->
+  <g transform="translate(${logoX}, ${logoY})">
+    <rect width="${logoW}" height="${logoH}" rx="8" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <text x="${isRtl ? logoW - 24 : 24}" y="${Math.round(logoH * 0.64)}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="22" font-weight="bold" text-anchor="${isRtl ? 'end' : 'start'}">${state.brandKit.logoText}</text>
+  </g>`;
+  }
+
+  const copyNode = state.nodes?.find((n: any) => n.role === 'copy' || n.id === 'copy' || n.id === 'node_copy');
+  let copyBadgeSvg = '';
+  if (!copyNode || copyNode.visible !== false) {
+    const badgeW = copyNode && typeof copyNode.width === 'number' ? Math.round(copyNode.width * scaleX) : Math.round(width * 0.42);
+    const badgeH = copyNode && typeof copyNode.height === 'number' ? Math.round(copyNode.height * scaleY) : 88;
+    const badgeX = copyNode && typeof copyNode.x === 'number' ? Math.round(copyNode.x * scaleX) : (isRtl ? width * 0.5 : width * 0.08);
+    const badgeY = copyNode && typeof copyNode.y === 'number' ? Math.round(copyNode.y * scaleY) : Math.round(height * 0.82);
+    const badgeBg = copyNode?.backgroundColor || state.brandKit.palette.cardBg;
+    const badgeRadius = copyNode && typeof copyNode.borderRadius === 'number' ? Math.round(copyNode.borderRadius * scaleAvg) : 16;
+    const copyText = isRtl ? (copyNode?.textCkb || state.copyCkb) : (copyNode?.textEn || state.copyEn);
+    const badgeDisplayText = state.langVariant === 'bilingual'
+      ? `${copyNode?.textEn || state.copyEn} · &#x2067;${copyNode?.textCkb || state.copyCkb}&#x2069;`
+      : isRtl
+      ? `&#x2067;${copyText}&#x2069;`
+      : copyText;
+
+    copyBadgeSvg = `
+  <!-- Live Vector Price & Offer Badge -->
+  <g transform="translate(${badgeX}, ${badgeY})" filter="url(#badgeShadow)">
+    <rect width="${badgeW}" height="${badgeH}" rx="${badgeRadius}" fill="${badgeBg}"/>
+    <text x="36" y="${Math.round(badgeH * 0.62)}" fill="#0F172A" font-family="Inter, Vazirmatn, sans-serif" font-size="${Math.round(Math.min(badgeH * 0.4, 34))}" font-weight="bold">${badgeDisplayText}</text>
+  </g>`;
+  }
+
   const gradColor0 = state.brandKit.palette?.secondary || '#0A1C1F';
   const gradColor1 = state.brandKit.palette?.primary || '#01585F';
   const gradColor2 = state.brandKit.palette?.accent || state.accentColor;
@@ -430,6 +481,9 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
   <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;family=Vazirmatn:wght@400;600;700;800&amp;display=swap');
+    </style>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="${gradColor0}"/>
       <stop offset="55%" stop-color="${gradColor1}"/>
@@ -446,11 +500,7 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   <!-- Accent Organic Shape -->
   <ellipse cx="${width * 0.6}" cy="${height * 0.65}" rx="${width * 0.38}" ry="${height * 0.18}" fill="${state.accentColor}" opacity="0.85" transform="rotate(${isRtl ? -12 : 12} ${width * 0.6} ${height * 0.65})"/>
 
-  <!-- Brand Logo Badge -->
-  <g transform="translate(${isRtl ? width - 340 : 64}, ${height * 0.06})">
-    <rect width="280" height="56" rx="8" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-    <text x="${isRtl ? 250 : 24}" y="36" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="22" font-weight="bold" text-anchor="${isRtl ? 'end' : 'start'}">${state.brandKit.logoText}</text>
-  </g>
+  ${logoSvg}
 
   <!-- Live Vector Headline -->
   ${headlineSvg}
@@ -458,11 +508,7 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   <!-- Dynamic User Custom Layers (Vector Primitives & Isolates) -->
   ${customNodesSvg}
 
-  <!-- Live Vector Price & Offer Badge -->
-  <g transform="translate(${isRtl ? width * 0.5 : width * 0.08}, ${height * 0.82})" filter="url(#badgeShadow)">
-    <rect width="${width * 0.42}" height="88" rx="16" fill="${state.brandKit.palette.cardBg}"/>
-    <text x="36" y="56" fill="#0F172A" font-family="Inter, Vazirmatn, sans-serif" font-size="34" font-weight="bold">${displayText}</text>
-  </g>
+  ${copyBadgeSvg}
 
   <!-- Verified Contact Tokens -->
   <text x="${isRtl ? width * 0.08 : width * 0.92}" y="${height - 32}" fill="rgba(255,255,255,0.7)" font-family="Inter, Vazirmatn, sans-serif" font-size="20" text-anchor="${isRtl ? 'start' : 'end'}">${state.brandKit.contactTokens.join(' · ')}</text>
@@ -490,6 +536,24 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
     downloadFile(blob, filename);
   }
   return filename;
+}
+
+function hexToLuminance(hex: string): number {
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length < 6) return 0.5;
+  const r = parseInt(cleanHex.slice(0, 2), 16) / 255;
+  const g = parseInt(cleanHex.slice(2, 4), 16) / 255;
+  const b = parseInt(cleanHex.slice(4, 6), 16) / 255;
+  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+function calculateWcagRatio(fgHex: string, bgHex: string): number {
+  const l1 = hexToLuminance(fgHex);
+  const l2 = hexToLuminance(bgHex);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 /**
@@ -570,6 +634,11 @@ export function generateHycPackageData(state: CanvasExportState, task?: any): { 
         },
       ];
 
+  const primaryBg = state.brandKit.palette?.primary || '#01585F';
+  const textFg = '#FFFFFF';
+  const measuredRatio = calculateWcagRatio(textFg, primaryBg);
+  const ratioLabel = `${measuredRatio >= 7 ? 'AAA' : measuredRatio >= 4.5 ? 'AA' : 'FAIL'}_${measuredRatio.toFixed(1)}_TO_1`;
+
   const pkg = {
     formatVersion: '0.4.0',
     specCompliance: 'MASTER_SPEC_INVARIANT_2',
@@ -587,9 +656,10 @@ export function generateHycPackageData(state: CanvasExportState, task?: any): { 
     },
     nodes: serializedNodes,
     qualityAudit: {
-      status: 'CERTIFIED_PASS',
+      status: measuredRatio >= 4.5 ? 'CERTIFIED_PASS' : 'FLAGGED_REVIEW',
       hardChecks: {
-        wcagContrast: 'AAA_13.1_TO_1',
+        wcagContrast: ratioLabel,
+        measuredContrastRatio: Number(measuredRatio.toFixed(2)),
         safeZonesRespected: true,
         protectedTokensIntact: true,
         noFlattenedText: true,

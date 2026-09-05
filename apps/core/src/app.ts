@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -220,6 +222,116 @@ export function createApp() {
     updatedAt: new Date().toISOString(),
   });
 
+  // Seed Drustee Evidence-First Health DNA
+  clientDnas.set('client-drustee', {
+    tenantId: 'tenant-drustee',
+    clientId: 'client-drustee',
+    name: 'Drustee Evidence-First Health',
+    code: 'DRUSTEE',
+    version: 1,
+    status: 'active',
+    defaultLocale: 'ckb',
+    defaultDirection: 'rtl',
+    colors: [
+      { name: 'Botanical Deep Emerald', hex: '#0D5C3A', role: 'primary' },
+      { name: 'Forest Pine', hex: '#062E1D', role: 'background' },
+      { name: 'Warm Amber Gold', hex: '#D4AF37', role: 'accent' },
+    ],
+    fonts: [
+      {
+        family: 'Vazirmatn',
+        style: 'ExtraBold',
+        weight: 800,
+        role: 'display',
+        license: 'OFL',
+        supportedLocales: ['ckb', 'ar'],
+      },
+      {
+        family: 'Noto Sans Arabic',
+        style: 'SemiBold',
+        weight: 600,
+        role: 'body',
+        license: 'OFL',
+        supportedLocales: ['ckb', 'ar'],
+      },
+    ],
+    assets: [
+      {
+        assetId: 'asset_drustee_logo_1',
+        name: 'Official Drustee Wordmark & Leaf Seal',
+        role: 'logo_primary',
+        storageKey: 'assets/drustee/logo_official.svg',
+        sha256: 'sha256_d892a01fc348be91',
+        mimeType: 'image/svg+xml',
+      },
+      {
+        assetId: 'asset_drustee_vitd3_1',
+        name: 'Vitamin D3 + K2 Amber Dropper Bottle Vector',
+        role: 'logo_secondary',
+        storageKey: 'assets/drustee/vit_d3_bottle.svg',
+        sha256: 'sha256_e1098b1c4320987a',
+        mimeType: 'image/svg+xml',
+      },
+      {
+        assetId: 'asset_drustee_omega3_1',
+        name: 'Wild Alaskan Omega-3 Softgels Bottle Vector',
+        role: 'badge',
+        storageKey: 'assets/drustee/omega3_bottle.svg',
+        sha256: 'sha256_f9018237cb1092e4',
+        mimeType: 'image/svg+xml',
+      },
+      {
+        assetId: 'asset_drustee_gmp_seal',
+        name: 'GMP Certified Manufacturing Badge',
+        role: 'badge',
+        storageKey: 'assets/drustee/badge_gmp.svg',
+        sha256: 'sha256_g88123490bca1123',
+        mimeType: 'image/svg+xml',
+      },
+      {
+        assetId: 'asset_drustee_lab_seal',
+        name: 'Third-Party Independent Lab Tested Badge',
+        role: 'badge',
+        storageKey: 'assets/drustee/badge_lab.svg',
+        sha256: 'sha256_h77123908fca9944',
+        mimeType: 'image/svg+xml',
+      },
+    ],
+    guidelines: {
+      voiceAndTone: 'Evidence-first clinical rigor in Sorani Kurdish; transparent dosages and preventative wellness without medical disease cure claims.',
+      prohibitedPhrases: [
+        'معجزة',
+        'دەرمانی هەموو دەردێک',
+        'بێ وێنە لە جیهان',
+        '١٠٠٪ گەرەنتی',
+        'چارەسەری نەخۆشی',
+        'miracle cure',
+        'cure-all',
+      ],
+      requiredDisclaimers: [
+        'تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.',
+      ],
+      layoutRules: [
+        'Always preserve UAX #9 bidi isolation for Sorani Kurdish typography',
+        'Maintain minimum 10% safe zone margins on all export aspect ratios',
+        'Display Third-Party Lab Tested and GMP Certification badges prominently',
+      ],
+    },
+    destinations: {
+      googleSharedDriveId: 'drive_drustee_main',
+      productionFolderId: 'folder_drustee_prod_verified',
+      archiveFolderId: 'folder_drustee_archive',
+      spreadsheetId: 'sheet_drustee_campaigns_456',
+      sheetId: 0,
+    },
+    approvalPolicy: {
+      requiredRoles: ['art_director', 'pharmacist_reviewer'],
+      allowAutoApproval: false,
+      autoApprovalEligibleTemplates: [],
+    },
+    updatedAt: new Date().toISOString(),
+  });
+
   // Seed Aster Hotel DNA
   clientDnas.set('client-aster', {
     tenantId: 'tenant-aster',
@@ -409,6 +521,19 @@ export function createApp() {
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
       dna: clientDnas.get('client-office-1')!,
+    },
+  ]);
+
+  clientSnapshots.set('client-drustee', [
+    {
+      snapshotId: 'snap_init_drustee_1',
+      clientId: 'client-drustee',
+      version: 1,
+      sha256: computeDnaHash(clientDnas.get('client-drustee')!),
+      commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
+      createdBy: 'art_director',
+      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+      dna: clientDnas.get('client-drustee')!,
     },
   ]);
 
@@ -1578,6 +1703,35 @@ export function createApp() {
     const run = evalRuns.get(runId);
     if (!run) return problem(c, 404, 'Evaluation Run Not Found');
     return c.json(run);
+  });
+
+  registerRoute('get', '/evaluations/datasets', (c: any) => {
+    return c.json([
+      { id: 'brief', name: 'Brief Builder', casesCount: 60, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
+      { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
+      { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
+    ]);
+  });
+
+  registerRoute('get', '/evaluations/datasets/:datasetId/cases', (c: any) => {
+    const datasetId = c.req.param('datasetId');
+    let relFile = 'evals/routing_brief.jsonl';
+    if (datasetId === 'rtl') relFile = 'evals/rtl_golden_cases.jsonl';
+    else if (datasetId === 'retrieval') relFile = 'evals/retrieval_eval.jsonl';
+
+    try {
+      const p1 = path.resolve(process.cwd(), relFile);
+      const p2 = path.resolve(process.cwd(), '../../', relFile);
+      const targetPath = fs.existsSync(p1) ? p1 : p2;
+      const content = fs.readFileSync(targetPath, 'utf-8');
+      const cases = content
+        .split('\n')
+        .filter((line) => line.trim().length > 0)
+        .map((line) => JSON.parse(line));
+      return c.json({ datasetId, total: cases.length, cases });
+    } catch (err: any) {
+      return problem(c, 500, 'Dataset Read Error', `Unable to load dataset ${datasetId}: ${err.message}`);
+    }
   });
 
   // Asset Security & Ingestion

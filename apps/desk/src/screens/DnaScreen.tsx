@@ -88,6 +88,18 @@ export interface ClientDnaSnapshot {
 // Fallback seed clients for initial render or offline resiliency
 const FALLBACK_CLIENTS: ClientSummary[] = [
   {
+    clientId: 'client-drustee',
+    name: 'Drustee Evidence-First Health',
+    code: 'DRUSTEE',
+    version: 1,
+    status: 'active',
+    defaultLocale: 'ckb',
+    defaultDirection: 'rtl',
+    colorsCount: 3,
+    rulesCount: 3,
+    snapshotsCount: 1,
+  },
+  {
     clientId: 'client-office-1',
     name: 'Hawa Creative',
     code: 'HAWA',
@@ -137,6 +149,79 @@ const FALLBACK_CLIENTS: ClientSummary[] = [
   },
 ];
 
+const DRUSTEE_FALLBACK_DNA: ClientDNA = {
+  tenantId: 'tenant-drustee',
+  clientId: 'client-drustee',
+  name: 'Drustee Evidence-First Health',
+  code: 'DRUSTEE',
+  version: 1,
+  status: 'active',
+  defaultLocale: 'ckb',
+  defaultDirection: 'rtl',
+  colors: [
+    { name: 'Botanical Deep Emerald', hex: '#0D5C3A', role: 'primary' },
+    { name: 'Forest Pine', hex: '#062E1D', role: 'background' },
+    { name: 'Warm Amber Gold', hex: '#D4AF37', role: 'accent' },
+  ],
+  fonts: [
+    { family: 'Vazirmatn', style: 'ExtraBold', weight: 800, role: 'display', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
+    { family: 'Noto Sans Arabic', style: 'SemiBold', weight: 600, role: 'body', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
+  ],
+  assets: [
+    { assetId: 'asset_drustee_logo_1', name: 'Official Drustee Wordmark & Leaf Seal', role: 'logo_primary', storageKey: 'assets/drustee/logo_official.svg', sha256: 'sha256_d892a01fc348be91', mimeType: 'image/svg+xml' },
+    { assetId: 'asset_drustee_vitd3_1', name: 'Vitamin D3 + K2 Amber Dropper Bottle Vector', role: 'logo_secondary', storageKey: 'assets/drustee/vit_d3_bottle.svg', sha256: 'sha256_e1098b1c4320987a', mimeType: 'image/svg+xml' },
+    { assetId: 'asset_drustee_omega3_1', name: 'Wild Alaskan Omega-3 Softgels Bottle Vector', role: 'badge', storageKey: 'assets/drustee/omega3_bottle.svg', sha256: 'sha256_f9018237cb1092e4', mimeType: 'image/svg+xml' },
+    { assetId: 'asset_drustee_gmp_seal', name: 'GMP Certified Manufacturing Badge', role: 'badge', storageKey: 'assets/drustee/badge_gmp.svg', sha256: 'sha256_g88123490bca1123', mimeType: 'image/svg+xml' },
+    { assetId: 'asset_drustee_lab_seal', name: 'Third-Party Independent Lab Tested Badge', role: 'badge', storageKey: 'assets/drustee/badge_lab.svg', sha256: 'sha256_h77123908fca9944', mimeType: 'image/svg+xml' },
+  ],
+  guidelines: {
+    voiceAndTone: 'Evidence-first clinical rigor in Sorani Kurdish; transparent dosages and preventative wellness without medical disease cure claims.',
+    prohibitedPhrases: [
+      'معجزة',
+      'دەرمانی هەموو دەردێک',
+      'بێ وێنە لە جیهان',
+      '١٠٠٪ گەرەنتی',
+      'چارەسەری نەخۆشی',
+      'miracle cure',
+      'cure-all',
+    ],
+    requiredDisclaimers: [
+      'تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.',
+    ],
+    layoutRules: [
+      'Always preserve UAX #9 bidi isolation for Sorani Kurdish typography',
+      'Maintain minimum 10% safe zone margins on all export aspect ratios',
+      'Display Third-Party Lab Tested and GMP Certification badges prominently',
+    ],
+  },
+  destinations: {
+    googleSharedDriveId: 'drive_drustee_main',
+    productionFolderId: 'folder_drustee_prod_verified',
+    archiveFolderId: 'folder_drustee_archive',
+    spreadsheetId: 'sheet_drustee_campaigns_456',
+    sheetId: 0,
+  },
+  approvalPolicy: {
+    requiredRoles: ['art_director', 'pharmacist_reviewer'],
+    allowAutoApproval: false,
+    autoApprovalEligibleTemplates: [],
+  },
+  updatedAt: new Date().toISOString(),
+};
+
+const DRUSTEE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
+  {
+    snapshotId: 'snap_init_drustee_1',
+    clientId: 'client-drustee',
+    version: 1,
+    sha256: 'sha256_d4dd10cb26e9ba2c1cb2beedea869141b54de6196ba93487dc76ec119f5eb574',
+    commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
+    createdBy: 'art_director',
+    createdAt: new Date().toISOString(),
+    dna: DRUSTEE_FALLBACK_DNA,
+  },
+];
+
 // WCAG Contrast Helper
 function getLuminance(hex: string): number {
   const cleanHex = hex.replace('#', '');
@@ -165,9 +250,9 @@ function getContrastRatio(hex1: string, hex2: string): number {
 
 export const DnaScreen: React.FC = () => {
   const [clients, setClients] = useState<ClientSummary[]>(FALLBACK_CLIENTS);
-  const [selectedClientId, setSelectedClientId] = useState<string>('client-office-1');
-  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(null);
-  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('client-drustee');
+  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(DRUSTEE_FALLBACK_DNA);
+  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>(DRUSTEE_FALLBACK_SNAPSHOTS);
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);

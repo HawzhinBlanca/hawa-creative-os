@@ -38,6 +38,35 @@ export interface BrandKit {
 }
 
 export const BRAND_KITS: Record<string, BrandKit> = {
+  drustee: {
+    id: 'drustee',
+    name: 'Drustee Evidence-First Health',
+    nameKurdish: 'دروستی بۆ تەندروستی و تەواوکەری خۆراکی',
+    industry: 'Clinical Supplements & Preventative Health',
+    industryKurdish: 'تەواوکەری زانستی و تەندروستی پشتڕاستکراو',
+    verifiedSha256: 'sha256_drustee_clinical_evidence_77e81b',
+    palette: {
+      primary: '#0D5C3A',      // Botanical Deep Emerald
+      secondary: '#062E1D',    // Forest Pine
+      accent: '#D4AF37',       // Warm Amber Gold
+      background: 'linear-gradient(150deg, #062E1D 0%, #0D5C3A 55%, #1B4332 100%)',
+      text: '#FFFFFF',
+      cardBg: 'rgba(255, 255, 255, 0.95)',
+    },
+    typography: {
+      latinFont: 'Inter',
+      kurdishFont: 'Vazirmatn',
+      headlineWeight: 800,
+      copyWeight: 600,
+    },
+    logoText: 'DRUSTEE · دروستی',
+    logoBadge: '🌿 EVIDENCE FIRST',
+    defaultHeadlineEn: 'Pure Active Vitamin D3 + K2',
+    defaultHeadlineCkb: 'ڤیتامین D3 + K2 بە ژەمێکی زانستی و بێگەرد',
+    defaultCopyEn: '5000 IU High Potency · Third-Party Lab Tested',
+    defaultCopyCkb: '٥٠٠٠ یەکەی نێودەوڵەتی · تاقیگەی سەربەخۆ پەسەندی کردووە',
+    contactTokens: ['drustee.krd', 'Erbil, Kurdistan Region', 'info@drustee.krd'],
+  },
   sebar: {
     id: 'sebar',
     name: 'SEBAR Verified Health',
