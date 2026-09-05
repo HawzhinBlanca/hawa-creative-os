@@ -242,6 +242,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
   // 1. Format & Variant State
   const [variant, setVariant] = useState<AspectPreset>('feed');
+  const [canvasMode, setCanvasMode] = useState<'single' | 'multi'>('single');
   const [langVariant, setLangVariant] = useState<'en' | 'ckb' | 'bilingual'>('ckb');
   const [availableBrandKits, setAvailableBrandKits] = useState<Record<string, BrandKit>>(() => getAllBrandKits());
   const [selectedBrandKitId, setSelectedBrandKitId] = useState<string>('drustee');
@@ -3207,6 +3208,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 {FORMAT_DIMENSIONS[fmt].label.split(' ')[0]}
               </button>
             ))}
+            <div style={{ height: 16, width: 1, background: 'var(--line)', margin: '0 4px' }} />
+            <button
+              className={`btn ${canvasMode === 'multi' ? 'primary' : ''}`}
+              style={{
+                fontSize: 11,
+                padding: '4px 9px',
+                fontWeight: 700,
+                background: canvasMode === 'multi' ? 'linear-gradient(135deg, #0284C7, #0D5C3A)' : 'transparent',
+                borderColor: canvasMode === 'multi' ? '#38BDF8' : 'var(--line)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+              onClick={() => setCanvasMode(canvasMode === 'single' ? 'multi' : 'single')}
+              title="Toggle Omnichannel 4-in-1 Multi-Artboard Canvas View (Figma & Canva Pro Grade)"
+            >
+              <span>{canvasMode === 'multi' ? '🎛️ 4-in-1 Omnichannel' : '🖼️ Single View'}</span>
+            </button>
           </div>
 
           {/* Drustee Hero Clinical SKUs */}
@@ -4064,10 +4084,221 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           {snapGuideX !== null && <div className="snap-guide-x" style={{ left: `calc(50% + ${(snapGuideX - currentArtboard.width / 2) * zoom + panOffset.x}px)` }} />}
           {snapGuideY !== null && <div className="snap-guide-y" style={{ top: `calc(50% + ${(snapGuideY - currentArtboard.height / 2) * zoom + panOffset.y}px)` }} />}
 
-          {/* Scaled & Panned Artboard */}
-          <div
-            ref={artboardRef}
-            className="artboard-container"
+          {/* Scaled & Panned Artboard Viewport */}
+          {canvasMode === 'multi' ? (
+            <div
+              className="multi-artboard-workspace"
+              style={{
+                display: 'flex',
+                gap: 40,
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
+                userSelect: 'none',
+                padding: '40px',
+              }}
+            >
+              {(['feed', 'story', 'square', 'landscape'] as AspectPreset[]).map((fmt) => {
+                const config = ARTBOARD_CONFIG[fmt];
+                const isActive = variant === fmt;
+                const scaleX = config.width / currentArtboard.width;
+                const scaleY = config.height / currentArtboard.height;
+
+                return (
+                  <div
+                    key={fmt}
+                    onClick={() => {
+                      if (!isActive) handleSwitchFormat(fmt);
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    {/* Header Ribbon Pill */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        background: isActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.8)',
+                        border: `1.5px solid ${isActive ? '#10B981' : 'rgba(255, 255, 255, 0.18)'}`,
+                        color: isActive ? '#10B981' : 'var(--muted)',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.35)' : 'none',
+                      }}
+                    >
+                      <span>{FORMAT_DIMENSIONS[fmt].label}</span>
+                      <span>·</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{config.width}×{config.height}</span>
+                      {isActive ? (
+                        <span style={{ background: '#10B981', color: '#fff', fontSize: 9, padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
+                          ACTIVE
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 9, color: 'var(--muted)', opacity: 0.8 }}>
+                          Click to Edit
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Artboard Frame */}
+                    <div
+                      ref={isActive ? artboardRef : undefined}
+                      onPointerDown={isActive ? handleArtboardPointerDown : undefined}
+                      style={{
+                        width: `${config.width}px`,
+                        height: `${config.height}px`,
+                        background: activeBrandKit.palette.background,
+                        borderRadius: 8,
+                        boxShadow: isActive
+                          ? '0 0 36px rgba(16, 185, 129, 0.4), 0 24px 64px rgba(0, 0, 0, 0.6)'
+                          : '0 12px 36px rgba(0, 0, 0, 0.5)',
+                        border: isActive ? '2.5px solid #10B981' : '1px solid rgba(255, 255, 255, 0.15)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        cursor: isActive ? 'default' : 'pointer',
+                      }}
+                    >
+                      {isActive ? (
+                        <>
+                          {nodes
+                            .filter((n) => n.visible)
+                            .sort((a, b) => a.zIndex - b.zIndex)
+                            .map((node) => renderCanvasNode(node))}
+                        </>
+                      ) : (
+                        <div style={{ position: 'relative', width: '100%', height: '100%', pointerEvents: 'none' }}>
+                          {nodes
+                            .filter((n) => n.visible)
+                            .sort((a, b) => a.zIndex - b.zIndex)
+                            .map((n) => {
+                              const nx = Math.round(n.x * scaleX);
+                              const ny = n.role === 'headline'
+                                ? config.defaultHeadlineY
+                                : n.role === 'copy'
+                                ? config.defaultCopyY
+                                : Math.round(n.y * scaleY);
+                              const nw = Math.round(n.width * Math.min(1.2, Math.max(0.75, scaleX)));
+                              const nh = Math.round(n.height * Math.min(1.2, Math.max(0.75, scaleY)));
+
+                              return (
+                                <div
+                                  key={`proj-${fmt}-${n.id}`}
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${nx}px`,
+                                    top: `${ny}px`,
+                                    width: `${nw}px`,
+                                    height: `${nh}px`,
+                                    zIndex: n.zIndex,
+                                    opacity: n.opacity ?? 1,
+                                    transform: n.rotation ? `rotate(${n.rotation}deg)` : undefined,
+                                  }}
+                                >
+                                  {n.role === 'headline' && (
+                                    <div
+                                      dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+                                      style={{
+                                        fontSize: fmt === 'story' ? 22 : fmt === 'landscape' ? 20 : 25,
+                                        fontWeight,
+                                        color: n.color || '#ffffff',
+                                        fontFamily: langVariant === 'ckb' ? 'Vazirmatn, sans-serif' : fontFamily,
+                                        textAlign: n.textAlign || (langVariant === 'ckb' ? 'right' : 'left'),
+                                        lineHeight: 1.25,
+                                      }}
+                                    >
+                                      {langVariant === 'ckb' ? headlineCkb : headlineEn}
+                                    </div>
+                                  )}
+                                  {n.role === 'copy' && (
+                                    <div
+                                      dir={langVariant === 'ckb' ? 'rtl' : 'ltr'}
+                                      style={{
+                                        fontSize: fmt === 'story' ? 12 : 13,
+                                        color: n.color || 'rgba(255, 255, 255, 0.85)',
+                                        fontFamily: langVariant === 'ckb' ? 'Vazirmatn, sans-serif' : fontFamily,
+                                        textAlign: n.textAlign || (langVariant === 'ckb' ? 'right' : 'left'),
+                                        lineHeight: 1.5,
+                                      }}
+                                    >
+                                      {langVariant === 'ckb' ? copyCkb : copyEn}
+                                    </div>
+                                  )}
+                                  {n.role === 'shape' && (
+                                    <div
+                                      style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        backgroundColor: n.backgroundColor || activeBrandKit.palette.primary,
+                                        borderRadius: n.borderRadius || 4,
+                                        opacity: n.opacity ?? 1,
+                                      }}
+                                    />
+                                  )}
+                                  {n.role === 'logo' && (
+                                    <div
+                                      style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: 'rgba(255,255,255,0.06)',
+                                        borderRadius: 6,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        color: activeBrandKit.palette.accent || '#38BDF8',
+                                      }}
+                                    >
+                                      ★ {activeBrandKit.name.split(' ')[0]}
+                                    </div>
+                                  )}
+                                  {n.role === 'image_custom' && n.svgContent && (
+                                    <div
+                                      style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+                                      dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(n.svgContent) }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+
+                      {/* Contact tokens */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 6,
+                          left: 10,
+                          right: 10,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: 8,
+                          color: 'rgba(255,255,255,0.6)',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <span>{activeBrandKit.contactTokens[0]}</span>
+                        <span>{activeBrandKit.contactTokens[1]}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              ref={artboardRef}
+              className="artboard-container"
             onPointerDown={handleArtboardPointerDown}
             onDragOver={(e) => {
               e.preventDefault();
@@ -4319,6 +4550,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <span>{activeBrandKit.contactTokens[1]}</span>
             </div>
           </div>
+        )}
 
           {/* Floating Bottom Studio HUD */}
           <div className="zoom-hud studio-glass">

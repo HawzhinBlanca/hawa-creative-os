@@ -4,3 +4,4 @@ export * from './engine.js';
 export * from './contrast.js';
 export * from './layout-bounds.js';
 export * from './font-inspector.js';
+export * from './font-packager.js';

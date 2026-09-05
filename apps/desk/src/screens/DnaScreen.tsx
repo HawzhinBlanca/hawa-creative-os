@@ -748,6 +748,47 @@ export const DnaScreen: React.FC = () => {
     await saveDnaChanges(updated, `✓ Added certified font ${inspectedFont.fontFamily} to Client DNA!`);
   };
 
+  const handleCopyFontCdnSnippet = () => {
+    if (!inspectedFont) return;
+    const cdnUrl = `/v1/fonts/cdn/${encodeURIComponent(inspectedFont.fontFamily)}/style.css`;
+    const cssSnippet = `@import url('${cdnUrl}');\n/* Or Link: <link rel="stylesheet" href="${cdnUrl}"> */`;
+    navigator.clipboard.writeText(cssSnippet);
+    setFontFileNotice(`✓ Copied CDN stylesheet link for ${inspectedFont.fontFamily}!`);
+    setTimeout(() => setFontFileNotice(null), 4000);
+  };
+
+  const handleDownloadFontCssKit = () => {
+    if (!inspectedFont) return;
+    const cssText = `/* Kurdish Sorani WebFont Kit: ${inspectedFont.fontFamily} */
+@font-face {
+  font-family: '${inspectedFont.fontFamily}';
+  src: url('/v1/fonts/cdn/${encodeURIComponent(inspectedFont.fontFamily)}/font.woff2') format('woff2'),
+       local('${inspectedFont.fontFamily}'),
+       local('Vazirmatn'),
+       local('Noto Sans Arabic');
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+  ascent-override: 95%;
+  descent-override: 25%;
+  line-gap-override: 15%;
+}
+.kurdish-text {
+  font-family: '${inspectedFont.fontFamily}', 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
+  line-height: 1.52;
+  direction: rtl;
+  text-align: right;
+}`;
+    const blob = new Blob([cssText], { type: 'text/css' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${inspectedFont.fontFamily.toLowerCase().replace(/[^a-z0-9]/g, '-')}-webfont.css`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setFontFileNotice(`✓ Downloaded WebFont CSS Kit for ${inspectedFont.fontFamily}!`);
+    setTimeout(() => setFontFileNotice(null), 4000);
+  };
+
   // Onboard New Client Tenant Handler
   const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1469,20 +1510,52 @@ export const DnaScreen: React.FC = () => {
                       <span>سەرجەم دەنگە کوردییە تایبەتەکان بە دروستی جێگیرکراون و هیچ داپۆشینێک نییە.</span>
                     </div>
 
-                    <button
-                      className="btn"
-                      style={{
-                        fontSize: 11,
-                        padding: '6px 14px',
-                        background: 'rgba(56, 189, 248, 0.15)',
-                        color: 'var(--accent)',
-                        border: '1px solid var(--accent)',
-                        fontWeight: 600,
-                      }}
-                      onClick={handleAddInspectedFontToDna}
-                    >
-                      ✓ Register Font in Client DNA Typography
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        className="btn"
+                        style={{
+                          fontSize: 11,
+                          padding: '6px 14px',
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          color: 'var(--accent)',
+                          border: '1px solid var(--accent)',
+                          fontWeight: 600,
+                        }}
+                        onClick={handleAddInspectedFontToDna}
+                      >
+                        ✓ Register Font in Client DNA Typography
+                      </button>
+                      <button
+                        className="btn"
+                        style={{
+                          fontSize: 11,
+                          padding: '6px 12px',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10B981',
+                          border: '1px solid #10B981',
+                          fontWeight: 600,
+                        }}
+                        onClick={handleCopyFontCdnSnippet}
+                        title="Copy @font-face CDN stylesheet import snippet"
+                      >
+                        🔗 Copy CDN @font-face CSS
+                      </button>
+                      <button
+                        className="btn"
+                        style={{
+                          fontSize: 11,
+                          padding: '6px 12px',
+                          background: 'rgba(212, 175, 55, 0.15)',
+                          color: '#D4AF37',
+                          border: '1px solid rgba(212, 175, 55, 0.4)',
+                          fontWeight: 600,
+                        }}
+                        onClick={handleDownloadFontCssKit}
+                        title="Download self-contained CSS webfont stylesheet"
+                      >
+                        📦 Download CSS Kit
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

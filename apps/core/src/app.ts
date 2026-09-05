@@ -42,7 +42,10 @@ import {
   DeterministicQAEngine,
   inspectKurdishFontCoverage,
   KURDISH_SORANI_GLYPH_TABLE,
+  packageKurdishWebFont,
+  generateKurdishFontFaceCss,
   type FontCoverageResult,
+  type KurdishWebFontPackage,
 } from '@hawa/qa';
 import {
   HyCanvasStudioAdapter,
@@ -51,6 +54,8 @@ import {
   KurdishVoiceTranscriber,
   ResilientModelGateway,
   globalCostGovernor,
+  WahaIngressHandler,
+  normalizeKurdishIncomingText,
   type CostReceipt,
   type ClientBudgetConfig,
 } from '@hawa/integrations';
@@ -684,6 +689,106 @@ export function createApp() {
     ]);
 
     broadcast('webhook:received', { platform: 'telegram', updateId: sourceEventId, taskId });
+    broadcast('task:created', task);
+
+    return c.json({ ok: true, task }, 201);
+  });
+
+  const wahaIngress = new WahaIngressHandler(process.env.WAHA_WEBHOOK_SECRET);
+
+  app.post('/api/webhooks/whatsapp', async (c) => {
+    const secret = c.req.header('x-waha-secret') || c.req.header('authorization');
+    const expectedSecret = process.env.WAHA_WEBHOOK_SECRET;
+    if (expectedSecret && secret !== expectedSecret && secret !== `Bearer ${expectedSecret}`) {
+      return problem(c, 401, 'Unauthorized', 'Invalid or missing WhatsApp webhook secret token');
+    }
+
+    const rawBody = await c.req.arrayBuffer();
+    const bodyText = new TextDecoder().decode(rawBody);
+    let json: any = {};
+    try {
+      json = JSON.parse(bodyText);
+    } catch {
+      json = { body: bodyText };
+    }
+
+    const normalized = wahaIngress.normalize(json);
+    const sourceEventId = normalized.messageId;
+
+    if (rawEvents.has(sourceEventId)) {
+      return c.json({ ok: true, duplicate: true, eventId: sourceEventId });
+    }
+    rawEvents.set(sourceEventId, json);
+
+    const clientId = normalized.detectedClientId || 'client-drustee';
+    const taskId = crypto.randomUUID();
+
+    // Pre-flight Cost Governor check (Invariant #8)
+    const estimatedTokens = 450;
+    const preFlight = globalCostGovernor.checkPreFlight(clientId, estimatedTokens, 'gemini-1.5-pro');
+
+    let taskStatus = 'RECEIVED';
+    let briefGenerated: any = null;
+    let costReceipt: any = null;
+
+    if (!preFlight.allowed) {
+      taskStatus = 'BUDGET_EXCEEDED';
+      broadcast('client:budget_exceeded', { clientId, remainingUsd: preFlight.remainingUsd, taskId });
+    } else {
+      costReceipt = globalCostGovernor.recordUsage({
+        clientId,
+        taskId,
+        role: 'brief_generation',
+        provider: 'google',
+        model: 'gemini-1.5-pro',
+        inputTokens: 250,
+        outputTokens: 200,
+      });
+      taskStatus = 'BRIEF_READY';
+      briefGenerated = {
+        headlineEn: 'Exclusive Launch Campaign',
+        headlineCkb: normalized.normalizedKurdishText.slice(0, 60),
+        copyCkb: normalized.normalizedKurdishText,
+        costReceipt,
+      };
+    }
+
+    const task = {
+      id: taskId,
+      tenantId: 'tenant-default',
+      clientId,
+      projectId: null,
+      status: taskStatus,
+      priority: 'routine',
+      sourcePlatform: 'whatsapp',
+      sourceEventId,
+      sourceChannelId: normalized.senderPhone,
+      idempotencyKey: normalized.idempotencyKey,
+      senderName: normalized.senderName,
+      kurdishText: normalized.normalizedKurdishText,
+      title: `${normalized.senderName} WhatsApp Request`,
+      headlineCkb: normalized.normalizedKurdishText.slice(0, 40),
+      copyCkb: normalized.normalizedKurdishText,
+      brief: briefGenerated,
+      costReceipt,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    tasks.set(taskId, task);
+    events.set(taskId, [
+      {
+        eventId: crypto.randomUUID(),
+        taskId,
+        fromStatus: 'NONE',
+        toStatus: taskStatus,
+        actor: { type: 'adapter', id: 'waha' },
+        reason: `Incoming WhatsApp message received from ${normalized.senderName}`,
+        occurredAt: new Date().toISOString(),
+      },
+    ]);
+
+    broadcast('webhook:received', { platform: 'whatsapp', updateId: sourceEventId, taskId });
     broadcast('task:created', task);
 
     return c.json({ ok: true, task }, 201);
@@ -1989,6 +2094,55 @@ export function createApp() {
     return c.json(result, 200);
   });
 
+  // --- Kurdish WebFont Packaging & Asset CDN Delivery (B-040, FR-037) ---
+  const packagedFonts = new Map<string, any>();
+
+  registerRoute('post', '/fonts/package', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const fontName = body.fontName || 'Vazirmatn Kurdish';
+    let fontBuffer: Uint8Array;
+
+    if (body.fontBase64) {
+      try {
+        fontBuffer = Buffer.from(body.fontBase64, 'base64');
+      } catch {
+        fontBuffer = new Uint8Array(128);
+      }
+    } else {
+      fontBuffer = new Uint8Array(128);
+    }
+
+    const pkg = packageKurdishWebFont(fontBuffer, fontName);
+    packagedFonts.set(pkg.family.toLowerCase(), pkg);
+
+    return c.json(pkg, 200);
+  });
+
+  registerRoute('get', '/fonts/cdn/:fontFamily/style.css', (c: any) => {
+    const family = c.req.param('fontFamily');
+    const cached = packagedFonts.get(family.toLowerCase());
+    const css = cached?.cssBundle || generateKurdishFontFaceCss({
+      fontFamily: family,
+      fontUrl: `/v1/fonts/cdn/${encodeURIComponent(family)}/font.woff2`,
+    });
+
+    return c.body(css, 200, {
+      'Content-Type': 'text/css; charset=utf-8',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+  });
+
+  registerRoute('get', '/fonts/cdn/:fontFamily/font.woff2', (c: any) => {
+    const family = c.req.param('fontFamily');
+    const cached = packagedFonts.get(family.toLowerCase());
+    const bytes = cached?.fontBytes || new Uint8Array(64);
+
+    return c.body(bytes, 200, {
+      'Content-Type': 'font/woff2',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+  });
+
   // --- Real-Time AI Generation Budget & Cost Controller (B-082, FR-079) ---
   registerRoute('get', '/clients/budgets', (c: any) => {
     const budgets = globalCostGovernor.getAllSummaries();
@@ -2008,6 +2162,85 @@ export function createApp() {
     const updated = globalCostGovernor.allocateBudget(clientId, capUsd);
     broadcast('client:budget_allocated', { clientId, capUsd });
     return c.json(updated, 200);
+  });
+
+  // --- Inbound Ingress Rehearsal with Real-Time Budget Debiting (FR-004, FR-079) ---
+  registerRoute('post', '/ingress/rehearsal', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const clientId = body.clientId || 'client-drustee';
+    const platform = body.platform || 'whatsapp';
+    const text = body.text || body.message || 'ئۆفەری تایبەتی جەژن بۆ کڕیارانی دەرمانخانە';
+    const senderName = body.senderName || 'Drustee Official';
+    const phone = body.phone || '9647501234567';
+
+    const normalizedText = normalizeKurdishIncomingText(text);
+    const estimatedTokens = 450;
+    const preFlight = globalCostGovernor.checkPreFlight(clientId, estimatedTokens, 'gemini-1.5-pro');
+
+    if (!preFlight.allowed) {
+      return c.json({
+        ok: false,
+        code: 'BUDGET_EXCEEDED',
+        message: `Client ${clientId} has exhausted their monthly budget ($${preFlight.remainingUsd.toFixed(3)} remaining)`,
+        preFlight,
+      }, 402);
+    }
+
+    const taskId = crypto.randomUUID();
+    const costReceipt = globalCostGovernor.recordUsage({
+      clientId,
+      taskId,
+      role: 'rehearsal_brief_generation',
+      provider: 'google',
+      model: 'gemini-1.5-pro',
+      inputTokens: 280,
+      outputTokens: 180,
+    });
+    const task = {
+      id: taskId,
+      tenantId: 'tenant-default',
+      clientId,
+      projectId: null,
+      status: 'BRIEF_READY',
+      priority: 'high',
+      sourcePlatform: platform,
+      sourceEventId: `rehearsal_${Date.now()}`,
+      sourceChannelId: phone,
+      idempotencyKey: `idem_rehearsal_${Date.now()}`,
+      senderName,
+      kurdishText: normalizedText,
+      title: body.title || `${senderName} Inbound Campaign`,
+      headlineCkb: normalizedText.split('\n')[0]?.slice(0, 40) || 'کەمپینی تایبەت',
+      headlineEn: body.headlineEn || 'Special Seasonal Campaign',
+      copyCkb: normalizedText,
+      copyEn: body.copyEn || 'Exclusive Office Promotion',
+      costReceipt,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    tasks.set(taskId, task);
+    events.set(taskId, [
+      {
+        eventId: crypto.randomUUID(),
+        taskId,
+        fromStatus: 'NONE',
+        toStatus: 'BRIEF_READY',
+        actor: { type: 'rehearsal', id: 'operator' },
+        reason: 'Inbound message ingress rehearsal simulated',
+        occurredAt: new Date().toISOString(),
+      },
+    ]);
+
+    broadcast('webhook:received', { platform, updateId: task.sourceEventId, taskId });
+    broadcast('task:created', task);
+
+    return c.json({
+      ok: true,
+      task,
+      costReceipt,
+      budgetStatus: globalCostGovernor.getOrCreateClientBudget(clientId),
+    }, 201);
   });
 
   // --- Governed Learning & Studio Feedback Loop Miner (B-055, B-056, B-057) ---

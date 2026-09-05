@@ -156,6 +156,24 @@ export class CostGovernor {
   }
 
   /**
+   * Pre-flight convenience check taking estimated tokens or cost.
+   */
+  public checkPreFlight(
+    clientId: string,
+    tokensOrCost: number | { input: number; output: number },
+    model = 'gemini-1.5-pro',
+    provider = 'google'
+  ): BudgetCheckResult {
+    let estimatedCost: number;
+    if (typeof tokensOrCost === 'number') {
+      estimatedCost = tokensOrCost < 1 ? tokensOrCost : this.calculateEstimatedCost(provider, model, { input: tokensOrCost, output: tokensOrCost });
+    } else {
+      estimatedCost = this.calculateEstimatedCost(provider, model, tokensOrCost);
+    }
+    return this.checkBudget(clientId, estimatedCost);
+  }
+
+  /**
    * Commits an executed operation's cost receipt into the client's financial ledger.
    */
   public recordUsage(params: {

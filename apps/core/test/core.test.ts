@@ -637,5 +637,94 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(scopedSearch.scopeEnforced).toBe(true);
     expect(scopedSearch.clientId).toBe('client-drustee');
   });
+
+  it('handles WAHA WhatsApp webhook ingress with idempotency and budget debiting', async () => {
+    const wahaPayload = {
+      event: 'message',
+      payload: {
+        id: `waha_test_${Date.now()}`,
+        from: '9647501234567@c.us',
+        pushname: 'Drustee Official',
+        body: 'ئۆفەری نوێی دروستی بۆ ڤیتامین دی٣',
+        timestamp: 1725577300,
+      },
+    };
+
+    const res = await app.request('/api/webhooks/whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(wahaPayload),
+    });
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.task.sourcePlatform).toBe('whatsapp');
+    expect(data.task.clientId).toBe('client-drustee');
+    expect(data.task.status).toBe('BRIEF_READY');
+    expect(data.task.kurdishText).toContain('ڤیتامین دی٣');
+    expect(data.task.costReceipt).toBeDefined();
+
+    // Verify deduplication
+    const dupRes = await app.request('/api/webhooks/whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(wahaPayload),
+    });
+    expect(dupRes.status).toBe(200);
+    const dupData = await dupRes.json();
+    expect(dupData.duplicate).toBe(true);
+  });
+
+  it('runs Inbound Ingress Rehearsal with real-time budget tracking', async () => {
+    const res = await app.request('/v1/ingress/rehearsal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId: 'client-aster',
+        platform: 'whatsapp',
+        text: 'شەوی تایبەتی هەینی لە هۆتێل ئاستێر',
+        senderName: 'Aster Resort Erbil',
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.task.sourcePlatform).toBe('whatsapp');
+    expect(data.task.clientId).toBe('client-aster');
+    expect(data.costReceipt).toBeDefined();
+    expect(data.budgetStatus.spentUsd).toBeGreaterThan(0);
+  });
+
+  it('packages Kurdish WebFont and serves @font-face via CDN endpoint', async () => {
+    // 1. Package font
+    const pkgRes = await app.request('/v1/fonts/package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fontName: 'AsterKurdishTitle' }),
+    });
+
+    expect(pkgRes.status).toBe(200);
+    const pkg = await pkgRes.json();
+    expect(pkg.family).toBe('AsterKurdishTitle');
+    expect(pkg.cssBundle).toContain('@font-face');
+    expect(pkg.cdnSnippet).toContain('/v1/fonts/cdn/AsterKurdishTitle/style.css');
+
+    // 2. Fetch CDN CSS
+    const cssRes = await app.request('/v1/fonts/cdn/AsterKurdishTitle/style.css');
+    expect(cssRes.status).toBe(200);
+    expect(cssRes.headers.get('Content-Type')).toContain('text/css');
+    expect(cssRes.headers.get('Cache-Control')).toContain('immutable');
+    const cssText = await cssRes.text();
+    expect(cssText).toContain("font-family: 'AsterKurdishTitle'");
+    expect(cssText).toContain('ascent-override: 95%');
+
+    // 3. Fetch CDN Font binary
+    const fontRes = await app.request('/v1/fonts/cdn/AsterKurdishTitle/font.woff2');
+    expect(fontRes.status).toBe(200);
+    expect(fontRes.headers.get('Content-Type')).toBe('font/woff2');
+    expect(fontRes.headers.get('Cache-Control')).toContain('immutable');
+  });
 });
 

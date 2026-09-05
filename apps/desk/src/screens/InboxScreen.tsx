@@ -122,20 +122,27 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
     };
 
     try {
-      await fetch('/v1/tasks', {
+      const res = await fetch('/v1/ingress/rehearsal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: p.title,
           clientId: p.client,
-          description: fullDescription,
-          priority: 'high',
+          platform: p.platform,
+          text: `${p.headlineCkb}\n${p.copyCkb}`,
           headlineEn: p.headlineEn,
-          headlineCkb: p.headlineCkb,
           copyEn: p.copyEn,
-          copyCkb: p.copyCkb,
+          title: p.title,
+          senderName: p.clientName,
         }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.task) {
+          taskObj.id = data.task.id;
+          (taskObj as any).costReceipt = data.costReceipt;
+          (taskObj as any).budgetStatus = data.budgetStatus;
+        }
+      }
     } catch {
       // Offline fallback
     }
@@ -143,7 +150,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
     setLiveTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== newTaskId)]);
     setSimulatedTask(taskObj);
     setSimulating(false);
-    setRealtimeNotification(`⚡ Ingress simulated: "${p.title}" landed in Review lane`);
+    setRealtimeNotification(`⚡ Ingress Rehearsal: "${p.title}" created with Cost Governor token debit!`);
     setTimeout(() => setRealtimeNotification(null), 6000);
   };
 
@@ -464,9 +471,14 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                 </div>
                 <h3>{t.title}</h3>
                 <p dir="rtl" lang="ckb">{t.description || 'تێکستی داواکراو…'}</p>
-                <div className="meta">
+                <div className="meta" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span className="pill">{t.clientId || 'Aster'}</span>
                   <span className="pill">ckb</span>
+                  {(t as any).costReceipt && (
+                    <span className="pill" style={{ background: 'rgba(212, 175, 55, 0.15)', color: '#D4AF37', border: '1px solid rgba(212, 175, 55, 0.4)', fontWeight: 600 }}>
+                      ⚡ ${(t as any).costReceipt.costUsd.toFixed(4)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
