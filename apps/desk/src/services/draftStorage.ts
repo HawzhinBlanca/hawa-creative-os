@@ -83,27 +83,45 @@ export async function persistWorkingDraft(draft: SavedCanvasDraft): Promise<void
     });
     draft.sha256Proof = await computeDocumentHash(manifestStr);
 
+    let savedToIdb = false;
+    let savedToLocalStorage = false;
+    let lastError: any = null;
+
     // 1. Save to IndexedDB
     try {
-      const db = await openDB();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(draft);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
+      if (typeof indexedDB !== 'undefined') {
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(draft);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+        savedToIdb = true;
+      }
+    } catch (e) {
+      lastError = e;
       // If IndexedDB fails, fall through to localStorage
     }
 
     // 2. Synchronize to localStorage backup
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(DRAFT_KEY_PREFIX + draft.id, JSON.stringify(draft));
-      localStorage.setItem('hawa_last_active_draft_id', draft.id);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(DRAFT_KEY_PREFIX + draft.id, JSON.stringify(draft));
+        localStorage.setItem('hawa_last_active_draft_id', draft.id);
+        savedToLocalStorage = true;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+
+    if (!savedToIdb && !savedToLocalStorage) {
+      throw new Error(`Failed to persist draft to local storage: ${lastError?.message || 'Storage unavailable'}`);
     }
   } catch (err) {
     console.warn('[DraftStorage] Failed to persist draft:', err);
+    throw err;
   }
 }
 

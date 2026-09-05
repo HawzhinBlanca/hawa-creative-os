@@ -683,14 +683,19 @@
       "sha256": "4bc20739920fd2843cf8b2014feff90f2820ecc82f7c1c027553908e15a77eef"
     },
     {
+      "path": "scripts/launch_hawa_os.sh",
+      "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362",
+      "bytes": 6006
+    },
+    {
       "path": "scripts/smoke_test_10_of_10.ts",
       "sha256": "1927c6a2965065265b40f5d63f50be116e0e329585b3db0d9cb4d76e8e948005",
       "bytes": 13745
     },
     {
       "path": "scripts/validate_pack.py",
-      "bytes": 20843,
-      "sha256": "777c1ec3bc347a756d3256ed05cc4c7d11534e5ed84f0ce3138dce0290cf5e08"
+      "bytes": 20853,
+      "sha256": "cbe9e1fc96d0e0299f7a04da2e3200ef8e02031bdee2b932613a09c6bb999656"
     },
     {
       "path": "ui/design-system.md",

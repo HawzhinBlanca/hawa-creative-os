@@ -33,6 +33,97 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
   const [showFactModal, setShowFactModal] = useState(false);
   const [resolvedFactChoice, setResolvedFactChoice] = useState<string | null>(null);
 
+  // Inbound Brief Simulator State
+  const [showSimulator, setShowSimulator] = useState(false);
+  const [simulatorPreset, setSimulatorPreset] = useState<'aster' | 'nova' | 'rona'>('aster');
+  const [simulating, setSimulating] = useState(false);
+  const [simulationStep, setSimulationStep] = useState(0);
+  const [simulatedTask, setSimulatedTask] = useState<LiveTask | null>(null);
+
+  const SIMULATOR_PRESETS = {
+    aster: {
+      client: 'client-aster',
+      clientName: 'Aster Hotel & Resort',
+      platform: 'whatsapp',
+      icon: '💬',
+      title: 'Friday VIP Rooftop Dinner & Live Oud',
+      headlineEn: 'Friday VIP Rooftop Dinner & Live Oud',
+      headlineCkb: 'شەوی تایبەتی هەینی لە هۆتێل ئاستێر',
+      copyEn: 'Special Friday VIP Dinner Menu · Call 0750 123 4567',
+      copyCkb: 'پێشکه‌شکردنی خواردنی تایبه‌ت له‌ شه‌وانی هه‌ینی له‌ هۆتێل ئاستێر له‌ هه‌ولێر',
+    },
+    nova: {
+      client: 'client-nova',
+      clientName: 'Nova Tech Systems',
+      platform: 'telegram',
+      icon: '✈️',
+      title: 'Cloud & AI Summit Erbil 2026',
+      headlineEn: 'Cloud & AI Summit Erbil 2026',
+      headlineCkb: 'کۆنگره‌ی نێوده‌وڵه‌تی ته‌کنه‌لۆجیا و ژیری ده‌ستکرد',
+      copyEn: 'International AI & Cloud Summit 2026 · Register at novatech.krd',
+      copyCkb: 'کۆنگره‌ی نێوده‌وڵه‌تی ته‌کنه‌لۆجیا و ژیری ده‌ستکرد له‌ هه‌ولێر',
+    },
+    rona: {
+      client: 'client-rona',
+      clientName: 'Rona Haute Couture',
+      platform: 'mobile_desk',
+      icon: '📱',
+      title: 'Autumn Luxury Velvet Collection',
+      headlineEn: 'Autumn Luxury Velvet Collection',
+      headlineCkb: 'کۆلێکشن نوێی پاییزه‌ لە دیزاینی ڕۆنا',
+      copyEn: 'Exclusive Autumn Velvet Collection · Erbil Empire World',
+      copyCkb: 'کۆلێکشن نوێی پاییزه‌ له‌ دیزاینی ڕۆنا له‌ ئیمپایەر وۆڕڵد هەولێر',
+    },
+  };
+
+  const handleRunSimulator = async () => {
+    const p = SIMULATOR_PRESETS[simulatorPreset];
+    setSimulating(true);
+    setSimulatedTask(null);
+
+    // Step through pipeline stages
+    for (let step = 1; step <= 7; step++) {
+      setSimulationStep(step);
+      await new Promise((r) => setTimeout(r, 220));
+    }
+
+    const newTaskId = `sim-${Date.now().toString(36)}`;
+    const fullDescription = `${p.headlineEn} / ${p.headlineCkb}\n${p.copyEn} / ${p.copyCkb}`;
+
+    const taskObj: LiveTask = {
+      id: newTaskId,
+      clientId: p.client,
+      title: p.title,
+      status: 'REVIEW',
+      priority: 'high',
+      description: fullDescription,
+      source: { platform: p.platform, externalId: `ext_${Date.now()}` },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await fetch('/v1/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: p.title,
+          clientId: p.client,
+          description: fullDescription,
+          priority: 'high',
+        }),
+      });
+    } catch {
+      // Offline fallback
+    }
+
+    setLiveTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== newTaskId)]);
+    setSimulatedTask(taskObj);
+    setSimulating(false);
+    setRealtimeNotification(`⚡ Ingress simulated: "${p.title}" landed in Review lane`);
+    setTimeout(() => setRealtimeNotification(null), 6000);
+  };
+
   const fetchTasks = async () => {
     setLoading(true);
     try {
@@ -149,15 +240,157 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
           {loading ? 'Refreshing board from Core API…' : lastFetched ? `${lastFetched} · ${liveTasks.length} active API tasks` : 'Live API & SSE connected'}
         </div>
-        <button
-          className="btn"
-          style={{ fontSize: 12, padding: '4px 10px' }}
-          onClick={fetchTasks}
-          disabled={loading}
-        >
-          {loading ? 'Syncing…' : '↻ Sync Board'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn"
+            style={{
+              fontSize: 12,
+              padding: '4px 10px',
+              background: 'rgba(245, 158, 11, 0.1)',
+              color: '#F59E0B',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+            onClick={() => setShowSimulator(!showSimulator)}
+          >
+            <span>⚡</span>
+            <span>{showSimulator ? 'Close Simulator' : 'Simulate Inbound Brief'}</span>
+          </button>
+          <button
+            className="btn"
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            onClick={fetchTasks}
+            disabled={loading}
+          >
+            {loading ? 'Syncing…' : '↻ Sync Board'}
+          </button>
+        </div>
       </div>
+
+      {/* Inbound Simulator Drawer */}
+      {showSimulator && (
+        <div
+          className="panel"
+          style={{
+            marginBottom: 16,
+            padding: 16,
+            background: 'var(--panel)',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>⚡</span>
+              <div>
+                <b style={{ fontSize: 14 }}>Inbound Client Brief Ingress Simulator</b>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                  Simulate external chat briefs (WhatsApp WAHA / Telegram) and verify the 7-stage durable pipeline.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSimulator(false)}
+              style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16 }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Preset Buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+            {(['aster', 'nova', 'rona'] as const).map((key) => {
+              const p = SIMULATOR_PRESETS[key];
+              const isSelected = simulatorPreset === key;
+              return (
+                <div
+                  key={key}
+                  onClick={() => !simulating && setSimulatorPreset(key)}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    border: `1px solid ${isSelected ? '#F59E0B' : 'var(--line)'}`,
+                    background: isSelected ? 'rgba(245, 158, 11, 0.08)' : 'var(--soft)',
+                    cursor: simulating ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span>{p.icon}</span>
+                    <b style={{ fontSize: 12 }}>{p.clientName}</b>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.title}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pipeline Stepper Visualization */}
+          {simulationStep > 0 && (
+            <div style={{ marginBottom: 14, padding: 12, background: 'var(--soft)', borderRadius: 8, border: '1px solid var(--line)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+                Live Pipeline Execution Stepper (Restate 1.7 Durable Journal)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, fontSize: 11 }}>
+                {[
+                  '1. Ingress Webhook',
+                  '2. Scope Lock (#5)',
+                  '3. Hybrid Retrieval',
+                  '4. Creative Director',
+                  '5. HyCanvas (.hyc)',
+                  '6. QA Guard (#7)',
+                  '7. Ready for Review',
+                ].map((name, idx) => {
+                  const stepNum = idx + 1;
+                  const isDone = simulationStep > stepNum;
+                  const isCurrent = simulationStep === stepNum;
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '6px 4px',
+                        textAlign: 'center',
+                        borderRadius: 6,
+                        background: isDone ? 'rgba(16, 185, 129, 0.15)' : isCurrent ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                        color: isDone ? '#10B981' : isCurrent ? '#F59E0B' : 'var(--muted)',
+                        fontWeight: isCurrent || isDone ? 600 : 400,
+                        border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.3)' : isCurrent ? 'rgba(245, 158, 11, 0.5)' : 'transparent'}`,
+                      }}
+                    >
+                      {isDone ? '✓ ' : isCurrent ? '⏳ ' : ''}{name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            {simulatedTask && (
+              <button
+                className="btn primary"
+                style={{ fontSize: 12, background: '#10B981', color: '#fff', fontWeight: 700 }}
+                onClick={() => onSelectReview(simulatedTask)}
+              >
+                🎨 Review "{simulatedTask.title}" in Studio →
+              </button>
+            )}
+            <button
+              className="btn primary"
+              style={{ fontSize: 12, background: '#F59E0B', color: '#000', fontWeight: 700 }}
+              onClick={handleRunSimulator}
+              disabled={simulating}
+            >
+              {simulating ? 'Simulating Inbound Pipeline…' : '▶ Run Ingress Simulation'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid4">
         <div

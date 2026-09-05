@@ -3,7 +3,8 @@ import { runRealtimeQADiagnostics, type QADiagnosticResult } from '../services/q
 import { computeSemanticDiff, type SemanticDiffResult, type DocumentSnapshot } from '../services/semanticDiff.ts';
 import { useI18n } from '../services/i18n.js';
 import { getBrandKit, getAllBrandKits, saveCustomBrandKit, type BrandKit } from '../services/brandKits.ts';
-import { exportToHighResPng, exportToSvg, exportToHycPackage, importFromHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
+import { exportToHighResPng, exportToSvg, exportToHycPackage, exportMasterDeliveryBundle, importFromHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
+import { sanitizeSvgContent } from '../services/sanitizer.js';
 import {
   toEasternKurdishDigits,
   toWesternDigits,
@@ -857,11 +858,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         }
       }
 
-      // Zoom Reset
+      // Zoom Controls (Cmd/Ctrl + +, Cmd/Ctrl + -, Cmd/Ctrl + 0)
+      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        setZoom((prev) => Math.min(3.0, Math.round((prev + 0.15) * 100) / 100));
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        setZoom((prev) => Math.max(0.3, Math.round((prev - 0.15) * 100) / 100));
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === '0' || e.key === '1')) {
         e.preventDefault();
         setZoom(1.0);
         setPanOffset({ x: 0, y: 0 });
+      }
+
+      // Quick Export / Delivery Kit Menu (Cmd/Ctrl + E)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setShowExportMenu((prev) => !prev);
       }
 
       // Keyboard Nudge for Selected Elements (Moves all selected together)
@@ -1579,6 +1594,36 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }, task);
     setStudioToast(`✓ HyCanvas Package exported: ${filename}`);
     setTimeout(() => setStudioToast(null), 5000);
+  };
+
+  const handleExportDeliveryKit = async () => {
+    setShowExportMenu(false);
+    setExporting(true);
+    try {
+      const filename = await exportMasterDeliveryBundle({
+        state: {
+          headlineEn,
+          headlineCkb,
+          copyEn,
+          copyCkb,
+          langVariant,
+          fontFamily,
+          fontWeight,
+          accentColor,
+          brandKit: activeBrandKit,
+          format: variant,
+          nodes,
+        },
+        task,
+        qaReport: qaDiagnostics,
+      });
+      setStudioToast(`✓ Master Delivery Kit (.zip) generated & downloaded: ${filename}`);
+    } catch (err: any) {
+      setErrorMessage(`Delivery kit packaging failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+      setTimeout(() => setStudioToast(null), 5000);
+    }
   };
 
   const handleImportHycFile = async (file: File) => {
@@ -2299,10 +2344,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           title={node.assetHash ? `Verified Asset: ${node.assetHash}` : node.name}
         >
           {isSelected && renderTransformBBox(node)}
-          {node.svgContent ? (
+          {node.svgContent && sanitizeSvgContent(node.svgContent) ? (
             <div
               style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex' }}
-              dangerouslySetInnerHTML={{ __html: node.svgContent }}
+              dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(node.svgContent) }}
             />
           ) : (
             <div style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center' }}>
@@ -2317,7 +2362,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   };
 
   return (
-    <section id="review" className="screen active" style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', direction: 'ltr' }}>
+    <section id="review" className="screen active review-screen" style={{ display: 'flex', flexDirection: 'column', direction: 'ltr' }}>
       {/* Dynamic Studio Feedback Banner */}
       {studioToast && (
         <div style={{
@@ -2341,7 +2386,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       )}
 
       {/* Studio Top Control Strip */}
-      <div style={{
+      <div className="studio-toolbar" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -2537,6 +2582,28 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             📥 Import .hyc
           </button>
 
+          {/* 1-Click Master Delivery Kit (.zip) */}
+          <button
+            className="btn"
+            style={{
+              fontSize: 11,
+              padding: '4px 12px',
+              fontWeight: 700,
+              background: 'rgba(245, 158, 11, 0.15)',
+              color: '#F59E0B',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+            onClick={handleExportDeliveryKit}
+            disabled={exporting}
+            title="Download complete Master Delivery Kit (.zip) with 2x Retina PNGs, SVG, .hyc, and QA certificate"
+          >
+            <span>🎁</span>
+            <span>Master Kit (.zip)</span>
+          </button>
+
           {/* Export Dropdown Button with 1x / 2x / 4K / SVG / HYC */}
           <div style={{ position: 'relative' }}>
             <button
@@ -2559,10 +2626,32 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   borderRadius: 8,
                   padding: 6,
                   zIndex: 200,
-                  width: 250,
+                  width: 260,
                   boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                 }}
               >
+                <div
+                  onClick={handleExportDeliveryKit}
+                  style={{
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                    fontWeight: 700,
+                    color: '#F59E0B',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    marginBottom: 4,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(245,158,11,0.2)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.08)')}
+                >
+                  <span>🎁</span>
+                  <span>Download Master Delivery Kit (.zip)</span>
+                </div>
+                <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
                 <div
                   onClick={() => handleExportPngWithScale(1)}
                   style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
@@ -2631,7 +2720,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       </div>
 
       {/* Main Review Grid: Left Column (Layers & Brief), Center (Canvas), Right (Inspector) */}
-      <div className="review" style={{ flex: 1, minHeight: 0, gridTemplateColumns: '260px minmax(380px, 1fr) 300px', overflow: 'hidden' }}>
+      <div className="review" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Left Column: Tri-Tab Layout (Layers Tree vs Assets & AI vs Brief & Spec) */}
         <div className="panel" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 10 }}>
@@ -2953,7 +3042,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                         <span style={{ fontSize: 8, fontFamily: 'monospace', color: '#94A3B8' }}>{aiResult.verifiedSha256.slice(0, 18)}…</span>
                       </div>
                       <div style={{ width: '100%', height: 90, background: '#0A1C1F', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
-                        <div style={{ width: 70, height: 90 }} dangerouslySetInnerHTML={{ __html: aiResult.svgContent }} />
+                        <div style={{ width: 70, height: 90 }} dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(aiResult.svgContent) }} />
                       </div>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button
@@ -4188,8 +4277,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Delete / Backspace</kbd> Delete Layer</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Z</kbd> Undo Action</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + Shift + Z</kbd> Redo Action</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + / -</kbd> Zoom In / Out</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + 0</kbd> Reset Zoom & Fit</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Cmd + E</kbd> Export / Master Kit</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>1 – 7</kbd> Switch Screens (Inbox...Ops)</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Arrow Keys</kbd> Nudge 1px (Shift: 10px)</div>
-              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd> Deselect Layer</div>
+              <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd> Dismiss / Deselect</div>
               <div><kbd style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 6px', borderRadius: 4 }}>?</kbd> Open Cheat Sheet</div>
             </div>
           </div>

@@ -1,0 +1,71 @@
+{
+  "at": "2026-09-05T11:07:22.696Z",
+  "scope": "Diagnostic checks; green results are NOT a production admission",
+  "results": [
+    {
+      "id": "unit",
+      "command": "pnpm test",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 1553,
+      "log": "logs/unit.log"
+    },
+    {
+      "id": "typecheck",
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 1634,
+      "log": "logs/typecheck.log"
+    },
+    {
+      "id": "lint",
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 301,
+      "log": "logs/lint.log"
+    },
+    {
+      "id": "desk-build",
+      "command": "pnpm --filter @hawa/desk build",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 2237,
+      "log": "logs/desk-build.log"
+    },
+    {
+      "id": "pack",
+      "command": "python3 scripts/validate_pack.py",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 1174,
+      "log": "logs/pack.log"
+    },
+    {
+      "id": "db-static",
+      "command": "pnpm db:check",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 377,
+      "log": "logs/db-static.log"
+    },
+    {
+      "id": "security-patterns",
+      "command": "python3 infra/security/security_scan.py",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 192,
+      "log": "logs/security-patterns.log"
+    },
+    {
+      "id": "adversarial",
+      "command": "pnpm exec tsx /Users/hawzhin/Hawdesign/output/audits/2026-09-05-reliability/probes.ts",
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 394,
+      "log": "logs/adversarial.log"
+    }
+  ],
+  "sourceDrift": []
+}

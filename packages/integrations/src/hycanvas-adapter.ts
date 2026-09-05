@@ -304,14 +304,26 @@ export class HyCanvasStudioAdapter implements DesignStudioAdapter {
 
   async verifyRoundTrip(_ctx: RequestContext, document: StudioDocumentRef): Promise<Result<{ pass: boolean; beforeHash: SHA256; afterHash: SHA256; semanticDiff: Record<string, unknown> }>> {
     const item = this.documents.get(document.documentId);
-    const hash = item ? item.ref.sourceSha256 : document.sourceSha256;
+    if (!item) {
+      return {
+        ok: false,
+        error: {
+          code: 'DOCUMENT_NOT_FOUND',
+          message: `Document ${document.documentId} not found in studio session; round-trip verification failed`,
+          retryable: false,
+          safeAction: 'Open or create document before verifying round trip',
+        },
+      };
+    }
+    const hash = item.ref.sourceSha256;
+    const match = hash === document.sourceSha256;
     return {
       ok: true,
       value: {
-        pass: true,
-        beforeHash: hash,
+        pass: match,
+        beforeHash: document.sourceSha256,
         afterHash: hash,
-        semanticDiff: {},
+        semanticDiff: match ? {} : { drift: 'source hash mismatch' },
       },
     };
   }

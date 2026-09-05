@@ -28,7 +28,7 @@ PASSES: list[str] = []
 
 IGNORED_TOP_LEVEL = {
     ".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
-    ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor"
+    ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output"
 }
 IGNORED_ANYWHERE = {"__pycache__", ".DS_Store"}
 WORKSPACE_ROOT_FILES = {

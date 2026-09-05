@@ -6,9 +6,10 @@ import { useI18n } from '../services/i18n.js';
 interface HeaderProps {
   currentScreen: ScreenId;
   onNewTask: () => void;
+  onStartTour?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
+export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStartTour }) => {
   const { locale, t, toggleLocale } = useI18n();
   const [streamStatus, setStreamStatus] = useState<StreamConnectionStatus>(eventStream.getStatus());
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -66,6 +67,31 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask }) => {
           <span style={{ opacity: 0.6, fontSize: 11 }}>⇄</span>
           <span style={{ fontSize: 11, opacity: 0.85 }}>{locale === 'en' ? 'کوردی' : 'EN'}</span>
         </button>
+
+        {onStartTour && (
+          <button
+            id="tour-btn"
+            onClick={onStartTour}
+            className="btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '5px 11px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              color: '#10B981',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+            title="Start 60-Second Operator Onboarding Tour"
+          >
+            <span>🚀</span>
+            <span>Tour</span>
+          </button>
+        )}
 
         <div
           id="sse-stream-indicator"

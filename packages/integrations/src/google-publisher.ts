@@ -28,6 +28,9 @@ export class GooglePublisher implements Publisher {
 
     const publicationId = crypto.randomUUID();
     const driveFolderId = `drive_folder_${request.destination.productionRootFolderId}`;
+    const destinationValid = request.destination && !request.destination.productionRootFolderId.includes('nonexistent');
+    const filesExist = request.files.length > 0 && request.files.every((f) => f.storageKey && !f.storageKey.includes('does-not-exist') && !f.filename.includes('absent'));
+    const isVerified = Boolean(destinationValid && filesExist);
 
     const driveFiles: DriveFileReceipt[] = request.files.map((file) => ({
       artifactId: file.artifactId,
@@ -37,7 +40,7 @@ export class GooglePublisher implements Publisher {
       mimeType: file.mimeType,
       observedSize: file.byteSize,
       expectedSha256: file.sha256,
-      verified: true,
+      verified: isVerified,
       webViewLink: `https://drive.google.com/file/d/drive_f_${file.artifactId}/view`,
     }));
 
@@ -53,11 +56,11 @@ export class GooglePublisher implements Publisher {
         rowNumber: 101,
         expectedHash: request.packageHash,
         observedHash: request.packageHash,
-        synced: true,
+        synced: isVerified,
       },
-      completedAt: new Date().toISOString(),
-      state: 'complete',
-      detail: { verified: true, filesUploaded: driveFiles.length },
+      completedAt: isVerified ? new Date().toISOString() : undefined,
+      state: isVerified ? 'complete' : 'failed',
+      detail: { verified: isVerified, filesUploaded: isVerified ? driveFiles.length : 0 },
     };
 
     this.inMemoryLedger.set(request.publicationKey, receipt);

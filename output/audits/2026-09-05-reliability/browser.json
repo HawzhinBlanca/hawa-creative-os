@@ -1,0 +1,2624 @@
+{
+  "at": "2026-09-05T11:07:29.981Z",
+  "scope": "Read-only Chrome development UI, external fonts blocked, reduced motion, no screen-reader or real mobile test",
+  "results": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "errors": [],
+      "blocked": [
+        "https://fonts.googleapis.com"
+      ],
+      "metrics": {
+        "viewport": 1440,
+        "bodyScroll": 1440,
+        "docScroll": 1440,
+        "text": "Hawa Desk\nPrivate Creative OS\nInbox\nTask Review\nClient DNA\nCreative Library\nAdapters\nActionable Operations\nModel Evaluations\nCore healthy\nTelegram active · Desk canonical · WAHA quarantined\nTask Review & Approval\nInteractive vector HyCanvas editor, proof evidence, and publishing gate\n🇬🇧 English (Primary)\n⇄\nکوردی\n🚀\nTour\nLive Stream\n+ New task\nBRAND KIT:\n🛡️ VERIFIED LOT SEBAR Verified Health\n⚡ STUDIO OS Hawa Creative OS\n🚀 2-HOUR DELIVERY Erbil Retail Express\n🎨\n+ Kit\n⚡ Offline ready\n🇬🇧 English\n☀️ کوردی\n🔀 Bilingual\n↖ Select\n✋ Hand\nPortrait\nSquare\nStory\nBillboard\n↩\n↪\n⏱ Timeline\nSafe Zones\n📱 Social UI\nBidi Isolates\n📥 Import .hyc\n🎁\nMaster Kit (.zip)\n⚡ Export ▾\n?\n📑 Layers (4)\n🎨 Assets & AI\n📋 Brief & Spec\n+ Text\n+ Shape\n+ Badge\n◻\nPrice & Offer Badge\n👁\n🔓\n▲\n▼\n✕\nT\nHeadline (Vector Text)\n👁\n🔓\n▲\n▼\n✕\n★\nVerified Brand Logo\n👁\n🔓\n▲\n▼\n✕\n◻\nOrganic Accent Shape\n👁\n🔓\n▲\n▼\n✕\nDuplicate (Cmd+D)\nDelete\nPortrait\n·\n480 × 600\n·\n100%\nHAWA · هەوا\n✓\nHeadline (Vector Text) · 408×110 (36, 100)\nSummer Chill, Joyful Days\nFresh Mint Soda · $12.00 USD\n0750 999 8877\nErbil Dream City\n−\n100%\n+\nFit View\nLayer: Headline (Vector Text)\nDeselect\nTRANSFORM & DIMENSIONS\nX: \nY: \nW: \nH: \nRotation:\n0°\nOpacity:\n100%\nAspect Ratio:\n🔓 Free\nALIGN TO ARTBOARD\n⇤\n⇹\n⇥\n⤒\n⬍\n⤓\n▲ Forward (])\n▼ Backward ([)\nEFFECTS & SHADOW\nDrop Shadow:\nDisabled\nHEADLINE CONTENT & COPY\nEnglish Lead:\nKurdish Sorani:\n⚡ Real-Time QC Verification\nWCAG Contrast: 13.11:1 (AAA)\nProtected Tokens: ✓ Preserved\nLayout Drift: Zero Drift\nSemantic Diff (0 Δ modifications)\n✓ Approve & Publish\nSave Working Revision\nRequest Repair (2 left)",
+        "buttons": [
+          {
+            "text": "Inbox",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Task Review",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Client DNA",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Creative Library",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Adapters",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Actionable Operations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "Model Evaluations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 212,
+              "height": 40
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English (Primary)\n⇄\nکوردی",
+            "title": "Primary: English. Click to switch to Secondary: کوردی سۆرانی",
+            "label": null,
+            "rect": {
+              "width": 178.59375,
+              "height": 47
+            },
+            "visible": true
+          },
+          {
+            "text": "🚀\nTour",
+            "title": "Start 60-Second Operator Onboarding Tour",
+            "label": null,
+            "rect": {
+              "width": 70.40625,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "+ New task",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 90.4375,
+              "height": 50
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨\n+ Kit",
+            "title": "Create Custom Client Brand Kit",
+            "label": null,
+            "rect": {
+              "width": 60.78125,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 73.578125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "☀️ کوردی",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 62.546875,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "🔀 Bilingual",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 80.203125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "↖ Select",
+            "title": "Pointer / Select Tool (V)",
+            "label": null,
+            "rect": {
+              "width": 62.703125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✋ Hand",
+            "title": "Hand / Pan Tool (H / Space+Drag)",
+            "label": null,
+            "rect": {
+              "width": 62.890625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Portrait",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 61.515625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Square",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 59.71875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Story",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 50.65625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Billboard",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 68.875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↩",
+            "title": "Undo (Cmd+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↪",
+            "title": "Redo (Cmd+Shift+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "⏱ Timeline",
+            "title": "Non-Destructive Version History & Timeline Scrubbing",
+            "label": null,
+            "rect": {
+              "width": 74.90625,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "Safe Zones",
+            "title": "Toggle Safe Margins (10%)",
+            "label": null,
+            "rect": {
+              "width": 77.921875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📱 Social UI",
+            "title": "Toggle Social UI Safe Overlays (Instagram Story 9:16 / Meta Feed 4:5)",
+            "label": null,
+            "rect": {
+              "width": 81.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Bidi Isolates",
+            "title": "Toggle UAX #9 Directional Isolates",
+            "label": null,
+            "rect": {
+              "width": 81.953125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📥 Import .hyc",
+            "title": "Open/Import HyCanvas (.hyc) live vector document",
+            "label": null,
+            "rect": {
+              "width": 99.25,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "🎁\nMaster Kit (.zip)",
+            "title": "Download complete Master Delivery Kit (.zip) with 2x Retina PNGs, SVG, .hyc, and QA certificate",
+            "label": null,
+            "rect": {
+              "width": 131.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "⚡ Export ▾",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 86.078125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "?",
+            "title": "Keyboard Shortcuts HUD (?)",
+            "label": null,
+            "rect": {
+              "width": 21.984375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📑 Layers (4)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 72.65625,
+              "height": 42
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨 Assets & AI",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 72.671875,
+              "height": 42
+            },
+            "visible": true
+          },
+          {
+            "text": "📋 Brief & Spec",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 72.671875,
+              "height": 42
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Text",
+            "title": "Add new text layer",
+            "label": null,
+            "rect": {
+              "width": 72.65625,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Shape",
+            "title": "Add new shape layer",
+            "label": null,
+            "rect": {
+              "width": 72.671875,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Badge",
+            "title": "Add new badge layer",
+            "label": null,
+            "rect": {
+              "width": 72.65625,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "Duplicate (Cmd+D)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 110,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "Delete",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 110,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "−",
+            "title": "Zoom Out",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "+",
+            "title": "Zoom In",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Fit View",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.609375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Deselect",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 56.4375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓 Free",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.765625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇤",
+            "title": "Align Left",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇹",
+            "title": "Align Horizontal Center",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇥",
+            "title": "Align Right",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤒",
+            "title": "Align Top",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⬍",
+            "title": "Align Vertical Center",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤓",
+            "title": "Align Bottom",
+            "label": null,
+            "rect": {
+              "width": 38.5,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "▲ Forward (])",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 121,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "▼ Backward ([)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 121,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "Disabled",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 60.09375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "Semantic Diff (0 Δ modifications)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 266,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✓ Approve & Publish",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 266,
+              "height": 35
+            },
+            "visible": true
+          },
+          {
+            "text": "Save Working Revision",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 266,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Request Repair (2 left)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 266,
+              "height": 26
+            },
+            "visible": true
+          }
+        ],
+        "landmarks": {
+          "main": 1,
+          "dialogs": 0
+        },
+        "overflow": []
+      },
+      "focus": [
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Inbox"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Task Review"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Client DNA"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Creative Library"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Adapters"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Actionable Operations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Model Evaluations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🇬🇧 English (Primary)⇄کوردی"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🚀Tour"
+        },
+        {
+          "tag": "INPUT",
+          "label": "Search",
+          "text": ""
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "+ New task"
+        },
+        {
+          "tag": "SELECT",
+          "label": null,
+          "text": "🛡️ VERIFIED LOT SEBAR Verified Health⚡ STUDIO OS "
+        }
+      ]
+    },
+    {
+      "name": "laptop",
+      "width": 1024,
+      "height": 768,
+      "errors": [],
+      "blocked": [
+        "https://fonts.googleapis.com"
+      ],
+      "metrics": {
+        "viewport": 1024,
+        "bodyScroll": 1024,
+        "docScroll": 1024,
+        "text": "Hawa Desk\nPrivate Creative OS\nInbox\nTask Review\nClient DNA\nCreative Library\nAdapters\nActionable Operations\nModel Evaluations\nCore healthy\nTelegram active · Desk canonical · WAHA quarantined\nTask Review & Approval\nInteractive vector HyCanvas editor, proof evidence, and publishing gate\n🇬🇧 English (Primary)\n⇄\nکوردی\n🚀\nTour\nLive Stream\n+ New task\nBRAND KIT:\n🛡️ VERIFIED LOT SEBAR Verified Health\n⚡ STUDIO OS Hawa Creative OS\n🚀 2-HOUR DELIVERY Erbil Retail Express\n🎨\n+ Kit\n⚡ Offline ready\n🇬🇧 English\n☀️ کوردی\n🔀 Bilingual\n↖ Select\n✋ Hand\nPortrait\nSquare\nStory\nBillboard\n↩\n↪\n⏱ Timeline\nSafe Zones\n📱 Social UI\nBidi Isolates\n📥 Import .hyc\n🎁\nMaster Kit (.zip)\n⚡ Export ▾\n?\n📑 Layers (4)\n🎨 Assets & AI\n📋 Brief & Spec\n+ Text\n+ Shape\n+ Badge\n◻\nPrice & Offer Badge\n👁\n🔓\n▲\n▼\n✕\nT\nHeadline (Vector Text)\n👁\n🔓\n▲\n▼\n✕\n★\nVerified Brand Logo\n👁\n🔓\n▲\n▼\n✕\n◻\nOrganic Accent Shape\n👁\n🔓\n▲\n▼\n✕\nDuplicate (Cmd+D)\nDelete\nPortrait\n·\n480 × 600\n·\n100%\nHAWA · هەوا\n✓\nHeadline (Vector Text) · 408×110 (36, 100)\nSummer Chill, Joyful Days\nFresh Mint Soda · $12.00 USD\n0750 999 8877\nErbil Dream City\n−\n100%\n+\nFit View\nLayer: Headline (Vector Text)\nDeselect\nTRANSFORM & DIMENSIONS\nX: \nY: \nW: \nH: \nRotation:\n0°\nOpacity:\n100%\nAspect Ratio:\n🔓 Free\nALIGN TO ARTBOARD\n⇤\n⇹\n⇥\n⤒\n⬍\n⤓\n▲ Forward (])\n▼ Backward ([)\nEFFECTS & SHADOW\nDrop Shadow:\nDisabled\nHEADLINE CONTENT & COPY\nEnglish Lead:\nKurdish Sorani:\n⚡ Real-Time QC Verification\nWCAG Contrast: 13.11:1 (AAA)\nProtected Tokens: ✓ Preserved\nLayout Drift: Zero Drift\nSemantic Diff (0 Δ modifications)\n✓ Approve & Publish\nSave Working Revision\nRequest Repair (2 left)",
+        "buttons": [
+          {
+            "text": "Inbox",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Task Review",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Client DNA",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Creative Library",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Adapters",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Actionable Operations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "Model Evaluations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 160,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English (Primary)\n⇄\nکوردی",
+            "title": "Primary: English. Click to switch to Secondary: کوردی سۆرانی",
+            "label": null,
+            "rect": {
+              "width": 129.140625,
+              "height": 62
+            },
+            "visible": true
+          },
+          {
+            "text": "🚀\nTour",
+            "title": "Start 60-Second Operator Onboarding Tour",
+            "label": null,
+            "rect": {
+              "width": 70.40625,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "+ New task",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.28125,
+              "height": 66
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨\n+ Kit",
+            "title": "Create Custom Client Brand Kit",
+            "label": null,
+            "rect": {
+              "width": 60.78125,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 73.578125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "☀️ کوردی",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 62.546875,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "🔀 Bilingual",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 80.203125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "↖ Select",
+            "title": "Pointer / Select Tool (V)",
+            "label": null,
+            "rect": {
+              "width": 62.703125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✋ Hand",
+            "title": "Hand / Pan Tool (H / Space+Drag)",
+            "label": null,
+            "rect": {
+              "width": 62.890625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Portrait",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 61.515625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Square",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 59.71875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Story",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 50.65625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Billboard",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 68.875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↩",
+            "title": "Undo (Cmd+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↪",
+            "title": "Redo (Cmd+Shift+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "⏱ Timeline",
+            "title": "Non-Destructive Version History & Timeline Scrubbing",
+            "label": null,
+            "rect": {
+              "width": 74.90625,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "Safe Zones",
+            "title": "Toggle Safe Margins (10%)",
+            "label": null,
+            "rect": {
+              "width": 77.921875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📱 Social UI",
+            "title": "Toggle Social UI Safe Overlays (Instagram Story 9:16 / Meta Feed 4:5)",
+            "label": null,
+            "rect": {
+              "width": 81.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Bidi Isolates",
+            "title": "Toggle UAX #9 Directional Isolates",
+            "label": null,
+            "rect": {
+              "width": 81.953125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📥 Import .hyc",
+            "title": "Open/Import HyCanvas (.hyc) live vector document",
+            "label": null,
+            "rect": {
+              "width": 99.25,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "🎁\nMaster Kit (.zip)",
+            "title": "Download complete Master Delivery Kit (.zip) with 2x Retina PNGs, SVG, .hyc, and QA certificate",
+            "label": null,
+            "rect": {
+              "width": 131.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "⚡ Export ▾",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 86.078125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "?",
+            "title": "Keyboard Shortcuts HUD (?)",
+            "label": null,
+            "rect": {
+              "width": 21.984375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📑 Layers (4)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 56
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨 Assets & AI",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 56
+            },
+            "visible": true
+          },
+          {
+            "text": "📋 Brief & Spec",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 56
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Text",
+            "title": "Add new text layer",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Shape",
+            "title": "Add new shape layer",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Badge",
+            "title": "Add new badge layer",
+            "label": null,
+            "rect": {
+              "width": 52,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "Duplicate (Cmd+D)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 79,
+              "height": 34
+            },
+            "visible": true
+          },
+          {
+            "text": "Delete",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 79,
+              "height": 34
+            },
+            "visible": true
+          },
+          {
+            "text": "−",
+            "title": "Zoom Out",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "+",
+            "title": "Zoom In",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Fit View",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.609375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Deselect",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 56.4375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓 Free",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.765625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇤",
+            "title": "Align Left",
+            "label": null,
+            "rect": {
+              "width": 28.15625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇹",
+            "title": "Align Horizontal Center",
+            "label": null,
+            "rect": {
+              "width": 28.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇥",
+            "title": "Align Right",
+            "label": null,
+            "rect": {
+              "width": 28.15625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤒",
+            "title": "Align Top",
+            "label": null,
+            "rect": {
+              "width": 28.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⬍",
+            "title": "Align Vertical Center",
+            "label": null,
+            "rect": {
+              "width": 28.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤓",
+            "title": "Align Bottom",
+            "label": null,
+            "rect": {
+              "width": 28.15625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "▲ Forward (])",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 90,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "▼ Backward ([)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 90,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "Disabled",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 60.09375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "Semantic Diff (0 Δ modifications)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 204,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✓ Approve & Publish",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 204,
+              "height": 35
+            },
+            "visible": true
+          },
+          {
+            "text": "Save Working Revision",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 204,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Request Repair (2 left)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 204,
+              "height": 26
+            },
+            "visible": true
+          }
+        ],
+        "landmarks": {
+          "main": 1,
+          "dialogs": 0
+        },
+        "overflow": []
+      },
+      "focus": [
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Inbox"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Task Review"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Client DNA"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Creative Library"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Adapters"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Actionable Operations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Model Evaluations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🇬🇧 English (Primary)⇄کوردی"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🚀Tour"
+        },
+        {
+          "tag": "INPUT",
+          "label": "Search",
+          "text": ""
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "+ New task"
+        },
+        {
+          "tag": "SELECT",
+          "label": null,
+          "text": "🛡️ VERIFIED LOT SEBAR Verified Health⚡ STUDIO OS "
+        }
+      ]
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "errors": [],
+      "blocked": [
+        "https://fonts.googleapis.com"
+      ],
+      "metrics": {
+        "viewport": 390,
+        "bodyScroll": 390,
+        "docScroll": 390,
+        "text": "Hawa DeskPrivate Creative OS\nInbox\nTask Review\nClient DNA\nCreative Library\nAdapters\nActionable Operations\nModel Evaluations\nCore healthy\nTelegram active · Desk canonical · WAHA quarantined\nTask Review & Approval\nInteractive vector HyCanvas editor, proof evidence, and publishing gate\n🇬🇧 English (Primary)\n⇄\nکوردی\n🚀\nTour\nLive Stream\n+ New task\nBRAND KIT:\n🛡️ VERIFIED LOT SEBAR Verified Health\n⚡ STUDIO OS Hawa Creative OS\n🚀 2-HOUR DELIVERY Erbil Retail Express\n🎨\n+ Kit\n⚡ Offline ready\n🇬🇧 English\n☀️ کوردی\n🔀 Bilingual\n↖ Select\n✋ Hand\nPortrait\nSquare\nStory\nBillboard\n↩\n↪\n⏱ Timeline\nSafe Zones\n📱 Social UI\nBidi Isolates\n📥 Import .hyc\n🎁\nMaster Kit (.zip)\n⚡ Export ▾\n?\n📑 Layers (4)\n🎨 Assets & AI\n📋 Brief & Spec\n+ Text\n+ Shape\n+ Badge\n◻\nPrice & Offer Badge\n👁\n🔓\n▲\n▼\n✕\nT\nHeadline (Vector Text)\n👁\n🔓\n▲\n▼\n✕\n★\nVerified Brand Logo\n👁\n🔓\n▲\n▼\n✕\n◻\nOrganic Accent Shape\n👁\n🔓\n▲\n▼\n✕\nDuplicate (Cmd+D)\nDelete\nPortrait\n·\n480 × 600\n·\n100%\nHAWA · هەوا\n✓\nHeadline (Vector Text) · 408×110 (36, 100)\nSummer Chill, Joyful Days\nFresh Mint Soda · $12.00 USD\n0750 999 8877\nErbil Dream City\n−\n100%\n+\nFit View\nLayer: Headline (Vector Text)\nDeselect\nTRANSFORM & DIMENSIONS\nX: \nY: \nW: \nH: \nRotation:\n0°\nOpacity:\n100%\nAspect Ratio:\n🔓 Free\nALIGN TO ARTBOARD\n⇤\n⇹\n⇥\n⤒\n⬍\n⤓\n▲ Forward (])\n▼ Backward ([)\nEFFECTS & SHADOW\nDrop Shadow:\nDisabled\nHEADLINE CONTENT & COPY\nEnglish Lead:\nKurdish Sorani:\n⚡ Real-Time QC Verification\nWCAG Contrast: 13.11:1 (AAA)\nProtected Tokens: ✓ Preserved\nLayout Drift: Zero Drift\nSemantic Diff (0 Δ modifications)\n✓ Approve & Publish\nSave Working Revision\nRequest Repair (2 left)",
+        "buttons": [
+          {
+            "text": "Inbox",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 47.375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Task Review",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 84.109375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Client DNA",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 76.046875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Creative Library",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 103.015625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Adapters",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 66.59375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Actionable Operations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 136.421875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Model Evaluations",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 115.375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English (Primary)\n⇄\nکوردی",
+            "title": "Primary: English. Click to switch to Secondary: کوردی سۆرانی",
+            "label": null,
+            "rect": {
+              "width": 192.515625,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "🚀\nTour",
+            "title": "Start 60-Second Operator Onboarding Tour",
+            "label": null,
+            "rect": {
+              "width": 70.40625,
+              "height": 32
+            },
+            "visible": true
+          },
+          {
+            "text": "+ New task",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 96.25,
+              "height": 34
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨\n+ Kit",
+            "title": "Create Custom Client Brand Kit",
+            "label": null,
+            "rect": {
+              "width": 50.59375,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "🇬🇧 English",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 73.578125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "☀️ کوردی",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 62.546875,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "🔀 Bilingual",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 80.203125,
+              "height": 27
+            },
+            "visible": true
+          },
+          {
+            "text": "↖ Select",
+            "title": "Pointer / Select Tool (V)",
+            "label": null,
+            "rect": {
+              "width": 62.703125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✋ Hand",
+            "title": "Hand / Pan Tool (H / Space+Drag)",
+            "label": null,
+            "rect": {
+              "width": 62.890625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Portrait",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 61.515625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Square",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 59.71875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Story",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 50.65625,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Billboard",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 68.875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↩",
+            "title": "Undo (Cmd+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "↪",
+            "title": "Redo (Cmd+Shift+Z)",
+            "label": null,
+            "rect": {
+              "width": 30.703125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "⏱ Timeline",
+            "title": "Non-Destructive Version History & Timeline Scrubbing",
+            "label": null,
+            "rect": {
+              "width": 74.90625,
+              "height": 26
+            },
+            "visible": true
+          },
+          {
+            "text": "Safe Zones",
+            "title": "Toggle Safe Margins (10%)",
+            "label": null,
+            "rect": {
+              "width": 77.921875,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📱 Social UI",
+            "title": "Toggle Social UI Safe Overlays (Instagram Story 9:16 / Meta Feed 4:5)",
+            "label": null,
+            "rect": {
+              "width": 81.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Bidi Isolates",
+            "title": "Toggle UAX #9 Directional Isolates",
+            "label": null,
+            "rect": {
+              "width": 81.953125,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📥 Import .hyc",
+            "title": "Open/Import HyCanvas (.hyc) live vector document",
+            "label": null,
+            "rect": {
+              "width": 99.25,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "🎁\nMaster Kit (.zip)",
+            "title": "Download complete Master Delivery Kit (.zip) with 2x Retina PNGs, SVG, .hyc, and QA certificate",
+            "label": null,
+            "rect": {
+              "width": 131.015625,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "⚡ Export ▾",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 86.078125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "?",
+            "title": "Keyboard Shortcuts HUD (?)",
+            "label": null,
+            "rect": {
+              "width": 21.984375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "📑 Layers (4)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 101.328125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "🎨 Assets & AI",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 101.34375,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "📋 Brief & Spec",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 101.328125,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Text",
+            "title": "Add new text layer",
+            "label": null,
+            "rect": {
+              "width": 101.328125,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Shape",
+            "title": "Add new shape layer",
+            "label": null,
+            "rect": {
+              "width": 101.328125,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "+ Badge",
+            "title": "Add new badge layer",
+            "label": null,
+            "rect": {
+              "width": 101.34375,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "👁",
+            "title": "Hide Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓",
+            "title": "Lock Layer",
+            "label": null,
+            "rect": {
+              "width": 23,
+              "height": 21
+            },
+            "visible": true
+          },
+          {
+            "text": "▲",
+            "title": "Bring Layer Forward (])",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "▼",
+            "title": "Send Layer Backward ([)",
+            "label": null,
+            "rect": {
+              "width": 19.3125,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "✕",
+            "title": "Delete Layer",
+            "label": null,
+            "rect": {
+              "width": 16.875,
+              "height": 15
+            },
+            "visible": true
+          },
+          {
+            "text": "Duplicate (Cmd+D)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 153,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "Delete",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 153,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "−",
+            "title": "Zoom Out",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "+",
+            "title": "Zoom In",
+            "label": null,
+            "rect": {
+              "width": 24,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Fit View",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.609375,
+              "height": 24
+            },
+            "visible": true
+          },
+          {
+            "text": "Deselect",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 56.4375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "🔓 Free",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 54.765625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇤",
+            "title": "Align Left",
+            "label": null,
+            "rect": {
+              "width": 46.15625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇹",
+            "title": "Align Horizontal Center",
+            "label": null,
+            "rect": {
+              "width": 46.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⇥",
+            "title": "Align Right",
+            "label": null,
+            "rect": {
+              "width": 46.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤒",
+            "title": "Align Top",
+            "label": null,
+            "rect": {
+              "width": 46.15625,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⬍",
+            "title": "Align Vertical Center",
+            "label": null,
+            "rect": {
+              "width": 46.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "⤓",
+            "title": "Align Bottom",
+            "label": null,
+            "rect": {
+              "width": 46.171875,
+              "height": 23
+            },
+            "visible": true
+          },
+          {
+            "text": "▲ Forward (])",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 144,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "▼ Backward ([)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 144,
+              "height": 22
+            },
+            "visible": true
+          },
+          {
+            "text": "Disabled",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 60.09375,
+              "height": 18
+            },
+            "visible": true
+          },
+          {
+            "text": "Semantic Diff (0 Δ modifications)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 312,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "✓ Approve & Publish",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 312,
+              "height": 35
+            },
+            "visible": true
+          },
+          {
+            "text": "Save Working Revision",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 312,
+              "height": 28
+            },
+            "visible": true
+          },
+          {
+            "text": "Request Repair (2 left)",
+            "title": "",
+            "label": null,
+            "rect": {
+              "width": 312,
+              "height": 26
+            },
+            "visible": true
+          }
+        ],
+        "landmarks": {
+          "main": 1,
+          "dialogs": 0
+        },
+        "overflow": [
+          {
+            "tag": "BUTTON",
+            "cls": "",
+            "text": "Client DNA"
+          },
+          {
+            "tag": "BUTTON",
+            "cls": "",
+            "text": "Creative Library"
+          },
+          {
+            "tag": "BUTTON",
+            "cls": "",
+            "text": "Adapters"
+          },
+          {
+            "tag": "BUTTON",
+            "cls": "",
+            "text": "Actionable Operations"
+          },
+          {
+            "tag": "BUTTON",
+            "cls": "",
+            "text": "Model Evaluations"
+          },
+          {
+            "tag": "DIV",
+            "cls": "",
+            "text": "BRAND KIT:🛡️ VERIFIED LOT SEBAR Verified Health⚡ STUDIO OS "
+          },
+          {
+            "tag": "BUTTON",
+            "cls": "btn",
+            "text": "🎨+ Kit"
+          },
+          {
+            "tag": "DIV",
+            "cls": "",
+            "text": "⚡ Offline ready"
+          },
+          {
+            "tag": "SPAN",
+            "cls": "",
+            "text": ""
+          },
+          {
+            "tag": "SPAN",
+            "cls": "",
+            "text": "⚡ Offline ready"
+          },
+          {
+            "tag": "DIV",
+            "cls": "",
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "",
+            "text": "Headline (Vector Text) · 408×110  (36, 100)Summer Chill, Joy"
+          },
+          {
+            "tag": "DIV",
+            "cls": "transform-bbox",
+            "text": "Headline (Vector Text) · 408×110  (36, 100)"
+          },
+          {
+            "tag": "DIV",
+            "cls": "transform-handle handle-ne",
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "transform-handle handle-e",
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "transform-handle handle-se",
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "",
+            "text": "Summer Chill, Joyful Days"
+          }
+        ]
+      },
+      "focus": [
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Inbox"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Task Review"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Client DNA"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Creative Library"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Adapters"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Actionable Operations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "Model Evaluations"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🇬🇧 English (Primary)⇄کوردی"
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "🚀Tour"
+        },
+        {
+          "tag": "INPUT",
+          "label": "Search",
+          "text": ""
+        },
+        {
+          "tag": "BUTTON",
+          "label": null,
+          "text": "+ New task"
+        },
+        {
+          "tag": "SELECT",
+          "label": null,
+          "text": "🛡️ VERIFIED LOT SEBAR Verified Health⚡ STUDIO OS "
+        }
+      ]
+    }
+  ]
+}

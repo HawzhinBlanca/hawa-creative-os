@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
 
 export interface ClientSummary {
   clientId: string;
@@ -187,6 +188,11 @@ export const DnaScreen: React.FC = () => {
   const [newSwatchHex, setNewSwatchHex] = useState('#164a3a');
   const [newSwatchRole, setNewSwatchRole] = useState<BrandColor['role']>('accent');
 
+  // Logo Palette Extraction State
+  const [logoExtractionNotice, setLogoExtractionNotice] = useState<string | null>(null);
+  const [extractedPaletteData, setExtractedPaletteData] = useState<ExtractedPalette | null>(null);
+  const [showLogoDropzone, setShowLogoDropzone] = useState(false);
+
   // Inline lexicon adder state
   const [newPhrase, setNewPhrase] = useState('');
   const [newDisclaimer, setNewDisclaimer] = useState('');
@@ -354,6 +360,59 @@ export const DnaScreen: React.FC = () => {
       colors: currentDna.colors.filter((c) => c.name !== colorName),
     };
     await saveDnaChanges(updated, `Removed color swatch "${colorName}"`);
+  };
+
+  // Logo Palette Extraction Handlers
+  const handleOnboardLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const pal = await extractPaletteFromFile(file);
+      setOnboardForm((prev) => ({
+        ...prev,
+        primaryColorHex: pal.primary,
+        secondaryColorHex: pal.secondary,
+        accentColorHex: pal.accent,
+        backgroundColorHex: pal.cardBg,
+      }));
+      setLogoExtractionNotice(`✓ Extracted from logo: WCAG ${pal.wcagGrade} (${pal.contrastRatioOnWhite}:1 against white)`);
+      setTimeout(() => setLogoExtractionNotice(null), 6000);
+    } catch (err: any) {
+      setLogoExtractionNotice(`⚠️ Palette extraction failed: ${err.message}`);
+    }
+  };
+
+  const handleMainTabLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const pal = await extractPaletteFromFile(file);
+      setExtractedPaletteData(pal);
+      setSaveSuccess(`✓ Extracted ${pal.swatches.length} brand colors from logo (WCAG ${pal.wcagGrade})`);
+      setTimeout(() => setSaveSuccess(null), 5000);
+    } catch (err: any) {
+      setErrorNotice(`Palette extraction failed: ${err.message}`);
+    }
+  };
+
+  const handleApplyExtractedPalette = async () => {
+    if (!currentDna || !extractedPaletteData) return;
+    const newColors: BrandColor[] = [
+      { name: 'Logo Primary', hex: extractedPaletteData.primary, role: 'primary' },
+      { name: 'Logo Secondary', hex: extractedPaletteData.secondary, role: 'secondary' },
+      { name: 'Logo Accent', hex: extractedPaletteData.accent, role: 'accent' },
+      { name: 'Logo Surface', hex: extractedPaletteData.cardBg, role: 'surface' },
+    ];
+    const updated: ClientDNA = {
+      ...currentDna,
+      colors: [
+        ...currentDna.colors.filter((c) => c.role !== 'primary' && c.role !== 'secondary' && c.role !== 'accent'),
+        ...newColors,
+      ],
+    };
+    await saveDnaChanges(updated, 'Auto-extracted and applied brand palette from logo');
+    setShowLogoDropzone(false);
+    setExtractedPaletteData(null);
   };
 
   // Handle adding prohibited phrase
@@ -736,14 +795,66 @@ export const DnaScreen: React.FC = () => {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <h3 style={{ margin: 0 }}>Approved Brand Palette</h3>
-                <button
-                  className="btn"
-                  style={{ fontSize: 11 }}
-                  onClick={() => setShowAddSwatch(!showAddSwatch)}
-                >
-                  {showAddSwatch ? 'Cancel' : '+ Add Swatch'}
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 11, background: 'rgba(56, 189, 248, 0.1)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                    onClick={() => setShowLogoDropzone(!showLogoDropzone)}
+                  >
+                    🎨 {showLogoDropzone ? 'Close Extractor' : 'Extract from Logo'}
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 11 }}
+                    onClick={() => setShowAddSwatch(!showAddSwatch)}
+                  >
+                    {showAddSwatch ? 'Cancel' : '+ Add Swatch'}
+                  </button>
+                </div>
               </div>
+
+              {/* Logo Palette Extractor Drawer */}
+              {showLogoDropzone && (
+                <div style={{ padding: 16, background: 'rgba(56, 189, 248, 0.04)', borderRadius: 10, marginBottom: 16, border: '1px dashed rgba(56, 189, 248, 0.35)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <h4 style={{ margin: 0, fontSize: 13, color: '#38BDF8' }}>🎨 Client Logo Color Quantization & WCAG Contrast</h4>
+                    {extractedPaletteData && (
+                      <span className={`pill ${extractedPaletteData.wcagGrade === 'AAA' ? 'ok' : extractedPaletteData.wcagGrade === 'AA' ? 'ok' : 'warn'}`}>
+                        WCAG: {extractedPaletteData.wcagGrade} ({extractedPaletteData.contrastRatioOnWhite}:1)
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px' }}>
+                    Upload or select client logo (.svg, .png, .webp). The engine quantizes pixel frequencies and computes relative luminance contrast.
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*,.svg"
+                    onChange={handleMainTabLogoUpload}
+                    style={{ fontSize: 12 }}
+                  />
+
+                  {extractedPaletteData && (
+                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+                        {extractedPaletteData.swatches.map((hex, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--panel)', padding: '4px 8px', borderRadius: 6, border: '1px solid var(--line)' }}>
+                            <div style={{ width: 18, height: 18, borderRadius: 4, background: hex }} />
+                            <code style={{ fontSize: 11 }}>{hex}</code>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        className="btn primary"
+                        style={{ fontSize: 12, background: '#10B981', color: '#fff' }}
+                        onClick={handleApplyExtractedPalette}
+                      >
+                        ✓ Apply Extracted Palette to Client DNA
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Add Swatch Drawer */}
               {showAddSwatch && (
@@ -1361,6 +1472,26 @@ export const DnaScreen: React.FC = () => {
                     <option value="ltr">Left-to-Right (LTR)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Logo Upload & Auto-Extraction Zone */}
+              <div style={{ marginBottom: 16, padding: 12, border: '1px dashed var(--line)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 650 }}>
+                    🎨 Auto-Extract Palette from Client Logo (.svg, .png)
+                  </label>
+                  {logoExtractionNotice && (
+                    <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>
+                      {logoExtractionNotice}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  onChange={handleOnboardLogoUpload}
+                  style={{ fontSize: 11 }}
+                />
               </div>
 
               <div style={{ marginBottom: 16 }}>

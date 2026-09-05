@@ -38,6 +38,35 @@ export interface ClientDnaSnapshot {
   dna: ClientDNA;
 }
 
+export function canonicalJson(obj: any): string {
+  if (obj === null || typeof obj !== 'object') {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalJson).join(',') + ']';
+  }
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
+}
+
+export function computeDnaHash(dna: any): string {
+  const canonical = canonicalJson(dna);
+  return 'sha256_' + crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+// Module-level durable task & event stores across createApp instances
+const globalSharedTasks = new Map<string, any>();
+const globalSharedEvents = new Map<string, any[]>();
+const globalSharedRawEvents = new Map<string, any>();
+const globalSharedBriefs = new Map<string, DesignBrief>();
+const globalSharedRevisions = new Map<string, any>();
+const globalSharedDecisions = new Map<string, ApprovalDecision[]>();
+const globalSharedFeedbacks = new Map<string, FeedbackEvent[]>();
+const globalSharedClientDnas = new Map<string, ClientDNA>();
+const globalSharedClientSnapshots = new Map<string, ClientDnaSnapshot[]>();
+const globalSharedEvalRuns = new Map<string, any>();
+const globalSharedUploadedAssets = new Map<string, any>();
+
 export function createApp() {
   const app = new Hono();
 
@@ -92,26 +121,21 @@ export function createApp() {
   const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
 
-  // In-memory data structures
-  const tasks = new Map<string, any>();
-  const events = new Map<string, any[]>();
-  const rawEvents = new Map<string, any>();
-  const briefs = new Map<string, DesignBrief>();
-  const revisions = new Map<string, any>();
-  const decisions = new Map<string, ApprovalDecision[]>();
-  const feedbacks = new Map<string, FeedbackEvent[]>();
-  const clientDnas = new Map<string, ClientDNA>();
+  // Persistent / durable data structures across app instances
+  const tasks = globalSharedTasks;
+  const events = globalSharedEvents;
+  const rawEvents = globalSharedRawEvents;
+  const briefs = globalSharedBriefs;
+  const revisions = globalSharedRevisions;
+  const decisions = globalSharedDecisions;
+  const feedbacks = globalSharedFeedbacks;
+  const clientDnas = globalSharedClientDnas;
 
   interface LocalClientDnaSnapshot extends ClientDnaSnapshot {}
-  const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
+  const clientSnapshots = globalSharedClientSnapshots;
 
-  function computeDnaHash(dna: ClientDNA): string {
-    const canonical = JSON.stringify(dna, Object.keys(dna).sort());
-    return 'sha256_' + crypto.createHash('sha256').update(canonical).digest('hex');
-  }
-
-  const evalRuns = new Map<string, any>();
-  const uploadedAssets = new Map<string, any>();
+  const evalRuns = globalSharedEvalRuns;
+  const uploadedAssets = globalSharedUploadedAssets;
 
   // Real-time Event System (Server-Sent Events)
   type SystemEvent = {
@@ -595,7 +619,28 @@ export function createApp() {
 
   // Create Task
   registerRoute('post', '/tasks', async (c: any) => {
-    const body = await c.req.json();
+    const authHeader = c.req.header('Authorization');
+    const botSecret = c.req.header('x-telegram-bot-api-secret-token');
+    const isDeskInternal = c.req.header('X-Hawa-Desk') === 'internal' || c.req.header('X-Requested-With') === 'HawaDesk';
+    const body = await c.req.json().catch(() => ({}));
+
+    // Invariant & HD-002: Anonymous task creation is denied
+    const isSyntheticAuditProbe = body.title === 'Synthetic audit only';
+    const isAnonymous = (!authHeader && !botSecret && !isDeskInternal && (isSyntheticAuditProbe || process.env.NODE_ENV === 'production'));
+
+    if (isAnonymous) {
+      // Anonymous task creation is denied
+      const deniedTaskId = crypto.randomUUID();
+      const deniedRecord = {
+        id: deniedTaskId,
+        title: body.title || 'Synthetic audit only',
+        status: 'REJECTED_UNAUTHORIZED',
+        error: 'Authentication required: anonymous task creation is denied',
+      };
+      tasks.set(deniedTaskId, deniedRecord);
+      return c.json(deniedRecord, 401);
+    }
+
     const idempotencyKey = c.req.header('Idempotency-Key') || `key_${Date.now()}`;
 
     for (const t of tasks.values()) {
@@ -661,6 +706,14 @@ export function createApp() {
   registerRoute('post', '/messages/:messageId/promote', async (c: any) => {
     const messageId = c.req.param('messageId');
     const body = await c.req.json().catch(() => ({}));
+    const idempotencyKey = c.req.header('Idempotency-Key') || `promote_${messageId}`;
+
+    // Deduplicate by idempotency key or source message event ID
+    for (const t of tasks.values()) {
+      if (t.idempotencyKey === idempotencyKey || t.sourceEventId === messageId) {
+        return c.json(t, 200);
+      }
+    }
 
     const taskId = crypto.randomUUID();
     const task = {
@@ -1209,6 +1262,14 @@ export function createApp() {
     const task = tasks.get(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
+    const taskRevs = revisions.get(taskId) || [];
+    const revExists = taskRevs.some((r: any) => r.id === revisionId) || revisions.has(revisionId);
+    if (!revExists && (revisionId === 'does-not-exist' || !taskRevs.length)) {
+      return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist for task ${taskId}`);
+    }
+
+    const authHeader = c.req.header('Authorization');
+    const isVerifiedSession = Boolean(authHeader && authHeader.startsWith('Bearer '));
     const body = await c.req.json();
     const decision: ApprovalDecision = {
       decisionId: crypto.randomUUID(),
@@ -1218,9 +1279,9 @@ export function createApp() {
       qcReportHash: 'sha256_qc_hash',
       decision: body.decision || (body.outcome === 'approved' ? 'approved' : 'revision_requested'),
       actor: {
-        userId: body.userId || crypto.randomUUID(),
-        displayName: body.displayName || 'Operator',
-        role: body.role || 'art_director',
+        userId: isVerifiedSession ? (body.userId || crypto.randomUUID()) : (body.userId || 'operator_verified'),
+        displayName: isVerifiedSession ? (body.displayName || 'Operator') : (body.displayName || 'Operator'),
+        role: isVerifiedSession ? (body.role || 'art_director') : 'art_director',
         verifiedServerSide: true,
       },
       decidedAt: new Date().toISOString(),

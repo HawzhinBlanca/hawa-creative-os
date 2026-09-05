@@ -22,6 +22,17 @@ export class DeterministicQAEngine implements QAEngine {
     // 1. Check canvas dimensions and variants
     const briefVariants = (request.brief.variants as Array<{ width: number; height: number }>) || [];
     const layoutFindings: QAFinding[] = [];
+    if (briefVariants.length > 0 && request.manifest.pages.length === 0) {
+      layoutFindings.push({
+        ruleId: 'REQUIRED_PAGE_VARIANT_MISSING',
+        severity: 'critical',
+        hardFailure: true,
+        category: 'layout',
+        message: `Manifest has no pages, but ${briefVariants.length} variants are required by brief`,
+        nodeIds: [],
+        evidence: { requiredVariants: briefVariants, pageCount: 0 },
+      });
+    }
     for (const page of request.manifest.pages) {
       const match = briefVariants.some((v) => v.width === page.width && v.height === page.height);
       if (!match && briefVariants.length > 0) {
@@ -117,6 +128,7 @@ export class DeterministicQAEngine implements QAEngine {
       evidence: { brandAssetsChecked: clientAssets.length },
       findings: brandFindings,
     });
+    allFindings.push(...brandFindings);
     // 5. Check safe zones
     const safeZoneFindings: QAFinding[] = [];
     const primaryPage = request.manifest.pages[0];

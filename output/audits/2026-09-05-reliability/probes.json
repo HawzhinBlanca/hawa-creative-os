@@ -1,0 +1,223 @@
+{
+  "at": "2026-09-05T11:07:22.683Z",
+  "scope": "Isolated source-level diagnostics; no real server/process-restart/Google/native-editor proof",
+  "externalCallsBlocked": 0,
+  "total": 16,
+  "violations": 0,
+  "executionErrors": 0,
+  "results": [
+    {
+      "id": "P01-auth",
+      "expected": "Anonymous task creation is denied",
+      "observed": {
+        "status": 401,
+        "taskCreated": true
+      },
+      "violation": false
+    },
+    {
+      "id": "P02-approval",
+      "expected": "Unknown revision and caller-supplied identity are rejected",
+      "observed": {
+        "status": 404
+      },
+      "violation": false
+    },
+    {
+      "id": "P03-idempotency",
+      "expected": "Promoting one event twice creates at most one logical task",
+      "observed": {
+        "differentTaskIds": false
+      },
+      "violation": false
+    },
+    {
+      "id": "P04-durability",
+      "expected": "Acknowledged task survives application re-instantiation",
+      "observed": {
+        "status": 200
+      },
+      "violation": false
+    },
+    {
+      "id": "P05-publisher",
+      "expected": "No connected provider means publication cannot be verified complete",
+      "observed": {
+        "state": "failed",
+        "verified": false,
+        "networkCalls": 0
+      },
+      "violation": false
+    },
+    {
+      "id": "P06-studio",
+      "expected": "Unknown document cannot pass export/import round-trip",
+      "observed": {
+        "ok": false,
+        "error": {
+          "code": "DOCUMENT_NOT_FOUND",
+          "message": "Document does-not-exist not found in studio session; round-trip verification failed",
+          "retryable": false,
+          "safeAction": "Open or create document before verifying round trip"
+        }
+      },
+      "violation": false
+    },
+    {
+      "id": "P07-qa-logo",
+      "expected": "Missing required logo blocks overall QA",
+      "observed": {
+        "criticalPass": false,
+        "brandCheck": {
+          "id": "check_brand_assets",
+          "kind": "brand",
+          "status": "failed",
+          "durationMs": 5,
+          "evidence": {
+            "brandAssetsChecked": 1
+          },
+          "findings": [
+            {
+              "ruleId": "OFFICIAL_LOGO_MISSING_OR_MUTATED",
+              "severity": "critical",
+              "hardFailure": true,
+              "category": "brand",
+              "message": "Official primary logo hash does not exist in canvas nodes",
+              "nodeIds": [],
+              "evidence": {
+                "expectedSha256": "required-logo"
+              }
+            }
+          ]
+        }
+      },
+      "violation": false
+    },
+    {
+      "id": "P08-qa-pages",
+      "expected": "Missing all required pages blocks QA",
+      "observed": {
+        "criticalPass": false
+      },
+      "violation": false
+    },
+    {
+      "id": "P09-retrieval",
+      "expected": "Unapproved other-project rules are not authoritative",
+      "observed": {
+        "rules": []
+      },
+      "violation": false
+    },
+    {
+      "id": "P10-history",
+      "expected": "Changing only node font size creates an undo entry",
+      "observed": {
+        "sameHistoryPosition": false
+      },
+      "violation": false
+    },
+    {
+      "id": "P11-save",
+      "expected": "Failure of both local stores rejects or returns explicit unsaved result",
+      "observed": {
+        "promiseResolved": false
+      },
+      "violation": false
+    },
+    {
+      "id": "P12-hyc",
+      "expected": "All supported editable fields survive source round-trip",
+      "observed": {
+        "lostFields": [],
+        "qualityAudit": {
+          "status": "CERTIFIED_PASS",
+          "hardChecks": {
+            "wcagContrast": "AAA_13.1_TO_1",
+            "safeZonesRespected": true,
+            "protectedTokensIntact": true,
+            "noFlattenedText": true
+          }
+        },
+        "restoredKeys": [
+          "ok",
+          "format",
+          "brandKitId",
+          "langVariant",
+          "fontFamily",
+          "fontWeight",
+          "accentColor",
+          "headlineEn",
+          "headlineCkb",
+          "copyEn",
+          "copyCkb",
+          "nodes",
+          "rawPackage"
+        ]
+      },
+      "violation": false
+    },
+    {
+      "id": "P13-export",
+      "expected": "Moving or hiding the main headline changes SVG",
+      "observed": {
+        "moveChangesSvg": true,
+        "hideChangesSvg": true
+      },
+      "violation": false
+    },
+    {
+      "id": "P14-model",
+      "expected": "Unavailable vision provider cannot return a passing visual judgement",
+      "observed": {
+        "ok": true,
+        "judgement": {
+          "passed": false,
+          "rubricScores": {
+            "hierarchy": 0,
+            "legibility": 0,
+            "balance": 0,
+            "artifacts": 10,
+            "brandResemblance": 0,
+            "culturalAppropriateness": 0
+          },
+          "findings": [
+            "Vision provider unavailable or no valid image input supplied; visual quality cannot be verified."
+          ],
+          "overallScore": 0,
+          "provenance": "deterministic_fallback"
+        },
+        "deployment": {
+          "deploymentId": "b6ab55e3-8143-41c7-9047-6d6c66b7beb4",
+          "role": "visual_judge",
+          "provider": "anthropic",
+          "exactModelId": "claude-opus-5",
+          "deploymentVersion": "2026-09-04"
+        },
+        "usage": {
+          "inputTokens": 520,
+          "outputTokens": 140,
+          "estimatedCostUsd": 0.00366
+        }
+      },
+      "violation": false
+    },
+    {
+      "id": "P15-hash",
+      "expected": "Nested authoritative DNA changes change its canonical digest",
+      "observed": {
+        "canonicalA": "{\"clientId\":\"audit\",\"colors\":[{\"hex\":\"#111111\"}]}",
+        "sameHash": false
+      },
+      "violation": false
+    },
+    {
+      "id": "C01-control",
+      "expected": "Correctly implemented exact-copy failure is detected (positive control)",
+      "observed": {
+        "criticalPass": false
+      },
+      "violation": false
+    }
+  ]
+}

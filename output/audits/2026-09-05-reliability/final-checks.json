@@ -1,0 +1,38 @@
+{
+  "at": "2026-09-05T11:05:23.305Z",
+  "results": [
+    {
+      "id": "unit",
+      "exitCode": 0,
+      "signal": null,
+      "log": "final-logs/unit.log"
+    },
+    {
+      "id": "typecheck",
+      "exitCode": 0,
+      "signal": null,
+      "log": "final-logs/typecheck.log"
+    },
+    {
+      "id": "desk-build",
+      "exitCode": 0,
+      "signal": null,
+      "log": "final-logs/desk-build.log"
+    },
+    {
+      "id": "pack",
+      "exitCode": 0,
+      "signal": null,
+      "log": "final-logs/pack.log"
+    },
+    {
+      "id": "dependency-audit",
+      "exitCode": 1,
+      "signal": null,
+      "log": "final-logs/dependency-audit.log"
+    }
+  ],
+  "changedSinceFirstCheck": [],
+  "head": "2d3515ef1b95b7e4433bc5fca526d80f5c1f171f",
+  "dirty": " M MANIFEST.json\n M SHA256SUMS.txt\n M apps/core/src/app.ts\n M apps/core/tsconfig.tsbuildinfo\n M apps/desk/src/App.tsx\n M apps/desk/src/components/Header.tsx\n M apps/desk/src/index.css\n M apps/desk/src/screens/DnaScreen.tsx\n M apps/desk/src/screens/InboxScreen.tsx\n M apps/desk/src/screens/ReviewScreen.tsx\n M apps/desk/src/services/canvasExport.ts\n M apps/desk/src/services/draftStorage.ts\n M apps/desk/src/services/historyTree.ts\n M apps/desk/tsconfig.tsbuildinfo\n M package.json\n M packages/integrations/src/google-publisher.ts\n M packages/integrations/src/hycanvas-adapter.ts\n M packages/integrations/src/model-gateway.ts\n M packages/integrations/tsconfig.tsbuildinfo\n M packages/qa/src/engine.ts\n M packages/qa/tsconfig.tsbuildinfo\n M packages/retrieval/src/retrieval-service.ts\n M packages/retrieval/tsconfig.tsbuildinfo\n M scripts/validate_pack.py\n?? apps/desk/src/components/GuidedTour.tsx\n?? apps/desk/src/services/paletteExtractor.ts\n?? apps/desk/src/services/sanitizer.ts\n?? apps/desk/src/services/zipBundler.ts\n?? apps/desk/test/\n?? output/\n?? scripts/launch_hawa_os.sh\n"
+}

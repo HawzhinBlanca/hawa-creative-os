@@ -289,10 +289,10 @@ export class ResilientModelGateway implements ModelGateway {
           };
         } else if (request.role === 'visual_judge') {
           output = {
-            passed: true,
-            rubricScores: { hierarchy: 9.5, legibility: 10.0, balance: 9.2, artifacts: 0.0, brandResemblance: 9.8, culturalAppropriateness: 10.0 },
-            findings: [],
-            overallScore: 9.7,
+            passed: false,
+            rubricScores: { hierarchy: 0.0, legibility: 0.0, balance: 0.0, artifacts: 10.0, brandResemblance: 0.0, culturalAppropriateness: 0.0 },
+            findings: ['Vision provider unavailable or no valid image input supplied; visual quality cannot be verified.'],
+            overallScore: 0.0,
           };
         } else {
           output = { status: 'success' };

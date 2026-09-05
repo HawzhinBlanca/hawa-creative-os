@@ -337,9 +337,17 @@ button, input, select, textarea {
 
 .review {
   display: grid;
-  grid-template-columns: minmax(240px, 28%) minmax(440px, 44%) minmax(260px, 28%);
-  gap: 14px;
+  grid-template-columns: 260px 1fr 300px;
+  gap: 12px;
   height: calc(100vh - 110px);
+}
+
+.review-screen {
+  height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  direction: ltr;
 }
 
 .review > .panel {
@@ -999,5 +1007,230 @@ button, input, select, textarea {
   margin-bottom: 6px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Responsive Layout Architecture & Ergonomic Mobile Review (HD-035)
+   ========================================================================== */
+
+@media (max-width: 1200px) {
+  .shell {
+    grid-template-columns: 200px 1fr;
+  }
+  .side {
+    padding: 16px 10px;
+  }
+  .side .brand {
+    font-size: 17px;
+    padding: 2px 6px 14px;
+  }
+  .side .nav button {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .top {
+    padding: 0 14px;
+  }
+  .search {
+    width: 180px;
+  }
+  .review {
+    grid-template-columns: 210px 1fr 250px;
+    gap: 8px;
+  }
+  .review > .panel {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 1040px) {
+  .shell {
+    grid-template-columns: 180px 1fr;
+  }
+  .review {
+    grid-template-columns: 190px 1fr 230px;
+    gap: 6px;
+  }
+  .top .search {
+    width: 140px;
+  }
+}
+
+@media (max-width: 900px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  .shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .side {
+    position: sticky;
+    top: 0;
+    height: auto;
+    width: 100%;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 50;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .side .brand {
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .side .brand small {
+    display: inline;
+    margin-left: 6px;
+  }
+
+  .side .nav {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    width: 100%;
+    gap: 4px;
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .side .nav button {
+    width: auto;
+    white-space: nowrap;
+    padding: 5px 9px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .side .system {
+    display: none;
+  }
+
+  .top {
+    height: auto;
+    min-height: 44px;
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+    box-sizing: border-box;
+    max-width: 100%;
+    position: static;
+  }
+
+  .top h1 {
+    font-size: 16px;
+  }
+
+  .top small {
+    font-size: 11px;
+  }
+
+  .top > div {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+
+  .search {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .main {
+    padding: 6px;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .screen {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .review-screen {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .review {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .review > .panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 10px !important;
+    height: auto !important;
+    overflow-y: visible !important;
+  }
+
+  .studio-viewport {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 320px !important;
+    box-sizing: border-box !important;
+  }
+
+  .studio-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .studio-toolbar > div {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal, .dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    box-sizing: border-box !important;
+  }
+
+  .card, .board, .stats, .dna, .library, .adapters, .overview {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
 }
 

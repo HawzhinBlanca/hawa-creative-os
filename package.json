@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "bash scripts/launch_hawa_os.sh",
+    "start:all": "bash scripts/launch_hawa_os.sh",
+    "dev:all": "bash scripts/launch_hawa_os.sh",
     "build": "tsc -b",
     "lint": "tsc --noEmit",
     "typecheck": "tsc -b",

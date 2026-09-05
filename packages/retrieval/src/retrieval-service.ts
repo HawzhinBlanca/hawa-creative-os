@@ -86,9 +86,15 @@ export class RetrievalService implements RetrievalProvider {
       projectId: ctx.projectId,
       clientDnaVersion: 1,
       authoritative: {
-        rules: clientPool.filter((i) => i.kind === 'rule').map((i) => ({ id: i.id, text: i.text, title: i.title })),
-        assets: clientPool.filter((i) => i.kind === 'official_asset').map((i) => ({ id: i.id, text: i.text, metadata: i.metadata })),
-        templates: clientPool.filter((i) => i.kind === 'template').map((i) => ({ id: i.id, metadata: i.metadata })),
+        rules: clientPool
+          .filter((i) => i.kind === 'rule' && i.approved && (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId))
+          .map((i) => ({ id: i.id, text: i.text, title: i.title })),
+        assets: clientPool
+          .filter((i) => i.kind === 'official_asset' && (i.approved ?? true) && (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId))
+          .map((i) => ({ id: i.id, text: i.text, metadata: i.metadata })),
+        templates: clientPool
+          .filter((i) => i.kind === 'template' && (i.approved ?? true) && (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId))
+          .map((i) => ({ id: i.id, metadata: i.metadata })),
         glossary: [],
       },
       evidence: evidence.slice(0, 10),

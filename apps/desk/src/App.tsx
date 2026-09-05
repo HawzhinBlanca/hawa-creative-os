@@ -8,6 +8,7 @@ import { LibraryScreen } from './screens/LibraryScreen.js';
 import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
+import { GuidedTour } from './components/GuidedTour.js';
 import { draftStore } from './services/draftStore.js';
 import { useI18n } from './services/i18n.js';
 
@@ -29,6 +30,41 @@ export const App: React.FC = () => {
 
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
+  const [showTour, setShowTour] = useState<boolean>(false);
+
+  // Global Keyboard Shortcuts (1 - 7 screen navigation)
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.getAttribute('role') === 'textbox')
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const screenMap: Record<string, ScreenId> = {
+        '1': 'inbox',
+        '2': 'review',
+        '3': 'dna',
+        '4': 'library',
+        '5': 'settings',
+        '6': 'ops',
+        '7': 'eval',
+      };
+
+      if (screenMap[e.key]) {
+        handleNavigate(screenMap[e.key]);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, []);
 
   useEffect(() => {
     const handleLocationChange = () => {
@@ -215,7 +251,7 @@ export const App: React.FC = () => {
     <div className={`shell ${isRtl ? 'rtl' : 'ltr'}`}>
       <Sidebar currentScreen={currentScreen} onNavigate={handleNavigate} />
       <main className="main">
-        <Header currentScreen={currentScreen} onNewTask={handleOpenModal} />
+        <Header currentScreen={currentScreen} onNewTask={handleOpenModal} onStartTour={() => setShowTour(true)} />
         <div className="content">
           {currentScreen === 'inbox' && (
             <InboxScreen
@@ -364,6 +400,13 @@ export const App: React.FC = () => {
           <span>{appToast}</span>
         </div>
       )}
+
+      {/* Guided 60-Second Operator Onboarding Tour */}
+      <GuidedTour
+        isOpen={showTour}
+        onClose={() => setShowTour(false)}
+        onNavigateScreen={(s) => handleNavigate(s as ScreenId)}
+      />
     </div>
   );
 };

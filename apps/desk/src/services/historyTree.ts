@@ -65,26 +65,7 @@ export function areStatesEqual(a: HistoryNodeState, b: HistoryNodeState): boolea
   for (let i = 0; i < a.nodes.length; i++) {
     const na = a.nodes[i];
     const nb = b.nodes[i];
-    if (
-      na.id !== nb.id ||
-      na.x !== nb.x ||
-      na.y !== nb.y ||
-      na.width !== nb.width ||
-      na.height !== nb.height ||
-      na.rotation !== nb.rotation ||
-      na.opacity !== nb.opacity ||
-      na.zIndex !== nb.zIndex ||
-      na.visible !== nb.visible ||
-      na.locked !== nb.locked ||
-      na.textEn !== nb.textEn ||
-      na.textCkb !== nb.textCkb ||
-      na.color !== nb.color ||
-      na.backgroundColor !== nb.backgroundColor ||
-      na.fontFamily !== nb.fontFamily ||
-      na.lineHeight !== nb.lineHeight ||
-      na.direction !== nb.direction ||
-      na.borderRadius !== nb.borderRadius
-    ) {
+    if (JSON.stringify(na) !== JSON.stringify(nb)) {
       return false;
     }
   }
