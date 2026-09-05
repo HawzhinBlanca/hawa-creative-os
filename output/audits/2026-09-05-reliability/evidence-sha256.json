@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-05T11:26:39.592Z",
+  "at": "2026-09-05T20:57:45.263Z",
   "algorithm": "SHA-256",
   "excludes": [
     "evidence-sha256.json"
@@ -38,7 +38,7 @@
     {
       "path": "checks.json",
       "bytes": 1671,
-      "sha256": "9d8c23e89f275eafbbdf015e6e0b5e9f907679dec56604b4d886e485a41147fe"
+      "sha256": "cede39c8ecc08652afa0d44f5ddcd6b207bee79d719d59e51ec077bf4efa83e6"
     },
     {
       "path": "desktop.png",
@@ -52,8 +52,8 @@
     },
     {
       "path": "final-checks.json",
-      "bytes": 1871,
-      "sha256": "d4d691018fb183a339f450f32335cf1b5bade93ddfb12e5fa952d8662ecdf7b9"
+      "bytes": 1024,
+      "sha256": "12975b5920a25b7c7cce249373b5c07b89032835d4d500a12a0a802a1d865da9"
     },
     {
       "path": "final-logs/dependency-audit.log",
@@ -62,13 +62,13 @@
     },
     {
       "path": "final-logs/desk-build.log",
-      "bytes": 545,
-      "sha256": "06b9a7d4c79bf7cbee58da4e0debe1ec665590aaebf3c5540e6017d628d61fbe"
+      "bytes": 877,
+      "sha256": "ae5d51d511d11e0346d78a9759fbb4d4b6789e27d89dc9b9ca53ab94cf0e3eb8"
     },
     {
       "path": "final-logs/pack.log",
       "bytes": 70,
-      "sha256": "b6b6ca80678a129663345697bb1d290c3ef176878b39ca4437f41072d10dd797"
+      "sha256": "0a337988a41b7b1f4a655440a9cc03708bef5d16f44c60987b7eec2f277c8f53"
     },
     {
       "path": "final-logs/typecheck.log",
@@ -77,8 +77,8 @@
     },
     {
       "path": "final-logs/unit.log",
-      "bytes": 3040,
-      "sha256": "1f51c792d1ea25dde14c0cdc508e5dcd0ef16e78333c64e68fd6b8c593ce2d29"
+      "bytes": 3099,
+      "sha256": "5e1de552b743b9ffa8985b70aa7c4a82562e60af96915c1f6b2b43ecffa35aa8"
     },
     {
       "path": "finalize-evidence.mjs",
@@ -97,8 +97,8 @@
     },
     {
       "path": "logs/adversarial.log",
-      "bytes": 6782,
-      "sha256": "f01fd1e7267630d7a9aada2676dd559d7b157e298d68ad312489efdae3f67935"
+      "bytes": 6825,
+      "sha256": "92f9c6a1f9597f9ca3562640ff4dde2989f56742d5152adf9b90db348f93974e"
     },
     {
       "path": "logs/db-static.log",
@@ -107,8 +107,8 @@
     },
     {
       "path": "logs/desk-build.log",
-      "bytes": 545,
-      "sha256": "a171128ba098c8642e5df5672d7e5af20a315c67e9a71943b6898186b5a3edc9"
+      "bytes": 877,
+      "sha256": "19a3aa7926960d1d3eb898949f4243a29c0812581e74156008bd6f58dc63b426"
     },
     {
       "path": "logs/lint.log",
@@ -118,7 +118,7 @@
     {
       "path": "logs/pack.log",
       "bytes": 70,
-      "sha256": "b6b6ca80678a129663345697bb1d290c3ef176878b39ca4437f41072d10dd797"
+      "sha256": "0a337988a41b7b1f4a655440a9cc03708bef5d16f44c60987b7eec2f277c8f53"
     },
     {
       "path": "logs/security-patterns.log",
@@ -132,8 +132,8 @@
     },
     {
       "path": "logs/unit.log",
-      "bytes": 3041,
-      "sha256": "6d99bc915e7e00be213e4a9226b65ca3b1bb99d9cc8a05694b5079bae3e9d804"
+      "bytes": 3098,
+      "sha256": "aa11bf8521383812cc3fb53ab22b363a81ec25f110cba09202fcd8215480c95e"
     },
     {
       "path": "mobile.png",
@@ -147,8 +147,8 @@
     },
     {
       "path": "probes.json",
-      "bytes": 6065,
-      "sha256": "0a5530534b0f930aa60ec47ac339eefe2ceac9e4c56605313ec3488db1f03a37"
+      "bytes": 6108,
+      "sha256": "0a82fa75d7825b2d0b41424b62396d0e72424b81bbead01ebbb6bbac34f6554d"
     },
     {
       "path": "probes.ts",
@@ -167,23 +167,23 @@
     },
     {
       "path": "source-after.json",
-      "bytes": 22948,
-      "sha256": "cd2db793e480d9cbb1dec0af2f2cec808ca65b964b860844455bcace0d0d6630"
+      "bytes": 23824,
+      "sha256": "ec95c40f15740ef0560d5e4435c2d2b62a42c08632ff40fe4e15da2c8fcb2909"
     },
     {
       "path": "source-before.json",
-      "bytes": 24634,
-      "sha256": "6fbf89957dcdbfde060a14649a2e4a1d2b406223aaf824d0578fee96ba914d86"
+      "bytes": 24679,
+      "sha256": "98a6ddd5226bec45f868d7764bc3f523a5374d3728a9d8239f1c7defb1bc5c9c"
     },
     {
       "path": "source-final.json",
-      "bytes": 35618,
-      "sha256": "df0e19ed3ab5d85030c54f24dab577be98c6c81cde696c93604520b47db73949"
+      "bytes": 41470,
+      "sha256": "e58734c99253d9614a638529aa165e91706195082fafb73fda5a3a2650bbb103"
     },
     {
       "path": "task-sheet-validation.json",
       "bytes": 312,
-      "sha256": "e60418086ab9e543a64e881f6fcf0c90dfafcb27d6e512da7376711f20432f07"
+      "sha256": "39d79475cca88cd4ff210235797c4eb60c15769f98cdbcc2521441c82b189025"
     },
     {
       "path": "tasks.csv",

@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-05T11:22:36.832Z",
+  "at": "2026-09-05T20:57:33.341Z",
   "scope": "Isolated source-level diagnostics; no real server/process-restart/Google/native-editor proof",
   "externalCallsBlocked": 0,
   "total": 16,
@@ -131,9 +131,10 @@
       "observed": {
         "lostFields": [],
         "qualityAudit": {
-          "status": "CERTIFIED_PASS",
+          "status": "FLAGGED_REVIEW",
           "hardChecks": {
-            "wcagContrast": "AAA_13.1_TO_1",
+            "wcagContrast": "FAIL_2.1_TO_1",
+            "measuredContrastRatio": 2.14,
             "safeZonesRespected": true,
             "protectedTokensIntact": true,
             "noFlattenedText": true
@@ -188,7 +189,7 @@
           "provenance": "deterministic_fallback"
         },
         "deployment": {
-          "deploymentId": "380b585f-6940-4fb5-a9cd-08dbbb290b1a",
+          "deploymentId": "e312fa9a-173c-42d5-910b-455fd15b6e34",
           "role": "visual_judge",
           "provider": "anthropic",
           "exactModelId": "claude-opus-5",

@@ -161,7 +161,7 @@ describe('Canvas Export & HyCanvas Serialization Rigor', () => {
   it('generates 4-in-1 Omnichannel Campaign Pack (.zip) with linked variants, SVGs, .hyc, and manifest (FR-033)', async () => {
     const { bundler, manifest, zipFilename } = await buildOmnichannelCampaignZip({
       state: sampleState,
-      task: { id: 'task-drustee-campaign-001', title: 'Drustee Vitamin D3 Launch' },
+      task: { id: 'task_drustee_campaign_001', title: 'Drustee Vitamin D3 Launch' },
       qaReport: { status: 'PASSED', violations: 0, wcagRatio: 13.11 },
     });
 
