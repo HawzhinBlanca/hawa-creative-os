@@ -290,3 +290,86 @@ export function validateMixedDirectionRuns(text: string): MixedDirectionValidati
   };
 }
 
+export interface KurdishOrthographyIssue {
+  type: 'arabic_kaf' | 'arabic_yeh' | 'non_standard_city';
+  character?: string;
+  foundWord?: string;
+  recommended: string;
+  message: string;
+  index: number;
+}
+
+export interface KurdishOrthographyReport {
+  valid: boolean;
+  issues: KurdishOrthographyIssue[];
+  normalizedText: string;
+}
+
+/**
+ * Validates Kurdish Sorani orthography against common Arabic keyboard intrusions:
+ * - Replaces Arabic Kaf 'ك' (U+0643) with Kurdish Kaf 'ک' (U+06A9)
+ * - Flags word-terminal dotted Arabic Yeh 'ي' (U+064A) in place of Kurdish Sorani 'ی' (U+06CC)
+ * - Flags Arabic city names in Sorani copy (أربيل -> هەولێر, دهوك -> دهۆک, السليمانية -> سلێمانی, كركوك -> کەرکووک)
+ */
+export function validateKurdishOrthography(text: string): KurdishOrthographyReport {
+  const issues: KurdishOrthographyIssue[] = [];
+  let normalized = text;
+
+  // 1. Check for Arabic Kaf 'ك' (U+0643) vs Kurdish Kaf 'ک' (U+06A9)
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\u0643') {
+      issues.push({
+        type: 'arabic_kaf',
+        character: 'ك',
+        recommended: 'ک',
+        message: 'Arabic Kaf (ك U+0643) detected. Kurdish Sorani standard requires Kurdish Kaf (ک U+06A9).',
+        index: i,
+      });
+    }
+  }
+  normalized = normalized.replace(/\u0643/g, '\u06A9');
+
+  // 2. Check for Arabic Yeh 'ي' (U+064A with bottom dots) at word boundary
+  const arabicYehRegex = /\u064A(?=[\s\p{P}]|$)/gu;
+  let match: RegExpExecArray | null;
+  while ((match = arabicYehRegex.exec(text)) !== null) {
+    issues.push({
+      type: 'arabic_yeh',
+      character: 'ي',
+      recommended: 'ی',
+      message: 'Arabic dotted Yeh (ي U+064A) detected at word end. Kurdish Sorani standard requires dotless Kurdish Yeh (ی U+06CC).',
+      index: match.index,
+    });
+  }
+  normalized = normalized.replace(arabicYehRegex, 'ی');
+
+  // 3. City Orthography Standardizations
+  const cityChecks = [
+    { regex: /(?<=^|[\s،.!?؛])أربيل(?=$|[\s،.!?؛])/gu, recommended: 'هەولێر' },
+    { regex: /(?<=^|[\s،.!?؛])السليمانية(?=$|[\s،.!?؛])/gu, recommended: 'سلێمانی' },
+    { regex: /(?<=^|[\s،.!?؛])ده[وۆ][كک](?=$|[\s،.!?؛])/gu, recommended: 'دهۆک' },
+    { regex: /(?<=^|[\s،.!?؛])[كک]ەر?[كک][وۆ]+[كک](?=$|[\s،.!?؛])/gu, recommended: 'کەرکووک' },
+  ];
+
+  for (const cc of cityChecks) {
+    let m: RegExpExecArray | null;
+    while ((m = cc.regex.exec(text)) !== null) {
+      issues.push({
+        type: 'non_standard_city',
+        foundWord: m[0],
+        recommended: cc.recommended,
+        message: `Arabic place name "${m[0]}" detected in Kurdish context. Standard Kurdish orthography is "${cc.recommended}".`,
+        index: m.index,
+      });
+    }
+    normalized = normalized.replace(cc.regex, cc.recommended);
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    normalizedText: normalized,
+  };
+}
+
+

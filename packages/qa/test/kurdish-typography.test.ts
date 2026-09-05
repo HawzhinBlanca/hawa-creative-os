@@ -12,7 +12,9 @@ import {
   SORANI_HIGH_ASCENDERS,
   SORANI_LOW_DESCENDERS,
   BIDI_CONTROLS,
+  validateKurdishOrthography,
 } from '../src/rtl-validator.js';
+import { checkSocialOverlayCollisions } from '../src/layout-bounds.js';
 
 describe('Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy', () => {
   describe('Glyph & Ligature Identification', () => {
@@ -150,6 +152,41 @@ describe('Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy', () => {
 
       // Rule P2: characters between RLI and PDI are skipped, first strong outside is 'ب' (RTL)
       expect(baseDir).toBe('rtl');
+    });
+  });
+
+  describe('Kurdish Sorani Orthography & Social Safe-Zone Overlays', () => {
+    it('detects Arabic Kaf intrusions and standardizes to Kurdish Sorani Kaf', () => {
+      const arabicKafSample = 'پێشكه_شكردنی دیاری كۆمپانیا';
+      const report = validateKurdishOrthography(arabicKafSample);
+
+      expect(report.valid).toBe(false);
+      expect(report.issues.some((i) => i.type === 'arabic_kaf')).toBe(true);
+      expect(report.normalizedText).toContain('ک');
+      expect(report.normalizedText).not.toContain('ك');
+    });
+
+    it('detects Arabic city names in Sorani copy and standardizes them', () => {
+      const sample = 'لقی سەرەکی لە أربيل و سلێمانی و دهوك كراوەیە';
+      const report = validateKurdishOrthography(sample);
+
+      expect(report.valid).toBe(false);
+      expect(report.normalizedText).toContain('هەولێر');
+      expect(report.normalizedText).toContain('دهۆک');
+    });
+
+    it('flags social platform safe zone collisions for 9:16 Instagram Story header and action bar', () => {
+      const storyNodes = [
+        { id: 'logo_top', role: 'logo', x: 100, y: 100, width: 200, height: 60 }, // y=100 is in top 14% (14% of 1920 = 269px)
+        { id: 'cta_bottom', role: 'cta', x: 100, y: 1600, width: 400, height: 100 }, // y+h = 1700 is in bottom 20% (80% of 1920 = 1536px)
+        { id: 'headline_safe', role: 'headline', text: 'شیکاری سەرەکی', x: 100, y: 800, width: 600, height: 120 },
+      ];
+
+      const collisions = checkSocialOverlayCollisions(storyNodes, 1080, 1920);
+      expect(collisions.length).toBe(2);
+      expect(collisions.map((c) => c.nodeId)).toContain('logo_top');
+      expect(collisions.map((c) => c.nodeId)).toContain('cta_bottom');
+      expect(collisions.map((c) => c.nodeId)).not.toContain('headline_safe');
     });
   });
 });

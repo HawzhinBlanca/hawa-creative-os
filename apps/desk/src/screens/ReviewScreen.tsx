@@ -3,7 +3,7 @@ import { runRealtimeQADiagnostics, type QADiagnosticResult } from '../services/q
 import { computeSemanticDiff, type SemanticDiffResult, type DocumentSnapshot } from '../services/semanticDiff.ts';
 import { useI18n } from '../services/i18n.js';
 import { getBrandKit, getAllBrandKits, saveCustomBrandKit, type BrandKit } from '../services/brandKits.ts';
-import { exportToHighResPng, exportToSvg, exportToHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
+import { exportToHighResPng, exportToSvg, exportToHycPackage, importFromHycPackage, FORMAT_DIMENSIONS, type AspectPreset } from '../services/canvasExport.js';
 import {
   toEasternKurdishDigits,
   toWesternDigits,
@@ -214,6 +214,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
   // 8. Overlays & Modals
   const [showSafeZones, setShowSafeZones] = useState<boolean>(false);
+  const [showSocialOverlays, setShowSocialOverlays] = useState<boolean>(false);
+  const [isDraggingHyc, setIsDraggingHyc] = useState<boolean>(false);
+  const hycFileInputRef = useRef<HTMLInputElement>(null);
   const [showBidiIsolates, setShowBidiIsolates] = useState<boolean>(false);
   const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
@@ -1578,6 +1581,83 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     setTimeout(() => setStudioToast(null), 5000);
   };
 
+  const handleImportHycFile = async (file: File) => {
+    setShowExportMenu(false);
+    try {
+      const res = await importFromHycPackage(file);
+      if (!res.ok) {
+        setStudioToast(`⚠️ HyCanvas Import Error: ${res.error || 'Failed to unpack document'}`);
+        setTimeout(() => setStudioToast(null), 6000);
+        return;
+      }
+      if (res.nodes && res.nodes.length > 0) {
+        setNodes(res.nodes);
+        setSelectedNodeIds([res.nodes[0].id]);
+      }
+      if (res.format && FORMAT_DIMENSIONS[res.format]) {
+        setVariant(res.format);
+      }
+      if (res.langVariant) {
+        setLangVariant(res.langVariant);
+      }
+      if (res.headlineEn) setHeadlineEn(res.headlineEn);
+      if (res.headlineCkb) setHeadlineCkb(res.headlineCkb);
+      if (res.copyEn) setCopyEn(res.copyEn);
+      if (res.copyCkb) setCopyCkb(res.copyCkb);
+      if (res.brandKitId && availableBrandKits[res.brandKitId]) {
+        setSelectedBrandKitId(res.brandKitId);
+      }
+      if (res.nodes && res.nodes.length > 0) {
+        pushHistory(`Import .hyc package (${res.nodes.length} layers)`);
+      }
+      setStudioToast(`✓ HyCanvas Document Loaded: ${res.nodes.length} live vector layers restored (100% editable)`);
+      setTimeout(() => setStudioToast(null), 5000);
+    } catch (err: any) {
+      setStudioToast(`⚠️ Import failed: ${err.message || String(err)}`);
+      setTimeout(() => setStudioToast(null), 5000);
+    }
+  };
+
+  const handleHycFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImportHycFile(file);
+      e.target.value = '';
+    }
+  };
+
+  const socialCollisions = useMemo(() => {
+    if (!showSocialOverlays) return [];
+    const collisions: { nodeId: string; nodeName: string; zone: string; overlapPx: number }[] = [];
+    const h = currentArtboard.height;
+
+    nodes.forEach((n) => {
+      if (!n.visible) return;
+      const isCritical = Boolean(n.role?.includes('headline') || n.role?.includes('copy') || n.role?.includes('logo') || n.textEn || n.textCkb);
+      if (!isCritical) return;
+
+      const nodeBottom = n.y + n.height;
+
+      if (variant === 'story') {
+        const headerDanger = Math.round(h * 0.14);
+        const footerDanger = Math.round(h * 0.80);
+        if (n.y < headerDanger) {
+          collisions.push({ nodeId: n.id, nodeName: n.name, zone: `Story Top Header UI`, overlapPx: headerDanger - n.y });
+        }
+        if (nodeBottom > footerDanger) {
+          collisions.push({ nodeId: n.id, nodeName: n.name, zone: `Story Bottom Action Bar`, overlapPx: nodeBottom - footerDanger });
+        }
+      } else if (variant === 'feed' || variant === 'square') {
+        const footerDanger = Math.round(h * 0.88);
+        if (nodeBottom > footerDanger) {
+          collisions.push({ nodeId: n.id, nodeName: n.name, zone: `Feed Bottom Action Bar`, overlapPx: nodeBottom - footerDanger });
+        }
+      }
+    });
+
+    return collisions;
+  }, [showSocialOverlays, nodes, variant, currentArtboard]);
+
   // Standard Task Lifecycle Handlers
   const taskId = task?.id;
   const taskTitle = task?.title || activeBrandKit.name;
@@ -2420,12 +2500,38 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           </button>
 
           <button
+            className={`btn ${showSocialOverlays ? 'primary' : ''}`}
+            style={{ fontSize: 11, padding: '4px 8px', color: showSocialOverlays ? '#38BDF8' : undefined }}
+            onClick={() => setShowSocialOverlays(!showSocialOverlays)}
+            title="Toggle Social UI Safe Overlays (Instagram Story 9:16 / Meta Feed 4:5)"
+          >
+            📱 Social UI {socialCollisions.length > 0 && <span style={{ background: '#EF4444', color: '#fff', padding: '1px 5px', borderRadius: 8, fontSize: 9, marginLeft: 3 }}>{socialCollisions.length}</span>}
+          </button>
+
+          <button
             className={`btn ${showBidiIsolates ? 'primary' : ''}`}
             style={{ fontSize: 11, padding: '4px 8px' }}
             onClick={() => setShowBidiIsolates(!showBidiIsolates)}
             title="Toggle UAX #9 Directional Isolates"
           >
             {t.review.bidiIsolates}
+          </button>
+
+          <input
+            type="file"
+            ref={hycFileInputRef}
+            accept=".hyc,application/json"
+            onChange={handleHycFileInputChange}
+            style={{ display: 'none' }}
+          />
+
+          <button
+            className="btn"
+            style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
+            onClick={() => hycFileInputRef.current?.click()}
+            title="Open/Import HyCanvas (.hyc) live vector document"
+          >
+            📥 Import .hyc
           </button>
 
           {/* Export Dropdown Button with 1x / 2x / 4K / SVG / HYC */}
@@ -2493,6 +2599,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   📦 Export HyCanvas (.hyc) Package
+                </div>
+                <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
+                <div
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    hycFileInputRef.current?.click();
+                  }}
+                  style={{ padding: '8px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, fontWeight: 700, color: '#10B981' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(16,185,129,0.15)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  📥 Import HyCanvas (.hyc) Package
                 </div>
               </div>
             )}
@@ -2922,6 +3040,23 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             ref={artboardRef}
             className="artboard-container"
             onPointerDown={handleArtboardPointerDown}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isDraggingHyc) setIsDraggingHyc(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDraggingHyc(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDraggingHyc(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleImportHycFile(file);
+            }}
             style={{
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
               width: `${currentArtboard.width}px`,
@@ -2933,6 +3068,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               overflow: 'hidden',
             }}
           >
+            {/* Drag & Drop .hyc Overlay */}
+            {isDraggingHyc && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(16, 185, 129, 0.25)',
+                  border: '3px dashed #10B981',
+                  backdropFilter: 'blur(6px)',
+                  zIndex: 100,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                <div style={{ fontSize: 36, marginBottom: 8 }}>📦</div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: '#10B981' }}>Drop .hyc Package to Open</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Zero layer flattening · 100% live vector tree</div>
+              </div>
+            )}
+
             {/* Artboard Floating Header Tag */}
             <div className="artboard-header-tag">
               <span>{FORMAT_DIMENSIONS[variant].label.split(' ')[0]}</span>
@@ -2961,6 +3119,97 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                 <span style={{ fontSize: 9, background: 'rgba(11,15,25,0.85)', color: '#38BDF8', padding: '1px 6px', borderRadius: 3 }}>
                   Safe Zone 10%
                 </span>
+              </div>
+            )}
+
+            {/* Social Native UI Overlays (Story 9:16 & Feed 4:5) */}
+            {showSocialOverlays && variant === 'story' && (
+              <>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${currentArtboard.height * 0.14}px`,
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    borderBottom: '2px dashed rgba(239, 68, 68, 0.75)',
+                    pointerEvents: 'none',
+                    zIndex: 42,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.7)', borderRadius: 2 }} />
+                    <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.3)', borderRadius: 2 }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.4)' }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444' }}>⚠️ Instagram Story Header UI Danger Zone (Top 14%)</span>
+                    </div>
+                    <span style={{ fontSize: 12, opacity: 0.7, color: '#fff' }}>✕</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${currentArtboard.height * 0.20}px`,
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    borderTop: '2px dashed rgba(239, 68, 68, 0.75)',
+                    pointerEvents: 'none',
+                    zIndex: 42,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ flex: 1, height: 32, borderRadius: 16, border: '1px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+                    <span style={{ fontSize: 10, color: '#EF4444', fontWeight: 700 }}>⚠️ Story Action Bar Danger Zone (Bottom 20%)</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 12, fontSize: 14 }}>
+                    <span>🤍</span>
+                    <span>✈️</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {showSocialOverlays && (variant === 'feed' || variant === 'square') && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: `${currentArtboard.height * 0.12}px`,
+                  background: 'rgba(239, 68, 68, 0.14)',
+                  borderTop: '2px dashed rgba(239, 68, 68, 0.75)',
+                  pointerEvents: 'none',
+                  zIndex: 42,
+                  padding: '8px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444' }}>
+                  ⚠️ Meta Feed Action Bar Danger Zone (Bottom 12%)
+                </span>
+                <div style={{ display: 'flex', gap: 10, fontSize: 14 }}>
+                  <span>🤍</span>
+                  <span>💬</span>
+                  <span>✈️</span>
+                  <span>🔖</span>
+                </div>
               </div>
             )}
 

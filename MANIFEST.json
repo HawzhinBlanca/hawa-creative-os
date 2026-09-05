@@ -683,6 +683,11 @@
       "sha256": "4bc20739920fd2843cf8b2014feff90f2820ecc82f7c1c027553908e15a77eef"
     },
     {
+      "path": "scripts/smoke_test_10_of_10.ts",
+      "sha256": "1927c6a2965065265b40f5d63f50be116e0e329585b3db0d9cb4d76e8e948005",
+      "bytes": 13745
+    },
+    {
       "path": "scripts/validate_pack.py",
       "bytes": 20843,
       "sha256": "777c1ec3bc347a756d3256ed05cc4c7d11534e5ed84f0ce3138dce0290cf5e08"

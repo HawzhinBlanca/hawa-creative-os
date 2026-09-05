@@ -123,6 +123,97 @@ export function checkSafeZoneViolations(
   return violations;
 }
 
+export interface SocialOverlayCollision {
+  platform: 'instagram_story' | 'meta_feed';
+  nodeId: string;
+  role?: string;
+  zone: 'header_ui' | 'footer_ui' | 'side_gutter';
+  zoneLabel: string;
+  overlapPx: number;
+}
+
+/**
+ * Validates social platform native UI collisions:
+ * - Instagram Story 9:16: top 14% header (profile, time, close button), bottom 20% (message/reaction/link pill)
+ * - Meta Feed 4:5: bottom 12% (action tray: like, comment, share, save)
+ */
+export function checkSocialOverlayCollisions(
+  nodes: NodeRect[],
+  pageWidth: number,
+  pageHeight: number
+): SocialOverlayCollision[] {
+  const collisions: SocialOverlayCollision[] = [];
+  const aspectRatio = pageWidth / pageHeight;
+  const isStory = Math.abs(aspectRatio - 9 / 16) < 0.05 || (pageWidth === 1080 && pageHeight === 1920);
+  const isFeed = Math.abs(aspectRatio - 4 / 5) < 0.05 || Math.abs(aspectRatio - 1) < 0.05 || (pageWidth === 1080 && pageHeight === 1350);
+
+  for (const node of nodes) {
+    const isCritical = Boolean(
+      node.text ||
+      node.role?.includes('logo') ||
+      node.role?.includes('cta') ||
+      node.role?.includes('headline') ||
+      node.role?.includes('copy')
+    );
+    if (!isCritical) continue;
+
+    if (isStory) {
+      const headerDanger = Math.round(pageHeight * 0.14);
+      const footerDanger = Math.round(pageHeight * 0.80);
+      const sideMargin = Math.round(pageWidth * 0.05);
+
+      if (node.y < headerDanger) {
+        collisions.push({
+          platform: 'instagram_story',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'header_ui',
+          zoneLabel: `Instagram Story Header UI (top ${headerDanger}px)`,
+          overlapPx: headerDanger - node.y,
+        });
+      }
+
+      const nodeBottom = node.y + node.height;
+      if (nodeBottom > footerDanger) {
+        collisions.push({
+          platform: 'instagram_story',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'footer_ui',
+          zoneLabel: `Instagram Story Message/Action Bar (bottom ${pageHeight - footerDanger}px)`,
+          overlapPx: nodeBottom - footerDanger,
+        });
+      }
+
+      if (node.x < sideMargin) {
+        collisions.push({
+          platform: 'instagram_story',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'side_gutter',
+          zoneLabel: `Story Left Edge Gutter (${sideMargin}px)`,
+          overlapPx: sideMargin - node.x,
+        });
+      }
+    } else if (isFeed) {
+      const footerDanger = Math.round(pageHeight * 0.88);
+      const nodeBottom = node.y + node.height;
+      if (nodeBottom > footerDanger) {
+        collisions.push({
+          platform: 'meta_feed',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'footer_ui',
+          zoneLabel: `Meta Feed Bottom Action Tray (bottom ${pageHeight - footerDanger}px)`,
+          overlapPx: nodeBottom - footerDanger,
+        });
+      }
+    }
+  }
+
+  return collisions;
+}
+
 /**
  * Checks whether text node exceeds its container bounding box.
  */

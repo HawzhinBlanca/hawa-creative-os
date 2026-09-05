@@ -47,6 +47,9 @@ export const ARTBOARD_ASPECT_RATIOS: Record<AspectPreset, { width: number; heigh
  * Triggers a browser file download from a Blob or URL.
  */
 function downloadFile(blob: Blob, filename: string) {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -458,28 +461,40 @@ export function exportToSvg(state: CanvasExportState): string {
  * Preserves all active vector nodes and full unflattened text hierarchy.
  */
 export function exportToHycPackage(state: CanvasExportState, task?: any): string {
+  const { filename, json } = generateHycPackageData(state, task);
+  if (typeof Blob !== 'undefined') {
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    downloadFile(blob, filename);
+  }
+  return filename;
+}
+
+/**
+ * Builds the HyCanvas package data structure and JSON string without side-effects.
+ */
+export function generateHycPackageData(state: CanvasExportState, task?: any): { filename: string; json: string; package: any } {
   const { width, height } = FORMAT_DIMENSIONS[state.format];
 
-  // If live active nodes exist in state, serialize all of them preserving full vector properties
-  const serializedNodes = (state.nodes && Array.isArray(state.nodes) && state.nodes.length > 0)
-    ? state.nodes.map((n: any) => ({
+  const serializedNodes = state.nodes && state.nodes.length > 0
+    ? state.nodes.map((n) => ({
         id: n.id,
         role: n.role,
         name: n.name,
-        type: n.role.startsWith('text') ? 'text_vector' : n.role === 'shape' || n.role === 'shape_custom' ? 'shape_primitive' : n.role === 'image_custom' ? 'asset_vector' : 'badge_vector',
+        type: n.role === 'headline' ? 'text_vector' : n.role === 'copy' ? 'badge_vector' : n.role === 'logo' ? 'brand_asset' : 'shape_vector',
         x: n.x,
         y: n.y,
         width: n.width,
         height: n.height,
-        rotation: n.rotation || 0,
-        opacity: n.opacity ?? 1,
+        rotation: n.rotation,
+        opacity: n.opacity,
         zIndex: n.zIndex,
-        visible: n.visible ?? true,
-        locked: n.locked ?? false,
-        editable: !n.locked,
+        locked: n.locked,
+        visible: n.visible,
+        contentEn: n.textEn,
+        contentCkb: n.textCkb,
+        fontFamily: n.fontFamily,
         fontSize: n.fontSize,
         fontWeight: n.fontWeight,
-        fontFamily: n.fontFamily,
         color: n.color,
         backgroundColor: n.backgroundColor,
         borderColor: n.borderColor,
@@ -487,10 +502,8 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
         borderRadius: n.borderRadius,
         svgContent: n.svgContent,
         assetHash: n.assetHash,
-        contentEn: n.textEn || (n.role === 'headline' ? state.headlineEn : n.role === 'copy' ? state.copyEn : undefined),
-        contentCkb: n.textCkb || (n.role === 'headline' ? state.headlineCkb : n.role === 'copy' ? state.copyCkb : undefined),
-        direction: n.direction || (state.langVariant === 'ckb' ? 'rtl' : 'ltr'),
-        bidiIsolate: true,
+        direction: n.direction,
+        aspectRatioLocked: n.aspectRatioLocked,
       }))
     : [
         {
@@ -558,9 +571,118 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
     },
   };
 
-  const jsonStr = JSON.stringify(pkg, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+  const json = JSON.stringify(pkg, null, 2);
   const filename = `hawa-package-${state.brandKit.id}-${state.format}.hyc`;
-  downloadFile(blob, filename);
-  return filename;
+  return { filename, json, package: pkg };
+}
+
+export interface HycImportResult {
+  ok: boolean;
+  error?: string;
+  format?: AspectPreset;
+  brandKitId?: string;
+  langVariant?: 'en' | 'ckb' | 'bilingual';
+  headlineEn?: string;
+  headlineCkb?: string;
+  copyEn?: string;
+  copyCkb?: string;
+  nodes: any[];
+  rawPackage?: any;
+}
+
+/**
+ * Parses and deserializes a HyCanvas (.hyc) package back into live, editable canvas nodes.
+ * Adheres to Master Spec Invariant #2: Source documents remain live editable vector trees.
+ */
+export async function importFromHycPackage(fileOrContent: File | string): Promise<HycImportResult> {
+  try {
+    let textContent: string;
+    if (typeof fileOrContent === 'string') {
+      textContent = fileOrContent;
+    } else {
+      textContent = await fileOrContent.text();
+    }
+
+    const pkg = JSON.parse(textContent);
+
+    if (!pkg || typeof pkg !== 'object') {
+      return { ok: false, error: 'Invalid file format: not a JSON package.', nodes: [] };
+    }
+
+    if (!pkg.nodes || !Array.isArray(pkg.nodes)) {
+      return { ok: false, error: 'Invalid HyCanvas package: missing vector nodes array.', nodes: [] };
+    }
+
+    const canvas = pkg.canvas || {};
+    const format: AspectPreset = ['square', 'story', 'feed', 'landscape'].includes(canvas.format)
+      ? canvas.format
+      : 'feed';
+    const langVariant = ['en', 'ckb', 'bilingual'].includes(canvas.languageMode)
+      ? canvas.languageMode
+      : 'bilingual';
+
+    // Map serialized nodes back into live CanvasNode structures
+    const nodes: any[] = pkg.nodes.map((n: any, index: number) => {
+      let role = n.role;
+      if (!role) {
+        if (n.type === 'text_vector') role = n.id === 'node_headline' ? 'headline' : 'text_custom';
+        else if (n.type === 'badge_vector') role = n.id === 'node_copy' ? 'copy' : 'badge_custom';
+        else if (n.type === 'brand_asset') role = 'logo';
+        else if (n.type === 'asset_vector') role = 'image_custom';
+        else role = 'shape';
+      }
+
+      return {
+        id: n.id || `node_imported_${index}_${Date.now().toString(36)}`,
+        role,
+        name: n.name || (role === 'headline' ? 'Headline Text' : role === 'copy' ? 'Body Copy' : `Layer ${index + 1}`),
+        zIndex: typeof n.zIndex === 'number' ? n.zIndex : index,
+        locked: Boolean(n.locked),
+        visible: n.visible !== false,
+        x: typeof n.x === 'number' ? n.x : 64,
+        y: typeof n.y === 'number' ? n.y : 64 + index * 40,
+        width: typeof n.width === 'number' ? n.width : 320,
+        height: typeof n.height === 'number' ? n.height : 60,
+        rotation: typeof n.rotation === 'number' ? n.rotation : 0,
+        opacity: typeof n.opacity === 'number' ? n.opacity : 1,
+        borderRadius: typeof n.borderRadius === 'number' ? n.borderRadius : 8,
+        backgroundColor: n.backgroundColor || n.bg || undefined,
+        borderColor: n.borderColor || undefined,
+        borderWidth: typeof n.borderWidth === 'number' ? n.borderWidth : undefined,
+        color: n.color || '#FFFFFF',
+        fontSize: typeof n.fontSize === 'number' ? n.fontSize : 24,
+        fontWeight: typeof n.fontWeight === 'number' ? n.fontWeight : 700,
+        fontFamily: n.fontFamily || 'Vazirmatn',
+        direction: n.direction || (langVariant === 'ckb' ? 'rtl' : 'ltr'),
+        textEn: n.contentEn || n.textEn || undefined,
+        textCkb: n.contentCkb || n.textCkb || undefined,
+        svgContent: n.svgContent || undefined,
+        assetHash: n.assetHash || n.sha256 || undefined,
+        groupId: n.groupId || undefined,
+        aspectRatioLocked: Boolean(n.aspectRatioLocked),
+      };
+    });
+
+    const headlineNode = nodes.find((n) => n.role === 'headline' || n.id === 'node_headline');
+    const copyNode = nodes.find((n) => n.role === 'copy' || n.id === 'node_copy');
+
+    return {
+      ok: true,
+      format,
+      brandKitId: canvas.brandKitId || 'hawa',
+      langVariant,
+      headlineEn: headlineNode?.textEn || pkg.taskContext?.title || undefined,
+      headlineCkb: headlineNode?.textCkb || undefined,
+      copyEn: copyNode?.textEn || undefined,
+      copyCkb: copyNode?.textCkb || undefined,
+      nodes,
+      rawPackage: pkg,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: `Failed to unpack .hyc document: ${err.message || String(err)}`,
+      nodes: [],
+    };
+  }
 }
