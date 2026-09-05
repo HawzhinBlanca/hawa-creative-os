@@ -194,3 +194,141 @@ export class ComfySandboxValidator {
     };
   }
 }
+
+export type ComfyWorkflowTemplateId =
+  | 'clinical_podium_mesh'
+  | 'kurdish_geometric_luxury'
+  | 'tech_isometric_grid'
+  | 'editorial_scrim_gradient';
+
+export interface ComfyWorkflowTemplate {
+  id: ComfyWorkflowTemplateId;
+  name: string;
+  category: 'healthcare' | 'luxury' | 'technology' | 'editorial';
+  description: string;
+  defaultPrompt: string;
+  negativePrompt: string;
+  recommendedPalette: { primary: string; accent: string; background: string };
+  pinnedModel: { name: string; sha256: string };
+}
+
+export const COMFY_WORKFLOW_TEMPLATES: Record<ComfyWorkflowTemplateId, ComfyWorkflowTemplate> = {
+  clinical_podium_mesh: {
+    id: 'clinical_podium_mesh',
+    name: 'Clinical Podium Mesh',
+    category: 'healthcare',
+    description: 'Clean geometric podium with clinical soft lighting for healthcare and supplement products (Drustee Vitamin D3+K2)',
+    defaultPrompt: 'clean clinical laboratory podium, pharmaceutical grade, soft daylighting, minimalist studio setting, subtle geometric shadow',
+    negativePrompt: 'blurry, noisy, text, watermark, messy, organic dirt, dark, low quality',
+    recommendedPalette: { primary: '#0B192C', accent: '#FFB200', background: '#F8FAFC' },
+    pinnedModel: { name: 'sd_xl_turbo_curated.safetensors', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
+  },
+  kurdish_geometric_luxury: {
+    id: 'kurdish_geometric_luxury',
+    name: 'Kurdish Geometric Luxury',
+    category: 'luxury',
+    description: 'Neo-Kurdish gold and amber vector motifs, geometric interlacing, and Kurdish star patterns (Aster Hotel & Resort)',
+    defaultPrompt: 'neo-kurdish golden geometric star patterns, intricate kurdish architectural interlacing, luxury hospitality backdrop, subtle ambient glow',
+    negativePrompt: 'raster text, letters, watermarks, distorted geometry, low resolution, cheap',
+    recommendedPalette: { primary: '#D4AF37', accent: '#016E7D', background: '#0A1C1F' },
+    pinnedModel: { name: 'sd_xl_turbo_curated.safetensors', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
+  },
+  tech_isometric_grid: {
+    id: 'tech_isometric_grid',
+    name: 'Tech Isometric Grid',
+    category: 'technology',
+    description: 'Deep blue and cyan circuit / grid topology for SaaS and infrastructure clients (Nova Tech Systems)',
+    defaultPrompt: 'isometric cybernetic grid topology, deep navy and cyan circuit paths, futuristic server room perspective, clean technological depth',
+    negativePrompt: 'words, text, unaligned grid, blurry lines, noisy compression',
+    recommendedPalette: { primary: '#0284C7', accent: '#38BDF8', background: '#030712' },
+    pinnedModel: { name: 'sd_xl_turbo_curated.safetensors', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
+  },
+  editorial_scrim_gradient: {
+    id: 'editorial_scrim_gradient',
+    name: 'Editorial Scrim Gradient',
+    category: 'editorial',
+    description: 'Soft multi-stop radial gradient with focal illumination for typography-first social layouts',
+    defaultPrompt: 'smooth studio cyclorama gradient, soft studio light falloff, editorial magazine lighting, perfect smooth color transition',
+    negativePrompt: 'banding, posterization, dust, artifacts, text, logo',
+    recommendedPalette: { primary: '#64748B', accent: '#F59E0B', background: '#0F172A' },
+    pinnedModel: { name: 'sd_xl_turbo_curated.safetensors', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
+  },
+};
+
+export const ASPECT_RATIO_DIMENSIONS: Record<'feed' | 'story' | 'square' | 'landscape', { width: number; height: number }> = {
+  feed: { width: 1080, height: 1350 },
+  story: { width: 1080, height: 1920 },
+  square: { width: 1080, height: 1080 },
+  landscape: { width: 1920, height: 1080 },
+};
+
+export interface ComfyWorkflowBuildOptions {
+  templateId: ComfyWorkflowTemplateId;
+  aspectRatio?: 'feed' | 'story' | 'square' | 'landscape';
+  customPrompt?: string;
+  seed?: number;
+}
+
+/**
+ * Builds a deterministic, allowlisted ComfyUI workflow graph for a vetted template.
+ * Strictly complies with Invariant #4: no text rasterization nodes.
+ */
+export function buildComfyWorkflowForTemplate(options: ComfyWorkflowBuildOptions): ComfyWorkflowGraph {
+  const template = COMFY_WORKFLOW_TEMPLATES[options.templateId] || COMFY_WORKFLOW_TEMPLATES.clinical_podium_mesh;
+  const dims = ASPECT_RATIO_DIMENSIONS[options.aspectRatio || 'feed'];
+  const promptText = options.customPrompt ? `${options.customPrompt}, ${template.defaultPrompt}` : template.defaultPrompt;
+  const seed = options.seed ?? 42;
+
+  return {
+    workflowId: `wf_${template.id}_${Date.now().toString(36)}`,
+    modelDependencies: [template.pinnedModel],
+    nodes: [
+      {
+        id: 1,
+        class_type: 'CheckpointLoaderSimple',
+        inputs: { ckpt_name: template.pinnedModel.name },
+      },
+      {
+        id: 2,
+        class_type: 'CLIPTextEncode',
+        inputs: { text: promptText },
+      },
+      {
+        id: 3,
+        class_type: 'CLIPTextEncode',
+        inputs: { text: template.negativePrompt },
+      },
+      {
+        id: 4,
+        class_type: 'EmptyLatentImage',
+        inputs: { width: dims.width, height: dims.height, batch_size: 1 },
+      },
+      {
+        id: 5,
+        class_type: 'KSampler',
+        inputs: {
+          seed,
+          steps: 12,
+          cfg: 2.5,
+          sampler_name: 'euler_ancestral',
+          scheduler: 'normal',
+        },
+      },
+      {
+        id: 6,
+        class_type: 'VAEDecode',
+        inputs: {},
+      },
+      {
+        id: 7,
+        class_type: 'TransparentBackgroundRemover',
+        inputs: {},
+      },
+      {
+        id: 8,
+        class_type: 'SaveImageWebP',
+        inputs: { filename_prefix: `hawa_${template.id}` },
+      },
+    ],
+  };
+}

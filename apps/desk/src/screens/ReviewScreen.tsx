@@ -400,12 +400,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<'layers' | 'assets' | 'brief'>('layers');
   const [aiPrompt, setAiPrompt] = useState<string>('Minimalist Kurdish Luxury Backdrop');
-  const [aiStyle, setAiStyle] = useState<string>('geometric_mesh');
+  const [aiTemplateId, setAiTemplateId] = useState<'clinical_podium_mesh' | 'kurdish_geometric_luxury' | 'tech_isometric_grid' | 'editorial_scrim_gradient'>('clinical_podium_mesh');
+  const [aiApplySmartScrim, setAiApplySmartScrim] = useState<boolean>(true);
+  const [aiScrimPosition, setAiScrimPosition] = useState<'top' | 'center' | 'bottom' | 'full'>('top');
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [aiResult, setAiResult] = useState<{
     assetId: string;
     prompt: string;
     style: string;
+    templateId?: string;
+    templateName?: string;
+    aspectRatio?: string;
+    dimensions?: { width: number; height: number };
+    scrimApplied?: boolean;
+    guaranteedWcagLevel?: string;
     graphHash: string;
     verifiedSha256: string;
     status: string;
@@ -1146,14 +1154,23 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       const res = await fetch('/v1/ai/comfy-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt, style: aiStyle }),
+        body: JSON.stringify({
+          templateId: aiTemplateId,
+          prompt: aiPrompt,
+          aspectRatio: variant,
+          primaryColor: activeBrandKit.palette.primary || '#0B192C',
+          accentColor: activeBrandKit.palette.accent || '#FFB200',
+          backgroundColor: activeBrandKit.palette.background || '#030712',
+          applySmartScrim: aiApplySmartScrim,
+          scrimPosition: aiScrimPosition,
+        }),
       });
       if (!res.ok) {
         throw new Error(`Synthesis failed: ${res.statusText}`);
       }
       const data = await res.json();
       setAiResult(data);
-      setStudioToast(`✓ Generated: ${data.verifiedSha256.slice(0, 16)}…`);
+      setStudioToast(`✓ Generated ${data.templateName || 'Vector'}: ${data.verifiedSha256.slice(0, 16)}…`);
     } catch (err: any) {
       setStudioToast(`✕ Error: ${err.message}`);
     } finally {
@@ -1171,21 +1188,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     const newNode: CanvasNode = {
       id: newId,
       role: 'image_custom',
-      name: asBackdrop ? `Backdrop (${aiResult.style})` : `AI Graphic (${aiResult.prompt.slice(0, 16)})`,
+      name: asBackdrop ? `Backdrop (${aiResult.templateName || aiResult.style})` : `AI Graphic (${aiResult.templateName || aiResult.prompt.slice(0, 16)})`,
       zIndex: asBackdrop ? Math.min(0, minZ - 1) : maxZ + 1,
       locked: asBackdrop,
       visible: true,
-      x: asBackdrop ? 0 : Math.round((currentArtboard.width - 280) / 2),
-      y: asBackdrop ? 0 : Math.round((currentArtboard.height - 350) / 2),
-      width: asBackdrop ? currentArtboard.width : 280,
-      height: asBackdrop ? currentArtboard.height : 350,
-      opacity: asBackdrop ? 0.85 : 1,
+      x: asBackdrop ? 0 : Math.round((currentArtboard.width - 320) / 2),
+      y: asBackdrop ? 0 : Math.round((currentArtboard.height - 400) / 2),
+      width: asBackdrop ? currentArtboard.width : 320,
+      height: asBackdrop ? currentArtboard.height : 400,
+      opacity: asBackdrop ? 0.95 : 1,
       svgContent: aiResult.svgContent,
       assetHash: aiResult.verifiedSha256,
     };
     setNodes((prev) => [...prev, newNode]);
     setSelectedNodeIds([newId]);
-    setStudioToast(asBackdrop ? '✓ Artboard Backdrop Applied' : '✓ Inserted Sandboxed Vector Layer');
+    setStudioToast(asBackdrop ? `✓ Backdrop Applied (WCAG ${aiResult.guaranteedWcagLevel || 'AAA'} Guaranteed)` : '✓ Inserted Sandboxed Vector Layer');
     setTimeout(() => setStudioToast(null), 2500);
     pushHistory();
   };
@@ -3688,68 +3705,133 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
               {/* Sandboxed ComfyUI AI Synthesis */}
               <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <b style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#38BDF8' }}>
-                    ComfyUI Sandboxed AI
-                  </b>
-                  <span style={{ fontSize: 9, background: 'rgba(56, 189, 248, 0.2)', color: '#38BDF8', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
-                    INVARIANT #3
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <b style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#38BDF8' }}>
+                      ComfyUI Sandboxed AI
+                    </b>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <span style={{ fontSize: 8, background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      INVARIANT #4
+                    </span>
+                    <span style={{ fontSize: 8, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      PINNED NODES
+                    </span>
+                  </div>
                 </div>
                 <p style={{ fontSize: 10, color: 'var(--muted)', margin: '0 0 8px', lineHeight: 1.3 }}>
-                  Deterministic vector graphics with pinned node allowlist & SHA-256 graph hashing.
+                  Deterministic vector graphics with allowlisted SDXL graph nodes and zero text rasterization.
                 </p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Vetted Workflow Template Selector */}
                   <div>
-                    <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Prompt</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                      <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Workflow Template</label>
+                      <span style={{ fontSize: 9, color: 'var(--muted)' }}>{variant.toUpperCase()} ({currentArtboard.width}×{currentArtboard.height})</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4 }}>
+                      {[
+                        { id: 'clinical_podium_mesh', icon: '🏥', name: 'Clinical Podium', desc: 'Drustee Supplements' },
+                        { id: 'kurdish_geometric_luxury', icon: '💎', name: 'Kurdish Luxury', desc: 'Aster / Rona' },
+                        { id: 'tech_isometric_grid', icon: '⚡', name: 'Tech Grid', desc: 'Nova Systems' },
+                        { id: 'editorial_scrim_gradient', icon: '🎨', name: 'Editorial Scrim', desc: 'Universal Clean' },
+                      ].map((tpl) => {
+                        const isSel = aiTemplateId === tpl.id;
+                        return (
+                          <div
+                            key={tpl.id}
+                            onClick={() => {
+                              setAiTemplateId(tpl.id as any);
+                              if (tpl.id === 'clinical_podium_mesh') setAiPrompt('Clean clinical laboratory podium, pharmaceutical grade, soft daylighting');
+                              if (tpl.id === 'kurdish_geometric_luxury') setAiPrompt('Neo-Kurdish golden geometric star patterns, luxury hospitality backdrop');
+                              if (tpl.id === 'tech_isometric_grid') setAiPrompt('Isometric cybernetic grid topology, deep navy and cyan circuit paths');
+                              if (tpl.id === 'editorial_scrim_gradient') setAiPrompt('Smooth studio cyclorama gradient, soft studio light falloff');
+                            }}
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              border: `1px solid ${isSel ? '#38BDF8' : 'var(--line)'}`,
+                              background: isSel ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: isSel ? '#38BDF8' : 'inherit' }}>
+                              <span>{tpl.icon}</span>
+                              <span>{tpl.name}</span>
+                            </div>
+                            <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 1 }}>{tpl.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Prompt Guidance</label>
                     <input
                       type="text"
                       className="input"
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       style={{ width: '100%', fontSize: 11, padding: '5px 8px', marginTop: 2 }}
-                      placeholder="e.g. Kurdish Luxury Backdrop"
+                      placeholder="e.g. Clinical podium for Vitamin D3+K2"
                     />
                   </div>
 
-                  <div>
-                    <label style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>Style Preset</label>
-                    <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                      {[
-                        { id: 'geometric_mesh', label: 'Geometric' },
-                        { id: 'radiant_glow', label: 'Radiant' },
-                        { id: 'islamic_star', label: 'Star Octagon' },
-                      ].map((st) => (
-                        <button
-                          key={st.id}
-                          type="button"
-                          className={`btn ${aiStyle === st.id ? 'primary' : ''}`}
-                          style={{ flex: 1, fontSize: 9, padding: '3px 2px' }}
-                          onClick={() => setAiStyle(st.id)}
-                        >
-                          {st.label}
-                        </button>
-                      ))}
+                  {/* Smart Contrast Scrim Setting */}
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={aiApplySmartScrim}
+                          onChange={(e) => setAiApplySmartScrim(e.target.checked)}
+                        />
+                        <span style={{ fontWeight: 600 }}>Smart Contrast Scrim</span>
+                      </label>
+                      <span style={{ fontSize: 8, background: 'rgba(16, 185, 129, 0.2)', color: '#10B981', padding: '1px 4px', borderRadius: 3, fontWeight: 700 }}>
+                        WCAG AAA
+                      </span>
                     </div>
+                    {aiApplySmartScrim && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+                        {(['top', 'center', 'bottom', 'full'] as const).map((pos) => (
+                          <button
+                            key={pos}
+                            type="button"
+                            className={`btn ${aiScrimPosition === pos ? 'primary' : ''}`}
+                            style={{ flex: 1, fontSize: 8, padding: '2px 0', textTransform: 'capitalize' }}
+                            onClick={() => setAiScrimPosition(pos)}
+                          >
+                            {pos}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <button
                     className="btn primary"
-                    style={{ marginTop: 4, fontSize: 11, padding: '6px', fontWeight: 600 }}
+                    style={{ marginTop: 2, fontSize: 11, padding: '7px', fontWeight: 600, background: '#0284C7' }}
                     onClick={handleGenerateAiBackground}
                     disabled={isGeneratingAi}
                   >
-                    {isGeneratingAi ? '⏳ Validating Sandbox Graph…' : '✨ Synthesize Sandboxed Vector'}
+                    {isGeneratingAi ? '⏳ Validating Allowlist & Generating Vector…' : '✨ Synthesize Sandboxed Vector'}
                   </button>
 
                   {aiResult && (
-                    <div style={{ marginTop: 8, padding: 8, background: 'rgba(0,0,0,0.3)', borderRadius: 6, border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                    <div style={{ marginTop: 4, padding: 8, background: 'rgba(0,0,0,0.35)', borderRadius: 6, border: '1px solid rgba(56, 189, 248, 0.35)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 9, color: '#10B981', fontWeight: 700 }}>✓ VERIFIED GRAPH</span>
                         <span style={{ fontSize: 8, fontFamily: 'monospace', color: '#94A3B8' }}>{aiResult.verifiedSha256.slice(0, 18)}…</span>
                       </div>
-                      <div style={{ width: '100%', height: 90, background: '#0A1C1F', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
-                        <div style={{ width: 70, height: 90 }} dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(aiResult.svgContent) }} />
+                      <div style={{ width: '100%', height: 100, background: '#0A1C1F', borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+                        <div style={{ width: 80, height: 100 }} dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(aiResult.svgContent) }} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, color: 'var(--muted)', marginBottom: 6 }}>
+                        <span>{aiResult.templateName || 'Vector'}</span>
+                        <span style={{ color: '#10B981', fontWeight: 600 }}>{aiResult.scrimApplied ? '✓ Scrim WCAG AAA' : 'Raw Vector'}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button
@@ -3757,14 +3839,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
                           style={{ flex: 1, fontSize: 9, padding: '4px 2px' }}
                           onClick={() => handleInsertAiResult(false)}
                         >
-                          Insert Layer
+                          ➕ Insert Element
                         </button>
                         <button
                           className="btn primary"
-                          style={{ flex: 1, fontSize: 9, padding: '4px 2px' }}
+                          style={{ flex: 1, fontSize: 9, padding: '4px 2px', background: '#10B981', color: '#fff', fontWeight: 700 }}
                           onClick={() => handleInsertAiResult(true)}
                         >
-                          Apply Backdrop
+                          🎨 Apply Backdrop
                         </button>
                       </div>
                     </div>

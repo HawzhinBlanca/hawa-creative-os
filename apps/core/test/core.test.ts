@@ -502,5 +502,56 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const timeline = await timelineRes.json();
     expect(timeline.events.length).toBeGreaterThanOrEqual(5);
   });
+
+  it('generates sandboxed ComfyUI visual backdrops and smart contrast composites (Invariant #4)', async () => {
+    // 1. Generate clinical podium background for Drustee
+    const bgRes = await app.request('/v1/ai/comfy-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId: 'clinical_podium_mesh',
+        aspectRatio: 'feed',
+        prompt: 'Drustee Vitamin D3+K2 clean podium',
+        primaryColor: '#0B192C',
+        accentColor: '#FFB200',
+        applySmartScrim: true,
+      }),
+    });
+
+    expect(bgRes.status).toBe(201);
+    const bgData = await bgRes.json();
+    expect(bgData.status).toBe('VERIFIED_SANDBOXED');
+    expect(bgData.templateId).toBe('clinical_podium_mesh');
+    expect(bgData.aspectRatio).toBe('feed');
+    expect(bgData.dimensions).toEqual({ width: 1080, height: 1350 });
+    expect(bgData.scrimApplied).toBe(true);
+    expect(bgData.guaranteedWcagLevel).toBe('AAA');
+    expect(bgData.svgContent).toContain('<svg viewBox="0 0 1080 1350"');
+    // Invariant #4: Backdrops must never embed rasterized text
+    expect(bgData.svgContent).not.toContain('<text');
+    expect(bgData.svgContent).not.toContain('<tspan');
+
+    // 2. Test composite endpoint with smart contrast scrim
+    const cmpRes = await app.request('/v1/ai/comfy-composite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId: 'kurdish_geometric_luxury',
+        aspectRatio: 'story',
+        headlineColor: '#FFFFFF',
+        backgroundColor: '#0A1C1F',
+      }),
+    });
+
+    expect(cmpRes.status).toBe(200);
+    const cmpData = await cmpRes.json();
+    expect(cmpData.status).toBe('COMPOSITE_VERIFIED');
+    expect(cmpData.aspectRatio).toBe('story');
+    expect(cmpData.dimensions).toEqual({ width: 1080, height: 1920 });
+    expect(cmpData.wcagContrast.level).toBe('AAA');
+    expect(cmpData.wcagContrast.scrimEnforced).toBe(true);
+    expect(cmpData.invariantCompliance.invariant2_live_vector_text).toBe('VERIFIED_UNFLATTENED');
+    expect(cmpData.invariantCompliance.invariant4_reference_pixels_never_ship).toBe('VERIFIED_VECTOR_SANDBOX');
+  });
 });
 

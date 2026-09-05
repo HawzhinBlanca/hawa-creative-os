@@ -6,4 +6,5 @@ export * from './reflow.js';
 export * from './diff.js';
 export * from './comfy-sandbox.js';
 export * from './brand-kits.js';
+export * from './vector-compositor.js';
 
