@@ -7,9 +7,10 @@ interface HeaderProps {
   currentScreen: ScreenId;
   onNewTask: () => void;
   onStartTour?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStartTour }) => {
+export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStartTour, onOpenCommandPalette }) => {
   const { locale, t, toggleLocale } = useI18n();
   const [streamStatus, setStreamStatus] = useState<StreamConnectionStatus>(eventStream.getStatus());
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -123,11 +124,40 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
           <span>{badgeText}</span>
         </div>
 
-        <input
-          className="search"
-          aria-label="Search"
-          placeholder={t.header.searchPlaceholder}
-        />
+        <button
+          id="omnisearch-btn"
+          onClick={onOpenCommandPalette}
+          className="btn"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 12,
+            padding: '5px 12px',
+            background: 'var(--panel)',
+            border: '1px solid var(--line)',
+            borderRadius: 8,
+            color: 'var(--muted)',
+            cursor: 'pointer',
+          }}
+          title="Global Omnisearch (⌘K / Ctrl+K)"
+        >
+          <span>🔍</span>
+          <span>{t.header.searchPlaceholder || 'Omnisearch...'}</span>
+          <kbd
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: 4,
+              padding: '1px 5px',
+              fontSize: 10,
+              fontFamily: 'monospace',
+              color: 'var(--text)',
+            }}
+          >
+            ⌘K
+          </kbd>
+        </button>
         <button className="btn primary" onClick={onNewTask}>
           {t.header.newTask}
         </button>

@@ -34,9 +34,26 @@ import {
   buildCompositedVisualBackdrop,
   generateSmartContrastScrim,
   calculateContrastRatio,
+  globalFeedbackMiner,
+  type CandidateRuleProposal,
+  type ArtboardSnapshot,
 } from '@hawa/creative';
-import { DeterministicQAEngine } from '@hawa/qa';
-import { HyCanvasStudioAdapter, GooglePublisher, ReconciliationService, KurdishVoiceTranscriber, ResilientModelGateway } from '@hawa/integrations';
+import {
+  DeterministicQAEngine,
+  inspectKurdishFontCoverage,
+  KURDISH_SORANI_GLYPH_TABLE,
+  type FontCoverageResult,
+} from '@hawa/qa';
+import {
+  HyCanvasStudioAdapter,
+  GooglePublisher,
+  ReconciliationService,
+  KurdishVoiceTranscriber,
+  ResilientModelGateway,
+  globalCostGovernor,
+  type CostReceipt,
+  type ClientBudgetConfig,
+} from '@hawa/integrations';
 import { EvaluationRunner } from '@hawa/evals';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 
@@ -1946,6 +1963,182 @@ export function createApp() {
         invariant4_reference_pixels_never_ship: 'VERIFIED_VECTOR_SANDBOX',
       },
       createdAt: new Date().toISOString(),
+    }, 200);
+  });
+
+  // --- Kurdish WebFont Ingestion & Diacritic Coverage Inspector (B-040, FR-037) ---
+  registerRoute('post', '/fonts/inspect', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const fontName = body.fontName || 'Vazirmatn Kurdish';
+    let fontSource: any = fontName;
+
+    if (body.characters && Array.isArray(body.characters)) {
+      fontSource = body.characters;
+    } else if (body.fontBase64) {
+      try {
+        fontSource = Buffer.from(body.fontBase64, 'base64');
+      } catch {
+        fontSource = fontName;
+      }
+    } else {
+      // Default to complete Kurdish Sorani character inventory
+      fontSource = KURDISH_SORANI_GLYPH_TABLE.map((g) => g.char);
+    }
+
+    const result = inspectKurdishFontCoverage(fontSource, fontName);
+    return c.json(result, 200);
+  });
+
+  // --- Real-Time AI Generation Budget & Cost Controller (B-082, FR-079) ---
+  registerRoute('get', '/clients/budgets', (c: any) => {
+    const budgets = globalCostGovernor.getAllSummaries();
+    return c.json({ budgets, count: budgets.length }, 200);
+  });
+
+  registerRoute('get', '/clients/:clientId/budget', (c: any) => {
+    const clientId = c.req.param('clientId');
+    const budget = globalCostGovernor.getOrCreateClientBudget(clientId);
+    return c.json(budget, 200);
+  });
+
+  registerRoute('post', '/clients/:clientId/budget/allocate', async (c: any) => {
+    const clientId = c.req.param('clientId');
+    const body = await c.req.json().catch(() => ({}));
+    const capUsd = Number(body.capUsd || 10.0);
+    const updated = globalCostGovernor.allocateBudget(clientId, capUsd);
+    broadcast('client:budget_allocated', { clientId, capUsd });
+    return c.json(updated, 200);
+  });
+
+  // --- Governed Learning & Studio Feedback Loop Miner (B-055, B-056, B-057) ---
+  registerRoute('post', '/feedback/mine', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const { clientId, taskId, initialArtboard, finalArtboard } = body;
+    if (!clientId || !taskId || !initialArtboard || !finalArtboard) {
+      return c.json({ error: 'Missing required parameters (clientId, taskId, initialArtboard, finalArtboard)' }, 400);
+    }
+    const proposed = globalFeedbackMiner.ingestTaskRefinements(clientId, taskId, initialArtboard, finalArtboard);
+    broadcast('feedback:rules_mined', { clientId, taskId, count: proposed.length });
+    return c.json({ proposedRules: proposed, count: proposed.length }, 201);
+  });
+
+  registerRoute('get', '/clients/:clientId/candidate-rules', (c: any) => {
+    const clientId = c.req.param('clientId');
+    const rules = globalFeedbackMiner.getCandidateRules(clientId);
+    return c.json({ candidateRules: rules, count: rules.length }, 200);
+  });
+
+  registerRoute('post', '/clients/:clientId/candidate-rules/:ruleId/promote', async (c: any) => {
+    const { clientId, ruleId } = c.req.param();
+    const body = await c.req.json().catch(() => ({}));
+    const role = (body.role || 'creative_director') as 'art_director' | 'creative_director';
+    const result = globalFeedbackMiner.promoteRule(ruleId, role);
+    if (!result.promoted) {
+      return c.json({ error: `Candidate rule ${ruleId} not found` }, 404);
+    }
+    // Also attach to active client DNA if exists
+    const dna = clientDnas.get(clientId);
+    if (dna && result.rule) {
+      if (!dna.guidelines) {
+        dna.guidelines = { voiceAndTone: '', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] };
+      }
+      if (!dna.guidelines.layoutRules) {
+        dna.guidelines.layoutRules = [];
+      }
+      dna.guidelines.layoutRules.push(result.rule.ruleText);
+      dna.version = (dna.version || 1) + 1;
+      dna.updatedAt = new Date().toISOString();
+    }
+    broadcast('dna:rule_promoted', { clientId, ruleId, auditHash: result.auditHash });
+    return c.json(result, 200);
+  });
+
+  registerRoute('post', '/clients/:clientId/candidate-rules/:ruleId/dismiss', (c: any) => {
+    const ruleId = c.req.param('ruleId');
+    const dismissed = globalFeedbackMiner.dismissRule(ruleId);
+    return c.json({ dismissed }, 200);
+  });
+
+  // --- Raycast/Linear-Grade Client-Scoped Omnisearch (B-080, FR-077, Invariant #4) ---
+  registerRoute('get', '/search', (c: any) => {
+    const query = (c.req.query('q') || '').trim().toLowerCase();
+    const clientId = c.req.query('clientId');
+
+    const results: Array<{ id: string; category: string; title: string; subtitle: string; url: string; badge?: string }> = [];
+
+    // 1. Navigation & Quick Actions
+    const navItems = [
+      { id: 'nav-review', title: 'Studio Review & Artboard', subtitle: 'Interactive vector editor and canvas export', url: '#/review', category: 'Navigation', badge: 'Studio' },
+      { id: 'nav-inbox', title: 'Intake & Task Simulator', subtitle: 'Multi-client inbound requests and pipeline ingress', url: '#/', category: 'Navigation', badge: 'Inbox' },
+      { id: 'nav-dna', title: 'Client DNA & Brand Governance', subtitle: 'Brand kits, fonts, and governed rule promotion', url: '#/dna', category: 'Navigation', badge: 'DNA' },
+      { id: 'nav-ops', title: 'Operations & AI Cost Budgets', subtitle: 'Adapter health, financial quotas, and recovery metrics', url: '#/ops', category: 'Navigation', badge: 'Ops' },
+      { id: 'nav-eval', title: 'AI Model Tournaments & Evals', subtitle: 'Leaderboard, retrieval scoring, and redteam tests', url: '#/eval', category: 'Navigation', badge: 'Evals' },
+      { id: 'act-export', title: 'Export 4-in-1 Campaign', subtitle: 'Generate Feed, Story, Square, Landscape .zip bundle', url: '#/review?action=export4in1', category: 'Actions', badge: 'Export' },
+      { id: 'act-comfy', title: 'Synthesize Sandboxed Backdrop', subtitle: 'Render pure vector SVG backdrop with smart contrast scrim', url: '#/review?action=comfy', category: 'Actions', badge: 'ComfyUI' },
+    ];
+
+    for (const item of navItems) {
+      if (!query || item.title.toLowerCase().includes(query) || item.subtitle.toLowerCase().includes(query) || item.badge.toLowerCase().includes(query)) {
+        results.push(item);
+      }
+    }
+
+    // 2. Client-Scoped Tasks (Invariant #4 - strictly isolated when clientId is provided)
+    for (const [id, task] of tasks.entries()) {
+      if (clientId && task.clientId !== clientId) {
+        continue; // Enforce strict tenant isolation
+      }
+      const matchText = `${task.title} ${task.clientId} ${task.brief?.headlineEn || ''} ${task.brief?.headlineCkb || ''}`.toLowerCase();
+      if (!query || matchText.includes(query)) {
+        results.push({
+          id: `task-${id}`,
+          category: 'Tasks',
+          title: task.title,
+          subtitle: `Client: ${task.clientId} • Status: ${task.status}`,
+          url: `#/review?taskId=${id}`,
+          badge: task.status,
+        });
+      }
+    }
+
+    // 3. Brand Kits & Client DNA
+    for (const [cId, dna] of clientDnas.entries()) {
+      if (clientId && cId !== clientId) continue;
+      const clientTitle = (dna as any).clientName || dna.name || cId;
+      if (!query || clientTitle.toLowerCase().includes(query) || cId.toLowerCase().includes(query)) {
+        const primaryHex = (dna as any).brandKit?.primaryColor || dna.colors?.[0]?.hex || '#0B192C';
+        const slogan = (dna as any).brandKit?.slogan || dna.guidelines?.voiceAndTone || '';
+        results.push({
+          id: `dna-${cId}`,
+          category: 'Clients',
+          title: clientTitle,
+          subtitle: `Primary: ${primaryHex}${slogan ? ` • ${slogan.slice(0, 35)}...` : ''}`,
+          url: `#/dna?client=${cId}`,
+          badge: 'Client DNA',
+        });
+      }
+    }
+
+    // 4. ComfyUI Workflow Templates
+    for (const [tplId, tpl] of Object.entries(COMFY_WORKFLOW_TEMPLATES)) {
+      if (!query || tpl.name.toLowerCase().includes(query) || tpl.description.toLowerCase().includes(query)) {
+        results.push({
+          id: `tpl-${tplId}`,
+          category: 'Templates',
+          title: tpl.name,
+          subtitle: tpl.description,
+          url: `#/review?template=${tplId}`,
+          badge: 'ComfyUI',
+        });
+      }
+    }
+
+    return c.json({
+      query,
+      clientId: clientId || null,
+      resultsCount: results.length,
+      results: results.slice(0, 25),
+      scopeEnforced: Boolean(clientId),
     }, 200);
   });
 

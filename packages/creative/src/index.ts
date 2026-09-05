@@ -7,4 +7,5 @@ export * from './diff.js';
 export * from './comfy-sandbox.js';
 export * from './brand-kits.js';
 export * from './vector-compositor.js';
+export * from './feedback-miner.js';
 

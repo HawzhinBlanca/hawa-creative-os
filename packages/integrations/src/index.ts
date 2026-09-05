@@ -7,3 +7,4 @@ export * from './model-gateway.js';
 export * from './reconciliation-service.js';
 export * from './voice-transcriber.js';
 export * from './telegram-bridge.js';
+export * from './cost-governor.js';

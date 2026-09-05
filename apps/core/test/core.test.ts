@@ -553,5 +553,89 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(cmpData.invariantCompliance.invariant2_live_vector_text).toBe('VERIFIED_UNFLATTENED');
     expect(cmpData.invariantCompliance.invariant4_reference_pixels_never_ship).toBe('VERIFIED_VECTOR_SANDBOX');
   });
+
+  it('inspects Kurdish WebFont coverage, tracks AI budgets, mines feedback deltas, and provides client-scoped omnisearch', async () => {
+    // 1. Font Inspection Endpoint
+    const fontRes = await app.request('/v1/fonts/inspect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fontName: 'Noto Sans Arabic Kurdish' }),
+    });
+    expect(fontRes.status).toBe(200);
+    const fontData = await fontRes.json();
+    expect(fontData.status).toBe('AAA_COMPLIANT');
+    expect(fontData.coveragePercentage).toBe(100);
+    expect(fontData.hasZwnj).toBe(true);
+    expect(fontData.diacriticClearanceRatio).toBe(1.52);
+
+    // 2. Budget Inspection and Allocation
+    const budgetRes = await app.request('/v1/clients/client-drustee/budget');
+    expect(budgetRes.status).toBe(200);
+    const budgetData = await budgetRes.json();
+    expect(budgetData.capUsd).toBe(10.0);
+    expect(budgetData.status).toBe('HEALTHY');
+
+    const allocRes = await app.request('/v1/clients/client-drustee/budget/allocate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ capUsd: 15.0 }),
+    });
+    expect(allocRes.status).toBe(200);
+    const allocData = await allocRes.json();
+    expect(allocData.capUsd).toBe(15.0);
+
+    // 3. Governed Learning & Feedback Mining
+    const mineRes = await app.request('/v1/feedback/mine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId: 'client-drustee',
+        taskId: 'task-test-learn-1',
+        initialArtboard: {
+          taskId: 'task-test-learn-1',
+          clientId: 'client-drustee',
+          layers: [{ id: 'title', type: 'text', color: '#111827', lineHeight: 1.2, x: 50, y: 50, width: 200, height: 50 }],
+        },
+        finalArtboard: {
+          taskId: 'task-test-learn-1',
+          clientId: 'client-drustee',
+          layers: [{ id: 'title', type: 'text', color: '#01585F', lineHeight: 1.52, x: 50, y: 90, width: 200, height: 50 }],
+        },
+      }),
+    });
+    expect(mineRes.status).toBe(201);
+    const mineData = await mineRes.json();
+    expect(mineData.count).toBeGreaterThan(0);
+
+    const candRes = await app.request('/v1/clients/client-drustee/candidate-rules');
+    expect(candRes.status).toBe(200);
+    const candData = await candRes.json();
+    expect(candData.candidateRules.length).toBeGreaterThan(0);
+
+    const firstRuleId = candData.candidateRules[0].id;
+    const promoteRes = await app.request(`/v1/clients/client-drustee/candidate-rules/${firstRuleId}/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'creative_director' }),
+    });
+    expect(promoteRes.status).toBe(200);
+    const promoteData = await promoteRes.json();
+    expect(promoteData.promoted).toBe(true);
+    expect(promoteData.rule.status).toBe('PROMOTED');
+    expect(promoteData.auditHash).toBeDefined();
+
+    // 4. Omnisearch with Invariant #4 client scoping
+    const globalSearchRes = await app.request('/v1/search?q=studio');
+    expect(globalSearchRes.status).toBe(200);
+    const globalSearch = await globalSearchRes.json();
+    expect(globalSearch.results.length).toBeGreaterThan(0);
+
+    // Scoped search for Drustee
+    const scopedSearchRes = await app.request('/v1/search?q=drustee&clientId=client-drustee');
+    expect(scopedSearchRes.status).toBe(200);
+    const scopedSearch = await scopedSearchRes.json();
+    expect(scopedSearch.scopeEnforced).toBe(true);
+    expect(scopedSearch.clientId).toBe('client-drustee');
+  });
 });
 

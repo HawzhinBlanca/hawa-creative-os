@@ -9,6 +9,7 @@ import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
 import { GuidedTour } from './components/GuidedTour.js';
+import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
 import { useI18n } from './services/i18n.js';
 
@@ -31,10 +32,18 @@ export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
   const [showTour, setShowTour] = useState<boolean>(false);
+  const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
 
-  // Global Keyboard Shortcuts (1 - 7 screen navigation)
+  // Global Keyboard Shortcuts (Cmd+K omnisearch & 1 - 7 screen navigation)
   useEffect(() => {
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      // Raycast-grade Cmd+K / Ctrl+K Palette Toggle
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+        return;
+      }
+
       const target = e.target as HTMLElement;
       if (
         target &&
@@ -251,7 +260,12 @@ export const App: React.FC = () => {
     <div className={`shell ${isRtl ? 'rtl' : 'ltr'}`}>
       <Sidebar currentScreen={currentScreen} onNavigate={handleNavigate} />
       <main className="main">
-        <Header currentScreen={currentScreen} onNewTask={handleOpenModal} onStartTour={() => setShowTour(true)} />
+        <Header
+          currentScreen={currentScreen}
+          onNewTask={handleOpenModal}
+          onStartTour={() => setShowTour(true)}
+          onOpenCommandPalette={() => setShowCommandPalette(true)}
+        />
         <div className="content">
           {currentScreen === 'inbox' && (
             <InboxScreen
@@ -406,6 +420,21 @@ export const App: React.FC = () => {
         isOpen={showTour}
         onClose={() => setShowTour(false)}
         onNavigateScreen={(s) => handleNavigate(s as ScreenId)}
+      />
+
+      {/* Raycast-Grade Global Command Palette (Cmd+K) */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onNavigate={(screen) => handleNavigate(screen)}
+        activeClientId={selectedTask?.clientId || 'client-drustee'}
+        onAction={(actionId) => {
+          if (actionId === 'tour') {
+            setShowTour(true);
+          } else if (actionId === 'new_task') {
+            handleOpenModal();
+          }
+        }}
       />
     </div>
   );

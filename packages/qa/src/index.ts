@@ -3,3 +3,4 @@ export * from './copy-validator.js';
 export * from './engine.js';
 export * from './contrast.js';
 export * from './layout-bounds.js';
+export * from './font-inspector.js';

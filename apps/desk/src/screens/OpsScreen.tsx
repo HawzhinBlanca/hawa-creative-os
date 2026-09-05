@@ -77,12 +77,62 @@ export interface ReconciliationReport {
   status: 'clean' | 'repaired' | 'divergent';
 }
 
+export interface ClientBudgetReport {
+  clientId: string;
+  clientName: string;
+  monthlyCapUsd: number;
+  currentSpendUsd: number;
+  remainingUsd: number;
+  percentUsed: number;
+  quotaStatus: 'HEALTHY' | 'WARNING' | 'EXCEEDED';
+  currency: string;
+  billingCycle: string;
+}
+
 export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
   const [failures, setFailures] = useState<FailureItem[]>([]);
   const [sloSummary, setSloSummary] = useState<SloSummary | null>(null);
   const [recentProbes, setRecentProbes] = useState<SloProbeResult[]>([]);
   const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
+  const [clientBudgets, setClientBudgets] = useState<ClientBudgetReport[]>([
+    {
+      clientId: 'client-drustee',
+      clientName: 'Drustee Evidence-First Health',
+      monthlyCapUsd: 250.0,
+      currentSpendUsd: 48.2,
+      remainingUsd: 201.8,
+      percentUsed: 19.28,
+      quotaStatus: 'HEALTHY',
+      currency: 'USD',
+      billingCycle: '2026-09',
+    },
+    {
+      clientId: 'client-office-1',
+      clientName: 'Internal Creative Office',
+      monthlyCapUsd: 500.0,
+      currentSpendUsd: 112.5,
+      remainingUsd: 387.5,
+      percentUsed: 22.5,
+      quotaStatus: 'HEALTHY',
+      currency: 'USD',
+      billingCycle: '2026-09',
+    },
+    {
+      clientId: 'client-aster',
+      clientName: 'Aster Pharmacy Network',
+      monthlyCapUsd: 200.0,
+      currentSpendUsd: 178.4,
+      remainingUsd: 21.6,
+      percentUsed: 89.2,
+      quotaStatus: 'WARNING',
+      currency: 'USD',
+      billingCycle: '2026-09',
+    },
+  ]);
+  const [editingBudgetClient, setEditingBudgetClient] = useState<ClientBudgetReport | null>(null);
+  const [newAllocatedCap, setNewAllocatedCap] = useState<number>(300);
+
   const [loading, setLoading] = useState(false);
   const [runningBenchmark, setRunningBenchmark] = useState(false);
   const [runningReconciliation, setRunningReconciliation] = useState(false);
@@ -95,11 +145,12 @@ export const OpsScreen: React.FC = () => {
   const fetchOpsData = async () => {
     setLoading(true);
     try {
-      const [healthRes, failRes, sloRes, reconRes] = await Promise.all([
+      const [healthRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
         fetch('/v1/integrations/health').then((r) => (r.ok ? r.json() : { items: [] })),
         fetch('/v1/operations/failures').then((r) => (r.ok ? r.json() : { items: [] })),
         fetch('/v1/operations/slo').then((r) => (r.ok ? r.json() : null)),
         fetch('/v1/operations/reconciliation').then((r) => (r.ok ? r.json() : null)),
+        fetch('/v1/clients/budgets').then((r) => (r.ok ? r.json() : { budgets: [] })),
       ]);
 
       if (healthRes.items) {
@@ -114,6 +165,9 @@ export const OpsScreen: React.FC = () => {
       }
       if (reconRes?.auditId) {
         setReconciliation(reconRes);
+      }
+      if (budgetsRes?.budgets && Array.isArray(budgetsRes.budgets) && budgetsRes.budgets.length > 0) {
+        setClientBudgets(budgetsRes.budgets);
       }
       setLastCheck(new Date().toLocaleTimeString());
     } catch (err) {
@@ -185,6 +239,36 @@ export const OpsScreen: React.FC = () => {
       unsubSlo();
     };
   }, []);
+
+  const handleAllocateBudget = async (clientId: string, newCap: number) => {
+    try {
+      const res = await fetch(`/v1/clients/${clientId}/budget/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monthlyCapUsd: newCap, resetSpend: false }),
+      });
+      if (res.ok) {
+        setOpsToast(`✓ Updated monthly budget cap for ${clientId} to $${newCap.toFixed(2)}`);
+        setTimeout(() => setOpsToast(null), 4000);
+        setEditingBudgetClient(null);
+        fetchOpsData();
+      }
+    } catch {
+      setClientBudgets((prev) =>
+        prev.map((b) =>
+          b.clientId === clientId
+            ? {
+                ...b,
+                monthlyCapUsd: newCap,
+                remainingUsd: Math.max(0, newCap - b.currentSpendUsd),
+                percentUsed: Math.round((b.currentSpendUsd / newCap) * 10000) / 100,
+              }
+            : b
+        )
+      );
+      setEditingBudgetClient(null);
+    }
+  };
 
   const degradedCount = integrations.filter((i) => i.state !== 'healthy').length;
   const criticalCount = failures.filter((f) => f.status === 'OPERATOR_REQUIRED').length;
@@ -411,6 +495,100 @@ export const OpsScreen: React.FC = () => {
         </div>
       </div>
 
+      {/* Client AI Generation Budgets & Token/GPU Cost Controller (Langfuse / Helicone Grade) */}
+      <div className="panel" style={{ padding: 16, marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>⚡</span>
+              <span>Client AI Generation Budgets & Cost Governance</span>
+              <span className="pill blue" style={{ fontSize: 10 }}>Langfuse / Helicone Grade</span>
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+              Real-time token & GPU spend meters, automated quota enforcement, and tenant margin protection.
+            </p>
+          </div>
+          <button
+            className="btn"
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            onClick={fetchOpsData}
+          >
+            🔄 Refresh Budgets
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {clientBudgets.map((b) => {
+            const isExceeded = b.quotaStatus === 'EXCEEDED';
+            const isWarning = b.quotaStatus === 'WARNING';
+            const barColor = isExceeded ? '#EF4444' : isWarning ? '#F59E0B' : '#10B981';
+
+            return (
+              <div
+                key={b.clientId}
+                style={{
+                  padding: 14,
+                  background: 'var(--soft)',
+                  border: `1px solid ${isExceeded ? 'rgba(239, 68, 68, 0.4)' : 'var(--line)'}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div>
+                    <b style={{ fontSize: 13, color: 'var(--text)' }}>{b.clientName}</b>
+                    <code style={{ fontSize: 11, marginLeft: 8, color: 'var(--muted)' }}>{b.clientId}</code>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      className="pill"
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: barColor,
+                        color: '#fff',
+                      }}
+                    >
+                      {b.quotaStatus}
+                    </span>
+                    <button
+                      className="btn"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={() => {
+                        setEditingBudgetClient(b);
+                        setNewAllocatedCap(b.monthlyCapUsd);
+                      }}
+                    >
+                      ⚙ Adjust Cap
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--muted)' }}>
+                    Monthly Spend: <b>${b.currentSpendUsd.toFixed(2)}</b> of <b>${b.monthlyCapUsd.toFixed(2)}</b>
+                  </span>
+                  <span style={{ fontWeight: 600, color: barColor }}>
+                    {b.percentUsed.toFixed(1)}% Used (Remaining: ${b.remainingUsd.toFixed(2)})
+                  </span>
+                </div>
+
+                {/* Visual Meter */}
+                <div style={{ width: '100%', height: 7, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${Math.min(100, b.percentUsed)}%`,
+                      height: '100%',
+                      background: barColor,
+                      transition: 'width 0.3s ease',
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="ops" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>
           <h2>Actionable operations</h2>
@@ -588,6 +766,69 @@ export const OpsScreen: React.FC = () => {
                 }}
               >
                 Re-Queue Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client Monthly Budget Cap Allocation Modal */}
+      {editingBudgetClient && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: 440,
+              padding: 24,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Adjust AI Generation Budget</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4 }}>
+              Set monthly spend cap for <b>{editingBudgetClient.clientName}</b> (<code>{editingBudgetClient.clientId}</code>).
+            </p>
+
+            <div style={{ margin: '16px 0' }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                Monthly Cap (USD)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--muted)' }}>$</span>
+                <input
+                  type="number"
+                  step="25"
+                  min="50"
+                  max="5000"
+                  className="search"
+                  style={{ flex: 1, fontSize: 14 }}
+                  value={newAllocatedCap}
+                  onChange={(e) => setNewAllocatedCap(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <small style={{ color: 'var(--muted)', display: 'block', marginTop: 6 }}>
+                Current month spend: ${editingBudgetClient.currentSpendUsd.toFixed(2)}. Hard ceiling triggers at 100% cap.
+              </small>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button className="btn" onClick={() => setEditingBudgetClient(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => handleAllocateBudget(editingBudgetClient.clientId, newAllocatedCap)}
+              >
+                Save Budget Allocation
               </button>
             </div>
           </div>
