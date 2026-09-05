@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   MessageAdapter,
   AdapterKind,
@@ -25,12 +26,7 @@ export class TelegramAdapter implements MessageAdapter {
   constructor(private readonly config: TelegramConfig) {}
 
   private computeHash(data: Uint8Array): SHA256 {
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-      hash = (hash << 5) - hash + data[i];
-      hash |= 0;
-    }
-    return `sha256_tg_${Math.abs(hash).toString(16).padStart(16, '0')}`;
+    return createHash('sha256').update(data).digest('hex') as SHA256;
   }
 
   async getCapabilities(_ctx: RequestContext): Promise<Result<CapabilityReport>> {

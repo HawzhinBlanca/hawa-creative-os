@@ -29,9 +29,6 @@ importers:
       '@hawa/creative':
         specifier: workspace:*
         version: link:../../packages/creative
-      '@hawa/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@hawa/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -96,9 +93,6 @@ importers:
       '@hawa/creative':
         specifier: workspace:*
         version: link:../../packages/creative
-      '@hawa/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@hawa/domain':
         specifier: workspace:*
         version: link:../../packages/domain
