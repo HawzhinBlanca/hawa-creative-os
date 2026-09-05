@@ -127,7 +127,7 @@ export interface SocialOverlayCollision {
   platform: 'instagram_story' | 'meta_feed';
   nodeId: string;
   role?: string;
-  zone: 'header_ui' | 'footer_ui' | 'side_gutter';
+  zone: 'header_ui' | 'footer_ui' | 'side_gutter' | 'right_rail';
   zoneLabel: string;
   overlapPx: number;
 }
@@ -153,7 +153,8 @@ export function checkSocialOverlayCollisions(
       node.role?.includes('logo') ||
       node.role?.includes('cta') ||
       node.role?.includes('headline') ||
-      node.role?.includes('copy')
+      node.role?.includes('copy') ||
+      node.role?.includes('badge')
     );
     if (!isCritical) continue;
 
@@ -161,6 +162,8 @@ export function checkSocialOverlayCollisions(
       const headerDanger = Math.round(pageHeight * 0.14);
       const footerDanger = Math.round(pageHeight * 0.80);
       const sideMargin = Math.round(pageWidth * 0.05);
+      const nodeBottom = node.y + node.height;
+      const nodeRight = node.x + node.width;
 
       if (node.y < headerDanger) {
         collisions.push({
@@ -173,7 +176,6 @@ export function checkSocialOverlayCollisions(
         });
       }
 
-      const nodeBottom = node.y + node.height;
       if (nodeBottom > footerDanger) {
         collisions.push({
           platform: 'instagram_story',
@@ -195,9 +197,38 @@ export function checkSocialOverlayCollisions(
           overlapPx: sideMargin - node.x,
         });
       }
+
+      if (nodeRight > pageWidth - sideMargin) {
+        collisions.push({
+          platform: 'instagram_story',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'side_gutter',
+          zoneLabel: `Story Right Edge Gutter (${sideMargin}px)`,
+          overlapPx: nodeRight - (pageWidth - sideMargin),
+        });
+      }
+
+      // Reels/Story Right-Side Interaction Rail (Like, Comment, Share)
+      const railTop = Math.round(pageHeight * 0.45);
+      const railBottom = Math.round(pageHeight * 0.82);
+      const railLeft = pageWidth - Math.round(pageWidth * 0.09); // rightmost 9%
+      if (nodeRight > railLeft && node.y < railBottom && nodeBottom > railTop) {
+        collisions.push({
+          platform: 'instagram_story',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'right_rail',
+          zoneLabel: `Story/Reels Right Interaction Rail Danger Zone`,
+          overlapPx: nodeRight - railLeft,
+        });
+      }
     } else if (isFeed) {
       const footerDanger = Math.round(pageHeight * 0.88);
+      const sideMargin = Math.round(pageWidth * 0.04);
       const nodeBottom = node.y + node.height;
+      const nodeRight = node.x + node.width;
+
       if (nodeBottom > footerDanger) {
         collisions.push({
           platform: 'meta_feed',
@@ -206,6 +237,28 @@ export function checkSocialOverlayCollisions(
           zone: 'footer_ui',
           zoneLabel: `Meta Feed Bottom Action Tray (bottom ${pageHeight - footerDanger}px)`,
           overlapPx: nodeBottom - footerDanger,
+        });
+      }
+
+      if (node.x < sideMargin) {
+        collisions.push({
+          platform: 'meta_feed',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'side_gutter',
+          zoneLabel: `Meta Feed Left Margin Gutter (${sideMargin}px)`,
+          overlapPx: sideMargin - node.x,
+        });
+      }
+
+      if (nodeRight > pageWidth - sideMargin) {
+        collisions.push({
+          platform: 'meta_feed',
+          nodeId: node.id,
+          role: node.role,
+          zone: 'side_gutter',
+          zoneLabel: `Meta Feed Right Margin Gutter (${sideMargin}px)`,
+          overlapPx: nodeRight - (pageWidth - sideMargin),
         });
       }
     }

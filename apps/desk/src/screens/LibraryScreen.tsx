@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface VerifiedAsset {
   assetId: string;
@@ -17,6 +17,19 @@ export const LibraryScreen: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<VerifiedAsset | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedList, setUploadedList] = useState<VerifiedAsset[]>([]);
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'templates' | 'assets' | 'negative'>('all');
+  const [showSemanticSourceModal, setShowSemanticSourceModal] = useState(false);
+
+  useEffect(() => {
+    fetch('/v1/assets')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setUploadedList(data);
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch initial library assets:', err));
+  }, []);
 
   const handleUploadAsset = async () => {
     setIsUploading(true);
@@ -55,9 +68,30 @@ export const LibraryScreen: React.FC = () => {
         <button className="btn primary" onClick={() => setShowUploadModal(true)}>
           + Upload & Ingest Asset
         </button>
-        <button className="btn">Templates</button>
-        <button className="btn">Assets</button>
-        <button className="btn">Negative examples</button>
+        <button
+          className={`btn ${libraryFilter === 'all' ? 'primary' : ''}`}
+          onClick={() => setLibraryFilter('all')}
+        >
+          All Items
+        </button>
+        <button
+          className={`btn ${libraryFilter === 'templates' ? 'primary' : ''}`}
+          onClick={() => setLibraryFilter('templates')}
+        >
+          Templates (46)
+        </button>
+        <button
+          className={`btn ${libraryFilter === 'assets' ? 'primary' : ''}`}
+          onClick={() => setLibraryFilter('assets')}
+        >
+          Assets ({1204 + uploadedList.length})
+        </button>
+        <button
+          className={`btn ${libraryFilter === 'negative' ? 'primary' : ''}`}
+          onClick={() => setLibraryFilter('negative')}
+        >
+          Negative Examples (67)
+        </button>
       </div>
 
       <div className="grid4">
@@ -68,71 +102,211 @@ export const LibraryScreen: React.FC = () => {
       </div>
 
       <div className="board" style={{ gridTemplateColumns: 'repeat(3, minmax(260px, 1fr))', minHeight: 0 }}>
-        {/* Uploaded Assets (Live API) */}
-        {uploadedList.map((asset) => (
-          <div key={asset.assetId} className="card" style={{ padding: 14, borderLeft: '3px solid #1d733c' }}>
+        {/* Uploaded Assets (Live API) - shown in 'all' and 'assets' */}
+        {(libraryFilter === 'all' || libraryFilter === 'assets') &&
+          uploadedList.map((asset) => (
+            <div key={asset.assetId} className="card" style={{ padding: 14, borderLeft: '3px solid #1d733c' }}>
+              <div className="canvaswrap" style={{ minHeight: 200, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <span className="pill ok" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✓ Sanitized & Admitted</span>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{asset.filename}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    SHA-256: {asset.sha256.substring(0, 16)}…
+                  </div>
+                </div>
+              </div>
+              <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>{asset.filename}</h3>
+              <div className="meta">
+                <span className="pill ok">XSS clean</span>
+                <span className="pill blue">LIVE API</span>
+                <span className="pill">{asset.mimeType.split('/')[1]}</span>
+              </div>
+            </div>
+          ))}
+
+        {/* Verified Asset Sample - shown in 'assets' */}
+        {libraryFilter === 'assets' && (
+          <div className="card" style={{ padding: 14 }}>
             <div className="canvaswrap" style={{ minHeight: 200, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
-                <span className="pill ok" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✓ Sanitized & Admitted</span>
-                <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)' }}>{asset.filename}</div>
+                <span className="pill ok" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✓ Vector Asset</span>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>aster-logo-gold.svg</div>
                 <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
-                  SHA-256: {asset.sha256.substring(0, 16)}…
+                  SHA-256: e3b0c44298fc1c14…
                 </div>
               </div>
             </div>
-            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>{asset.filename}</h3>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>aster-logo-gold.svg</h3>
             <div className="meta">
-              <span className="pill ok">XSS clean</span>
-              <span className="pill blue">LIVE API</span>
-              <span className="pill">{asset.mimeType.split('/')[1]}</span>
+              <span className="pill ok">SVG Clean</span>
+              <span className="pill">Aster</span>
+              <span className="pill">Vector</span>
             </div>
           </div>
-        ))}
+        )}
 
-        {/* Card 1 */}
-        <div className="card" style={{ padding: 14 }}>
-          <div className="canvaswrap" style={{ minHeight: 240 }}>
-            <div className="canvas" style={{ width: '55%' }}>
-              <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 24 }}>میوانی نوێ</div>
-              <div className="shape"></div>
+        {/* Card 1: Podcast guest - shown in 'all' and 'templates' */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 240 }}>
+              <div className="canvas" style={{ width: '55%' }}>
+                <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 24 }}>میوانی نوێ</div>
+                <div className="shape"></div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Podcast guest · approved</h3>
+            <div className="meta">
+              <span className="pill ok">editable .hyc</span>
+              <span className="pill">Aster</span>
+              <span className="pill">ckb</span>
             </div>
           </div>
-          <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Podcast guest · approved</h3>
-          <div className="meta">
-            <span className="pill ok">editable .hyc</span>
-            <span className="pill">Aster</span>
-            <span className="pill">ckb</span>
-          </div>
-        </div>
+        )}
 
-        {/* Card 2 */}
-        <div className="card" style={{ padding: 14 }}>
-          <div className="canvaswrap" style={{ minHeight: 240 }}>
-            <div className="canvas" style={{ width: '55%', background: 'linear-gradient(135deg, #f4ecdd, #e9b666)' }}>
-              <div className="copy" style={{ color: '#17191c', fontSize: 16 }}>SUMMER OFFER</div>
+        {/* Card 2: Retail offer family - shown in 'all' and 'templates' */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 240 }}>
+              <div className="canvas" style={{ width: '55%', background: 'linear-gradient(135deg, #f4ecdd, #e9b666)' }}>
+                <div className="copy" style={{ color: '#17191c', fontSize: 16 }}>SUMMER OFFER</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Retail offer family</h3>
+            <div className="meta">
+              <span className="pill ok">template v7</span>
+              <span className="pill">3 formats</span>
             </div>
           </div>
-          <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Retail offer family</h3>
-          <div className="meta">
-            <span className="pill ok">template v7</span>
-            <span className="pill">3 formats</span>
-          </div>
-        </div>
+        )}
 
-        {/* Card 3: Retrieval Evidence */}
-        <div className="card" style={{ padding: 14 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Retrieval evidence</h3>
-          <div className="rule">
-            <b>Why this appears</b>
-            <p>Same client (Aster), campaign type (retail_offer), language (ckb), and active template family. Approved after one revision.</p>
+        {/* Card 3: Retrieval Evidence - shown in 'all' */}
+        {libraryFilter === 'all' && (
+          <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Retrieval evidence</h3>
+            <div className="rule">
+              <b>Why this appears</b>
+              <p>Same client (Aster), campaign type (retail_offer), language (ckb), and active template family. Approved after one revision.</p>
+            </div>
+            <div className="rule">
+              <b>Source integrity</b>
+              <p>Design hash, manifest, Drive ID and Client DNA version are available and locked.</p>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 10 }}
+              onClick={() => setShowSemanticSourceModal(true)}
+            >
+              Open semantic source
+            </button>
           </div>
-          <div className="rule">
-            <b>Source integrity</b>
-            <p>Design hash, manifest, Drive ID and Client DNA version are available and locked.</p>
-          </div>
-          <button className="btn" style={{ marginTop: 10 }}>Open semantic source</button>
-        </div>
+        )}
+
+        {/* Negative Examples - shown in 'negative' */}
+        {libraryFilter === 'negative' && (
+          <>
+            <div className="card" style={{ padding: 14, borderLeft: '3px solid #dc2626' }}>
+              <div className="canvaswrap" style={{ minHeight: 180, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', padding: 12 }}>
+                  <span className="pill bad" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✕ Gate N Rejected</span>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#991b1b' }}>XSS Injection in SVG</div>
+                  <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 4 }}>
+                    &lt;script&gt; embedded in vector defs
+                  </div>
+                </div>
+              </div>
+              <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Malicious SVG Payload</h3>
+              <div className="meta">
+                <span className="pill bad">Security Block</span>
+                <span className="pill">OWASP rule</span>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: 14, borderLeft: '3px solid #dc2626' }}>
+              <div className="canvaswrap" style={{ minHeight: 180, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', padding: 12 }}>
+                  <span className="pill bad" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✕ Safe-Zone Failure</span>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#991b1b' }}>Instagram Story Collision</div>
+                  <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 4 }}>
+                    CTA overlapped 9:16 right-rail danger zone
+                  </div>
+                </div>
+              </div>
+              <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Right-Rail Interaction Danger</h3>
+              <div className="meta">
+                <span className="pill bad">Safe-Zone QA</span>
+                <span className="pill">Social 9:16</span>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: 14, borderLeft: '3px solid #dc2626' }}>
+              <div className="canvaswrap" style={{ minHeight: 180, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', padding: 12 }}>
+                  <span className="pill bad" style={{ fontSize: 11, marginBottom: 8, display: 'inline-block' }}>✕ Bidi Control Leak</span>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#991b1b' }}>Unisolated Latin Token</div>
+                  <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 4 }}>
+                    Punctuation inverted due to missing UAX #9 RLI/PDI
+                  </div>
+                </div>
+              </div>
+              <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Bidi Glyphs Flips</h3>
+              <div className="meta">
+                <span className="pill bad">UAX #9</span>
+                <span className="pill">RTL Guard</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
+
+      {/* Semantic Source Modal */}
+      {showSemanticSourceModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: 540,
+              padding: 24,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Semantic Source Traceability</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4 }}>
+              Locked retrieval provenance and immutable scope verification.
+            </p>
+
+            <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="rule">
+                <b>Target Client DNA</b>
+                <p>Aster Pharmacy (ID: <code>aster_pharmacy</code> · Locked Revision #4)</p>
+              </div>
+              <div className="rule">
+                <b>Corpus Provenance</b>
+                <p>Google Drive Vector Store & Local Memory Snapshot (Hash: <code>8f29c4ba7e10398f…</code>)</p>
+              </div>
+              <div className="rule">
+                <b>Immutable Retrieval Scope</b>
+                <p>Verified: Zero cross-client contamination. Negative context filters active for competing brands.</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="btn primary" onClick={() => setShowSemanticSourceModal(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Asset Ingestion & Security Modal */}
       {showUploadModal && (

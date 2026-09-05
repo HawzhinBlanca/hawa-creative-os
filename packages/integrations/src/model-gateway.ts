@@ -206,6 +206,32 @@ export class ResilientModelGateway implements ModelGateway {
         } catch {
           // Graceful fallback to deterministic engine
         }
+      } else if (candidate.provider === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
+        try {
+          const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': process.env.ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model: candidate.model.startsWith('claude-opus-5') ? 'claude-3-5-sonnet-20241022' : candidate.model,
+              max_tokens: 1024,
+              messages: [{ role: 'user', content: `${promptText}\n\nRespond ONLY with valid JSON.` }],
+            }),
+          });
+          if (apiRes.ok) {
+            const body: any = await apiRes.json();
+            const textContent = body.content?.[0]?.text;
+            if (textContent) {
+              output = JSON.parse(textContent);
+              liveSuccess = true;
+            }
+          }
+        } catch {
+          // Graceful fallback to deterministic engine
+        }
       } else if (candidate.provider === 'openai' && process.env.OPENAI_API_KEY) {
         try {
           const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {

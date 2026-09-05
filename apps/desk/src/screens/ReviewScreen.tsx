@@ -1607,6 +1607,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       if (res.brandKitId && availableBrandKits[res.brandKitId]) {
         setSelectedBrandKitId(res.brandKitId);
       }
+      if (res.fontFamily) setFontFamily(res.fontFamily);
+      if (res.fontWeight) setFontWeight(res.fontWeight);
+      if (res.accentColor) setAccentColor(res.accentColor);
       if (res.nodes && res.nodes.length > 0) {
         pushHistory(`Import .hyc package (${res.nodes.length} layers)`);
       }

@@ -1029,7 +1029,7 @@ export function createApp() {
     const documentRef = rev?.document || {
       documentId: `doc_${taskId.slice(0, 8)}`,
       sourceRevision: 1,
-      sourceSha256: 'sha256_mock_doc_hash',
+      sourceSha256: crypto.createHash('sha256').update(taskId).digest('hex'),
       format: 'hycanvas' as const,
     };
 
@@ -1506,6 +1506,10 @@ export function createApp() {
     evalRuns.set(runId, run);
 
     return c.json(run, 201);
+  });
+
+  registerRoute('get', '/evaluations/runs', (c: any) => {
+    return c.json(Array.from(evalRuns.values()));
   });
 
   registerRoute('get', '/evaluations/runs/:runId', (c: any) => {

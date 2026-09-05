@@ -553,6 +553,9 @@ export function generateHycPackageData(state: CanvasExportState, task?: any): { 
       brandKitName: state.brandKit.name,
       verifiedHash: state.brandKit.verifiedSha256,
       languageMode: state.langVariant,
+      fontFamily: state.fontFamily,
+      fontWeight: state.fontWeight,
+      accentColor: state.accentColor,
     },
     nodes: serializedNodes,
     qualityAudit: {
@@ -582,6 +585,9 @@ export interface HycImportResult {
   format?: AspectPreset;
   brandKitId?: string;
   langVariant?: 'en' | 'ckb' | 'bilingual';
+  fontFamily?: string;
+  fontWeight?: number;
+  accentColor?: string;
   headlineEn?: string;
   headlineCkb?: string;
   copyEn?: string;
@@ -671,6 +677,9 @@ export async function importFromHycPackage(fileOrContent: File | string): Promis
       format,
       brandKitId: canvas.brandKitId || 'hawa',
       langVariant,
+      fontFamily: canvas.fontFamily || headlineNode?.fontFamily || undefined,
+      fontWeight: canvas.fontWeight || headlineNode?.fontWeight || undefined,
+      accentColor: canvas.accentColor || undefined,
       headlineEn: headlineNode?.textEn || pkg.taskContext?.title || undefined,
       headlineCkb: headlineNode?.textCkb || undefined,
       copyEn: copyNode?.textEn || undefined,

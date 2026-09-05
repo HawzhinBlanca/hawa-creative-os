@@ -175,6 +175,17 @@ describe('Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy', () => {
       expect(report.normalizedText).toContain('دهۆک');
     });
 
+    it('detects variations of Kurdish city orthography: اربيل, حلبجة, زاخو, and السليمانيه', () => {
+      const sample = 'سەردانی لقەکانمان بکە لە اربيل، حلبجة، زاخو، و السليمانيه';
+      const report = validateKurdishOrthography(sample);
+
+      expect(report.valid).toBe(false);
+      expect(report.normalizedText).toContain('هەولێر');
+      expect(report.normalizedText).toContain('هەڵەبجە');
+      expect(report.normalizedText).toContain('زاخۆ');
+      expect(report.normalizedText).toContain('سلێمانی');
+    });
+
     it('flags social platform safe zone collisions for 9:16 Instagram Story header and action bar', () => {
       const storyNodes = [
         { id: 'logo_top', role: 'logo', x: 100, y: 100, width: 200, height: 60 }, // y=100 is in top 14% (14% of 1920 = 269px)
@@ -187,6 +198,30 @@ describe('Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy', () => {
       expect(collisions.map((c) => c.nodeId)).toContain('logo_top');
       expect(collisions.map((c) => c.nodeId)).toContain('cta_bottom');
       expect(collisions.map((c) => c.nodeId)).not.toContain('headline_safe');
+    });
+
+    it('flags right edge gutter and right interaction rail collisions on 9:16 vertical video', () => {
+      const storyNodes = [
+        { id: 'cta_right_rail', role: 'cta', x: 950, y: 1000, width: 80, height: 50 }, // x+w=1030 > 983 in rail zone
+        { id: 'badge_edge', role: 'badge', x: 1040, y: 500, width: 30, height: 30 }, // x+w=1070 > 1026 right gutter
+        { id: 'center_content', role: 'copy', x: 200, y: 1000, width: 400, height: 80 },
+      ];
+
+      const collisions = checkSocialOverlayCollisions(storyNodes, 1080, 1920);
+      expect(collisions.some((c) => c.nodeId === 'cta_right_rail' && c.zone === 'right_rail')).toBe(true);
+      expect(collisions.some((c) => c.nodeId === 'badge_edge' && c.zone === 'side_gutter')).toBe(true);
+      expect(collisions.some((c) => c.nodeId === 'center_content')).toBe(false);
+    });
+
+    it('flags Meta Feed margin collisions on 1:1 square canvas', () => {
+      const feedNodes = [
+        { id: 'icon_left_bleed', role: 'logo', x: 20, y: 300, width: 100, height: 100 }, // x=20 < 43
+        { id: 'safe_box', role: 'headline', x: 100, y: 300, width: 500, height: 100 },
+      ];
+
+      const collisions = checkSocialOverlayCollisions(feedNodes, 1080, 1080);
+      expect(collisions.some((c) => c.nodeId === 'icon_left_bleed' && c.zone === 'side_gutter')).toBe(true);
+      expect(collisions.some((c) => c.nodeId === 'safe_box')).toBe(false);
     });
   });
 });
