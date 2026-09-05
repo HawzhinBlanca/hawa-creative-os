@@ -294,23 +294,41 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     async function hydrate() {
       try {
         const draft = await loadWorkingDraft(draftKey);
-        if (active && draft && !published) {
-          if (draft.headlineEn) setHeadlineEn(draft.headlineEn);
-          if (draft.headlineCkb) setHeadlineCkb(draft.headlineCkb);
-          if (draft.copyEn) setCopyEn(draft.copyEn);
-          if (draft.copyCkb) setCopyCkb(draft.copyCkb);
-          if (draft.fontFamily) setFontFamily(draft.fontFamily);
-          if (draft.fontWeight) setFontWeight(draft.fontWeight);
-          if (draft.accentColor) setAccentColor(draft.accentColor);
-          if (draft.format) setVariant(draft.format as AspectPreset);
-          if (draft.langVariant) setLangVariant(draft.langVariant);
-          if (draft.nodes && Array.isArray(draft.nodes) && draft.nodes.length > 0) setNodes(draft.nodes);
-          if (draft.zoom) setZoom(draft.zoom);
-          if (draft.panOffset) setPanOffset(draft.panOffset);
-          if (draft.selectedNodeIds) setSelectedNodeIds(draft.selectedNodeIds);
-          setDraftSavedAt(draft.updatedAt);
-          setStudioToast(`✓ Restored working draft from IndexedDB (${new Date(draft.updatedAt).toLocaleTimeString()})`);
-          setTimeout(() => setStudioToast(null), 2500);
+        if (active && !published) {
+          if (draft) {
+            if (draft.headlineEn) setHeadlineEn(draft.headlineEn);
+            if (draft.headlineCkb) setHeadlineCkb(draft.headlineCkb);
+            if (draft.copyEn) setCopyEn(draft.copyEn);
+            if (draft.copyCkb) setCopyCkb(draft.copyCkb);
+            if (draft.fontFamily) setFontFamily(draft.fontFamily);
+            if (draft.fontWeight) setFontWeight(draft.fontWeight);
+            if (draft.accentColor) setAccentColor(draft.accentColor);
+            if (draft.format) setVariant(draft.format as AspectPreset);
+            if (draft.langVariant) setLangVariant(draft.langVariant);
+            if (draft.nodes && Array.isArray(draft.nodes) && draft.nodes.length > 0) setNodes(draft.nodes);
+            if (draft.zoom) setZoom(draft.zoom);
+            if (draft.panOffset) setPanOffset(draft.panOffset);
+            if (draft.selectedNodeIds) setSelectedNodeIds(draft.selectedNodeIds);
+            setDraftSavedAt(draft.updatedAt);
+            setStudioToast(`✓ Restored working draft from IndexedDB (${new Date(draft.updatedAt).toLocaleTimeString()})`);
+            setTimeout(() => setStudioToast(null), 2500);
+          } else if (task) {
+            // Clean state reset for fresh task to prevent cross-task pollution
+            setHeadlineEn(task.title || 'Special Ramadan Offer');
+            setHeadlineCkb(task.titleCkb || 'ئۆفەری تایبەتی ڕەمەزان');
+            setCopyEn(task.description || '50% off on all services across Erbil & Sulaymaniyah.');
+            setCopyCkb(task.descriptionCkb || '٥٠٪ داشکاندن لەسەر هەموو خزمەتگوزارییەکان.');
+            setNodes([
+              { id: 'node_headline', role: 'headline', name: 'Headline (Vector Text)', zIndex: 15, locked: false, visible: true, x: 36, y: 100, width: 408, height: 110, rotation: 0, opacity: 1 },
+              { id: 'node_copy', role: 'copy', name: 'Price & Offer Badge', zIndex: 16, locked: false, visible: true, x: 36, y: 480, width: 260, height: 52, rotation: 0, opacity: 1 },
+              { id: 'node_logo', role: 'logo', name: 'Verified Brand Logo', zIndex: 10, locked: false, visible: true, x: 32, y: 28, width: 190, height: 42, rotation: 0, opacity: 1 },
+              { id: 'node_shape', role: 'shape', name: 'Organic Accent Shape', zIndex: 2, locked: false, visible: true, x: 60, y: 240, width: 360, height: 210, rotation: 15, opacity: 0.85 },
+            ]);
+            setSelectedNodeIds(['node_headline']);
+            setZoom(1.0);
+            setPanOffset({ x: 0, y: 0 });
+            setDraftSavedAt(null);
+          }
         }
       } catch (err) {
         console.warn('[DraftHydration] Failed:', err);
@@ -498,6 +516,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
     const newClones: CanvasNode[] = [];
     const newIds: string[] = [];
+    const groupMap = new Map<string, string>();
+
+    idsToDup.forEach((id) => {
+      const target = nodes.find((n) => n.id === id);
+      if (target?.groupId && !groupMap.has(target.groupId)) {
+        groupMap.set(target.groupId, `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
+      }
+    });
 
     idsToDup.forEach((id, idx) => {
       const target = nodes.find((n) => n.id === id);
@@ -507,6 +533,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         ...JSON.parse(JSON.stringify(target)),
         id: clonedId,
         name: `${target.name} (Copy)`,
+        groupId: target.groupId ? groupMap.get(target.groupId) : undefined,
         x: Math.min(target.x + 20, currentArtboard.width - target.width),
         y: Math.min(target.y + 20, currentArtboard.height - target.height),
         zIndex: maxZ + 1 + idx,
@@ -592,7 +619,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
   // Keyboard Shortcuts Listener (Full Photoshop / Figma Mastery)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isInputActive = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable;
+      const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable;
+      const isAnyModalOpen = showBrandKitModal || showTimelineModal || showShortcutsModal || showDiffModal || showExportMenu;
 
       if (!isInputActive) {
         if (e.code === 'Space' && !e.repeat) {
@@ -614,38 +642,44 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           setShowDiffModal(false);
           setShowExportMenu(false);
           setShowShortcutsModal(false);
+          setShowTimelineModal(false);
+          setShowBrandKitModal(false);
         }
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
-          e.preventDefault();
-          handleDeleteLayer();
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
-          e.preventDefault();
-          handleDuplicateLayer();
-        }
-        // Group / Ungroup
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
-          e.preventDefault();
-          if (e.shiftKey) handleUngroup();
-          else handleGroup();
-        }
-        // Layer Stacking: [ and ]
-        if (selectedNodeId && (e.key === '[' || e.key === ']')) {
-          e.preventDefault();
-          if (e.key === '[') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'back' : 'down');
-          if (e.key === ']') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'front' : 'up');
-        }
-      }
 
-      // Undo / Redo
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        redo();
+        // Layer manipulation shortcuts (only when modals are not open)
+        if (!isAnyModalOpen) {
+          if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeIds.length > 0) {
+            e.preventDefault();
+            handleDeleteLayer();
+          }
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            handleDuplicateLayer();
+          }
+          // Group / Ungroup
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
+            e.preventDefault();
+            if (e.shiftKey) handleUngroup();
+            else handleGroup();
+          }
+          // Layer Stacking: [ and ]
+          if (selectedNodeId && (e.key === '[' || e.key === ']')) {
+            e.preventDefault();
+            if (e.key === '[') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'back' : 'down');
+            if (e.key === ']') handleMoveLayerZIndex(selectedNodeId, (e.metaKey || e.ctrlKey) ? 'front' : 'up');
+          }
+        }
+
+        // Undo / Redo (Safe from capturing native form typing)
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) redo();
+          else undo();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+          e.preventDefault();
+          redo();
+        }
       }
 
       // Zoom Reset
@@ -716,7 +750,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     }
   };
 
-  // Switch Aspect Ratio Format (Clamps positions to new artboard bounds)
+  // Switch Aspect Ratio Format (Clamps positions & dimensions to new artboard bounds)
   const handleSwitchFormat = (fmt: AspectPreset) => {
     const newConfig = ARTBOARD_CONFIG[fmt];
     setVariant(fmt);
@@ -725,9 +759,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         let ny = n.y;
         if (n.role === 'headline') ny = newConfig.defaultHeadlineY;
         if (n.role === 'copy') ny = newConfig.defaultCopyY;
-        const clampedX = Math.min(n.x, Math.max(20, newConfig.width - n.width - 20));
-        const clampedY = Math.min(ny, Math.max(20, newConfig.height - n.height - 20));
-        return { ...n, x: clampedX, y: clampedY };
+        const clampedW = Math.min(n.width, newConfig.width - 40);
+        const clampedH = Math.min(n.height, newConfig.height - 40);
+        const clampedX = Math.min(n.x, Math.max(20, newConfig.width - clampedW - 20));
+        const clampedY = Math.min(ny, Math.max(20, newConfig.height - clampedH - 20));
+        return { ...n, width: clampedW, height: clampedH, x: clampedX, y: clampedY };
       })
     );
     pushHistory();
@@ -742,6 +778,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
     if (isSpacePressed || activeTool === 'hand') return;
     e.stopPropagation();
 
+    const targetNode = nodes.find((n) => n.id === nodeId);
+    if (!targetNode || targetNode.locked) return;
+
     const isShift = e.shiftKey;
     let currentSelectedIds = [...selectedNodeIds];
 
@@ -752,14 +791,61 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
         currentSelectedIds.push(nodeId);
       }
     } else {
-      if (!currentSelectedIds.includes(nodeId)) {
+      if (targetNode.groupId) {
+        currentSelectedIds = nodes.filter((n) => n.groupId === targetNode.groupId).map((n) => n.id);
+      } else if (!currentSelectedIds.includes(nodeId)) {
         currentSelectedIds = [nodeId];
       }
     }
     setSelectedNodeIds(currentSelectedIds);
 
-    const targetNode = nodes.find((n) => n.id === nodeId);
-    if (!targetNode || targetNode.locked) return;
+    const isAltClone = e.altKey;
+    const startPositions: Record<string, { x: number; y: number }> = {};
+    let primaryTargetId = targetNode.id;
+
+    if (isAltClone) {
+      const maxZ = nodes.reduce((max, n) => Math.max(max, n.zIndex), 0);
+      const newClones: CanvasNode[] = [];
+      const newClonedIds: string[] = [];
+      const groupMap = new Map<string, string>();
+
+      currentSelectedIds.forEach((id) => {
+        const t = nodes.find((n) => n.id === id);
+        if (t?.groupId && !groupMap.has(targetNode.groupId || '')) {
+          groupMap.set(t.groupId, `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
+        }
+      });
+
+      currentSelectedIds.forEach((id, idx) => {
+        const t = nodes.find((n) => n.id === id);
+        if (!t) return;
+        const clonedId = `${t.id}_copy_${Date.now()}_${idx}`;
+        const clonedNode: CanvasNode = {
+          ...JSON.parse(JSON.stringify(t)),
+          id: clonedId,
+          name: `${t.name} (Copy)`,
+          groupId: t.groupId ? groupMap.get(t.groupId) : undefined,
+          zIndex: maxZ + 1 + idx,
+        };
+        newClones.push(clonedNode);
+        newClonedIds.push(clonedId);
+        startPositions[clonedId] = { x: clonedNode.x, y: clonedNode.y };
+      });
+
+      const targetIdx = currentSelectedIds.indexOf(nodeId);
+      primaryTargetId = newClonedIds[targetIdx >= 0 ? targetIdx : 0] || newClonedIds[0];
+
+      setNodes((prev) => [...prev, ...newClones]);
+      setSelectedNodeIds(newClonedIds);
+      setStudioToast(`✓ Cloned ${newClones.length} Layer(s) (Option+Drag)`);
+      setTimeout(() => setStudioToast(null), 1800);
+    } else {
+      nodes.forEach((n) => {
+        if (currentSelectedIds.includes(n.id)) {
+          startPositions[n.id] = { x: n.x, y: n.y };
+        }
+      });
+    }
 
     const currentTarget = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
@@ -770,14 +856,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
     const startClientX = e.clientX;
     const startClientY = e.clientY;
-
-    // Snapshot start positions of all selected nodes for multi-drag
-    const startPositions: Record<string, { x: number; y: number }> = {};
-    nodes.forEach((n) => {
-      if (currentSelectedIds.includes(n.id)) {
-        startPositions[n.id] = { x: n.x, y: n.y };
-      }
-    });
 
     let hasMoved = false;
     let rafId: number | null = null;
@@ -802,7 +880,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       setSmartGuide(null);
       setIsDraggingNode(false);
       if (hasMoved) {
-        pushHistory('Move Layers');
+        pushHistory(isAltClone ? 'Duplicate & Move Layers' : 'Move Layers');
       }
     };
 
@@ -834,7 +912,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           let deltaY = Math.round(dy);
 
           // Magnetic snap for the primary target node
-          const primaryStart = startPositions[targetNode.id];
+          const primaryStart = startPositions[primaryTargetId];
           if (primaryStart) {
             const nextPrimaryX = Math.round(primaryStart.x + dx);
             const nextPrimaryY = Math.round(primaryStart.y + dy);
@@ -930,6 +1008,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
       }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
       setMarquee(null);
     };
 
@@ -972,6 +1052,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('blur', onPointerUp);
   };
 
   // Transform Handle Resize & Rotation Handler (With Proportional Shift Lock)
@@ -1083,8 +1165,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
 
         if (isLockedRatio) {
           const ratio = startW / startH;
-          if (handle === 'se' || handle === 'nw') {
+          if (handle === 'se') {
             newH = Math.round(newW / ratio);
+          } else if (handle === 'nw') {
+            newH = Math.round(newW / ratio);
+            newY = startY + (startH - newH);
+          } else if (handle === 'ne') {
+            newH = Math.round(newW / ratio);
+            newY = startY + (startH - newH);
+          } else if (handle === 'sw') {
+            newW = Math.round(newH * ratio);
+            newX = startX + (startW - newW);
           }
         }
 
@@ -1515,6 +1606,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
           {isEditing ? (
             <textarea
               autoFocus
+              onPointerDown={(e) => e.stopPropagation()}
               value={langVariant === 'ckb' ? headlineCkb : headlineEn}
               onChange={(e) => {
                 if (langVariant === 'ckb') setHeadlineCkb(e.target.value);
@@ -1662,6 +1754,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             <input
               autoFocus
               type="text"
+              onPointerDown={(e) => e.stopPropagation()}
               value={langVariant === 'ckb' ? copyCkb : copyEn}
               onChange={(e) => {
                 if (langVariant === 'ckb') setCopyCkb(e.target.value);
@@ -1786,6 +1879,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             <input
               autoFocus
               type="text"
+              onPointerDown={(e) => e.stopPropagation()}
               value={node.textEn || ''}
               onChange={(e) => {
                 const val = e.target.value;
@@ -1887,6 +1981,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ task }) => {
             <input
               autoFocus
               type="text"
+              onPointerDown={(e) => e.stopPropagation()}
               value={node.textEn || ''}
               onChange={(e) => {
                 const val = e.target.value;

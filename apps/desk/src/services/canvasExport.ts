@@ -36,6 +36,13 @@ export const FORMAT_DIMENSIONS: Record<AspectPreset, FormatDimensions> = {
   landscape: { width: 1920, height: 1080, label: 'Billboard 16:9 (Display)', aspectRatio: '16 / 9' },
 };
 
+export const ARTBOARD_ASPECT_RATIOS: Record<AspectPreset, { width: number; height: number; label: string }> = {
+  feed: { width: 480, height: 600, label: 'Portrait 4:5 (Meta)' },
+  square: { width: 480, height: 480, label: 'Square 1:1 (Feed)' },
+  story: { width: 380, height: 675, label: 'Story 9:16 (Reels/TikTok)' },
+  landscape: { width: 640, height: 360, label: 'Billboard 16:9 (Display)' },
+};
+
 /**
  * Triggers a browser file download from a Blob or URL.
  */
@@ -59,6 +66,12 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   const width = baseW * scale;
   const height = baseH * scale;
 
+  // Compute preview artboard coordinate scaling factors
+  const artboardBase = ARTBOARD_ASPECT_RATIOS[state.format] || { width: 480, height: 600 };
+  const scaleX = baseW / artboardBase.width;
+  const scaleY = baseH / artboardBase.height;
+  const scaleAvg = Math.min(scaleX, scaleY);
+
   // Use OffscreenCanvas if available in browser/worker environment
   let canvas: HTMLCanvasElement | OffscreenCanvas;
   let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
@@ -78,9 +91,13 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
     ctx.scale(scale, scale);
   }
 
-  // 1. Draw Background Gradient
+  // 1. Draw Background Gradient using dynamic Brand Kit palette
   const grad = ctx.createLinearGradient(0, 0, width, height);
-  if (state.brandKit.id === 'sebar') {
+  if (state.brandKit.palette) {
+    grad.addColorStop(0, state.brandKit.palette.secondary || '#0A1C1F');
+    grad.addColorStop(0.55, state.brandKit.palette.primary || '#01585F');
+    grad.addColorStop(1, state.brandKit.palette.accent || state.accentColor);
+  } else if (state.brandKit.id === 'sebar') {
     grad.addColorStop(0, '#0A1C1F');
     grad.addColorStop(0.55, '#01585F');
     grad.addColorStop(1, '#016E7D');
@@ -105,22 +122,20 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   const shapeX = state.langVariant === 'ckb' ? width * 0.45 : width * 0.55;
   const shapeY = height * 0.65;
   ctx.translate(shapeX, shapeY);
-  ctx.rotate(state.langVariant === 'ckb' ? -0.2 : 0.2);
+  ctx.rotate((state.langVariant === 'ckb' ? -12 : 12) * Math.PI / 180);
   ctx.beginPath();
   ctx.ellipse(0, 0, shapeW / 2, shapeH / 2, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // 3. Draw Brand Logo Badge (Top Left / Right)
-  const isRtl = state.langVariant === 'ckb';
-  const logoPad = width * 0.06;
-  const logoY = height * 0.06;
+  // 3. Draw Brand Logo Badge (Invariant #5 Cryptographically Protected Asset)
+  ctx.save();
   const logoW = 280;
   const logoH = 56;
-  const logoX = isRtl ? width - logoPad - logoW : logoPad;
+  const logoX = state.langVariant === 'ckb' ? width - logoW - 64 : 64;
+  const logoY = height * 0.06;
 
-  ctx.save();
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -129,74 +144,53 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   ctx.stroke();
 
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 22px Inter, system-ui, sans-serif';
-  ctx.textAlign = isRtl ? 'right' : 'left';
-  ctx.fillText(state.brandKit.logoText, isRtl ? logoX + logoW - 20 : logoX + 20, logoY + 36);
-
-  ctx.fillStyle = '#10B981';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText('✓', isRtl ? logoX + 18 : logoX + logoW - 32, logoY + 36);
+  ctx.font = 'bold 22px Inter, sans-serif';
+  ctx.textAlign = state.langVariant === 'ckb' ? 'right' : 'left';
+  ctx.fillText(state.brandKit.logoText, state.langVariant === 'ckb' ? logoX + logoW - 24 : logoX + 24, logoY + 36);
   ctx.restore();
 
-  // 4. Draw Headline Text
+  // 4. Draw Typography (Headline with UAX #9 Directional Isolation)
   ctx.save();
-  ctx.fillStyle = '#FFFFFF';
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-  ctx.shadowBlur = 16;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 4;
-
+  const isRtl = state.langVariant === 'ckb';
   const textMargin = width * 0.08;
-  const headlineY = height * 0.22;
-  const fontName = isRtl
-    ? (state.fontFamily.includes('Noto') ? '"Noto Sans Arabic", Vazirmatn, sans-serif' : 'Vazirmatn, "Noto Sans Arabic", sans-serif')
-    : `${state.fontFamily}, sans-serif`;
-
-  ctx.direction = (isRtl ? 'rtl' : 'ltr') as CanvasDirection;
 
   if (state.langVariant === 'bilingual') {
-    // English Lead Headline
+    // English Primary Line
+    ctx.fillStyle = '#FFFFFF';
     ctx.font = `800 ${Math.round(width * 0.058)}px Inter, sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(state.headlineEn, textMargin, headlineY);
+    ctx.fillText(state.headlineEn, textMargin, height * 0.22);
 
-    // Kurdish Optical Subtitle
+    // Kurdish Secondary Line with Directional Isolation
     ctx.fillStyle = state.accentColor;
-    ctx.font = `700 ${Math.round(width * 0.046)}px Vazirmatn, sans-serif`;
+    ctx.font = `700 ${Math.round(width * 0.046)}px Vazirmatn, "Noto Sans Arabic", sans-serif`;
+    ctx.direction = 'rtl';
     ctx.textAlign = 'right';
-    ctx.fillText(state.headlineCkb, width - textMargin, headlineY + Math.round(width * 0.075));
-  } else if (isRtl) {
-    ctx.font = `${state.fontWeight} ${Math.round(width * 0.062)}px ${fontName}, sans-serif`;
-    ctx.textAlign = 'right';
-    ctx.fillText(state.headlineCkb, width - textMargin, headlineY);
+    ctx.fillText(state.headlineCkb, width - textMargin, height * 0.30);
   } else {
-    ctx.font = `${state.fontWeight} ${Math.round(width * 0.062)}px ${fontName}, sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText(state.headlineEn, textMargin, headlineY);
+    ctx.fillStyle = '#FFFFFF';
+    const chosenFont = isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : state.fontFamily;
+    ctx.font = `${state.fontWeight} ${Math.round(width * 0.062)}px ${chosenFont}, sans-serif`;
+    ctx.direction = isRtl ? 'rtl' : 'ltr';
+    ctx.textAlign = isRtl ? 'right' : 'left';
+    const headlineText = isRtl ? state.headlineCkb : state.headlineEn;
+    ctx.fillText(headlineText, isRtl ? width - textMargin : textMargin, height * 0.24);
   }
   ctx.restore();
 
-  // 5. Draw Price & Offer Badge (Bottom)
-  const badgeY = height * 0.82;
-  const badgeH = 88;
-  const badgePadX = 36;
-  const displayText = state.langVariant === 'bilingual'
-    ? `${state.copyEn} · ${state.copyCkb}`
-    : isRtl
-    ? state.copyCkb
-    : state.copyEn;
-
+  // 5. Draw Price & Offer Badge (Invariant #5 Protected Token Footprint)
   ctx.save();
-  ctx.font = 'bold 36px Inter, Vazirmatn, sans-serif';
-  const textWidth = ctx.measureText(displayText).width;
-  const badgeW = textWidth + badgePadX * 2;
-  const badgeX = isRtl ? width - textMargin - badgeW : textMargin;
+  const badgeW = width * 0.42;
+  const badgeH = 88;
+  const badgeX = isRtl ? width - badgeW - textMargin : textMargin;
+  const badgeY = height * 0.82;
+  const badgePadX = 36;
 
-  // Badge Container Box
-  ctx.fillStyle = state.brandKit.palette.cardBg;
+  // Badge Container & Shadow
   ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
   ctx.shadowBlur = 24;
   ctx.shadowOffsetY = 8;
+  ctx.fillStyle = state.brandKit.palette.cardBg;
   ctx.beginPath();
   ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 16);
   ctx.fill();
@@ -205,10 +199,15 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#0F172A';
   ctx.textAlign = isRtl ? 'right' : 'left';
+  const displayText = state.langVariant === 'bilingual'
+    ? `${state.copyEn} · ${state.copyCkb}`
+    : isRtl
+    ? state.copyCkb
+    : state.copyEn;
   ctx.fillText(displayText, isRtl ? badgeX + badgeW - badgePadX : badgeX + badgePadX, badgeY + 56);
   ctx.restore();
 
-  // 5b. Draw Any Dynamic Custom Layers (text_custom, shape_custom, badge_custom)
+  // 5b. Draw Any Dynamic Custom Layers with Precise Multi-Resolution Scaling
   if (state.nodes && Array.isArray(state.nodes)) {
     const customNodes = state.nodes.filter(
       (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom'].includes(n.role)
@@ -216,10 +215,10 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
 
     for (const cNode of customNodes) {
       ctx.save();
-      const nodeX = cNode.x;
-      const nodeY = cNode.y;
-      const nodeW = cNode.width;
-      const nodeH = cNode.height;
+      const nodeX = cNode.x * scaleX;
+      const nodeY = cNode.y * scaleY;
+      const nodeW = cNode.width * scaleX;
+      const nodeH = cNode.height * scaleY;
 
       if (cNode.rotation) {
         ctx.translate(nodeX + nodeW / 2, nodeY + nodeH / 2);
@@ -231,40 +230,42 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
 
       if (cNode.shadow) {
         ctx.shadowColor = cNode.shadow.color || 'rgba(0,0,0,0.35)';
-        ctx.shadowBlur = cNode.shadow.blur || 14;
-        ctx.shadowOffsetX = cNode.shadow.x || 0;
-        ctx.shadowOffsetY = cNode.shadow.y || 4;
+        ctx.shadowBlur = (cNode.shadow.blur || 14) * scaleAvg;
+        ctx.shadowOffsetX = (cNode.shadow.x || 0) * scaleX;
+        ctx.shadowOffsetY = (cNode.shadow.y || 4) * scaleY;
       }
 
       if (cNode.role === 'shape_custom') {
         ctx.fillStyle = cNode.backgroundColor || state.accentColor;
         ctx.beginPath();
-        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, cNode.borderRadius ?? 12);
+        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, (cNode.borderRadius ?? 12) * scaleAvg);
         ctx.fill();
         if (cNode.borderColor) {
           ctx.strokeStyle = cNode.borderColor;
-          ctx.lineWidth = cNode.borderWidth || 1;
+          ctx.lineWidth = (cNode.borderWidth || 1) * scaleAvg;
           ctx.stroke();
         }
       } else if (cNode.role === 'badge_custom') {
         ctx.fillStyle = cNode.backgroundColor || 'rgba(255, 255, 255, 0.2)';
         ctx.beginPath();
-        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, cNode.borderRadius ?? 999);
+        ctx.roundRect(nodeX, nodeY, nodeW, nodeH, (cNode.borderRadius ?? 999) * scaleAvg);
         ctx.fill();
         ctx.fillStyle = cNode.color || '#FFFFFF';
-        ctx.font = `bold ${cNode.fontSize || 16}px Inter, Vazirmatn, sans-serif`;
+        const badgeFontSize = Math.round((cNode.fontSize || 16) * scaleAvg);
+        ctx.font = `bold ${badgeFontSize}px Inter, Vazirmatn, sans-serif`;
         ctx.textAlign = 'center';
         const badgeLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
-        ctx.fillText(badgeLabel || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + 6);
+        ctx.fillText(badgeLabel || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + badgeFontSize * 0.35);
       } else if (cNode.role === 'text_custom') {
         ctx.fillStyle = cNode.color || '#FFFFFF';
         const customFont = cNode.fontFamily || (isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : 'Inter');
-        ctx.font = `${cNode.fontWeight || 600} ${cNode.fontSize || 24}px ${customFont}, sans-serif`;
+        const customFontSize = Math.round((cNode.fontSize || 24) * scaleAvg);
+        ctx.font = `${cNode.fontWeight || 600} ${customFontSize}px ${customFont}, sans-serif`;
         ctx.direction = (cNode.direction || (isRtl ? 'rtl' : 'ltr')) as CanvasDirection;
         ctx.textAlign = cNode.textAlign || 'center';
         const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
         const textLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
-        ctx.fillText(textLabel || '', textX, nodeY + nodeH / 2 + 8);
+        ctx.fillText(textLabel || '', textX, nodeY + nodeH / 2 + customFontSize * 0.35);
       }
       ctx.restore();
     }
@@ -293,11 +294,16 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
 }
 
 /**
- * Standalone Clean Vector SVG Export with Embedded Web Fonts & Directional Isolates
+ * Standalone Clean Vector SVG Export with Embedded Web Fonts, Dynamic Custom Layers, & Directional Isolates
  */
 export function exportToSvg(state: CanvasExportState): string {
   const { width, height } = FORMAT_DIMENSIONS[state.format];
+  const artboardBase = ARTBOARD_ASPECT_RATIOS[state.format] || { width: 480, height: 600 };
+  const scaleX = width / artboardBase.width;
+  const scaleY = height / artboardBase.height;
+  const scaleAvg = Math.min(scaleX, scaleY);
   const isRtl = state.langVariant === 'ckb';
+
   const displayText = state.langVariant === 'bilingual'
     ? `${state.copyEn} · &#x2067;${state.copyCkb}&#x2069;`
     : isRtl
@@ -309,13 +315,63 @@ export function exportToSvg(state: CanvasExportState): string {
        <text x="${width * 0.92}" y="${height * 0.30}" fill="${state.accentColor}" font-family="Vazirmatn, sans-serif" font-size="${Math.round(width * 0.046)}" font-weight="700" text-anchor="end" dir="rtl">&#x2067;${state.headlineCkb}&#x2069;</text>`
     : `<text x="${isRtl ? width * 0.92 : width * 0.08}" y="${height * 0.24}" fill="#FFFFFF" font-family="${isRtl ? 'Vazirmatn' : state.fontFamily}, sans-serif" font-size="${Math.round(width * 0.062)}" font-weight="${state.fontWeight}" text-anchor="${isRtl ? 'end' : 'start'}" dir="${isRtl ? 'rtl' : 'ltr'}">${isRtl ? `&#x2067;${state.headlineCkb}&#x2069;` : state.headlineEn}</text>`;
 
+  // Render any dynamic custom nodes into SVG vector elements
+  let customNodesSvg = '';
+  if (state.nodes && Array.isArray(state.nodes)) {
+    const customNodes = state.nodes.filter(
+      (n: any) => n.visible && ['text_custom', 'shape_custom', 'badge_custom'].includes(n.role)
+    ).sort((a: any, b: any) => a.zIndex - b.zIndex);
+
+    for (const cNode of customNodes) {
+      const nodeX = Math.round(cNode.x * scaleX);
+      const nodeY = Math.round(cNode.y * scaleY);
+      const nodeW = Math.round(cNode.width * scaleX);
+      const nodeH = Math.round(cNode.height * scaleY);
+      const rot = cNode.rotation ? ` transform="rotate(${cNode.rotation} ${nodeX + nodeW / 2} ${nodeY + nodeH / 2})"` : '';
+      const op = cNode.opacity !== undefined && cNode.opacity !== 1 ? ` opacity="${cNode.opacity}"` : '';
+
+      if (cNode.role === 'shape_custom') {
+        const bg = cNode.backgroundColor || state.accentColor;
+        const rx = Math.round((cNode.borderRadius ?? 12) * scaleAvg);
+        const stroke = cNode.borderColor ? ` stroke="${cNode.borderColor}" stroke-width="${Math.round((cNode.borderWidth || 1) * scaleAvg)}"` : '';
+        customNodesSvg += `\n  <rect x="${nodeX}" y="${nodeY}" width="${nodeW}" height="${nodeH}" rx="${rx}" fill="${bg}"${stroke}${op}${rot}/>`;
+      } else if (cNode.role === 'badge_custom') {
+        const bg = cNode.backgroundColor || 'rgba(255, 255, 255, 0.2)';
+        const rx = Math.round((cNode.borderRadius ?? 999) * scaleAvg);
+        const textColor = cNode.color || '#FFFFFF';
+        const fontSize = Math.round((cNode.fontSize || 16) * scaleAvg);
+        const label = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
+        customNodesSvg += `\n  <g${rot}${op}>
+    <rect x="${nodeX}" y="${nodeY}" width="${nodeW}" height="${nodeH}" rx="${rx}" fill="${bg}"/>
+    <text x="${nodeX + nodeW / 2}" y="${nodeY + nodeH / 2 + Math.round(fontSize * 0.35)}" fill="${textColor}" font-family="Inter, Vazirmatn, sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle">${label || ''}</text>
+  </g>`;
+      } else if (cNode.role === 'text_custom') {
+        const textColor = cNode.color || '#FFFFFF';
+        const font = cNode.fontFamily || (isRtl ? 'Vazirmatn, sans-serif' : 'Inter, sans-serif');
+        const fontSize = Math.round((cNode.fontSize || 24) * scaleAvg);
+        const weight = cNode.fontWeight || 600;
+        const anchor = cNode.textAlign === 'center' ? 'middle' : cNode.textAlign === 'right' ? 'end' : 'start';
+        const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
+        const textY = nodeY + nodeH / 2 + Math.round(fontSize * 0.35);
+        const dirAttr = (cNode.direction || (isRtl ? 'rtl' : 'ltr')) === 'rtl' ? ' dir="rtl"' : '';
+        const label = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
+        const formattedText = (cNode.direction === 'rtl' || isRtl) ? `&#x2067;${label || ''}&#x2069;` : (label || '');
+        customNodesSvg += `\n  <text x="${textX}" y="${textY}" fill="${textColor}" font-family="${font}" font-size="${fontSize}" font-weight="${weight}" text-anchor="${anchor}"${dirAttr}${op}${rot}>${formattedText}</text>`;
+      }
+    }
+  }
+
+  const gradColor0 = state.brandKit.palette?.secondary || '#0A1C1F';
+  const gradColor1 = state.brandKit.palette?.primary || '#01585F';
+  const gradColor2 = state.brandKit.palette?.accent || state.accentColor;
+
   const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0A1C1F"/>
-      <stop offset="55%" stop-color="#01585F"/>
-      <stop offset="100%" stop-color="${state.accentColor}"/>
+      <stop offset="0%" stop-color="${gradColor0}"/>
+      <stop offset="55%" stop-color="${gradColor1}"/>
+      <stop offset="100%" stop-color="${gradColor2}"/>
     </linearGradient>
     <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.25"/>
@@ -337,6 +393,9 @@ export function exportToSvg(state: CanvasExportState): string {
   <!-- Live Vector Headline -->
   ${headlineSvg}
 
+  <!-- Dynamic User Custom Layers (Vector Primitives & Isolates) -->
+  ${customNodesSvg}
+
   <!-- Live Vector Price & Offer Badge -->
   <g transform="translate(${isRtl ? width * 0.5 : width * 0.08}, ${height * 0.82})" filter="url(#badgeShadow)">
     <rect width="${width * 0.42}" height="88" rx="16" fill="${state.brandKit.palette.cardBg}"/>
@@ -355,9 +414,78 @@ export function exportToSvg(state: CanvasExportState): string {
 
 /**
  * Downloads complete HyCanvas (.hyc) JSON package adhering to Master Spec Invariant #2
+ * Preserves all active vector nodes and full unflattened text hierarchy.
  */
 export function exportToHycPackage(state: CanvasExportState, task?: any): string {
   const { width, height } = FORMAT_DIMENSIONS[state.format];
+
+  // If live active nodes exist in state, serialize all of them preserving full vector properties
+  const serializedNodes = (state.nodes && Array.isArray(state.nodes) && state.nodes.length > 0)
+    ? state.nodes.map((n: any) => ({
+        id: n.id,
+        role: n.role,
+        name: n.name,
+        type: n.role.startsWith('text') ? 'text_vector' : n.role === 'shape' || n.role === 'shape_custom' ? 'shape_primitive' : 'badge_vector',
+        x: n.x,
+        y: n.y,
+        width: n.width,
+        height: n.height,
+        rotation: n.rotation || 0,
+        opacity: n.opacity ?? 1,
+        zIndex: n.zIndex,
+        visible: n.visible ?? true,
+        locked: n.locked ?? false,
+        editable: !n.locked,
+        fontSize: n.fontSize,
+        fontWeight: n.fontWeight,
+        fontFamily: n.fontFamily,
+        color: n.color,
+        backgroundColor: n.backgroundColor,
+        borderColor: n.borderColor,
+        borderWidth: n.borderWidth,
+        borderRadius: n.borderRadius,
+        contentEn: n.textEn || (n.role === 'headline' ? state.headlineEn : n.role === 'copy' ? state.copyEn : undefined),
+        contentCkb: n.textCkb || (n.role === 'headline' ? state.headlineCkb : n.role === 'copy' ? state.copyCkb : undefined),
+        direction: n.direction || (state.langVariant === 'ckb' ? 'rtl' : 'ltr'),
+        bidiIsolate: true,
+      }))
+    : [
+        {
+          id: 'node_headline',
+          type: 'text_vector',
+          contentEn: state.headlineEn,
+          contentCkb: state.headlineCkb,
+          fontFamily: state.fontFamily,
+          fontWeight: state.fontWeight,
+          color: '#FFFFFF',
+          editable: true,
+          bidiIsolate: true,
+        },
+        {
+          id: 'node_copy',
+          type: 'badge_vector',
+          contentEn: state.copyEn,
+          contentCkb: state.copyCkb,
+          fontFamily: 'Inter',
+          color: '#0F172A',
+          bg: state.brandKit.palette.cardBg,
+          editable: true,
+        },
+        {
+          id: 'node_logo',
+          type: 'brand_asset',
+          sha256: state.brandKit.verifiedSha256,
+          text: state.brandKit.logoText,
+          locked: true,
+        },
+        {
+          id: 'node_accent_shape',
+          type: 'shape_primitive',
+          color: state.accentColor,
+          shape: 'organic_ellipse',
+        },
+      ];
+
   const pkg = {
     formatVersion: '0.4.0',
     specCompliance: 'MASTER_SPEC_INVARIANT_2',
@@ -370,42 +498,7 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
       verifiedHash: state.brandKit.verifiedSha256,
       languageMode: state.langVariant,
     },
-    nodes: [
-      {
-        id: 'node_headline',
-        type: 'text_vector',
-        contentEn: state.headlineEn,
-        contentCkb: state.headlineCkb,
-        fontFamily: state.fontFamily,
-        fontWeight: state.fontWeight,
-        color: '#FFFFFF',
-        editable: true,
-        bidiIsolate: true,
-      },
-      {
-        id: 'node_copy',
-        type: 'badge_vector',
-        contentEn: state.copyEn,
-        contentCkb: state.copyCkb,
-        fontFamily: 'Inter',
-        color: '#0F172A',
-        bg: state.brandKit.palette.cardBg,
-        editable: true,
-      },
-      {
-        id: 'node_logo',
-        type: 'brand_asset',
-        sha256: state.brandKit.verifiedSha256,
-        text: state.brandKit.logoText,
-        locked: true,
-      },
-      {
-        id: 'node_accent_shape',
-        type: 'shape_primitive',
-        color: state.accentColor,
-        shape: 'organic_ellipse',
-      },
-    ],
+    nodes: serializedNodes,
     qualityAudit: {
       status: 'CERTIFIED_PASS',
       hardChecks: {

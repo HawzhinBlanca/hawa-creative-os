@@ -741,6 +741,8 @@ export function createApp() {
       commandId: crypto.randomUUID(),
       taskId,
       workflowId: `wf_${taskId}`,
+      outboxId: `outbox_${taskId}`,
+      vaultUri: `gdrive://hawa-vault/clients/${task.clientId || defaultClientId}/published/${taskId}_master_4k.hyc`,
       acceptedAt: new Date().toISOString(),
     }, 202);
   });
