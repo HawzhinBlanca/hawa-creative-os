@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   generateHycPackageData,
   generateSvgData,
+  generateStandaloneSvgData,
   importFromHycPackage,
   buildOmnichannelCampaignZip,
   type CanvasExportState,
@@ -195,5 +196,14 @@ describe('Canvas Export & HyCanvas Serialization Rigor', () => {
     expect(contentText).toContain('04_landscape_billboard_16x9/editable_tree.hyc');
     expect(contentText).toContain('campaign_manifest.json');
     expect(contentText).toContain('README_CAMPAIGN.txt');
+  });
+
+  it('generates zero-dependency standalone SVG with inlined Base64 Kurdish WOFF2 font', () => {
+    const { filename, svgContent } = generateStandaloneSvgData(sampleState);
+    expect(filename).toContain('-zero-dep.svg');
+    expect(svgContent).toContain('data:font/woff2;charset=utf-8;base64,');
+    expect(svgContent).toContain("@font-face");
+    expect(svgContent).toContain("font-family: 'Vazirmatn'");
+    expect(svgContent).not.toContain('fonts.googleapis.com');
   });
 });

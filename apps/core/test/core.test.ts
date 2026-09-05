@@ -726,5 +726,84 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(fontRes.headers.get('Content-Type')).toBe('font/woff2');
     expect(fontRes.headers.get('Cache-Control')).toContain('immutable');
   });
+
+  it('dispatches outbound campaign review to WhatsApp and processes inbound approval callback action', async () => {
+    // 1. Create a sample task
+    const createRes = await app.request('/v1/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Two-Way Review Test', clientId: 'client-drustee' }),
+    });
+    const { id: taskId } = await createRes.json();
+
+    // 2. Dispatch outbound review
+    const dispatchRes = await app.request(`/v1/campaigns/${taskId}/dispatch-review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: '+9647509998877' }),
+    });
+
+    expect(dispatchRes.status).toBe(200);
+    const dispatchBody = await dispatchRes.json();
+    expect(dispatchBody.ok).toBe(true);
+    expect(dispatchBody.dispatch.actions.length).toBe(2);
+    const approveAction = dispatchBody.dispatch.actions[0];
+    expect(approveAction.action).toBe('approve');
+
+    // 3. Simulate inbound callback via action webhook
+    const actionUrl = approveAction.callbackUrl.replace('http://localhost:3001', '');
+    const callbackRes = await app.request(actionUrl, { method: 'GET' });
+    expect(callbackRes.status).toBe(200);
+    const htmlText = await callbackRes.text();
+    expect(htmlText).toContain('کەمپینەکە بەسەرکەوتوویی پەسەندکرا');
+
+    // 4. Verify task state is updated to APPROVED
+    const taskRes = await app.request(`/v1/tasks/${taskId}`);
+    const task = await taskRes.json();
+    expect(task.status).toBe('APPROVED');
+  });
+
+  it('publishes 4-in-1 omnichannel campaign package to client Google Drive and Sheets with outbox receipt', async () => {
+    // 1. Create and approve task
+    const createRes = await app.request('/v1/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Omnichannel Publishing Test', clientId: 'client-drustee' }),
+    });
+    const { id: taskId } = await createRes.json();
+
+    // Transition to APPROVED
+    await app.request(`/v1/tasks/${taskId}/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: 'client-drustee' }),
+    });
+    await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    const revCheck = await app.request(`/v1/tasks/${taskId}`);
+    const { latestRevisionId } = await revCheck.json();
+    await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome: 'approved' }),
+    });
+
+    // 2. Publish Omnichannel
+    const pubRes = await app.request(`/v1/tasks/${taskId}/publish-omnichannel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: 'Omnichannel campaign release' }),
+    });
+
+    expect(pubRes.status).toBe(200);
+    const pubData = await pubRes.json();
+    expect(pubData.ok).toBe(true);
+    expect(pubData.status).toBe('COMPLETE');
+    expect(pubData.filesCount).toBe(12); // 4 formats x (png, svg, hyc)
+    expect(pubData.publicationReceipt).toBeDefined();
+    expect(pubData.publicationReceipt.state).toBe('complete');
+    expect(pubData.vaultUri).toContain(`${taskId}_omnichannel_bundle.zip`);
+    expect(pubData.driveFolderUrl).toContain('https://drive.google.com/drive/folders/');
+    expect(pubData.sheetRowUrl).toContain('https://docs.google.com/spreadsheets/d/');
+  });
 });
 
