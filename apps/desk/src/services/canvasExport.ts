@@ -362,17 +362,19 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   const headlineNode = state.nodes?.find((n: any) => n.role === 'headline' || n.id === 'headline' || n.id === 'node_headline');
   let headlineSvg = '';
   if (!headlineNode || headlineNode.visible !== false) {
-    const hlX = headlineNode && typeof headlineNode.x === 'number' ? Math.round(headlineNode.x * scaleX) : (isRtl ? width * 0.92 : width * 0.08);
+    const hlAnchor = headlineNode?.textAlign === 'center' ? 'middle' : headlineNode?.textAlign === 'right' ? 'end' : (isRtl ? 'end' : 'start');
+    const hlX = headlineNode && typeof headlineNode.x === 'number'
+      ? Math.round((hlAnchor === 'end' ? headlineNode.x + (headlineNode.width || 0) : hlAnchor === 'middle' ? headlineNode.x + (headlineNode.width || 0) / 2 : headlineNode.x) * scaleX)
+      : (isRtl ? width * 0.92 : width * 0.08);
     const hlY = headlineNode && typeof headlineNode.y === 'number' ? Math.round(headlineNode.y * scaleY + (headlineNode.fontSize || 32) * scaleAvg) : (height * 0.24);
     const hlFontSize = headlineNode && headlineNode.fontSize ? Math.round(headlineNode.fontSize * scaleAvg) : Math.round(width * 0.062);
     const hlWeight = headlineNode && headlineNode.fontWeight ? headlineNode.fontWeight : state.fontWeight;
-    const hlAnchor = headlineNode?.textAlign === 'center' ? 'middle' : headlineNode?.textAlign === 'right' ? 'end' : (isRtl ? 'end' : 'start');
     const hlText = isRtl ? (headlineNode?.textCkb || state.headlineCkb) : (headlineNode?.textEn || state.headlineEn);
 
     headlineSvg = state.langVariant === 'bilingual'
       ? `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}">${headlineNode?.textEn || state.headlineEn}</text>
          <text x="${width * 0.92}" y="${hlY + Math.round(hlFontSize * 1.3)}" fill="${state.accentColor}" font-family="Vazirmatn, sans-serif" font-size="${Math.round(hlFontSize * 0.8)}" font-weight="${hlWeight}" text-anchor="end" dir="rtl">&#x2067;${headlineNode?.textCkb || state.headlineCkb}&#x2069;</text>`
-      : `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="${isRtl ? 'Vazirmatn' : state.fontFamily}, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}" dir="${isRtl ? 'rtl' : 'ltr'}">${isRtl ? `&#x2067;${hlText}&#x2069;` : hlText}</text>`;
+      : `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="${isRtl ? 'Vazirmatn' : state.fontFamily}, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}" dir="${isRtl ? 'rtl' : 'ltr'}">&#x2067;${hlText}&#x2069;</text>`;
   }
 
   // Render any dynamic custom nodes into SVG vector elements
@@ -466,11 +468,12 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
       ? `&#x2067;${copyText}&#x2069;`
       : copyText;
 
+    const badgeTextColor = copyNode?.color || (hexToLuminance(badgeBg) > 0.4 ? '#0F172A' : '#FFFFFF');
     copyBadgeSvg = `
   <!-- Live Vector Price & Offer Badge -->
   <g transform="translate(${badgeX}, ${badgeY})" filter="url(#badgeShadow)">
     <rect width="${badgeW}" height="${badgeH}" rx="${badgeRadius}" fill="${badgeBg}"/>
-    <text x="36" y="${Math.round(badgeH * 0.62)}" fill="#0F172A" font-family="Inter, Vazirmatn, sans-serif" font-size="${Math.round(Math.min(badgeH * 0.4, 34))}" font-weight="bold">${badgeDisplayText}</text>
+    <text x="${isRtl ? badgeW - 36 : 36}" y="${Math.round(badgeH * 0.62)}" fill="${badgeTextColor}" font-family="Inter, Vazirmatn, sans-serif" font-size="${Math.round(Math.min(badgeH * 0.4, 34))}" font-weight="bold" text-anchor="${isRtl ? 'end' : 'start'}">${badgeDisplayText}</text>
   </g>`;
   }
 

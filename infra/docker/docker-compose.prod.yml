@@ -40,6 +40,8 @@ services:
       context: ../..
       dockerfile: infra/docker/Dockerfile.core
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -64,6 +66,8 @@ services:
       context: ../..
       dockerfile: infra/docker/Dockerfile.worker
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       NODE_ENV: production
       PORT: 9080
@@ -121,7 +125,7 @@ services:
     networks:
       - core
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9070/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:9070/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

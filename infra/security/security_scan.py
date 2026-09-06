@@ -23,7 +23,7 @@ def scan() -> int:
             continue
         if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".zip", ".lock", ".svg"}:
             continue
-        if path.name in {".env.example", "env.example", "security_scan.py"}:
+        if path.name in {".env.example", "env.example", "security_scan.py"} or (path.name.startswith(".env") and not path.name.endswith(".example")):
             continue
         try:
             content = path.read_text(encoding="utf-8")

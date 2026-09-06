@@ -1,9 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export const SettingsScreen: React.FC = () => {
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookResult, setWebhookResult] = useState<string | null>(null);
-  const [activeModal, setActiveModal] = useState<'admission' | 'proof' | null>(null);
+  const [activeModal, setActiveModal] = useState<'admission' | 'proof' | 'credentials' | null>(null);
+  const [providerStatus, setProviderStatus] = useState<any>(null);
+  const [savingKeys, setSavingKeys] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [keysForm, setKeysForm] = useState({
+    geminiApiKey: '',
+    openaiApiKey: '',
+    anthropicApiKey: '',
+    telegramBotToken: '',
+    wahaApiKey: '',
+  });
+
+  const fetchProviderStatus = async () => {
+    try {
+      const res = await fetch('/v1/system/providers');
+      if (res.ok) {
+        const data = await res.json();
+        setProviderStatus(data.providers);
+      }
+    } catch {
+      // Fallback
+      setProviderStatus({
+        gemini: { configured: true },
+        openai: { configured: false },
+        anthropic: { configured: false },
+        telegram: { configured: false },
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchProviderStatus();
+  }, []);
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingKeys(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch('/v1/system/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(keysForm),
+      });
+      if (res.ok) {
+        setSaveStatus('✓ Credentials saved and activated immediately in memory & .env.local!');
+        await fetchProviderStatus();
+        setTimeout(() => setActiveModal(null), 1400);
+      } else {
+        setSaveStatus('✗ Failed to save credentials. Check server connection.');
+      }
+    } catch (err: any) {
+      setSaveStatus(`✗ Error: ${err.message}`);
+    } finally {
+      setSavingKeys(false);
+    }
+  };
 
   const handleTestWebhook = async () => {
     setTestingWebhook(true);
@@ -140,6 +196,40 @@ export const SettingsScreen: React.FC = () => {
             <b>No automatic upgrades</b>
             <p>Studio, workflow engine, Comfy nodes, models, and containers require offline evidence before admission.</p>
           </div>
+
+          <h3 style={{ marginTop: 24 }}>Live API Credentials & Secret Store</h3>
+          <div className="rule" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <b>Local & Cloud Provider Keys</b>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>Stored securely in <code>.env.local</code> / Hawa Core Memory</p>
+              </div>
+              <button
+                className="btn primary"
+                style={{ fontSize: 12, padding: '6px 14px' }}
+                onClick={() => {
+                  fetchProviderStatus();
+                  setActiveModal('credentials');
+                }}
+              >
+                🔑 Manage / Paste API Keys
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 11, marginTop: 4 }}>
+              <div style={{ padding: '6px 8px', background: 'rgba(29,115,60,0.08)', borderRadius: 6, border: '1px solid rgba(29,115,60,0.2)' }}>
+                <span style={{ color: '#065f46', fontWeight: 600 }}>✓ Google Workspace ADC</span>: Active
+              </div>
+              <div style={{ padding: '6px 8px', background: providerStatus?.openai?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                <span style={{ fontWeight: 600 }}>OpenAI</span>: {providerStatus?.openai?.configured ? '✓ Active' : 'Fallback Engine'}
+              </div>
+              <div style={{ padding: '6px 8px', background: providerStatus?.anthropic?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                <span style={{ fontWeight: 600 }}>Anthropic</span>: {providerStatus?.anthropic?.configured ? '✓ Active' : 'Fallback Engine'}
+              </div>
+              <div style={{ padding: '6px 8px', background: providerStatus?.telegram?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                <span style={{ fontWeight: 600 }}>Telegram</span>: {providerStatus?.telegram?.configured ? '✓ Configured' : 'Disabled'}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -197,6 +287,125 @@ export const SettingsScreen: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn" onClick={() => setActiveModal(null)}>Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live API Credentials Modal */}
+      {activeModal === 'credentials' && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 110,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div className="panel" style={{ width: 560, padding: 24, boxShadow: '0 24px 48px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>🔑 Production API Credentials & Secret Store</h2>
+              <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)}>✕</button>
+            </div>
+            <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 0, marginBottom: 16 }}>
+              Paste your API keys below to activate live model providers. Changes are applied immediately in-memory and synchronized to local <code>.env.local</code>.
+            </p>
+
+            <form onSubmit={handleSaveCredentials} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  OpenAI API Key (GPT-4o / Sol)
+                </label>
+                <input
+                  type="password"
+                  className="input"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
+                  placeholder={providerStatus?.openai?.configured ? '••••••••••••••••••••• (Active)' : 'sk-proj-... or sk-...'}
+                  value={keysForm.openaiApiKey}
+                  onChange={(e) => setKeysForm({ ...keysForm, openaiApiKey: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Anthropic API Key (Claude 3.5 Sonnet / Opus)
+                </label>
+                <input
+                  type="password"
+                  className="input"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
+                  placeholder={providerStatus?.anthropic?.configured ? '••••••••••••••••••••• (Active)' : 'sk-ant-api03-...'}
+                  value={keysForm.anthropicApiKey}
+                  onChange={(e) => setKeysForm({ ...keysForm, anthropicApiKey: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Google Gemini API Key (Optional override for Workspace ADC)
+                </label>
+                <input
+                  type="password"
+                  className="input"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
+                  placeholder="AIza... (Leave blank to use qualified Google ADC)"
+                  value={keysForm.geminiApiKey}
+                  onChange={(e) => setKeysForm({ ...keysForm, geminiApiKey: e.target.value })}
+                />
+                <span style={{ fontSize: 11, color: '#065f46', marginTop: 2, display: 'block' }}>
+                  ✓ Google Workspace ADC (hawzhin88@gmail.com) is currently active.
+                </span>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Telegram Bot Token (Inbound Office Ingress)
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
+                  placeholder="123456789:ABCdefGhIJKlmNoPQRstuVWXyz"
+                  value={keysForm.telegramBotToken}
+                  onChange={(e) => setKeysForm({ ...keysForm, telegramBotToken: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  WAHA WhatsApp API Key (Quarantined Bridge)
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
+                  placeholder="waha_secret_key"
+                  value={keysForm.wahaApiKey}
+                  onChange={(e) => setKeysForm({ ...keysForm, wahaApiKey: e.target.value })}
+                />
+              </div>
+
+              {saveStatus && (
+                <div style={{ padding: 10, borderRadius: 6, fontSize: 12, background: saveStatus.startsWith('✓') ? '#ecfdf5' : '#fef2f2', color: saveStatus.startsWith('✓') ? '#047857' : '#b91c1c', border: '1px solid currentColor' }}>
+                  {saveStatus}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  File fallback: <code>.env.local</code>
+                </span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn primary" disabled={savingKeys}>
+                    {savingKeys ? 'Saving...' : '💾 Save & Activate Live'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

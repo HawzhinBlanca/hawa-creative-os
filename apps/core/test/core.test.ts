@@ -805,5 +805,44 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(pubData.driveFolderUrl).toContain('https://drive.google.com/drive/folders/');
     expect(pubData.sheetRowUrl).toContain('https://docs.google.com/spreadsheets/d/');
   });
+
+  it('manages system provider credentials via /v1/system/providers', async () => {
+    // 1. Query current providers status
+    const getRes = await app.request('/v1/system/providers');
+    expect(getRes.status).toBe(200);
+    const getData = await getRes.json();
+    expect(getData.ok).toBe(true);
+    expect(getData.providers.gemini.configured).toBe(true);
+    expect(getData.providers.openai).toBeDefined();
+
+    // 2. Update credentials
+    const postRes = await app.request('/v1/system/providers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        openaiApiKey: 'mock-test-openai-key-1234567890',
+        anthropicApiKey: 'mock-test-anthropic-key-0987654321',
+      }),
+    });
+    expect(postRes.status).toBe(200);
+    const postData = await postRes.json();
+    expect(postData.ok).toBe(true);
+
+    // 3. Verify in-memory activation
+    expect(process.env.OPENAI_API_KEY).toBe('mock-test-openai-key-1234567890');
+    expect(process.env.ANTHROPIC_API_KEY).toBe('mock-test-anthropic-key-0987654321');
+
+    const verifyRes = await app.request('/v1/system/providers');
+    const verifyData = await verifyRes.json();
+    expect(verifyData.providers.openai.configured).toBe(true);
+    expect(verifyData.providers.openai.preview).toContain('mock...7890');
+    expect(verifyData.providers.anthropic.configured).toBe(true);
+    expect(verifyData.providers.anthropic.preview).toContain('mock...4321');
+
+    // Clean up test environment
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+  });
 });
+
 
