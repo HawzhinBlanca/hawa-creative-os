@@ -167,7 +167,24 @@ export const OpsScreen: React.FC = () => {
         setReconciliation(reconRes);
       }
       if (budgetsRes?.budgets && Array.isArray(budgetsRes.budgets) && budgetsRes.budgets.length > 0) {
-        setClientBudgets(budgetsRes.budgets);
+        const mappedBudgets: ClientBudgetReport[] = budgetsRes.budgets.map((b: any) => {
+          const cap = Number(b.monthlyCapUsd ?? b.capUsd ?? 250);
+          const spent = Number(b.currentSpendUsd ?? b.spentUsd ?? 0);
+          const remaining = Number(b.remainingUsd ?? Math.max(0, cap - spent));
+          const pct = Number(b.percentUsed ?? (cap > 0 ? (spent / cap) * 100 : 0));
+          return {
+            clientId: b.clientId || 'client-unknown',
+            clientName: b.clientName || b.clientId || 'Client Brand',
+            monthlyCapUsd: cap,
+            currentSpendUsd: spent,
+            remainingUsd: remaining,
+            percentUsed: pct,
+            quotaStatus: b.quotaStatus || b.status || (pct >= 100 ? 'EXCEEDED' : pct >= 80 ? 'WARNING' : 'HEALTHY'),
+            currency: b.currency || 'USD',
+            billingCycle: b.billingCycle || b.month || '2026-09',
+          };
+        });
+        setClientBudgets(mappedBudgets);
       }
       setLastCheck(new Date().toLocaleTimeString());
     } catch (err) {
@@ -565,10 +582,10 @@ export const OpsScreen: React.FC = () => {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                   <span style={{ color: 'var(--muted)' }}>
-                    Monthly Spend: <b>${b.currentSpendUsd.toFixed(2)}</b> of <b>${b.monthlyCapUsd.toFixed(2)}</b>
+                    Monthly Spend: <b>${Number(b.currentSpendUsd || 0).toFixed(2)}</b> of <b>${Number(b.monthlyCapUsd || 0).toFixed(2)}</b>
                   </span>
                   <span style={{ fontWeight: 600, color: barColor }}>
-                    {b.percentUsed.toFixed(1)}% Used (Remaining: ${b.remainingUsd.toFixed(2)})
+                    {Number(b.percentUsed || 0).toFixed(1)}% Used (Remaining: ${Number(b.remainingUsd || 0).toFixed(2)})
                   </span>
                 </div>
 
@@ -816,7 +833,7 @@ export const OpsScreen: React.FC = () => {
                 />
               </div>
               <small style={{ color: 'var(--muted)', display: 'block', marginTop: 6 }}>
-                Current month spend: ${editingBudgetClient.currentSpendUsd.toFixed(2)}. Hard ceiling triggers at 100% cap.
+                Current month spend: ${Number(editingBudgetClient.currentSpendUsd || 0).toFixed(2)}. Hard ceiling triggers at 100% cap.
               </small>
             </div>
 
