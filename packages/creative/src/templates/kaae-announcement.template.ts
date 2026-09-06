@@ -102,17 +102,17 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     pageId,
     text: categoryBadgeText,
     role: 'disclaimer',
-    x: width - 560,
+    x: 500,
     y: 95,
-    width: 500,
+    width: 440,
     height: 40,
+    direction: 'rtl',
     style: {
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: 'bold',
       fontFamily: 'Cairo',
       textAlign: 'right',
       color: '#F7B500',
-      letterSpacing: 2,
     },
     locked: true,
   });
@@ -187,7 +187,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     contentY += 60;
   }
 
-  // 5. Kurdish Headline (Cairo Bold, RTL aligned, 52px)
+  // 5. Kurdish Headline (Cairo Bold, RTL aligned)
   ops.push({
     op: 'addText',
     nodeId: 'ann_headline_ckb',
@@ -197,20 +197,21 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     x: 100,
     y: contentY,
     width: width - 200,
-    height: 140,
+    height: 120,
+    direction: 'rtl',
     style: {
-      fontSize: 50,
+      fontSize: 38,
       fontWeight: 'bold',
       fontFamily: 'Cairo',
       textAlign: 'right',
       color: '#FFFFFF',
-      lineHeight: 1.4,
+      lineHeight: 1.35,
     },
     locked: false,
   });
-  contentY += 150;
+  contentY += 120;
 
-  // 6. Optional English Headline (Minion Variable Bold, 38px)
+  // 6. Optional English Headline (Minion Variable Bold, 28px)
   if (params.headlineEn) {
     ops.push({
       op: 'addText',
@@ -221,18 +222,18 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
       x: 100,
       y: contentY,
       width: width - 200,
-      height: 70,
+      height: 60,
       style: {
-        fontSize: 34,
+        fontSize: 26,
         fontWeight: 'bold',
-        fontFamily: 'Minion Variable Concept',
+        fontFamily: 'Cairo',
         textAlign: 'left',
         color: '#F7B500',
         lineHeight: 1.3,
       },
       locked: false,
     });
-    contentY += 80;
+    contentY += 75;
   }
 
   // Divider Accent
@@ -251,9 +252,9 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     height: 2,
     locked: true,
   });
-  contentY += 30;
+  contentY += 35;
 
-  // 7. Kurdish Body Copy (Noto Naskh Arabic, 30px)
+  // 7. Kurdish Body Copy (Cairo / Noto Naskh Arabic)
   ops.push({
     op: 'addText',
     nodeId: 'ann_copy_ckb',
@@ -264,17 +265,18 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     y: contentY,
     width: width - 200,
     height: 220,
+    direction: 'rtl',
     style: {
-      fontSize: 28,
+      fontSize: 24,
       fontWeight: '500',
-      fontFamily: 'Noto Naskh Arabic',
+      fontFamily: 'Cairo',
       textAlign: 'right',
       color: '#E2E8F0',
       lineHeight: 1.6,
     },
     locked: false,
   });
-  contentY += 230;
+  contentY += 210;
 
   // 8. Optional English Copy
   if (params.copyEn) {
