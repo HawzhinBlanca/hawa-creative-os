@@ -25,6 +25,7 @@ import {
   TaskWorkflowController,
   type TaskActor,
   type WorkflowCheckpoint,
+  kaaeClientDNA,
 } from '@hawa/domain';
 
 try {
@@ -585,6 +586,10 @@ export function createApp() {
     updatedAt: new Date().toISOString(),
   });
 
+  // Seed KAAE (Kurdistan Accrediting Association for Education)
+  clientDnas.set('c1000000-0000-4000-8000-000000000002', kaaeClientDNA);
+  clientDnas.set('kaae', kaaeClientDNA);
+
   // Seed baseline governance snapshots for all clients
   clientSnapshots.set('client-office-1', [
     {
@@ -670,6 +675,20 @@ export function createApp() {
       dna: clientDnas.get('client-rona')!,
     },
   ]);
+
+  clientSnapshots.set('c1000000-0000-4000-8000-000000000002', [
+    {
+      snapshotId: 'snap_init_kaae_1',
+      clientId: 'c1000000-0000-4000-8000-000000000002',
+      version: 1,
+      sha256: computeDnaHash(kaaeClientDNA),
+      commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Minion/Cairo typography',
+      createdBy: 'autonomous_creative_director',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      dna: kaaeClientDNA,
+    },
+  ]);
+  clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
 
   // Health checks
   app.get('/health', (c) => c.json({ status: 'healthy', timestamp: new Date().toISOString() }));
@@ -1330,6 +1349,23 @@ export function createApp() {
       idempotencyKey: `pub_${taskId}`,
     };
 
+    const client = clientDnas.get(task.clientId) || clientDnas.get(defaultClientId);
+    const destination = client?.destinations
+      ? {
+          sharedDriveId: client.destinations.googleSharedDriveId,
+          productionRootFolderId: client.destinations.productionFolderId,
+          relativeFolderParts: ['Clients', client.code || 'KAAE', '2026'],
+          spreadsheetId: client.destinations.spreadsheetId,
+          sheetId: client.destinations.sheetId,
+        }
+      : {
+          sharedDriveId: 'drive_office_main',
+          productionRootFolderId: 'folder_prod_root',
+          relativeFolderParts: ['Clients', 'Hawa', '2026'],
+          spreadsheetId: 'sheet_tracker_123',
+          sheetId: 0,
+        };
+
     await publisher.publish(ctx, {
       taskId,
       clientId: task.clientId || defaultClientId,
@@ -1348,13 +1384,7 @@ export function createApp() {
           sha256: 'sha256_png_hash',
         },
       ],
-      destination: {
-        sharedDriveId: 'drive_office_main',
-        productionRootFolderId: 'folder_prod_root',
-        relativeFolderParts: ['Clients', 'Hawa', '2026'],
-        spreadsheetId: 'sheet_tracker_123',
-        sheetId: 0,
-      },
+      destination,
       sheetRow: {
         taskId,
         client: task.clientId || defaultClientId,

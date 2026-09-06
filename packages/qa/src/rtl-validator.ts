@@ -347,8 +347,8 @@ export function validateKurdishOrthography(text: string): KurdishOrthographyRepo
   const cityChecks = [
     { regex: /(?<=^|[\s،.!?؛])[أا]ربيل(?=$|[\s،.!?؛])/gu, recommended: 'هەولێر' },
     { regex: /(?<=^|[\s،.!?؛])(ال)?سليماني[ةه](?=$|[\s،.!?؛])/gu, recommended: 'سلێمانی' },
-    { regex: /(?<=^|[\s،.!?؛])ده[وۆ][كک](?=$|[\s،.!?؛])/gu, recommended: 'دهۆک' },
-    { regex: /(?<=^|[\s،.!?؛])[كک]ەر?[كک][وۆ]+[كک](?=$|[\s،.!?؛])/gu, recommended: 'کەرکووک' },
+    { regex: /(?<=^|[\s،.!?؛])دهو[كک](?=$|[\s،.!?؛])/gu, recommended: 'دهۆک' },
+    { regex: /(?<=^|[\s،.!?؛])(كركوك|كەركوك|کەرکوک)(?=$|[\s،.!?؛])/gu, recommended: 'کەرکووک' },
     { regex: /(?<=^|[\s،.!?؛])حلبج[ةه](?=$|[\s،.!?؛])/gu, recommended: 'هەڵەبجە' },
     { regex: /(?<=^|[\s،.!?؛])زاخو(?=$|[\s،.!?؛])/gu, recommended: 'زاخۆ' },
   ];

@@ -31,6 +31,7 @@ export const LibraryScreen: React.FC = () => {
   const [uploadedList, setUploadedList] = useState<VerifiedAsset[]>([]);
   const [selectedClient, setSelectedClient] = useState<string>('all');
   const [clients, setClients] = useState<ClientOption[]>([
+    { clientId: 'c1000000-0000-4000-8000-000000000002', name: 'KAAE (Education Accreditation)', tier: 'enterprise' },
     { clientId: 'client-aster', name: 'Aster Pharmacy', tier: 'enterprise' },
     { clientId: 'client-zagros', name: 'Zagros Roastery', tier: 'standard' },
     { clientId: 'client-drustee', name: 'Drustee Official', tier: 'enterprise' },
@@ -279,6 +280,64 @@ export const LibraryScreen: React.FC = () => {
               }
             >
               📥 Insert into Canvas
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 1: Accreditation Certificate */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#FFF2DB' }}>
+              <div className="canvas" style={{ width: '80%', border: '4px double #4770A3', background: '#FFFFFF', padding: 12, textAlign: 'center' }}>
+                <div style={{ color: '#4770A3', fontSize: 11, fontWeight: 'bold', letterSpacing: '0.05em' }}>KAAE · دەستەی متمانەبەخشی</div>
+                <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 16, fontWeight: 'bold', color: '#0A1628', margin: '6px 0' }}>بڕوانامەی متمانەبەخشینی نیشتمانی</div>
+                <div style={{ fontSize: 10, color: '#D4A94C', fontWeight: 600 }}>LAW NO. 6 OF 2022</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Institutional Certificate · A4 Landscape</h3>
+            <div className="meta">
+              <span className="pill ok">Vector .hyc</span>
+              <span className="pill">KAAE</span>
+              <span className="pill">A4 @ 300DPI</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => {
+                setInsertedNotice('✓ KAAE Accreditation Certificate template loaded into Studio');
+                setTimeout(() => setInsertedNotice(null), 3500);
+              }}
+            >
+              📥 Load Certificate in Studio
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 2: Social Announcement */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#0A1628' }}>
+              <div className="canvas" style={{ width: '60%', background: 'linear-gradient(150deg, #0A1628, #160874)', padding: 12, textAlign: 'right' }}>
+                <span className="pill" style={{ fontSize: 9, background: '#F7B500', color: '#0A1628', fontWeight: 'bold' }}>بڕیاری فەرمی</span>
+                <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0' }}>ڕاگەیەندراوی متمانەبەخشین</div>
+                <div style={{ fontSize: 9, color: '#94A3B8' }}>info@kaae.krd · Erbil</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Social Announcement Feed Card</h3>
+            <div className="meta">
+              <span className="pill ok">Cairo Display</span>
+              <span className="pill">KAAE</span>
+              <span className="pill">1080 x 1350</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => {
+                setInsertedNotice('✓ KAAE Social Announcement template loaded into Studio');
+                setTimeout(() => setInsertedNotice(null), 3500);
+              }}
+            >
+              📥 Load Card in Studio
             </button>
           </div>
         )}

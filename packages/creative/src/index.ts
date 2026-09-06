@@ -9,3 +9,4 @@ export * from './brand-kits.js';
 export * from './vector-compositor.js';
 export * from './feedback-miner.js';
 export * from './reflow-engine.js';
+export * from './templates/index.js';

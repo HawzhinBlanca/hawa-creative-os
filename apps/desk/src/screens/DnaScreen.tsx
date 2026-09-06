@@ -147,6 +147,18 @@ const FALLBACK_CLIENTS: ClientSummary[] = [
     rulesCount: 2,
     snapshotsCount: 1,
   },
+  {
+    clientId: 'c1000000-0000-4000-8000-000000000002',
+    name: 'Kurdistan Accrediting Association for Education (KAAE)',
+    code: 'KAAE',
+    version: 1,
+    status: 'active',
+    defaultLocale: 'ckb',
+    defaultDirection: 'rtl',
+    colorsCount: 8,
+    rulesCount: 6,
+    snapshotsCount: 1,
+  },
 ];
 
 const DRUSTEE_FALLBACK_DNA: ClientDNA = {

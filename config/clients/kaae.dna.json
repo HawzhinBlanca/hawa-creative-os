@@ -1,0 +1,358 @@
+{
+  "schemaVersion": 1,
+  "tenantId": "a0000000-0000-4000-8000-000000000001",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "version": 1,
+  "status": "active",
+  "identity": {
+    "officialName": "Kurdistan Accrediting Association for Education",
+    "aliases": [
+      "KAAE",
+      "دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا لە هەرێمی کوردستان",
+      "دەستەی متمانەبەخشی بە پەروەردە",
+      "هيئة الاعتماد التعليمي في كردستان"
+    ],
+    "products": [
+      {
+        "id": "che-accreditation",
+        "name": "Commission on Higher Education (CHE) Institutional & Programmatic Accreditation",
+        "aliases": [
+          "بۆردی خوێندنی باڵا",
+          "مفوضية التعليم العالي",
+          "CHE Accreditation"
+        ]
+      },
+      {
+        "id": "k12-accreditation",
+        "name": "Commission on K-12 Accreditation",
+        "aliases": [
+          "بۆردی پەروەردە K-12",
+          "مفوضية التعليم المدرسي (K-12)",
+          "K-12 Accreditation"
+        ]
+      },
+      {
+        "id": "peer-evaluator-network",
+        "name": "Peer Evaluator Review & Audit System",
+        "aliases": [
+          "هەڵسەنگێنەرانی هاوتا",
+          "المقيمون من الأقران",
+          "Peer Evaluators"
+        ]
+      }
+    ]
+  },
+  "brand": {
+    "approvedAssetIds": [
+      "f2000000-0000-4000-8000-000000000003",
+      "f2000000-0000-4000-8000-000000000004",
+      "f2000000-0000-4000-8000-000000000005",
+      "f2000000-0000-4000-8000-000000000006"
+    ],
+    "deprecatedAssetIds": [],
+    "colors": [
+      {
+        "token": "kaae-midnight-navy",
+        "srgb": "#160874",
+        "usage": "Primary brand foundation; conveys legal authority, deep institutional prestige, and high contrast backing"
+      },
+      {
+        "token": "kaae-royal-iris",
+        "srgb": "#35309B",
+        "usage": "Secondary brand identity; academic distinction, publication headers, and official ribbon badges"
+      },
+      {
+        "token": "kaae-electric-azure",
+        "srgb": "#0E6CD3",
+        "usage": "Accent vibrant blue; interactive links, CTAs, button states, and active navigation indicators"
+      },
+      {
+        "token": "kaae-sun-gold",
+        "srgb": "#E8B85C",
+        "usage": "Accent Kurdistan sun gold and warm ochre; symbolizes enlightenment, quality excellence, and rays"
+      },
+      {
+        "token": "kaae-steel-blue",
+        "srgb": "#4770A3",
+        "usage": "Muted structural accent and card borders; soft institutional framing and secondary data panels"
+      },
+      {
+        "token": "kaae-parchment-cream",
+        "srgb": "#FFF2DB",
+        "usage": "Warm parchment cream background; official certificates, warm documents, and subtle contrast fields"
+      },
+      {
+        "token": "kaae-pure-white",
+        "srgb": "#FFFFFF",
+        "usage": "Clean white document ground, digital canvas, and high-contrast letterheads"
+      },
+      {
+        "token": "kaae-charcoal-ink",
+        "srgb": "#1A202C",
+        "usage": "High-legibility primary typography and legal text ink"
+      }
+    ],
+    "fonts": [
+      {
+        "id": "font-en-display",
+        "family": "Minion Variable Concept",
+        "styles": [
+          "Bold",
+          "Semibold"
+        ],
+        "languages": [
+          "en"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "id": "font-en-subheadings",
+        "family": "Minion Variable Concept",
+        "styles": [
+          "Medium",
+          "Italic"
+        ],
+        "languages": [
+          "en"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "id": "font-en-body",
+        "family": "Minion Variable Concept",
+        "styles": [
+          "Regular"
+        ],
+        "languages": [
+          "en"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "id": "font-en-web",
+        "family": "Verdana",
+        "styles": [
+          "Regular",
+          "Bold"
+        ],
+        "languages": [
+          "en"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "id": "font-ckb-display",
+        "family": "Cairo",
+        "styles": [
+          "Bold",
+          "SemiBold"
+        ],
+        "languages": [
+          "ckb",
+          "ar"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "id": "font-ckb-body",
+        "family": "Noto Naskh Arabic",
+        "styles": [
+          "Regular",
+          "Medium"
+        ],
+        "languages": [
+          "ckb",
+          "ar"
+        ],
+        "fileHashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      }
+    ],
+    "layoutRules": [
+      "Maintain official logo clear space invariant equal to or greater than the cap-height of letter K (28px minimum).",
+      "Enforce strict RTL (Right-to-Left) directional orientation for Kurdish Sorani and Arabic publications.",
+      "Preserve bidirectional text flow; verify zero character reversal on Western Arabic / Indic numerals in legal citations.",
+      "Do not stretch, distort, or change the aspect ratio or proportions of the emblem.",
+      "Do not rotate, angle, or place the emblem diagonally.",
+      "Do not alter the colors of the emblem rays, central K, or circular banner.",
+      "Prohibit placing official lockup logos directly on noisy or low-contrast backgrounds without a minimum 4.5:1 contrast container.",
+      "Headings in Minion Variable Bold (20-30pt Title Case or Small Caps), Subheadings in Medium or Italic (16-20pt), Body in Regular (11-12pt, 1.4x line spacing).",
+      "Stationery: Business cards require logo, name, title, contact info. Letterheads require top logo and footer contact. Certificates require logo, recipient name, seal, date. Email signatures include name, title, KAAE affiliation, phone, email, website, and social links."
+    ],
+    "imageryRules": [
+      "Feature authentic photography of students, classrooms, laboratories, and peer review committees across Kurdistan.",
+      "Avoid generic, Western corporate stock imagery that lacks local institutional context.",
+      "Editorial and event banners must feature high-resolution institutional photography with KAAE branded watermark in top-right or top-left corner conforming to layout direction."
+    ]
+  },
+  "languagePolicy": {
+    "defaultLanguage": "ckb",
+    "supportedLanguages": [
+      "ckb",
+      "ar",
+      "en"
+    ],
+    "numberStyle": "source_preserved",
+    "glossaryVersion": 1,
+    "tone": [
+      "authoritative",
+      "statutory",
+      "academically rigorous",
+      "transparent",
+      "objective",
+      "constructive"
+    ],
+    "prohibitedTerms": [
+      "guaranteed accreditation",
+      "instant degree verification",
+      "pay-for-pass accreditation",
+      "diploma mill endorsement"
+    ]
+  },
+  "production": {
+    "defaultVariants": [
+      {
+        "id": "feed-portrait",
+        "name": "Social Feed Portrait (Instagram/Facebook)",
+        "width": 1080,
+        "height": 1350,
+        "unit": "px",
+        "format": "png",
+        "colorSpace": "srgb",
+        "dpi": 72
+      },
+      {
+        "id": "feed-square",
+        "name": "Social Feed Square",
+        "width": 1080,
+        "height": 1080,
+        "unit": "px",
+        "format": "png",
+        "colorSpace": "srgb",
+        "dpi": 72
+      },
+      {
+        "id": "story-vertical",
+        "name": "Instagram & Facebook Story",
+        "width": 1080,
+        "height": 1920,
+        "unit": "px",
+        "format": "png",
+        "colorSpace": "srgb",
+        "dpi": 72
+      },
+      {
+        "id": "web-banner-landscape",
+        "name": "Official Portal Landscape Banner",
+        "width": 1920,
+        "height": 1080,
+        "unit": "px",
+        "format": "webp",
+        "colorSpace": "srgb",
+        "dpi": 72
+      },
+      {
+        "id": "print-report-a4",
+        "name": "Official Accreditation Report A4",
+        "width": 210,
+        "height": 297,
+        "unit": "mm",
+        "format": "pdf",
+        "colorSpace": "cmyk",
+        "dpi": 300
+      },
+      {
+        "id": "accreditation-certificate-a4",
+        "name": "Institutional Accreditation Certificate",
+        "width": 297,
+        "height": 210,
+        "unit": "mm",
+        "format": "pdf",
+        "colorSpace": "cmyk",
+        "dpi": 300
+      }
+    ],
+    "templateIds": [
+      "kaae-social-announcement",
+      "kaae-accreditation-certificate"
+    ],
+    "approvalPolicyId": "kaae-board-dual-peer-review",
+    "drive": {
+      "sharedDriveId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM",
+      "knowledgeRootFolderId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM",
+      "productionRootFolderId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM_2026_PRODUCTION"
+    },
+    "sheets": {
+      "spreadsheetId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM_ACCREDITATION_REGISTRY",
+      "sheetId": 0
+    }
+  },
+  "privacy": {
+    "modelEgressMode": "approved_providers",
+    "allowedProviders": [
+      "google",
+      "anthropic",
+      "openai"
+    ],
+    "rawMessageRetentionDays": 365,
+    "promptRetentionDays": 180
+  },
+  "rules": [
+    {
+      "id": "e1000000-0000-4000-8000-000000000001",
+      "key": "legal_authority_citation",
+      "category": "compliance",
+      "scope": "client",
+      "humanRule": "All formal proclamations and public reports must cite statutory authorization under Kurdistan Regional Law No. 6 of 2022.",
+      "machineRule": {
+        "patternRequired": "Law No\\. (?:6|٦) of 2022|یاسای ژمارە (?:6|٦)ی ساڵی 2022|القانون رقم (?:6|٦) لسنة 2022"
+      },
+      "priority": 100,
+      "effectiveFrom": "2022-08-04T00:00:00Z",
+      "effectiveUntil": null,
+      "status": "active"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000002",
+      "key": "logo_contrast_safety",
+      "category": "design",
+      "scope": "client",
+      "humanRule": "Official KAAE emblems must maintain at least 4.5:1 contrast against adjacent background colors.",
+      "machineRule": {
+        "minContrastRatio": 4.5
+      },
+      "priority": 90,
+      "effectiveFrom": "2022-08-04T00:00:00Z",
+      "effectiveUntil": null,
+      "status": "active"
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000003",
+      "key": "logo_distortion_prohibition",
+      "category": "design",
+      "scope": "client",
+      "humanRule": "Official KAAE emblems must never be stretched, distorted, rotated diagonally, or recolored.",
+      "machineRule": {
+        "allowDistortion": false,
+        "allowRotation": false,
+        "allowRecoloring": false
+      },
+      "priority": 95,
+      "effectiveFrom": "2022-08-04T00:00:00Z",
+      "effectiveUntil": null,
+      "status": "active"
+    }
+  ],
+  "contentHash": "7df970563a178c8a4fa12b7013737d489b44825f67e3b9060bb96e5aa7f327cf"
+}

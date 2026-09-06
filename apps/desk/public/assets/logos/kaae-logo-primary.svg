@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 600" width="100%" height="100%">
+  <defs>
+    <radialGradient id="kaaeGoldCore" cx="50%" cy="50%" r="50%" fx="35%" fy="35%">
+      <stop offset="0%" stop-color="#FFF3D1"/>
+      <stop offset="35%" stop-color="#FCD364"/>
+      <stop offset="70%" stop-color="#EAA620"/>
+      <stop offset="100%" stop-color="#C5850E"/>
+    </radialGradient>
+    <linearGradient id="pageGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#EDF4FC"/>
+    </linearGradient>
+    <linearGradient id="pageGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E1EEFA"/>
+    </linearGradient>
+    <linearGradient id="pageGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#D4E6F7"/>
+    </linearGradient>
+    <path id="arcTopP" d="M 120,300 A 180,180 0 1,1 480,300" fill="none"/>
+    <path id="arcBottomP" d="M 480,300 A 180,180 0 1,1 120,300" fill="none"/>
+  </defs>
+
+  <g transform="translate(-30, 0)">
+    <!-- 21 Sunburst Rays -->
+    <g id="rays" stroke="#F7B500" stroke-width="5" stroke-linecap="round">
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(0 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(17.142857 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(34.285714 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(51.428571 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(68.571428 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(85.714285 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(102.857142 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(120 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(137.142857 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(154.285714 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(171.428571 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(188.571428 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(205.714285 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(222.857142 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(240 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(257.142857 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(274.285714 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(291.428571 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(308.571428 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(325.714285 300 300)"/>
+      <line x1="300" y1="50" x2="300" y2="85" transform="rotate(342.857142 300 300)"/>
+    </g>
+
+    <!-- Outer Ring Background -->
+    <circle cx="300" cy="300" r="200" fill="#FFFFFF" stroke="#4770A3" stroke-width="4"/>
+    <circle cx="300" cy="300" r="192" fill="none" stroke="#F7B500" stroke-width="1.5"/>
+
+    <!-- Directional Swooshes -->
+    <path d="M 440,250 A 155,155 0 0,0 230,150" fill="none" stroke="#2D4A73" stroke-width="8" stroke-linecap="round"/>
+    <polygon points="445,260 440,240 455,248" fill="#2D4A73"/>
+
+    <path d="M 160,350 A 155,155 0 0,0 370,450" fill="none" stroke="#2D4A73" stroke-width="8" stroke-linecap="round"/>
+    <polygon points="155,340 160,360 145,352" fill="#2D4A73"/>
+
+    <!-- Orbiting Text -->
+    <text font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="20" font-weight="600" fill="#2D4A73" letter-spacing="3">
+      <textPath href="#arcTopP" startOffset="50%" text-anchor="middle">
+        Association for Education
+      </textPath>
+    </text>
+    <text font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="20" font-weight="600" fill="#2D4A73" letter-spacing="3">
+      <textPath href="#arcBottomP" startOffset="50%" text-anchor="middle">
+        Kurdistan Accrediting
+      </textPath>
+    </text>
+
+    <!-- Inner Golden Core -->
+    <circle cx="300" cy="300" r="125" fill="url(#kaaeGoldCore)" stroke="#C5850E" stroke-width="2"/>
+
+    <!-- Core Serif Letter 'K' -->
+    <text x="300" y="348" font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="140" font-weight="700" fill="#1E3A5F" text-anchor="middle">
+      K
+    </text>
+  </g>
+
+  <!-- Fanned Dynamic A-A-E Document Pages -->
+  <!-- Page 3 ('E') - Furthest back -->
+  <g id="page-E">
+    <path d="M 680,240 L 780,265 L 740,510 L 640,480 Z" fill="url(#pageGrad3)" stroke="#2D4A73" stroke-width="2.5"/>
+    <text x="705" y="420" transform="rotate(13 705 420)" font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="96" font-weight="700" fill="#1E3A5F" text-anchor="middle">
+      E
+    </text>
+  </g>
+
+  <!-- Page 2 ('A') - Middle -->
+  <g id="page-A2">
+    <path d="M 570,225 L 680,240 L 640,490 L 530,470 Z" fill="url(#pageGrad2)" stroke="#2D4A73" stroke-width="2.5"/>
+    <text x="600" y="405" transform="rotate(8 600 405)" font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="96" font-weight="700" fill="#1E3A5F" text-anchor="middle">
+      A
+    </text>
+  </g>
+
+  <!-- Page 1 ('A') - Front page swooshing from the book spine -->
+  <g id="page-A1">
+    <path d="M 430,220 C 470,215 520,215 570,225 L 530,470 C 470,460 410,440 370,420 C 410,400 440,370 450,330 Z" fill="url(#pageGrad1)" stroke="#2D4A73" stroke-width="2.5"/>
+    <text x="495" y="380" transform="rotate(3 495 380)" font-family="'Minion Variable Concept', 'Crimson Text', Georgia, serif" font-size="105" font-weight="700" fill="#1E3A5F" text-anchor="middle">
+      A
+    </text>
+    <!-- Swooshing Spine Base -->
+    <path d="M 370,420 C 440,420 500,455 530,470" fill="none" stroke="#2D4A73" stroke-width="2"/>
+    <path d="M 390,435 C 450,435 500,465 525,475" fill="none" stroke="#4770A3" stroke-width="1.5"/>
+  </g>
+</svg>

@@ -154,6 +154,35 @@ export const BRAND_KITS: Record<string, BrandKit> = {
     defaultCopyCkb: 'گەیاندنی خێرا · ٦٬٠٠٠ دینار',
     contactTokens: ['0750 444 3322', 'Bakhtiari, Erbil', 'express.krd'],
   },
+  kaae: {
+    id: 'kaae',
+    name: 'Kurdistan Accrediting Association for Education',
+    nameKurdish: 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا',
+    industry: 'Educational Accreditation & Quality Assurance',
+    industryKurdish: 'متمانەبەخشی بە دامەزراوەکانی خوێندنی باڵا و پەروەردە',
+    verifiedSha256: '2acc0742b2c6a83f0d0f9330f5e1fe9dfae72fb0b28fbb282c787d5a4c4571f6',
+    palette: {
+      primary: '#4770A3',      // Official KAAE Blue (Pantone 5415 C)
+      secondary: '#0A1628',    // Midnight Foundation
+      accent: '#F7B500',       // Kurdistan Sun Gold (Pantone 7549 C)
+      background: 'linear-gradient(150deg, #0A1628 0%, #160874 40%, #1E3A5F 100%)',
+      text: '#FFFFFF',
+      cardBg: 'rgba(255, 242, 219, 0.96)', // Parchment Cream
+    },
+    typography: {
+      latinFont: 'Minion Variable Concept',
+      kurdishFont: 'Cairo',
+      headlineWeight: 700,
+      copyWeight: 600,
+    },
+    logoText: 'KAAE · دەستەی متمانەبەخشی',
+    logoBadge: '🏛️ LAW NO. 6 OF 2022',
+    defaultHeadlineEn: 'Accreditation Standards for Higher Education & K-12',
+    defaultHeadlineCkb: 'ستانداردەکانی متمانەبەخشین بە پەروەردە و خوێندنی باڵا',
+    defaultCopyEn: 'Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Review',
+    defaultCopyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · هەڵسەنگاندنی نیشتمانی',
+    contactTokens: ['www.kaae.org', 'info@kaae.krd', '60m Street, Erbil'],
+  },
 };
 
 export const getBrandKit = (id: string): BrandKit => {

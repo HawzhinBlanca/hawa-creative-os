@@ -106,8 +106,8 @@ export class DeterministicQAEngine implements QAEngine {
     const brandFindings: QAFinding[] = [];
     const logoAssets = clientAssets.filter((a) => a.role === 'logo_primary');
     if (logoAssets.length > 0) {
-      const primaryLogo = logoAssets[0];
-      const hasLogoNode = request.manifest.nodes.some((n) => n.assetSha256 === primaryLogo.sha256);
+      const approvedShas = new Set(logoAssets.map((a) => a.sha256));
+      const hasLogoNode = request.manifest.nodes.some((n) => Boolean(n.assetSha256 && approvedShas.has(n.assetSha256)));
       if (!hasLogoNode) {
         brandFindings.push({
           ruleId: 'OFFICIAL_LOGO_MISSING_OR_MUTATED',
@@ -116,7 +116,7 @@ export class DeterministicQAEngine implements QAEngine {
           category: 'brand',
           message: 'Official primary logo hash does not exist in canvas nodes',
           nodeIds: [],
-          evidence: { expectedSha256: primaryLogo.sha256 },
+          evidence: { expectedSha256: logoAssets[0].sha256, approvedSha256s: Array.from(approvedShas) },
         });
       }
     }

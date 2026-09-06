@@ -6,11 +6,12 @@ import {
 } from '../src/brand-kits.js';
 
 describe('Option C: Pro Brand Kits & Multi-Format Specifications', () => {
-  it('loads all 3 canonical Kurdistan commercial brand kits', () => {
+  it('loads all canonical Kurdistan commercial and institutional brand kits', () => {
     const kitIds = Object.keys(CANONICAL_BRAND_KITS);
     expect(kitIds).toContain('sebar');
     expect(kitIds).toContain('hawa');
     expect(kitIds).toContain('erbil_express');
+    expect(kitIds).toContain('kaae');
   });
 
   it('verifies SEBAR brand kit complies with verified medical-supplement standards', () => {
@@ -34,8 +35,8 @@ describe('Option C: Pro Brand Kits & Multi-Format Specifications', () => {
 
   it('verifies typography pairings support dual-script Latin and Kurdish', () => {
     for (const kit of Object.values(CANONICAL_BRAND_KITS)) {
-      expect(['Inter', 'Plus Jakarta Sans']).toContain(kit.typography.latinFont);
-      expect(['Vazirmatn', 'Noto Sans Arabic']).toContain(kit.typography.kurdishFont);
+      expect(['Inter', 'Plus Jakarta Sans', 'Minion Variable Concept', 'Verdana']).toContain(kit.typography.latinFont);
+      expect(['Vazirmatn', 'Noto Sans Arabic', 'Cairo']).toContain(kit.typography.kurdishFont);
       expect(kit.typography.headlineWeight).toBeGreaterThanOrEqual(700);
     }
   });

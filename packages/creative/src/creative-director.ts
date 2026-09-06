@@ -1,5 +1,6 @@
 import type { StudioOperation } from '@hawa/contracts';
 import type { DesignBrief, DesignPlan, AssetTopology, VisualIngredient, LayoutZone } from '@hawa/domain';
+import { buildKaaeCertificateOperations, buildKaaeAnnouncementOperations, KAAE_PRIMARY_LOGO_SHA256 } from './templates/index.js';
 
 export class CreativeDirectorRunner {
   createDesignPlan(brief: DesignBrief, clientColors: string[]): DesignPlan {
@@ -92,16 +93,24 @@ export class CreativeDirectorRunner {
   }
 
   generateStudioOperations(brief: DesignBrief, plan: DesignPlan, primaryLogoSha256: string): StudioOperation[] {
+    const isKaae =
+      primaryLogoSha256 === KAAE_PRIMARY_LOGO_SHA256 ||
+      brief.clientId === 'c1000000-0000-4000-8000-000000000002';
+
     const ops: StudioOperation[] = [];
     const variant = brief.variants[0] || { width: 1080, height: 1080 };
     const pageId = 'page_primary';
 
     // 1. Add background vector/shape
+    const bgFill = isKaae
+      ? '<rect width="100%" height="100%" fill="#0A1628"/>'
+      : '<rect width="100%" height="100%" fill="#0B0F19"/>';
+
     ops.push({
       op: 'addVector',
       nodeId: 'node_bg',
       pageId,
-      source: '<rect width="100%" height="100%" fill="#0B0F19"/>',
+      source: bgFill,
       x: 0,
       y: 0,
       width: variant.width,
@@ -121,8 +130,8 @@ export class CreativeDirectorRunner {
       },
       x: 60,
       y: 60,
-      width: 240,
-      height: 80,
+      width: isKaae ? 260 : 240,
+      height: isKaae ? 110 : 80,
       fit: 'contain',
       locked: true,
     });
@@ -132,6 +141,16 @@ export class CreativeDirectorRunner {
     for (let i = 0; i < brief.exactCopy.length; i++) {
       const block = brief.exactCopy[i];
       const isEnglish = block.language === 'en' || block.direction === 'ltr';
+
+      let fontFamily = isEnglish ? 'Inter' : 'Vazirmatn';
+      if (isKaae) {
+        if (isEnglish) {
+          fontFamily = block.role === 'headline' ? 'Minion Variable Concept' : 'Inter';
+        } else {
+          fontFamily = block.role === 'headline' ? 'Cairo' : 'Noto Naskh Arabic';
+        }
+      }
+
       ops.push({
         op: 'addText',
         nodeId: `node_text_${i}`,
@@ -145,9 +164,9 @@ export class CreativeDirectorRunner {
         style: {
           fontSize: block.role === 'headline' ? 44 : 26,
           fontWeight: block.role === 'headline' ? 'bold' : 'normal',
-          fontFamily: isEnglish ? 'Inter' : 'Vazirmatn',
+          fontFamily,
           textAlign: isEnglish ? 'left' : 'right',
-          color: '#FFFFFF',
+          color: isKaae && block.role === 'subheadline' ? '#D4A94C' : '#FFFFFF',
           lineHeight: 1.3,
         },
         locked: false, // Invariant 3: Live text must be editable
@@ -155,7 +174,50 @@ export class CreativeDirectorRunner {
       currentY += 80;
     }
 
-
     return ops;
   }
+
+  /**
+   * Directly routes to specialized authoritative KAAE studio templates
+   */
+  generateKaaeOperations(
+    brief: DesignBrief,
+    templateType: 'announcement' | 'certificate',
+    customParams?: Record<string, any>
+  ): StudioOperation[] {
+    if (templateType === 'certificate') {
+      const recipientBlock = brief.exactCopy.find((c) => c.role === 'headline') || brief.exactCopy[0];
+      const programBlock = brief.exactCopy.find((c) => c.role === 'subheadline') || brief.exactCopy[1];
+      return buildKaaeCertificateOperations({
+        recipientName: customParams?.recipientName || recipientBlock?.text || 'د. ڕێبوار ئەحمەد محەمەد',
+        programName: customParams?.programName || programBlock?.text || 'پرۆگرامی متمانەبەخشی نیشتمانی بۆ خوێندنی باڵا',
+        startDate: customParams?.startDate || '2025-09-01',
+        endDate: customParams?.endDate || '2026-06-30',
+        issueDate: customParams?.issueDate || '2026-09-06',
+        language: brief.primaryLanguage === 'ckb' ? 'ckb' : 'en',
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    } else {
+      const ckbHeadline =
+        brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline') || brief.exactCopy[0];
+      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
+      const ckbCopy =
+        brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body')) ||
+        brief.exactCopy[1];
+      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
+
+      return buildKaaeAnnouncementOperations({
+        headlineCkb: ckbHeadline?.text || 'ڕاگەیاندنی فەرمی ستانداردەکانی متمانەبەخشین',
+        headlineEn: enHeadline?.text,
+        copyCkb:
+          ckbCopy?.text ||
+          'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان.',
+        copyEn: enCopy?.text,
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    }
+  }
 }
+
