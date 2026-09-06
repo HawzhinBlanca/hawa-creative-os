@@ -47,8 +47,11 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://${POSTGRES_USER:-hawa_owner}:${POSTGRES_PASSWORD:-hawa_production_secure_pass}@postgres:5432/${POSTGRES_DB:-hawa}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-expected_office_secret}
+    volumes:
+      - ./.env.production:/app/infra/docker/.env.production
     networks:
       - core
+      - egress
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,6 +78,7 @@ services:
       RESTATE_INGRESS_URL: http://restate:8080
     networks:
       - core
+      - egress
     depends_on:
       core:
         condition: service_healthy
@@ -132,6 +136,7 @@ services:
 
 networks:
   edge: {}
+  egress: {}
   core:
     internal: true
 

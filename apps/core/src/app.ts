@@ -3213,6 +3213,20 @@ export function createApp() {
     });
   });
 
+  app.get('/v1/system/providers/test-telegram', async (c) => {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token || token === 'replace_with_telegram_bot_token') {
+      return c.json({ ok: false, message: 'Telegram bot token is not configured' });
+    }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      const data = await res.json();
+      return c.json({ ok: res.ok, telegram: data });
+    } catch (err: any) {
+      return c.json({ ok: false, error: err.message });
+    }
+  });
+
   app.post('/v1/system/providers', async (c) => {
     let body: any = {};
     try {
@@ -3243,9 +3257,17 @@ export function createApp() {
     }
 
     try {
-      const envPath = fs.existsSync(path.resolve(process.cwd(), 'infra/docker/.env.production'))
-        ? path.resolve(process.cwd(), 'infra/docker/.env.production')
-        : path.resolve(process.cwd(), 'infra/docker/.env.local');
+      const candidatePaths = [
+        path.resolve('/app/infra/docker/.env.production'),
+        path.resolve(process.cwd(), 'infra/docker/.env.production'),
+        path.resolve(process.cwd(), '../../infra/docker/.env.production'),
+        path.resolve(process.cwd(), '.env.production'),
+        path.resolve(process.cwd(), '.env.local'),
+      ];
+      const envPath = candidatePaths.find((p) => fs.existsSync(p)) || candidatePaths[0];
+      try {
+        fs.mkdirSync(path.dirname(envPath), { recursive: true });
+      } catch {}
       let currentContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
       const updateOrAppend = (key: string, val: string | undefined) => {
