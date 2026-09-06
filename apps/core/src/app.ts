@@ -727,12 +727,17 @@ export function createApp() {
 
   app.post('/api/webhooks/whatsapp', async (c) => {
     const secret = c.req.header('x-waha-secret') || c.req.header('authorization');
+    const signature = c.req.header('x-waha-signature') || c.req.header('x-hub-signature-256');
     const expectedSecret = process.env.WAHA_WEBHOOK_SECRET;
-    if (expectedSecret && secret !== expectedSecret && secret !== `Bearer ${expectedSecret}`) {
-      return problem(c, 401, 'Unauthorized', 'Invalid or missing WhatsApp webhook secret token');
-    }
 
     const rawBody = await c.req.arrayBuffer();
+    if (expectedSecret) {
+      const secretMatches = secret && (secret === expectedSecret || secret === `Bearer ${expectedSecret}`);
+      const sigMatches = signature && wahaIngress.verifySignature(rawBody, signature);
+      if (!secretMatches && !sigMatches) {
+        return problem(c, 401, 'Unauthorized', 'Invalid or missing WhatsApp webhook secret token or HMAC signature');
+      }
+    }
     const bodyText = new TextDecoder().decode(rawBody);
     let json: any = {};
     try {

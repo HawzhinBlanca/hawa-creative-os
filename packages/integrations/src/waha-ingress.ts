@@ -73,6 +73,8 @@ export const PHONE_CLIENT_DIRECTORY: Record<string, string> = {
   '9647709998877': 'client-rona',
 };
 
+import crypto from 'node:crypto';
+
 export class WahaIngressHandler {
   constructor(private readonly secretToken?: string) {}
 
@@ -82,6 +84,32 @@ export class WahaIngressHandler {
   verifySecret(providedSecret?: string): boolean {
     if (!this.secretToken) return true; // Optional in local test mode
     return providedSecret === this.secretToken;
+  }
+
+  /**
+   * Verifies HMAC-SHA256 signature against webhook raw payload with timing-safe comparison.
+   */
+  verifySignature(payload: string | Buffer | ArrayBuffer, signature?: string): boolean {
+    if (!this.secretToken) return true; // Optional in local test mode
+    if (!signature) return false;
+    try {
+      const cleanSig = signature.replace(/^sha256=/i, '').trim();
+      const hmac = crypto.createHmac('sha256', this.secretToken);
+      if (typeof payload === 'string') {
+        hmac.update(payload, 'utf8');
+      } else if (payload instanceof ArrayBuffer) {
+        hmac.update(Buffer.from(payload));
+      } else {
+        hmac.update(payload);
+      }
+      const expected = hmac.digest('hex');
+      const expectedBuf = Buffer.from(expected, 'hex');
+      const actualBuf = Buffer.from(cleanSig, 'hex');
+      if (expectedBuf.length !== actualBuf.length) return false;
+      return crypto.timingSafeEqual(expectedBuf, actualBuf);
+    } catch {
+      return false;
+    }
   }
 
   /**

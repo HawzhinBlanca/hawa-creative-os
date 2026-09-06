@@ -12,12 +12,28 @@ import type {
 export interface GooglePublisherConfig {
   serviceAccountEmail?: string;
   serviceAccountKey?: string;
+  credentialsFile?: string;
 }
 
 export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
 
   constructor(private readonly config: GooglePublisherConfig = {}) {}
+
+  /**
+   * Discovers and inspects Google Workspace service account credentials from config or environment.
+   */
+  getCredentials(): { email?: string; hasKey: boolean; source: 'config' | 'env' | 'none' } {
+    if (this.config.serviceAccountEmail && this.config.serviceAccountKey) {
+      return { email: this.config.serviceAccountEmail, hasKey: true, source: 'config' };
+    }
+    const envEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GCP_SERVICE_ACCOUNT_EMAIL;
+    const envKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (envEmail || envKey) {
+      return { email: envEmail, hasKey: Boolean(envKey), source: 'env' };
+    }
+    return { source: 'none', hasKey: false };
+  }
 
   async publish(_ctx: RequestContext, request: PublishRequest): Promise<Result<PublicationReceipt, AppError>> {
     // Invariant 12: No side effect relies on retries alone. Uses stable publicationKey

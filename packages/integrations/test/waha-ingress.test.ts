@@ -54,4 +54,19 @@ describe('WAHA Ingress & Normalization Engine (FR-004, FR-071)', () => {
     const normalized = handler.normalize(asterPayload);
     expect(normalized.detectedClientId).toBe('client-aster');
   });
+
+  it('verifies valid and rejects forged HMAC-SHA256 signatures with timing-safe comparison', () => {
+    const hmacTestKey = 'test-key-mock';
+    const handler = new WahaIngressHandler(hmacTestKey);
+    const body = JSON.stringify({ id: 'msg_99', text: 'Hello from WhatsApp' });
+
+    const validSig = require('node:crypto').createHmac('sha256', hmacTestKey).update(body).digest('hex');
+    expect(handler.verifySignature(body, validSig)).toBe(true);
+    expect(handler.verifySignature(body, `sha256=${validSig}`)).toBe(true);
+
+    // Tampered payload or signature
+    expect(handler.verifySignature(body + 'tampered', validSig)).toBe(false);
+    expect(handler.verifySignature(body, 'bad_signature_digest')).toBe(false);
+    expect(handler.verifySignature(body, undefined)).toBe(false);
+  });
 });
