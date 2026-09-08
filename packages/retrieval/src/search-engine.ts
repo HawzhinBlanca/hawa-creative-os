@@ -47,10 +47,13 @@ export interface SearchResult {
 /**
  * Normalizes Kurdish Sorani and Arabic text for consistent tokenization and retrieval.
  */
-export function normalizeSearchToken(text: string): string {
-  if (!text) return '';
-  return text
+export function normalizeSearchToken(text: any): string {
+  if (text === null || text === undefined) return '';
+  const str = typeof text === 'string' ? text : String(text);
+  if (!str.trim()) return '';
+  return str
     .toLowerCase()
+    .normalize('NFC')
     // Standardize Arabic Kaf to Kurdish Kaf
     .replace(/\u0643/g, '\u06a9')
     // Standardize Arabic Yeh to Kurdish Yeh
@@ -61,6 +64,8 @@ export function normalizeSearchToken(text: string): string {
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
     // Remove diacritics / tashkeel
     .replace(/[\u064B-\u065F\u0670]/g, '')
+    // Normalize Zero-Width Non-Joiner (ZWNJ), Zero-Width Joiner (ZWJ), and directional marks
+    .replace(/[\u200C\u200D\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, ' ')
     // Normalize punctuation
     .replace(/[،؛؟]/g, ' ')
     .trim();
@@ -112,8 +117,8 @@ export class VaultSearchEngine {
     const rawQ = query.q?.trim() || '';
     const queryTokens = extractSearchTokens(rawQ);
     const normalizedRaw = normalizeSearchToken(rawQ);
-    const limit = query.limit || 20;
-    const offset = query.offset || 0;
+    const limit = Math.max(1, Math.min(query.limit ?? 20, 200));
+    const offset = Math.max(0, query.offset || 0);
 
     const hits: SearchHit[] = [];
 
@@ -128,22 +133,24 @@ export class VaultSearchEngine {
         continue;
       }
 
+      const itemBody = item.bodyText || '';
+
       // If empty query, return all matching scope sorted by recency
       if (queryTokens.length === 0) {
         hits.push({
           item,
           score: 1.0,
           matchedTokens: [],
-          snippet: item.bodyText.substring(0, 120),
+          snippet: itemBody.substring(0, 120),
         });
         continue;
       }
 
       const itemTitleNorm = normalizeSearchToken(item.title);
       const itemSubNorm = normalizeSearchToken(item.subtitle || '');
-      const itemBodyNorm = normalizeSearchToken(item.bodyText);
+      const itemBodyNorm = normalizeSearchToken(itemBody);
       const itemIdNorm = normalizeSearchToken(item.id);
-      const itemTagsNorm = (item.tags || []).map(normalizeSearchToken);
+      const itemTagsNorm = (item.tags || []).map((t) => normalizeSearchToken(t));
 
       let score = 0;
       const matchedTokens: string[] = [];
@@ -199,7 +206,7 @@ export class VaultSearchEngine {
       // Candidate must match at least one token to qualify
       if (score > 0) {
         // Formulate snippet highlighting the first matched region
-        let snippet = item.bodyText;
+        let snippet = itemBody;
         if (snippet.length > 140) {
           const firstIdx = matchedTokens.length > 0
             ? normalizeSearchToken(snippet).indexOf(matchedTokens[0])

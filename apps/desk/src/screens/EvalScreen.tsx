@@ -185,9 +185,10 @@ export const EvalScreen: React.FC = () => {
   return (
     <section id="eval" className="screen active" style={{ overflowY: 'auto' }}>
       <div className="eval" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+        <h1 className="sr-only">Evaluation & Benchmark Suites</h1>
         {/* Left Sidebar: Dataset Navigation & Run Controls */}
         <div className="panel" style={{ padding: 16, height: 'fit-content' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>Evaluation datasets</h3>
+          <h2 style={{ margin: '0 0 12px', fontSize: 16 }}>Evaluation datasets</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {datasets.map((ds) => (
               <div
@@ -323,6 +324,9 @@ export const EvalScreen: React.FC = () => {
               {/* Search and Language Filters */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
                 <input
+                  id="eval-case-search-input"
+                  name="evalCaseSearch"
+                  aria-label="Search cases by ID, prompt text, or client"
                   type="text"
                   placeholder="Search cases by ID, prompt text, or client..."
                   value={searchQuery}
@@ -331,7 +335,7 @@ export const EvalScreen: React.FC = () => {
                     flex: 1,
                     background: 'var(--bg)',
                     border: '1px solid var(--line)',
-                    color: '#fff',
+                    color: 'var(--ink)',
                     padding: '6px 12px',
                     borderRadius: 6,
                     fontSize: 12,
@@ -380,7 +384,7 @@ export const EvalScreen: React.FC = () => {
                         const target = c.client_id || c.expected?.client || (c.expected_base_direction ? `Direction: ${c.expected_base_direction}` : '—');
                         return (
                           <tr key={c.id || idx} style={{ borderBottom: '1px solid var(--line)' }}>
-                            <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: '#38BDF8' }}>
+                            <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-text, #0369a1)' }}>
                               {c.id || `CASE-${idx + 1}`}
                             </td>
                             <td style={{ padding: '8px 10px' }}>
@@ -435,7 +439,7 @@ export const EvalScreen: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--line)', borderRadius: 8, padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <b style={{ fontSize: 13, color: '#38BDF8' }}>1. Routing & Intake Suite</b>
+                  <b style={{ fontSize: 13, color: 'var(--accent-text, #0369a1)' }}>1. Routing & Intake Suite</b>
                   <span className="pill ok">60/60 Passed</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px' }}>
@@ -450,7 +454,7 @@ export const EvalScreen: React.FC = () => {
 
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--line)', borderRadius: 8, padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <b style={{ fontSize: 13, color: '#10B981' }}>2. RTL Golden Typographic Suite</b>
+                  <b style={{ fontSize: 13, color: 'var(--ok-text, #166534)' }}>2. RTL Golden Typographic Suite</b>
                   <span className="pill ok">40/40 Passed</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px' }}>
@@ -615,13 +619,13 @@ export const EvalScreen: React.FC = () => {
             {/* Expected Invariants */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}>
-                <b style={{ fontSize: 11, color: '#38BDF8', display: 'block', marginBottom: 4 }}>Target Client / Scope</b>
+                <b style={{ fontSize: 11, color: 'var(--accent-text, #0369a1)', display: 'block', marginBottom: 4 }}>Target Client / Scope</b>
                 <span style={{ fontSize: 13, fontFamily: 'monospace' }}>
                   {inspectCase.client_id || inspectCase.expected?.client || '—'}
                 </span>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}>
-                <b style={{ fontSize: 11, color: '#10B981', display: 'block', marginBottom: 4 }}>Required Checks</b>
+                <b style={{ fontSize: 11, color: 'var(--ok-text, #166534)', display: 'block', marginBottom: 4 }}>Required Checks</b>
                 <span style={{ fontSize: 12 }}>
                   {Array.isArray(inspectCase.checks) ? inspectCase.checks.join(', ') : 'fact_isolation, zero_leakage'}
                 </span>

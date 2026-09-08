@@ -1,9 +1,11 @@
 import type { DesignBrief } from '@hawa/domain';
 
 export type TaskRoute = 'template_fill' | 'editable_composition' | 'creative_director' | 'human_only';
+export type FigmaRoute = 'buzz_template' | 'figma_freeform' | 'human';
 
 export interface RouteResolution {
   route: TaskRoute;
+  figmaRoute: FigmaRoute;
   confidence: number;
   reasoning: string;
   matchedTemplateId?: string;
@@ -19,6 +21,7 @@ export class DesignRouter {
     if (bestTemplate && bestTemplate.matchScore >= 0.9) {
       return {
         route: 'template_fill',
+        figmaRoute: 'buzz_template',
         confidence: bestTemplate.matchScore,
         reasoning: `Matched high-confidence template ${bestTemplate.id}`,
         matchedTemplateId: bestTemplate.id,
@@ -35,6 +38,7 @@ export class DesignRouter {
     if (isComplex) {
       return {
         route: 'creative_director',
+        figmaRoute: 'figma_freeform',
         confidence: 0.92,
         reasoning: 'Task classified as complex novel visual campaign, routing to Creative Director Runner',
         requiresHumanReview: false,
@@ -45,6 +49,7 @@ export class DesignRouter {
     if (brief.exactCopy.length <= 3 && brief.variants.length <= 2) {
       return {
         route: 'editable_composition',
+        figmaRoute: 'figma_freeform',
         confidence: 0.88,
         reasoning: 'Routine request with simple copy and standard dimensions',
         requiresHumanReview: false,
@@ -54,6 +59,7 @@ export class DesignRouter {
     // 4. Ambiguity / low confidence
     return {
       route: 'human_only',
+      figmaRoute: 'human',
       confidence: 0.65,
       reasoning: 'Low confidence routing match or highly customized requirement; pauses for human operator selection',
       requiresHumanReview: true,

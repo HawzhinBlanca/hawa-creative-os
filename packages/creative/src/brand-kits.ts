@@ -160,14 +160,14 @@ export const CANONICAL_BRAND_KITS: Record<string, BrandKitDefinition> = {
     nameKurdish: 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا',
     industry: 'Educational Accreditation & Institutional Quality',
     industryKurdish: 'متمانەبەخشی و ستانداردەکانی خوێندنی باڵا و پەروەردە',
-    verifiedSha256: '2acc0742b2c6a83f0d0f9330f5e1fe9dfae72fb0b28fbb282c787d5a4c4571f6',
+    verifiedSha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
     palette: {
       primary: '#4770A3',      // Official KAAE Blue (Pantone 5415 C)
-      secondary: '#0A1628',    // Midnight Foundation
-      accent: '#F7B500',       // Kurdistan Sun Gold
-      background: 'linear-gradient(150deg, #0A1628 0%, #160874 40%, #1E3A5F 100%)',
+      secondary: '#0A1628',    // Midnight Depth Foundation
+      accent: '#F7B500',       // Kurdistan Sun Gold (Pantone 7549 C)
+      background: 'linear-gradient(150deg, #0A1628 0%, #1E3A5F 50%, #2C5282 100%)',
       text: '#FFFFFF',
-      cardBg: 'rgba(255, 242, 219, 0.96)', // Parchment Cream
+      cardBg: 'rgba(253, 248, 243, 0.98)', // Academic Cream Paper
     },
     typography: {
       latinFont: 'Minion Variable Concept',
@@ -182,6 +182,64 @@ export const CANONICAL_BRAND_KITS: Record<string, BrandKitDefinition> = {
     defaultCopyEn: 'Kurdistan Regional Law No. 6 of 2022 · Independent Review',
     defaultCopyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · هەڵسەنگاندنی سەربەخۆ',
     contactTokens: ['www.kaae.org', 'info@kaae.krd', '60m Street, Erbil'],
+  },
+  fastpay: {
+    id: 'fastpay',
+    name: 'FastPay Mobile Wallet',
+    nameKurdish: 'فاستپەی - خێراترین ڕێگای پارەدان',
+    industry: 'Digital Payments & Fintech',
+    industryKurdish: 'پارەدانی دیجیتاڵی و خزمەتگوزاری دارایی',
+    verifiedSha256: 'sha256_fastpay_fintech_verified_c89b21',
+    palette: {
+      primary: '#0045F5',      // FastPay Electric Cobalt
+      secondary: '#071033',    // Midnight Navy
+      accent: '#F72585',       // Vibrant Fintech Magenta
+      background: 'linear-gradient(150deg, #071033 0%, #0045F5 60%, #4361EE 100%)',
+      text: '#FFFFFF',
+      cardBg: 'rgba(255, 255, 255, 0.96)',
+    },
+    typography: {
+      latinFont: 'Inter',
+      kurdishFont: 'Vazirmatn',
+      headlineWeight: 800,
+      copyWeight: 700,
+    },
+    logoText: 'FASTPAY · فاستپەی',
+    logoBadge: '⚡ 0% TRANSFER FEE',
+    defaultHeadlineEn: 'Instant Money Transfer Anywhere in Kurdistan',
+    defaultHeadlineCkb: 'گواستنەوەی خێرای پارە بۆ هەموو شوێنێکی کوردستان',
+    defaultCopyEn: 'Send, Receive & Pay in Seconds · Licensed by CBI',
+    defaultCopyCkb: 'بە چەند چرکەیەک پارە بنێرە و وەربگرە · مۆڵەتپێدراو لە بانکی ناوەندی',
+    contactTokens: ['fast-pay.cash', '066 211 0000', 'Erbil Empire World'],
+  },
+  aster: {
+    id: 'aster',
+    name: 'Aster Pharmacy Kurdistan',
+    nameKurdish: 'دەرمانخانەی ئاستەر',
+    industry: 'Clinical Pharmacy & Healthcare Retail',
+    industryKurdish: 'دەرمانخانە و چاودێری تەندروستی پزیشکی',
+    verifiedSha256: 'sha256_aster_pharmacy_verified_d91e45',
+    palette: {
+      primary: '#00875A',      // Clinical Emerald Green
+      secondary: '#0B2117',    // Deep Forest Slate
+      accent: '#00A3BF',       // Clean Medical Cyan
+      background: 'linear-gradient(150deg, #0B2117 0%, #00875A 60%, #00A3BF 100%)',
+      text: '#FFFFFF',
+      cardBg: 'rgba(255, 255, 255, 0.95)',
+    },
+    typography: {
+      latinFont: 'Plus Jakarta Sans',
+      kurdishFont: 'Noto Sans Arabic',
+      headlineWeight: 800,
+      copyWeight: 600,
+    },
+    logoText: 'ASTER · دەرمانخانەی ئاستەر',
+    logoBadge: '🏥 24/7 EXPRESS CARE',
+    defaultHeadlineEn: 'Your Health, Certified Medication & 24/7 Care',
+    defaultHeadlineCkb: 'تەندروستی تۆ لە پێشینەمانە · دەرمانی بڕواپێکراو بە درێژایی ٢٤ کاتژمێر',
+    defaultCopyEn: 'Original European Standards · Free Home Delivery in Erbil',
+    defaultCopyCkb: 'ستانداردی ئەوروپی و دەرمانی ڕەسەن · گەیاندنی بێبەرامبەر لە هەولێر',
+    contactTokens: ['0750 700 8899', 'Gulan Street, Erbil', 'asterpharmacy.krd'],
   },
 };
 

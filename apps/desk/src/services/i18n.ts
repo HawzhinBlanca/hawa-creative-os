@@ -82,7 +82,7 @@ export const translations: Record<Locale, TranslationSchema> = {
     },
     screenSubtitles: {
       inbox: 'Central operator desk, live task intake and pipeline transitions',
-      review: 'Interactive vector HyCanvas editor, proof evidence, and publishing gate',
+      review: 'Figma Agent Studio, live staging proof evidence, and publishing gate',
       dna: 'Brand tokens, approved copy invariants, and versioned client rules',
       library: 'Verified vector assets, SHA-256 fingerprints, and retrieval embeddings',
       settings: 'Connected channel bridges, ComfyUI worker sandbox, and model cascade status',

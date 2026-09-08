@@ -6,3 +6,4 @@ export * from './publisher.js';
 export * from './qa-engine.js';
 export * from './retrieval.js';
 export * from './asset-provider.js';
+export * from './figma-bridge.js';

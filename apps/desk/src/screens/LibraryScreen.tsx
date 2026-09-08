@@ -32,9 +32,10 @@ export const LibraryScreen: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<string>('all');
   const [clients, setClients] = useState<ClientOption[]>([
     { clientId: 'c1000000-0000-4000-8000-000000000002', name: 'KAAE (Education Accreditation)', tier: 'enterprise' },
+    { clientId: 'client-fastpay', name: 'FastPay Mobile Wallet', tier: 'enterprise' },
     { clientId: 'client-aster', name: 'Aster Pharmacy', tier: 'enterprise' },
-    { clientId: 'client-zagros', name: 'Zagros Roastery', tier: 'standard' },
     { clientId: 'client-drustee', name: 'Drustee Official', tier: 'enterprise' },
+    { clientId: 'client-zagros', name: 'Zagros Roastery', tier: 'standard' },
   ]);
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'templates' | 'assets' | 'negative'>('all');
   const [showSemanticSourceModal, setShowSemanticSourceModal] = useState(false);
@@ -113,6 +114,7 @@ export const LibraryScreen: React.FC = () => {
       assetId: asset.assetId,
       filename: asset.filename,
       svgContent: asset.sanitizedContent || assetContent,
+      imageUrl: (asset as any).imageUrl,
       sha256: asset.sha256,
       clientId: asset.clientId,
     };
@@ -129,8 +131,28 @@ export const LibraryScreen: React.FC = () => {
 
     setInsertedNotice(`Asset "${asset.filename}" loaded! Redirecting to Studio Artboard…`);
     setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('hawa:navigate', { detail: 'review' }));
       window.location.hash = '#/review';
-    }, 800);
+    }, 400);
+  };
+
+  const handleLoadTemplate = (templateId: string, templateTitle: string) => {
+    const payload = { templateId, templateTitle };
+    try {
+      sessionStorage.setItem('hawa_pending_template', JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('hawa:load_canvas_template', { detail: payload })
+    );
+
+    setInsertedNotice(`✓ Template "${templateTitle}" loaded! Redirecting to Studio Artboard…`);
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('hawa:navigate', { detail: 'review' }));
+      window.location.hash = '#/review';
+    }, 400);
   };
 
   return (
@@ -142,7 +164,7 @@ export const LibraryScreen: React.FC = () => {
             top: 20,
             right: 20,
             zIndex: 9999,
-            background: '#10B981',
+            background: '#047857',
             color: '#FFFFFF',
             padding: '12px 20px',
             borderRadius: 8,
@@ -161,8 +183,13 @@ export const LibraryScreen: React.FC = () => {
 
         {/* Multi-Tenant Client Selector (FR-018, Gate A & B) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6, marginRight: 6 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Client Isolation:</span>
+          <label htmlFor="library-client-selector" style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
+            Client Isolation:
+          </label>
           <select
+            id="library-client-selector"
+            name="libraryClientSelector"
+            aria-label="Filter library assets by client isolation"
             style={{
               padding: '6px 10px',
               borderRadius: 6,
@@ -209,6 +236,8 @@ export const LibraryScreen: React.FC = () => {
           Negative Examples (67)
         </button>
       </div>
+
+      <h2 className="sr-only">Verified Vector Assets and Commercial Templates</h2>
 
       <div className="grid4">
         <div className="stat"><b>318</b><span>approved designs</span></div>
@@ -284,60 +313,225 @@ export const LibraryScreen: React.FC = () => {
           </div>
         )}
 
-        {/* KAAE Card 1: Accreditation Certificate */}
-        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+        {/* Verified Asset Sample: Official KAAE Logo */}
+        {(libraryFilter === 'all' || libraryFilter === 'assets') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
           <div className="card" style={{ padding: 14 }}>
-            <div className="canvaswrap" style={{ minHeight: 220, background: '#FFF2DB' }}>
-              <div className="canvas" style={{ width: '80%', border: '4px double #4770A3', background: '#FFFFFF', padding: 12, textAlign: 'center' }}>
-                <div style={{ color: '#4770A3', fontSize: 11, fontWeight: 'bold', letterSpacing: '0.05em' }}>KAAE · دەستەی متمانەبەخشی</div>
-                <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 16, fontWeight: 'bold', color: '#0A1628', margin: '6px 0' }}>بڕوانامەی متمانەبەخشینی نیشتمانی</div>
-                <div style={{ fontSize: 10, color: '#D4A94C', fontWeight: 600 }}>LAW NO. 6 OF 2022</div>
+            <div className="canvaswrap" style={{ minHeight: 180, background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+              <div style={{ textAlign: 'center' }}>
+                <img
+                  src="/assets/logos/kaae-official-logo.png"
+                  alt="KAAE Official Real Logo"
+                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }}
+                />
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
+                  SHA-256: 40dab5f8ca1fe647…
+                </div>
               </div>
             </div>
-            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Institutional Certificate · A4 Landscape</h3>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>kaae-official-logo.png</h3>
+            <div className="meta" style={{ marginBottom: 10 }}>
+              <span className="pill ok">Official Emblem</span>
+              <span className="pill blue">KAAE</span>
+              <span className="pill">2687×2687 HD</span>
+            </div>
+            <button
+              className="btn primary"
+              style={{ width: '100%', fontSize: 12, padding: '6px 10px' }}
+              onClick={() =>
+                handleInsertIntoCanvas({
+                  assetId: 'kaae_official_logo_real',
+                  filename: 'kaae-official-logo.png',
+                  mimeType: 'image/png',
+                  sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
+                  sanitized: true,
+                  storageKey: 'assets/logos/kaae-official-logo.png',
+                  imageUrl: '/assets/logos/kaae-official-logo.png',
+                } as any)
+              }
+            >
+              📥 Insert into Canvas
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 1: Accreditation Mandate (Square 1:1) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#FDF8F3' }}>
+              <div className="canvas" style={{ width: '75%', borderLeft: '4px solid #F7B500', background: '#FFFFFF', padding: 14, textAlign: 'left', borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+                <span className="pill" style={{ fontSize: 8.5, background: 'rgba(30, 64, 175, 0.12)', color: '#1e40af', fontWeight: 'bold' }}>LAW NO. 6 OF 2022</span>
+                <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0A1628', margin: '8px 0 4px', lineHeight: 1.25 }}>Institutional Accreditation Mandate</div>
+                <div style={{ fontSize: 9.5, color: '#1e40af', fontWeight: 600 }}>100% Compliance · 12 Core Standards · 2026 Cycle</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Institutional Mandate · 1:1 Square</h3>
             <div className="meta">
-              <span className="pill ok">Vector .hyc</span>
+              <span className="pill ok">Figma Buzz</span>
+              <span className="pill">KAAE</span>
+              <span className="pill">1080 × 1080</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12, background: '#4770A3', color: '#fff' }}
+              onClick={() => handleLoadTemplate('kaae_mandate', 'KAAE Institutional Mandate · 1:1 Square')}
+            >
+              📥 Load Mandate Template
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 2: Standards of Higher Education (Portrait 4:5) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#0A1628' }}>
+              <div className="canvas" style={{ width: '65%', background: 'linear-gradient(150deg, #0A1628, #1E3A5F)', padding: 12, textAlign: 'left', borderRadius: 6, border: '1px solid #4770A3' }}>
+                <span className="pill" style={{ fontSize: 8.5, background: '#F7B500', color: '#0A1628', fontWeight: 'bold' }}>STANDARDS CRITERIA</span>
+                <div style={{ fontSize: 12.5, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0 4px', lineHeight: 1.25 }}>Higher Education Standards</div>
+                <div style={{ fontSize: 9, color: '#CBD5E1' }}>01 Governance · 02 Faculty · 03 Facilities</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Higher Ed Standards · 4:5 Feed</h3>
+            <div className="meta">
+              <span className="pill ok">Figma Buzz</span>
+              <span className="pill">KAAE</span>
+              <span className="pill">1080 × 1350</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => handleLoadTemplate('kaae_standards', 'KAAE Higher Ed Standards · 4:5 Feed')}
+            >
+              📥 Load Standards Template
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 3: Strategic Roadmap 2026-2028 (Square 1:1 Keynote) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#0A1628' }}>
+              <div className="canvas" style={{ width: '70%', background: '#0A1628', border: '1px solid #F7B500', padding: 12, textAlign: 'center', borderRadius: 6 }}>
+                <div style={{ color: '#F7B500', fontSize: 10, fontWeight: 'bold', letterSpacing: '0.05em' }}>2026 – 2028 ROADMAP</div>
+                <div style={{ fontSize: 12.5, fontWeight: 'bold', color: '#FFFFFF', margin: '6px 0 4px' }}>Strategic Quality Roadmap</div>
+                <div style={{ fontSize: 8.5, color: '#94A3B8' }}>4 Phased National Deployment Milestones</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Strategic Roadmap · 1:1 Keynote</h3>
+            <div className="meta">
+              <span className="pill ok">Figma Buzz</span>
+              <span className="pill">KAAE</span>
+              <span className="pill">1080 × 1080</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => handleLoadTemplate('kaae_roadmap', 'KAAE Strategic Roadmap · 1:1 Keynote')}
+            >
+              📥 Load Roadmap Template
+            </button>
+          </div>
+        )}
+
+        {/* KAAE Card 4: Accreditation Certificate (A4 Landscape) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#FDF8F3' }}>
+              <div className="canvas" style={{ width: '82%', border: '3px double #4770A3', background: '#FFFFFF', padding: 12, textAlign: 'center' }}>
+                <div style={{ color: '#1e40af', fontSize: 10.5, fontWeight: 'bold', letterSpacing: '0.05em' }}>KAAE · دەستەی متمانەبەخشی</div>
+                <div style={{ fontSize: 14, fontWeight: 'bold', color: '#0A1628', margin: '5px 0' }}>Institutional Accreditation Diploma</div>
+                <div style={{ fontSize: 9.5, color: '#92400e', fontWeight: 700 }}>LAW NO. 6 OF 2022</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Institutional Diploma · A4 Landscape</h3>
+            <div className="meta">
+              <span className="pill ok">Figma Master</span>
               <span className="pill">KAAE</span>
               <span className="pill">A4 @ 300DPI</span>
             </div>
             <button
               className="btn"
               style={{ marginTop: 8, width: '100%', fontSize: 12 }}
-              onClick={() => {
-                setInsertedNotice('✓ KAAE Accreditation Certificate template loaded into Studio');
-                setTimeout(() => setInsertedNotice(null), 3500);
-              }}
+              onClick={() => handleLoadTemplate('kaae_certificate', 'KAAE Institutional Diploma · A4 Landscape')}
             >
-              📥 Load Certificate in Studio
+              📥 Load Certificate Staging
             </button>
           </div>
         )}
 
-        {/* KAAE Card 2: Social Announcement */}
-        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'c1000000-0000-4000-8000-000000000002') && (
+        {/* Commercial Brand Card 1: FastPay 1:1 Fintech Promo (Horizon 19) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'client-fastpay') && (
           <div className="card" style={{ padding: 14 }}>
-            <div className="canvaswrap" style={{ minHeight: 220, background: '#0A1628' }}>
-              <div className="canvas" style={{ width: '60%', background: 'linear-gradient(150deg, #0A1628, #160874)', padding: 12, textAlign: 'right' }}>
-                <span className="pill" style={{ fontSize: 9, background: '#F7B500', color: '#0A1628', fontWeight: 'bold' }}>بڕیاری فەرمی</span>
-                <div className="t1" dir="rtl" lang="ckb" style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0' }}>ڕاگەیەندراوی متمانەبەخشین</div>
-                <div style={{ fontSize: 9, color: '#94A3B8' }}>info@kaae.krd · Erbil</div>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#071033' }}>
+              <div className="canvas" style={{ width: '70%', background: 'linear-gradient(135deg, #071033, #0045F5)', border: '2px solid #0045F5', padding: 12, textAlign: 'left', borderRadius: 8 }}>
+                <span className="pill" style={{ fontSize: 8.5, background: '#B5179E', color: '#FFFFFF', fontWeight: 'bold' }}>⚡ 0% FEES · CBI LICENSED</span>
+                <div style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0 4px', lineHeight: 1.25 }}>Instant Money Transfer</div>
+                <div style={{ fontSize: 9.5, color: '#4CC9F0', fontWeight: 700 }}>خەڵاتی بەخێرهاتن: ٥٬٠٠٠ دینار کاشباک</div>
               </div>
             </div>
-            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>KAAE Social Announcement Feed Card</h3>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>FastPay Fintech Promo · 1:1 Square</h3>
             <div className="meta">
-              <span className="pill ok">Cairo Display</span>
-              <span className="pill">KAAE</span>
-              <span className="pill">1080 x 1350</span>
+              <span className="pill ok">Vector Live</span>
+              <span className="pill">FastPay</span>
+              <span className="pill">1080 × 1080</span>
             </div>
             <button
               className="btn"
-              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
-              onClick={() => {
-                setInsertedNotice('✓ KAAE Social Announcement template loaded into Studio');
-                setTimeout(() => setInsertedNotice(null), 3500);
-              }}
+              style={{ marginTop: 8, width: '100%', fontSize: 12, background: '#0045F5', color: '#fff' }}
+              onClick={() => handleLoadTemplate('fastpay_promo', 'FastPay Fintech Promo · 1:1 Square')}
             >
-              📥 Load Card in Studio
+              📥 Load FastPay Template
+            </button>
+          </div>
+        )}
+
+        {/* Commercial Brand Card 2: Aster Pharmacy 4:5 Healthcare (Horizon 19) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'client-aster') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#02231E' }}>
+              <div className="canvas" style={{ width: '65%', background: 'linear-gradient(150deg, #02231E, #064E3B)', border: '2px solid #10B981', padding: 12, textAlign: 'left', borderRadius: 8 }}>
+                <span className="pill" style={{ fontSize: 8.5, background: '#047857', color: '#FFFFFF', fontWeight: 'bold' }}>🏥 24/7 CLINICAL CARE</span>
+                <div style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0 4px', lineHeight: 1.25 }}>Healthcare & Prescriptions</div>
+                <div style={{ fontSize: 9.5, color: '#FCD34D', fontWeight: 700 }}>داشکاندنی وەرزی: ٪٢٥ بۆ هەموو ڤیتامینەکان</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Aster Healthcare Campaign · 4:5 Feed</h3>
+            <div className="meta">
+              <span className="pill ok">Vector Live</span>
+              <span className="pill">Aster Pharmacy</span>
+              <span className="pill">1080 × 1350</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12, background: '#064E3B', color: '#fff', borderColor: '#10B981' }}
+              onClick={() => handleLoadTemplate('aster_healthcare', 'Aster Healthcare Campaign · 4:5 Feed')}
+            >
+              📥 Load Aster Template
+            </button>
+          </div>
+        )}
+
+        {/* Commercial Brand Card 3: Drustee Clinical 1:1 Supplement (Horizon 19) */}
+        {(libraryFilter === 'all' || libraryFilter === 'templates') && (selectedClient === 'all' || selectedClient === 'client-drustee') && (
+          <div className="card" style={{ padding: 14 }}>
+            <div className="canvaswrap" style={{ minHeight: 220, background: '#062319' }}>
+              <div className="canvas" style={{ width: '70%', background: 'linear-gradient(135deg, #062319, #0B3828)', border: '2px solid #EAB308', padding: 12, textAlign: 'left', borderRadius: 8 }}>
+                <span className="pill" style={{ fontSize: 8.5, background: '#EAB308', color: '#062319', fontWeight: 'bold' }}>🌿 100% ORGANIC GMP</span>
+                <div style={{ fontSize: 13, fontWeight: 'bold', color: '#FFFFFF', margin: '8px 0 4px', lineHeight: 1.25 }}>Clinical Health Supplements</div>
+                <div style={{ fontSize: 9.5, color: '#FDE047', fontWeight: 700 }}>بڕوانامەی نێودەوڵەتی GMP و کۆنتڕۆڵی جۆری</div>
+              </div>
+            </div>
+            <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Drustee Organic Supplement · 1:1 Square</h3>
+            <div className="meta">
+              <span className="pill ok">Vector Live</span>
+              <span className="pill">Drustee Health</span>
+              <span className="pill">1080 × 1080</span>
+            </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12, background: '#0B3828', color: '#FDE047', borderColor: '#EAB308' }}
+              onClick={() => handleLoadTemplate('drustee_clinical', 'Drustee Organic Supplement · 1:1 Square')}
+            >
+              📥 Load Drustee Template
             </button>
           </div>
         )}
@@ -353,10 +547,17 @@ export const LibraryScreen: React.FC = () => {
             </div>
             <h3 style={{ margin: '10px 0 4px', fontSize: 14 }}>Podcast guest · approved</h3>
             <div className="meta">
-              <span className="pill ok">editable .hyc</span>
+              <span className="pill ok">Figma Buzz</span>
               <span className="pill">Aster</span>
               <span className="pill">ckb</span>
             </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => handleLoadTemplate('aster_podcast', 'Podcast Guest · Approved')}
+            >
+              📥 Load Podcast Template
+            </button>
           </div>
         )}
 
@@ -373,6 +574,13 @@ export const LibraryScreen: React.FC = () => {
               <span className="pill ok">template v7</span>
               <span className="pill">3 formats</span>
             </div>
+            <button
+              className="btn"
+              style={{ marginTop: 8, width: '100%', fontSize: 12 }}
+              onClick={() => handleLoadTemplate('aster_retail', 'Retail Offer Family')}
+            >
+              📥 Load Retail Template
+            </button>
           </div>
         )}
 
@@ -533,10 +741,13 @@ export const LibraryScreen: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, margin: '14px 0' }}>
               <div>
-                <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+                <label htmlFor="upload-client-select" style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                   Target Client Tenant
                 </label>
                 <select
+                  id="upload-client-select"
+                  name="uploadClient"
+                  aria-label="Target Client Tenant"
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
                   value={uploadClient}
                   onChange={(e) => setUploadClient(e.target.value)}
@@ -550,10 +761,13 @@ export const LibraryScreen: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+                <label htmlFor="upload-category-select" style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                   Asset Category
                 </label>
                 <select
+                  id="upload-category-select"
+                  name="uploadCategory"
+                  aria-label="Asset Category"
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
                   value={uploadCategory}
                   onChange={(e) => setUploadCategory(e.target.value)}
@@ -567,10 +781,13 @@ export const LibraryScreen: React.FC = () => {
             </div>
 
             <div style={{ margin: '14px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+              <label htmlFor="upload-asset-name" style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                 Asset Filename
               </label>
               <input
+                id="upload-asset-name"
+                name="assetName"
+                aria-label="Asset Filename"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 value={assetName}
                 onChange={(e) => setAssetName(e.target.value)}
@@ -578,10 +795,13 @@ export const LibraryScreen: React.FC = () => {
             </div>
 
             <div style={{ margin: '14px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
+              <label htmlFor="upload-asset-content" style={{ display: 'block', fontWeight: 650, fontSize: 12, marginBottom: 4 }}>
                 SVG Source or Content
               </label>
               <textarea
+                id="upload-asset-content"
+                name="assetContent"
+                aria-label="SVG Source or Content"
                 style={{
                   width: '100%',
                   height: 95,

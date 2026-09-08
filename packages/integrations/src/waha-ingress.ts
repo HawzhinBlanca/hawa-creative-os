@@ -63,10 +63,13 @@ export function normalizeKurdishIncomingText(text: string): string {
     .trim();
 }
 
+export const KAAE_CLIENT_ID = 'c1000000-0000-4000-8000-000000000002';
+
 /**
  * Known Office / Client phone number routing table (Invariant #6 scope mapping)
  */
 export const PHONE_CLIENT_DIRECTORY: Record<string, string> = {
+  '9647500000001': KAAE_CLIENT_ID,
   '9647501234567': 'client-drustee',
   '9647507654321': 'client-aster',
   '9647701112233': 'client-nova',
@@ -124,8 +127,31 @@ export class WahaIngressHandler {
     const text = data.body || data.caption || '';
     const normalizedText = normalizeKurdishIncomingText(text);
 
-    // Derive or map client ID before any retrieval (Invariant #6)
-    const detectedClientId = raw.clientId || PHONE_CLIENT_DIRECTORY[phoneClean] || 'client-drustee';
+    // Derive or map client ID before any retrieval (Invariant #4 & #6)
+    let detectedClientId = raw.clientId || PHONE_CLIENT_DIRECTORY[phoneClean];
+    if (!detectedClientId) {
+      const lower = text.toLowerCase();
+      if (
+        lower.includes('kaae') ||
+        text.includes('باوەڕپێدان') ||
+        text.includes('کەی ئەی') ||
+        lower.includes('accreditation') ||
+        lower.includes('university') ||
+        text.includes('زانکۆ')
+      ) {
+        detectedClientId = KAAE_CLIENT_ID;
+      } else if (lower.includes('drustee') || text.includes('دەرمان') || text.includes('ڤیتامین')) {
+        detectedClientId = 'client-drustee';
+      } else if (lower.includes('aster') || text.includes('ئاستێر') || text.includes('هۆتێل')) {
+        detectedClientId = 'client-aster';
+      } else if (lower.includes('nova') || text.includes('نۆڤا') || text.includes('تەکنەلۆجیا')) {
+        detectedClientId = 'client-nova';
+      } else if (lower.includes('rona') || text.includes('ڕۆنا') || text.includes('مۆدە')) {
+        detectedClientId = 'client-rona';
+      } else {
+        detectedClientId = 'client-drustee';
+      }
+    }
 
     return {
       platform: 'whatsapp',

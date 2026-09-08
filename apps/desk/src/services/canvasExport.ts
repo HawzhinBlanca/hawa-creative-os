@@ -277,7 +277,17 @@ export async function exportToPngBlob(state: CanvasExportState): Promise<{ blob:
         ctx.font = `bold ${badgeFontSize}px Inter, Vazirmatn, sans-serif`;
         ctx.textAlign = 'center';
         const badgeLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
-        ctx.fillText(badgeLabel || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + badgeFontSize * 0.35);
+        const lines = (badgeLabel || '').split('\n').filter((l: string) => l.trim().length > 0);
+        if (lines.length <= 1) {
+          ctx.fillText(lines[0] || '', nodeX + nodeW / 2, nodeY + nodeH / 2 + badgeFontSize * 0.35);
+        } else {
+          const lineHeight = Math.round(badgeFontSize * 1.25);
+          const totalTextH = lines.length * lineHeight;
+          const startY = Math.round(nodeY + (nodeH - totalTextH) / 2 + badgeFontSize * 0.85);
+          lines.forEach((line: string, idx: number) => {
+            ctx.fillText(line, nodeX + nodeW / 2, startY + idx * lineHeight);
+          });
+        }
       } else if (cNode.role === 'text_custom') {
         ctx.fillStyle = cNode.color || '#FFFFFF';
         const customFont = cNode.fontFamily || (isRtl ? 'Vazirmatn, "Noto Sans Arabic"' : 'Inter');
@@ -287,13 +297,34 @@ export async function exportToPngBlob(state: CanvasExportState): Promise<{ blob:
         ctx.textAlign = cNode.textAlign || 'center';
         const textX = cNode.textAlign === 'center' ? nodeX + nodeW / 2 : cNode.textAlign === 'right' ? nodeX + nodeW : nodeX;
         const textLabel = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
-        ctx.fillText(textLabel || '', textX, nodeY + nodeH / 2 + customFontSize * 0.35);
+        const lines = (textLabel || '').split('\n');
+        if (lines.length <= 1) {
+          ctx.fillText(lines[0] || '', textX, nodeY + nodeH / 2 + customFontSize * 0.35);
+        } else {
+          const lineHeight = Math.round(customFontSize * 1.3);
+          const totalHeight = lines.length * lineHeight;
+          const startY = Math.round(nodeY + (nodeH - totalHeight) / 2 + customFontSize * 0.85);
+          lines.forEach((line: string, idx: number) => {
+            ctx.fillText(line, textX, startY + idx * lineHeight);
+          });
+        }
       } else if (cNode.role === 'image_custom') {
-        if (cNode.svgContent && typeof Image !== 'undefined') {
+        if (cNode.imageUrl && typeof Image !== 'undefined') {
           try {
             await new Promise<void>((resolve) => {
+              let finished = false;
+              const timer = setTimeout(() => {
+                if (!finished) {
+                  finished = true;
+                  resolve();
+                }
+              }, 2500);
               const img = new Image();
+              img.crossOrigin = 'anonymous';
               img.onload = () => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
                 try {
                   ctx.drawImage(img, nodeX, nodeY, nodeW, nodeH);
                 } catch {
@@ -301,7 +332,45 @@ export async function exportToPngBlob(state: CanvasExportState): Promise<{ blob:
                 }
                 resolve();
               };
-              img.onerror = () => resolve();
+              img.onerror = () => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                resolve();
+              };
+              img.src = cNode.imageUrl;
+            });
+          } catch {
+            // ignore
+          }
+        } else if (cNode.svgContent && typeof Image !== 'undefined') {
+          try {
+            await new Promise<void>((resolve) => {
+              let finished = false;
+              const timer = setTimeout(() => {
+                if (!finished) {
+                  finished = true;
+                  resolve();
+                }
+              }, 2500);
+              const img = new Image();
+              img.onload = () => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                try {
+                  ctx.drawImage(img, nodeX, nodeY, nodeW, nodeH);
+                } catch {
+                  // ignore
+                }
+                resolve();
+              };
+              img.onerror = () => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                resolve();
+              };
               img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(cNode.svgContent);
             });
           } catch {
@@ -348,6 +417,16 @@ export async function exportToHighResPng(state: CanvasExportState): Promise<stri
   return filename;
 }
 
+export function escapeSvgXml(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 /**
  * Standalone Clean Vector SVG Export with Embedded Web Fonts, Dynamic Custom Layers, & Directional Isolates
  */
@@ -372,9 +451,9 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
     const hlText = isRtl ? (headlineNode?.textCkb || state.headlineCkb) : (headlineNode?.textEn || state.headlineEn);
 
     headlineSvg = state.langVariant === 'bilingual'
-      ? `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}">${headlineNode?.textEn || state.headlineEn}</text>
-         <text x="${width * 0.92}" y="${hlY + Math.round(hlFontSize * 1.3)}" fill="${state.accentColor}" font-family="Vazirmatn, sans-serif" font-size="${Math.round(hlFontSize * 0.8)}" font-weight="${hlWeight}" text-anchor="end" dir="rtl">&#x2067;${headlineNode?.textCkb || state.headlineCkb}&#x2069;</text>`
-      : `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="${isRtl ? 'Vazirmatn' : state.fontFamily}, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}" dir="${isRtl ? 'rtl' : 'ltr'}">&#x2067;${hlText}&#x2069;</text>`;
+      ? `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}">${escapeSvgXml(headlineNode?.textEn || state.headlineEn)}</text>
+         <text x="${width * 0.92}" y="${hlY + Math.round(hlFontSize * 1.3)}" fill="${state.accentColor}" font-family="Vazirmatn, sans-serif" font-size="${Math.round(hlFontSize * 0.8)}" font-weight="${hlWeight}" text-anchor="end" dir="rtl">&#x2067;${escapeSvgXml(headlineNode?.textCkb || state.headlineCkb)}&#x2069;</text>`
+      : `<text x="${hlX}" y="${hlY}" fill="#FFFFFF" font-family="${isRtl ? 'Vazirmatn' : state.fontFamily}, sans-serif" font-size="${hlFontSize}" font-weight="${hlWeight}" text-anchor="${hlAnchor}" dir="${isRtl ? 'rtl' : 'ltr'}">&#x2067;${escapeSvgXml(hlText)}&#x2069;</text>`;
   }
 
   // Render any dynamic custom nodes into SVG vector elements
@@ -403,9 +482,20 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
         const textColor = cNode.color || '#FFFFFF';
         const fontSize = Math.round((cNode.fontSize || 16) * scaleAvg);
         const label = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
+        const lines = (label || '').split('\n').filter((l: string) => l.trim().length > 0);
+        let badgeSvg = '';
+        if (lines.length <= 1) {
+          badgeSvg = `<text x="${nodeX + nodeW / 2}" y="${nodeY + nodeH / 2 + Math.round(fontSize * 0.35)}" fill="${textColor}" font-family="Inter, Vazirmatn, sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle">${escapeSvgXml(lines[0] || '')}</text>`;
+        } else {
+          const lineHeight = Math.round(fontSize * 1.25);
+          const totalH = lines.length * lineHeight;
+          const startY = Math.round(nodeY + (nodeH - totalH) / 2 + fontSize * 0.85);
+          const tspans = lines.map((l: string, idx: number) => `<tspan x="${nodeX + nodeW / 2}" y="${startY + idx * lineHeight}">${escapeSvgXml(l)}</tspan>`).join('');
+          badgeSvg = `<text fill="${textColor}" font-family="Inter, Vazirmatn, sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle">${tspans}</text>`;
+        }
         customNodesSvg += `\n  <g${rot}${op}>
     <rect x="${nodeX}" y="${nodeY}" width="${nodeW}" height="${nodeH}" rx="${rx}" fill="${bg}"/>
-    <text x="${nodeX + nodeW / 2}" y="${nodeY + nodeH / 2 + Math.round(fontSize * 0.35)}" fill="${textColor}" font-family="Inter, Vazirmatn, sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle">${label || ''}</text>
+    ${badgeSvg}
   </g>`;
       } else if (cNode.role === 'text_custom') {
         const textColor = cNode.color || '#FFFFFF';
@@ -417,10 +507,24 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
         const textY = nodeY + nodeH / 2 + Math.round(fontSize * 0.35);
         const dirAttr = (cNode.direction || (isRtl ? 'rtl' : 'ltr')) === 'rtl' ? ' dir="rtl"' : '';
         const label = state.langVariant === 'ckb' ? (cNode.textCkb || cNode.textEn) : cNode.textEn;
-        const formattedText = (cNode.direction === 'rtl' || isRtl) ? `&#x2067;${label || ''}&#x2069;` : (label || '');
-        customNodesSvg += `\n  <text x="${textX}" y="${textY}" fill="${textColor}" font-family="${font}" font-size="${fontSize}" font-weight="${weight}" text-anchor="${anchor}"${dirAttr}${op}${rot}>${formattedText}</text>`;
+        const lines = (label || '').split('\n');
+        if (lines.length <= 1) {
+          const formattedText = (cNode.direction === 'rtl' || isRtl) ? `&#x2067;${escapeSvgXml(label || '')}&#x2069;` : escapeSvgXml(label || '');
+          customNodesSvg += `\n  <text x="${textX}" y="${textY}" fill="${textColor}" font-family="${font}" font-size="${fontSize}" font-weight="${weight}" text-anchor="${anchor}"${dirAttr}${op}${rot}>${formattedText}</text>`;
+        } else {
+          const lineHeight = Math.round(fontSize * 1.3);
+          const totalH = lines.length * lineHeight;
+          const startY = Math.round(nodeY + (nodeH - totalH) / 2 + fontSize * 0.85);
+          const tspans = lines.map((l: string, idx: number) => {
+            const formatted = (cNode.direction === 'rtl' || isRtl) ? `&#x2067;${escapeSvgXml(l)}&#x2069;` : escapeSvgXml(l);
+            return `<tspan x="${textX}" y="${startY + idx * lineHeight}">${formatted}</tspan>`;
+          }).join('');
+          customNodesSvg += `\n  <text fill="${textColor}" font-family="${font}" font-size="${fontSize}" font-weight="${weight}" text-anchor="${anchor}"${dirAttr}${op}${rot}>${tspans}</text>`;
+        }
       } else if (cNode.role === 'image_custom') {
-        if (cNode.svgContent) {
+        if (cNode.imageUrl) {
+          customNodesSvg += `\n  <image href="${cNode.imageUrl}" x="${nodeX}" y="${nodeY}" width="${nodeW}" height="${nodeH}" preserveAspectRatio="xMidYMid meet"${rot}${op}/>`;
+        } else if (cNode.svgContent) {
           const rawSvg = cNode.svgContent.replace(/<\?xml[^>]*\?>/g, '').trim();
           customNodesSvg += `\n  <g transform="translate(${nodeX}, ${nodeY})"${rot}${op}>
     <svg width="${nodeW}" height="${nodeH}" viewBox="0 0 480 600" preserveAspectRatio="none">
@@ -448,7 +552,7 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
   <!-- Brand Logo Badge -->
   <g transform="translate(${logoX}, ${logoY})">
     <rect width="${logoW}" height="${logoH}" rx="8" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-    <text x="${isRtl ? logoW - 24 : 24}" y="${Math.round(logoH * 0.64)}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="22" font-weight="bold" text-anchor="${isRtl ? 'end' : 'start'}">${state.brandKit.logoText}</text>
+    <text x="${isRtl ? logoW - 24 : 24}" y="${Math.round(logoH * 0.64)}" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="22" font-weight="bold" text-anchor="${isRtl ? 'end' : 'start'}">${escapeSvgXml(state.brandKit.logoText)}</text>
   </g>`;
   }
 
@@ -463,10 +567,10 @@ export function generateSvgData(state: CanvasExportState): { filename: string; s
     const badgeRadius = copyNode && typeof copyNode.borderRadius === 'number' ? Math.round(copyNode.borderRadius * scaleAvg) : 16;
     const copyText = isRtl ? (copyNode?.textCkb || state.copyCkb) : (copyNode?.textEn || state.copyEn);
     const badgeDisplayText = state.langVariant === 'bilingual'
-      ? `${copyNode?.textEn || state.copyEn} · &#x2067;${copyNode?.textCkb || state.copyCkb}&#x2069;`
+      ? `${escapeSvgXml(copyNode?.textEn || state.copyEn)} · &#x2067;${escapeSvgXml(copyNode?.textCkb || state.copyCkb)}&#x2069;`
       : isRtl
-      ? `&#x2067;${copyText}&#x2069;`
-      : copyText;
+      ? `&#x2067;${escapeSvgXml(copyText)}&#x2069;`
+      : escapeSvgXml(copyText);
 
     const badgeTextColor = copyNode?.color || (hexToLuminance(badgeBg) > 0.4 ? '#0F172A' : '#FFFFFF');
     copyBadgeSvg = `
@@ -576,12 +680,43 @@ export function exportToHycPackage(state: CanvasExportState, task?: any): string
   return filename;
 }
 
-function hexToLuminance(hex: string): number {
-  const cleanHex = hex.replace('#', '');
-  if (cleanHex.length < 6) return 0.5;
-  const r = parseInt(cleanHex.slice(0, 2), 16) / 255;
-  const g = parseInt(cleanHex.slice(2, 4), 16) / 255;
-  const b = parseInt(cleanHex.slice(4, 6), 16) / 255;
+function parseColorToRgb(color: string): [number, number, number] {
+  if (!color || typeof color !== 'string') return [128, 128, 128];
+  const trimmed = color.trim().toLowerCase();
+  if (trimmed.startsWith('rgb')) {
+    const match = trimmed.match(/\(([^)]+)\)/);
+    if (match) {
+      const parts = match[1].split(',').map((p) => parseFloat(p.trim()));
+      if (parts.length >= 3) {
+        return [
+          Math.min(255, Math.max(0, Math.round(parts[0] || 0))),
+          Math.min(255, Math.max(0, Math.round(parts[1] || 0))),
+          Math.min(255, Math.max(0, Math.round(parts[2] || 0))),
+        ];
+      }
+    }
+  }
+  const cleanHex = trimmed.replace('#', '');
+  if (cleanHex.length === 3) {
+    const r = parseInt(cleanHex[0] + cleanHex[0], 16);
+    const g = parseInt(cleanHex[1] + cleanHex[1], 16);
+    const b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    return [isNaN(r) ? 128 : r, isNaN(g) ? 128 : g, isNaN(b) ? 128 : b];
+  }
+  if (cleanHex.length >= 6) {
+    const r = parseInt(cleanHex.slice(0, 2), 16);
+    const g = parseInt(cleanHex.slice(2, 4), 16);
+    const b = parseInt(cleanHex.slice(4, 6), 16);
+    return [isNaN(r) ? 128 : r, isNaN(g) ? 128 : g, isNaN(b) ? 128 : b];
+  }
+  return [128, 128, 128];
+}
+
+function hexToLuminance(color: string): number {
+  const [r255, g255, b255] = parseColorToRgb(color);
+  const r = r255 / 255;
+  const g = g255 / 255;
+  const b = b255 / 255;
   const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
@@ -605,7 +740,7 @@ export function generateHycPackageData(state: CanvasExportState, task?: any): { 
         id: n.id,
         role: n.role,
         name: n.name,
-        type: n.role === 'headline' ? 'text_vector' : n.role === 'copy' ? 'badge_vector' : n.role === 'logo' ? 'brand_asset' : 'shape_vector',
+        type: n.role === 'headline' ? 'text_vector' : n.role === 'copy' ? 'badge_vector' : n.role === 'logo' ? 'brand_asset' : n.role === 'image_custom' ? 'asset_vector' : 'shape_vector',
         x: n.x,
         y: n.y,
         width: n.width,
@@ -626,8 +761,10 @@ export function generateHycPackageData(state: CanvasExportState, task?: any): { 
         borderWidth: n.borderWidth,
         borderRadius: n.borderRadius,
         svgContent: n.svgContent,
+        imageUrl: (n as any).imageUrl,
         assetHash: n.assetHash,
         direction: n.direction,
+        digitScript: (n as any).digitScript,
         aspectRatioLocked: n.aspectRatioLocked,
         groupId: n.groupId,
         textAlign: n.textAlign,
@@ -799,7 +936,9 @@ export async function importFromHycPackage(fileOrContent: File | string): Promis
         textEn: n.contentEn || n.textEn || undefined,
         textCkb: n.contentCkb || n.textCkb || undefined,
         svgContent: n.svgContent ? sanitizeSvgContent(n.svgContent) || undefined : undefined,
+        imageUrl: n.imageUrl || undefined,
         assetHash: n.assetHash || n.sha256 || undefined,
+        digitScript: n.digitScript === 'eastern' ? 'eastern' : n.digitScript === 'western' ? 'western' : undefined,
         groupId: n.groupId || undefined,
         textAlign: n.textAlign || undefined,
         shadow: n.shadow || undefined,
@@ -906,7 +1045,7 @@ HAWA CREATIVE OS — PRODUCTION MASTER DELIVERY PACKAGE
 ================================================================
 Client:       ${state.brandKit.name} (${state.brandKit.id})
 Generated:    ${new Date().toLocaleString()}
-Engine:       HyCanvas v0.3.9 / Hawa Desk Studio
+Engine:       Hawa Creative OS — Figma Agent Studio v2.0
 Status:       Approved & Verified
 
 PACKAGE CONTENTS:
@@ -995,7 +1134,7 @@ export async function buildOmnichannelCampaignZip(options: OmnichannelCampaignOp
   const manifest = {
     campaignId: `HAWA-OMNI-${Date.now().toString(36).toUpperCase()}`,
     generatedAt: new Date().toISOString(),
-    engine: 'HyCanvas v0.3.9 / Hawa Desk Studio',
+    engine: 'Hawa Creative OS — Figma Agent Studio v2.0',
     client: {
       id: state.brandKit.id,
       name: state.brandKit.name,
@@ -1031,7 +1170,7 @@ HAWA CREATIVE OS — 4-IN-1 OMNICHANNEL CAMPAIGN PACK
 ================================================================
 Client:       ${state.brandKit.name} (${state.brandKit.id})
 Generated:    ${new Date().toLocaleString()}
-Engine:       HyCanvas v0.3.9 / Hawa Desk Studio
+Engine:       Hawa Creative OS — Figma Agent Studio v2.0
 Status:       Production Ready · Approved
 
 OMNICHANNEL CHANNELS & FORMATS:

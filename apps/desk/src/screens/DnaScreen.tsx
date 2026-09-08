@@ -234,6 +234,51 @@ const DRUSTEE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
   },
 ];
 
+const KAAE_FALLBACK_DNA: ClientDNA = {
+  tenantId: 'tenant-kaae',
+  clientId: 'c1000000-0000-4000-8000-000000000002',
+  name: 'Kurdistan Accrediting Association for Education (KAAE)',
+  code: 'KAAE',
+  version: 1,
+  status: 'active',
+  defaultLocale: 'ckb',
+  defaultDirection: 'rtl',
+  colors: [
+    { name: 'KAAE Deep Midnight Navy', hex: '#160874', role: 'primary', cmyk: '100,95,5,30', pantone: 'PANTONE 2755 C' },
+    { name: 'Parchment Cream', hex: '#FFF2DB', role: 'background', cmyk: '0,5,15,0', pantone: 'PANTONE 7527 C' },
+    { name: 'Kurdish Sun Gold', hex: '#E8B85C', role: 'accent', cmyk: '10,25,75,0', pantone: 'PANTONE 142 C' },
+    { name: 'Authority Dark Slate', hex: '#0A1628', role: 'surface' },
+  ],
+  fonts: [
+    { family: 'Cairo', style: 'Bold', weight: 700, role: 'display', license: 'OFL', supportedLocales: ['ckb', 'ar', 'en'] },
+    { family: 'Vazirmatn', style: 'Regular', weight: 400, role: 'body', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
+    { family: 'Minion Variable Concept', style: 'Semibold', weight: 600, role: 'caption', license: 'Commercial', supportedLocales: ['en'] },
+  ],
+  assets: [
+    { assetId: 'kaae_logo_primary', name: 'KAAE Official 21-Ray Seal', role: 'logo_primary', storageKey: '/assets/logos/kaae-official-logo.png', sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc', mimeType: 'image/png' },
+    { assetId: 'kaae_symbol', name: 'KAAE Accreditation Symbol', role: 'logo_symbol', storageKey: '/assets/logos/kaae-symbol.svg', sha256: 'sha256_kaae_symbol_verified', mimeType: 'image/svg+xml' },
+  ],
+  guidelines: {
+    voiceAndTone: 'Official, prestigious, legalistic academic accreditation authority under Law No. 6 of 2022',
+    prohibitedPhrases: ['unofficial', 'commercial discount', 'guaranteed pass', 'cheap degree'],
+    requiredDisclaimers: ['بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە پەرلەمانی کوردستان'],
+    layoutRules: ['Always preserve the 21-ray sun seal intact', 'All diplomas must use A4 landscape vector margins'],
+  },
+  destinations: {
+    googleSharedDriveId: 'drive_kaae_root',
+    productionFolderId: 'folder_kaae_certificates',
+    archiveFolderId: 'folder_kaae_archive',
+    spreadsheetId: 'sheet_kaae_registry',
+    sheetId: 0,
+  },
+  approvalPolicy: {
+    requiredRoles: ['president', 'quality_director', 'academic_board'],
+    allowAutoApproval: false,
+    autoApprovalEligibleTemplates: [],
+  },
+  updatedAt: new Date().toISOString(),
+};
+
 // WCAG Contrast Helper
 function getLuminance(hex: string): number {
   const cleanHex = hex.replace('#', '');
@@ -424,7 +469,12 @@ export const DnaScreen: React.FC = () => {
         const dnaData: ClientDNA = await dnaRes.json();
         setCurrentDna(dnaData);
       } else {
-        setErrorNotice(`Unable to load DNA for ${clientId}`);
+        if (clientId === 'c1000000-0000-4000-8000-000000000002' || clientId === 'kaae') {
+          setCurrentDna(KAAE_FALLBACK_DNA);
+        } else if (clientId === 'client-drustee') {
+          setCurrentDna(DRUSTEE_FALLBACK_DNA);
+        }
+        setErrorNotice(`Notice: Operating on local baseline DNA for ${clientId}`);
       }
 
       if (snapRes.ok) {
@@ -960,10 +1010,12 @@ export const DnaScreen: React.FC = () => {
       )}
 
       <div className="dna">
+        <h1 className="sr-only">Client Brand DNA & Governance</h1>
+
         {/* Left Column: Client Directory */}
         <div className="panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ margin: 0 }}>Clients & Tenants</h3>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Clients & Tenants</h2>
             <span className="pill ok">{clients.length} Registered</span>
           </div>
 
@@ -1108,7 +1160,7 @@ export const DnaScreen: React.FC = () => {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="btn"
-                    style={{ fontSize: 11, background: 'rgba(56, 189, 248, 0.1)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                    style={{ fontSize: 11, background: 'rgba(2, 132, 199, 0.08)', color: 'var(--accent-text, #0369a1)', border: '1px solid rgba(2, 132, 199, 0.3)' }}
                     onClick={() => setShowLogoDropzone(!showLogoDropzone)}
                   >
                     🎨 {showLogoDropzone ? 'Close Extractor' : 'Extract from Logo'}
@@ -1127,7 +1179,7 @@ export const DnaScreen: React.FC = () => {
               {showLogoDropzone && (
                 <div style={{ padding: 16, background: 'rgba(56, 189, 248, 0.04)', borderRadius: 10, marginBottom: 16, border: '1px dashed rgba(56, 189, 248, 0.35)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <h4 style={{ margin: 0, fontSize: 13, color: '#38BDF8' }}>🎨 Client Logo Color Quantization & WCAG Contrast</h4>
+                    <h4 style={{ margin: 0, fontSize: 13, color: 'var(--accent-text, #0369a1)' }}>🎨 Client Logo Color Quantization & WCAG Contrast</h4>
                     {extractedPaletteData && (
                       <span className={`pill ${extractedPaletteData.wcagGrade === 'AAA' ? 'ok' : extractedPaletteData.wcagGrade === 'AA' ? 'ok' : 'warn'}`}>
                         WCAG: {extractedPaletteData.wcagGrade} ({extractedPaletteData.contrastRatioOnWhite}:1)
@@ -1138,6 +1190,9 @@ export const DnaScreen: React.FC = () => {
                     Upload or select client logo (.svg, .png, .webp). The engine quantizes pixel frequencies and computes relative luminance contrast.
                   </p>
                   <input
+                    id="dna-logo-upload-input"
+                    name="dnaLogoUploadInput"
+                    aria-label="Upload client logo image or SVG for color quantization"
                     type="file"
                     accept="image/*,.svg"
                     onChange={handleMainTabLogoUpload}
@@ -1156,7 +1211,7 @@ export const DnaScreen: React.FC = () => {
                       </div>
                       <button
                         className="btn primary"
-                        style={{ fontSize: 12, background: '#10B981', color: '#fff' }}
+                        style={{ fontSize: 12, background: '#047857', color: '#fff' }}
                         onClick={handleApplyExtractedPalette}
                       >
                         ✓ Apply Extracted Palette to Client DNA
@@ -1172,6 +1227,9 @@ export const DnaScreen: React.FC = () => {
                   <h4 style={{ margin: '0 0 10px', fontSize: 13 }}>New Color Swatch</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'center' }}>
                     <input
+                      id="dna-new-swatch-name"
+                      name="newSwatchName"
+                      aria-label="Color Name"
                       type="text"
                       className="search"
                       style={{ width: '100%' }}
@@ -1181,12 +1239,18 @@ export const DnaScreen: React.FC = () => {
                     />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <input
+                        id="dna-new-swatch-picker"
+                        name="newSwatchPicker"
+                        aria-label="Color Picker"
                         type="color"
                         value={newSwatchHex}
                         onChange={(e) => setNewSwatchHex(e.target.value)}
                         style={{ width: 36, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
                       />
                       <input
+                        id="dna-new-swatch-hex"
+                        name="newSwatchHex"
+                        aria-label="Color Hex Code"
                         type="text"
                         className="search"
                         style={{ width: 90 }}
@@ -1195,6 +1259,9 @@ export const DnaScreen: React.FC = () => {
                       />
                     </div>
                     <select
+                      id="dna-new-swatch-role"
+                      name="newSwatchRole"
+                      aria-label="Color Role"
                       className="search"
                       style={{ width: '100%', height: 34 }}
                       value={newSwatchRole}
@@ -1220,7 +1287,7 @@ export const DnaScreen: React.FC = () => {
                   const contrast = getContrastRatio(color.hex, currentBgHex);
                   const isWcagAaa = contrast >= 7.0;
                   const isWcagAa = contrast >= 4.5;
-                  const isTextDark = getLuminance(color.hex) > 0.45;
+                  const isTextDark = getLuminance(color.hex) > 0.18;
 
                   return (
                     <div
@@ -1241,10 +1308,10 @@ export const DnaScreen: React.FC = () => {
                           alignItems: 'flex-start',
                           justifyContent: 'space-between',
                           padding: 8,
-                          color: isTextDark ? '#17191c' : '#ffffff',
+                          color: isTextDark ? '#000000' : '#ffffff',
                         }}
                       >
-                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', opacity: 0.85 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>
                           {color.role}
                         </span>
                         <button
@@ -1420,6 +1487,9 @@ export const DnaScreen: React.FC = () => {
                   >
                     <span>{isInspectingFont ? 'Analyzing…' : '📤 Inspect WebFont (.woff2 / .ttf)'}</span>
                     <input
+                      id="inspect-font-file-input"
+                      name="inspectFontFileInput"
+                      aria-label="Inspect WebFont file (.woff2, .woff, .ttf, .otf)"
                       type="file"
                       accept=".woff2,.woff,.ttf,.otf"
                       style={{ display: 'none' }}
@@ -1435,9 +1505,9 @@ export const DnaScreen: React.FC = () => {
                 {fontFileNotice && (
                   <div
                     style={{
-                      background: 'rgba(16, 185, 129, 0.12)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      color: '#10B981',
+                      background: 'rgba(22, 101, 52, 0.08)',
+                      border: '1px solid rgba(22, 101, 52, 0.25)',
+                      color: 'var(--ok-text, #166534)',
                       padding: '8px 12px',
                       borderRadius: 6,
                       fontSize: 12,
@@ -1626,6 +1696,9 @@ export const DnaScreen: React.FC = () => {
               <h3 style={{ marginTop: 24, marginBottom: 8 }}>Required Disclaimers (Protected Claims)</h3>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input
+                  id="dna-new-disclaimer-input"
+                  name="newDisclaimer"
+                  aria-label="New required disclaimer text"
                   type="text"
                   className="search"
                   style={{ flex: 1 }}
@@ -1682,6 +1755,9 @@ export const DnaScreen: React.FC = () => {
 
               <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 <input
+                  id="dna-new-banned-phrase-input"
+                  name="newBannedPhrase"
+                  aria-label="Add banned word or phrase"
                   type="text"
                   className="search"
                   style={{ flex: 1 }}
@@ -1723,6 +1799,9 @@ export const DnaScreen: React.FC = () => {
               <h3>Layout & Architectural Principles</h3>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 <input
+                  id="dna-new-layout-rule-input"
+                  name="newLayoutRule"
+                  aria-label="New layout rule or safety margin"
                   type="text"
                   className="search"
                   style={{ flex: 1 }}
@@ -1763,7 +1842,7 @@ export const DnaScreen: React.FC = () => {
         {/* Right Column: Governance & Immutable Snapshots */}
         <div className="panel" style={{ minWidth: 320 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ margin: 0 }}>Governance & Audit</h3>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Governance & Audit</h2>
             <span className="pill ok">{snapshots.length} Snapshots</span>
           </div>
 
@@ -1783,7 +1862,7 @@ export const DnaScreen: React.FC = () => {
 
           {/* Candidate Rules from Operator Feedback (Governed Learning) */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0 8px' }}>
-            <h4 style={{ margin: 0, fontSize: 13 }}>Candidate Rules (Governed Learning)</h4>
+            <h3 style={{ margin: 0, fontSize: 13 }}>Candidate Rules (Governed Learning)</h3>
             <span className="pill blue" style={{ fontSize: 9 }}>Cursor / Figma Grade</span>
           </div>
 
@@ -1800,26 +1879,26 @@ export const DnaScreen: React.FC = () => {
                   className="finding"
                   style={{
                     marginBottom: 12,
-                    borderColor: rule.status === 'promoted' ? '#1d733c' : undefined,
-                    background: rule.status === 'promoted' ? '#ecfdf5' : undefined,
+                    borderColor: rule.status === 'promoted' ? '#166534' : undefined,
+                    background: rule.status === 'promoted' ? 'rgba(22, 101, 52, 0.08)' : undefined,
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <b style={{ color: rule.status === 'promoted' ? '#065f46' : 'var(--text)', fontSize: 12 }}>
+                    <b style={{ color: rule.status === 'promoted' ? '#166534' : 'var(--text)', fontSize: 12 }}>
                       {rule.proposedRule}
                     </b>
                     <span
                       className="pill"
                       style={{
                         fontSize: 9,
-                        background: rule.status === 'promoted' ? '#10B981' : 'rgba(56, 189, 248, 0.15)',
-                        color: rule.status === 'promoted' ? '#fff' : 'var(--accent)',
+                        background: rule.status === 'promoted' ? '#166534' : 'rgba(2, 132, 199, 0.12)',
+                        color: rule.status === 'promoted' ? '#ffffff' : 'var(--accent-text, #0369a1)',
                       }}
                     >
                       {rule.status === 'promoted' ? '✓ PROMOTED' : `${Math.round(rule.confidence * 100)}% CONFIDENCE`}
                     </span>
                   </div>
-                  <p style={{ margin: '4px 0', fontSize: 11, color: rule.status === 'promoted' ? '#047857' : 'var(--muted)' }}>
+                  <p style={{ margin: '4px 0', fontSize: 11, color: rule.status === 'promoted' ? '#166534' : 'var(--muted)' }}>
                     {rule.rationale}
                   </p>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1852,7 +1931,7 @@ export const DnaScreen: React.FC = () => {
           )}
 
           {/* Immutable Snapshot Timeline */}
-          <h4 style={{ margin: '20px 0 10px', fontSize: 13 }}>Immutable Snapshot Timeline</h4>
+          <h3 style={{ margin: '20px 0 10px', fontSize: 13 }}>Immutable Snapshot Timeline</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {snapshots.map((snap) => (
               <div
@@ -1943,10 +2022,13 @@ export const DnaScreen: React.FC = () => {
             <form onSubmit={handleOnboardSubmit}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                  <label htmlFor="onboard-client-name" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                     Client Name *
                   </label>
                   <input
+                    id="onboard-client-name"
+                    name="onboardClientName"
+                    aria-label="Client Name"
                     type="text"
                     required
                     className="search"
@@ -1957,10 +2039,13 @@ export const DnaScreen: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                  <label htmlFor="onboard-client-code" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                     Code (Uppercase) *
                   </label>
                   <input
+                    id="onboard-client-code"
+                    name="onboardClientCode"
+                    aria-label="Client Code"
                     type="text"
                     required
                     maxLength={8}
@@ -1975,10 +2060,13 @@ export const DnaScreen: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                  <label htmlFor="onboard-default-locale" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                     Default Locale
                   </label>
                   <select
+                    id="onboard-default-locale"
+                    name="onboardDefaultLocale"
+                    aria-label="Default Locale"
                     className="search"
                     style={{ width: '100%', height: 36 }}
                     value={onboardForm.defaultLocale}
@@ -1990,10 +2078,13 @@ export const DnaScreen: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                  <label htmlFor="onboard-default-direction" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                     Default Direction
                   </label>
                   <select
+                    id="onboard-default-direction"
+                    name="onboardDefaultDirection"
+                    aria-label="Default Direction"
                     className="search"
                     style={{ width: '100%', height: 36 }}
                     value={onboardForm.defaultDirection}
@@ -2008,16 +2099,19 @@ export const DnaScreen: React.FC = () => {
               {/* Logo Upload & Auto-Extraction Zone */}
               <div style={{ marginBottom: 16, padding: 12, border: '1px dashed var(--line)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ fontSize: 12, fontWeight: 650 }}>
+                  <label htmlFor="onboard-logo-upload" style={{ fontSize: 12, fontWeight: 650 }}>
                     🎨 Auto-Extract Palette from Client Logo (.svg, .png)
                   </label>
                   {logoExtractionNotice && (
-                    <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>
+                    <span style={{ fontSize: 11, color: '#047857', fontWeight: 600 }}>
                       {logoExtractionNotice}
                     </span>
                   )}
                 </div>
                 <input
+                  id="onboard-logo-upload"
+                  name="onboardLogoUpload"
+                  aria-label="Client Logo Image or SVG"
                   type="file"
                   accept="image/*,.svg"
                   onChange={handleOnboardLogoUpload}
@@ -2033,6 +2127,9 @@ export const DnaScreen: React.FC = () => {
                   <div>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>Primary</span>
                     <input
+                      id="onboard-primary-color"
+                      name="onboardPrimaryColor"
+                      aria-label="Primary Brand Color"
                       type="color"
                       value={onboardForm.primaryColorHex}
                       onChange={(e) => setOnboardForm({ ...onboardForm, primaryColorHex: e.target.value })}
@@ -2042,6 +2139,9 @@ export const DnaScreen: React.FC = () => {
                   <div>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>Secondary</span>
                     <input
+                      id="onboard-secondary-color"
+                      name="onboardSecondaryColor"
+                      aria-label="Secondary Brand Color"
                       type="color"
                       value={onboardForm.secondaryColorHex}
                       onChange={(e) => setOnboardForm({ ...onboardForm, secondaryColorHex: e.target.value })}
@@ -2051,6 +2151,9 @@ export const DnaScreen: React.FC = () => {
                   <div>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>Accent</span>
                     <input
+                      id="onboard-accent-color"
+                      name="onboardAccentColor"
+                      aria-label="Accent Brand Color"
                       type="color"
                       value={onboardForm.accentColorHex}
                       onChange={(e) => setOnboardForm({ ...onboardForm, accentColorHex: e.target.value })}
@@ -2060,6 +2163,9 @@ export const DnaScreen: React.FC = () => {
                   <div>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>Background</span>
                     <input
+                      id="onboard-bg-color"
+                      name="onboardBgColor"
+                      aria-label="Background Brand Color"
                       type="color"
                       value={onboardForm.backgroundColorHex}
                       onChange={(e) => setOnboardForm({ ...onboardForm, backgroundColorHex: e.target.value })}
@@ -2070,10 +2176,13 @@ export const DnaScreen: React.FC = () => {
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                <label htmlFor="onboard-voice-tone" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                   Voice & Tone Mandate
                 </label>
                 <input
+                  id="onboard-voice-tone"
+                  name="onboardVoiceTone"
+                  aria-label="Voice & Tone Mandate"
                   type="text"
                   className="search"
                   style={{ width: '100%' }}
@@ -2083,10 +2192,13 @@ export const DnaScreen: React.FC = () => {
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
+                <label htmlFor="onboard-prohibited-phrases" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
                   Prohibited Lexicon (Comma separated)
                 </label>
                 <input
+                  id="onboard-prohibited-phrases"
+                  name="onboardProhibitedPhrases"
+                  aria-label="Prohibited Lexicon (Comma separated)"
                   type="text"
                   className="search"
                   style={{ width: '100%' }}

@@ -17,8 +17,11 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
     expect(card.text).toContain('Task Ready for Operator Review');
     expect(card.text).toContain('Title:* Summer Grand Opening');
     expect(card.text).toContain('Client:* Aster Cafe');
-    expect(card.text).toContain('http://localhost:4173/review?doc=doc-hyc-777&taskId=task-office-88&mode=review');
-    expect(card.reply_markup.inline_keyboard[0][0].text).toBe('⚡ Open Desk Studio');
+    expect(card.reply_markup.inline_keyboard[0][0].text).toBe('✅ Approve & Publish');
+    expect(card.reply_markup.inline_keyboard[0][0].callback_data).toContain('approve:task-office-88:');
+    expect(card.reply_markup.inline_keyboard[0][1].text).toBe('✏️ Request Revision');
+    expect(card.reply_markup.inline_keyboard[0][1].callback_data).toContain('revision:task-office-88:');
+    expect(card.reply_markup.inline_keyboard[1][0].text).toBe('⚡ Open Desk Studio');
   });
 
   it('formats an English publication receipt with Google Drive and Sheets links', () => {
@@ -84,5 +87,45 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
     expect(sent.length).toBe(1);
     expect(sent[0].chatId).toBe(9876);
     expect(sent[0].text).toContain('Hawa Telegram Bridge Status');
+  });
+
+  it('processes incoming Telegram callback query for button approval', async () => {
+    const bridge = new TelegramBridgeDaemon();
+    const update = {
+      update_id: 102,
+      callback_query: {
+        id: 'cb-query-123',
+        from: { id: 9876, is_bot: false, first_name: 'Hawzhin' },
+        message: {
+          message_id: 502,
+          chat: { id: 9876, type: 'private' },
+          date: Math.floor(Date.now() / 1000),
+          text: 'Campaign preview',
+        },
+        data: 'approve:task-kaae-888:mock_signature_hash',
+      },
+    };
+
+    const result = await bridge.processUpdate(update as any);
+    expect(result.processed).toBe(true);
+    expect(result.botResponse).not.toBeNull();
+    expect(result.botResponse.action).toBe('approve');
+    expect(result.botResponse.taskId).toBe('task-kaae-888');
+    expect(result.botResponse.signature).toBe('mock_signature_hash');
+  });
+
+  it('handles slash commands for two-way approval and revision', () => {
+    const bridge = new TelegramBridgeDaemon();
+
+    const approveCmd = bridge.handleCommand('/approve task-fast-101', 9876);
+    expect(approveCmd).not.toBeNull();
+    expect(approveCmd?.action).toBe('approve');
+    expect(approveCmd?.taskId).toBe('task-fast-101');
+
+    const reviseCmd = bridge.handleCommand('/revise task-fast-101 Increase logo size and use dark blue', 9876);
+    expect(reviseCmd).not.toBeNull();
+    expect(reviseCmd?.action).toBe('revision');
+    expect(reviseCmd?.taskId).toBe('task-fast-101');
+    expect(reviseCmd?.notes).toBe('Increase logo size and use dark blue');
   });
 });

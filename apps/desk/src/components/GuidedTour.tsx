@@ -58,7 +58,7 @@ export const TOUR_STEPS: TourStep[] = [
     ],
   },
   {
-    title: 'HyCanvas Studio & Lossless Editable Vector Nodes',
+    title: 'Figma Agent Studio & Lossless Editable Vector Nodes',
     badge: 'Invariant #2',
     targetScreen: 'review',
     icon: '🎨',

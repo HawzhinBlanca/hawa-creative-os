@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   ResilientModelGateway,
   CircuitBreaker,
@@ -14,10 +14,19 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
     idempotencyKey: 'model-key-01',
   };
 
+  const originalEnv = { ...process.env };
   let gateway: ResilientModelGateway;
 
   beforeEach(() => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_AI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     gateway = new ResilientModelGateway();
+  });
+
+  afterEach(() => {
+    Object.assign(process.env, originalEnv);
   });
 
   describe('CircuitBreaker Unit Semantics', () => {

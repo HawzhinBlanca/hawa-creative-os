@@ -38,8 +38,8 @@ import {
 import { getBrandKit } from '../../../apps/desk/src/services/brandKits.js';
 
 describe('KAAE End-to-End Production Qualification Drill (All 4 Pillars)', () => {
-  const telegramBotToken = '8975998512:AAELwUMofl2S-Rho0zrXjVL66tlJzTAfHzI';
-  const telegramWebhookSecret = 'kaae_office_secret_production_entropy_99f3b817';
+  const telegramBotToken = ['test_bot', 'mock_token', 'drill'].join('_');
+  const telegramWebhookSecret = ['test_secret', 'mock_entropy', 'drill'].join('_');
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
 
   // --------------------------------------------------------------------------

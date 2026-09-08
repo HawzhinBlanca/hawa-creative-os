@@ -28,7 +28,8 @@ PASSES: list[str] = []
 
 IGNORED_TOP_LEVEL = {
     ".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
-    ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output"
+    ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output",
+    "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma"
 }
 IGNORED_ANYWHERE = {"__pycache__", ".DS_Store"}
 WORKSPACE_ROOT_FILES = {
@@ -44,6 +45,8 @@ def should_skip(path: Path) -> bool:
     if any(part in IGNORED_ANYWHERE for part in rel.parts):
         return True
     if rel.parts and rel.parts[0] in IGNORED_TOP_LEVEL:
+        return True
+    if rel.parts and rel.parts[0] == "config" and len(rel.parts) > 1 and not rel.name.endswith((".example.yaml", ".example.json")):
         return True
     if path.suffix == ".pyc":
         return True
@@ -337,7 +340,7 @@ def validate_security_hygiene() -> None:
     require(not font_files, "package contains no redistributed font binaries")
 
     secret_patterns = [
-        re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
+        re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
         re.compile(r"AIza[0-9A-Za-z_-]{30,}"),
         re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     ]

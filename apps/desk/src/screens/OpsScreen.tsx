@@ -97,6 +97,17 @@ export const OpsScreen: React.FC = () => {
   const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
   const [clientBudgets, setClientBudgets] = useState<ClientBudgetReport[]>([
     {
+      clientId: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE (Accreditation Agency)',
+      monthlyCapUsd: 1000.0,
+      currentSpendUsd: 124.8,
+      remainingUsd: 875.2,
+      percentUsed: 12.48,
+      quotaStatus: 'HEALTHY',
+      currency: 'USD',
+      billingCycle: '2026-09',
+    },
+    {
       clientId: 'client-drustee',
       clientName: 'Drustee Evidence-First Health',
       monthlyCapUsd: 250.0,
@@ -336,6 +347,7 @@ export const OpsScreen: React.FC = () => {
       )}
 
       {/* Primary Ops Metrics */}
+      <h1 className="sr-only">Operations & Telemetry Overview</h1>
       <div className="grid4">
         <div className="stat"><b>{criticalCount}</b><span>critical incidents</span></div>
         <div className="stat"><b>{recoverableCount}</b><span>recoverable failures</span></div>
@@ -368,7 +380,7 @@ export const OpsScreen: React.FC = () => {
               <span style={{ fontSize: 11 }}>P95 Latency</span>
             </div>
             <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20, color: sloSummary.p99DurationMs < 1500 ? 'var(--accent)' : '#EF4444' }}>
+              <b style={{ fontSize: 20, color: sloSummary.p99DurationMs < 1500 ? 'var(--accent-text, #0369a1)' : '#b91c1c' }}>
                 {sloSummary.p99DurationMs}ms
               </b>
               <span style={{ fontSize: 11 }}>P99 Latency (&lt;1500ms)</span>
@@ -378,7 +390,7 @@ export const OpsScreen: React.FC = () => {
               <span style={{ fontSize: 11 }}>Synthetic Probes</span>
             </div>
             <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20, color: '#10B981' }}>{sloSummary.successRate}%</b>
+              <b style={{ fontSize: 20, color: 'var(--ok-text, #166534)' }}>{sloSummary.successRate}%</b>
               <span style={{ fontSize: 11 }}>Success Rate</span>
             </div>
           </div>
@@ -457,7 +469,7 @@ export const OpsScreen: React.FC = () => {
       )}
 
       {/* Reconciliation & Storage Drift Audit Panel (FR-049, FR-050) */}
-      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid #10B981' }}>
+      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid #166534' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
@@ -472,7 +484,7 @@ export const OpsScreen: React.FC = () => {
           </div>
           <button
             className="btn"
-            style={{ fontSize: 12, padding: '4px 10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', borderColor: '#10B981', fontWeight: 600 }}
+            style={{ fontSize: 12, padding: '4px 10px', background: 'rgba(22, 101, 52, 0.08)', color: 'var(--ok-text, #166534)', borderColor: 'var(--ok-text, #166534)', fontWeight: 600 }}
             onClick={runReconciliation}
             disabled={runningReconciliation}
           >
@@ -481,7 +493,7 @@ export const OpsScreen: React.FC = () => {
         </div>
 
         {reconcileToast && (
-          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10B981', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#10B981' }}>
+          <div style={{ background: 'rgba(22, 101, 52, 0.08)', border: '1px solid rgba(22, 101, 52, 0.25)', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--ok-text, #166534)' }}>
             {reconcileToast}
           </div>
         )}
@@ -500,11 +512,11 @@ export const OpsScreen: React.FC = () => {
             <span style={{ fontSize: 11 }}>Sheet Rows</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18, color: '#10B981' }}>{reconciliation?.inSyncCount || 0}</b>
+            <b style={{ fontSize: 18, color: 'var(--ok-text, #166534)' }}>{reconciliation?.inSyncCount || 0}</b>
             <span style={{ fontSize: 11 }}>In Sync</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? '#F59E0B' : '#10B981' }}>
+            <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? 'var(--warn-text, #854d0e)' : 'var(--ok-text, #166534)' }}>
               {reconciliation?.driftCount || 0}
             </b>
             <span style={{ fontSize: 11 }}>Drifts Repaired</span>
@@ -538,7 +550,7 @@ export const OpsScreen: React.FC = () => {
           {clientBudgets.map((b) => {
             const isExceeded = b.quotaStatus === 'EXCEEDED';
             const isWarning = b.quotaStatus === 'WARNING';
-            const barColor = isExceeded ? '#EF4444' : isWarning ? '#F59E0B' : '#10B981';
+            const barColor = isExceeded ? '#b91c1c' : isWarning ? '#92400e' : '#166534';
 
             return (
               <div
@@ -816,12 +828,15 @@ export const OpsScreen: React.FC = () => {
             </p>
 
             <div style={{ margin: '16px 0' }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+              <label htmlFor="ops-monthly-cap-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 Monthly Cap (USD)
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--muted)' }}>$</span>
                 <input
+                  id="ops-monthly-cap-input"
+                  name="opsMonthlyCapInput"
+                  aria-label="Monthly Cap in USD"
                   type="number"
                   step="25"
                   min="50"

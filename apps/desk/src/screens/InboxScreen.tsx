@@ -39,12 +39,23 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
   // Inbound Brief Simulator State
   const [showSimulator, setShowSimulator] = useState(false);
-  const [simulatorPreset, setSimulatorPreset] = useState<'drustee' | 'aster' | 'nova' | 'rona'>('drustee');
+  const [simulatorPreset, setSimulatorPreset] = useState<'kaae' | 'drustee' | 'aster' | 'nova' | 'rona'>('kaae');
   const [simulating, setSimulating] = useState(false);
   const [simulationStep, setSimulationStep] = useState(0);
   const [simulatedTask, setSimulatedTask] = useState<LiveTask | null>(null);
 
   const SIMULATOR_PRESETS = {
+    kaae: {
+      client: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE (Accreditation)',
+      platform: 'web_portal',
+      icon: '🏛️',
+      title: '2026 Higher Education Institutional Quality Certification',
+      headlineEn: 'Official 2026 Institutional Accreditation Cycle',
+      headlineCkb: 'دەستپێکردنی فەرمیی خولی باوەڕپێدانی دامەزراوەیی بۆ ساڵی ٢٠٢٦',
+      copyEn: 'Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Review',
+      copyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · هەڵسەنگاندنی نیشتمانی',
+    },
     drustee: {
       client: 'client-drustee',
       clientName: 'Drustee Supplements',
@@ -276,9 +287,9 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
             style={{
               fontSize: 12,
               padding: '4px 10px',
-              background: 'rgba(245, 158, 11, 0.1)',
-              color: '#F59E0B',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              background: 'rgba(146, 64, 14, 0.08)',
+              color: 'var(--warn-text, #854d0e)',
+              border: '1px solid rgba(146, 64, 14, 0.25)',
               display: 'flex',
               alignItems: 'center',
               gap: 5,
@@ -331,8 +342,8 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
           </div>
 
           {/* Preset Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
-            {(['drustee', 'aster', 'nova', 'rona'] as const).map((key) => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
+            {(['kaae', 'drustee', 'aster', 'nova', 'rona'] as const).map((key) => {
               const p = SIMULATOR_PRESETS[key];
               const isSelected = simulatorPreset === key;
               return (
@@ -371,7 +382,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                   '2. Scope Lock (#5)',
                   '3. Hybrid Retrieval',
                   '4. Creative Director',
-                  '5. HyCanvas (.hyc)',
+                  '5. Figma Studio (Staging)',
                   '6. QA Guard (#7)',
                   '7. Ready for Review',
                 ].map((name, idx) => {
@@ -385,10 +396,10 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                         padding: '6px 4px',
                         textAlign: 'center',
                         borderRadius: 6,
-                        background: isDone ? 'rgba(16, 185, 129, 0.15)' : isCurrent ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                        color: isDone ? '#10B981' : isCurrent ? '#F59E0B' : 'var(--muted)',
+                        background: isDone ? 'rgba(22, 101, 52, 0.1)' : isCurrent ? 'rgba(146, 64, 14, 0.1)' : 'rgba(0, 0, 0, 0.04)',
+                        color: isDone ? 'var(--ok-text, #166534)' : isCurrent ? 'var(--warn-text, #854d0e)' : 'var(--muted)',
                         fontWeight: isCurrent || isDone ? 600 : 400,
-                        border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.3)' : isCurrent ? 'rgba(245, 158, 11, 0.5)' : 'transparent'}`,
+                        border: `1px solid ${isDone ? 'rgba(22, 101, 52, 0.3)' : isCurrent ? 'rgba(146, 64, 14, 0.4)' : 'transparent'}`,
                       }}
                     >
                       {isDone ? '✓ ' : isCurrent ? '⏳ ' : ''}{name}
@@ -422,6 +433,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         </div>
       )}
 
+      <h1 className="sr-only">Workflow Inbox & Task Queue</h1>
       <div className="grid4">
         <div
           className={`stat ${activeFilter === 'needs_action' ? 'sel' : ''}`}
@@ -453,9 +465,9 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         {/* Lane 1: New messages */}
         {(activeFilter === 'all' || activeFilter === 'needs_action') && (
           <div className="lane">
-            <div className="lanehead">
+            <h2 className="lanehead" style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               New messages <span className="pill">{4 + liveNewMessages.length}</span>
-            </div>
+            </h2>
 
             {/* Live API Tasks in this lane */}
             {liveNewMessages.map((t) => (
@@ -507,9 +519,9 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         {/* Lane 2: Needs input */}
         {(activeFilter === 'all' || activeFilter === 'needs_action') && (
           <div className="lane">
-            <div className="lanehead">
+            <h2 className="lanehead" style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Needs input <span className="pill warn">{3 + liveNeedsInput.length}</span>
-            </div>
+            </h2>
 
             {/* Live API tasks needing input */}
             {liveNeedsInput.map((t) => (
@@ -583,9 +595,9 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         {/* Lane 3: In production */}
         {(activeFilter === 'all' || activeFilter === 'production') && (
           <div className="lane">
-            <div className="lanehead">
+            <h2 className="lanehead" style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               In production <span className="pill">{12 + liveInProduction.length}</span>
-            </div>
+            </h2>
 
             {/* Live API tasks in production */}
             {liveInProduction.map((t) => (
@@ -600,7 +612,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                   <span className="pill ok" style={{ fontSize: 10 }}>LIVE</span>
                 </div>
                 <h3>{t.title}</h3>
-                <p>Generating HyCanvas layout & deterministic QA checks…</p>
+                <p>Generating Figma layout in 30_AI_STAGING & deterministic QA checks…</p>
                 <div className="bar"><i style={{ width: '65%' }}></i></div>
               </div>
             ))}
@@ -622,9 +634,9 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
         {/* Lane 4: Review */}
         {(activeFilter === 'all' || activeFilter === 'review') && (
           <div className="lane">
-            <div className="lanehead">
+            <h2 className="lanehead" style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Review <span className="pill ok">{5 + liveReview.length}</span>
-            </div>
+            </h2>
 
             {/* Live API tasks in review */}
             {liveReview.map((t) => (
@@ -652,7 +664,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
                   </button>
                   <button
                     className="btn"
-                    style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38BDF8', borderColor: '#0284C7' }}
+                    style={{ background: 'rgba(2, 132, 199, 0.08)', color: 'var(--accent-text, #0369a1)', borderColor: 'var(--accent-text, #0369a1)' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectReview(t);

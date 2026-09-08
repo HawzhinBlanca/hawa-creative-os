@@ -5,6 +5,7 @@ import {
   type DriveRecord,
   type SheetRowRecord,
 } from '../src/reconciliation-service.js';
+import { GooglePublisher } from '../src/google-publisher.js';
 
 describe('ReconciliationService (FR-049, FR-050)', () => {
   it('detects clean state when PostgreSQL, Drive, and Sheets are perfectly synced', () => {
@@ -70,5 +71,28 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     expect(sheets.length).toBe(1);
     expect(sheets[0].status).toBe('COMPLETE');
     expect(sheets[0].rowNumber).toBe(42);
+  });
+
+  it('handles GooglePublisher reconciliation without throwing unhandled exceptions', async () => {
+    const publisher = new GooglePublisher();
+    const nonExistentId = '00000000-0000-4000-8000-000000000000';
+    const ctx = {
+      tenantId: 'tenant-default',
+      taskId: 'task-test',
+      actor: { type: 'workflow' as const, id: 'publisher' },
+      correlationId: 'corr-1',
+      deadline: new Date().toISOString(),
+      idempotencyKey: 'key-1',
+    };
+
+    const res = await publisher.reconcile(ctx, nonExistentId);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect((res as any).error.code).toBe('PUBLICATION_RECEIPT_NOT_FOUND');
+    }
+
+    const verifyRes = await publisher.verify(ctx, nonExistentId);
+    expect(verifyRes.ok).toBe(true);
+    expect(verifyRes.value.consistent).toBe(false);
   });
 });

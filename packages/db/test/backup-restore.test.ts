@@ -37,11 +37,11 @@ describe('Horizon 4: Production Database Backup, Wipe & Clean-Host Recovery Dril
     expect(snapshotBundle).toContain('INSERT INTO');
   });
 
-  it('verifies exact schema invariant counts: 49 tables, 11 enums, 24 RLS policies', async () => {
+  it('verifies exact schema invariant counts: 52 tables, 11 enums, 24 RLS policies', async () => {
     const result = await checkDatabaseSchema();
 
     expect(result.valid).toBe(true);
-    expect(result.tableCount).toBe(49);
+    expect(result.tableCount).toBe(52);
     expect(result.enumsCount).toBe(11);
     expect(result.policiesCount).toBe(24);
   });
@@ -68,7 +68,7 @@ describe('Horizon 4: Production Database Backup, Wipe & Clean-Host Recovery Dril
     simulatedCleanHost.policies = [...parsedSchema.policies, ...parsedRls.policies];
 
     // 3. Verify post-restore integrity
-    expect(simulatedCleanHost.tables).toHaveLength(49);
+    expect(simulatedCleanHost.tables).toHaveLength(52);
     expect(simulatedCleanHost.enums).toHaveLength(11);
     expect(simulatedCleanHost.policies).toHaveLength(24);
 

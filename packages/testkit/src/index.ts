@@ -1,4 +1,5 @@
 export * from './fake-studio.js';
+export * from './fake-figma-bridge.js';
 export * from './fake-model-gateway.js';
 export * from './fake-publisher.js';
 export * from './fake-message-adapter.js';

@@ -61,6 +61,10 @@ export const BIDI_CONTROLS = {
 };
 
 export function determineBaseDirection(text: string): 'rtl' | 'ltr' {
+  if (!text || typeof text !== 'string') {
+    return 'ltr';
+  }
+
   // If paragraph starts with explicit RTL control (RLI \u2067, RLE \u202B, RLO \u202E, ALM \u061C, RLM \u200F)
   if (/^[\u2067\u202B\u202E\u061C\u200F]/.test(text)) {
     return 'rtl';
@@ -98,6 +102,10 @@ export function determineBaseDirection(text: string): 'rtl' | 'ltr' {
 }
 
 export function checkPairedBrackets(text: string): boolean {
+  if (!text || typeof text !== 'string') {
+    return true;
+  }
+
   const stack: string[] = [];
   const openPairs: Record<string, string> = {
     '(': ')',
@@ -130,6 +138,19 @@ export function checkPairedBrackets(text: string): boolean {
 }
 
 export function analyzeBidi(text: string): BidiAnalysis {
+  if (!text || typeof text !== 'string') {
+    return {
+      baseDirection: 'ltr',
+      hasRtlCharacters: false,
+      hasLtrCharacters: false,
+      hasArabicIndicDigits: false,
+      hasPairedBrackets: false,
+      bracketPairsMatched: true,
+      soraniSpecificCharacters: [],
+      isolatedControlsValid: true,
+    };
+  }
+
   const baseDirection = determineBaseDirection(text);
   const hasRtl = RTL_CHAR_REGEX.test(text);
   const hasLtr = LTR_CHAR_REGEX.test(text);
@@ -216,8 +237,9 @@ export function checkKurdishTypographyClearance(
   lineHeight: number,
   verticalPaddingPx: number = 0
 ): KurdishTypographyClearance {
-  const hasHigh = SORANI_HIGH_ASCENDERS.some((c) => text.includes(c));
-  const hasLow = SORANI_LOW_DESCENDERS.some((c) => text.includes(c));
+  const safeText = text && typeof text === 'string' ? text : '';
+  const hasHigh = SORANI_HIGH_ASCENDERS.some((c) => safeText.includes(c));
+  const hasLow = SORANI_LOW_DESCENDERS.some((c) => safeText.includes(c));
   const issues: string[] = [];
 
   const recommendedLineHeight = (hasHigh || hasLow) ? 1.45 : 1.35;

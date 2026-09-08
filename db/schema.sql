@@ -984,4 +984,45 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Figma Agent Studio v2.0 tables
+CREATE TABLE IF NOT EXISTS design_jobs (
+  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  task_id text NOT NULL,
+  client_id text NOT NULL,
+  route text NOT NULL CHECK (route IN ('buzz_template','figma_freeform','human')),
+  figma_file_key text,
+  figma_node_id text,
+  template_id text,
+  revision integer NOT NULL DEFAULT 0,
+  state text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS figma_leases (
+  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  task_id text NOT NULL,
+  client_id text NOT NULL,
+  figma_file_key text NOT NULL,
+  holder text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  released_at timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS one_live_task_lease ON figma_leases(task_id) WHERE released_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS figma_mutations (
+  id bigserial PRIMARY KEY,
+  design_job_id text NOT NULL,
+  command_id text NOT NULL UNIQUE,
+  expected_revision integer NOT NULL,
+  resulting_revision integer,
+  operation text NOT NULL,
+  args_hash text NOT NULL,
+  affected_node_ids jsonb,
+  marker_id text,
+  status text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 COMMIT;

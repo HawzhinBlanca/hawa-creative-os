@@ -1,6 +1,19 @@
 import type { StudioOperation } from '@hawa/contracts';
 import type { DesignBrief, DesignPlan, AssetTopology, VisualIngredient, LayoutZone } from '@hawa/domain';
-import { buildKaaeCertificateOperations, buildKaaeAnnouncementOperations, KAAE_PRIMARY_LOGO_SHA256 } from './templates/index.js';
+import {
+  buildKaaeCertificateOperations,
+  buildKaaeAnnouncementOperations,
+  buildKaaeMandateOperations,
+  buildKaaeHigherEdStandardsOperations,
+  buildKaaeStrategicRoadmapOperations,
+  buildFastpayPromoTemplate,
+  buildAsterHealthcareTemplate,
+  buildDrusteeClinicalTemplate,
+  KAAE_PRIMARY_LOGO_SHA256,
+  FASTPAY_PRIMARY_LOGO_SHA256,
+  ASTER_PRIMARY_LOGO_SHA256,
+  DRUSTEE_PRIMARY_LOGO_SHA256,
+} from './templates/index.js';
 
 export class CreativeDirectorRunner {
   createDesignPlan(brief: DesignBrief, clientColors: string[]): DesignPlan {
@@ -182,7 +195,7 @@ export class CreativeDirectorRunner {
    */
   generateKaaeOperations(
     brief: DesignBrief,
-    templateType: 'announcement' | 'certificate',
+    templateType: 'announcement' | 'certificate' | 'mandate' | 'standards' | 'roadmap',
     customParams?: Record<string, any>
   ): StudioOperation[] {
     if (templateType === 'certificate') {
@@ -195,6 +208,48 @@ export class CreativeDirectorRunner {
         endDate: customParams?.endDate || '2026-06-30',
         issueDate: customParams?.issueDate || '2026-09-06',
         language: brief.primaryLanguage === 'ckb' ? 'ckb' : 'en',
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    } else if (templateType === 'mandate') {
+      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
+      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
+      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
+      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
+
+      return buildKaaeMandateOperations({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    } else if (templateType === 'standards') {
+      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
+      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
+      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
+      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
+
+      return buildKaaeHigherEdStandardsOperations({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    } else if (templateType === 'roadmap') {
+      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
+      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
+      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
+      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
+
+      return buildKaaeStrategicRoadmapOperations({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
         logoSha256: KAAE_PRIMARY_LOGO_SHA256,
         ...customParams,
       });
@@ -219,5 +274,54 @@ export class CreativeDirectorRunner {
       });
     }
   }
+
+  /**
+   * Generates authentic commercial operations for Kurdistan brands (FastPay, Aster Pharmacy, Drustee Health).
+   */
+  generateCommercialBrandOperations(
+    brandId: 'fastpay' | 'aster' | 'drustee' | string,
+    brief: DesignBrief,
+    customParams?: Record<string, any>
+  ): StudioOperation[] {
+    const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
+    const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
+    const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
+    const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
+
+    if (brandId === 'fastpay') {
+      return buildFastpayPromoTemplate({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
+        badgeText: customParams?.badgeText,
+        discountText: customParams?.discountText,
+        ...customParams,
+      });
+    } else if (brandId === 'aster' || brandId === 'client-aster') {
+      return buildAsterHealthcareTemplate({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
+        discountBadge: customParams?.discountBadge,
+        offerPill: customParams?.offerPill,
+        ...customParams,
+      });
+    } else if (brandId === 'drustee' || brandId === 'client-drustee') {
+      return buildDrusteeClinicalTemplate({
+        headlineEn: customParams?.headlineEn || enHeadline?.text,
+        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
+        copyEn: customParams?.copyEn || enCopy?.text,
+        copyCkb: customParams?.copyCkb || ckbCopy?.text,
+        potencyBadge: customParams?.potencyBadge,
+        lotText: customParams?.lotText,
+        ...customParams,
+      });
+    } else {
+      return this.generateKaaeOperations(brief, 'announcement', customParams);
+    }
+  }
 }
+
 

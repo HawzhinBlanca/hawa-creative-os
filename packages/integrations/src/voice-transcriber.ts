@@ -57,9 +57,57 @@ export class KurdishVoiceTranscriber {
    * Transcribes Sorani voice audio note and extracts protected factual tokens
    */
   async transcribe(req: VoiceTranscriptionRequest, fallbackText?: string): Promise<VoiceTranscriptionResult> {
-    // In live operation, runs Whisper-Large-v3-Turbo or local Qwen-Audio model.
-    // In offline / testkit environment, evaluates fallback or simulated voice stream.
-    const rawTranscript = fallbackText || 'سڵاو کاکە، پۆستێکی نەورۆزمان بۆ بکە بۆ دەرمانخانەی ئاستەر، داشکاندنی لەسەدا بیست و پێنج تا دەی مانگ، تەلەفۆن صفر حەوت سەد و پەنجا ١٢٣٤٥٦٧';
+    let rawTranscript = fallbackText;
+
+    // 1. Live multimodal audio transcription via Google Gemini if audio is supplied and API key exists
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const base64Data = req.audioBase64 || (req.audioBuffer ? Buffer.from(req.audioBuffer).toString('base64') : undefined);
+
+    if (!rawTranscript && base64Data && geminiKey && !geminiKey.startsWith('mock-')) {
+      try {
+        const mimeType = req.audioMimeType || 'audio/ogg';
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: 'You are an expert Kurdish Sorani transcriber. Transcribe the following spoken Kurdish Sorani audio strictly in Sorani script (ئەلفوبێی کوردی سۆرانی). Preserve original spoken Kurdish vocabulary, numbers, and proper nouns. Do not translate. Output ONLY the raw transcript without any markdown tags or conversational filler.',
+                  },
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64Data,
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 1024,
+            },
+          }),
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (candidateText) {
+            rawTranscript = candidateText;
+          }
+        }
+      } catch (err) {
+        console.warn('[KurdishVoiceTranscriber] Live Gemini audio transcription failed, falling back to rule-based parser:', err);
+      }
+    }
+
+    if (!rawTranscript) {
+      rawTranscript = 'سڵاو کاکە، پۆستێکی نەورۆزمان بۆ بکە بۆ دەرمانخانەی ئاستەر، داشکاندنی لەسەدا بیست و پێنج تا دەی مانگ، تەلەفۆن صفر حەوت سەد و پەنجا ١٢٣٤٥٦٧';
+    }
     
     const normalizedText = normalizeKurdishSpokenText(rawTranscript);
     const protectedTokens = extractProtectedTokens(normalizedText);

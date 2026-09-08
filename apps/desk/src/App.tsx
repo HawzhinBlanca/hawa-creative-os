@@ -87,11 +87,23 @@ export const App: React.FC = () => {
         setCurrentScreen(hash as ScreenId);
       }
     };
+
+    const handleCustomNav = (e: any) => {
+      const targetScreen = e.detail;
+      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      if (targetScreen && validScreens.includes(targetScreen as ScreenId)) {
+        window.location.hash = `#/${targetScreen}`;
+        setCurrentScreen(targetScreen as ScreenId);
+      }
+    };
+
     window.addEventListener('hashchange', handleLocationChange);
     window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hawa:navigate', handleCustomNav);
     return () => {
       window.removeEventListener('hashchange', handleLocationChange);
       window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hawa:navigate', handleCustomNav);
     };
   }, []);
 

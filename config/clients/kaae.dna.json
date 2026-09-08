@@ -52,44 +52,49 @@
     "deprecatedAssetIds": [],
     "colors": [
       {
-        "token": "kaae-midnight-navy",
-        "srgb": "#160874",
-        "usage": "Primary brand foundation; conveys legal authority, deep institutional prestige, and high contrast backing"
-      },
-      {
-        "token": "kaae-royal-iris",
-        "srgb": "#35309B",
-        "usage": "Secondary brand identity; academic distinction, publication headers, and official ribbon badges"
-      },
-      {
-        "token": "kaae-electric-azure",
-        "srgb": "#0E6CD3",
-        "usage": "Accent vibrant blue; interactive links, CTAs, button states, and active navigation indicators"
-      },
-      {
-        "token": "kaae-sun-gold",
-        "srgb": "#E8B85C",
-        "usage": "Accent Kurdistan sun gold and warm ochre; symbolizes enlightenment, quality excellence, and rays"
-      },
-      {
-        "token": "kaae-steel-blue",
+        "token": "kaae-blue",
         "srgb": "#4770A3",
-        "usage": "Muted structural accent and card borders; soft institutional framing and secondary data panels"
+        "usage": "Primary institutional brand identity; academic stability, quality assurance, and trust (PMS 5415 C)"
       },
       {
-        "token": "kaae-parchment-cream",
-        "srgb": "#FFF2DB",
-        "usage": "Warm parchment cream background; official certificates, warm documents, and subtle contrast fields"
+        "token": "kaae-gold",
+        "srgb": "#F7B500",
+        "usage": "Primary brand accent; Kurdistan sun gold, achievement, excellence, and distinction (PMS 7549 C)"
+      },
+      {
+        "token": "kaae-royal",
+        "srgb": "#1E3A5F",
+        "usage": "Secondary institutional authority, hero title typography, and card structural backing"
+      },
+      {
+        "token": "kaae-ocean",
+        "srgb": "#2C5282",
+        "usage": "Secondary bridge blue; interactive accents, badges, and container panels"
+      },
+      {
+        "token": "kaae-midnight",
+        "srgb": "#0A1628",
+        "usage": "Deep keynote canvas, high-contrast dark mode, and executive presentation fields"
+      },
+      {
+        "token": "kaae-sky",
+        "srgb": "#4A90E2",
+        "usage": "Clarity highlight, metadata chips, and active indicator bars"
+      },
+      {
+        "token": "kaae-cream",
+        "srgb": "#FDF8F3",
+        "usage": "Light mode canvas; dignified warm academic cream ground (PMS 9184 C)"
       },
       {
         "token": "kaae-pure-white",
         "srgb": "#FFFFFF",
-        "usage": "Clean white document ground, digital canvas, and high-contrast letterheads"
+        "usage": "Container card ground, sharp borders, and high-contrast letterheads"
       },
       {
         "token": "kaae-charcoal-ink",
-        "srgb": "#1A202C",
-        "usage": "High-legibility primary typography and legal text ink"
+        "srgb": "#1A1A1A",
+        "usage": "Primary editorial body copy and legal proclamation ink"
       }
     ],
     "fonts": [
@@ -197,11 +202,11 @@
     ]
   },
   "languagePolicy": {
-    "defaultLanguage": "ckb",
+    "defaultLanguage": "en",
     "supportedLanguages": [
+      "en",
       "ckb",
-      "ar",
-      "en"
+      "ar"
     ],
     "numberStyle": "source_preserved",
     "glossaryVersion": 1,
@@ -289,12 +294,12 @@
     ],
     "approvalPolicyId": "kaae-board-dual-peer-review",
     "drive": {
-      "sharedDriveId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM",
-      "knowledgeRootFolderId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM",
-      "productionRootFolderId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM_2026_PRODUCTION"
+      "sharedDriveId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+      "knowledgeRootFolderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+      "productionRootFolderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr"
     },
     "sheets": {
-      "spreadsheetId": "1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM_ACCREDITATION_REGISTRY",
+      "spreadsheetId": "1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ",
       "sheetId": 0
     }
   },

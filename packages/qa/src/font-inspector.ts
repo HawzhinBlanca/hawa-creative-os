@@ -197,6 +197,7 @@ export function extractGlyphSetFromBuffer(buffer: Uint8Array | ArrayBuffer): {
 
         if (format === 4) {
           // Format 4: Segment mapping to delta values
+          if (subtableOffset + 14 > bytes.length) continue;
           const segCountX2 = view.getUint16(subtableOffset + 6);
           const segCount = segCountX2 / 2;
           const endCodeOffset = subtableOffset + 14;
@@ -210,13 +211,15 @@ export function extractGlyphSetFromBuffer(buffer: Uint8Array | ArrayBuffer): {
               if (startCode <= endCode && endCode !== 0xFFFF) {
                 for (let cp = startCode; cp <= endCode; cp++) {
                   supported.add(cp);
+                  if (supported.size > 65535) break;
                 }
               }
             }
           }
         } else if (format === 12) {
           // Format 12: Segmented coverage for 32-bit characters
-          const nGroups = view.getUint32(subtableOffset + 12);
+          if (subtableOffset + 16 > bytes.length) continue;
+          const nGroups = Math.min(view.getUint32(subtableOffset + 12), 4096);
           const groupsOffset = subtableOffset + 16;
 
           for (let g = 0; g < nGroups; g++) {
@@ -225,8 +228,16 @@ export function extractGlyphSetFromBuffer(buffer: Uint8Array | ArrayBuffer): {
             const startCharCode = view.getUint32(entryOffset);
             const endCharCode = view.getUint32(entryOffset + 4);
 
-            for (let cp = startCharCode; cp <= endCharCode; cp++) {
-              supported.add(cp);
+            // Defend against corrupted or malicious huge ranges (OOM attack prevention)
+            if (
+              startCharCode <= endCharCode &&
+              endCharCode <= 0x10FFFF &&
+              endCharCode - startCharCode <= 0x10000
+            ) {
+              for (let cp = startCharCode; cp <= endCharCode; cp++) {
+                supported.add(cp);
+                if (supported.size > 65535) break;
+              }
             }
           }
         }

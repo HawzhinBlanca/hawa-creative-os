@@ -9,6 +9,12 @@ import {
   BriefBuilder,
   buildKaaeCertificateOperations,
   buildKaaeAnnouncementOperations,
+  buildKaaeMandateOperations,
+  buildKaaeHigherEdStandardsOperations,
+  buildKaaeStrategicRoadmapOperations,
+  KAAE_MANDATE_BUZZ_MAPPING,
+  KAAE_STANDARDS_BUZZ_MAPPING,
+  KAAE_ROADMAP_BUZZ_MAPPING,
   KAAE_PRIMARY_LOGO_SHA256,
   KAAE_SYMBOL_SHA256,
 } from '../src/index.js';
@@ -24,8 +30,8 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(validation.ok).toBe(true);
       if (validation.ok) {
         expect(validation.value.code).toBe('KAAE');
-        expect(validation.value.defaultLocale).toBe('ckb');
-        expect(validation.value.defaultDirection).toBe('rtl');
+        expect(validation.value.defaultLocale).toBe('en');
+        expect(validation.value.defaultDirection).toBe('ltr');
         expect(validation.value.assets.length).toBe(4);
       }
     });
@@ -264,6 +270,85 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
         expect(headline?.text).toBe('ڕاگەیاندنی فەرمی نوێ');
       }
+    });
+
+    it('dispatches to authentic mandate template via generateKaaeOperations', () => {
+      const briefRes = briefBuilder.build({
+        taskId: 'task-kaae-mandate-001',
+        clientId: kaaeClientId,
+        clientDnaVersion: 1,
+        objective: 'Statutory Mandate Notice',
+        rawRequestText: 'Institutional Accreditation Mandate',
+      });
+
+      if (briefRes.ok) {
+        const ops = director.generateKaaeOperations(briefRes.value, 'mandate', {
+          headlineEn: 'Custom Institutional Accreditation Mandate',
+        });
+
+        expect(ops.length).toBeGreaterThanOrEqual(12);
+        const bg = ops.find((o) => o.op === 'addVector' && o.nodeId === 'mandate_bg');
+        expect(bg?.source).toContain('#FDF8F3'); // Authentic Cream
+        const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'mandate_headline_en');
+        expect(headline?.text).toBe('Custom Institutional Accreditation Mandate');
+      }
+    });
+
+    it('dispatches to authentic standards template via generateKaaeOperations', () => {
+      const briefRes = briefBuilder.build({
+        taskId: 'task-kaae-std-001',
+        clientId: kaaeClientId,
+        clientDnaVersion: 1,
+        objective: 'Higher Education Quality Standards',
+        rawRequestText: 'Standards of Higher Education',
+      });
+
+      if (briefRes.ok) {
+        const ops = director.generateKaaeOperations(briefRes.value, 'standards');
+        expect(ops.length).toBeGreaterThanOrEqual(15);
+        const bg = ops.find((o) => o.op === 'addVector' && o.nodeId === 'std_bg');
+        expect(bg?.height).toBe(1350); // 4:5
+        expect(bg?.source).toContain('#0A1628');
+        expect(bg?.source).toContain('#1E3A5F');
+      }
+    });
+
+    it('dispatches to authentic roadmap template via generateKaaeOperations', () => {
+      const briefRes = briefBuilder.build({
+        taskId: 'task-kaae-road-001',
+        clientId: kaaeClientId,
+        clientDnaVersion: 1,
+        objective: 'Strategic Roadmap 2026-2028',
+        rawRequestText: 'Three-Year Strategic Roadmap',
+      });
+
+      if (briefRes.ok) {
+        const ops = director.generateKaaeOperations(briefRes.value, 'roadmap');
+        expect(ops.length).toBeGreaterThanOrEqual(16);
+        const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'roadmap_headline_en');
+        expect(headline?.text).toContain('Three-Year Strategic Roadmap');
+      }
+    });
+  });
+
+  describe('Part 5: Figma Buzz Field Mappings & Ground-Truth Tokens', () => {
+    it('verifies KAAE Mandate Buzz Field Mapping conformity', () => {
+      expect(KAAE_MANDATE_BUZZ_MAPPING.templateId).toBe('kaae_mandate');
+      expect(KAAE_MANDATE_BUZZ_MAPPING.targetAspectRatios).toContain('1:1');
+      expect(KAAE_MANDATE_BUZZ_MAPPING.textFields.headlineEn).toContain('Institutional Accreditation Mandate');
+      expect(KAAE_MANDATE_BUZZ_MAPPING.mediaFields.logo.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
+    });
+
+    it('verifies KAAE Standards Buzz Field Mapping conformity', () => {
+      expect(KAAE_STANDARDS_BUZZ_MAPPING.templateId).toBe('kaae_standards');
+      expect(KAAE_STANDARDS_BUZZ_MAPPING.targetAspectRatios).toContain('4:5');
+      expect(KAAE_STANDARDS_BUZZ_MAPPING.textFields.std1Title).toContain('Mission, Governance');
+    });
+
+    it('verifies KAAE Roadmap Buzz Field Mapping conformity', () => {
+      expect(KAAE_ROADMAP_BUZZ_MAPPING.templateId).toBe('kaae_roadmap');
+      expect(KAAE_ROADMAP_BUZZ_MAPPING.targetAspectRatios).toContain('1:1');
+      expect(KAAE_ROADMAP_BUZZ_MAPPING.textFields.phase1Title).toBe('Comprehensive Institutional Audits');
     });
   });
 });

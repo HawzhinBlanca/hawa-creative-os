@@ -137,4 +137,48 @@ describe('Universal Multi-Tenant Search Engine (FR-077, Invariant #6, Gate B)', 
     expect(res.hits[0].score).toBeGreaterThan(20);
     expect(res.tookMs).toBeLessThan(15);
   });
+
+  it('robustly handles non-string inputs, extreme limits, ZWNJ, and missing item fields', () => {
+    // 1. Non-string inputs to normalizeSearchToken
+    expect(normalizeSearchToken(null)).toBe('');
+    expect(normalizeSearchToken(undefined)).toBe('');
+    expect(normalizeSearchToken(2026 as any)).toBe('2026');
+    expect(normalizeSearchToken(true as any)).toBe('true');
+
+    // 2. ZWNJ and bidi control normalization
+    expect(normalizeSearchToken('پاش\u200Cکەوتوو')).toBe('پاش کەوتوو');
+    expect(normalizeSearchToken('\u2067سڵاو\u2069')).toBe('سڵاو');
+
+    // 3. Item with missing optional fields / empty bodyText
+    const imperfectItems: SearchableItem[] = [
+      {
+        id: 'item-sparse-01',
+        category: 'copy',
+        clientId: 'client-kaae',
+        title: 'Sparse Record',
+        bodyText: '',
+        tags: undefined,
+        updatedAt: '2026-09-06T00:00:00Z',
+      },
+    ];
+
+    const engine = new VaultSearchEngine(imperfectItems);
+
+    // Bounded limits
+    const clampedRes = engine.search({
+      q: 'Sparse',
+      clientId: 'client-kaae',
+      limit: -5,
+      offset: -10,
+    });
+    expect(clampedRes.hits.length).toBe(1);
+    expect(clampedRes.hits[0].item.id).toBe('item-sparse-01');
+
+    // Empty query returns item without crashing on missing bodyText
+    const emptyQRes = engine.search({
+      q: '',
+      clientId: 'client-kaae',
+    });
+    expect(emptyQRes.hits.length).toBe(1);
+  });
 });

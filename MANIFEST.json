@@ -10,7 +10,7 @@
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 138,
+  "fileCount": 153,
   "files": [
     {
       "path": ".env.example",
@@ -128,6 +128,11 @@
       "sha256": "89db1d50bb672bc34c7f8cb6d1c8be75a7e6724984e2525249314941ffeae6fb"
     },
     {
+      "path": "adrs/016_figma_agent_studio_migration.md",
+      "bytes": 3705,
+      "sha256": "2eea27ce809a03d265fff220eb439fdd3cf3a9a308dc3cf3ea0524fb709ded7c"
+    },
+    {
       "path": "api/events.md",
       "bytes": 3137,
       "sha256": "9be75a7f90d84222cf734e548a6b38073cad75b5fe5b6e0a96312abe611ccacc"
@@ -214,8 +219,8 @@
     },
     {
       "path": "db/schema.sql",
-      "bytes": 40883,
-      "sha256": "8df690b479b5d4ed7fb7ac31da6694a7a5434417c34faf6b6b08e66720789ec0"
+      "bytes": 42135,
+      "sha256": "c89691100e02d46bfe09374c4ec0464cca7ff063694fb3a7550a8747ea8ea0a1"
     },
     {
       "path": "db/seed.sql",
@@ -688,19 +693,74 @@
       "sha256": "4bc20739920fd2843cf8b2014feff90f2820ecc82f7c1c027553908e15a77eef"
     },
     {
+      "path": "scripts/export_kaae_deliverables.ts",
+      "bytes": 24113,
+      "sha256": "4c5c40bb5c8e77e2297028203ffc9521312fbbb7de9232d2a9c6e89e167d01d6"
+    },
+    {
+      "path": "scripts/generate_figma_studio_eval_design.ts",
+      "bytes": 19338,
+      "sha256": "2bd862b76c1b56f756c57f26f1f0c3a9692491eae6ef47f89de774940f846486"
+    },
+    {
       "path": "scripts/launch_hawa_os.sh",
-      "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362",
-      "bytes": 6006
+      "bytes": 6006,
+      "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362"
+    },
+    {
+      "path": "scripts/process_kaae_logo.ts",
+      "bytes": 2964,
+      "sha256": "f374adfbfed49387dea951637491de45f5f923a3cbb93695a0d6ce1de7c8e590"
+    },
+    {
+      "path": "scripts/publish_kaae_omnichannel.ts",
+      "bytes": 24216,
+      "sha256": "0d3fc797145ad7d3fa43a1eb4868fd96c251e03feaf489c82e507b6d3a11c0ff"
+    },
+    {
+      "path": "scripts/render_10_out_of_10_designs.ts",
+      "bytes": 45048,
+      "sha256": "ca763017f2389d841650a8628b5ce7dfb05a5d9923ba2a0aa2c1c342742b4ae2"
+    },
+    {
+      "path": "scripts/render_kaae_pro_brand_designs.ts",
+      "bytes": 28207,
+      "sha256": "51e33a08f6116378210faaa0d36009b2df34565e45c117cc7f9610699e484281"
+    },
+    {
+      "path": "scripts/render_pro_designer_showcase.ts",
+      "bytes": 33743,
+      "sha256": "f37f123ced7a9aa5ea87ecf20ae99caff702423aa2863543218ee01ab4b13a89"
+    },
+    {
+      "path": "scripts/setup_public_tunnel.ts",
+      "bytes": 4212,
+      "sha256": "259e44ff5d9f45edb7ab31973185592c8912bc376b1790cd9b799d3c1f03c304"
     },
     {
       "path": "scripts/smoke_test_10_of_10.ts",
-      "sha256": "1927c6a2965065265b40f5d63f50be116e0e329585b3db0d9cb4d76e8e948005",
-      "bytes": 13745
+      "bytes": 13745,
+      "sha256": "1927c6a2965065265b40f5d63f50be116e0e329585b3db0d9cb4d76e8e948005"
+    },
+    {
+      "path": "scripts/sync_kaae_figma_bridge.ts",
+      "bytes": 11994,
+      "sha256": "d91d0a798707d7061b8f192a8eb26612cd035fa64374d7473492368eec2c3646"
+    },
+    {
+      "path": "scripts/test_gateway_models.ts",
+      "bytes": 3029,
+      "sha256": "a274670bdeff4f5030b295971f4f6c2a461f60df9bb61326114f88e85bf97104"
+    },
+    {
+      "path": "scripts/test_kaae_full_english_pipeline.ts",
+      "bytes": 44348,
+      "sha256": "33fa22862250d1fe16499ceaffa51958dfb5473305472c0033dc1e1b03618922"
     },
     {
       "path": "scripts/validate_pack.py",
-      "bytes": 20853,
-      "sha256": "cbe9e1fc96d0e0299f7a04da2e3200ef8e02031bdee2b932613a09c6bb999656"
+      "bytes": 21101,
+      "sha256": "4c2f1d2211f8fd1f684f0c33797a2cb275b5b0d04da7a2793652f63a6bf91d60"
     },
     {
       "path": "ui/design-system.md",

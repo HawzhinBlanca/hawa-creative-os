@@ -510,8 +510,8 @@ const readmeContent = `
 # KAAE 2026 Official Production Deliverables Package
 **Client:** Kurdistan Accrediting Association for Education (KAAE)
 **Client ID:** c1000000-0000-4000-8000-000000000002
-**Target Google Shared Drive:** https://drive.google.com/drive/folders/1vDN1f5I-iX-GOdAtp4cIwSV4leBIKmZM
-**Target Google Sheet:** kaae_institutional_register_2026
+**Target Google Shared Drive:** https://drive.google.com/drive/folders/1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr
+**Target Google Sheet:** 1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ
 
 ## Complete Directory Structure & Shipped Deliverables
 

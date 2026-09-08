@@ -37,6 +37,61 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(json.task.status).toBe('RECEIVED');
   });
 
+  it('handles authenticated telegram webhook with auto-generation into AWAITING_APPROVAL and QA report', async () => {
+    const res = await app.request('/api/webhooks/telegram?generate=true', {
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'expected_office_secret',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        update_id: 1011,
+        message: {
+          text: 'دەستپێکردنی خولی باوەڕپێدانی زانکۆکانی کەی ئەی ئەی ئی ٢٠٢٦',
+          chat: { id: 9988 },
+          from: { id: 9988, first_name: 'Hawzhin', username: 'hawzhin' },
+        },
+      }),
+    });
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.task.sourcePlatform).toBe('telegram');
+    expect(json.task.clientId).toBe('c1000000-0000-4000-8000-000000000002');
+    expect(json.task.status).toBe('AWAITING_APPROVAL');
+    expect(json.task.latestRevisionId).toBeDefined();
+    expect(json.task.latestQAReport).toBeDefined();
+    expect(json.task.latestQAReport.criticalPass).toBe(true);
+  });
+
+  it('handles telegram bot slash commands via webhook (/status)', async () => {
+    const res = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'expected_office_secret',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        update_id: 1012,
+        message: { text: '/status', chat: { id: 9988 } },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.command).toBe(true);
+    expect(json.reply.text).toContain('Hawa Telegram Bridge Status');
+  });
+
+  it('exposes telegram adapter health and configuration via /v1/adapters/telegram/status', async () => {
+    const res = await app.request('/v1/adapters/telegram/status');
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.botUsername).toBe('hawdesign_official_bot');
+    expect(json.bridge).toBeDefined();
+  });
+
   it('deduplicates identical incoming event', async () => {
     const payload = JSON.stringify({
       update_id: 102,
@@ -151,7 +206,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const editorUrlRes = await app.request(`/v1/tasks/${taskId}/editor-url`);
     expect(editorUrlRes.status).toBe(200);
     const editorUrlData = await editorUrlRes.json();
-    expect(editorUrlData.url).toContain('/review?doc=');
+    expect(editorUrlData.url).toMatch(/figma\.com\/design|\/review\?doc=/);
     expect(editorUrlData.taskId).toBe(taskId);
 
     // 4c. Test Content-Addressed Export Package Assembler (FR-045)
@@ -842,6 +897,30 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     // Clean up test environment
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('deduplicates clients in GET /v1/clients and provides verified KAAE DNA', async () => {
+    const res = await app.request('/v1/clients');
+    expect(res.status).toBe(200);
+    const clients = await res.json();
+    expect(Array.isArray(clients)).toBe(true);
+
+    // Verify no duplicate client IDs exist
+    const clientIds = clients.map((c: any) => c.clientId);
+    const uniqueIds = new Set(clientIds);
+    expect(clientIds.length).toBe(uniqueIds.size);
+
+    // Verify KAAE exists exactly once
+    const kaaeClients = clients.filter((c: any) => c.clientId === 'c1000000-0000-4000-8000-000000000002');
+    expect(kaaeClients.length).toBe(1);
+    expect(kaaeClients[0].name).toContain('Kurdistan Accrediting Association');
+
+    // Verify DNA endpoint works for KAAE
+    const dnaRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000002/dna');
+    expect(dnaRes.status).toBe(200);
+    const dna = await dnaRes.json();
+    expect(dna.name).toContain('Kurdistan Accrediting Association');
+    expect(dna.fonts[0].family).toContain('Minion');
   });
 });
 

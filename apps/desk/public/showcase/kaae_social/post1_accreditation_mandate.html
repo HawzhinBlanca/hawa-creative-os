@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KAAE Institutional Accreditation Mandate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      width: 1080px;
+      height: 1080px;
+      background: #FDF8F3;
+      font-family: 'Inter', sans-serif;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 70px 75px;
+    }
+
+    /* Subtle Quarter-Sun Burst Rays Watermark */
+    .sunburst-motif {
+      position: absolute;
+      top: -120px;
+      right: -120px;
+      width: 540px;
+      height: 540px;
+      pointer-events: none;
+      opacity: 0.12;
+      background: radial-gradient(circle at 100% 0%, #F7B500 0%, transparent 70%);
+    }
+    .sunburst-rays {
+      position: absolute;
+      top: -80px;
+      right: -80px;
+      width: 480px;
+      height: 480px;
+      pointer-events: none;
+      opacity: 0.08;
+      background-image: repeating-conic-gradient(
+        from 180deg at 100% 0%,
+        #4770A3 0deg 6deg,
+        transparent 6deg 14deg
+      );
+    }
+
+    /* Geometric Triangle Halftone Accent */
+    .geometric-mesh {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 380px;
+      height: 280px;
+      opacity: 0.035;
+      background-image: radial-gradient(#1E3A5F 1.5px, transparent 1.5px);
+      background-size: 20px 20px;
+      pointer-events: none;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 10;
+    }
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .brand-logo {
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 12px rgba(30, 58, 95, 0.15));
+    }
+    .brand-text h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1E3A5F;
+      letter-spacing: 0.5px;
+      line-height: 1.1;
+    }
+    .brand-text p {
+      font-size: 11px;
+      font-weight: 600;
+      color: #4770A3;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      margin-top: 3px;
+    }
+    .header-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #FFFFFF;
+      border: 1px solid rgba(71, 112, 163, 0.2);
+      padding: 8px 18px;
+      border-radius: 999px;
+      box-shadow: 0 2px 8px rgba(10, 22, 40, 0.04);
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      background: #F7B500;
+      border-radius: 50%;
+    }
+    .badge-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #1E3A5F;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* Main Content Area */
+    .hero-section {
+      position: relative;
+      z-index: 10;
+      margin-top: 10px;
+    }
+    .eyebrow {
+      font-size: 13px;
+      font-weight: 700;
+      color: #F7B500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .eyebrow::after {
+      content: '';
+      display: inline-block;
+      width: 40px;
+      height: 2px;
+      background: #F7B500;
+    }
+    .hero-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 46px;
+      font-weight: 700;
+      color: #1E3A5F;
+      line-height: 1.18;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .gold-underline {
+      width: 140px;
+      height: 4px;
+      background: linear-gradient(90deg, #F7B500 0%, #FFD700 80%, transparent 100%);
+      border-radius: 2px;
+      margin-bottom: 22px;
+    }
+
+    /* Highlight Card */
+    .mandate-card {
+      background: #FFFFFF;
+      border: 1px solid rgba(71, 112, 163, 0.15);
+      border-left: 6px solid #F7B500;
+      border-radius: 16px;
+      padding: 26px 30px;
+      box-shadow: 0 10px 30px rgba(30, 58, 95, 0.06);
+      margin-bottom: 30px;
+    }
+    .mandate-card p {
+      font-size: 18.5px;
+      line-height: 1.6;
+      color: #2D3748;
+      font-weight: 450;
+    }
+    .mandate-card strong {
+      color: #1E3A5F;
+      font-weight: 600;
+    }
+
+    /* Stat Cards Grid */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      position: relative;
+      z-index: 10;
+    }
+    .stat-box {
+      background: #FFFFFF;
+      border: 1px solid rgba(71, 112, 163, 0.16);
+      border-radius: 14px;
+      padding: 22px 20px;
+      box-shadow: 0 6px 18px rgba(10, 22, 40, 0.04);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #4770A3, #F7B500);
+    }
+    .stat-metric {
+      font-size: 34px;
+      font-weight: 800;
+      color: #1E3A5F;
+      line-height: 1;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .stat-metric.gold {
+      color: #F7B500;
+    }
+    .stat-metric.blue {
+      color: #4770A3;
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #4770A3;
+      margin-bottom: 4px;
+    }
+    .stat-desc {
+      font-size: 12.5px;
+      color: #718096;
+      line-height: 1.35;
+      font-weight: 450;
+    }
+
+    /* Footer */
+    .footer {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 22px;
+      border-top: 1px solid rgba(71, 112, 163, 0.18);
+    }
+    .footer-legal {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .footer-seal {
+      width: 24px;
+      height: 24px;
+      background: #1E3A5F;
+      color: #F7B500;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .legal-text p {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1E3A5F;
+      line-height: 1.3;
+    }
+    .legal-text span {
+      font-size: 11px;
+      font-weight: 400;
+      color: #718096;
+    }
+    .domain-badge {
+      background: #1E3A5F;
+      color: #FFFFFF;
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      box-shadow: 0 4px 12px rgba(30, 58, 95, 0.2);
+    }
+    .domain-badge span {
+      color: #F7B500;
+    }
+  </style>
+</head>
+<body>
+  <!-- Watermarks -->
+  <div class="sunburst-motif"></div>
+  <div class="sunburst-rays"></div>
+  <div class="geometric-mesh"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="brand-lockup">
+      <img src="kaae-logo.png" alt="KAAE Emblem" class="brand-logo">
+      <div class="brand-text">
+        <h1>KAAE</h1>
+        <p>Quality Assurance &amp; Accreditation</p>
+      </div>
+    </div>
+    <div class="header-badge">
+      <div class="badge-dot"></div>
+      <span class="badge-label">National Mandate</span>
+    </div>
+  </header>
+
+  <!-- Hero Content -->
+  <main class="hero-section">
+    <div class="eyebrow">Statutory Quality Authority</div>
+    <h2 class="hero-title">Advancing Academic Rigor<br>&amp; Institutional Excellence</h2>
+    <div class="gold-underline"></div>
+
+    <div class="mandate-card">
+      <p>
+        Established by <strong>Law No. 6 of 2022</strong>, KAAE operates as the independent national accreditation body for the Kurdistan Region, ensuring colleges, universities, and K-12 schools uphold <strong>measurable, internationally comparable standards</strong> through transparent peer review.
+      </p>
+    </div>
+  </main>
+
+  <!-- Key Metrics -->
+  <section class="stat-grid">
+    <div class="stat-box">
+      <div class="stat-metric gold">02</div>
+      <div class="stat-label">Commissions</div>
+      <div class="stat-desc">Higher Education &amp; K-12 Accreditation Boards</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-metric blue">MSCHE</div>
+      <div class="stat-label">Global Partner</div>
+      <div class="stat-desc">Middle States Commission Consultative Alignment</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-metric">100%</div>
+      <div class="stat-label">Peer Evaluation</div>
+      <div class="stat-desc">Evidence-Based On-Site Institutional Audits</div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-legal">
+      <div class="footer-seal">§</div>
+      <div class="legal-text">
+        <p>Kurdistan Accrediting Association for Education</p>
+        <span>Enacted under Law No. 6 of 2022 · Erbil, Kurdistan Region</span>
+      </div>
+    </div>
+    <div class="domain-badge">
+      www.<span>kaae</span>.org
+    </div>
+  </footer>
+</body>
+</html>

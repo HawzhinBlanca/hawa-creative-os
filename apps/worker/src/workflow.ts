@@ -2,7 +2,7 @@ import type { RequestContext, Result, AppError, UUID } from '@hawa/contracts';
 import { TaskStateMachine } from '@hawa/domain';
 import { BriefBuilder, CreativeDirectorRunner, DesignRouter } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
-import { HyCanvasStudioAdapter, GooglePublisher, DirectModelGateway } from '@hawa/integrations';
+import { FigmaBridgeAdapter, GooglePublisher, DirectModelGateway } from '@hawa/integrations';
 import { RetrievalService } from '@hawa/retrieval';
 import { OfficeTracer } from '@hawa/observability';
 
@@ -32,7 +32,7 @@ export class TaskWorkflowRunner {
   private router = new DesignRouter();
   private creativeDirector = new CreativeDirectorRunner();
   private qaEngine = new DeterministicQAEngine();
-  private studio = new HyCanvasStudioAdapter();
+  private studio = new FigmaBridgeAdapter();
   private publisher = new GooglePublisher();
   private modelGateway = new DirectModelGateway();
   private retrieval = new RetrievalService();

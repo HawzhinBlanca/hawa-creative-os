@@ -206,4 +206,139 @@ describe('Canvas Export & HyCanvas Serialization Rigor', () => {
     expect(svgContent).toContain("font-family: 'Vazirmatn'");
     expect(svgContent).not.toContain('fonts.googleapis.com');
   });
+
+  it('correctly splits and formats multiline custom badges and texts with tspans in SVG export', () => {
+    const multilineState: CanvasExportState = {
+      ...sampleState,
+      nodes: [
+        {
+          id: 'node_stat_box_1',
+          role: 'badge_custom',
+          name: 'Stat Badge',
+          x: 50,
+          y: 200,
+          width: 200,
+          height: 100,
+          visible: true,
+          zIndex: 5,
+          locked: false,
+          textEn: '100%\nStatutory Compliance\nKurdistan Parity',
+          backgroundColor: '#0F172A',
+          color: '#38BDF8',
+          fontSize: 16,
+        },
+        {
+          id: 'node_multiline_text',
+          role: 'text_custom',
+          name: 'Header Notice',
+          x: 50,
+          y: 350,
+          width: 300,
+          height: 100,
+          visible: true,
+          zIndex: 6,
+          locked: false,
+          textEn: 'OFFICIAL NOTICE\nMINISTRY DIRECTIVE\nERBIL HEADQUARTERS',
+          fontSize: 20,
+        },
+      ],
+    };
+
+    const { svgContent } = generateSvgData(multilineState);
+    expect(svgContent).toContain('<tspan');
+    expect(svgContent).toContain('>100%</tspan>');
+    expect(svgContent).toContain('>Statutory Compliance</tspan>');
+    expect(svgContent).toContain('>Kurdistan Parity</tspan>');
+    expect(svgContent).toContain('OFFICIAL NOTICE');
+    expect(svgContent).toContain('MINISTRY DIRECTIVE');
+    expect(svgContent).toContain('ERBIL HEADQUARTERS');
+  });
+
+  it('correctly computes WCAG contrast and auto-selects dark text on rgba translucent white backgrounds', () => {
+    const translucentState: CanvasExportState = {
+      ...sampleState,
+      brandKit: {
+        ...drusteeKit,
+        palette: {
+          ...drusteeKit.palette,
+          cardBg: 'rgba(255, 255, 255, 0.95)',
+        },
+      },
+      nodes: [
+        {
+          id: 'node_copy_white',
+          role: 'copy',
+          name: 'White Translucent Badge',
+          x: 50,
+          y: 800,
+          width: 320,
+          height: 70,
+          visible: true,
+          zIndex: 10,
+          locked: false,
+          textEn: '$34.00 · Clinical Grade',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        },
+      ],
+    };
+
+    const { svgContent } = generateSvgData(translucentState);
+    // Badge on white background must receive dark text, never white text
+    expect(svgContent).toContain('fill="#0F172A"');
+  });
+
+  it('safely XML-escapes ampersands and angle brackets in SVG export preventing parse errors', () => {
+    const specialCharsState: CanvasExportState = {
+      ...sampleState,
+      langVariant: 'bilingual',
+      headlineEn: 'Research & Development <Advanced>',
+      headlineCkb: 'توێژینەوە & پەرەپێدان <تایبەت>',
+      copyEn: 'Clinical Trials & Standards',
+      copyCkb: 'ستانداردەکان & ڕێنماییەکان',
+      nodes: undefined,
+    };
+
+    const { svgContent } = generateSvgData(specialCharsState);
+    // Must contain escaped &amp; and &lt; / &gt;
+    expect(svgContent).toContain('Research &amp; Development &lt;Advanced&gt;');
+    expect(svgContent).toContain('توێژینەوە &amp; پەرەپێدان &lt;تایبەت&gt;');
+    expect(svgContent).toContain('Clinical Trials &amp; Standards');
+    // Must NOT contain bare unescaped &
+    expect(svgContent).not.toMatch(/Research & Development/);
+    // Must preserve UAX #9 isolate entities
+    expect(svgContent).toContain('&#x2067;');
+    expect(svgContent).toContain('&#x2069;');
+  });
+
+  it('losslessly round-trips custom image layers and digitScript metadata in .hyc package', async () => {
+    const imageNodeState: CanvasExportState = {
+      ...sampleState,
+      nodes: [
+        {
+          id: 'node_custom_photo',
+          role: 'image_custom',
+          name: 'Hero Product Photo',
+          x: 40,
+          y: 60,
+          width: 400,
+          height: 300,
+          visible: true,
+          zIndex: 5,
+          locked: false,
+          imageUrl: 'https://storage.hawa.dev/assets/drustee/bottle-hero.webp',
+          digitScript: 'eastern',
+        } as any,
+      ],
+    };
+
+    const { json } = generateHycPackageData(imageNodeState);
+    const result = await importFromHycPackage(json);
+
+    expect(result.ok).toBe(true);
+    expect(result.nodes).toHaveLength(1);
+    const restored = result.nodes[0];
+    expect(restored.role).toBe('image_custom');
+    expect(restored.imageUrl).toBe('https://storage.hawa.dev/assets/drustee/bottle-hero.webp');
+    expect(restored.digitScript).toBe('eastern');
+  });
 });

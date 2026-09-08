@@ -91,7 +91,15 @@ export class GooglePublisher implements Publisher {
         return { ok: true, value: receipt };
       }
     }
-    throw new Error(`Publication receipt ${publicationId} not found`);
+    return {
+      ok: false,
+      error: {
+        code: 'PUBLICATION_RECEIPT_NOT_FOUND',
+        message: `Publication receipt ${publicationId} not found in ledger`,
+        retryable: false,
+        safeAction: 'Verify publication ID exists before reconciling',
+      },
+    };
   }
 
   async verify(_ctx: RequestContext, publicationId: UUID): Promise<Result<{ consistent: boolean; differences: Record<string, unknown>[] }>> {

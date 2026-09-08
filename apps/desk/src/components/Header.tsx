@@ -31,9 +31,9 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
     };
   }, []);
 
-  const badgeColor = !isOnline ? '#f97316' : streamStatus === 'connected' ? '#22c55e' : '#eab308';
-  const badgeBg = !isOnline ? 'rgba(249, 115, 22, 0.12)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(234, 179, 8, 0.12)';
-  const badgeBorder = !isOnline ? 'rgba(249, 115, 22, 0.3)' : streamStatus === 'connected' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)';
+  const badgeColor = !isOnline ? '#9a3412' : streamStatus === 'connected' ? '#166534' : '#854d0e';
+  const badgeBg = !isOnline ? 'rgba(154, 52, 18, 0.08)' : streamStatus === 'connected' ? 'rgba(22, 101, 52, 0.08)' : 'rgba(133, 77, 14, 0.08)';
+  const badgeBorder = !isOnline ? 'rgba(154, 52, 18, 0.3)' : streamStatus === 'connected' ? 'rgba(22, 101, 52, 0.3)' : 'rgba(133, 77, 14, 0.3)';
   const badgeText = !isOnline ? t.header.offlineCache : streamStatus === 'connected' ? t.header.liveStream : t.header.connecting;
 
   return (
@@ -56,17 +56,17 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
             fontSize: 12,
             fontWeight: 600,
             padding: '5px 11px',
-            background: locale === 'en' ? 'rgba(56, 189, 248, 0.1)' : 'rgba(234, 179, 8, 0.12)',
-            color: locale === 'en' ? '#38bdf8' : '#eab308',
-            border: `1px solid ${locale === 'en' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(234, 179, 8, 0.3)'}`,
+            background: locale === 'en' ? 'rgba(2, 132, 199, 0.1)' : 'rgba(180, 83, 9, 0.12)',
+            color: locale === 'en' ? '#0369a1' : '#b45309',
+            border: `1px solid ${locale === 'en' ? 'rgba(2, 132, 199, 0.35)' : 'rgba(180, 83, 9, 0.35)'}`,
             borderRadius: 8,
             cursor: 'pointer',
           }}
           title={locale === 'en' ? 'Primary: English. Click to switch to Secondary: کوردی سۆرانی' : 'Secondary: کوردی. کلیک بکە بۆ گۆڕین بۆ سەرەکی: English'}
         >
           <span>{locale === 'en' ? '🇬🇧 English (Primary)' : '☀️ کوردی (Secondary)'}</span>
-          <span style={{ opacity: 0.6, fontSize: 11 }}>⇄</span>
-          <span style={{ fontSize: 11, opacity: 0.85 }}>{locale === 'en' ? 'کوردی' : 'EN'}</span>
+          <span style={{ opacity: 0.8, fontSize: 11, fontWeight: 700 }}>⇄</span>
+          <span style={{ fontSize: 11, fontWeight: 700 }}>{locale === 'en' ? 'کوردی' : 'EN'}</span>
         </button>
 
         {onStartTour && (
@@ -81,9 +81,9 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
               fontSize: 12,
               fontWeight: 600,
               padding: '5px 11px',
-              background: 'rgba(16, 185, 129, 0.1)',
-              color: '#10B981',
-              border: '1px solid rgba(16, 185, 129, 0.25)',
+              background: 'rgba(4, 120, 87, 0.1)',
+              color: '#047857',
+              border: '1px solid rgba(4, 120, 87, 0.35)',
               borderRadius: 8,
               cursor: 'pointer',
             }}

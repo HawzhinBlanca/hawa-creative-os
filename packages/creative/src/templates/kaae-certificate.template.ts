@@ -13,7 +13,7 @@ export interface KaaeCertificateParams {
   language?: 'en' | 'ckb' | 'ar';
 }
 
-export const KAAE_PRIMARY_LOGO_SHA256 = '2acc0742b2c6a83f0d0f9330f5e1fe9dfae72fb0b28fbb282c787d5a4c4571f6';
+export const KAAE_PRIMARY_LOGO_SHA256 = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
 export const KAAE_SYMBOL_SHA256 = 'fc01cc8ed2ba4016e4f701abcb46d5b4f934d9a3c664129d82a475de40439180';
 
 /**

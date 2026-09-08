@@ -142,6 +142,44 @@ export interface FeedbackEventsTable {
   created_at: Generated<Date>;
 }
 
+export interface DesignJobsTable {
+  id: Generated<string>;
+  task_id: string;
+  client_id: string;
+  route: 'buzz_template' | 'figma_freeform' | 'human';
+  figma_file_key: string | null;
+  figma_node_id: string | null;
+  template_id: string | null;
+  revision: Generated<number>;
+  state: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface FigmaLeasesTable {
+  id: Generated<string>;
+  task_id: string;
+  client_id: string;
+  figma_file_key: string;
+  holder: string;
+  expires_at: Date;
+  released_at: Date | null;
+}
+
+export interface FigmaMutationsTable {
+  id: Generated<string>;
+  design_job_id: string;
+  command_id: string;
+  expected_revision: number;
+  resulting_revision: number | null;
+  operation: string;
+  args_hash: string;
+  affected_node_ids: string[] | null;
+  marker_id: string | null;
+  status: string;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   tenants: TenantsTable;
   users: UsersTable;
@@ -154,4 +192,7 @@ export interface Database {
   outbox: OutboxTable;
   publications: PublicationsTable;
   feedback_events: FeedbackEventsTable;
+  design_jobs: DesignJobsTable;
+  figma_leases: FigmaLeasesTable;
+  figma_mutations: FigmaMutationsTable;
 }
