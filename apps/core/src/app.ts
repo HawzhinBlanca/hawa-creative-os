@@ -812,8 +812,9 @@ export function createApp() {
     explicitClientId?: string | null;
     autoGenerate?: boolean;
     rawJson?: any;
+    deskBaseUrl?: string;
   }) {
-    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, explicitClientId, autoGenerate } = input;
+    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, explicitClientId, autoGenerate, deskBaseUrl } = input;
     const normalizedText = normalizeKurdishIncomingText(rawText);
 
     // 1. Client Routing & Lock (Invariant #4)
@@ -1072,7 +1073,7 @@ export function createApp() {
         copy: headlineCkb,
         status: taskStatus,
         clientName: clientDisplayName,
-        deskBaseUrl: process.env.HAWA_DESK_BASE_URL || 'http://127.0.0.1:8080',
+        deskBaseUrl: deskBaseUrl || process.env.PUBLIC_TUNNEL_URL || process.env.HAWA_DESK_BASE_URL || 'http://127.0.0.1:8080',
         voiceTranscript: input.voiceTranscript,
       });
       await telegramBridge.dispatchOutboundMessage(sourceChannelId, previewCard);
@@ -1422,7 +1423,9 @@ export function createApp() {
       json.senderName ||
       'Telegram Client';
 
-    const shouldGenerate = c.req.query('generate') === 'true' || Boolean(json.autoGenerate || json.generate);
+    const shouldGenerate = c.req.query('generate') !== 'false' && json.autoGenerate !== false;
+    const hostHeader = c.req.header('x-forwarded-host') || c.req.header('host');
+    const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
 
     const result = await ingestChatCampaignTask({
       platform: 'telegram',
@@ -1433,6 +1436,7 @@ export function createApp() {
       voiceTranscript,
       explicitClientId: json.clientId,
       autoGenerate: shouldGenerate,
+      deskBaseUrl: incomingDeskBase,
       rawJson: json,
     });
 
@@ -1470,7 +1474,9 @@ export function createApp() {
     }
     rawEvents.set(sourceEventId, json);
 
-    const shouldGenerate = c.req.query('generate') === 'true' || Boolean(json.autoGenerate || json.generate);
+    const shouldGenerateWa = c.req.query('generate') !== 'false' && json.autoGenerate !== false;
+    const hostHeaderWa = c.req.header('x-forwarded-host') || c.req.header('host');
+    const incomingDeskBaseWa = hostHeaderWa ? `https://${hostHeaderWa}` : undefined;
 
     const result = await ingestChatCampaignTask({
       platform: 'whatsapp',
@@ -1479,7 +1485,8 @@ export function createApp() {
       senderName: normalized.senderName,
       rawText: normalized.rawText,
       explicitClientId: normalized.detectedClientId,
-      autoGenerate: shouldGenerate,
+      autoGenerate: shouldGenerateWa,
+      deskBaseUrl: incomingDeskBaseWa,
       rawJson: json,
     });
 
