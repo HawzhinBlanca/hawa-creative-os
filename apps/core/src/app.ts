@@ -1109,12 +1109,37 @@ export function createApp(options?: CreateAppOptions) {
       if (platform === 'whatsapp') taskStatus = 'BRIEF_READY';
     }
 
-    // 3. Construct Brief with Strict Language Canon
-    const hasKurdishOrArabic = /[\u0600-\u06FF]/.test(rawText);
+    // 3. Construct Brief with Strict Language Canon & Directive Separation
+    let clientInstructions = '';
+    let payloadText = rawText.trim();
+
+    // 3a. Check for explicit divider lines: e.g. __________, ----------, ==========, ***
+    const dividerMatch = payloadText.match(/\n\s*([_\-=\*]{3,})\s*\n/);
+    if (dividerMatch && dividerMatch.index !== undefined) {
+      clientInstructions = payloadText.slice(0, dividerMatch.index).trim();
+      payloadText = payloadText.slice(dividerMatch.index + dividerMatch[0].length).trim();
+    } else {
+      // 3b. Check for explicit copy section headers (e.g. "Content:", "Copy:", "Text:", "دەق:")
+      const sectionMatch = payloadText.match(/\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i);
+      if (sectionMatch && sectionMatch.index !== undefined) {
+        clientInstructions = payloadText.slice(0, sectionMatch.index).trim();
+        payloadText = payloadText.slice(sectionMatch.index + sectionMatch[0].length).trim();
+      } else {
+        // 3c. If message begins with conversational opening directives, strip leading directive paragraph
+        const conversationalMatch = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)\b[^\n]*\n+/i);
+        if (conversationalMatch && payloadText.length > conversationalMatch[0].length + 20) {
+          clientInstructions = conversationalMatch[0].trim();
+          payloadText = payloadText.slice(conversationalMatch[0].length).trim();
+        }
+      }
+    }
+
+    const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);
+    const firstNonEmptyPayloadLine = payloadLines[0] || '';
+
+    const hasKurdishOrArabic = /[\u0600-\u06FF]/.test(payloadText || rawText);
     const primaryLanguage: 'en' | 'ckb' = hasKurdishOrArabic ? 'ckb' : 'en';
     const direction: 'ltr' | 'rtl' = primaryLanguage === 'en' ? 'ltr' : 'rtl';
-
-    const firstNonEmptyLine = rawText.split('\n').map((l) => l.trim()).filter(Boolean)[0] || '';
 
     let headlineEn: string | undefined;
     let headlineCkb: string | undefined;
@@ -1123,13 +1148,14 @@ export function createApp(options?: CreateAppOptions) {
     let title: string;
 
     if (primaryLanguage === 'en') {
-      headlineEn = firstNonEmptyLine.slice(0, 70) || (isKaae ? 'National Standards for Quality Assurance in Education' : 'Official Announcement');
-      copyEn = rawText || (isKaae ? 'Official National Accreditation Framework and Standards for Higher Education and General Education in the Kurdistan Region.' : 'Special Announcement');
-      title = isKaae ? `KAAE: ${headlineEn.slice(0, 35)}…` : `${senderName}: ${headlineEn.slice(0, 35)}…`;
+      headlineEn = firstNonEmptyPayloadLine.slice(0, 80) || (isKaae ? 'National Standards for Quality Assurance in Education' : 'Official Announcement');
+      copyEn = payloadText || rawText || (isKaae ? 'Official National Accreditation Framework and Standards for Higher Education and General Education in the Kurdistan Region.' : 'Special Announcement');
+      title = isKaae ? `KAAE: ${headlineEn.slice(0, 45)}…` : `${senderName}: ${headlineEn.slice(0, 45)}…`;
     } else {
-      headlineCkb = firstNonEmptyLine.slice(0, 55) || (isKaae ? 'دەستپێکردنی باوەڕپێدانی زانکۆکان بۆ ٢٠٢٦' : 'ئۆفەری فەرمی');
-      copyCkb = normalizedText || (isKaae ? 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · دەستەی باوەڕپێدانی دامەزراوەکانی خوێندنی باڵا' : 'پۆستی تایبەت لە ئۆفیس');
-      title = isKaae ? `KAAE: ${headlineCkb.slice(0, 35)}…` : `${senderName}: ${headlineCkb.slice(0, 35)}…`;
+      const normalizedPayload = normalizeKurdishIncomingText(payloadText || rawText);
+      headlineCkb = firstNonEmptyPayloadLine.slice(0, 65) || (isKaae ? 'دەستپێکردنی باوەڕپێدانی زانکۆکان بۆ ٢٠٢٦' : 'ئۆفەری فەرمی');
+      copyCkb = normalizedPayload || normalizedText || (isKaae ? 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · دەستەی باوەڕپێدانی دامەزراوەکانی خوێندنی باڵا' : 'پۆستی تایبەت لە ئۆفیس');
+      title = isKaae ? `KAAE: ${headlineCkb.slice(0, 45)}…` : `${senderName}: ${headlineCkb.slice(0, 45)}…`;
     }
 
     const exactCopy: ExactCopyBlock[] = [];
@@ -1339,9 +1365,14 @@ export function createApp(options?: CreateAppOptions) {
       else if (clientId === 'client-drustee') clientDisplayName = 'Drustee Health';
 
       if (autoGenerate) {
+        const canvaDocId = finalDoc?.studioDocumentId;
+        const canvaUrl = canvaDocId ? `https://www.canva.com/design/${canvaDocId}/edit` : undefined;
+
         const previewCard = telegramBridge.formatTaskPreviewCard({
           id: taskId,
           docId: finalDoc?.documentId || taskId,
+          canvaDocumentId: canvaDocId,
+          canvaUrl,
           title,
           copy: (primaryLanguage === 'en' ? headlineEn : headlineCkb) || title,
           status: taskStatus,

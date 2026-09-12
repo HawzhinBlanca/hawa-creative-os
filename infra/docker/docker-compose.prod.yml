@@ -46,7 +46,8 @@ services:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@postgres:5432/hawa
-      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-expected_office_secret}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-kaae_office_secret_production_entropy_99f3b817}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-7191500129}
       RESTATE_INGRESS_URL: http://restate:8080
     extra_hosts:
       - "api.telegram.org:149.154.167.99"
@@ -116,6 +117,7 @@ services:
       - ../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
       - ../../db/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
+      - ../../packages/db/migrations/001_canva_bindings.sql:/docker-entrypoint-initdb.d/04-canva-bindings.sql:ro
     networks:
       - core
       - edge

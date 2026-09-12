@@ -4,6 +4,8 @@ import { KAAE_PRIMARY_LOGO_SHA256 } from './kaae-certificate.template.js';
 
 export interface KaaeAnnouncementParams {
   pageId?: string;
+  width?: number;
+  height?: number;
   headlineEn?: string;
   headlineCkb?: string;
   copyEn?: string;
@@ -1196,8 +1198,8 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
   const logoSha = params.logoSha256 || KAAE_PRIMARY_LOGO_SHA256;
   const ops: StudioOperation[] = [];
 
-  const width = 1080;
-  const height = 1350;
+  const width = params.width || 1080;
+  const height = params.height || 1350;
 
   // 1. Vector Deep Institutional Navy Foundation (#0A1628, #1E3A5F, #4770A3)
   ops.push({
@@ -1486,6 +1488,12 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     ? 'یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · پەرلەمانی کوردستان · دەستەی متمانەبەخشین'
     : 'یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · پەرلەمانی کوردستان | Kurdistan Regional Law No. 6 of 2022';
 
+  const bottomMargin = Math.round(height * 0.05);
+  const footerHeight = 28;
+  const statutoryHeight = 32;
+  const footerY = height - bottomMargin - footerHeight - 8;
+  const statutoryY = footerY - statutoryHeight - 12;
+
   ops.push({
     op: 'addText',
     nodeId: 'ann_statutory_rule',
@@ -1493,11 +1501,11 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     text: statutoryText,
     role: 'disclaimer',
     x: 60,
-    y: height - 150,
+    y: statutoryY,
     width: width - 120,
-    height: 35,
+    height: statutoryHeight,
     style: {
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '600',
       fontFamily: isEnglishOnly ? 'Inter' : 'Cairo',
       textAlign: 'center',
@@ -1515,11 +1523,11 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     text: 'www.kaae.org · info@kaae.krd · 60m Street, Erbil, Kurdistan Region',
     role: 'disclaimer',
     x: 60,
-    y: height - 95,
+    y: footerY,
     width: width - 120,
-    height: 30,
+    height: footerHeight,
     style: {
-      fontSize: 18,
+      fontSize: 16,
       fontFamily: 'Inter',
       textAlign: 'center',
       color: '#94A3B8',

@@ -605,7 +605,13 @@ export class CreativeDirectorRunner {
         ? undefined
         : customParams?.copyCkb || ckbCopy?.text || (!isEnglishOnly ? brief.exactCopy[1]?.text || 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان.' : undefined);
 
+      const primaryVariant = brief.variants?.[0];
+      const width = customParams?.width || primaryVariant?.width || 1080;
+      const height = customParams?.height || primaryVariant?.height || 1350;
+
       return buildKaaeAnnouncementOperations({
+        width,
+        height,
         headlineCkb: headlineCkbResolved,
         headlineEn: headlineEnResolved,
         copyCkb: copyCkbResolved,
