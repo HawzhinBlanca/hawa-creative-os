@@ -1,0 +1,78 @@
+{
+  "task": "CV-10",
+  "generatedAt": "2026-09-11T23:26:50Z",
+  "requirements": ["FR-014", "FR-015", "FR-024", "FR-026", "FR-040"],
+  "holdoutControls": {
+    "protectedTokensPreserved": [
+      {
+        "test": "KAAE official decree date preservation",
+        "token": "2026-09-15",
+        "result": "PASS",
+        "status": "EXACT_MATCH"
+      },
+      {
+        "test": "Drustee Vitamin C Serum price preservation",
+        "token": "25,000 IQD",
+        "result": "PASS",
+        "status": "EXACT_MATCH"
+      }
+    ],
+    "negativeHoldoutProbes": [
+      {
+        "probe": "Detect price alteration from 25,000 IQD to 20,000 IQD",
+        "triggeredError": "PROTECTED_TOKEN_MUTATED",
+        "halted": true,
+        "detail": "Factual holdout control failed: Protected token '25,000 IQD' (price) was mutated or omitted in candidate text."
+      },
+      {
+        "probe": "Detect dropped mandatory medical disclaimer",
+        "missingDisclaimer": "تەواوکەری خۆراکییە و جێگەی دەرمان ناگرێتەوە",
+        "triggeredError": "MANDATORY_DISCLAIMER_MISSING",
+        "halted": true,
+        "detail": "Statutory holdout control failed: Required legal disclaimer was omitted in candidate text."
+      }
+    ]
+  },
+  "boundedRepairEngine": {
+    "maxCyclesAllowed": 2,
+    "repairTrajectory": [
+      {
+        "cycle": 1,
+        "defect": "Text line height collision in Kurdish diacritics",
+        "action": "Adjusted diacritic safe line-height to 1.42",
+        "status": "REPAIR_REQUIRED",
+        "workPreserved": true,
+        "checkpointsCount": 2
+      },
+      {
+        "cycle": 2,
+        "defect": "Header zone contrast below WCAG AA",
+        "action": "Adjusted font color and background overlay",
+        "status": "REPAIR_REQUIRED",
+        "workPreserved": true,
+        "checkpointsCount": 3
+      },
+      {
+        "cycle": 3,
+        "defect": "Persistent layout margin drift",
+        "action": "HALTED - Exceeds max repair budget of 2 cycles (FR-040)",
+        "triggeredError": "MAX_REPAIR_BUDGET_EXCEEDED",
+        "taskStatus": "OPERATOR_REQUIRED",
+        "workPreserved": true,
+        "safeAction": "Open Hawa Desk for human designer review and manual Canva touch-up",
+        "preservedCheckpoints": 3
+      }
+    ]
+  },
+  "assetIsolation": {
+    "diffusionProhibition": {
+      "rule": "Diffusion image generation strictly prohibited for logos and factual lettering",
+      "enforcedError": "PROHIBITED_DIFFUSION_LETTERING_OR_LOGO",
+      "testResult": "PASS - Missing official logo halts immediately with MISSING_BRAND_ASSET"
+    },
+    "privateCompositionReference": {
+      "rule": "shippedInArtifact: false invariant (FR-024)",
+      "exportSafetyCheck": "PASS - tampered plan with shippedInArtifact: true blocked with REFERENCE_PIXEL_SHIPPING_BLOCKED"
+    }
+  }
+}

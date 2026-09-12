@@ -1,0 +1,123 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library"
+    - button "Adapters" [active]
+    - button "Actionable Operations"
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Adapters & Model Registry" [level=1]
+  - text: Connected channel bridges, ComfyUI worker sandbox, and model cascade status
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - heading "Settings & Platform Adapters" [level=1]
+  - heading "Adapters and capabilities" [level=2]
+  - table:
+    - rowgroup:
+      - row "Adapter Authority State Action":
+        - columnheader "Adapter"
+        - columnheader "Authority"
+        - columnheader "State"
+        - columnheader "Action"
+    - rowgroup:
+      - row "Hawa Desk canonical healthy —":
+        - cell "Hawa Desk"
+        - cell "canonical"
+        - cell "healthy":
+          - generic: healthy
+        - cell "—"
+      - row "Telegram Bridge @hawdesign_official_bot · webhook / polling idle capture & card dispatch healthy Test webhook Poll now":
+        - cell "Telegram Bridge @hawdesign_official_bot · webhook / polling idle":
+          - text: Telegram Bridge
+          - generic: "@hawdesign_official_bot · webhook / polling idle"
+        - cell "capture & card dispatch"
+        - cell "healthy":
+          - generic: healthy
+        - cell "Test webhook Poll now":
+          - button "Test webhook"
+          - button "Poll now"
+      - row "WAHA WhatsApp capture only quarantined View admission":
+        - cell "WAHA WhatsApp"
+        - cell "capture only"
+        - cell "quarantined":
+          - generic: quarantined
+        - cell "View admission":
+          - button "View admission"
+      - row "Figma Agent Studio master creative & buzz factory v2.0 Bridge Connected Bridge status":
+        - cell "Figma Agent Studio"
+        - cell "master creative & buzz factory"
+        - cell "v2.0 Bridge Connected":
+          - generic: v2.0 Bridge Connected
+        - cell "Bridge status":
+          - button "Bridge status"
+  - heading "Telegram Webhook & Public Tunnel (Horizon 17)" [level=3]
+  - generic: Instant Push Ingress (<50ms)
+  - paragraph:
+    - text: "Current Mode:"
+    - generic: 🔄 On-Demand Long Polling
+  - generic: Polling Fallback
+  - generic: Telegram Webhook URL
+  - textbox "Telegram Webhook URL":
+    - /placeholder: https://preview-office.kaae.org/api/webhooks/telegram
+    - text: https://preview-office.kaae.org/api/webhooks/telegram
+  - button "Set Webhook"
+  - button "Delete Webhook"
+  - heading "Figma Cloud Agent Studio (Horizon 18)" [level=3]
+  - generic: Cloud Document & Template Engine
+  - paragraph:
+    - text: "File Key:"
+    - code: figma_kaae_master_library
+    - text: "· Mode:"
+    - generic: sandbox_emulated
+  - generic: Sandbox Staging Verified
+  - text: 🔒
+  - generic: "Invariant #14 Enforced:"
+  - text: Autonomous agent generation is strictly confined to
+  - code: 30_AI_STAGING
+  - text: page. Core master pages (
+  - code: 00_COVER
+  - text: through
+  - code: 20_PUBLICATION_PREP
+  - text: ) are immutable.
+  - heading "Network policy" [level=3]
+  - generic: Private office / VPN only
+  - paragraph: No public administration endpoints. Outbound provider egress is capability-scoped, token-budgeted, and audited in OpenTelemetry.
+  - heading "Model registry" [level=2]
+  - generic: fast_router & brief_builder
+  - paragraph: Gemini 3.8 Flash · exact snapshot 2026-09-03 · 100% token preservation
+  - generic: creative_director
+  - paragraph: GPT-5.6 Sol · creator/judge separation active · discrete editable nodes
+  - generic: visual_judge (advisory)
+  - paragraph: Claude Opus 5 · independent model family · cannot waive hard QA
+  - heading "Upstream locks" [level=3]
+  - text: No automatic upgrades
+  - paragraph: Studio, workflow engine, Comfy nodes, models, and containers require offline evidence before admission.
+  - heading "Live API Credentials & Secret Store" [level=3]
+  - generic: Local & Cloud Provider Keys
+  - paragraph:
+    - text: Stored securely in
+    - code: .env.local
+    - text: / Hawa Core Memory
+  - button "🔑 Manage / Paste API Keys"
+  - generic: "✓ Google Workspace ADC: Active"
+  - generic: "OpenAI: ✓ Active"
+  - generic: "Anthropic: ✓ Active"
+  - generic: "Telegram: ✓ Configured"

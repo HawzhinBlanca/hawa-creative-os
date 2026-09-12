@@ -211,6 +211,16 @@ export const kaaeClientDNA: ClientDNA = {
     spreadsheetId: '1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ',
     sheetId: 0,
   },
+  canvaMapping: {
+    canvaTeamId: 'team_kaae_erbil',
+    canvaBrandKitId: 'kit_kaae_2026',
+    canvaTemplateIds: {
+      mandate_square: 'DAF_kaae_sq_01',
+      standards_portrait: 'DAF_kaae_port_02',
+      roadmap_landscape: 'DAF_kaae_land_03',
+    },
+    verifiedAt: '2026-09-11T20:00:00Z',
+  },
   approvalPolicy: {
     requiredRoles: ['lead_evaluator', 'commission_director', 'board_chair'],
     allowAutoApproval: false,

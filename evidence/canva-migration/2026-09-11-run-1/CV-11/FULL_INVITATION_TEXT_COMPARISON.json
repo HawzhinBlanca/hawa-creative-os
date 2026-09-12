@@ -1,0 +1,54 @@
+{
+  "task": "CV-11",
+  "generatedAt": "2026-09-11T23:29:45Z",
+  "fixture": "KAAE Official National Conference Invitation",
+  "requirements": ["FR-014", "FR-015", "FR-027", "FR-028"],
+  "textComparison": {
+    "headlineCkb": {
+      "briefExactCopy": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە",
+      "canvaNativeReadback": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە",
+      "match": true,
+      "addressableNodeId": "elem_text_headline"
+    },
+    "subheadlineEn": {
+      "briefExactCopy": "National Quality Assurance Conference",
+      "canvaNativeReadback": "National Quality Assurance Conference",
+      "match": true,
+      "addressableNodeId": "elem_text_subheadline"
+    },
+    "bodyCkb": {
+      "briefExactCopy": "بانگهێشتنامەی فەرمی بۆ ئامادەبوون لە کۆنفرانسی ساڵانەی پێوەرەکانی متمانەبەخشین.",
+      "canvaNativeReadback": "بانگهێشتنامەی فەرمی بۆ ئامادەبوون لە کۆنفرانسی ساڵانەی پێوەرەکانی متمانەبەخشین.",
+      "match": true,
+      "addressableNodeId": "elem_text_body"
+    },
+    "dateLocation": {
+      "briefExactCopy": "ڕێکەوت: 2026-09-15 | شوێن: هۆڵی پێشەوا، هەولێر",
+      "canvaNativeReadback": "ڕێکەوت: 2026-09-15 | شوێن: هۆڵی پێشەوا، هەولێر",
+      "match": true,
+      "addressableNodeId": "elem_text_date_location"
+    },
+    "cta": {
+      "briefExactCopy": "پشتڕاستکردنەوەی ئامادەبوون: www.kaae.org",
+      "canvaNativeReadback": "پشتڕاستکردنەوەی ئامادەبوون: www.kaae.org",
+      "match": true,
+      "addressableNodeId": "elem_text_cta"
+    },
+    "disclaimer": {
+      "briefExactCopy": "دەستەی متمانەبەخشی بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان",
+      "canvaNativeReadback": "دەستەی متمانەبەخشی بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان",
+      "match": true,
+      "addressableNodeId": "elem_text_disclaimer"
+    }
+  },
+  "logoIdentity": {
+    "role": "official_logo",
+    "expectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canvaNativeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "match": true,
+    "box": { "x": 410, "y": 80, "width": 260, "height": 110 },
+    "locked": true,
+    "sourceType": "official_asset",
+    "recreatedViaImageModel": false
+  }
+}

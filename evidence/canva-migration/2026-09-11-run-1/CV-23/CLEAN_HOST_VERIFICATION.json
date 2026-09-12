@@ -1,0 +1,58 @@
+{
+  "task": "CV-23",
+  "timestamp": "2026-09-12T02:25:00.000Z",
+  "cleanHostEnvironment": {
+    "os": "Darwin 25.3.0 arm64",
+    "nodeVersion": "v22.13.1",
+    "pnpmVersion": "11.5.3",
+    "dockerPostgresHealthy": true
+  },
+  "buildVerification": {
+    "@hawa/desk": {
+      "buildExitCode": 0,
+      "typecheckExitCode": 0,
+      "modulesTransformed": 46,
+      "buildDurationMs": 505
+    },
+    "@hawa/core": {
+      "buildExitCode": 0,
+      "typecheckExitCode": 0
+    }
+  },
+  "testVerification": {
+    "@hawa/desk": {
+      "testFiles": 4,
+      "testsPassed": 17,
+      "testsFailed": 0,
+      "preservedGeneralUtilities": [
+        "apps/desk/test/draftStorage.test.ts",
+        "apps/desk/test/paletteExtractor.test.ts",
+        "apps/desk/test/sanitizer.test.ts",
+        "apps/desk/test/zipBundler.test.ts"
+      ]
+    },
+    "@hawa/core": {
+      "testFiles": 31,
+      "testsPassed": 236,
+      "testsFailed": 0,
+      "cv23DedicatedSuite": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts (7/7 passed)"
+    },
+    "@hawa/integrations": {
+      "testFiles": 11,
+      "testsPassed": 65,
+      "testsFailed": 0
+    }
+  },
+  "databaseZeroPollution": {
+    "schema": "hawa",
+    "tasksCount": 1449,
+    "outboxCommandsCount": 1449,
+    "pollutionVerified": "ZERO_POLLUTION"
+  },
+  "absentOldServices": [
+    "figma_desktop_bridge_daemon",
+    "polotno_runtime_store",
+    "konva_canvas_renderer",
+    "review_screen_monolith"
+  ]
+}

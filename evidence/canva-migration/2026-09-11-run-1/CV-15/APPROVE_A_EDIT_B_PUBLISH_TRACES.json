@@ -1,0 +1,40 @@
+{
+  "taskId": "f85d5d0b-f086-4c93-976c-3cf5d0b2da19",
+  "revisions": {
+    "revA": "rev_kaae_A_approved",
+    "revB": "rev_kaae_B_edited"
+  },
+  "step1_approve_A": {
+    "status": 201,
+    "approvalId": "5e9140c9-bc2b-4eb3-bd58-2e2b27e03eb2",
+    "decision": "approved",
+    "boundRevisionId": "rev_kaae_A_approved"
+  },
+  "step2_edit_B_invalidation": {
+    "status": 201,
+    "approvalInvalidated": true,
+    "taskStatus": "AWAITING_APPROVAL"
+  },
+  "step3_publish_B_with_approval_A": {
+    "status": 409,
+    "errorTitle": "Conflict",
+    "errorDetail": "Revision mismatch: Approval is bound to revision 'rev_kaae_A_approved', cannot be used to publish target revision 'rev_kaae_B_edited'. B cannot ship using A's approval.",
+    "invariantSatisfied": "B cannot ship using A approval"
+  },
+  "step4_publish_current_task_unapproved": {
+    "status": 409,
+    "errorTitle": "Conflict",
+    "errorDetail": "Task f85d5d0b-f086-4c93-976c-3cf5d0b2da19 is in status 'AWAITING_APPROVAL', not 'approved'"
+  },
+  "step5_deliver_approved_stored_A": {
+    "status": 200,
+    "receiptState": "COMPLETE",
+    "filesDeliveredFrom": "stored_immutable_capture",
+    "liveCanvaExportBypassed": true
+  },
+  "step6_approve_B_and_publish": {
+    "approvalStatus": 201,
+    "publishStatus": 200,
+    "publishReceiptState": "COMPLETE"
+  }
+}

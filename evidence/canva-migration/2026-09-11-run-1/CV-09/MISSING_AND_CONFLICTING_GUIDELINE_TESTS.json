@@ -1,0 +1,33 @@
+{
+  "taskId": "CV-09",
+  "name": "Missing & Conflicting Guideline Defense Evidence",
+  "generatedAt": "2026-09-11T20:20:40.000Z",
+  "testSuite": "apps/core/test/client-knowledge-assets.test.ts",
+  "missingAssetDefense": {
+    "testScenario": "Client with no official assets queried for primary logo",
+    "result": "BLOCKED",
+    "conflictType": "MISSING_BRAND_ASSET",
+    "severity": "BLOCKING",
+    "description": "No approved official assets exist for client. Cannot invent placeholder branding.",
+    "safeAction": "Upload official vector logo/assets before generation",
+    "syntheticLogoInvented": false
+  },
+  "conflictingGuidelineDefense": {
+    "testScenario": "Drustee brief query containing prohibited phrase 'Magic cure'",
+    "result": "BLOCKED",
+    "conflictType": "PROHIBITED_LEXICON_VIOLATION",
+    "severity": "BLOCKING",
+    "description": "Query violates client prohibited guidelines: contains \"Magic cure\"",
+    "safeAction": "Remove prohibited phrase or seek client exception",
+    "prohibitedPhraseAllowed": false
+  },
+  "untrustedUploadSanitization": {
+    "testScenario": "Uploaded SVG with active <script>alert('XSS')</script> and onload attribute",
+    "result": "SANITIZED",
+    "scriptTagsStripped": true,
+    "eventHandlersNeutralized": true,
+    "vectorPathsPreserved": true,
+    "sha256ComputedOverSanitizedBytes": true,
+    "executableUploadsRejected": true
+  }
+}

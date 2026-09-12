@@ -1,0 +1,83 @@
+{
+  "task": "CV-10",
+  "generatedAt": "2026-09-11T23:26:45Z",
+  "requirements": ["FR-056", "FR-057", "FR-058", "FR-059", "FR-062", "FR-079", "NFR-018"],
+  "modelDeploymentsByRole": {
+    "creative_director": {
+      "provider": "openai",
+      "exactModelId": "gpt-5.6-sol",
+      "deploymentVersion": "2026-09-04",
+      "admission": "primary",
+      "hiddenRemappingFixed": true
+    },
+    "visual_judge": {
+      "provider": "anthropic",
+      "exactModelId": "claude-opus-5",
+      "deploymentVersion": "2026-09-04",
+      "admission": "primary",
+      "hiddenRemappingFixed": true
+    },
+    "brief_builder": {
+      "provider": "google",
+      "exactModelId": "gemini-3.8-flash",
+      "deploymentVersion": "2026-09-04",
+      "admission": "primary",
+      "hiddenRemappingFixed": true
+    },
+    "intake_router": {
+      "provider": "google",
+      "exactModelId": "gemini-3.8-flash",
+      "deploymentVersion": "2026-09-04",
+      "admission": "primary",
+      "hiddenRemappingFixed": true
+    }
+  },
+  "admissionPolicy": {
+    "retiredModelsBlocked": ["gemini-1.5-pro", "claude-3-haiku"],
+    "canaryModelsAdmitted": ["gemini-3.8-flash", "claude-sonnet-5"],
+    "enforcedAt": "resolve_and_generation"
+  },
+  "usageReceipts": [
+    {
+      "receiptId": "rcpt_kaae_template_01",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "clientName": "KAAE",
+      "taskId": "t1000000-0000-4000-8000-000000000001",
+      "role": "creative_director",
+      "provider": "local",
+      "model": "deterministic-template-v1",
+      "taskRoute": "template_fill",
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "costUsd": 0.000000,
+      "status": "COMMITTED",
+      "reasoning": "Routine institutional template task uses zero deep models and zero diffusion generation (NFR-018)"
+    },
+    {
+      "receiptId": "rcpt_drustee_novel_02",
+      "clientId": "c1000000-0000-4000-8000-000000000003",
+      "clientName": "Drustee",
+      "taskId": "t1000000-0000-4000-8000-000000000002",
+      "role": "creative_director",
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "taskRoute": "multi_format_composition",
+      "inputTokens": 520,
+      "outputTokens": 140,
+      "costUsd": 0.002500,
+      "status": "COMMITTED",
+      "reasoning": "Omnichannel campaign layout coordination"
+    }
+  ],
+  "failoverProbes": [
+    {
+      "probe": "Primary rate-limit 429 failover",
+      "role": "brief_builder",
+      "primaryProvider": "google (gemini-3.8-flash)",
+      "simulatedFailure": "429 Too Many Requests",
+      "failoverProvider": "anthropic (claude-sonnet-5)",
+      "attempts": 2,
+      "workPreserved": true
+    }
+  ]
+}

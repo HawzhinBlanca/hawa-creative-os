@@ -1,0 +1,42 @@
+{
+  "buttons": 95,
+  "docWidth": 390,
+  "smallButtons": [
+    {
+      "height": 23,
+      "label": "Inbox",
+      "width": 47.3671875
+    },
+    {
+      "height": 23,
+      "label": "Task Review",
+      "width": 84.1015625
+    },
+    {
+      "height": 23,
+      "label": "Client DNA",
+      "width": 76.046875
+    },
+    {
+      "height": 23,
+      "label": "Creative Library",
+      "width": 103.015625
+    },
+    {
+      "height": 23,
+      "label": "Adapters",
+      "width": 66.5859375
+    },
+    {
+      "height": 23,
+      "label": "Actionable Operations",
+      "width": 136.4140625
+    },
+    {
+      "height": 23,
+      "label": "Model Evaluations",
+      "width": 115.3671875
+    }
+  ],
+  "width": 390
+}

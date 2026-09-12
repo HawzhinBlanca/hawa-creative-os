@@ -1,0 +1,185 @@
+{
+  "anonymousCreate": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required: anonymous or unauthorized task creation is denied",
+      "instance": "http://localhost/v1/tasks"
+    }
+  },
+  "forgedBearerCreate": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required: anonymous or unauthorized task creation is denied",
+      "instance": "http://localhost/v1/tasks"
+    }
+  },
+  "spoofedDeskCreate": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required: anonymous or unauthorized task creation is denied",
+      "instance": "http://localhost/v1/tasks"
+    }
+  },
+  "newRevision": {
+    "status": 404,
+    "body": {
+      "type": "https://hawa.design/errors/404",
+      "title": "Task Not Found",
+      "status": 404,
+      "detail": "Task Not Found",
+      "instance": "http://localhost/v1/tasks/denied/revisions"
+    }
+  },
+  "unauthenticatedDecision": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to record review decisions",
+      "instance": "http://localhost/v1/tasks/denied/revisions/undefined/decisions"
+    }
+  },
+  "foreignTaskRevisionDecision": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to record review decisions",
+      "instance": "http://localhost/v1/tasks/denied/revisions/undefined/decisions"
+    }
+  },
+  "taskAAfterDecision": {
+    "status": 404,
+    "body": {
+      "type": "https://hawa.design/errors/404",
+      "title": "Task Not Found",
+      "status": 404,
+      "detail": "No task found with id denied",
+      "instance": "http://localhost/v1/tasks/denied"
+    }
+  },
+  "noRevisionExportPackage": {
+    "status": 404,
+    "body": {
+      "type": "https://hawa.design/errors/404",
+      "title": "Task Not Found",
+      "status": 404,
+      "detail": "Task Not Found",
+      "instance": "http://localhost/v1/tasks/denied/export-package"
+    }
+  },
+  "readiness": {
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "dependencies": {
+        "postgres": "disconnected",
+        "restate": "disconnected",
+        "studio": "sandbox_emulated"
+      }
+    }
+  },
+  "integrationHealth": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "integrationId": "int_telegram",
+          "kind": "telegram",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        },
+        {
+          "integrationId": "int_waha",
+          "kind": "waha",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        },
+        {
+          "integrationId": "int_google_drive",
+          "kind": "google_drive",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        },
+        {
+          "integrationId": "int_google_sheets",
+          "kind": "google_sheets",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        },
+        {
+          "integrationId": "int_phoenix",
+          "kind": "phoenix",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        },
+        {
+          "integrationId": "int_figma_bridge",
+          "kind": "figma_agent_studio",
+          "state": "sandbox_emulated",
+          "checkedAt": "2026-09-09T18:46:32.002Z"
+        }
+      ]
+    }
+  },
+  "publishMissingPhysicalFile": {
+    "ok": false,
+    "error": {
+      "code": "INVALID_DESTINATION",
+      "message": "Destination folder 'audit-invented-folder' is not a valid configured Google Drive folder"
+    }
+  },
+  "emptyPublication": {
+    "ok": false,
+    "error": {
+      "code": "INVALID_DESTINATION",
+      "message": "Destination folder 'audit-invented-folder' is not a valid configured Google Drive folder"
+    }
+  },
+  "figmaUnknownInspect": {
+    "ok": false,
+    "error": {
+      "code": "FILE_NOT_FOUND",
+      "message": "Figma file audit-unknown-file not found in bridge staging memory",
+      "retryable": false,
+      "safeAction": "Verify fileKey exists or initialize bridge staging document before inspecting"
+    }
+  },
+  "figmaUnknownRender": {
+    "ok": false,
+    "error": {
+      "code": "DOCUMENT_NOT_FOUND",
+      "message": "Document audit-nonexistent not found in Figma adapter",
+      "retryable": false,
+      "safeAction": "Ensure document is created before rendering"
+    }
+  },
+  "deliberatelyWrongModelScore": {
+    "dataset": "routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 0,
+    "failedCases": 200,
+    "passRate": 0,
+    "criticalViolations": 0
+  },
+  "visualJudgeScoreWithoutModel": {
+    "dataset": "visual_judge_rubric.json",
+    "totalCases": 10,
+    "passedCases": 0,
+    "failedCases": 10,
+    "passRate": 0,
+    "criticalViolations": 1
+  },
+  "networkAttempts": 0
+}

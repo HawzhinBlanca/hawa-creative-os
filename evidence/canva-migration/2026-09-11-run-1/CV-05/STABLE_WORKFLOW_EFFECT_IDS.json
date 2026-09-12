@@ -1,0 +1,79 @@
+{
+  "taskId": "CV-05",
+  "name": "Make one durable workflow own the whole job",
+  "generatedAt": "2026-09-11T22:43:40+03:00",
+  "workflowContract": {
+    "engine": "Restate 1.7.x / DurableStepJournal",
+    "workflowName": "TaskWorkflow",
+    "serviceName": "TaskService",
+    "workflowIdPattern": "task-wf-{taskId}",
+    "idempotencyKeyPattern": "{channelEventId}:{action}:{nonce}"
+  },
+  "stableEffectIdentifiers": [
+    {
+      "step": 1,
+      "effectIdPattern": "task-routing:{taskId}",
+      "category": "deterministic_analysis",
+      "description": "Tenant routing, client code resolution, language and priority extraction",
+      "idempotent": true
+    },
+    {
+      "step": 2,
+      "effectIdPattern": "client-scope-lock:{taskId}",
+      "category": "sovereign_boundary",
+      "description": "Enforces immutable client scoping prior to asset or context retrieval",
+      "idempotent": true
+    },
+    {
+      "step": 3,
+      "effectIdPattern": "context-retrieval:{taskId}",
+      "category": "knowledge_retrieval",
+      "description": "Bounded context pack retrieval from sovereign client DNA and brand assets",
+      "idempotent": true
+    },
+    {
+      "step": 4,
+      "effectIdPattern": "brief-building:{taskId}",
+      "category": "creative_brief",
+      "description": "Deterministic structured brief construction with factual constraints",
+      "idempotent": true
+    },
+    {
+      "step": 5,
+      "effectIdPattern": "creative-planning:{taskId}",
+      "category": "art_direction",
+      "description": "Design planning, color palette extraction, and typography hierarchy",
+      "idempotent": true
+    },
+    {
+      "step": 6,
+      "effectIdPattern": "studio-composing:{taskId}",
+      "category": "external_side_effect",
+      "description": "High-cost external studio document creation and operation batch application (Canva native)",
+      "idempotent": true,
+      "expensive": true,
+      "replayedOnCrash": true
+    },
+    {
+      "step": 7,
+      "effectIdPattern": "qa-evaluation:{taskId}",
+      "category": "quality_assurance",
+      "description": "Deterministic hard QA, font inlining, bidirectional Kurdish typography, off-canvas audit",
+      "idempotent": true
+    },
+    {
+      "step": 8,
+      "effectIdPattern": "persist-operational-records:{taskId}",
+      "category": "storage_persistence",
+      "description": "Atomic task event stream, revision, and QA report persistence to PostgreSQL",
+      "idempotent": true
+    },
+    {
+      "step": 9,
+      "effectIdPattern": "await-approval-gate:{taskId}",
+      "category": "human_waitpoint",
+      "description": "Transitions task to human_review/awaiting_approval; suspends durable workflow for Desk approval signal",
+      "idempotent": true
+    }
+  ]
+}

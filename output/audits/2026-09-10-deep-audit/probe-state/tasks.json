@@ -1,0 +1,833 @@
+[
+  [
+    "b829dcff-a6c4-41cb-baeb-39ffdfa66f7c",
+    {
+      "id": "b829dcff-a6c4-41cb-baeb-39ffdfa66f7c",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "REVISION_REQUESTED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "b829dcff-a6c4-41cb-baeb-39ffdfa66f7c",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038257771_66a2e145-8f56-4796-b1c4-f1b62828937b",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:04:17.783Z",
+      "updatedAt": "2026-09-10T11:04:17.845Z",
+      "latestRevisionId": "373aa3bd-6415-4741-ae3a-f9f029706ebf",
+      "latestApproval": {
+        "decisionId": "afd01b1c-6494-4cdc-9beb-a2a623c2549a",
+        "taskId": "b829dcff-a6c4-41cb-baeb-39ffdfa66f7c",
+        "designRevisionId": "3f684276-8364-4a7d-8c03-ed4cd8887e26",
+        "sourceHash": "ec639560c2e07803c530520ee110a432b38a9ab170a952f19519114595a3c58a",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:04:17.875Z"
+      },
+      "invalidationHistory": [
+        {
+          "invalidatedAt": "2026-09-10T11:04:17.845Z",
+          "reason": "post_approval_edit",
+          "previousApprovalId": "e15f9ed3-d686-42bb-911d-c45239536180",
+          "previousRevisionId": "3f684276-8364-4a7d-8c03-ed4cd8887e26",
+          "newRevisionId": "373aa3bd-6415-4741-ae3a-f9f029706ebf",
+          "actor": {
+            "userId": "00000000-0000-4000-b000-000000000001",
+            "role": "operator"
+          }
+        }
+      ],
+      "repairCount": 1
+    }
+  ],
+  [
+    "f4bb15f8-0e72-4d79-93ad-8385c4d00168",
+    {
+      "id": "f4bb15f8-0e72-4d79-93ad-8385c4d00168",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "APPROVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "f4bb15f8-0e72-4d79-93ad-8385c4d00168",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038257902_fe923907-e40d-47d0-82ef-4085ad636ff2",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:04:17.901Z",
+      "updatedAt": "2026-09-10T11:04:17.908Z",
+      "latestRevisionId": "453aba28-7f21-450a-8432-6342a23cef18",
+      "latestApproval": {
+        "decisionId": "ab1f2adb-6ff0-42ab-915c-1185e097544a",
+        "taskId": "f4bb15f8-0e72-4d79-93ad-8385c4d00168",
+        "designRevisionId": "453aba28-7f21-450a-8432-6342a23cef18",
+        "sourceHash": "0c477efad20cf4de9fe304abbccfdf677fb4e9dce8617aa71535576cf52abebe",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:04:17.918Z"
+      }
+    }
+  ],
+  [
+    "cdeb8059-a360-4112-823d-fd2b2b2997c9",
+    {
+      "id": "cdeb8059-a360-4112-823d-fd2b2b2997c9",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "COMPLETE",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "cdeb8059-a360-4112-823d-fd2b2b2997c9",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038308524_bea3fdd9-08ff-420e-90c8-010f930a8e98",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:08.535Z",
+      "updatedAt": "2026-09-10T11:05:08.598Z",
+      "latestRevisionId": "1f64ae06-40fa-475c-b9fd-3458f604d161",
+      "latestApproval": {
+        "decisionId": "5009adc4-3cee-4176-9344-a854dea5b123",
+        "taskId": "cdeb8059-a360-4112-823d-fd2b2b2997c9",
+        "designRevisionId": "e09e9a2d-f934-4646-a08c-a1cd0169b54d",
+        "sourceHash": "ec639560c2e07803c530520ee110a432b38a9ab170a952f19519114595a3c58a",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:05:08.713Z"
+      },
+      "invalidationHistory": [
+        {
+          "invalidatedAt": "2026-09-10T11:05:08.598Z",
+          "reason": "post_approval_edit",
+          "previousApprovalId": "d5ce2677-b633-4843-a090-dfb39f66afc9",
+          "previousRevisionId": "e09e9a2d-f934-4646-a08c-a1cd0169b54d",
+          "newRevisionId": "1f64ae06-40fa-475c-b9fd-3458f604d161",
+          "actor": {
+            "userId": "00000000-0000-4000-b000-000000000001",
+            "role": "operator"
+          }
+        }
+      ],
+      "repairCount": 1
+    }
+  ],
+  [
+    "0599b849-2736-49d6-a7cf-f2a08c570781",
+    {
+      "id": "0599b849-2736-49d6-a7cf-f2a08c570781",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "APPROVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "0599b849-2736-49d6-a7cf-f2a08c570781",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038308663_0f3b6758-c42d-438e-90fb-b79597fd456a",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:08.663Z",
+      "updatedAt": "2026-09-10T11:05:08.669Z",
+      "latestRevisionId": "75256fe8-ac72-4924-9f0a-d97447c29aeb",
+      "latestApproval": {
+        "decisionId": "09f6b9c8-7bb9-45a9-98ba-63ed4f122c5c",
+        "taskId": "0599b849-2736-49d6-a7cf-f2a08c570781",
+        "designRevisionId": "75256fe8-ac72-4924-9f0a-d97447c29aeb",
+        "sourceHash": "0c477efad20cf4de9fe304abbccfdf677fb4e9dce8617aa71535576cf52abebe",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:05:08.680Z"
+      }
+    }
+  ],
+  [
+    "613d8010-8cae-40c4-bba1-11a3dc1c33eb",
+    {
+      "id": "613d8010-8cae-40c4-bba1-11a3dc1c33eb",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "client-aster",
+      "projectId": null,
+      "status": "BRIEFING",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "613d8010-8cae-40c4-bba1-11a3dc1c33eb",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038308696_1e16c0f6-b3fe-465a-ae8f-9ba7d7a74ac1",
+      "clientScopeLocked": true,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:08.695Z",
+      "updatedAt": "2026-09-10T11:05:08.701Z"
+    }
+  ],
+  [
+    "283062d9-aadf-4409-b0f2-15c223dd8dd6",
+    {
+      "id": "283062d9-aadf-4409-b0f2-15c223dd8dd6",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "COMPLETE",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "283062d9-aadf-4409-b0f2-15c223dd8dd6",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038358702_ad247104-9297-4c3e-ac56-1d7cc0b58424",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:58.713Z",
+      "updatedAt": "2026-09-10T11:05:58.774Z",
+      "latestRevisionId": "679c95d8-6a81-4116-94e8-7db0945c0e94",
+      "latestApproval": {
+        "decisionId": "2e9d3dde-e270-45bc-a9d0-e71f207d342b",
+        "taskId": "283062d9-aadf-4409-b0f2-15c223dd8dd6",
+        "designRevisionId": "e7193cfc-23cc-4bef-8ef6-27cfe953c551",
+        "sourceHash": "ec639560c2e07803c530520ee110a432b38a9ab170a952f19519114595a3c58a",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:05:58.891Z"
+      },
+      "invalidationHistory": [
+        {
+          "invalidatedAt": "2026-09-10T11:05:58.774Z",
+          "reason": "post_approval_edit",
+          "previousApprovalId": "071cd3c4-2f77-409d-a75e-443036dacf21",
+          "previousRevisionId": "e7193cfc-23cc-4bef-8ef6-27cfe953c551",
+          "newRevisionId": "679c95d8-6a81-4116-94e8-7db0945c0e94",
+          "actor": {
+            "userId": "00000000-0000-4000-b000-000000000001",
+            "role": "operator"
+          }
+        }
+      ],
+      "repairCount": 1
+    }
+  ],
+  [
+    "bced5f75-3401-4d4b-b852-9434fbef7e4c",
+    {
+      "id": "bced5f75-3401-4d4b-b852-9434fbef7e4c",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "APPROVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "bced5f75-3401-4d4b-b852-9434fbef7e4c",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038358841_075ffe98-ee1b-4fb9-9f70-a666b594f58e",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:58.840Z",
+      "updatedAt": "2026-09-10T11:05:58.847Z",
+      "latestRevisionId": "7813faf9-413b-4c38-909d-5bef678c4dcf",
+      "latestApproval": {
+        "decisionId": "dd884765-8e3f-413a-9a0e-d7e67209ab97",
+        "taskId": "bced5f75-3401-4d4b-b852-9434fbef7e4c",
+        "designRevisionId": "7813faf9-413b-4c38-909d-5bef678c4dcf",
+        "sourceHash": "0c477efad20cf4de9fe304abbccfdf677fb4e9dce8617aa71535576cf52abebe",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:05:58.858Z"
+      }
+    }
+  ],
+  [
+    "e5aa04ad-9dd7-46b6-9087-28b3c9bda993",
+    {
+      "id": "e5aa04ad-9dd7-46b6-9087-28b3c9bda993",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "client-aster",
+      "projectId": null,
+      "status": "BRIEFING",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "e5aa04ad-9dd7-46b6-9087-28b3c9bda993",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038358875_939fa396-8a66-4a9a-a521-9b8063ef88ba",
+      "clientScopeLocked": true,
+      "version": 1,
+      "createdAt": "2026-09-10T11:05:58.874Z",
+      "updatedAt": "2026-09-10T11:05:58.879Z"
+    }
+  ],
+  [
+    "30604263-12f9-4752-b420-8b04bbddab85",
+    {
+      "id": "30604263-12f9-4752-b420-8b04bbddab85",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "COMPLETE",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "30604263-12f9-4752-b420-8b04bbddab85",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038442878_2d359f72-c21f-4959-a1cd-185e52d28191",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:07:22.887Z",
+      "updatedAt": "2026-09-10T11:07:22.953Z",
+      "latestRevisionId": "70e278ea-009d-4fd3-bda3-ecf99554da9a",
+      "latestApproval": {
+        "decisionId": "75ca6a4f-b5b9-498a-8f20-ffc3014a0a4f",
+        "taskId": "30604263-12f9-4752-b420-8b04bbddab85",
+        "designRevisionId": "165c7ddb-897c-4d53-92e8-545737ddea6e",
+        "sourceHash": "ec639560c2e07803c530520ee110a432b38a9ab170a952f19519114595a3c58a",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:07:23.080Z"
+      },
+      "invalidationHistory": [
+        {
+          "invalidatedAt": "2026-09-10T11:07:22.953Z",
+          "reason": "post_approval_edit",
+          "previousApprovalId": "155217ec-6273-4fbc-b1ea-51d5e43d76a8",
+          "previousRevisionId": "165c7ddb-897c-4d53-92e8-545737ddea6e",
+          "newRevisionId": "70e278ea-009d-4fd3-bda3-ecf99554da9a",
+          "actor": {
+            "userId": "00000000-0000-4000-b000-000000000001",
+            "role": "operator"
+          }
+        }
+      ],
+      "repairCount": 1
+    }
+  ],
+  [
+    "c00242d9-ab7c-4f96-80ab-6962e5dd6689",
+    {
+      "id": "c00242d9-ab7c-4f96-80ab-6962e5dd6689",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "APPROVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "c00242d9-ab7c-4f96-80ab-6962e5dd6689",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038443025_9535dbfa-a56e-4f70-a1c9-4f798c49834e",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:07:23.022Z",
+      "updatedAt": "2026-09-10T11:07:23.032Z",
+      "latestRevisionId": "0e34dbb1-3210-4697-92be-a7c6b39a05d9",
+      "latestApproval": {
+        "decisionId": "ca61e3a7-6ad1-42e9-869e-ebdad595cac7",
+        "taskId": "c00242d9-ab7c-4f96-80ab-6962e5dd6689",
+        "designRevisionId": "0e34dbb1-3210-4697-92be-a7c6b39a05d9",
+        "sourceHash": "0c477efad20cf4de9fe304abbccfdf677fb4e9dce8617aa71535576cf52abebe",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:07:23.043Z"
+      }
+    }
+  ],
+  [
+    "4ff8dec4-aa2e-4fcb-bfcb-f8a752c5f470",
+    {
+      "id": "4ff8dec4-aa2e-4fcb-bfcb-f8a752c5f470",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "client-aster",
+      "projectId": null,
+      "status": "BRIEFING",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "4ff8dec4-aa2e-4fcb-bfcb-f8a752c5f470",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789038443064_ee73b70c-a0a9-485a-9a9e-131c258c1f4d",
+      "clientScopeLocked": true,
+      "version": 1,
+      "createdAt": "2026-09-10T11:07:23.061Z",
+      "updatedAt": "2026-09-10T11:07:23.069Z"
+    }
+  ],
+  [
+    "189e601f-85da-4e91-ab3c-af4d80d2f0f8",
+    {
+      "id": "189e601f-85da-4e91-ab3c-af4d80d2f0f8",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "COMPLETE",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "189e601f-85da-4e91-ab3c-af4d80d2f0f8",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789040853925_4c01643f-0dc9-40ff-b98e-62af269ee45b",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:47:33.937Z",
+      "updatedAt": "2026-09-10T11:47:34.004Z",
+      "latestRevisionId": "b4700a06-abc0-4fcf-8036-9a778fa6e820",
+      "latestApproval": {
+        "decisionId": "221ed1d7-e13f-426d-a06a-d3f9a918b5d2",
+        "taskId": "189e601f-85da-4e91-ab3c-af4d80d2f0f8",
+        "designRevisionId": "86cfb768-7f60-40ae-885e-710943e4e8ac",
+        "sourceHash": "ec639560c2e07803c530520ee110a432b38a9ab170a952f19519114595a3c58a",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:47:34.118Z"
+      },
+      "invalidationHistory": [
+        {
+          "invalidatedAt": "2026-09-10T11:47:34.004Z",
+          "reason": "post_approval_edit",
+          "previousApprovalId": "e3f9f1e0-1e14-42a3-ae36-ba4945162450",
+          "previousRevisionId": "86cfb768-7f60-40ae-885e-710943e4e8ac",
+          "newRevisionId": "b4700a06-abc0-4fcf-8036-9a778fa6e820",
+          "actor": {
+            "userId": "00000000-0000-4000-b000-000000000001",
+            "role": "operator"
+          }
+        }
+      ],
+      "repairCount": 1
+    }
+  ],
+  [
+    "502e78a5-a063-41a8-b9ce-20b2c111a566",
+    {
+      "id": "502e78a5-a063-41a8-b9ce-20b2c111a566",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "APPROVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "502e78a5-a063-41a8-b9ce-20b2c111a566",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789040854067_8c81e72e-9290-4134-9d51-5f2571e24d70",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:47:34.067Z",
+      "updatedAt": "2026-09-10T11:47:34.073Z",
+      "latestRevisionId": "724ddbdf-f9be-4eac-84a8-897d36479db1",
+      "latestApproval": {
+        "decisionId": "5a82212c-4e98-46dd-8110-994e68e2fc0b",
+        "taskId": "502e78a5-a063-41a8-b9ce-20b2c111a566",
+        "designRevisionId": "724ddbdf-f9be-4eac-84a8-897d36479db1",
+        "sourceHash": "0c477efad20cf4de9fe304abbccfdf677fb4e9dce8617aa71535576cf52abebe",
+        "qcReportHash": "verified_qc_pass",
+        "decision": "approved",
+        "actor": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "displayName": "Primary Operator",
+          "role": "art_director",
+          "verifiedServerSide": true
+        },
+        "decidedAt": "2026-09-10T11:47:34.084Z"
+      }
+    }
+  ],
+  [
+    "531073f8-1079-45e5-881d-b57acd5c7a1b",
+    {
+      "id": "531073f8-1079-45e5-881d-b57acd5c7a1b",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "client-aster",
+      "projectId": null,
+      "status": "BRIEFING",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "531073f8-1079-45e5-881d-b57acd5c7a1b",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789040854098_792b1fb2-445c-4b7f-8fd0-20a5f67df9ac",
+      "clientScopeLocked": true,
+      "version": 1,
+      "createdAt": "2026-09-10T11:47:34.098Z",
+      "updatedAt": "2026-09-10T11:47:34.104Z"
+    }
+  ],
+  [
+    "49237d1f-e453-4950-9d9f-6432ea1bb5c9",
+    {
+      "id": "49237d1f-e453-4950-9d9f-6432ea1bb5c9",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "AWAITING_APPROVAL",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "49237d1f-e453-4950-9d9f-6432ea1bb5c9",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041462532_c7fec6a9-c439-4424-b90a-b05b988e031c",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:57:42.546Z",
+      "updatedAt": "2026-09-10T11:57:42.594Z",
+      "latestRevisionId": "83ef1822-1220-4538-a838-aa000d1ca6bb"
+    }
+  ],
+  [
+    "57356dd9-364d-4b71-8372-05fb85da30ca",
+    {
+      "id": "57356dd9-364d-4b71-8372-05fb85da30ca",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "57356dd9-364d-4b71-8372-05fb85da30ca",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041462638_a2399bb6-20f2-4ba8-9469-5c4ddc1282e1",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:57:42.637Z",
+      "updatedAt": "2026-09-10T11:57:42.637Z"
+    }
+  ],
+  [
+    "81f631f8-6482-4cb6-9204-cc8a56165b82",
+    {
+      "id": "81f631f8-6482-4cb6-9204-cc8a56165b82",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "81f631f8-6482-4cb6-9204-cc8a56165b82",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041462657_dc40d4f5-0e21-43fd-8d93-1ca75bd31ee5",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:57:42.656Z",
+      "updatedAt": "2026-09-10T11:57:42.656Z"
+    }
+  ],
+  [
+    "1d6e923f-df26-4d3b-813b-07c8ced475d4",
+    {
+      "id": "1d6e923f-df26-4d3b-813b-07c8ced475d4",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "AWAITING_APPROVAL",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "1d6e923f-df26-4d3b-813b-07c8ced475d4",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041509750_8d38e1b3-f3e9-4457-84a1-89a495d30c45",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:58:29.767Z",
+      "updatedAt": "2026-09-10T11:58:29.824Z",
+      "latestRevisionId": "6895cf44-f40b-485e-8267-78c2442b3078"
+    }
+  ],
+  [
+    "e25ec775-20f0-435c-8944-6a514cb86001",
+    {
+      "id": "e25ec775-20f0-435c-8944-6a514cb86001",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "e25ec775-20f0-435c-8944-6a514cb86001",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041509874_11d24e2e-4ea9-4823-ae9e-af8e1e82da75",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:58:29.874Z",
+      "updatedAt": "2026-09-10T11:58:29.874Z"
+    }
+  ],
+  [
+    "47d3e333-4678-48d3-a2fa-c53b4d2170c5",
+    {
+      "id": "47d3e333-4678-48d3-a2fa-c53b4d2170c5",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "47d3e333-4678-48d3-a2fa-c53b4d2170c5",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789041509893_16e8b147-d389-42be-bd50-e1355ee7b9cd",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T11:58:29.893Z",
+      "updatedAt": "2026-09-10T11:58:29.893Z"
+    }
+  ],
+  [
+    "76a57908-16f7-4d9e-b217-8cce95921713",
+    {
+      "id": "76a57908-16f7-4d9e-b217-8cce95921713",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "AWAITING_APPROVAL",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit isolated forged session",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "76a57908-16f7-4d9e-b217-8cce95921713",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789043069793_1be51e8d-6f04-464c-9065-238ee22b7027",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T12:24:29.805Z",
+      "updatedAt": "2026-09-10T12:24:29.854Z",
+      "latestRevisionId": "cde77d63-e879-4cb3-ab5d-5096730442c3"
+    }
+  ],
+  [
+    "adb1bc8f-18e4-4f2a-99f6-b155a0cdc92f",
+    {
+      "id": "adb1bc8f-18e4-4f2a-99f6-b155a0cdc92f",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit object instead of node array",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "adb1bc8f-18e4-4f2a-99f6-b155a0cdc92f",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789043069896_f573e77d-8a20-4c7e-8bcc-8b38665a03ea",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T12:24:29.896Z",
+      "updatedAt": "2026-09-10T12:24:29.896Z"
+    }
+  ],
+  [
+    "22e43993-1c00-4f33-a580-0a96139cfd73",
+    {
+      "id": "22e43993-1c00-4f33-a580-0a96139cfd73",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "projectId": null,
+      "status": "RECEIVED",
+      "state": "received",
+      "priority": 3,
+      "title": "Audit anonymous route",
+      "description": "Protected exact price: 25 USD. Required official primary logo.",
+      "headlineEn": "Exact headline",
+      "headlineCkb": "سڵاو",
+      "copyEn": "Protected exact price: 25 USD. Required official primary logo.",
+      "copyCkb": "٢٥ دۆلار",
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "22e43993-1c00-4f33-a580-0a96139cfd73",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789043069913_71394951-db78-428e-b93c-80f14594c384",
+      "clientScopeLocked": false,
+      "version": 1,
+      "createdAt": "2026-09-10T12:24:29.913Z",
+      "updatedAt": "2026-09-10T12:24:29.913Z"
+    }
+  ]
+]

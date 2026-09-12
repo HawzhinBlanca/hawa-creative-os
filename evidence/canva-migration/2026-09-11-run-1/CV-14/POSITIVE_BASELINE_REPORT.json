@@ -1,0 +1,99 @@
+{
+  "status": "passed",
+  "criticalPass": true,
+  "checks": [
+    {
+      "id": "check_layout_dimensions",
+      "kind": "layout",
+      "status": "passed",
+      "durationMs": 4,
+      "evidence": {
+        "pagesChecked": 3
+      },
+      "findings": []
+    },
+    {
+      "id": "check_exact_copy",
+      "kind": "copy",
+      "status": "passed",
+      "durationMs": 12,
+      "evidence": {
+        "copyBlocksChecked": 4,
+        "extractedTextNodes": 4
+      },
+      "findings": []
+    },
+    {
+      "id": "check_bidi_integrity",
+      "kind": "bidi",
+      "status": "passed",
+      "durationMs": 8,
+      "evidence": {
+        "textNodesInspected": 4
+      },
+      "findings": []
+    },
+    {
+      "id": "check_brand_assets",
+      "kind": "brand",
+      "status": "passed",
+      "durationMs": 5,
+      "evidence": {
+        "brandAssetsChecked": 4
+      },
+      "findings": []
+    },
+    {
+      "id": "check_safe_zones",
+      "kind": "layout",
+      "status": "passed",
+      "durationMs": 4,
+      "evidence": {
+        "safeZoneViolationsCount": 0
+      },
+      "findings": []
+    },
+    {
+      "id": "check_contrast_compliance",
+      "kind": "layout",
+      "status": "passed",
+      "durationMs": 6,
+      "evidence": {
+        "contrastFindingsCount": 0
+      },
+      "findings": []
+    },
+    {
+      "id": "check_confidentiality",
+      "kind": "facts",
+      "status": "passed",
+      "durationMs": 3,
+      "evidence": {
+        "confidentialTokensChecked": 2
+      },
+      "findings": []
+    },
+    {
+      "id": "check_typography_and_clipping",
+      "kind": "font",
+      "status": "passed",
+      "durationMs": 5,
+      "evidence": {
+        "nodesInspected": 6
+      },
+      "findings": []
+    },
+    {
+      "id": "check_package_and_coverage",
+      "kind": "source_package",
+      "status": "passed",
+      "durationMs": 4,
+      "evidence": {
+        "renderCount": 1
+      },
+      "findings": []
+    }
+  ],
+  "findings": [],
+  "reportHash": "report_hash_64f3b531-ff3f-4dc3-a468-1ef5cb07dd99_3da5c59e-e95c-420a-b141-b0913ae77554_1789159237003"
+}

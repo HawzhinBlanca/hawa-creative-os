@@ -1,0 +1,22 @@
+{
+  "taskId": "CV-05",
+  "name": "Duplicate-Dispatch Negative Protection Verification",
+  "generatedAt": "2026-09-11T22:43:55+03:00",
+  "invariantsVerified": ["FR-004", "FR-062", "NFR-001", "Invariant #10"],
+  "problemStatement": "A channel event, operator action, or outbox retry dispatches the same command twice with the same idempotency key.",
+  "protectionMechanism": {
+    "engine": "TaskWorkflowDispatcher",
+    "idempotencyCache": "In-flight / registered submission registry keyed by idempotencyKey",
+    "behaviorOnDuplicate": "Returns existing confirmed submission receipt with reconciled: true without launching a duplicate workflow or invoking external provider APIs"
+  },
+  "testEvidence": {
+    "testSuite": "apps/worker/test/durable-workflow-recovery.test.ts",
+    "testName": "proves duplicate-dispatch negative protection: re-dispatching same command returns existing receipt without re-running",
+    "firstDispatchStatus": "completed",
+    "firstDispatchReconciled": false,
+    "secondDispatchStatus": "completed",
+    "secondDispatchReconciled": true,
+    "totalRunnerExecutions": 1,
+    "duplicatedExecutions": 0
+  }
+}

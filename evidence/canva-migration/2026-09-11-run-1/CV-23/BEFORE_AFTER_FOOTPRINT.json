@@ -1,0 +1,94 @@
+{
+  "task": "CV-23",
+  "timestamp": "2026-09-12T02:25:00.000Z",
+  "linesOfCode": {
+    "reviewScreenTsx": {
+      "before": 9553,
+      "after": 0,
+      "delta": -9553
+    },
+    "polotnoEngineTs": {
+      "before": 395,
+      "after": 0,
+      "delta": -395
+    },
+    "historyTreeTs": {
+      "before": 215,
+      "after": 0,
+      "delta": -215
+    },
+    "canvasExportTs": {
+      "before": 864,
+      "after": 0,
+      "delta": -864
+    },
+    "reflowEngineTs": {
+      "before": 135,
+      "after": 0,
+      "delta": -135
+    },
+    "editorPresetsTs": {
+      "before": 198,
+      "after": 0,
+      "delta": -198
+    },
+    "cairoFontBase64Ts": {
+      "before": 1450,
+      "after": 0,
+      "delta": -1450
+    },
+    "interFontBase64Ts": {
+      "before": 820,
+      "after": 0,
+      "delta": -820
+    },
+    "vazirmatnFontBase64Ts": {
+      "before": 410,
+      "after": 0,
+      "delta": -410
+    },
+    "generateDrusteePilotCampaignTs": {
+      "before": 580,
+      "after": 0,
+      "delta": -580
+    },
+    "legacyTestsTs": {
+      "before": 1120,
+      "after": 0,
+      "delta": -1120
+    },
+    "totalLocReduction": -15740
+  },
+  "bytesDeletedFromSource": {
+    "ReviewScreenTsx": 429617,
+    "cairoFontBase64Ts": 222582,
+    "interFontBase64Ts": 123934,
+    "vazirmatnFontBase64Ts": 61998,
+    "canvasExportTs": 60121,
+    "generateDrusteePilotCampaignTs": 22768,
+    "polotnoEngineTs": 19106,
+    "polotnoEngineTestTs": 19114,
+    "canvasExportTestTs": 13253,
+    "editorPresetsTs": 12391,
+    "historyTreeTs": 9286,
+    "historyTreeTestTs": 3788,
+    "reflowEngineTs": 4805,
+    "totalBytesDeleted": 1002762
+  },
+  "dependencies": {
+    "directDependencies": {
+      "before": 4,
+      "after": 3,
+      "delta": -1
+    },
+    "transitivePackagesInLockfile": {
+      "delta": -59
+    }
+  },
+  "productionBundleGzip": {
+    "beforeGzipKb": 121.2,
+    "afterGzipKb": 119.74,
+    "reductionKb": 1.46
+  },
+  "summary": "15,740 LOC and over 1.0 MB of dead legacy canvas and Polotno source completely eliminated. 59 obsolete transitive packages purged."
+}

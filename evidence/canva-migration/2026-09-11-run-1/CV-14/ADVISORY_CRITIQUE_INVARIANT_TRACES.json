@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-09-11T20:40:37.006Z",
+  "advisoryVisionScore": 99,
+  "hardFailuresPresent": 2,
+  "overallStatus": "failed",
+  "criticalPass": false,
+  "waivedHardFailuresCount": 0,
+  "invariantPreserved": true,
+  "rationale": "Advisory visual critique cannot waive hard failures; every deliberate critical defect is rejected."
+}

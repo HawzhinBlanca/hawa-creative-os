@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "evaluated_at": "2026-09-11T22:21:48Z",
+  "task": "CV-03",
+  "title": "Canva Integration Capabilities and Route Decision Matrix",
+  "route_summary": {
+    "primary_editing_transport": "native_canva_editor_handoff",
+    "primary_automation_assistant": "canva_mcp_bounded",
+    "primary_export_route": "supervised_native_download_and_hawa_ingest",
+    "secondary_app_target": "canva_apps_sdk",
+    "backend_connect_api_status": "blocked_pending_enterprise",
+    "model_gateway_status": "operational_gpt4o_claude5_only"
+  },
+  "lifecycle_routes": {
+    "creation": {
+      "template_duplication": {
+        "status": "tested",
+        "route": "Native Canva Editor / MCP clone",
+        "evidence": "Design DAHU6ovIEc4 successfully cloned from reference DAHR4TSWs60"
+      },
+      "novel_design_from_scratch": {
+        "status": "manual",
+        "route": "Native Canva Editor with Hawa brand assets pre-loaded",
+        "evidence": "Proven manual designer workflow; full element creation tools available in browser"
+      },
+      "svg_file_import": {
+        "status": "unsupported",
+        "route": "Canva file upload of Hawa SVG",
+        "evidence": "Design DAHU6lCA2Ik: Uploading SVG creates flattened single image element; 0 live text nodes. Unsuitable for editable master creation."
+      },
+      "connect_api_creation": {
+        "status": "blocked",
+        "route": "Canva Connect REST API POST /v1/designs",
+        "evidence": "Requires Canva Enterprise credentials (CANVA_CLIENT_ID / CANVA_CLIENT_SECRET NOT_SET)"
+      },
+      "apps_sdk_assembly": {
+        "status": "supported",
+        "route": "Canva Apps SDK element creation API",
+        "evidence": "Documented in Canva Apps SDK reference; requires custom app build"
+      }
+    },
+    "editing": {
+      "human_manual_editing": {
+        "status": "tested",
+        "route": "Native Canva Web / Desktop Editor",
+        "evidence": "Full typography, layout, Kurdish/Arabic shaping, layering, alignments operational in browser"
+      },
+      "mcp_text_replacement": {
+        "status": "tested",
+        "route": "Canva MCP perform_editing_operations (replace_text)",
+        "evidence": "Transaction 1349343667361672919 successfully committed on element PBHt6bZ5gPtRXMKT-LBh8J18w7tTNnjkX"
+      },
+      "mcp_element_positioning": {
+        "status": "tested",
+        "route": "Canva MCP perform_editing_operations (position_element)",
+        "evidence": "Position moved to top 491.6, left 186.1 in transaction 1349343667361672919"
+      },
+      "mcp_transaction_cancellation": {
+        "status": "tested",
+        "route": "Canva MCP cancel_editing_transaction",
+        "evidence": "Transaction 8014671116583219452 cancelled cleanly; uncommitted draft discarded"
+      },
+      "mcp_new_text_container_creation": {
+        "status": "unsupported",
+        "route": "Canva MCP",
+        "evidence": "Canva MCP skill explicitly does not support creating new text containers or changing typeface"
+      },
+      "apps_sdk_design_editing": {
+        "status": "supported",
+        "route": "Canva Apps SDK Design Editing API",
+        "evidence": "Supported for rect, shape, text, group, embed elements; 1-minute session bound"
+      }
+    },
+    "observation": {
+      "element_tree_readback": {
+        "status": "tested",
+        "route": "Canva MCP start_editing_transaction inspect",
+        "evidence": "Returned 5 text elements, container bounding boxes, and element IDs for DAHU6ovIEc4"
+      },
+      "browser_canvas_dom_probe": {
+        "status": "tested",
+        "route": "Supervised browser DOM probe",
+        "evidence": "Verified presence of canvas elements and confirmed SVG upload flattened to single img element"
+      },
+      "revision_hash_observation": {
+        "status": "manual",
+        "route": "Hawa artifact sha256 hashing upon snapshot export",
+        "evidence": "Canva API does not provide immutable revision hashes; Hawa computes sha256 on ingested export files"
+      }
+    },
+    "exports": {
+      "png_export": {
+        "native_editor_download": {
+          "status": "tested",
+          "route": "Native Canva Editor Download UI (PNG)",
+          "evidence": "Exported and verified in ARTIFACT_INSPECTION.json; sha256 verified"
+        },
+        "mcp_export": {
+          "status": "unsupported",
+          "route": "Canva MCP export_design",
+          "evidence": "Installed MCP runtime set lacks automated export tool"
+        },
+        "connect_api_export": {
+          "status": "blocked",
+          "route": "Canva Connect REST API POST /v1/exports",
+          "evidence": "Blocked pending Enterprise credentials"
+        }
+      },
+      "pdf_print_export": {
+        "native_editor_download": {
+          "status": "tested",
+          "route": "Native Canva Editor Download UI (PDF Print, CMYK, crop marks, bleed)",
+          "evidence": "Exported and verified in ARTIFACT_INSPECTION.json; print preflight verified"
+        },
+        "mcp_export": {
+          "status": "unsupported",
+          "route": "Canva MCP",
+          "evidence": "MCP does not expose PDF Print, CMYK, or bleed/crop controls"
+        },
+        "connect_api_export": {
+          "status": "unsupported",
+          "route": "Canva Connect REST API",
+          "evidence": "Connect API exports only support standard/pro quality; no CMYK, bleed, or crop mark parameters"
+        },
+        "apps_sdk_export": {
+          "status": "unsupported",
+          "route": "Canva Apps SDK export request",
+          "evidence": "Apps SDK only supports PDF Standard and SVG; PDF Print excluded"
+        }
+      },
+      "svg_export": {
+        "native_editor_download": {
+          "status": "tested",
+          "route": "Native Canva Editor Download UI (SVG)",
+          "evidence": "Exported and analyzed; all 29 text nodes converted to 94 outlined paths. Zero live text nodes."
+        }
+      }
+    }
+  },
+  "model_entitlements": {
+    "gpt_4o": {"status": "tested", "http_status": 200, "found": true, "inference": "passed"},
+    "gpt_4o_mini": {"status": "tested", "http_status": 200, "found": true, "inference": "passed"},
+    "gpt_6_astra": {"status": "unsupported", "http_status": 404, "found": false, "notes": "Model does not exist in account"},
+    "gpt_image_2_5_sunburst": {"status": "unsupported", "http_status": 404, "found": false, "notes": "Model does not exist in account"},
+    "claude_sonnet_5": {"status": "tested", "http_status": 200, "found": true, "inference": "passed"},
+    "claude_opus_5": {"status": "tested", "http_status": 200, "found": true, "inference": "not_run"},
+    "claude_3_5_sonnet_20241022": {"status": "unsupported", "http_status": 404, "found": false, "notes": "Model not found in this account"}
+  }
+}

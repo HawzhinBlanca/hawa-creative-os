@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-09-11T20:40:37.006Z",
+  "semanticCoverage": {
+    "textNodesCount": 2,
+    "imageFillsCount": 1,
+    "hasLogo": true,
+    "isComplete": false,
+    "unobservedLayersCount": 3
+  },
+  "qaStatus": "blocked",
+  "criticalPass": false,
+  "invariantPreserved": true,
+  "rationale": "Insufficient inspection coverage is UNKNOWN/BLOCKED; unobserved layers cannot pass as verified source."
+}

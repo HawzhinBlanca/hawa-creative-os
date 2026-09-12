@@ -46,7 +46,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer test_art_director_token',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -88,7 +88,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer test_art_director_token',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -143,7 +143,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer test_art_director_token',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
       },
       body: JSON.stringify({
         decision: 'approved',

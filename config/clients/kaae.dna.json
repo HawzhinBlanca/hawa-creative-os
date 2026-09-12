@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tenantId": "a0000000-0000-4000-8000-000000000001",
   "clientId": "c1000000-0000-4000-8000-000000000002",
-  "version": 1,
+  "version": 5,
   "status": "active",
   "identity": {
     "officialName": "Kurdistan Accrediting Association for Education",
@@ -11,6 +11,36 @@
       "دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا لە هەرێمی کوردستان",
       "دەستەی متمانەبەخشی بە پەروەردە",
       "هيئة الاعتماد التعليمي في كردستان"
+    ],
+    "officialSlogan": {
+      "en": "Empowering Education, Inspiring the Future",
+      "ckb": "بەهێزکردنی پەروەردە، ئیلهامبەخشین بە داهاتوو"
+    },
+    "leadership": [
+      {
+        "name": "Dr. Boushra Rahal Alameh",
+        "role": "President, KAAE",
+        "email": "boushra.rahal@kaae.org",
+        "phone": "+964 (0)750 345 8885"
+      },
+      {
+        "name": "Dr. Honar Issa",
+        "role": "Secretary-General, KAAE",
+        "email": "honar.issa@kaae.org",
+        "phone": "+964 (0)775 777 8888"
+      },
+      {
+        "name": "Dr. Dilan Majid Rostam",
+        "role": "Director, Commission on Higher Education (CHE)",
+        "email": "dilan.rostam@kaae.org",
+        "phone": "+964 (0)750 345 8883"
+      },
+      {
+        "name": "Dr. Lara Nabil Abdallah",
+        "role": "Director, Commission on K-12",
+        "email": "lara.nabil@kaae.org",
+        "phone": "+964 (0)750 345 8884"
+      }
     ],
     "products": [
       {
@@ -39,6 +69,240 @@
           "المقيمون من الأقران",
           "Peer Evaluators"
         ]
+      }
+    ],
+    "executiveStaff": [
+      {
+        "name": "Dr. Boushra Rahal Alameh",
+        "title": "President",
+        "email": "boushra.rahal@kaae.org",
+        "phone": "+964 (0)750 345 8885"
+      },
+      {
+        "name": "Dr. Honar Issa",
+        "title": "Secretary-General",
+        "email": "honar.issa@kaae.org",
+        "phone": "+964 (0)775 777 8888"
+      },
+      {
+        "name": "Dr. Dilan Majid Rostam",
+        "title": "Director, Commission on Higher Education",
+        "email": "dilan.rostam@kaae.org",
+        "phone": "+964 (0)750 345 8883"
+      },
+      {
+        "name": "Dr. Lara Nabil Abdallah",
+        "title": "Director, Commission on K-12",
+        "email": "lara.nabil@kaae.org",
+        "phone": "+964 (0)750 345 8884"
+      },
+      {
+        "name": "Akam Omer",
+        "title": "Manager, Information Technology",
+        "email": "akam.omer@kaae.org",
+        "phone": "+964 (0)750 345 8886"
+      },
+      {
+        "name": "Zhila Faris Ali",
+        "title": "Manager, Human Resources & Finance",
+        "email": "zhila.faris@kaae.org",
+        "phone": "+964 (0)750 345 8882"
+      },
+      {
+        "name": "Yad Hidayat",
+        "title": "Executive Assistant",
+        "email": "yad.hidayat@kaae.org",
+        "phone": "+964 (0)775 777 8888"
+      },
+      {
+        "name": "Areen Shaba",
+        "title": "Accountant",
+        "email": "areen.shaba@kaae.org",
+        "phone": "+964 (0)750 345 8887"
+      }
+    ],
+    "highCouncil": [
+      {
+        "name": "Masrour Barzani",
+        "role": "Chair",
+        "title": "Prime Minister of the Kurdistan Regional Government"
+      },
+      {
+        "name": "Qubad Talabani",
+        "role": "Vice Chair",
+        "title": "Deputy Prime Minister"
+      },
+      {
+        "name": "Dr. Aram Mohammed Qadir",
+        "role": "Member",
+        "title": "Minister of Higher Education & Scientific Research"
+      },
+      {
+        "name": "Alan Hama Saeed Salih",
+        "role": "Member",
+        "title": "Minister of Education"
+      },
+      {
+        "name": "Dr. Dara Rashid Mahmud",
+        "role": "Member",
+        "title": "Minister of Planning"
+      },
+      {
+        "name": "Dr. Honar Issa",
+        "role": "Secretary-General",
+        "title": "Secretary-General of KAAE"
+      }
+    ],
+    "boardOfTrustees": [
+      {
+        "name": "Prof. Dlawer Ala'aldeen",
+        "affiliation": "President, Middle East Research Institute (MERI)"
+      },
+      {
+        "name": "Dr. Henry Cram",
+        "affiliation": "Former President, Middle States Association of Colleges and Schools (MSA-CESS)"
+      },
+      {
+        "name": "Dr. Heather Perfetti",
+        "affiliation": "President, Middle States Commission on Higher Education (MSCHE)"
+      },
+      {
+        "name": "Dr. Andrea K. Talentino",
+        "affiliation": "President, Augustana College"
+      },
+      {
+        "name": "Dr. Linda Thompson",
+        "affiliation": "President, Westfield State University"
+      },
+      {
+        "name": "Dr. Carol Anderson",
+        "affiliation": "Accreditation Specialist"
+      },
+      {
+        "name": "Dr. Katie Bash",
+        "affiliation": "Evaluation Specialist"
+      },
+      {
+        "name": "Dr. Lee Bash",
+        "affiliation": "Higher Education Consultant"
+      },
+      {
+        "name": "Dr. Clayton Petry",
+        "affiliation": "Curriculum & Governance Specialist"
+      },
+      {
+        "name": "Daniel Rufo",
+        "affiliation": "International Accreditation Expert"
+      }
+    ],
+    "advisoryBoard": [
+      {
+        "name": "Ghada Maalouf",
+        "role": "Advisory Board Member"
+      },
+      {
+        "name": "Dr. Narimane Hadj-Hamou",
+        "role": "Advisory Board Member, Higher Education Specialist"
+      },
+      {
+        "name": "Christian Talbot",
+        "role": "Advisory Board Member, Strategic Innovation Specialist"
+      },
+      {
+        "name": "Dr. Rita Stephan",
+        "role": "Advisory Board Member"
+      }
+    ],
+    "commissioners": {
+      "k12": [
+        {
+          "name": "Dr. Abdurrahman Ahmad Wahab",
+          "role": "Commissioner"
+        },
+        {
+          "name": "Jeffrey Bradley",
+          "role": "Commissioner"
+        },
+        {
+          "name": "Salam Mohammad Islam",
+          "role": "Commissioner"
+        },
+        {
+          "name": "Dr. Osama M. Obeidat",
+          "role": "Commissioner"
+        }
+      ],
+      "higherEducation": [
+        {
+          "name": "Dr. Margaret Bailey",
+          "role": "Commissioner"
+        }
+      ]
+    },
+    "accreditationLiaisonOfficers": [
+      {
+        "name": "Tola A. Faraj",
+        "institution": "Hawler Medical University (HMU)"
+      },
+      {
+        "name": "Shara Ali",
+        "institution": "Sulaimani Polytechnic University (SPU)"
+      },
+      {
+        "name": "Kanar R. Tariq",
+        "institution": "Qaiwan International University (QIU)"
+      },
+      {
+        "name": "Sheheen A. Abdulkareem",
+        "institution": "University of Duhok (UoD)"
+      },
+      {
+        "name": "Dr. Ameena S. M. Juma",
+        "institution": "Cihan University"
+      },
+      {
+        "name": "Tooraj H. Fatah",
+        "institution": "Qala University"
+      },
+      {
+        "name": "Twana A. Tahir",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Nasih AbdulRahman Saeed",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Halmat Faieeq Darwsh",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Kardo Rached",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Dr. Ali Arif",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Shamal Fatah",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Arazoo Jabbar",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Yaser Khorramdel",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Jamal Kakrasul",
+        "institution": "Accreditation Liaison Officer"
+      },
+      {
+        "name": "Faye Zibari",
+        "institution": "Accreditation Liaison Officer"
       }
     ]
   },
@@ -359,5 +623,638 @@
       "status": "active"
     }
   ],
-  "contentHash": "7df970563a178c8a4fa12b7013737d489b44825f67e3b9060bb96e5aa7f327cf"
+  "contentHash": "7df970563a178c8a4fa12b7013737d489b44825f67e3b9060bb96e5aa7f327cf",
+  "guidelines": {
+    "layoutRules": [
+      "Zero flattened raster text: all copy must remain editable vector text nodes with live OpenType shaping",
+      "Strict Kurdish Sorani orthography: standard Kurdish alphabet (ک, ی), diacritic clearances (ڵ, ۆ, ێ, ڕ), ZWNJ preservation",
+      "Official 21-ray sun seal must maintain minimum 28px digital / 15mm print clear space without aspect distortion",
+      "Every deliverable must state legal authority citation under Kurdistan Regional Parliament Law No. 6 of 2022",
+      "All primary headlines must maintain minimum 7.0:1 AAA contrast against dark navy or parchment backgrounds",
+      "Institutional announcements must state official slogan: \"Empowering Education, Inspiring the Future\""
+    ],
+    "campaignArchetypes": [
+      {
+        "id": "kaae_eligibility_decree",
+        "ratio": "4:5 / A4",
+        "name": "University Eligibility Status Decree",
+        "primaryPalette": [
+          "#002050",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_global_milestone",
+        "ratio": "4:5",
+        "name": "Global Network Accreditation Milestone (CHEA, INQAAHE)",
+        "primaryPalette": [
+          "#160874",
+          "#E8B85C",
+          "#FFF2DB"
+        ]
+      },
+      {
+        "id": "kaae_evaluator_call",
+        "ratio": "4:5",
+        "name": "Call for National & International Peer Evaluators",
+        "primaryPalette": [
+          "#160874",
+          "#35309B",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_alo_cohort",
+        "ratio": "5:4 / 16:9",
+        "name": "Accreditation Liaison Officers (ALO) Cohort Onboarding",
+        "primaryPalette": [
+          "#0A1628",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_field_report",
+        "ratio": "4:5",
+        "name": "K-12 & CHE Pilot Study Field Visit Report",
+        "primaryPalette": [
+          "#160874",
+          "#FDF8F3",
+          "#E8B85C"
+        ]
+      },
+      {
+        "id": "kaae_forum_keynote",
+        "ratio": "1:1",
+        "name": "Kurdistan Educational Forum Stage Announcement",
+        "primaryPalette": [
+          "#0A1628",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_speaker_spotlight",
+        "ratio": "4:5",
+        "name": "International Speaker & Scholar Profile Card",
+        "primaryPalette": [
+          "#160874",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_cultural_greeting",
+        "ratio": "4:5",
+        "name": "Official Eid & National Cultural Holiday Greeting",
+        "primaryPalette": [
+          "#160874",
+          "#E8B85C",
+          "#FFF2DB"
+        ]
+      },
+      {
+        "id": "kaae_volunteer_surge",
+        "ratio": "4:5",
+        "name": "MSCHE 138 Higher Education Volunteer Roster Card",
+        "primaryPalette": [
+          "#160874",
+          "#35309B",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_strategic_pillars",
+        "ratio": "5:4",
+        "name": "ELEVATE 2026-2029 4 Pillars of Knowledge Nation",
+        "primaryPalette": [
+          "#002050",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_web_portal_promo",
+        "ratio": "4:5",
+        "name": "Official Trilingual Portal & Community Launch",
+        "primaryPalette": [
+          "#160874",
+          "#FFFFFF",
+          "#E8B85C"
+        ]
+      },
+      {
+        "id": "kaae_diploma_a4",
+        "ratio": "A4 Landscape",
+        "name": "Institutional Accreditation Diploma & Vector Guilloche Certificate",
+        "primaryPalette": [
+          "#FDF8F3",
+          "#160874",
+          "#E8B85C"
+        ]
+      },
+      {
+        "id": "kaae_metrics_card",
+        "ratio": "4:5 / 16:9",
+        "name": "OTA Social Media Analytics & Reach Infographic",
+        "primaryPalette": [
+          "#0A1628",
+          "#E8B85C",
+          "#35309B"
+        ]
+      },
+      {
+        "id": "kaae_tvet_dual_model",
+        "ratio": "4:5 / 16:9",
+        "name": "Koenig & Bauer TVET German Dual-Training Reform",
+        "primaryPalette": [
+          "#002050",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      },
+      {
+        "id": "kaae_business_id",
+        "ratio": "3.5:2",
+        "name": "Executive Staff Bilingual Business Identification",
+        "primaryPalette": [
+          "#160874",
+          "#E8B85C",
+          "#FFFFFF"
+        ]
+      }
+    ]
+  },
+  "updatedAt": "2026-09-10T01:30:00.000Z",
+  "strategicInitiative": {
+    "titleEn": "ELEVATE 2026–2029 Strategic Plan",
+    "titleCkb": "بەرزکردنەوە: پلانی ستراتیژی ٢٠٢٦–٢٠٢٩",
+    "nationalVision": "نەتەوەی زانست (Knowledge Nation) — Vision of Prime Minister Masrour Barzani",
+    "effectiveDate": "July 1, 2026 (Adopted following Board of Trustees approval in June 2026)",
+    "definitionCkb": "بەرزکردنەوە: بەرزکردنەوەی شتێک بۆ پلە یان ئاستێکی بەرزتر (فەرهەنگەکانی ئۆکسفۆرد)",
+    "fourPillars": [
+      {
+        "id": 1,
+        "titleEn": "Quality & Equity",
+        "titleCkb": "کوالێتی و یەکسانی",
+        "descCkb": "بەرزکردنەوەی ستانداردەکانی فێرکردن، هاوچەرخکردنی پلانی خوێندن، فراوانکردنی پەروەردەی پیشەیی و تەکنیکی (TVET)، و باشترکردنی دەستڕاگەیشتنی خوێندکاران."
+      },
+      {
+        "id": 2,
+        "titleEn": "Education Reform",
+        "titleCkb": "چاکسازیی پەروەردەیی",
+        "descCkb": "بەهێزکردنی توێژینەوە، داھێنان، و هاوبەشییە نێودەوڵەتییەکان لە زانکۆکاندا."
+      },
+      {
+        "id": 3,
+        "titleEn": "Infrastructure & Workforce",
+        "titleCkb": "ژێرخان و هێزی کار",
+        "descCkb": "وەبەرهێنان لە دروستکردنی خوێندنگاکان، دامەزراندنی ٣٨,٠٠٠ مامۆستا، و فراوانکردنی تواناسازی لە ڕێگەی هاوبەشیی نێوان کەرتی گشتی و تایبەتەوە."
+      },
+      {
+        "id": 4,
+        "titleEn": "Digitalization & Governance",
+        "titleCkb": "دیجیتاڵکردن و حوکمڕانی کردن",
+        "descCkb": "پەیڕەوکردنی سیستمەکانی حکومەتی ئەلیکترۆنی، دەستەبەرکردنی ڕۆشنی، و بەهێزکردنی خودموختاری دامەزراوەیی."
+      }
+    ],
+    "coreValues": [
+      {
+        "id": "transparency",
+        "en": "Transparency",
+        "ckb": "ڕۆشنی"
+      },
+      {
+        "id": "continuous_improvement",
+        "en": "Continuous Improvement",
+        "ckb": "باشترکردنی بەردەوام"
+      },
+      {
+        "id": "accountability",
+        "en": "Accountability",
+        "ckb": "بەرپرسیارێتی"
+      },
+      {
+        "id": "academic_excellence",
+        "en": "Academic Excellence",
+        "ckb": "نایابی ئەکادیمی"
+      }
+    ],
+    "guidingPrinciples": [
+      {
+        "id": "GP_I",
+        "code": "EXCEL",
+        "nameEn": "Excellence, Capacity Building & Sustainability",
+        "nameCkb": "نایابی لە ڕێگەی بەپیشەییکردن، بنیاتنانی تواناکان، و بەردەوامییان",
+        "goalsCount": 3,
+        "kpisCount": 19
+      },
+      {
+        "id": "GP_II",
+        "code": "TRUST",
+        "nameEn": "Transparency, Accountability & Public Trust",
+        "nameCkb": "ڕۆشنی، بەرپرسیارێتی، و متمانەی گشتی",
+        "goalsCount": 3,
+        "kpisCount": 19
+      },
+      {
+        "id": "GP_III",
+        "code": "LEAD",
+        "nameEn": "Regional Leadership & Global Integration",
+        "nameCkb": "سەرکردایەتیی هەرێمی و هاودەمبوونی جیهانی",
+        "goalsCount": 3,
+        "kpisCount": 13
+      }
+    ],
+    "totalKPIs": 51,
+    "strategicGoals": 9
+  },
+  "swotAnalysis": {
+    "strengths": [
+      {
+        "id": "S1",
+        "en": "Statutory legal authority of KAAE under Law No. 6 of 2022",
+        "ckb": "دەسەڵاتی یاسایی دەستەی (KAAE) بۆ جێبەجێکردنی ئەرکی متمانەبەخشی."
+      },
+      {
+        "id": "S2",
+        "en": "Established governance architecture: High Council and Board of Trustees",
+        "ckb": "پێکهاتەی حوکمڕانیی ئەنجومەنی باڵا و دەستەی بەڕێوەبردن دامەزراون."
+      },
+      {
+        "id": "S3",
+        "en": "High-level political commitment from KRG leadership supporting educational reform",
+        "ckb": "ڕاسپاردەیەکی سیاسیی بەهێز و پابەندبوونی ئاستبەرزی سەرکردایەتیی حکومەتی هەرێمی کوردستان (KRG)."
+      },
+      {
+        "id": "S4",
+        "en": "Regulatory framework providing legitimacy based on international best practices",
+        "ckb": "پەرەپێدانی سیاسەت و چوارچێوەیەکی ڕێکخستن کە یاساییبوون بەپێی باشترین بنەما تاقیکراوەکان دەستەبەر دەکات."
+      },
+      {
+        "id": "S5",
+        "en": "Clear mission and vision aligned with the national Knowledge Nation strategy",
+        "ckb": "ئەرک، دیدگا، و ئەرکی چاکسازیی بەڕوونی داڕێژراو کە تەواو یەکدەگرنەوە لەگەڵ ستراتیژی نیشتمانیی پەروەردە."
+      },
+      {
+        "id": "S6",
+        "en": "Operational international partnerships with recognized accreditation bodies (MSCHE, MSA-CESS)",
+        "ckb": "دامەزراندنی هاوبەشیی کارا لەگەڵ دوو دەزگای نێودەوڵەتیی متمانەبەخشی لە بواری پەروەردە و خوێندنی باڵادا."
+      },
+      {
+        "id": "S7",
+        "en": "Shared organizational culture and inclusive team working environment",
+        "ckb": "کولتووری ڕێکخراوەیی هاوبەش و ژینگەیەکی گشتگیر بۆ تیمی کارکردن."
+      },
+      {
+        "id": "S8",
+        "en": "Willingness of academic leadership to implement accreditation processes",
+        "ckb": "ئامادەیی و خواستی سەرکردایەتیی ئەکادیمی بۆ جێبەجێکردنی پرۆسەکانی متمانەبەخشی."
+      },
+      {
+        "id": "S9",
+        "en": "Innovative digital initiatives supporting accreditation systems and monitoring",
+        "ckb": "دەستپێشخەرییە دیجیتاڵییە نوێیەکان کە پشتگیری لە سیستمەکانی متمانەبەخشی و چاودێریکردن دەکەن."
+      }
+    ],
+    "weaknesses": [
+      {
+        "id": "W1",
+        "en": "Limited domestic accreditation experience within institutions and KAAE staff",
+        "ckb": "ئەزموونی سنوورداری متمانەبەخشی لە ناوخۆی دامەزراوەکان و تیمی کارکردنی دەستەی (KAAE)دا."
+      },
+      {
+        "id": "W2",
+        "en": "Inefficiency in institutional QA departments and high staff turnover",
+        "ckb": "ناکارامەیی لە کارکردنی بەشەکانی دڵنیایی جۆری لە ناو زۆرێک لە دامەزراوەکاندا، هاوشان لەگەڵ ڕێژەیەکی بەرزی وازهێنان."
+      },
+      {
+        "id": "W3",
+        "en": "Limited institutional autonomy, financial constraints, and political skepticism",
+        "ckb": "سەربەخۆیی سنوورداری دامەزراوەیی، ئاستەنگە داراییەکان، و گومانی سیاسی کە کاریگەری دەکەنە سەر بەردەوامی."
+      },
+      {
+        "id": "W4",
+        "en": "Absence of a clear culture of ongoing assessment and continuous improvement",
+        "ckb": "نەبوونی کولتووری ڕوون، و نرخاندن و باشترکردنی بەردەوام."
+      },
+      {
+        "id": "W5",
+        "en": "Lack of unified digital learning platforms limiting data reliability for decision-making",
+        "ckb": "نەبوونی ئیکۆسیستم و پلاتفۆرمە دیجیتاڵییەکانی فێربوون، کە دەبێتە هۆی سنووردارکردنی ڕۆشنی و بەردەستبوونی داتا."
+      }
+    ],
+    "opportunities": [
+      {
+        "id": "O1",
+        "en": "Institutionalizing accreditation across K-12, Higher Ed, and TVET",
+        "ckb": "بەکارهێنانی هەژموون و پێگەی سەرکردایەتی بۆ بەدامەزراوەیکردنی پابەندبوونی دامەزراوەکان لە سەرانسەری K-12، خوێندنی باڵا، و TVET."
+      },
+      {
+        "id": "O2",
+        "en": "Reviewing existing educational policies and proposing statutory updates",
+        "ckb": "پێداچوونەوە بە سیاسەت و ڕێکارە پەروەردەییە هەبووەکان و پێشنیارکردنی هەموارکردنەوە پاڵپشتیکەرەکان."
+      },
+      {
+        "id": "O3",
+        "en": "Leveraging global partnerships for knowledge transfer, benchmarking, and technical aid",
+        "ckb": "سوودوەرگرتن لە هاوبەشییە جیهانییەکان بۆ گواستنەوەی زانیاری، پێوەرکاری، و پێشکەشکردنی هاوکاریی تەکنیکی."
+      },
+      {
+        "id": "O4",
+        "en": "Building digital infrastructure for capacity building and data facilitation",
+        "ckb": "بونیادنانی ژێرخانی دیجیتاڵی بۆ بونیادنانی تواناکان، و ئاسانکاری لە پرۆسەکانی متمانەبەخشی و داتادا."
+      },
+      {
+        "id": "O5",
+        "en": "Academic leadership training pathways via KAAE Academy",
+        "ckb": "ڕێڕەوەکانی ڕاهێنانی سەرکردایەتیی ئەکادیمی بۆ پاڵپشتیکردنی ئەرکی (KAAE)."
+      },
+      {
+        "id": "O6",
+        "en": "Digital transformation: institutional email, student SIS, and e-learning platforms",
+        "ckb": "وەرچەرخانی دیجیتاڵی لە پەروەردە و خوێندندا (ئیمەیڵی فەرمی، تۆماری خوێندکاران، پلاتفۆرمی خوێندنی ئەلیکترۆنی)."
+      },
+      {
+        "id": "O7",
+        "en": "System-wide LMS adoption to enhance transparency and data-driven decisions",
+        "ckb": "پەیڕەوکردنی سیستمی بەڕێوەبردنی فێربوون (LMS) لە سەرانسەری دامەزراوەکاندا بە مەبەستی بەرزکردنەوەی ڕۆشنی."
+      }
+    ],
+    "threats": [
+      {
+        "id": "T1",
+        "en": "Dependence on KRG public funding potentially impacting organizational sustainability",
+        "ckb": "پشتبەستن بە سەرچاوەکانی دابینکردنی دارایی حکومەت کە ڕەنگە کاریگەریی هەبێت لەسەر بەردەوامی."
+      },
+      {
+        "id": "T2",
+        "en": "Loss of momentum or interest from academic institutions over time",
+        "ckb": "لە دەستدانی ئارەزوو لەلایەن دامەزراوە ئەکادیمییەکان."
+      },
+      {
+        "id": "T3",
+        "en": "Political interference impacting accreditation independence",
+        "ckb": "دەستێوەردان یان هەژموونی سیاسی لە بەرەوپێشچوونی پرۆسەکان کە کاریگەری دەکاتە سەر سەربەخۆیی دامەزراوەکە."
+      },
+      {
+        "id": "T4",
+        "en": "Resistance to change among faculty, instructional staff, and institutional leaders",
+        "ckb": "بەرگریی نیشاندان لە بەرامبەر گۆڕانکاریدا لەلایەن بەشێک لە ستافی وانەبێژان و سەرکردەکانەوە."
+      },
+      {
+        "id": "T5",
+        "en": "Public sector fiscal constraints limiting capacity for required transformation",
+        "ckb": "کۆتوبەندە داراییەکانی کەرتی گشتی ڕێگرن لەبەردەم توانستی جێبەجێکردنی گۆڕانکارییەکان."
+      },
+      {
+        "id": "T6",
+        "en": "Regional geopolitical and macroeconomic instability",
+        "ckb": "ناسەقامگیریی سیاسیی هەرێمی."
+      },
+      {
+        "id": "T7",
+        "en": "Uneven digital infrastructure across K-12, Higher Ed, and TVET",
+        "ckb": "نایەکدەستیی ژێرخانی دیجیتاڵی لە سەرانسەری دامەزراوەکاندا کە ئامادەیی بۆ متمانەبەخشی سنووردار دەکات."
+      },
+      {
+        "id": "T8",
+        "en": "Scale challenges: statutory oversight over more than 7,000 institutions",
+        "ckb": "ئالنگاریەکانی پەیوەست بە قەبارە؛ چاودێریکردنی زیاتر لە ٧٠٠٠ دامەزراوە لە ژێر یاسای متمانەبەخشیدا."
+      }
+    ]
+  },
+  "verifiedPilotImpact": {
+    "k12FieldVisits": {
+      "schoolsVisited": 12,
+      "coverage": "All 3 governorates (Zakho in north to Halabja in south)",
+      "governorates": [
+        "Erbil",
+        "Sulaimani",
+        "Duhok"
+      ],
+      "schoolTypes": "Public and Private"
+    },
+    "higherEdPilot": {
+      "universitiesEngaged": 11,
+      "fceCriteriaEvaluated": 21,
+      "workshopsDelivered": "20+ workshops & webinars",
+      "firstPathwayEligibility": [
+        {
+          "institution": "American University of Kurdistan (AUK)",
+          "decision": "Eligible Status - To Be Granted",
+          "collegialAdvices": 13,
+          "recommendations": 0,
+          "requirements": 0
+        },
+        {
+          "institution": "Catholic University in Erbil (CUE)",
+          "decision": "Eligible Status - To Be Granted",
+          "collegialAdvices": 15,
+          "recommendations": 5,
+          "requirements": 0
+        }
+      ]
+    }
+  },
+  "socialMediaOtaMetrics": {
+    "reportingPeriod": "Since January 2025",
+    "totals": {
+      "views": "4.24M",
+      "reach": "1.09M",
+      "impressions": "165.4K",
+      "engagements": "24K",
+      "followers": 4098
+    },
+    "platformRanking": [
+      {
+        "platform": "LinkedIn",
+        "engagements": 25145
+      },
+      {
+        "platform": "Facebook",
+        "engagements": 10116
+      },
+      {
+        "platform": "Instagram",
+        "engagements": 9485
+      },
+      {
+        "platform": "X (Twitter)",
+        "engagements": 1046
+      },
+      {
+        "platform": "YouTube",
+        "engagements": 1045
+      }
+    ],
+    "globalAudience": [
+      "United Kingdom",
+      "Finland",
+      "Canada",
+      "Sweden",
+      "Norway",
+      "United States",
+      "France",
+      "Germany",
+      "Turkey",
+      "Egypt",
+      "Lebanon",
+      "United Arab Emirates",
+      "Iran"
+    ]
+  },
+  "fifteenGraphicCampaignArchetypes": [
+    {
+      "id": "kaae_eligibility_decree",
+      "ratio": "4:5 / A4",
+      "name": "University Eligibility Status Decree",
+      "primaryPalette": [
+        "#002050",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_global_milestone",
+      "ratio": "4:5",
+      "name": "Global Network Accreditation Milestone (CHEA, INQAAHE)",
+      "primaryPalette": [
+        "#160874",
+        "#E8B85C",
+        "#FFF2DB"
+      ]
+    },
+    {
+      "id": "kaae_evaluator_call",
+      "ratio": "4:5",
+      "name": "Call for National & International Peer Evaluators",
+      "primaryPalette": [
+        "#160874",
+        "#35309B",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_alo_cohort",
+      "ratio": "5:4 / 16:9",
+      "name": "Accreditation Liaison Officers (ALO) Cohort Onboarding",
+      "primaryPalette": [
+        "#0A1628",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_field_report",
+      "ratio": "4:5",
+      "name": "K-12 & CHE Pilot Study Field Visit Report",
+      "primaryPalette": [
+        "#160874",
+        "#FDF8F3",
+        "#E8B85C"
+      ]
+    },
+    {
+      "id": "kaae_forum_keynote",
+      "ratio": "1:1",
+      "name": "Kurdistan Educational Forum Stage Announcement",
+      "primaryPalette": [
+        "#0A1628",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_speaker_spotlight",
+      "ratio": "4:5",
+      "name": "International Speaker & Scholar Profile Card",
+      "primaryPalette": [
+        "#160874",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_cultural_greeting",
+      "ratio": "4:5",
+      "name": "Official Eid & National Cultural Holiday Greeting",
+      "primaryPalette": [
+        "#160874",
+        "#E8B85C",
+        "#FFF2DB"
+      ]
+    },
+    {
+      "id": "kaae_volunteer_surge",
+      "ratio": "4:5",
+      "name": "MSCHE 138 Higher Education Volunteer Roster Card",
+      "primaryPalette": [
+        "#160874",
+        "#35309B",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_strategic_pillars",
+      "ratio": "5:4",
+      "name": "ELEVATE 2026-2029 4 Pillars of Knowledge Nation",
+      "primaryPalette": [
+        "#002050",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_web_portal_promo",
+      "ratio": "4:5",
+      "name": "Official Trilingual Portal & Community Launch",
+      "primaryPalette": [
+        "#160874",
+        "#FFFFFF",
+        "#E8B85C"
+      ]
+    },
+    {
+      "id": "kaae_diploma_a4",
+      "ratio": "A4 Landscape",
+      "name": "Institutional Accreditation Diploma & Vector Guilloche Certificate",
+      "primaryPalette": [
+        "#FDF8F3",
+        "#160874",
+        "#E8B85C"
+      ]
+    },
+    {
+      "id": "kaae_metrics_card",
+      "ratio": "4:5 / 16:9",
+      "name": "OTA Social Media Analytics & Reach Infographic",
+      "primaryPalette": [
+        "#0A1628",
+        "#E8B85C",
+        "#35309B"
+      ]
+    },
+    {
+      "id": "kaae_tvet_dual_model",
+      "ratio": "4:5 / 16:9",
+      "name": "Koenig & Bauer TVET German Dual-Training Reform",
+      "primaryPalette": [
+        "#002050",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "kaae_business_id",
+      "ratio": "3.5:2",
+      "name": "Executive Staff Bilingual Business Identification",
+      "primaryPalette": [
+        "#160874",
+        "#E8B85C",
+        "#FFFFFF"
+      ]
+    }
+  ]
 }

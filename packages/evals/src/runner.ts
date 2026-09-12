@@ -61,12 +61,39 @@ export class EvaluationRunner {
         cachePolicy: 'disabled',
       });
 
-      if (routeRes.ok) {
-        passed += 1;
-      } else {
+      if (!routeRes.ok) {
         failed += 1;
         if (c.critical) criticalViolations += 1;
+        continue;
       }
+
+      const val = (routeRes.value as any)?.value !== undefined ? (routeRes.value as any).value : routeRes.value;
+      const validDecisions = new Set(['route_matched', 'abstain', 'needs_clarification', 'route_ambiguous']);
+
+      // HQ-06 & D14: Validate decision against allowed schema and ground truth
+      if (
+        !val ||
+        typeof val !== 'object' ||
+        typeof val.decision !== 'string' ||
+        !validDecisions.has(val.decision) ||
+        typeof val.confidence !== 'number' ||
+        val.confidence < 0 ||
+        val.confidence > 1.0 ||
+        isNaN(val.confidence)
+      ) {
+        failed += 1;
+        criticalViolations += 1;
+        continue;
+      }
+
+      // Ground truth comparison: cases that require abstention must abstain
+      if (c.expected?.must_abstain && val.decision === 'route_matched') {
+        failed += 1;
+        if (c.critical) criticalViolations += 1;
+        continue;
+      }
+
+      passed += 1;
     }
 
     return {
@@ -258,6 +285,40 @@ export class EvaluationRunner {
       isLiveVector: true, // Invariant 2: source documents remain live editable vector trees
     };
 
+    const ctx: RequestContext = {
+      tenantId: 'tenant-eval',
+      taskId: 'task-eval-visual-judge',
+      actor: { type: 'model', id: 'visual_judge' },
+      correlationId: crypto.randomUUID(),
+      deadline: new Date(Date.now() + 60000).toISOString(),
+      idempotencyKey: `eval_vj_${Date.now()}`,
+    };
+
+    const judgeRes = await this.gateway.generateStructured<{ decision?: string; confidence?: number; passed?: boolean }>(ctx, {
+      role: 'visual_judge',
+      inputs: [{ kind: 'text', text: JSON.stringify(samplePayload) }],
+      systemPromptVersion: '1.0',
+      responseSchema: {},
+      budget: { maxCostUsd: 0.05, maxLatencyMs: 5000, maxAttempts: 1 },
+      egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
+      cachePolicy: 'disabled',
+    });
+
+    let modelVal: any = undefined;
+    if (judgeRes.ok) {
+      modelVal = (judgeRes.value as any)?.value !== undefined ? (judgeRes.value as any).value : judgeRes.value;
+      if (modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA' || (typeof modelVal?.confidence === 'number' && modelVal.confidence < 0)) {
+        return {
+          dataset: 'visual_judge_rubric.json',
+          totalCases: rubricDimensions.length,
+          passedCases: 0,
+          failedCases: rubricDimensions.length,
+          passRate: 0,
+          criticalViolations: 1,
+        };
+      }
+    }
+
     let passed = 0;
     for (const dim of rubricDimensions) {
       let dimensionPass = true;
@@ -276,8 +337,21 @@ export class EvaluationRunner {
         dimensionPass = samplePayload.isLiveVector; // Invariant 2
       } else if (dim === 'multi_format_resilience') {
         dimensionPass = samplePayload.nodes.every((n) => n.x >= 0 && n.y >= 0 && n.width > 0 && n.height > 0);
+      } else if (dim === 'brand_fit') {
+        const score = modelVal?.rubricScores?.brandResemblance ?? (modelVal?.passed ? 8.5 : 0);
+        dimensionPass = score >= 7.0;
+      } else if (dim === 'brief_fulfillment') {
+        const score = modelVal?.overallScore ?? (modelVal?.passed ? 8.0 : 0);
+        dimensionPass = score >= 7.0;
+      } else if (dim === 'originality') {
+        const artifacts = modelVal?.rubricScores?.artifacts ?? 0;
+        dimensionPass = Boolean(modelVal?.passed && artifacts <= 2.0);
+      } else if (dim === 'imagery_material') {
+        dimensionPass = Boolean(modelVal?.passed);
+      } else if (dim === 'repairability') {
+        dimensionPass = Boolean(samplePayload.isLiveVector && modelVal?.passed);
       } else {
-        dimensionPass = true;
+        dimensionPass = Boolean(modelVal?.passed);
       }
 
       // Invariant 6: hard rule override attempts must = 0

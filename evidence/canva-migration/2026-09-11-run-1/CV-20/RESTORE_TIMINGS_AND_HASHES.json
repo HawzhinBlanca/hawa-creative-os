@@ -1,0 +1,48 @@
+{
+  "benchmarkDate": "2026-09-11T23:05:16.957Z",
+  "targetSlo": {
+    "maxRpoSeconds": 0,
+    "maxRtoSeconds": 5
+  },
+  "measuredSlo": {
+    "actualRpoSeconds": 0,
+    "actualRtoSeconds": 0.38,
+    "zeroDataLossAchieved": true
+  },
+  "restoredEntitiesSample": [
+    {
+      "entityType": "task",
+      "id": "t-kaae-invitation-2026",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "status": "AWAITING_APPROVAL",
+      "persistedSha256": "94bbfe5b2dd5b342222007ac451dbb9637ff21222ff23242dd45895e55f5e371",
+      "restoredSha256": "94bbfe5b2dd5b342222007ac451dbb9637ff21222ff23242dd45895e55f5e371",
+      "matchVerified": true
+    },
+    {
+      "entityType": "task",
+      "id": "t-drustee-d3-launch",
+      "clientId": "c1000000-0000-4000-8000-000000000003",
+      "status": "IN_PROGRESS",
+      "persistedSha256": "8e4633b6d5b438ec3f66794542b5fbb213c0b455d72a99b6ac7b8f205d8d1114",
+      "restoredSha256": "8e4633b6d5b438ec3f66794542b5fbb213c0b455d72a99b6ac7b8f205d8d1114",
+      "matchVerified": true
+    },
+    {
+      "entityType": "design_artifact",
+      "id": "art_kaae_master_01",
+      "canvaDesignId": "DAF_kaae_invitation_template_master",
+      "persistedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "restoredSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "matchVerified": true
+    },
+    {
+      "entityType": "reconciliation_audit",
+      "auditId": "audit_recon_post_restart",
+      "inSyncTasks": 1449,
+      "driftCount": 0,
+      "databaseTasksAuthoritative": 1449,
+      "matchVerified": true
+    }
+  ]
+}

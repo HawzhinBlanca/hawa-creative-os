@@ -1,0 +1,19 @@
+{
+  "task_id": "CV-01",
+  "timestamp": "2026-09-11T22:19:00+03:00",
+  "git_commit": "f597bffbf8af3fb1bc65f1028dc161f095ab9ccf",
+  "working_tree_modified_count": 127,
+  "key_file_sha256": {
+    "apps/core/src/app.ts": "097f5e9ab620e622852c041ddc366aaf0467cef12cfeb3ca258ef7a3e90a945f",
+    "apps/desk/src/screens/ReviewScreen.tsx": "8d31b0e518a5ce7d2138fb6525cf1f52d279814b0d1fa50a316a3e57d79812ee",
+    "apps/desk/src/assets/editorPresets.ts": "116711b8073cd4c2ba3be830ec8e74ee809da9fad37fbd8a7aac5c7c6097969d",
+    "apps/worker/src/outbox-consumer.ts": "60332da4d823a54334c027c56cda7e8b439f24495f3c444e39b1edbda9be0526",
+    "packages/db/src/repositories/task.repository.ts": "4f99daacc3da6ac2c2369cd978dfec5e194d4fc1b9961e8d40e263d8afe00672",
+    "packages/db/src/repositories/outbox.repository.ts": "a67da85d0ea8972f9753438c09edf4854a67d2d17bc8c905cbc120cc0e3b30c9",
+    "packages/db/src/types.ts": "c65d8e96fa1c07c110faedd29c0f3612023d6942447d15dfef38e0216419f20b",
+    "db/schema.sql": "c953b1786ee16972bd37a0437352509c39d4e40ecdd34ff80278fae96dcfad52",
+    "db/seed.sql": "97df7efe33699bf6607d8dcdf3d45bc28d03a21684104329057ffa3d585fd12b",
+    "adrs/018_admit_polotno_editor.md": "aba2104de1c8f83864cefbc7faa514b3adf3493182f69dc1c1d186990fc3ef02",
+    "adrs/019_editor_decomposition_architecture.md": "3a2c85704806a9d67e0b68c7e7c126a8cfff2e483dbf459b0b9d8731c5bf0721"
+  }
+}

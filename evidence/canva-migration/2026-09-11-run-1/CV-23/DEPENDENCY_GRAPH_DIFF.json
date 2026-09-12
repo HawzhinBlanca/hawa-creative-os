@@ -1,0 +1,36 @@
+{
+  "task": "CV-23",
+  "target": "Remove Figma and legacy editor runtime completely",
+  "timestamp": "2026-09-12T02:25:00.000Z",
+  "packages": {
+    "@hawa/desk": {
+      "removedDependencies": {
+        "polotno": "^4.12.1"
+      },
+      "remainingDependencies": {
+        "dompurify": "^3.4.15",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+      },
+      "devDependencies": {
+        "@types/dompurify": "^3.2.0",
+        "@types/react": "^19.0.8",
+        "@types/react-dom": "^19.0.3",
+        "@vitejs/plugin-react": "^4.3.4",
+        "typescript": "^5.8.2",
+        "vite": "^6.1.0"
+      }
+    }
+  },
+  "pnpmLockDiff": {
+    "transitivePackagesRemoved": 59,
+    "netPackageDelta": -59,
+    "lockfileStatus": "clean_consistent",
+    "resolvedDependenciesCount": 207,
+    "reusedStoreCount": 132
+  },
+  "zeroResidualVendors": true,
+  "admittedVendors": [
+    "canva"
+  ]
+}

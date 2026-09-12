@@ -1,0 +1,21 @@
+{
+  "totalClassified": 10,
+  "migratedVerified": 6,
+  "archivedReadOnly": 2,
+  "blockedNeedsAccess": 2,
+  "failedCount": 0,
+  "silentlyDroppedCount": 0,
+  "unauthorizedReapprovedCount": 0,
+  "byFormat": {
+    "hycanvas_json": 4,
+    "polotno_json": 2,
+    "figma_rest_ref": 2,
+    "legacy_zip_pack": 2
+  },
+  "byState": {
+    "active_inflight": 8,
+    "approved_delivered": 0,
+    "draft": 0,
+    "archived": 2
+  }
+}

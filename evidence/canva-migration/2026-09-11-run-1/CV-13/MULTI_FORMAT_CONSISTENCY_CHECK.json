@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-09-11T20:36:55.920Z",
+  "canvaDesignId": "DAF_kaae_invitation_cv13_master",
+  "requiredVariants": [
+    "4:5",
+    "1:1",
+    "9:16"
+  ],
+  "capturedVariants": [
+    {
+      "variant": "4:5 (1080x1350)",
+      "format": "png",
+      "sha256": "sha256_6d028b44cdc30c4a0e258268443f05cd1e9d0702c87f617493f0e51e205f82f4",
+      "byteSize": 45
+    },
+    {
+      "variant": "1:1 (1080x1080)",
+      "format": "png",
+      "sha256": "sha256_2a8042a00656eb580efa9d48fb2f7be2ccec10b71a0a925979d88ed76edda840",
+      "byteSize": 45
+    },
+    {
+      "variant": "9:16 (1080x1920)",
+      "format": "png",
+      "sha256": "sha256_ee55fd8fefd32b7a92cc8e670d9a48e1cd8dad27de32007998e26c1f3a0865dd",
+      "byteSize": 45
+    },
+    {
+      "variant": "Print Document",
+      "format": "pdf_print",
+      "colorSpace": "cmyk",
+      "dpi": 300,
+      "sha256": "sha256_6fad760b2dfdd4079ed1100bc2925435a370ef3c0d1d03b3938c8a683ac56b42",
+      "byteSize": 808
+    },
+    {
+      "variant": "Digital Distribution",
+      "format": "pdf_standard",
+      "colorSpace": "srgb",
+      "dpi": 150,
+      "sha256": "sha256_ea8a76af95f027ad0ddcb3ef079c47625054942458e7f33a6d9c7dddb25b2218",
+      "byteSize": 807
+    }
+  ],
+  "atomicPublishResult": {
+    "captureSetId": "edbab52b-faae-4c79-93f2-d0685dd06430",
+    "version": 2,
+    "capturedArtifactSetHash": "sha256_d72d3dd62ea95b78a94a25c1032750b51bb2fd2e29a97688a71a252d4df063c4",
+    "isSourceComplete": true,
+    "createdAt": "2026-09-11T20:36:55.920Z"
+  },
+  "status": "PASS",
+  "acceptance": "All required variants, hashes, sizes, source-observation coverage and capture time persisted atomically."
+}

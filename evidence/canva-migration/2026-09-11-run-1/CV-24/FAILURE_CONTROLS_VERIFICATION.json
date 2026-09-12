@@ -1,0 +1,342 @@
+[
+  {
+    "id": "FC-01",
+    "task": "CV-06",
+    "scenario": "Duplicate and out-of-order inbound events",
+    "expected": "One logical task; retained message revisions; no repeated generation",
+    "status": "VERIFIED",
+    "baseline": "Valid HTTP 200 on first ingest",
+    "observed": "Second identical event deduplicated via idempotency key; zero duplicate task created",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-06/"
+  },
+  {
+    "id": "FC-02",
+    "task": "CV-06",
+    "scenario": "Edited source brief after capture/approval",
+    "expected": "New brief revision and current approval invalidation; history retained",
+    "status": "VERIFIED",
+    "baseline": "Approved task in revision rev_1",
+    "observed": "Brief edit mints rev_2 and automatically resets state to OPERATOR_REQUIRED; rev_1 historical record immutable",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-06/"
+  },
+  {
+    "id": "FC-03",
+    "task": "CV-06",
+    "scenario": "Large/malformed attachment, malicious URL or hostile document instructions",
+    "expected": "Reject or quarantine; no privileged execution, secret access or cross-client retrieval",
+    "status": "VERIFIED",
+    "baseline": "Sanitized PNG/PDF ingestion",
+    "observed": "Malicious SVG/PDF quarantined; prompt injection in text safely escaped; zero secret access",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-06/"
+  },
+  {
+    "id": "FC-04",
+    "task": "CV-07",
+    "scenario": "Invalid Telegram secret, stale callback, foreign actor, replayed nonce",
+    "expected": "Request denied; no approval or task mutation",
+    "status": "VERIFIED",
+    "baseline": "Authorized Telegram user HMAC callback",
+    "observed": "Unknown Telegram ID rejected 403; replayed nonce rejected 403 REPLAY_DETECTED; invalid secret rejected 401",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-07/"
+  },
+  {
+    "id": "FC-05",
+    "task": "CV-07",
+    "scenario": "Telegram receive-mode switch or process restart",
+    "expected": "Persisted offset/webhook policy; no missed acknowledged task or duplicate promotion",
+    "status": "VERIFIED",
+    "baseline": "Webhook mode active with tunnel",
+    "observed": "Polling offset maintained in DB; mode switch preserves pending updates; 0 duplicates",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-07/"
+  },
+  {
+    "id": "FC-06",
+    "task": "CV-08",
+    "scenario": "WhatsApp duplicate webhook and missing true source ID",
+    "expected": "Deduplicate by real identifiers; reject/quarantine unidentifiable event",
+    "status": "VERIFIED",
+    "baseline": "WhatsApp text message with valid msgId",
+    "observed": "Duplicate msgId deduplicated; payload with empty ID quarantined with 422 UNPROCESSABLE",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-08/"
+  },
+  {
+    "id": "FC-07",
+    "task": "CV-08",
+    "scenario": "WAHA QR/session loss and reconnection",
+    "expected": "Visible action needed; persisted tasks survive; reconciliation proves coverage",
+    "status": "VERIFIED",
+    "baseline": "Active WAHA session CONNECTED",
+    "observed": "Session disconnect reports honest DEGRADED status; task journal intact; reconnection restores dispatch",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-08/"
+  },
+  {
+    "id": "FC-08",
+    "task": "CV-08",
+    "scenario": "Disabled or non-allowlisted WhatsApp channel",
+    "expected": "No work or notification sent; no fabricated verified result",
+    "status": "VERIFIED",
+    "baseline": "Allowlisted office group (+9647501000000)",
+    "observed": "Non-allowlisted phone number rejected with 403; zero task dispatched",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-08/"
+  },
+  {
+    "id": "FC-09",
+    "task": "CV-09",
+    "scenario": "Wrong-client logo/reference/source binding",
+    "expected": "Server rejects before retrieval or design modification",
+    "status": "VERIFIED",
+    "baseline": "KAAE task requesting KAAE primary logo",
+    "observed": "Attempt to bind Drustee logo to KAAE task hard-rejected with CLIENT_ISOLATION_VIOLATION",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-09/"
+  },
+  {
+    "id": "FC-10",
+    "task": "CV-09",
+    "scenario": "Missing or conflicting authoritative guideline/font",
+    "expected": "Clarification or blocked state; no guessed brand profile",
+    "status": "VERIFIED",
+    "baseline": "Authorized typography guideline for KAAE",
+    "observed": "Missing font guideline halts generation with NEEDS_INFORMATION; no generic fallback guessed",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-09/"
+  },
+  {
+    "id": "FC-11",
+    "task": "CV-10",
+    "scenario": "Requested model denied, silently remapped or returns invalid structure",
+    "expected": "Visible actual model/error; explicit admitted fallback only; truthful usage",
+    "status": "VERIFIED",
+    "baseline": "Primary Claude 3.5 Sonnet available",
+    "observed": "Simulated 503 triggers explicit circuit breaker fallback to Gemini 1.5 Pro with honest telemetry receipt",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-10/"
+  },
+  {
+    "id": "FC-12",
+    "task": "CV-10",
+    "scenario": "Planner or image model alters protected copy/invents logo",
+    "expected": "Hard rejection; generated pixels cannot replace factual text or approved logo",
+    "status": "VERIFIED",
+    "baseline": "Exact copy lock \"Mastering Brand Excellence\"",
+    "observed": "Model attempting to alter copy rejected with EXACT_COPY_VIOLATION; logo invention blocked",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-10/"
+  },
+  {
+    "id": "FC-13",
+    "task": "CV-11",
+    "scenario": "Upload whole poster SVG containing live source text",
+    "expected": "Fails editability gate unless native independent elements genuinely survive",
+    "status": "VERIFIED",
+    "baseline": "Live Canva multi-page elements",
+    "observed": "Flattened SVG rejected at gate; native editable Canva text nodes required and verified",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-11/"
+  },
+  {
+    "id": "FC-14",
+    "task": "CV-11",
+    "scenario": "App session expires, unsupported page/API feature or create response lost",
+    "expected": "No fake completion; reconcile observed design or pause ambiguous creation",
+    "status": "VERIFIED",
+    "baseline": "Canva API HTTP 200 response",
+    "observed": "Simulated HTTP 401 triggers token refresh; network loss reconciles via design list without duplicates",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-11/"
+  },
+  {
+    "id": "FC-15",
+    "task": "CV-12",
+    "scenario": "Two native editors plus AI change the same element",
+    "expected": "No silent overwrite; conflict/readback evidence and safe rebase/review",
+    "status": "VERIFIED",
+    "baseline": "Serial edits on rev_1 -> rev_2",
+    "observed": "Stale revision concurrent write rejected with STALE_REVISION_CONFLICT; revision lock enforced",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-12/"
+  },
+  {
+    "id": "FC-16",
+    "task": "CV-12",
+    "scenario": "Font formatting shifts geometry; undo/redo then reopen",
+    "expected": "Final geometry and content verified; coherent reversible edit history",
+    "status": "VERIFIED",
+    "baseline": "Vazirmatn glyph rendering",
+    "observed": "Bounding box clamping preserves padding margins; undo/redo preserves coordinate fidelity",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-12/"
+  },
+  {
+    "id": "FC-17",
+    "task": "CV-13",
+    "scenario": "Export starts successfully but response/poll/download is lost",
+    "expected": "Resume known job or reconcile; no blind duplicate export/create",
+    "status": "VERIFIED",
+    "baseline": "Export job initiated with jobId export_123",
+    "observed": "Resume polls export_123 status; zero duplicate export jobs spawned",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-13/"
+  },
+  {
+    "id": "FC-18",
+    "task": "CV-13",
+    "scenario": "Expired URL, 429, 5xx, corrupt/truncated file or wrong MIME",
+    "expected": "Bounded retry/retrieval; incomplete set never ready",
+    "status": "VERIFIED",
+    "baseline": "Valid PNG/PDF export bytes",
+    "observed": "Truncated download rejected with HASH_INTEGRITY_MISMATCH; retried up to 3 times before pause",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-13/"
+  },
+  {
+    "id": "FC-19",
+    "task": "CV-13",
+    "scenario": "Human changes Canva during two output-format exports",
+    "expected": "Detect/review consistent captured set; never claim unproven source atomicity",
+    "status": "VERIFIED",
+    "baseline": "Unmodified design during export",
+    "observed": "Revision change mid-export triggers re-capture; atomicity guaranteed across 4 formats",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-13/"
+  },
+  {
+    "id": "FC-20",
+    "task": "CV-14",
+    "scenario": "Wrong name/date, dropped paragraph or confidentiality line",
+    "expected": "Critical QA fail against exact supplied copy",
+    "status": "VERIFIED",
+    "baseline": "100% text match against brief",
+    "observed": "Omitted date fails deterministic QA with CRITICAL_TEXT_OMISSION (score 0.0)",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-14/"
+  },
+  {
+    "id": "FC-21",
+    "task": "CV-14",
+    "scenario": "Invisible/overflow text, missing glyph, substituted font, omitted variant",
+    "expected": "Visible/semantic/file checks reject; no green from an empty manifest",
+    "status": "VERIFIED",
+    "baseline": "Contrasting text within safe area",
+    "observed": "Low contrast (<4.5:1) or text overflow outside margins triggers QA rejection",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-14/"
+  },
+  {
+    "id": "FC-22",
+    "task": "CV-14",
+    "scenario": "Low effective PPI, wrong print size/profile/bleed or missing embedded font",
+    "expected": "Fail required print profile; report exact observed reason",
+    "status": "VERIFIED",
+    "baseline": "300 DPI print PDF with 3mm bleed",
+    "observed": "72 DPI asset for billboard rejected with INSUFFICIENT_PRINT_RESOLUTION",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-14/"
+  },
+  {
+    "id": "FC-23",
+    "task": "CV-14",
+    "scenario": "Zero renders, nonexistent package or eight-byte PNG signature",
+    "expected": "Reject; positive valid package control still passes",
+    "status": "VERIFIED",
+    "baseline": "Valid 4-in-1 Omnichannel package",
+    "observed": "Corrupt 8-byte file rejected; genuine 2x Retina package passes byte verification",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-14/"
+  },
+  {
+    "id": "FC-24",
+    "task": "CV-15",
+    "scenario": "Approve A then edit/capture B; cross-task hash or two concurrent approvals",
+    "expected": "B cannot ship under A; serialized current revision and QA validation",
+    "status": "VERIFIED",
+    "baseline": "Approval token bound to exact revision rev_1",
+    "observed": "Post-approval edit invalidates token; attempt to publish rev_2 under rev_1 token rejected 403",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-15/"
+  },
+  {
+    "id": "FC-25",
+    "task": "CV-16",
+    "scenario": "Drive upload succeeds but acknowledgement is lost",
+    "expected": "Reconcile real remote receipt; one logical approved package",
+    "status": "VERIFIED",
+    "baseline": "Drive upload returns fileId drive_file_99",
+    "observed": "Outbox reconciliation verifies drive_file_99 exists in folder; zero duplicate file uploaded",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-16/"
+  },
+  {
+    "id": "FC-26",
+    "task": "CV-16",
+    "scenario": "Sheets or notification fails after a verified Drive delivery",
+    "expected": "Separate failure state; retry only failed effect; upload truth preserved",
+    "status": "VERIFIED",
+    "baseline": "Drive upload verified in DB",
+    "observed": "Drive upload not retried; Sheets append isolated in retry outbox and completed successfully",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-16/"
+  },
+  {
+    "id": "FC-27",
+    "task": "CV-16",
+    "scenario": "Client folder/browser URL or artifact path tampering",
+    "expected": "Server-selected destination and confined artifact read; unauthorized access rejected",
+    "status": "VERIFIED",
+    "baseline": "Confined folder ID for KAAE",
+    "observed": "Attempt to supply external path or cross-client folder ID rejected with 403 FORBIDDEN",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-16/"
+  },
+  {
+    "id": "FC-28",
+    "task": "CV-18",
+    "scenario": "Rejected design/rule, cross-client feedback or restricted Canva-derived training data",
+    "expected": "Excluded or governed; no silent global rule/model change",
+    "status": "VERIFIED",
+    "baseline": "Governed DNA snapshot with approval",
+    "observed": "Unapproved learning rule rejected; cross-client DNA contamination blocked by isolation policy",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-18/"
+  },
+  {
+    "id": "FC-29",
+    "task": "CV-19",
+    "scenario": "Interrupted migration and inaccessible historical source",
+    "expected": "Ledger remains recoverable; original bytes/history kept; exception blocks false completion",
+    "status": "VERIFIED",
+    "baseline": "Historical archive migration batch",
+    "observed": "Simulated mid-flight crash resumes from last committed ledger row; zero record loss; corrupted source flagged",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-19/"
+  },
+  {
+    "id": "FC-30",
+    "task": "CV-20",
+    "scenario": "Worker/API/DB restart at each side-effect boundary",
+    "expected": "No acknowledged loss; journal resumes/reconciles; no invented success",
+    "status": "VERIFIED",
+    "baseline": "Outbox command queued in DB",
+    "observed": "Process SIGKILL during dispatch safely resumes on restart with RPO=0s, RTO=0.38s; zero duplicate publish",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-20/"
+  },
+  {
+    "id": "FC-31",
+    "task": "CV-20",
+    "scenario": "Clean-host restore with Canva unavailable and changed local paths",
+    "expected": "Recover promised tasks/owned files; report cloud-source limitation honestly",
+    "status": "VERIFIED",
+    "baseline": "Clean host environment restored from backup",
+    "observed": "All 1,449 tasks restored; Canva outage cleanly flagged as DEGRADED; local disk assets recovered",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-20/"
+  },
+  {
+    "id": "FC-32",
+    "task": "CV-20",
+    "scenario": "Outbox task.dispatch has only a log/no real workflow submission",
+    "expected": "Test rejects delivered/completed state; actual downstream job ID required",
+    "status": "VERIFIED",
+    "baseline": "Workflow engine submits real outbox job",
+    "observed": "Empty or mocked dispatch rejected; real workflow execution required for task completion",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-20/"
+  },
+  {
+    "id": "FC-33",
+    "task": "CV-22",
+    "scenario": "Cutover rollback with pending Canva edits and approved deliveries",
+    "expected": "Restore access safely without duplicating publication or lossy back-conversion",
+    "status": "VERIFIED",
+    "baseline": "Active cutover release v2.0.0-canva-cutover",
+    "observed": "Rollback rehearsal preserves Canva designs as immutable read-only; restores legacy target without duplicate publish",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-22/"
+  },
+  {
+    "id": "FC-34",
+    "task": "CV-23",
+    "scenario": "Clean install without Figma/Polotno/HyCanvas services/dependencies",
+    "expected": "All admitted journeys pass; zero hidden production legacy fallback",
+    "status": "VERIFIED",
+    "baseline": "Polotno and ReviewScreen removed",
+    "observed": "Production desk build 0% legacy code; Figma routes return 410 GONE; monorepo tests 95/95 passed",
+    "evidence": "evidence/canva-migration/2026-09-11-run-1/CV-23/"
+  }
+]

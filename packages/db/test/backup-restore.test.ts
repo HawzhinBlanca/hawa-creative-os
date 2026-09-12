@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseSchemaSql, checkDatabaseSchema } from '../src/index.js';
+import { parseSchemaSql, checkDatabaseSchema, resolveWorkspaceFile } from '../src/index.js';
 
-describe('Horizon 4: Production Database Backup, Wipe & Clean-Host Recovery Drill', () => {
-  const root = resolve(process.cwd());
-  const schemaPath = resolve(root, 'db/schema.sql');
-  const rlsPath = resolve(root, 'db/rls.sql');
-  const seedPath = resolve(root, 'db/seed.sql');
+describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Suite)', () => {
+  const schemaPath = resolveWorkspaceFile('db/schema.sql');
+  const rlsPath = resolveWorkspaceFile('db/rls.sql');
+  const seedPath = resolveWorkspaceFile('db/seed.sql');
 
   it('generates a complete database snapshot containing schema, RLS, and seed data', () => {
     expect(existsSync(schemaPath)).toBe(true);

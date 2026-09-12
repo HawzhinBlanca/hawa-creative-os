@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "evaluated_at": "2026-09-11T22:21:30Z",
+  "scope": "Canva and Model Gateway authentication, transport permissions, and plan entitlements audit",
+  "canva_credentials": {
+    "CANVA_API_KEY": {
+      "configured": false,
+      "status": "NOT_SET",
+      "notes": "Headless backend API token not provided in process environment"
+    },
+    "CANVA_CLIENT_ID": {
+      "configured": false,
+      "status": "NOT_SET",
+      "notes": "Canva Connect OAuth client ID not provided"
+    },
+    "CANVA_CLIENT_SECRET": {
+      "configured": false,
+      "status": "NOT_SET",
+      "notes": "Canva Connect OAuth client secret not provided"
+    }
+  },
+  "canva_account_state": {
+    "account_tier": "Pro (verified via brand kit and tool inspection)",
+    "brand_kit_id": "kAHAK-4ShnQ",
+    "brand_kit_name": "KAAE",
+    "observed_designs": [
+      {
+        "design_id": "DAHR4TSWs60",
+        "title": "STAY CONNECTED WITH KAAE",
+        "role": "Original reference design (preserved untouched)"
+      },
+      {
+        "design_id": "DAHU6ovIEc4",
+        "title": "HAWA CANVA FEASIBILITY — TEST ONLY — KAAE",
+        "role": "Isolated test copy design",
+        "url": "https://www.canva.com/design/DAHU6ovIEc4/MvQS6y7k7_BceoHqjc0IAw/edit"
+      },
+      {
+        "design_id": "DAHU6lCA2Ik",
+        "title": "KAAE_Standards_Higher_Ed_1080x1350",
+        "role": "SVG transfer test design (flattened image observation)",
+        "url": "https://www.canva.com/design/DAHU6lCA2Ik/3zZ55C8h6OytVO3aJQabJA/edit"
+      }
+    ]
+  },
+  "canva_transport_evaluation": {
+    "connect_rest_api": {
+      "status": "blocked",
+      "reason": "Private Connect integrations require Canva Enterprise agreement; public integrations require review. No credentials configured in current runtime.",
+      "documentation": "https://www.canva.dev/docs/connect/"
+    },
+    "canva_mcp": {
+      "status": "tested_bounded",
+      "proven_capabilities": [
+        "search_designs",
+        "start_editing_transaction",
+        "perform_editing_operations (text replace, position, format)",
+        "commit_editing_transaction",
+        "cancel_editing_transaction",
+        "upload_asset"
+      ],
+      "limitations": [
+        "No automated export tool in 32-tool runtime set",
+        "Cannot create arbitrary new text containers or arbitrary typeface styling",
+        "Host AI connector does not equal Hawa backend service credentials"
+      ]
+    },
+    "canva_apps_sdk": {
+      "status": "supported_target",
+      "capabilities": [
+        "In-editor sidebar element generation",
+        "Native richtext and primitive shape injection",
+        "Export dialog initiation"
+      ],
+      "prerequisites": "Requires building and deploying custom Canva App inside developer team"
+    },
+    "native_editor_handoff": {
+      "status": "tested_primary",
+      "capabilities": [
+        "Full desktop/browser editing with zero Hawa canvas maintenance",
+        "Rich typography, Arabic/Kurdish font support, Kurdish layout",
+        "Native PDF Print download (CMYK, crop marks, bleed)",
+        "PNG / SVG export"
+      ],
+      "verification": "Proven in feasibility research; verified by user manual actions"
+    }
+  },
+  "model_credentials": {
+    "OPENAI_API_KEY": {
+      "configured": true,
+      "status": "ACTIVE",
+      "key_length": 164,
+      "entitled_models": ["gpt-4o", "gpt-4o-mini"],
+      "missing_or_forbidden_models": ["gpt-6-astra (404)", "gpt-image-2.5-sunburst (404)"]
+    },
+    "ANTHROPIC_API_KEY": {
+      "configured": true,
+      "status": "ACTIVE",
+      "key_length": 108,
+      "entitled_models": ["claude-sonnet-5", "claude-opus-5"],
+      "missing_models": ["claude-3-5-sonnet-20241022 (404)"]
+    }
+  }
+}

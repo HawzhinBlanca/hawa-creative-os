@@ -1,0 +1,22 @@
+{
+  "documentId": "doc_rollback_sample_07",
+  "taskId": "task_rollback_sample_07",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "title": "Rollback Sample Test Document",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "6f9ba4ae1772974d73c8f422fed4e0c547ff451a671057849f110a4f0ce3625f",
+  "archivedAt": "2026-09-12T05:33:18.317Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "documentId": "doc_rollback_sample_07",
+    "layers": [
+      {
+        "id": "l1",
+        "type": "text",
+        "text": "Text to preserve forever"
+      }
+    ]
+  },
+  "metadata": {}
+}

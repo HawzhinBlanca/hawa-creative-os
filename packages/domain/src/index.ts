@@ -9,4 +9,4 @@ export * from './feedback.js';
 export * from './orthography.js';
 export * from './sanitizer.js';
 export * from './workflow-controller.js';
-export * from './fixtures/kaae-client-dna.js';
+export * from './fixtures/index.js';

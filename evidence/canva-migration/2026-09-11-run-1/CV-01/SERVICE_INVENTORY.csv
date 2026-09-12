@@ -1,0 +1,15 @@
+service_name,type,port_or_endpoint,purpose,dependencies,migration_action
+hawa-core,Application (Node.js/Hono),3001,API gateway and task lifecycle authority,PostgreSQL; Restate; integrations,Preserve core task authority; add Canva integration routes; retire Figma routes
+hawa-postgres,Database (PostgreSQL 17 + pgvector),127.0.0.1:54332->5432,Authoritative single source of business truth,None,Preserve; add Canva binding tables
+hawa-worker,Worker (Node.js),9080,Durable outbox consumer and task executor,PostgreSQL; ModelGateway,Preserve; dispatch Canva automation jobs
+hawa-desk,Web App (React/Vite/Tailwind),80 (Nginx),Visual editing and operator review interface,hawa-core,Replace monolithic ReviewScreen with lean Work/Clients/Settings desk
+hawa-nginx,Reverse Proxy,127.0.0.1:8080->80,Static file serving and API reverse proxy,hawa-desk; hawa-core,Preserve
+hawa-restate,Durable Execution Engine (Restate 1.7.0),Internal,Durable workflow and event coordination,None,Preserve
+figma-bridge,Integration / Adapter,External (api.figma.com),Figma REST/Plugin lease and mutation bridge,Figma API,Retire completely
+hycanvas-editor,Frontend Component,Embedded (ReviewScreen),Custom canvas vector editing engine,None,Retire completely
+polotno-engine,Frontend SDK (Polotno v1.14),Embedded (ReviewScreen),Embedded canvas editor engine,Konva,Retire completely
+comfyui,Local AI Worker (Optional),127.0.0.1:8188,Local diffusion and asset generation,PyTorch/GPU,Optional profile; preserve direct provider fallback
+model-gateway,Integration Library,In-process,Multi-provider model router (Google/Anthropic/OpenAI),Provider APIs,Preserve role-based model router
+telegram-bridge,Integration Adapter,External (api.telegram.org),Telegram bot and notification adapter,Telegram Bot API,Preserve as first-class adapter
+waha-adapter,Integration Adapter,127.0.0.1:3000,WhatsApp HTTP API adapter,Chromium/WhatsApp Web,Preserve with honest boundaries
+google-publisher,Integration Adapter,External (Google APIs),Google Drive delivery and Sheets reporting,Google Workspace API,Preserve

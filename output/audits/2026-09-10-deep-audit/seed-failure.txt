@@ -1,0 +1,1 @@
+Unmodified seed against empty live-schema clone failed (SQLSTATE 23503): client_memberships uses tenant 00000000-0000-4000-8000-000000000001 for Drustee and FastPay, but clients belong to 00000000-0000-4000-a000-000000000001. Transaction rolled back.

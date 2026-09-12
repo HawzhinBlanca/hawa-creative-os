@@ -1,0 +1,40 @@
+{
+  "documentId": "doc_fastpay_gateway_04",
+  "taskId": "t-fastpay-gateway-launch",
+  "clientId": "c1000000-0000-4000-8000-000000000005",
+  "title": "FastPay Direct Merchant Gateway Integration",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "e60cc0565715eb59b150edaf7c9be1da639dd2579570a253ae7a92911246505b",
+  "archivedAt": "2026-09-11T23:02:03.371Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "layers": [
+      {
+        "id": "bg",
+        "type": "frame",
+        "fill": "#0F172A",
+        "width": 1080,
+        "height": 1350
+      },
+      {
+        "id": "head",
+        "type": "text",
+        "text": "فاستپەی - خێراترین دەروازەی پارەدانی ئەلیکترۆنی"
+      },
+      {
+        "id": "sub",
+        "type": "text",
+        "text": "پارەدانی پارێزراو بۆ سەرجەم فرۆشگاکانی کوردستان و عێراق"
+      },
+      {
+        "id": "cta",
+        "type": "text",
+        "text": "ئێستا ئەپڵیکەیشن دابەزێنە"
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#0F172A"
+  }
+}

@@ -59,9 +59,13 @@ export interface InboundActionPayload {
 /**
  * Computes deterministic HMAC signature for an interactive action to prevent tampering.
  */
-export function computeActionSignature(taskId: string, action: string, secretKey = 'hawa_safe_secret_key'): string {
+export function computeActionSignature(taskId: string, action: string, secretKey?: string): string {
+  const key = secretKey || process.env.HAWA_ACTION_HMAC_SECRET;
+  if (!key) {
+    throw new Error('HAWA_ACTION_HMAC_SECRET or explicit secretKey is required to compute action signature');
+  }
   return crypto
-    .createHmac('sha256', secretKey)
+    .createHmac('sha256', key)
     .update(`${taskId}:${action}`)
     .digest('hex')
     .slice(0, 32);
@@ -74,11 +78,18 @@ export function verifyActionSignature(
   taskId: string,
   action: string,
   providedSignature: string,
-  secretKey = 'hawa_safe_secret_key'
+  secretKey?: string
 ): boolean {
-  const expected = computeActionSignature(taskId, action, secretKey);
+  if (!providedSignature || typeof providedSignature !== 'string') return false;
+  const key = secretKey || process.env.HAWA_ACTION_HMAC_SECRET;
+  if (!key) return false;
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(providedSignature));
+    const expected = computeActionSignature(taskId, action, key);
+    const targetExpected = providedSignature.length === 16 ? expected.slice(0, 16) : expected;
+    const bufExpected = Buffer.from(targetExpected);
+    const bufProvided = Buffer.from(providedSignature);
+    if (bufExpected.length !== bufProvided.length) return false;
+    return crypto.timingSafeEqual(bufExpected, bufProvided);
   } catch {
     return false;
   }
@@ -89,7 +100,7 @@ export function verifyActionSignature(
  */
 export function buildOutboundReviewDispatch(
   payload: CampaignReviewDispatchPayload,
-  secretKey = 'hawa_safe_secret_key'
+  secretKey?: string
 ): OutboundDispatchReceipt {
   const dispatchId = `disp_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const baseUrl = payload.callbackBaseUrl || 'http://localhost:3001';

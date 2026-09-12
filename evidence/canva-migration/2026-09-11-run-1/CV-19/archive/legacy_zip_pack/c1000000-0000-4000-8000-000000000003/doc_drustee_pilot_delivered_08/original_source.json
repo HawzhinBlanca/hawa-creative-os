@@ -1,0 +1,16 @@
+{
+  "documentId": "doc_drustee_pilot_delivered_08",
+  "taskId": "t-drustee-pilot-delivered-01",
+  "clientId": "c1000000-0000-4000-8000-000000000003",
+  "title": "Drustee Evidence-First Pilot Deliverable Package",
+  "sourceFormat": "legacy_zip_pack",
+  "lifecycleState": "archived",
+  "sourceSha256": "2c807cda30e3a394586124a4f32ab37465ef9e5242d0799f7abccca58590bec3",
+  "archivedAt": "2026-09-11T23:02:03.372Z",
+  "sourceContent": {
+    "packId": "drustee_pilot_package_signed_sha256",
+    "deliveredAt": "2026-09-04T18:30:00Z",
+    "driveUrl": "https://drive.google.com/drive/folders/drustee_pilot_archive"
+  },
+  "metadata": {}
+}

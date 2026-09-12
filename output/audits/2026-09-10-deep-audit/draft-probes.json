@@ -1,0 +1,59 @@
+{
+  "draftStoredFields": [
+    "title",
+    "copy",
+    "copyCkb",
+    "clientId",
+    "savedAt"
+  ],
+  "quotaErrorPropagated": true,
+  "queueReturnedSuccess": true,
+  "actuallyQueued": 1,
+  "flush": {
+    "success": 0,
+    "failed": 2
+  },
+  "queueAfterFailedDownstream": 2,
+  "calls": [
+    {
+      "route": "/v1/tasks",
+      "body": {
+        "clientId": "audit-client",
+        "title": "Offline task",
+        "priority": "routine",
+        "description": "Keep this",
+        "source": {
+          "platform": "hawa_desk",
+          "externalId": "offline-queue"
+        }
+      }
+    },
+    {
+      "route": "/v1/tasks/audit-task/route",
+      "body": {
+        "clientId": "audit-client",
+        "taskRoute": "standard_generation"
+      }
+    },
+    {
+      "route": "/v1/tasks",
+      "body": {
+        "clientId": "audit-client",
+        "title": "Downstream failure",
+        "priority": "routine",
+        "description": "Exact price 25",
+        "source": {
+          "platform": "hawa_desk",
+          "externalId": "offline-queue"
+        }
+      }
+    },
+    {
+      "route": "/v1/tasks/audit-task/route",
+      "body": {
+        "clientId": "audit-client",
+        "taskRoute": "standard_generation"
+      }
+    }
+  ]
+}

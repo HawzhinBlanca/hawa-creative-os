@@ -35,14 +35,23 @@ export interface QARequest {
   clientDna: JsonObject;
   profile: { name: string; version: string; rules: JsonObject };
   repairCycle: 0 | 1 | 2;
+  captureSet?: any;
+  capturedPackageId?: string;
+  advisoryVisionScore?: number;
+  confidentialTokens?: string[];
 }
 
 export interface QAReport {
-  status: 'passed' | 'failed' | 'error';
+  status: 'passed' | 'failed' | 'error' | 'blocked';
   criticalPass: boolean;
   checks: QACheckResult[];
   findings: QAFinding[];
   reportHash: SHA256;
+  advisorySummary?: {
+    score?: number;
+    visualCritique?: string;
+    waivedHardFailuresCount: number;
+  };
 }
 
 export interface QAEngine {

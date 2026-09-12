@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-11T20:33:50.723Z",
+  "canvaDesignId": "DAF_c891f83056594341",
+  "step1_CommitLifecycle": {
+    "initialVersion": 1,
+    "stagedTransactionId": "tx_eddaee3f20c14349",
+    "previewObservedHash": "sha256_d8e8ff1db722614298cd30b580f4d2c6721f9d1c3ee27607d45ff186f0051e1b",
+    "committedVersion": 2,
+    "parentRevisionId": "DAF_c891f83056594341@v1",
+    "leaseAutomaticallyReleased": true,
+    "revisionHistoryCount": 1
+  },
+  "step2_CancelLifecycle": {
+    "preCancelHash": "sha256_fe6c5979e5eead97e1c592baab279923f3d72a23208ae5c4be9247f121ee3478",
+    "stagedTransactionId": "tx_e97f66a58af94bf7",
+    "cancelledStatus": "cancelled",
+    "postCancelReopenedHash": "sha256_fe6c5979e5eead97e1c592baab279923f3d72a23208ae5c4be9247f121ee3478",
+    "hashMatchPreCancel": true,
+    "preservedWithoutDrift": true
+  }
+}

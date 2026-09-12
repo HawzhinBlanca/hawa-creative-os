@@ -1,0 +1,60 @@
+{
+  "taskId": "CV-05",
+  "name": "Restart / Resume Traces Across Side-Effect Boundaries",
+  "generatedAt": "2026-09-11T22:43:42+03:00",
+  "invariantsVerified": ["Invariant #10", "Invariant #12", "FR-060", "FR-061"],
+  "testScenario": "Simulate worker process crash immediately after expensive studio-composing external step, then resume with preserved durable journal",
+  "run1_crashSimulation": {
+    "attempt": 1,
+    "crashedAt": "qa-evaluation:task-crash-studio-2",
+    "crashType": "PreStepExecutionCrash",
+    "executionTrace": [
+      "invoked:task-routing:task-crash-studio-2",
+      "completed:task-routing:task-crash-studio-2",
+      "invoked:client-scope-lock:task-crash-studio-2",
+      "completed:client-scope-lock:task-crash-studio-2",
+      "invoked:context-retrieval:task-crash-studio-2",
+      "completed:context-retrieval:task-crash-studio-2",
+      "invoked:brief-building:task-crash-studio-2",
+      "completed:brief-building:task-crash-studio-2",
+      "invoked:creative-planning:task-crash-studio-2",
+      "completed:creative-planning:task-crash-studio-2",
+      "invoked:studio-composing:task-crash-studio-2",
+      "completed:studio-composing:task-crash-studio-2",
+      "invoked:qa-evaluation:task-crash-studio-2",
+      "crashed_before:qa-evaluation:task-crash-studio-2"
+    ],
+    "externalStudioCreateCalls": 1,
+    "externalStudioApplyCalls": 1,
+    "result": "CRASHED"
+  },
+  "run2_durableResume": {
+    "attempt": 2,
+    "resumedWithJournalEntries": 6,
+    "executionTrace": [
+      "invoked:task-routing:task-crash-studio-2",
+      "replayed:task-routing:task-crash-studio-2",
+      "invoked:client-scope-lock:task-crash-studio-2",
+      "replayed:client-scope-lock:task-crash-studio-2",
+      "invoked:context-retrieval:task-crash-studio-2",
+      "replayed:context-retrieval:task-crash-studio-2",
+      "invoked:brief-building:task-crash-studio-2",
+      "replayed:brief-building:task-crash-studio-2",
+      "invoked:creative-planning:task-crash-studio-2",
+      "replayed:creative-planning:task-crash-studio-2",
+      "invoked:studio-composing:task-crash-studio-2",
+      "replayed:studio-composing:task-crash-studio-2",
+      "invoked:qa-evaluation:task-crash-studio-2",
+      "completed:qa-evaluation:task-crash-studio-2",
+      "invoked:await-approval-gate:task-crash-studio-2",
+      "completed:await-approval-gate:task-crash-studio-2"
+    ],
+    "externalStudioCreateCallsCombined": 1,
+    "externalStudioApplyCallsCombined": 1,
+    "duplicateExternalCalls": 0,
+    "finalStatus": "AWAITING_APPROVAL",
+    "recoveredDocumentId": "doc_live_canva_101",
+    "result": "SUCCESS"
+  },
+  "proofSummary": "Expensive external studio compose operation was called exactly ONCE across crash and recovery. Upon recovery, the studio result was replayed directly from the durable journal without network re-invocation, verifying zero side-effect duplication."
+}

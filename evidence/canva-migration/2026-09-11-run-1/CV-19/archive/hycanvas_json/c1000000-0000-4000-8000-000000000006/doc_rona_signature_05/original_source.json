@@ -1,0 +1,35 @@
+{
+  "documentId": "doc_rona_signature_05",
+  "taskId": "t-rona-signature-01",
+  "clientId": "c1000000-0000-4000-8000-000000000006",
+  "title": "Rona Luxury Real Estate Signature Announcement",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "ad67443695115497a563d17b03566f8db841a29b8463883b2cd55b4ffa92637c",
+  "archivedAt": "2026-09-11T23:02:03.371Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "layers": [
+      {
+        "id": "bg",
+        "type": "frame",
+        "fill": "#18181B",
+        "width": 1080,
+        "height": 1350
+      },
+      {
+        "id": "h1",
+        "type": "text",
+        "text": "ڕۆنا - ژیانێکی شاهانە لە دڵی پایەتەختدا"
+      },
+      {
+        "id": "h2",
+        "type": "text",
+        "text": "ڤێلای مۆدێرن بە شێوازی بیناسازی هاوچەرخ"
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#18181B"
+  }
+}

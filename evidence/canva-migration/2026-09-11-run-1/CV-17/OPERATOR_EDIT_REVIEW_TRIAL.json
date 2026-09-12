@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-09-11T22:54:43.007Z",
+  "operatorRole": "Art Director",
+  "operatorId": "operator_hawzhin",
+  "trialScenarios": [
+    {
+      "scenarioId": "TRIAL-001",
+      "client": "KAAE Accreditation",
+      "taskId": "task-kaae-2026-001",
+      "steps": [
+        {
+          "step": 1,
+          "action": "View Task in Work Queue",
+          "result": "Task highlighted, status AWAITING_APPROVAL displayed"
+        },
+        {
+          "step": 2,
+          "action": "Click [Edit in Canva]",
+          "result": "Opens Canva design URL https://www.canva.com/design/DAF_kaae_cert_2026/edit in new tab"
+        },
+        {
+          "step": 3,
+          "action": "Click [Capture for Review]",
+          "result": "Generates immutable Revision v3, runs automated QA checks (Contrast 8.4:1, Bidi passed), updates SHA-256"
+        },
+        {
+          "step": 4,
+          "action": "Click [Approve Captured Files]",
+          "result": "Opens role sign-off modal, records Art Director approval bound to checksum"
+        },
+        {
+          "step": 5,
+          "action": "Click [Deliver Approved Files]",
+          "result": "Executes verified delivery to folder_kaae_prod_2026 and sheet_hawa_office_reporting. Status -> COMPLETE"
+        }
+      ],
+      "success": true
+    },
+    {
+      "scenarioId": "TRIAL-002",
+      "client": "Drustee Hospital",
+      "taskId": "task-drustee-2026-002",
+      "steps": [
+        {
+          "step": 1,
+          "action": "View Task in Work Queue",
+          "result": "Status IN_PROGRESS displayed"
+        },
+        {
+          "step": 2,
+          "action": "Click [Request Revision]",
+          "result": "Modal opens, logs feedback: \"Enlarge Kurdish font by 2px and adjust vitamin icon clearance\", status transitions to IN_PROGRESS"
+        }
+      ],
+      "success": true
+    }
+  ],
+  "honestHealthTrial": {
+    "fakeHealthIndicatorsRemoved": true,
+    "liveProbeEndpoint": "/v1/health",
+    "observedStatus": "Core Healthy · Canva Connected · PostgreSQL Live · Audit Sync"
+  }
+}

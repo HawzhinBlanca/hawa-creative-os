@@ -1,0 +1,43 @@
+{
+  "taskId": "CV-09",
+  "name": "Three-Client Retrieval Isolation & Cross-Client Controls",
+  "generatedAt": "2026-09-11T20:20:20.000Z",
+  "testSuite": "apps/core/test/client-knowledge-assets.test.ts",
+  "controlsExecuted": [
+    {
+      "test": "KAAE Positive Scoped Retrieval",
+      "targetClientId": "c1000000-0000-4000-8000-000000000002",
+      "query": "accreditation logo standards",
+      "resultCount": 2,
+      "crossClientBleedDetected": false,
+      "verifiedBelongsTo": "KAAE"
+    },
+    {
+      "test": "KAAE Negative Bleed Control (Querying Drustee keywords under KAAE scope)",
+      "targetClientId": "c1000000-0000-4000-8000-000000000002",
+      "query": "botanical vitamin supplement herbal",
+      "drusteeItemsReturned": 0,
+      "crossClientBleedDetected": false
+    },
+    {
+      "test": "Aster Negative Bleed Control (Querying KAAE keywords under Aster scope)",
+      "targetClientId": "c1000000-0000-4000-8000-000000000004",
+      "query": "accreditation university parliamentary law",
+      "kaaeItemsReturned": 0,
+      "crossClientBleedDetected": false
+    },
+    {
+      "test": "Drustee Positive Scoped Search",
+      "targetClientId": "c1000000-0000-4000-8000-000000000003",
+      "query": "botanical",
+      "hitsCount": 1,
+      "crossClientBleedDetected": false,
+      "verifiedBelongsTo": "DRUSTEE"
+    }
+  ],
+  "canvaMappingStrictness": {
+    "nakedKitNameAllowed": false,
+    "missingTeamIdAllowed": false,
+    "verifiedTeamIdsEnforced": true
+  }
+}

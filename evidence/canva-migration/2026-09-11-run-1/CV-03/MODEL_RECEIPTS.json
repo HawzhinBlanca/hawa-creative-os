@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-09-11T19:21:29.630094+00:00",
+  "runner": "Hawa Canva Migration CV-03 Qualification Probe",
+  "credential_presence": {
+    "OPENAI_API_KEY": true,
+    "ANTHROPIC_API_KEY": true,
+    "CANVA_API_KEY": false,
+    "CANVA_CLIENT_ID": false,
+    "CANVA_CLIENT_SECRET": false
+  },
+  "model_visibility_checks": [
+    {
+      "provider": "openai",
+      "requested_model": "gpt-4o",
+      "http_status": 200,
+      "found": true,
+      "observed_id": "gpt-4o",
+      "elapsed_ms": 1098,
+      "request_id": "cbaa8747-29a8-40ee-9d36-9c8aa174e71e"
+    },
+    {
+      "provider": "openai",
+      "requested_model": "gpt-4o-mini",
+      "http_status": 200,
+      "found": true,
+      "observed_id": "gpt-4o-mini",
+      "elapsed_ms": 613,
+      "request_id": "16779ac3-2a42-453a-92f7-178438e4ebf5"
+    },
+    {
+      "provider": "openai",
+      "requested_model": "gpt-6-astra",
+      "http_status": 404,
+      "found": false,
+      "observed_id": null,
+      "elapsed_ms": 844,
+      "request_id": "58bbe5e3-48b7-4674-a805-5eac44d7ef63",
+      "error_snippet": "{\n  \"error\": {\n    \"message\": \"That model does not exist\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"id\",\n    \"code\": null\n  }\n}"
+    },
+    {
+      "provider": "openai",
+      "requested_model": "gpt-image-2.5-sunburst",
+      "http_status": 404,
+      "found": false,
+      "observed_id": null,
+      "elapsed_ms": 1722,
+      "request_id": "f7c4d4e0-5504-4208-a6d6-670e57c712a8",
+      "error_snippet": "{\n  \"error\": {\n    \"message\": \"That model does not exist\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"id\",\n    \"code\": null\n  }\n}"
+    },
+    {
+      "provider": "anthropic",
+      "requested_model": "claude-sonnet-5",
+      "http_status": 200,
+      "found": true,
+      "observed_id": "claude-sonnet-5",
+      "display_name": "Claude Sonnet 5",
+      "elapsed_ms": 361,
+      "request_id": "req_011CexCHG2iLfZibJc7Nu9a1"
+    },
+    {
+      "provider": "anthropic",
+      "requested_model": "claude-opus-5",
+      "http_status": 200,
+      "found": true,
+      "observed_id": "claude-opus-5",
+      "display_name": "Claude Opus 5",
+      "elapsed_ms": 333,
+      "request_id": "req_011CexCHHcDwYEXz7Gm34eLt"
+    },
+    {
+      "provider": "anthropic",
+      "requested_model": "claude-3-5-sonnet-20241022",
+      "http_status": 404,
+      "found": false,
+      "observed_id": null,
+      "elapsed_ms": 319,
+      "request_id": "req_011CexCHKAENbmeD7ojGLqGy",
+      "error_snippet": "{\"type\":\"error\",\"error\":{\"type\":\"not_found_error\",\"message\":\"model: claude-3-5-sonnet-20241022\"},\"request_id\":\"req_011CexCHKAENbmeD7ojGLqGy\"}"
+    }
+  ],
+  "inference_checks": [
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "http_status": 200,
+      "elapsed_ms": 1245,
+      "output": "OK",
+      "request_id": "req_2052f03c7d9747a1936a8d12f1e25748",
+      "status": "passed"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "http_status": 200,
+      "elapsed_ms": 1184,
+      "output": "OK",
+      "request_id": "req_011CexCHRobBQQYnaB9zQtjS",
+      "status": "passed"
+    }
+  ]
+}

@@ -1478,11 +1478,19 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
   }
 
   // 9. Statutory Authority Citation Badge
+  const isEnglishOnly = Boolean(params.headlineEn && !params.headlineCkb);
+  const isKurdishOnly = Boolean(params.headlineCkb && !params.headlineEn);
+  const statutoryText = isEnglishOnly
+    ? 'Kurdistan Parliament Law No. 6 of 2022 · Independent National Accreditation Authority'
+    : isKurdishOnly
+    ? 'یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · پەرلەمانی کوردستان · دەستەی متمانەبەخشین'
+    : 'یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · پەرلەمانی کوردستان | Kurdistan Regional Law No. 6 of 2022';
+
   ops.push({
     op: 'addText',
     nodeId: 'ann_statutory_rule',
     pageId,
-    text: 'یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ · پەرلەمانی کوردستان | Kurdistan Regional Law No. 6 of 2022',
+    text: statutoryText,
     role: 'disclaimer',
     x: 60,
     y: height - 150,
@@ -1491,7 +1499,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     style: {
       fontSize: 18,
       fontWeight: '600',
-      fontFamily: 'Cairo',
+      fontFamily: isEnglishOnly ? 'Inter' : 'Cairo',
       textAlign: 'center',
       color: '#F7B500',
       letterSpacing: 1,

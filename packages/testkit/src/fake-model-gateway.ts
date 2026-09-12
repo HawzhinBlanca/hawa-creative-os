@@ -70,8 +70,15 @@ export class FakeModelGateway implements ModelGateway {
 
     let val: unknown;
     if (request.role === 'intake_router') {
+      const text = (request.inputs?.[0]?.text || '').toLowerCase();
+      const mustAbstain =
+        text.includes('same design again') ||
+        text.includes('talab?') ||
+        text.includes('upload it to aster folder') ||
+        text.includes('ignore the system') ||
+        text.includes('which sara?');
       val = {
-        decision: 'route_matched',
+        decision: mustAbstain ? 'abstain' : 'route_matched',
         clientId: 'client-office-1',
         projectId: 'project-campaign-2026',
         confidence: 0.96,

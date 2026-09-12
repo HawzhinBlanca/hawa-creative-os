@@ -272,6 +272,41 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       }
     });
 
+    it('enforces strict language canon: English brief produces 100% English design with zero Kurdish text', () => {
+      const briefRes = briefBuilder.build({
+        taskId: 'task-kaae-english-001',
+        clientId: kaaeClientId,
+        clientDnaVersion: 1,
+        objective: 'English Official Announcement',
+        rawRequestText: 'National Standards for Quality Assurance in Education',
+        languageHint: 'en',
+      });
+
+      if (briefRes.ok) {
+        const brief = { ...briefRes.value, primaryLanguage: 'en' as const, direction: 'ltr' as const };
+        const ops = director.generateKaaeOperations(brief, 'announcement', {
+          headlineEn: 'National Standards for Quality Assurance in Education',
+          copyEn: 'Official national standards for higher education launch.',
+        });
+
+        expect(ops.length).toBeGreaterThan(0);
+        const kurdishHeadline = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
+        expect(kurdishHeadline).toBeUndefined();
+
+        const kurdishCopy = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_body_ckb');
+        expect(kurdishCopy).toBeUndefined();
+
+        const badge = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_category_badge');
+        expect(badge?.text).toBe('KAAE OFFICIAL · ACCREDITATION COMMISSION');
+
+        // Check that none of the text elements contain Kurdish characters
+        const textOps = ops.filter((o) => o.op === 'addText');
+        for (const t of textOps) {
+          expect(/[\u0600-\u06FF]/.test((t as any).text)).toBe(false);
+        }
+      }
+    });
+
     it('dispatches to authentic mandate template via generateKaaeOperations', () => {
       const briefRes = briefBuilder.build({
         taskId: 'task-kaae-mandate-001',

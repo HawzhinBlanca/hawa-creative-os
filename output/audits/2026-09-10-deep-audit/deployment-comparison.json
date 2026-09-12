@@ -1,0 +1,13 @@
+{
+  "liveSha256": "6fd579ef567d207abf7a59b09862ce9bf0aac41beb9b75e5f2606f52c31c705e",
+  "snapshotSha256": "4354fef50c97bbb25ab2792262f0351b109d24634ba9f3b35bc8c4b86304af94",
+  "sameFullFile": false,
+  "relevantMarkersInLive": {
+    "hawa_sess_": true,
+    "verified_qc_pass": true,
+    "sha256_pkg_hash": true,
+    "headlineCkb: null": true,
+    "const outboxRepo": true,
+    "Cannot Approve Empty Design": true
+  }
+}

@@ -14,6 +14,7 @@
   "dependencies": {
     "@hawa/contracts": "workspace:*",
     "@hawa/domain": "workspace:*",
+    "@hawa/db": "workspace:*",
     "@hawa/integrations": "workspace:*",
     "@hawa/retrieval": "workspace:*",
     "@hawa/creative": "workspace:*",

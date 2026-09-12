@@ -1,0 +1,25 @@
+{
+  "documentId": "doc_reopen_test_06",
+  "taskId": "task_reopen_test_06",
+  "clientId": "c1000000-0000-4000-8000-000000000003",
+  "title": "Drustee Reopen Sample Document",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "ec67447d0367f99e135c552dbdb34b72ac42d7c4ea34db74775b96e8b0db0b9c",
+  "archivedAt": "2026-09-12T05:33:18.317Z",
+  "sourceContent": {
+    "layers": [
+      {
+        "id": "head_layer",
+        "type": "text",
+        "text": "سەردێڕی سەرەتایی"
+      },
+      {
+        "id": "discl_layer",
+        "type": "text",
+        "text": "تێبینی تەندروستی کۆن"
+      }
+    ]
+  },
+  "metadata": {}
+}

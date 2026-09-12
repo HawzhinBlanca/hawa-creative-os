@@ -19,3 +19,6 @@ output/*
 !output/memleak/
 hawdesign-creative-os-figma-agent-studio/
 exports/
+.hawa-state/
+scratch/
+*staged-exports/

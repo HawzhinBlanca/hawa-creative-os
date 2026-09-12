@@ -107,7 +107,7 @@ describe('Integrations: Real Adapters & Providers', () => {
   });
 
   it('GooglePublisher: publishes idempotently to Google Drive and Sheets', async () => {
-    const publisher = new GooglePublisher();
+    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'unit_test_token' });
     const request: PublishRequest = {
       taskId: 't-pub-2',
       clientId: 'c-pub-2',

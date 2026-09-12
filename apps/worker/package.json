@@ -11,11 +11,13 @@
   },
   "dependencies": {
     "@hawa/contracts": "workspace:*",
+    "@hawa/creative": "workspace:*",
+    "@hawa/db": "workspace:*",
     "@hawa/domain": "workspace:*",
     "@hawa/integrations": "workspace:*",
-    "@hawa/retrieval": "workspace:*",
-    "@hawa/creative": "workspace:*",
+    "@hawa/observability": "workspace:*",
     "@hawa/qa": "workspace:*",
-    "@hawa/observability": "workspace:*"
+    "@hawa/retrieval": "workspace:*",
+    "@restatedev/restate-sdk": "^1.17.0"
   }
 }

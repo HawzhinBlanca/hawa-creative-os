@@ -20,7 +20,7 @@ CREATE TYPE task_state AS ENUM (
   'received','promotion_pending','routing','routing_review','brief_draft','brief_review',
   'context_ready','design_planning','asset_production','studio_composition','qa',
   'auto_repair','human_review','revision_requested','approved','publishing','complete',
-  'paused','failed_retryable','failed_operator','cancelled'
+  'paused','failed_retryable','failed_operator','cancelled','rejected'
 );
 CREATE TYPE record_status AS ENUM ('draft','active','inactive','superseded','deleted');
 CREATE TYPE approval_decision AS ENUM ('approved','revision_requested','rejected','escalated');

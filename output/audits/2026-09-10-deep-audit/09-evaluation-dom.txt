@@ -1,0 +1,66 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library"
+    - button "Adapters"
+    - button "Actionable Operations"
+    - button "Model Evaluations" [active]
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Model Evaluations & Canary Tournaments" [level=1]
+  - text: Adversarial red-team safety benchmarks, copy-guard, and golden suites
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - heading "Evaluation & Benchmark Suites" [level=1]
+  - heading "Evaluation datasets" [level=2]
+  - generic: Brief Builder
+  - generic: brief.jsonl
+  - generic: 200 cases
+  - generic: RTL Golden Suite
+  - generic: rtl.jsonl
+  - generic: 40 cases
+  - generic: Retrieval & Leakage
+  - generic: retrieval.jsonl
+  - generic: 20 cases
+  - button "⚡ Run Multi-Pass Tournament"
+  - heading "Brief Builder" [level=2]
+  - generic: Holdout v2026.09
+  - paragraph: Blind holdout · exact versions · no production state mutation
+  - button "Cases (0)"
+  - button "Suite Breakdown"
+  - button "Candidates"
+  - generic: 100%
+  - text: protected tokens
+  - generic: 100%
+  - text: requirement recall
+  - generic: $0.012
+  - text: median case cost
+  - generic: 134 / 134
+  - text: cases passed
+  - textbox "Search cases by ID, prompt text, or client":
+    - /placeholder: Search cases by ID, prompt text, or client...
+  - button "All"
+  - button "ckb"
+  - button "ar"
+  - button "en"
+  - generic: No cases match query ""
+  - heading "Admission Status" [level=3]
+  - text: Gemini 3.8 Flash & GPT-5.6 Sol passed all admission gates
+  - paragraph: 100% protected token preservation, zero hallucinated facts, zero hard QA rule overrides, and verified Sorani Kurdish missing-information detection.

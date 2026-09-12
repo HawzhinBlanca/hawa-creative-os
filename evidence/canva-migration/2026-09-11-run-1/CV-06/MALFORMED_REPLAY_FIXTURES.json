@@ -1,0 +1,71 @@
+{
+  "taskId": "CV-06",
+  "name": "Malformed and Replay Ingress Fixtures Verification",
+  "executedAt": "2026-09-11T22:58:00+03:00",
+  "status": "PASS",
+  "fixtures": [
+    {
+      "fixtureId": "FIX-SSRF-01-LOOPBACK",
+      "description": "Attempt to fetch attachment from 127.0.0.1",
+      "inputUrl": "http://127.0.0.1:8080/secret.png",
+      "expectedResult": "REJECT",
+      "actualResult": "BLOCKED",
+      "error": "Private IPv4 destination forbidden (SSRF defense)"
+    },
+    {
+      "fixtureId": "FIX-SSRF-02-METADATA",
+      "description": "Attempt to fetch attachment from cloud metadata endpoint 169.254.169.254",
+      "inputUrl": "http://169.254.169.254/computeMetadata/v1/",
+      "expectedResult": "REJECT",
+      "actualResult": "BLOCKED",
+      "error": "Link-local / cloud metadata destination forbidden (SSRF defense)"
+    },
+    {
+      "fixtureId": "FIX-SSRF-03-PRIVATE-NET",
+      "description": "Attempt to fetch attachment from internal RFC1918 10.0.0.5",
+      "inputUrl": "https://10.0.0.5/asset.jpg",
+      "expectedResult": "REJECT",
+      "actualResult": "BLOCKED",
+      "error": "Private IPv4 destination forbidden (SSRF defense)"
+    },
+    {
+      "fixtureId": "FIX-MALFORMED-01-OVERSIZED",
+      "description": "Attachment exceeding 50MB (52,428,801 bytes)",
+      "sizeBytes": 52428801,
+      "mimeType": "application/pdf",
+      "expectedResult": "REJECT",
+      "actualResult": "REJECT",
+      "error": "Attachment size 52428801 exceeds maximum allowed limit of 52428800 bytes (50MB)"
+    },
+    {
+      "fixtureId": "FIX-MALFORMED-02-FORBIDDEN-MIME",
+      "description": "Malicious payload with application/x-msdos-program",
+      "mimeType": "application/x-msdos-program",
+      "fileName": "invoice.exe",
+      "expectedResult": "REJECT",
+      "actualResult": "REJECT",
+      "error": "MIME type application/x-msdos-program is not permitted for ingress attachments"
+    },
+    {
+      "fixtureId": "FIX-REPLAY-01-EXACT-DUPLICATE",
+      "description": "Exact same source event ID delivered twice within 5 seconds",
+      "channel": "telegram",
+      "sourceEventId": "evt_replay_test_1001",
+      "firstSubmission": { "acknowledged": true, "isDuplicate": false },
+      "secondSubmission": { "acknowledged": true, "isDuplicate": true },
+      "databaseRowsCreated": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "FIX-OUT-OF-ORDER-01-POST-APPROVAL-EDIT",
+      "description": "Source message edited in Telegram after brief has been approved in Hawa",
+      "statePrior": "in_progress",
+      "editPayload": { "text": "Corrected minister title and changed date" },
+      "expectedAction": "revision_requested",
+      "actualAction": "revision_requested",
+      "taskStatePost": "revision_requested",
+      "approvedBriefIntegrity": "UNTOUCHED",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-09-11T21:00:06.719Z",
+  "wrong_folder_denials": [
+    {
+      "folderId": "audit-invented-destination",
+      "ok": false,
+      "errorCode": "INVALID_DESTINATION",
+      "denied": true
+    },
+    {
+      "folderId": "unauthorized_folder",
+      "ok": false,
+      "errorCode": "INVALID_DESTINATION",
+      "denied": true
+    },
+    {
+      "folderId": "",
+      "ok": false,
+      "errorCode": "INVALID_DESTINATION",
+      "denied": true
+    }
+  ],
+  "notification_failure_independence": {
+    "taskId": "6749c3d6-3c95-4e91-8b74-bc5c9c1538fb",
+    "publicationStatus": "COMPLETE",
+    "driveReceiptPreserved": true,
+    "notificationFailureDoesNotRollback": true
+  },
+  "unapproved_or_nonexistent_chat_delivery_defense": {
+    "chatApprovalRequiresRealFiles": true,
+    "fabricatedReceiptBlocked": true
+  },
+  "publication_reconciliation": {
+    "auditId": "audit_bc682348_1789160406719",
+    "status": "clean",
+    "driftCount": 0,
+    "inSyncCount": 1
+  }
+}

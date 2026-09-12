@@ -1,0 +1,71 @@
+{
+  "taskId": "CV-06",
+  "name": "Unify Desk, Telegram and WhatsApp ingress",
+  "executedAt": "2026-09-11T22:58:00+03:00",
+  "status": "PASS",
+  "summary": {
+    "totalTestsExecuted": 22,
+    "testsPassed": 22,
+    "testsFailed": 0,
+    "coverage": [
+      "packages/integrations/src/unified-ingress.ts",
+      "packages/db/src/repositories/ingress.repository.ts",
+      "apps/core/src/ingress-persistence-adapter.ts",
+      "apps/core/src/app.ts"
+    ]
+  },
+  "testBatteries": [
+    {
+      "suite": "packages/integrations/test/unified-ingress.test.ts",
+      "total": 16,
+      "passed": 16,
+      "failed": 0,
+      "tests": [
+        "1. Ingress deduplication: drops duplicate source message delivery cleanly without task duplicate",
+        "2. Conversational gating: ordinary group chat remains MESSAGE_ONLY with no task creation",
+        "3. Explicit command promotion: /task or #brief command promotes message to task_created with outbox command",
+        "4. Desk form submission: creates task immediately with complete provenance",
+        "5. Ambiguous intent: flags as AMBIGUOUS_NEEDS_CLARIFICATION without creating task",
+        "6. Revision tracking: edit of source message before task creation updates draft text",
+        "7. Revision safety: edit of source message AFTER brief approval flags task for revision without corrupting approved brief",
+        "8. Attachment validation: accepts valid PNG/JPEG/PDF within bounds",
+        "9. Attachment size bounding: rejects attachment exceeding 50MB limit",
+        "10. Attachment MIME bounding: rejects forbidden MIME types (e.g. executable/script)",
+        "11. Attachment content dedup: computes consistent SHA-256 and detects identical attachment across messages",
+        "12. Fetch destination validation (SSRF): blocks loopback (127.0.0.1, localhost, [::1])",
+        "13. Fetch destination validation (SSRF): blocks RFC1918 private IPv4 networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)",
+        "14. Fetch destination validation (SSRF): blocks AWS/GCP/Azure link-local metadata (169.254.169.254)",
+        "15. Fetch destination validation (SSRF): permits valid public HTTPS URLs",
+        "16. Content sanitization: strips HTML tags, normalizes Kurdish Sorani orthography, bounds length"
+      ]
+    },
+    {
+      "suite": "apps/core/test/unified-ingress-postgres.test.ts",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "tests": [
+        "1. Commits inbox_events, message_events, and message_attachments durably to PostgreSQL",
+        "2. Idempotency: repeated delivery of identical event does not duplicate inbox or message rows",
+        "3. Gating: chat message without /task triggers no task aggregate and no outbox command",
+        "4. Revision safety: source edit after brief approval triggers revision_requested in task_events without brief corruption",
+        "5. Tests /api/ingress/unified endpoint via HTTP request",
+        "6. Tests /api/ingress/promote endpoint via HTTP request"
+      ]
+    }
+  ],
+  "requirementsVerified": [
+    "FR-001",
+    "FR-002",
+    "FR-003",
+    "FR-004",
+    "FR-005",
+    "FR-006",
+    "FR-010",
+    "FR-012",
+    "FR-066",
+    "FR-068",
+    "NFR-006",
+    "NFR-007"
+  ]
+}

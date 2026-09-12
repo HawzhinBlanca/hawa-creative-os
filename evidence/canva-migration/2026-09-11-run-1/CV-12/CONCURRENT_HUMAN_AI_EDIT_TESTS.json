@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-09-11T20:33:50.723Z",
+  "singleAutomationLease": {
+    "writerA": {
+      "status": "ACQUIRED",
+      "leaseId": "lease_fea5052c55af47a3",
+      "holder": "hawa_writer_service_alpha"
+    },
+    "writerBConcurrentAttempt": {
+      "status": "REJECTED_409",
+      "errorCode": "AUTOMATION_LEASE_HELD",
+      "message": "Canva design 'DAF_kaae_invitation_template_master' is currently leased to Hawa automation writer 'hawa_writer_service_alpha'. Concurrent automated edits are blocked."
+    },
+    "externalHumanLockCheck": {
+      "isExternalHumanLocked": false,
+      "invariantPreserved": true,
+      "rationale": "A lease only coordinates Hawa writers and does not lock external Canva users."
+    }
+  },
+  "concurrentHumanEditDefense": {
+    "initialSourceObservationHash": "sha256_47491deb166a9884095cf39089ea35114ef7db0cb88252dab7d1358325aecb55",
+    "humanAction": "Human designer edited headline directly in Canva editor",
+    "aiStaleEditAttempt": {
+      "expectedObservationHash": "sha256_47491deb166a9884095cf39089ea35114ef7db0cb88252dab7d1358325aecb55",
+      "result": {
+        "status": "ABORTED_PREVENTED_OVERWRITE",
+        "code": "EXPECTED_REVISION_MISMATCH",
+        "message": "Concurrent human or external modification detected on Canva design 'DAF_ecc702eae0c74dd3'. Expected source observation sha256_47491deb166a9884095cf39089ea35114ef7db0cb88252dab7d1358325aecb55 does not match current state sha256_f48bf274636f688f95f516adc30692f47e8acca79b54f21758feaabe02658a82. Bounded AI edit aborted to preserve human work (FR-031, NFR-008).",
+        "safeAction": "Read back fresh design state and re-evaluate bounded edits against latest human modifications"
+      }
+    },
+    "verification": "Human edit was preserved 100% without data loss or silent overwrite."
+  }
+}

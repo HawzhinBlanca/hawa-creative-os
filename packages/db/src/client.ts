@@ -11,9 +11,13 @@ export interface RlsContext {
 
 export function createDb(connectionString?: string): Kysely<Database> {
   const pool = new pg.Pool({
-    connectionString: connectionString || process.env.DATABASE_URL || 'postgres://hawa_app:secret@localhost:5432/hawa',
+    connectionString: connectionString || process.env.DATABASE_URL || 'postgres://hawa_app:hawa_production_secure_pass@localhost:5432/hawa',
     max: 20,
     idleTimeoutMillis: 30000,
+  });
+
+  pool.on('connect', (client) => {
+    client.query('SET search_path TO hawa, public');
   });
 
   return new Kysely<Database>({
@@ -29,19 +33,19 @@ export async function withRlsContext<T>(
   callback: (trx: Kysely<Database>) => Promise<T>
 ): Promise<T> {
   return await db.transaction().execute(async (trx) => {
-    await sql`SET LOCAL app.tenant_id = ${ctx.tenantId}`.execute(trx);
-    await sql`SET LOCAL hawa.current_tenant_id = ${ctx.tenantId}`.execute(trx);
+    await sql`SELECT set_config('app.tenant_id', ${ctx.tenantId}, true)`.execute(trx);
+    await sql`SELECT set_config('hawa.current_tenant_id', ${ctx.tenantId}, true)`.execute(trx);
     if (ctx.clientId) {
-      await sql`SET LOCAL app.client_id = ${ctx.clientId}`.execute(trx);
-      await sql`SET LOCAL hawa.current_client_id = ${ctx.clientId}`.execute(trx);
+      await sql`SELECT set_config('app.client_id', ${ctx.clientId}, true)`.execute(trx);
+      await sql`SELECT set_config('hawa.current_client_id', ${ctx.clientId}, true)`.execute(trx);
     }
     if (ctx.userId) {
-      await sql`SET LOCAL app.user_id = ${ctx.userId}`.execute(trx);
-      await sql`SET LOCAL hawa.current_user_id = ${ctx.userId}`.execute(trx);
+      await sql`SELECT set_config('app.user_id', ${ctx.userId}, true)`.execute(trx);
+      await sql`SELECT set_config('hawa.current_user_id', ${ctx.userId}, true)`.execute(trx);
     }
     if (ctx.role) {
-      await sql`SET LOCAL app.role = ${ctx.role}`.execute(trx);
-      await sql`SET LOCAL hawa.current_role = ${ctx.role}`.execute(trx);
+      await sql`SELECT set_config('app.role', ${ctx.role}, true)`.execute(trx);
+      await sql`SELECT set_config('hawa.current_role', ${ctx.role}, true)`.execute(trx);
     }
     return await callback(trx);
   });

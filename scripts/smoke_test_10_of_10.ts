@@ -8,7 +8,12 @@
  * 4. Live Multi-Tenant HTTP API Endpoints & Immutable DNA Snapshots
  */
 
-import { generateHycPackageData, importFromHycPackage, FORMAT_DIMENSIONS } from '../apps/desk/src/services/canvasExport.js';
+import {
+  CanvaCapturePipeline,
+  createSyntheticValidPng,
+  createSyntheticValidPdf,
+} from '../packages/integrations/src/canva-capture-pipeline.js';
+import type { CanvaStudioBinding, CanvaCapturedArtifact, CanvaSemanticCoverage } from '../packages/contracts/src/design-studio.js';
 import { ResilientModelGateway } from '../packages/integrations/src/model-gateway.js';
 import { EvaluationRunner } from '../packages/evals/src/runner.js';
 import { checkSocialOverlayCollisions } from '../packages/qa/src/layout-bounds.js';
@@ -24,120 +29,117 @@ async function runSmokeSuite() {
   const totalPasses = 4;
 
   // --------------------------------------------------------------------------
-  // PASS 1: HyCanvas (.hyc) AST Complete Round-Trip Invariant (#2)
+  // PASS 1: Native Canva Studio Binding & Immutable Artifact Capture Invariant (#2, ADR 020)
   // --------------------------------------------------------------------------
-  console.log('▶ [PASS 1/4] HyCanvas (.hyc) Complete Round-Trip & Vector Tree Preservation');
+  console.log('▶ [PASS 1/4] Native Canva Studio Binding, Capture Pipeline & Immutable Merkle Invariant');
   {
-    const mockBrandKit: any = {
-      id: 'client-aster',
-      name: 'Aster Pharmacy',
-      palette: { background: '#0F172A', cardBg: '#1E293B', primary: '#10B981', secondary: '#38BDF8', text: '#FFFFFF', accent: '#F59E0B' },
-      verifiedSha256: 'sha256_aster_dna_verified_mock_hash_001',
-      logoText: 'ASTER · دەرمانخانەی ئەستێرە',
-    };
+    const pipeline = new CanvaCapturePipeline();
+    const tenantId = 't0000000-0000-4000-8000-000000000001';
+    const taskId = '00000000-0000-4000-8000-000000000001';
+    const clientId = '00000000-0000-4000-a000-000000000001';
+    const canvaDesignId = 'DAF_kaae_smoke_test_01';
+    const bindingId = '00000000-0000-4000-b000-000000000001';
 
-    const originalNodes = [
+    const binding: CanvaStudioBinding = {
+      id: bindingId,
+      tenantId,
+      taskId,
+      clientId,
+      canvaDesignId,
+      editUrl: `https://www.canva.com/design/${canvaDesignId}/edit`,
+      viewUrl: `https://www.canva.com/design/${canvaDesignId}/view`,
+      directionName: 'primary',
+      status: 'bound',
+      version: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    pipeline.registerBinding(binding);
+
+    // 1.1 Verify valid PNG preflight
+    const pngBuffer = createSyntheticValidPng(1080, 1350);
+    const pngVal = pipeline.validateArtifactBytes(pngBuffer, 'png');
+    if (!pngVal.ok || pngVal.value.width !== 1080 || pngVal.value.height !== 1350) {
+      throw new Error('Pass 1 FAILED: PNG preflight validation failed.');
+    }
+
+    // 1.2 Verify print-ready PDF preflight (CMYK, 300 DPI, trim/bleed)
+    const pdfBuffer = createSyntheticValidPdf({
+      cmyk: true,
+      trimBox: [9, 9, 1089, 1359],
+      bleedBox: [0, 0, 1098, 1368],
+      fonts: ['Cairo-Bold', 'NotoNaskhArabic-Regular'],
+    });
+    const pdfVal = pipeline.validateArtifactBytes(pdfBuffer, 'pdf_print');
+    if (!pdfVal.ok || pdfVal.value.colorSpace !== 'cmyk' || pdfVal.value.dpi !== 300) {
+      throw new Error('Pass 1 FAILED: Print-ready PDF validation failed.');
+    }
+
+    // 1.3 Stage and atomically publish capture set
+    const artifacts: CanvaCapturedArtifact[] = [
       {
-        id: 'node_headline_main',
-        role: 'headline',
-        name: 'Main Kurdish Headline',
-        x: 64,
-        y: 180,
-        width: 952,
-        height: 140,
-        rotation: 0,
-        opacity: 1,
-        zIndex: 10,
-        locked: false,
-        visible: true,
-        textEn: 'Spring Health Campaign 2026',
-        textCkb: 'داشکاندنی وەرزی تەندروستی لە هەولێر',
-        fontFamily: 'Vazirmatn',
-        fontSize: 48,
-        fontWeight: 800,
-        color: '#FFFFFF',
+        format: 'png',
+        storageKey: `captures/${taskId}/feed.png`,
+        sha256: pngVal.value.sha256,
+        byteSize: pngVal.value.byteSize,
+        width: 1080,
+        height: 1350,
       },
       {
-        id: 'node_copy_price',
-        role: 'copy',
-        name: 'Price Badge',
-        x: 64,
-        y: 360,
-        width: 420,
-        height: 80,
-        rotation: 0,
-        opacity: 1,
-        zIndex: 11,
-        locked: false,
-        visible: true,
-        textEn: 'Medicines from 12,000 IQD',
-        textCkb: 'دەرمان لە ١٢٬٠٠٠ دینار',
-        fontFamily: 'Inter',
-        fontSize: 22,
-        fontWeight: 600,
-        color: '#10B981',
-        backgroundColor: '#1E293B',
-      },
-      {
-        id: 'node_vector_logo',
-        role: 'logo',
-        name: 'Official Logo Vector',
-        x: 64,
-        y: 64,
-        width: 200,
-        height: 60,
-        rotation: 0,
-        opacity: 1,
-        zIndex: 12,
-        locked: true,
-        visible: true,
-        svgContent: '<svg viewBox="0 0 200 60"><path d="M10 10 H190 V50 H10 Z" fill="#10B981"/></svg>',
-        assetHash: 'sha256_logo_svg_vector_123',
+        format: 'pdf_print',
+        storageKey: `captures/${taskId}/print.pdf`,
+        sha256: pdfVal.value.sha256,
+        byteSize: pdfVal.value.byteSize,
+        dpi: 300,
+        colorSpace: 'cmyk',
       },
     ];
 
-    const packageExport = generateHycPackageData({
-      headlineEn: 'Spring Health Campaign 2026',
-      headlineCkb: 'داشکاندنی وەرزی تەندروستی لە هەولێر',
-      copyEn: 'Medicines from 12,000 IQD',
-      copyCkb: 'دەرمان لە ١٢٬٠٠٠ دینار',
-      langVariant: 'bilingual',
-      fontFamily: 'Vazirmatn',
-      fontWeight: 800,
-      accentColor: '#10B981',
-      brandKit: mockBrandKit,
-      format: 'story',
-      nodes: originalNodes,
-    }, { id: 'task-smoke-01', clientId: 'client-aster', title: 'Smoke Task' });
+    const semanticCoverage: CanvaSemanticCoverage = {
+      textNodesCount: 8,
+      imageFillsCount: 2,
+      hasLogo: true,
+      isComplete: true,
+    };
 
-    if (!packageExport.json || packageExport.json.length < 100) {
-      throw new Error('Pass 1 FAILED: HyCanvas package serialization returned empty payload.');
+    const publishRes = await pipeline.publishCapturePackage({
+      tenantId,
+      bindingId,
+      taskId,
+      clientId,
+      canvaDesignId,
+      expectedVersion: 1,
+      artifacts,
+      semanticCoverage,
+      requiredVariants: ['feed'],
+      authActor: { actorType: 'operator', actorId: 'smoke-test-operator' },
+    });
+
+    if (!publishRes.ok) {
+      throw new Error(`Pass 1 FAILED: Failed to publish captured artifact set: ${publishRes.error.message}`);
     }
 
-    const importResult = await importFromHycPackage(packageExport.json);
-
-    if (!importResult.ok) {
-      throw new Error(`Pass 1 FAILED: HyCanvas import failed: ${importResult.error}`);
+    // 1.4 Invariant: Incomplete snapshot cannot masquerade as complete
+    const incompleteRes = await pipeline.publishCapturePackage({
+      tenantId,
+      bindingId,
+      taskId,
+      clientId,
+      canvaDesignId,
+      expectedVersion: 2,
+      artifacts,
+      semanticCoverage: { ...semanticCoverage, isComplete: false },
+      requiredVariants: ['feed'],
+      authActor: { actorType: 'operator', actorId: 'smoke-test-operator' },
+    });
+    if (incompleteRes.ok) {
+      throw new Error('Pass 1 FAILED: Expected rejection of incomplete snapshot under Invariant #2.');
     }
 
-    if (importResult.nodes.length !== originalNodes.length) {
-      throw new Error(`Pass 1 FAILED: Layer count mismatch. Expected ${originalNodes.length}, got ${importResult.nodes.length}`);
-    }
-
-    // Invariant #2: Verify unflattened vector text remains 100% editable
-    const importedHeadline = importResult.nodes.find((n) => n.id === 'node_headline_main');
-    if (!importedHeadline || importedHeadline.textCkb !== originalNodes[0].textCkb) {
-      throw new Error('Pass 1 FAILED: Headline Kurdish text was altered or flattened during round-trip.');
-    }
-
-    const importedLogo = importResult.nodes.find((n) => n.id === 'node_vector_logo');
-    if (!importedLogo || importedLogo.svgContent !== originalNodes[2].svgContent) {
-      throw new Error('Pass 1 FAILED: Vector SVG path content was altered or lost.');
-    }
-
-    console.log(`  ✓ Serialized ${originalNodes.length} layers to ${packageExport.filename}`);
-    console.log(`  ✓ Lossless round-trip deserialization: ${importResult.nodes.length} live editable vector layers restored`);
-    console.log(`  ✓ Invariant #2 preserved: 0 flattened raster layers, exact text & vector coordinates intact`);
+    console.log(`  ✓ Native Canva Studio Binding registered: ${canvaDesignId} (v1)`);
+    console.log(`  ✓ Preflight inspection validated: 1080x1350 sRGB PNG & 300 DPI CMYK PDF Print`);
+    console.log(`  ✓ Merkle hash integrity: ${publishRes.value.capturedArtifactSetHash.substring(0, 24)}…`);
+    console.log(`  ✓ Invariant #2 enforced: Incomplete coverage rejected (${incompleteRes.error.code})`);
     passedPasses++;
   }
 

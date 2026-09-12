@@ -1,0 +1,115 @@
+{
+  "taskId": "CV-09",
+  "name": "Preserve original client knowledge and assets",
+  "generatedAt": "2026-09-11T20:20:00.000Z",
+  "clients": [
+    {
+      "code": "KAAE",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "tenantId": "a0000000-0000-4000-8000-000000000001",
+      "name": "Kurdistan Accrediting Association for Education (KAAE)",
+      "groundTruthSource": {
+        "file": "KAAE_Guidelines4.pdf",
+        "title": "Brand Guidelines - EXCELLENCE EDITION - 2025",
+        "pageCitations": [
+          { "page": 4, "topic": "Core Palette", "tokens": ["#4770A3", "#F7B500", "#1E3A5F", "#FDF8F3", "#0A1628"] },
+          { "page": 8, "topic": "Logo Clear Space", "rule": "Clear space equal to cap-height of letter K (minimum 28px)" },
+          { "page": 12, "topic": "Typography Hierarchy", "fonts": ["Minion Variable Concept", "Cairo", "Noto Naskh Arabic"] },
+          { "page": 16, "topic": "Statutory Authority", "statute": "Law No. 6 of 2022 enacted by Kurdistan Regional Parliament" }
+        ]
+      },
+      "canvaMapping": {
+        "canvaTeamId": "team_kaae_erbil",
+        "canvaBrandKitId": "kit_kaae_2026",
+        "canvaTemplateIds": {
+          "mandate_square": "DAF_kaae_sq_01",
+          "standards_portrait": "DAF_kaae_port_02",
+          "roadmap_landscape": "DAF_kaae_land_03"
+        },
+        "verified": true
+      },
+      "officialAssets": [
+        {
+          "role": "logo_primary",
+          "filename": "kaae-official-logo.png",
+          "sha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc",
+          "mimeType": "image/png",
+          "minimumWidthPx": 140,
+          "clearSpacePx": 28
+        },
+        {
+          "role": "logo_primary",
+          "filename": "kaae-logo-primary.svg",
+          "sha256": "accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7",
+          "mimeType": "image/svg+xml",
+          "minimumWidthPx": 140,
+          "clearSpacePx": 28
+        }
+      ]
+    },
+    {
+      "code": "DRUSTEE",
+      "clientId": "c1000000-0000-4000-8000-000000000003",
+      "tenantId": "a0000000-0000-4000-8000-000000000001",
+      "name": "Drustee Evidence-First Botanical Health",
+      "canvaMapping": {
+        "canvaTeamId": "team_drustee_erbil",
+        "canvaBrandKitId": "kit_drustee_2026",
+        "canvaTemplateIds": {
+          "supplement_feed": "DAF_drustee_feed_01",
+          "wellness_story": "DAF_drustee_story_02",
+          "clinical_square": "DAF_drustee_sq_03"
+        },
+        "verified": true
+      },
+      "officialAssets": [
+        {
+          "role": "logo_primary",
+          "filename": "drustee-logo-primary.svg",
+          "sha256": "6a3f120199e43681c2f8832a819b91811a2f64e26a7cb0195e3479a9578107ef",
+          "mimeType": "image/svg+xml",
+          "minimumWidthPx": 120,
+          "clearSpacePx": 24
+        }
+      ],
+      "prohibitedPhrases": [
+        "Magic cure",
+        "Instant miracle",
+        "100% cure guarantee",
+        "Replaces hospital treatment"
+      ]
+    },
+    {
+      "code": "ASTER",
+      "clientId": "c1000000-0000-4000-8000-000000000004",
+      "tenantId": "a0000000-0000-4000-8000-000000000001",
+      "name": "Aster Luxury Resort & Hospitality Erbil",
+      "canvaMapping": {
+        "canvaTeamId": "team_aster_erbil",
+        "canvaBrandKitId": "kit_aster_2026",
+        "canvaTemplateIds": {
+          "suite_showcase": "DAF_aster_suite_01",
+          "event_announcement": "DAF_aster_event_02",
+          "gourmet_square": "DAF_aster_sq_03"
+        },
+        "verified": true
+      },
+      "officialAssets": [
+        {
+          "role": "logo_primary",
+          "filename": "aster-luxury-logo.svg",
+          "sha256": "8e1c940562e84120f21469e3498b82103f1a23e98b0461298c4371906a5b78cd",
+          "mimeType": "image/svg+xml",
+          "minimumWidthPx": 160,
+          "clearSpacePx": 32
+        }
+      ],
+      "prohibitedPhrases": [
+        "Cheap stay",
+        "Budget motel",
+        "Discount rooms",
+        "Fast food dining"
+      ]
+    }
+  ]
+}

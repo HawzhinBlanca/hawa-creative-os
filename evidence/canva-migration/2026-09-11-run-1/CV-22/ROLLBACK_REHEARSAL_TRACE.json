@@ -1,0 +1,19 @@
+{
+  "rehearsalId": "rb_rehearsal_1789168600071",
+  "timestamp": "2026-09-11T23:16:40.071Z",
+  "reason": "Official production cutover readiness drill",
+  "pass": true,
+  "priorRelease": "v1.4.0-legacy-archive",
+  "cutoverRelease": "v2.0.0-canva-cutover",
+  "checks": {
+    "canvaWorkingFilesPreserved": true,
+    "designsBefore": 1,
+    "designsAfter": 1,
+    "silentBackTranslationBlocked": true,
+    "duplicateDeliveriesBlocked": true,
+    "postgresTaskIntegrityPreserved": true,
+    "driveDestinationsUnchanged": true
+  },
+  "durationMs": 38,
+  "certifiedBy": "operator_lead"
+}

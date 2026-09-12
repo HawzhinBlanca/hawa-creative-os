@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-09-11T20:36:55.919Z",
+  "fileFormat": "pdf_print",
+  "colorSpace": "CMYK (DeviceCMYK)",
+  "targetDpi": 300,
+  "pageBoxes": {
+    "mediaBox": [
+      0,
+      0,
+      595,
+      842
+    ],
+    "trimBox": [
+      9,
+      9,
+      1089,
+      1359
+    ],
+    "bleedBox": [
+      0,
+      0,
+      1098,
+      1368
+    ],
+    "bleedMm": 3.175
+  },
+  "embeddedFonts": [
+    {
+      "name": "Cairo-Bold",
+      "role": "headline",
+      "script": "Kurdish_Sorani",
+      "licensed": true
+    },
+    {
+      "name": "NotoNaskhArabic-Regular",
+      "role": "body",
+      "script": "Kurdish_Sorani_Arabic",
+      "licensed": true
+    }
+  ],
+  "preflightInspectionResult": "QUALIFIED_FOR_COMMERCIAL_PRINT"
+}

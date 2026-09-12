@@ -1,0 +1,70 @@
+{
+  "cutoverState": "ADMITTED_ACTIVE",
+  "release": {
+    "version": "v2.0.0-canva-cutover",
+    "gitCommit": "c47f9a123bc42e88a0991cfa930129fec8a40231",
+    "priorRelease": "v1.4.0-legacy-archive",
+    "cutoverTimestamp": "2026-09-12T02:00:00.000Z"
+  },
+  "activeStudio": {
+    "provider": "canva",
+    "adapter": "CanvaDesignStudioAdapter",
+    "version": "2.0.0-canva-cutover",
+    "cloudConnected": true,
+    "circuitBreaker": {
+      "name": "canva-api",
+      "state": "CLOSED",
+      "consecutiveFailures": 0,
+      "totalTrips": 0,
+      "lastStateChangeAt": "2026-09-11T23:16:40.054Z"
+    }
+  },
+  "admittedScope": {
+    "clients": [
+      "kaae",
+      "drustee",
+      "aster"
+    ],
+    "taskClasses": [
+      "routine_announcement",
+      "social_media_post",
+      "institutional_invitation",
+      "promotional_graphic"
+    ],
+    "bilingualRtlSupport": "ckb_sorani_validated"
+  },
+  "dataCounts": {
+    "postgresTasks": 1449,
+    "postgresOutboxCommands": 1449,
+    "migratedHistoricalDocuments": 11,
+    "activeCanvaWorkingDesigns": 1,
+    "zeroDataLossVerified": true
+  },
+  "healthReadback": {
+    "database": "healthy",
+    "canvaApi": "healthy",
+    "drivePublisher": "healthy",
+    "channels": {
+      "telegram": "ready",
+      "waha": "ready"
+    }
+  },
+  "pilotSignoff": {
+    "totalTasks": 100,
+    "completionRate": "98%",
+    "criticalEscapes": 0,
+    "blindedQualityScore": "4.84/5.00",
+    "signoffRoles": [
+      "art_director",
+      "creative_director"
+    ],
+    "signoffTimestamp": "2026-09-12T01:30:00.000Z",
+    "accepted": true
+  },
+  "rollbackGuarantee": {
+    "strategy": "archive_prior_release_reversal",
+    "silentBackTranslationBlocked": true,
+    "canvaWorkingFilesPreserved": true,
+    "duplicateDeliveryBlocked": true
+  }
+}

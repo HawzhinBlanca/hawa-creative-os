@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-09-11T23:06:59.520Z",
+  "totalCases": 239,
+  "passedCases": 239,
+  "passRate": 100,
+  "criticalViolations": 0,
+  "breakdown": {
+    "routingAndBrief": {
+      "dataset": "routing_brief.jsonl",
+      "totalCases": 200,
+      "passedCases": 200,
+      "failedCases": 0,
+      "passRate": 100,
+      "criticalViolations": 0
+    },
+    "retrieval": {
+      "dataset": "retrieval_eval.jsonl",
+      "totalCases": 20,
+      "passedCases": 20,
+      "failedCases": 0,
+      "passRate": 100,
+      "criticalViolations": 0
+    },
+    "copyGuard": {
+      "dataset": "copy_guard_benchmark",
+      "totalCases": 4,
+      "passedCases": 4,
+      "failedCases": 0,
+      "passRate": 100,
+      "criticalViolations": 0
+    },
+    "visualJudge": {
+      "dataset": "visual_quality_rubric.md",
+      "totalCases": 10,
+      "passedCases": 10,
+      "failedCases": 0,
+      "passRate": 100,
+      "criticalViolations": 0
+    },
+    "adversarialSafety": {
+      "dataset": "adversarial_safety_benchmark",
+      "totalCases": 5,
+      "passedCases": 5,
+      "failedCases": 0,
+      "passRate": 100,
+      "criticalViolations": 0
+    }
+  }
+}

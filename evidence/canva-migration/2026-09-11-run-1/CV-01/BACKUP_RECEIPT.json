@@ -1,0 +1,35 @@
+{
+  "task_id": "CV-01",
+  "timestamp": "2026-09-11T22:18:00+03:00",
+  "backup_location": "/Users/hawzhin/Documents/Hawdesign-Backups/2026-09-11-canva-migration-baseline",
+  "artifacts": [
+    {
+      "type": "git_bundle",
+      "filename": "hawdesign-all-branches.bundle",
+      "size_bytes": 209085167,
+      "sha256": "f80f47e0903b1f206696b528d69f98549294535d7a3cdf2ad2d4659b39f274a3",
+      "scope": "all branches and refs"
+    },
+    {
+      "type": "database_dump",
+      "filename": "hawa_production_dump.sql",
+      "size_bytes": 4065757,
+      "sha256": "3a4918ab88f56212d83eba48c28936b2e7c2ba07fa76d7d2fa5d06b0c07b34b9",
+      "database": "hawa",
+      "host": "127.0.0.1:54332",
+      "options": "--clean --if-exists"
+    },
+    {
+      "type": "working_tree_snapshot",
+      "path": "working-tree/",
+      "file_count": 1143,
+      "exclusions": [
+        "node_modules",
+        ".git",
+        "dist",
+        ".turbo"
+      ]
+    }
+  ],
+  "status": "VERIFIED"
+}

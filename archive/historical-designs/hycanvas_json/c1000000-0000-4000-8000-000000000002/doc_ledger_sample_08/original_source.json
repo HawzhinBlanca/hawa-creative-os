@@ -1,0 +1,20 @@
+{
+  "documentId": "doc_ledger_sample_08",
+  "taskId": "task_ledger_08",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "title": "Ledger Sample Document",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "f82809c545693eefe1ff439534a649576f0d7b470bbcf8feb1d1a42f35696027",
+  "archivedAt": "2026-09-12T05:33:18.317Z",
+  "sourceContent": {
+    "layers": [
+      {
+        "id": "t1",
+        "type": "text",
+        "text": "نموونەی دەقی خشتەی کۆچپێکردن"
+      }
+    ]
+  },
+  "metadata": {}
+}

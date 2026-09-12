@@ -1,0 +1,87 @@
+{
+  "structuredRevisionRequest": {
+    "scope": "copy",
+    "category": "factual_error",
+    "targetNodes": [
+      "headline-layer-1",
+      "decree-text-layer-2"
+    ],
+    "priority": "high",
+    "isReusableFeedback": true,
+    "comment": "Correct legal decree citation format per Kurdistan Regional Government official gazette"
+  },
+  "feedbackEvent": {
+    "id": "542435eb-5f44-43cd-98c7-bdcad5ae43e8",
+    "tenantId": "00000000-0000-4000-a000-000000000001",
+    "clientId": "00000000-0000-4000-a000-000000000002",
+    "taskId": "00000000-0000-4000-a000-000000000099",
+    "beforeRevisionId": "rev-audit-alpha",
+    "category": "factual_error",
+    "severity": "high",
+    "scope": "client_dna_rule",
+    "explicitness": "direct_instruction",
+    "target": {
+      "nodes": [
+        "headline-layer-1",
+        "decree-text-layer-2"
+      ],
+      "scope": "copy"
+    },
+    "comment": "Correct legal decree citation format per Kurdistan Regional Government official gazette",
+    "actorId": "00000000-0000-4000-b000-000000000001",
+    "createdAt": "2026-09-11T20:49:18.490Z"
+  },
+  "auditTrail": [
+    {
+      "id": "1687291f-d396-4bea-8e25-67beaeae8237",
+      "timestamp": "2026-09-11T20:49:18.490Z",
+      "eventType": "approval.revision_requested",
+      "actorId": "00000000-0000-4000-b000-000000000001",
+      "actorRole": "art_director",
+      "actorDisplayName": "Chief Art Director",
+      "taskId": "00000000-0000-4000-a000-000000000099",
+      "revisionId": "rev-audit-alpha",
+      "captureSetId": "00000000-0000-4000-a000-000000000088",
+      "artifactSetHash": "hash_artifact_alpha",
+      "qcReportHash": "hash_qc_alpha",
+      "details": {
+        "approvalId": "bfbf08be-7ad8-491b-a2fb-68b43049cc07",
+        "decision": "revision_requested",
+        "expectedTaskVersion": 1,
+        "actualTaskVersion": 2,
+        "nonce": "appr_1789159758490_83124111",
+        "revisionRequest": {
+          "scope": "copy",
+          "category": "factual_error",
+          "targetNodes": [
+            "headline-layer-1",
+            "decree-text-layer-2"
+          ],
+          "priority": "high",
+          "isReusableFeedback": true,
+          "comment": "Correct legal decree citation format per Kurdistan Regional Government official gazette"
+        }
+      },
+      "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entryHash": "3551d01336daa0ee97b8c516aa6c1caf52ee3128ed5a9c308a49da2e107c4f4d"
+    },
+    {
+      "id": "8b0c2c16-4502-4fb4-9723-3fd7d137d985",
+      "timestamp": "2026-09-11T20:49:18.490Z",
+      "eventType": "approval.invalidated",
+      "actorId": "00000000-0000-4000-b000-000000000001",
+      "actorRole": "art_director",
+      "actorDisplayName": "Chief Art Director",
+      "taskId": "00000000-0000-4000-a000-000000000099",
+      "revisionId": "rev-audit-alpha",
+      "details": {
+        "invalidatedApprovalId": "bfbf08be-7ad8-491b-a2fb-68b43049cc07",
+        "newRevisionId": "rev-audit-beta",
+        "reason": "post_approval_edit"
+      },
+      "prevHash": "3551d01336daa0ee97b8c516aa6c1caf52ee3128ed5a9c308a49da2e107c4f4d",
+      "entryHash": "ae1dc1affb94c0d28025018159ec54483fa0097e10c7bc676cc947bb797ac740"
+    }
+  ],
+  "auditChainingValid": true
+}

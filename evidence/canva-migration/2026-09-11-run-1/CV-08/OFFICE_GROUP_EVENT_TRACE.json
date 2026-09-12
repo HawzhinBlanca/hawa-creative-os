@@ -1,0 +1,50 @@
+{
+  "taskId": "CV-08",
+  "name": "Preserve WhatsApp with honest boundaries",
+  "generatedAt": "2026-09-11T20:15:00.000Z",
+  "testSuite": "apps/core/test/waha-honest-adapter.test.ts",
+  "ingressVerification": {
+    "channel": "waha",
+    "session": "office_waha_session_1",
+    "allowedOfficeGroup": "120363024847291039@g.us",
+    "senderJid": "9647501234567@c.us",
+    "senderDisplayName": "Office Lead Designer",
+    "observedMessageId": "waha_obs_msg_1789157673760",
+    "rawPayloadSha256": "e1d5e6e95e9d2f13fa716865ac74beaba336052c38d6acb3c4491676cb973fdd",
+    "lengthBasedHashRemoved": true,
+    "signatureVerification": {
+      "method": "HMAC-SHA256",
+      "timingSafeEqual": true,
+      "verified": true
+    },
+    "kurdishSoraniNormalization": {
+      "rawInput": "پۆستەری نوێی ئەکادیمیای کەی ئەی ئەی ئی بۆ باوەڕپێدانی نێودەوڵەتی",
+      "normalized": "پۆستەری نوێی ئەکادیمیای کەی ئەی ئەی ئی بۆ باوەڕپێدانی نێودەوڵەتی",
+      "zwnjPreserved": true,
+      "legacyArabicReplaced": true
+    }
+  },
+  "databasePersistence": {
+    "database": "hawa_test",
+    "tenantId": "00000000-0000-4000-a000-000000000008",
+    "taskId": "bd7dd071-2fed-4337-bb4c-d2f59e955583",
+    "taskState": "received",
+    "inboxEventRecorded": true,
+    "rlsBoundaryEnforced": true
+  },
+  "canvaBinding": {
+    "canvaDesignId": "canva_des_waha_1789157673760",
+    "canvaTeamId": "team_kaae_erbil",
+    "status": "bound",
+    "directionName": "primary",
+    "editUrl": "https://www.canva.com/design/canva_des_waha_1789157673760/edit",
+    "viewUrl": "https://www.canva.com/design/canva_des_waha_1789157673760/view"
+  },
+  "groupAllowlistEnforcement": {
+    "authorizedGroupStatus": 201,
+    "unauthorizedGroupStatus": 403,
+    "unauthorizedGroupCode": "WAHA_FORBIDDEN_GROUP",
+    "unauthorizedGroupDetail": "WhatsApp group unauthorized_stranger_group@g.us is not in the office allowlist",
+    "directChatStatus": 201
+  }
+}

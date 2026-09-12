@@ -128,7 +128,7 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       if (res.ok) {
         // Fallback cascade for intake_router: google -> anthropic (claude-3-5-sonnet)
         expect(res.value.deployment.provider).toBe('anthropic');
-        expect(res.value.deployment.exactModelId).toBe('claude-3-5-sonnet');
+        expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
         expect(res.value.attempts).toBe(2);
         // Anthropic pricing: (520 * 3.00 + 140 * 15.00) / 1,000,000 = (1560 + 2100) / 1,000,000 = $0.00366
         expect(res.value.usage.estimatedCostUsd).toBe(0.00366);

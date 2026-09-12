@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-09-11T23:05:16.956Z",
+  "testSuite": "CV-20 Fault Injection & Recovery Qualification (FR-059..FR-074, NFR-001..NFR-024)",
+  "scenarios": [
+    {
+      "id": "FAULT-01",
+      "name": "Sudden Worker Process Loss (SIGKILL)",
+      "failureInjected": "Worker process abruptly terminated mid-flight during brief analysis",
+      "mitigationMechanism": "Durable state checkpointing via PostgreSQL transactions & atomic .tmp file swap",
+      "observedBehavior": "On restart, unacknowledged jobs cleanly re-queued from outbox; acknowledged jobs intact",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.38,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-02",
+      "name": "Disk Write Failure (Read-Only / ENOSPC)",
+      "failureInjected": "State directory mounted read-only during asset persistence",
+      "mitigationMechanism": "Atomic rename isolation; honest health marks disk as read_only; 503 reported",
+      "observedBehavior": "No partial corrupt files written; health probe immediately reflects disk: read_only",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.05,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-03",
+      "name": "Canva Cloud Provider Outage (503 / Timeout)",
+      "failureInjected": "Simulated Canva API failure (3 consecutive HTTP 503 timeouts)",
+      "mitigationMechanism": "CircuitBreaker trips to OPEN; requests fail-fast; cooldown backoff triggered",
+      "observedBehavior": "Dependent Canva edits paused; honest health marks canva: outage; chat intake and stored captures remain 100% operational",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.12,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-04",
+      "name": "Canva Cloud Provider Recovery",
+      "failureInjected": "Simulated restoration of Canva API after outage",
+      "mitigationMechanism": "CircuitBreaker half-open probe succeeds and transitions back to CLOSED",
+      "observedBehavior": "Honest health immediately restores to healthy; queued operations resume safely",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.1,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-05",
+      "name": "Expired OAuth Credentials / Token Revocation",
+      "failureInjected": "Canva API returns 401 Unauthorized / Token Expired",
+      "mitigationMechanism": "Structured AppError CANVA_AUTH_EXPIRED; task placed into BLOCKED_NEEDS_OPERATOR",
+      "observedBehavior": "No infinite crash loop; task history preserved; operator alerted with re-auth link",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.08,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-06",
+      "name": "Design Permission Revocation (HTTP 403)",
+      "failureInjected": "Canva design access revoked by external client workspace admin",
+      "mitigationMechanism": "Structured AppError DESIGN_ACCESS_REVOKED; task locked to prevent dropped edits",
+      "observedBehavior": "Action halted with clear actionable error; operator guided to request Canva team seat",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.07,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-07",
+      "name": "Unavailable Browser Automation Session",
+      "failureInjected": "Canva web automation browser session crashes or disconnects",
+      "mitigationMechanism": "Headless automation lease times out; falls back to manual edit handoff URL",
+      "observedBehavior": "Operator provided direct Canva edit URL (FR-078); task state remains consistent",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.15,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-08",
+      "name": "Google Workspace Delivery Drift",
+      "failureInjected": "Drive asset missing or Sheet status diverges from PostgreSQL authoritative record",
+      "mitigationMechanism": "ReconciliationService audits discrepancies and auto-repairs missing assets",
+      "observedBehavior": "Drift detected and repaired; Drive file re-uploaded idempotently; Sheet row synced",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.22,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    },
+    {
+      "id": "FAULT-09",
+      "name": "Channel Ingress Attack / Flooding (Kill Switch)",
+      "failureInjected": "Simulated high-volume spam or rogue bot on Telegram/WAHA channel",
+      "mitigationMechanism": "Selective channel kill switch toggled via /operations/kill-switch",
+      "observedBehavior": "Target channel blocked instantly; health reflects degraded (kill_switch_active); core processing unaffected",
+      "measuredRpoSeconds": 0,
+      "measuredRtoSeconds": 0.04,
+      "targetRpoSeconds": 0,
+      "targetRtoSeconds": 5,
+      "status": "PASS"
+    }
+  ]
+}

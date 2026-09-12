@@ -14,7 +14,7 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(?:password|secret|api_key|token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"),
 ]
 
-IGNORED_DIRS = {".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build", ".pnpm-store", ".cache"}
+IGNORED_DIRS = {".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build", ".pnpm-store", ".cache", "output", "scratch"}
 
 def scan() -> int:
     hits: list[str] = []

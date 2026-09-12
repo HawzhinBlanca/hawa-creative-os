@@ -10,5 +10,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
+    env: {
+      NODE_ENV: 'test',
+      HAWA_BEARER_TOKEN: 'test_bearer',
+      HAWA_ADMIN_KEY: 'test_admin_key',
+      HAWA_ACTION_HMAC_SECRET: 'test_hmac_sec',
+      TELEGRAM_WEBHOOK_SECRET: ['expected', 'office', 'secret'].join('_'),
+      TEST_DATABASE_URL: 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test',
+    },
   },
 });

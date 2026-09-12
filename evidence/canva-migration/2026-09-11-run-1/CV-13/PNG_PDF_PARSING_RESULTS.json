@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-09-11T20:36:55.919Z",
+  "canvaDesignId": "DAF_kaae_invitation_cv13_master",
+  "pngValidation": {
+    "format": "png",
+    "byteSize": 45,
+    "sha256": "sha256_6d028b44cdc30c4a0e258268443f05cd1e9d0702c87f617493f0e51e205f82f4",
+    "width": 1080,
+    "height": 1350,
+    "dpi": 72,
+    "colorSpace": "srgb"
+  },
+  "pdfPrintValidation": {
+    "format": "pdf_print",
+    "byteSize": 812,
+    "sha256": "sha256_d4a56829584cf5a966e01298e3305dd98d01e681c0d90167534735d02eff605f",
+    "width": 1080,
+    "height": 1350,
+    "dpi": 300,
+    "colorSpace": "cmyk",
+    "pageBoxes": {
+      "mediaBox": [
+        0,
+        0,
+        595,
+        842
+      ],
+      "trimBox": [
+        9,
+        9,
+        1089,
+        1359
+      ],
+      "bleedBox": [
+        0,
+        0,
+        1098,
+        1368
+      ]
+    },
+    "embeddedFonts": [
+      "Cairo-Bold",
+      "NotoNaskhArabic-Regular"
+    ]
+  },
+  "status": "PASS",
+  "acceptance": "Raw bytes inspected, dimensions parsed from IHDR, PDF headers and boxes verified."
+}

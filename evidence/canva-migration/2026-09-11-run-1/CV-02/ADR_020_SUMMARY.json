@@ -1,0 +1,23 @@
+{
+  "adr_number": 20,
+  "title": "Native Canva Studio Architecture and Embedded Canvas Retirement",
+  "date": "2026-09-11",
+  "status": "Approved",
+  "supersedes": [
+    "ADR 016",
+    "ADR 018"
+  ],
+  "total_requirements": 105,
+  "counts": {
+    "PRESERVED": 95,
+    "REPLACED": 5,
+    "CONSTRAINED": 5,
+    "UNRESOLVED": 0
+  },
+  "source_guarantee_reconciliation": {
+    "working_master": "Canva Cloud Design ID",
+    "system_of_record": "Hawa PostgreSQL (briefs, brand assets, task lifecycle, audit events)",
+    "release_artifact": "Immutable local files (PNG / PDF Print) with SHA-256 digests",
+    "disaster_recovery": "Reconstruction from canonical structured brief and original brand assets"
+  }
+}

@@ -29,7 +29,8 @@ PASSES: list[str] = []
 IGNORED_TOP_LEVEL = {
     ".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
     ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output",
-    "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma"
+    "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma",
+    "scratch", ".hawa-state", "data"
 }
 IGNORED_ANYWHERE = {"__pycache__", ".DS_Store"}
 WORKSPACE_ROOT_FILES = {
@@ -43,6 +44,8 @@ def should_skip(path: Path) -> bool:
     except Exception:
         return False
     if any(part in IGNORED_ANYWHERE for part in rel.parts):
+        return True
+    if rel.name.startswith(".env") and not rel.name.endswith(".example"):
         return True
     if rel.parts and rel.parts[0] in IGNORED_TOP_LEVEL:
         return True

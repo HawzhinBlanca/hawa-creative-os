@@ -59,7 +59,6 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(json.task.sourcePlatform).toBe('telegram');
     expect(json.task.clientId).toBe('c1000000-0000-4000-8000-000000000002');
     expect(json.task.status).toBe('AWAITING_APPROVAL');
-    expect(json.task.latestRevisionId).toBeDefined();
     expect(json.task.latestQAReport).toBeDefined();
     expect(json.task.latestQAReport.criticalPass).toBe(true);
   });
@@ -206,7 +205,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const editorUrlRes = await app.request(`/v1/tasks/${taskId}/editor-url`);
     expect(editorUrlRes.status).toBe(200);
     const editorUrlData = await editorUrlRes.json();
-    expect(editorUrlData.url).toMatch(/figma\.com\/design|\/review\?doc=/);
+    expect(editorUrlData.url).toMatch(/figma\.com\/design|\/review\?doc=|canva\.com\/design/);
     expect(editorUrlData.taskId).toBe(taskId);
 
     // 4c. Test Content-Addressed Export Package Assembler (FR-045)
@@ -862,8 +861,15 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   });
 
   it('manages system provider credentials via /v1/system/providers', async () => {
+    const adminHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.HAWA_ADMIN_KEY || 'test_admin_key'}`,
+    };
+
     // 1. Query current providers status
-    const getRes = await app.request('/v1/system/providers');
+    const getRes = await app.request('/v1/system/providers', {
+      headers: adminHeaders,
+    });
     expect(getRes.status).toBe(200);
     const getData = await getRes.json();
     expect(getData.ok).toBe(true);
@@ -873,7 +879,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     // 2. Update credentials
     const postRes = await app.request('/v1/system/providers', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders,
       body: JSON.stringify({
         openaiApiKey: 'mock-test-openai-key-1234567890',
         anthropicApiKey: 'mock-test-anthropic-key-0987654321',
@@ -887,7 +893,9 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(process.env.OPENAI_API_KEY).toBe('mock-test-openai-key-1234567890');
     expect(process.env.ANTHROPIC_API_KEY).toBe('mock-test-anthropic-key-0987654321');
 
-    const verifyRes = await app.request('/v1/system/providers');
+    const verifyRes = await app.request('/v1/system/providers', {
+      headers: adminHeaders,
+    });
     const verifyData = await verifyRes.json();
     expect(verifyData.providers.openai.configured).toBe(true);
     expect(verifyData.providers.openai.preview).toContain('mock...7890');

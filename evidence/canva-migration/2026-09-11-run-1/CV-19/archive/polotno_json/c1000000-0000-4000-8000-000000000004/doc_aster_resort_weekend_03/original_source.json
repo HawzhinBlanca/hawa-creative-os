@@ -1,0 +1,37 @@
+{
+  "documentId": "doc_aster_resort_weekend_03",
+  "taskId": "t-aster-weekend-promo",
+  "clientId": "c1000000-0000-4000-8000-000000000004",
+  "title": "Aster Hotel & Resort Weekend Getaway",
+  "sourceFormat": "polotno_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "6570908e99d223008f83359df73ee11ea3e980f34cd990518bf527870ecabcd2",
+  "archivedAt": "2026-09-11T23:02:03.371Z",
+  "sourceContent": {
+    "pages": [
+      {
+        "id": "aster_p1",
+        "children": [
+          {
+            "id": "txt1",
+            "type": "text",
+            "text": "ئاستێر هۆتێل و ڕیزۆرت - هەولێر"
+          },
+          {
+            "id": "txt2",
+            "type": "text",
+            "text": "بەرواری تایبەت بۆ پشووی کۆتایی هەفتە لە باوەشی سروشتدا"
+          },
+          {
+            "id": "txt3",
+            "type": "text",
+            "text": "پەیوەندی بکەن بە ٠٧٥٠١٢٣٤٥٦٧ بۆ حجزکردن"
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#1E293B"
+  }
+}

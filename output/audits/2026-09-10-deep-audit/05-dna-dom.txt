@@ -1,0 +1,184 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA" [active]
+    - button "Creative Library"
+    - button "Adapters"
+    - button "Actionable Operations"
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Client DNA & Brand Governance" [level=1]
+  - text: Brand tokens, approved copy invariants, and versioned client rules
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - heading "Client Brand DNA & Governance" [level=1]
+  - heading "Clients & Tenants" [level=2]
+  - generic: 7 Registered
+  - generic: Hawa Creative
+  - code: HAWA
+  - text: · CKB (RTL)
+  - generic: v1
+  - generic: 2 cols · 1 rules
+  - generic: Drustee Evidence-First Health
+  - code: DRUSTEE
+  - text: · CKB (RTL)
+  - generic: v1
+  - generic: 3 cols · 3 rules
+  - generic: Aster Hotel & Resort
+  - code: ASTER
+  - text: · CKB (RTL)
+  - generic: v12
+  - generic: 3 cols · 3 rules
+  - generic: Nova Tech Systems
+  - code: NOVA
+  - text: · EN (LTR)
+  - generic: v8
+  - generic: 3 cols · 2 rules
+  - generic: Rona Haute Couture
+  - code: RONA
+  - text: · CKB (RTL)
+  - generic: v4
+  - generic: 3 cols · 2 rules
+  - generic: FastPay Mobile Wallet
+  - code: FASTPAY
+  - text: · CKB (RTL)
+  - generic: v1
+  - generic: 3 cols · 3 rules
+  - generic: Kurdistan Accrediting Association for Education (KAAE)
+  - code: KAAE
+  - text: · EN (LTR)
+  - generic: v1
+  - generic: 8 cols · 6 rules
+  - separator
+  - button "+ Onboard Client Tenant":
+    - generic: +
+    - generic: Onboard Client Tenant
+  - generic: "Invariant #4 Strict Isolation: Each client scope is immutable and bounded in PostgreSQL before retrieval commences. Zero cross-tenant leakage."
+  - button "🎨 Brand & Palette"
+  - button "🏛️ Tenant Identity"
+  - button "✍️ Language & RTL"
+  - button "⚖️ Rules & Principles"
+  - heading "Drustee Evidence-First Health" [level=2]
+  - generic: v1 active
+  - generic: LIVE API
+  - text: "Tenant ID:"
+  - code: tenant-drustee
+  - text: "· Client ID:"
+  - code: client-drustee
+  - button "🔄 Refresh"
+  - button "🛡️ Commit Snapshot":
+    - generic: 🛡️
+    - generic: Commit Snapshot
+  - heading "Approved Brand Palette" [level=3]
+  - button "🎨 Extract from Logo"
+  - button "+ Add Swatch"
+  - generic: primary
+  - button "×"
+  - generic: Botanical Deep Emerald
+  - code: "#0D5C3A"
+  - 'generic "Contrast ratio against canvas: 1.8:1"': Fail 1.8:1
+  - generic: background
+  - button "×"
+  - generic: Forest Pine
+  - code: "#062E1D"
+  - 'generic "Contrast ratio against canvas: 1:1"': Fail 1:1
+  - generic: accent
+  - button "×"
+  - generic: Warm Amber Gold
+  - code: "#D4AF37"
+  - 'generic "Contrast ratio against canvas: 7.1:1"': AAA 7.1:1
+  - heading "Official Cryptographic Assets" [level=3]
+  - paragraph: "Assets protected by Invariant #5 with deterministic SHA-256 integrity verification."
+  - table:
+    - rowgroup:
+      - row "Asset Name Role Status Storage Key SHA-256 Fingerprint":
+        - columnheader "Asset Name"
+        - columnheader "Role"
+        - columnheader "Status"
+        - columnheader "Storage Key"
+        - columnheader "SHA-256 Fingerprint"
+    - rowgroup:
+      - row "Official Drustee Wordmark & Leaf Seal logo_primary verified active assets/drustee/logo_official.svg sha256_d892a…":
+        - cell "Official Drustee Wordmark & Leaf Seal"
+        - cell "logo_primary":
+          - code: logo_primary
+        - cell "verified active":
+          - generic: verified active
+        - cell "assets/drustee/logo_official.svg"
+        - cell "sha256_d892a…":
+          - code: sha256_d892a…
+      - row "Vitamin D3 + K2 Amber Dropper Bottle Vector logo_secondary verified active assets/drustee/vit_d3_bottle.svg sha256_e1098…":
+        - cell "Vitamin D3 + K2 Amber Dropper Bottle Vector"
+        - cell "logo_secondary":
+          - code: logo_secondary
+        - cell "verified active":
+          - generic: verified active
+        - cell "assets/drustee/vit_d3_bottle.svg"
+        - cell "sha256_e1098…":
+          - code: sha256_e1098…
+      - row "Wild Alaskan Omega-3 Softgels Bottle Vector badge verified active assets/drustee/omega3_bottle.svg sha256_f9018…":
+        - cell "Wild Alaskan Omega-3 Softgels Bottle Vector"
+        - cell "badge":
+          - code: badge
+        - cell "verified active":
+          - generic: verified active
+        - cell "assets/drustee/omega3_bottle.svg"
+        - cell "sha256_f9018…":
+          - code: sha256_f9018…
+      - row "GMP Certified Manufacturing Badge badge verified active assets/drustee/badge_gmp.svg sha256_g8812…":
+        - cell "GMP Certified Manufacturing Badge"
+        - cell "badge":
+          - code: badge
+        - cell "verified active":
+          - generic: verified active
+        - cell "assets/drustee/badge_gmp.svg"
+        - cell "sha256_g8812…":
+          - code: sha256_g8812…
+      - row "Third-Party Independent Lab Tested Badge badge verified active assets/drustee/badge_lab.svg sha256_h7712…":
+        - cell "Third-Party Independent Lab Tested Badge"
+        - cell "badge":
+          - code: badge
+        - cell "verified active":
+          - generic: verified active
+        - cell "assets/drustee/badge_lab.svg"
+        - cell "sha256_h7712…":
+          - code: sha256_h7712…
+  - heading "Governance & Audit" [level=2]
+  - generic: 1 Snapshots
+  - generic: Current Revision
+  - generic: v1 Active
+  - button "🛡️ Create Immutable Version"
+  - heading "Candidate Rules (Governed Learning)" [level=3]
+  - generic: Cursor / Figma Grade
+  - generic: Enforce top-right brand logo anchor in RTL Kurdish layouts
+  - generic: 96% CONFIDENCE
+  - paragraph: Derived from 6 consecutive approved campaign deliverables with 0 counterexamples
+  - generic: "Occurrences: 6"
+  - generic: ·
+  - text: "SHA-256:"
+  - code: 9f86d08188…
+  - button "Approve & Promote to Active DNA"
+  - button "Dismiss"
+  - heading "Immutable Snapshot Timeline" [level=3]
+  - generic: v1
+  - generic: 11:20 AM
+  - paragraph: "Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets"
+  - code: sha256_ce81bdb…
+  - button "Inspect"

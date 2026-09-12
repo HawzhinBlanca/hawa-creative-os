@@ -1,0 +1,146 @@
+{
+  "timestamp": "2026-09-11T22:54:43.007Z",
+  "architecture": "Lean Hawa Work Desk (Canva Studio Architecture ADR 020)",
+  "primaryNavigation": [
+    {
+      "id": "work",
+      "label": "Work Desk",
+      "icon": "💼",
+      "route": "#/work",
+      "purpose": "Actionable creative queue, Canva Studio handoff, captured preview, and verified delivery gate",
+      "components": [
+        "WorkQueue",
+        "TaskDetail",
+        "PrimaryActionBar",
+        "CapturedPreviewStage",
+        "BriefAndExactCopy",
+        "BrandDNA",
+        "QAPreflight",
+        "AuditTimeline"
+      ]
+    },
+    {
+      "id": "clients",
+      "label": "Client DNA & Library",
+      "icon": "🧬",
+      "route": "#/clients",
+      "purpose": "Client DNA profiles, guidelines, tokens, and verified asset library",
+      "components": [
+        "ClientDnaProfiles",
+        "BrandTokens",
+        "ApprovedCopyInvariants",
+        "DestinationsConfig",
+        "VerifiedAssetLibrary"
+      ]
+    },
+    {
+      "id": "settings",
+      "label": "Settings & System Health",
+      "icon": "⚙️",
+      "route": "#/settings",
+      "purpose": "Channel bridges (Telegram, WAHA WhatsApp), honest health probes, and audit logs",
+      "components": [
+        "AdapterBridges",
+        "HonestHealthInspector",
+        "KillSwitches",
+        "AuditLogs",
+        "TokenCostGovernor"
+      ]
+    }
+  ],
+  "legacyRouteReplacements": [
+    {
+      "legacyRoute": "#/inbox",
+      "legacyPurpose": "Task intake queue",
+      "newDestination": "#/work",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Work Desk queue view with fast search, status pills, and inbound brief presets",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/review",
+      "legacyPurpose": "Polotno / bespoke in-browser canvas editor",
+      "newDestination": "#/work",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Work Desk task detail view with large captured preview, native Canva handoff, and 5 primary actions",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/dna",
+      "legacyPurpose": "Client DNA profiles",
+      "newDestination": "#/clients",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Clients screen focused on Client DNA brand tokens, rules, and destination folders",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/library",
+      "legacyPurpose": "Vector asset library",
+      "newDestination": "#/clients",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Clients screen with active Creative Asset Library tab showing SHA-256 fingerprints",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/settings",
+      "legacyPurpose": "Adapter settings and credentials",
+      "newDestination": "#/settings",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Settings screen with Canva Studio status, adapter controls, and honest health",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/ops",
+      "legacyPurpose": "Operations & reconciliation",
+      "newDestination": "#/settings",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Settings operations tab with live telemetry and reconciliation logs",
+      "blankLinks": false
+    },
+    {
+      "legacyRoute": "#/eval",
+      "legacyPurpose": "Model evaluations and benchmarks",
+      "newDestination": "#/settings",
+      "resolutionStatus": "ACTIVE_WORKING_DESTINATION",
+      "behavior": "Renders Settings model registry & evaluation status",
+      "blankLinks": false
+    }
+  ],
+  "primaryActionsMatrix": [
+    {
+      "action": "Edit in Canva",
+      "requirement": "FR-078",
+      "buttonId": "btn-edit-in-canva",
+      "behavior": "Opens bound native Canva document in external editor tab. Nonce/token verified.",
+      "status": "VERIFIED"
+    },
+    {
+      "action": "Capture for review",
+      "requirement": "FR-078, CV-13, CV-14",
+      "buttonId": "btn-capture-for-review",
+      "behavior": "Captures high-res render package (PNG 24-bit + PDF Print) into immutable revision with SHA-256 and runs QA preflight.",
+      "status": "VERIFIED"
+    },
+    {
+      "action": "Request revision",
+      "requirement": "FR-078, CV-15",
+      "buttonId": "btn-request-revision",
+      "behavior": "Opens structured feedback drawer, logs notes into immutable history, and transitions status to IN_PROGRESS.",
+      "status": "VERIFIED"
+    },
+    {
+      "action": "Approve captured files",
+      "requirement": "FR-041, FR-078, CV-15",
+      "buttonId": "btn-approve-captured",
+      "behavior": "Binds human approval (Art Director / Brand Lead) strictly to the captured revision checksum.",
+      "status": "VERIFIED"
+    },
+    {
+      "action": "Deliver approved files",
+      "requirement": "FR-046, FR-048, FR-049, FR-078, CV-16",
+      "buttonId": "btn-deliver-approved",
+      "behavior": "Publishes approved package to Google Drive folder and upserts reporting Sheet row with readback verification.",
+      "status": "VERIFIED"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "documentId": "doc_drustee_vitamin_d3_02",
+  "taskId": "t-drustee-d3-launch",
+  "clientId": "c1000000-0000-4000-8000-000000000003",
+  "title": "Drustee Vitamin D3 Healthcare Campaign",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "d3293a9ca46717f409c465ec58be3f9844d7af8f10a68d53b1d376bcfd3fd628",
+  "archivedAt": "2026-09-11T23:02:03.370Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "layers": [
+      {
+        "id": "bg",
+        "type": "frame",
+        "fill": "#01585F",
+        "width": 1080,
+        "height": 1350
+      },
+      {
+        "id": "head",
+        "type": "text",
+        "text": "دروستی - ڤیتامین دی٣ بە کواڵێتی ئەوروپی"
+      },
+      {
+        "id": "body",
+        "type": "text",
+        "text": "تەندروستی ئێسک و سیستەمی بەرگری بەهێز بکە بە پێوەرە پزیشکییەکان"
+      },
+      {
+        "id": "discl",
+        "type": "text",
+        "text": "مۆڵەتپێدراو لەلایەن وەزارەتی تەندروستی حکومەتی هەرێمی کوردستان"
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#01585F"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "documentId": "doc_nova_telecom_06",
+  "taskId": "t-nova-telecom-4g",
+  "clientId": "c1000000-0000-4000-8000-000000000007",
+  "title": "Nova Telecom 4G+ Broadband Expansion",
+  "sourceFormat": "polotno_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "5641943822cec10f6acd8149657342cd456c66fa8077fa9b196c89bd87d1e822",
+  "archivedAt": "2026-09-11T23:02:03.371Z",
+  "sourceContent": {
+    "pages": [
+      {
+        "id": "nova_p1",
+        "children": [
+          {
+            "id": "t1",
+            "type": "text",
+            "text": "نۆڤا تیلیکۆم - خێراییەکی بێسنوور لە سەرانسەری کوردستان"
+          },
+          {
+            "id": "t2",
+            "type": "text",
+            "text": "هێڵی ئینتەرنێتی بێبڕانەوە بۆ ماڵ و ئۆفیس"
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#0369A1"
+  }
+}

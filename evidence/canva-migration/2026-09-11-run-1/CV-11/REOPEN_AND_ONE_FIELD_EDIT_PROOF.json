@@ -1,0 +1,59 @@
+{
+  "task": "CV-11",
+  "generatedAt": "2026-09-11T23:29:50Z",
+  "requirements": ["FR-028", "FR-031", "FR-032"],
+  "oneFieldEditProof": {
+    "designId": "DAF_7f8a9b1c2d3e4f5a",
+    "targetElementId": "elem_text_cta",
+    "beforeEdit": {
+      "version": 1,
+      "text": "پشتڕاستکردنەوەی ئامادەبوون: www.kaae.org",
+      "color": "#D4A94C"
+    },
+    "appliedEdit": {
+      "newText": "تۆمارکردنی بەپەلە: www.kaae.org/urgent",
+      "newColor": "#38BDF8"
+    },
+    "afterEdit": {
+      "version": 2,
+      "text": "تۆمارکردنی بەپەلە: www.kaae.org/urgent",
+      "color": "#38BDF8",
+      "versionIncremented": true
+    },
+    "unrelatedNodesPreservedByteForByte": {
+      "headline": {
+        "text": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە",
+        "box": { "x": 60, "y": 240, "width": 960, "height": 160 },
+        "preserved": true
+      },
+      "officialLogo": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "box": { "x": 410, "y": 80, "width": 260, "height": 110 },
+        "preserved": true
+      },
+      "backgroundShape": {
+        "fillColor": "#0A1628",
+        "box": { "x": 0, "y": 0, "width": 1080, "height": 1350 },
+        "preserved": true
+      }
+    }
+  },
+  "novelLayoutProof": {
+    "client": "Drustee Evidence-First Health",
+    "designId": "DAF_novel_81c2d3e4f5a6b7c8",
+    "route": "editable_composition",
+    "addressableElementsCount": 6,
+    "textElementsCount": 4,
+    "semanticCoverage": {
+      "isComplete": true,
+      "hasLogo": true,
+      "textNodesCount": 4
+    },
+    "flatPosterUploadDefense": {
+      "probe": "Attempt to pass whole-poster flat SVG without live text nodes",
+      "rejected": true,
+      "errorCode": "FLAT_POSTER_REJECTED",
+      "detail": "Rejecting flat whole-poster upload. Invariant violation: Every automated graphic must retain an editable structured source document with live text and independently addressable nodes (FR-028)."
+    }
+  }
+}

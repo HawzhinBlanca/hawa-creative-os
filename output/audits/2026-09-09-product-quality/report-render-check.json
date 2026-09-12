@@ -1,0 +1,83 @@
+{
+  "images": [
+    {
+      "alt": "Initial narrow inbox",
+      "complete": true,
+      "height": 674,
+      "width": 572
+    },
+    {
+      "alt": "Desktop inbox",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "New-task modal",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Live candidate review",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Figma proof hub",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Client DNA",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Creative library",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Operations",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Evaluations",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Adapters",
+      "complete": true,
+      "height": 1000,
+      "width": 1440
+    },
+    {
+      "alt": "Mobile toolbar",
+      "complete": true,
+      "height": 844,
+      "width": 390
+    },
+    {
+      "alt": "Mobile canvas",
+      "complete": true,
+      "height": 844,
+      "width": 390
+    },
+    {
+      "alt": "After Fit View",
+      "complete": true,
+      "height": 844,
+      "width": 390
+    }
+  ],
+  "title": "Hawdesign — Independent Quality Audit"
+}

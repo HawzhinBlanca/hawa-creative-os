@@ -45,8 +45,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-hawa_owner}:${POSTGRES_PASSWORD:-hawa_production_secure_pass}@postgres:5432/${POSTGRES_DB:-hawa}
+      DATABASE_URL: postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@postgres:5432/hawa
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-expected_office_secret}
+      RESTATE_INGRESS_URL: http://restate:8080
+    extra_hosts:
+      - "api.telegram.org:149.154.167.99"
     volumes:
       - ./.env.production:/app/infra/docker/.env.production
     networks:
@@ -74,7 +77,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 9080
-      DATABASE_URL: postgresql://${POSTGRES_USER:-hawa_owner}:${POSTGRES_PASSWORD:-hawa_production_secure_pass}@postgres:5432/${POSTGRES_DB:-hawa}
+      DATABASE_URL: postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@postgres:5432/hawa
       RESTATE_INGRESS_URL: http://restate:8080
     networks:
       - core
@@ -100,6 +103,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-hawa_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hawa_production_secure_pass}
       PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:54332:5432"
     command:
       - postgres
       - -c
@@ -113,6 +118,7 @@ services:
       - ../../db/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
     networks:
       - core
+      - edge
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hawa_owner} -d ${POSTGRES_DB:-hawa}"]
       interval: 10s

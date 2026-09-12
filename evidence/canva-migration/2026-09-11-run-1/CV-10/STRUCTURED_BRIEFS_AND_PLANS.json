@@ -1,0 +1,129 @@
+{
+  "task": "CV-10",
+  "generatedAt": "2026-09-11T23:26:40Z",
+  "requirements": ["FR-013", "FR-014", "FR-015", "FR-016", "FR-025", "NFR-018"],
+  "briefs": [
+    {
+      "briefId": "b1000000-0000-4000-8000-000000000001",
+      "taskId": "t1000000-0000-4000-8000-000000000001",
+      "clientId": "c1000000-0000-4000-8000-000000000002",
+      "clientName": "KAAE (Kurdistan Accreditation Agency)",
+      "clientDnaVersion": 1,
+      "objective": "Official KAAE Quality Standards Announcement for Academic Year 2026-2027",
+      "taskRoute": "template_fill",
+      "primaryLanguage": "ckb",
+      "direction": "rtl",
+      "variants": [
+        {
+          "id": "v_feed",
+          "name": "Social Feed Card (4:5)",
+          "width": 1080,
+          "height": 1350,
+          "aspectRatio": "4:5",
+          "role": "instagram_post"
+        }
+      ],
+      "exactCopy": [
+        {
+          "id": "ec_headline",
+          "role": "headline",
+          "text": "ڕاگەیاندنی فەرمی ستانداردەکانی متمانەبەخشین",
+          "language": "ckb",
+          "direction": "rtl",
+          "approved": true,
+          "protectedTokens": []
+        },
+        {
+          "id": "ec_decree",
+          "role": "body",
+          "text": "بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان لە بەرواری 2026-09-15",
+          "language": "ckb",
+          "direction": "rtl",
+          "approved": true,
+          "protectedTokens": [
+            {
+              "type": "date",
+              "raw": "2026-09-15",
+              "normalized": "2026-09-15",
+              "mustPreserveExact": true
+            }
+          ]
+        }
+      ],
+      "missingFacts": [],
+      "requiredAssetRoles": ["logo_primary"]
+    },
+    {
+      "briefId": "b1000000-0000-4000-8000-000000000002",
+      "taskId": "t1000000-0000-4000-8000-000000000002",
+      "clientId": "c1000000-0000-4000-8000-000000000003",
+      "clientName": "Drustee Evidence-First Health",
+      "clientDnaVersion": 1,
+      "objective": "Vitamin D3 Clinical Promo Omnichannel Launch",
+      "taskRoute": "multi_format_composition",
+      "primaryLanguage": "ckb",
+      "direction": "rtl",
+      "variants": [
+        { "id": "v_feed", "name": "Feed", "width": 1080, "height": 1350, "aspectRatio": "4:5", "role": "instagram_post" },
+        { "id": "v_story", "name": "Story", "width": 1080, "height": 1920, "aspectRatio": "9:16", "role": "instagram_story" },
+        { "id": "v_landscape", "name": "Landscape", "width": 1920, "height": 1080, "aspectRatio": "16:9", "role": "banner" },
+        { "id": "v_print_a4", "name": "Print A4", "width": 2480, "height": 3508, "aspectRatio": "1:1.414", "role": "custom" }
+      ],
+      "exactCopy": [
+        {
+          "id": "ec_h1",
+          "role": "headline",
+          "text": "سیرۆمی ڤیتامین C دروستی",
+          "language": "ckb",
+          "direction": "rtl",
+          "approved": true,
+          "protectedTokens": []
+        },
+        {
+          "id": "ec_price",
+          "role": "subheadline",
+          "text": "داشکاندنی تایبەت بە نرخی 25,000 IQD تا ڕێکەوتی 2026-09-30",
+          "language": "ckb",
+          "direction": "rtl",
+          "approved": true,
+          "protectedTokens": [
+            { "type": "price", "raw": "25,000 IQD", "normalized": "25,000 IQD", "mustPreserveExact": true },
+            { "type": "date", "raw": "2026-09-30", "normalized": "2026-09-30", "mustPreserveExact": true }
+          ]
+        },
+        {
+          "id": "ec_disclaimer",
+          "role": "disclaimer",
+          "text": "تەواوکەری خۆراکییە و جێگەی دەرمان ناگرێتەوە",
+          "language": "ckb",
+          "direction": "rtl",
+          "approved": true,
+          "protectedTokens": []
+        }
+      ],
+      "missingFacts": [],
+      "requiredAssetRoles": ["logo_primary"]
+    }
+  ],
+  "layoutPlans": [
+    {
+      "planId": "p1000000-0000-4000-8000-000000000001",
+      "briefId": "b1000000-0000-4000-8000-000000000001",
+      "topology": "slot_matrix",
+      "rationale": "Multi-format canonical layout for Social Feed Card (4:5) prioritizing RTL Kurdish Sorani right-aligned typography with diacritic-safe clearance",
+      "zones": [
+        { "id": "zone_header", "name": "header_logo_zone", "x": 60, "y": 60, "width": 960, "height": 120, "allowedRoles": ["official_logo"], "zIndex": 10 },
+        { "id": "zone_hero", "name": "hero_visual_zone", "x": 60, "y": 200, "width": 960, "height": 680, "allowedRoles": ["subject_cutout", "product_render", "background"], "zIndex": 1 },
+        { "id": "zone_content", "name": "typography_copy_zone", "x": 60, "y": 910, "width": 960, "height": 360, "allowedRoles": ["headline", "subheadline", "cta", "disclaimer"], "zIndex": 20 }
+      ],
+      "ingredients": [
+        { "id": "ing_bg", "role": "background", "sourceType": "vector_shape", "targetWidth": 1080, "targetHeight": 1350, "transparentBackground": false },
+        { "id": "ing_logo", "role": "official_logo", "sourceType": "official_asset", "targetWidth": 260, "targetHeight": 110, "transparentBackground": true }
+      ],
+      "artDirectionReference": {
+        "shippedInArtifact": false,
+        "modelSnapshot": "gemini-3.8-flash"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "documentId": "doc_figma_brand_guideline_10",
+  "taskId": "t-legacy-figma-brand-02",
+  "clientId": "c1000000-0000-4000-8000-000000000001",
+  "title": "Historical Multi-Tenant Figma Component System",
+  "sourceFormat": "figma_rest_ref",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "121d87db18fbdd5f7e890b18b7bc9dc9448e22f337054c61975b22fea3b88b8f",
+  "archivedAt": "2026-09-11T23:02:03.372Z",
+  "sourceContent": {
+    "figmaFileKey": "fig_shared_design_system_legacy",
+    "nodeId": "4:18",
+    "originalUrl": "https://www.figma.com/file/fig_shared_design_system_legacy/Core-UI"
+  },
+  "metadata": {
+    "inaccessible": true,
+    "tokenRevoked": true,
+    "blockerReason": "Legacy Figma Enterprise seat revoked during Canva migration kickoff; named blocker per FR-032"
+  }
+}

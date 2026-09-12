@@ -1,0 +1,12 @@
+{
+  "anonymous": {
+    "status": 404,
+    "title": "Task Not Found"
+  },
+  "never_issued_session": {
+    "status": 404,
+    "title": "Task Not Found"
+  },
+  "scope": "Random nonexistent task ID; neither request created or changed any record.",
+  "interpretation": "Inconclusive for authentication: both requests return not-found, so route ordering may mask the authorization result. Not used as proof of the session bypass; isolated forgedSession probe supplies that proof."
+}

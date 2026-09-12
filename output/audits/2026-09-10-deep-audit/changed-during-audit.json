@@ -1,0 +1,9 @@
+[
+  "apps/core/src/app.ts",
+  "apps/core/tsconfig.tsbuildinfo",
+  "packages/creative/src/templates/kaae-announcement.template.ts",
+  "packages/creative/test/kaae-creative-generation.test.ts",
+  "packages/creative/tsconfig.tsbuildinfo",
+  "packages/integrations/src/telegram-bridge.ts",
+  "packages/integrations/tsconfig.tsbuildinfo"
+]

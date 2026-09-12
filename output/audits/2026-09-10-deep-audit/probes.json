@@ -1,0 +1,237 @@
+{
+  "anonymousIntake": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required: anonymous or unauthorized task creation is denied",
+      "instance": "http://localhost/v1/tasks"
+    }
+  },
+  "forgedSession": {
+    "status": 401,
+    "accepted": false
+  },
+  "copyReadback": {
+    "createHeadlineCkb": "سڵاو",
+    "readHeadlineCkb": "سڵاو",
+    "createCopyCkb": "٢٥ دۆلار",
+    "readCopyCkb": "٢٥ دۆلار",
+    "createHeadlineEn": "Exact headline",
+    "readHeadlineEn": "Exact headline"
+  },
+  "anonymousRead": {
+    "status": 401
+  },
+  "qaBypass": {
+    "revisionStatus": 201,
+    "approvalStatus": 412,
+    "beforeQaCount": 0,
+    "afterQa": []
+  },
+  "staleApproval": {
+    "status": 412,
+    "approvedRevision": "57c5bb87-b1d8-4612-a101-fa08de37d4f4",
+    "currentRevision": "cde77d63-e879-4cb3-ab5d-5096730442c3",
+    "currentState": "received",
+    "newRevision": "cde77d63-e879-4cb3-ab5d-5096730442c3"
+  },
+  "duplicateApproval": {
+    "status": 412,
+    "approvalCount": 0
+  },
+  "rejection": {
+    "status": 409,
+    "taskState": "received"
+  },
+  "nonArrayNodes": {
+    "revisionStatus": 400,
+    "approvalStatus": 500
+  },
+  "crossTaskControl": {
+    "status": 400
+  },
+  "crossTaskRevisionRead": {
+    "status": 404,
+    "returnedOtherTasksRevision": false
+  },
+  "anonymousRoute": {
+    "status": 401,
+    "requestedClient": "client-aster",
+    "dbClient": "c1000000-0000-4000-8000-000000000002",
+    "dbState": "received"
+  },
+  "anonymousDnaMutation": {
+    "status": 401
+  },
+  "anonymousBudgetMutation": {
+    "status": 401
+  },
+  "clientIdentifier": {
+    "status": 400,
+    "title": "Invalid Client Identifier"
+  },
+  "publication": {
+    "ok": true,
+    "state": "drive_complete",
+    "verified": false,
+    "fileVerified": false,
+    "observedSize": 999999,
+    "actualName": "wrong.txt",
+    "sheetSynced": false,
+    "calls": [
+      {
+        "url": "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        "method": "POST",
+        "containsSyntheticBytes": false,
+        "bodyLength": 665
+      },
+      {
+        "url": "https://www.googleapis.com/drive/v3/files/controlled_remote_file_1?fields=id,name,size,mimeType,webViewLink",
+        "method": "GET",
+        "containsSyntheticBytes": false,
+        "bodyLength": 0
+      },
+      {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/audit-sheet/values/A1:append?valueInputOption=USER_ENTERED",
+        "method": "POST",
+        "containsSyntheticBytes": false,
+        "bodyLength": 206
+      }
+    ]
+  },
+  "reconciliation": {
+    "networkCalls": 0,
+    "state": "drive_complete",
+    "sheetSynced": false
+  },
+  "idempotencyChangedPayload": {
+    "returnedOldPublication": false,
+    "networkCalls": 0
+  },
+  "publisherRestart": {
+    "newUploads": 1
+  },
+  "emptyPublication": {
+    "ok": true,
+    "state": "failed",
+    "verified": false,
+    "fileCount": 0,
+    "sheetSynced": false
+  },
+  "physicalMismatch": {
+    "state": "drive_complete",
+    "verified": false,
+    "actualByteLength": 20,
+    "reportedByteLength": 999999,
+    "sheetWrongOtherColumnsAccepted": false
+  },
+  "publicationDatabaseFailure": {
+    "status": 422,
+    "persistedState": "received"
+  },
+  "hiddenCopyLogoAndMissingVariant": {
+    "criticalPass": false,
+    "checks": [
+      {
+        "kind": "layout",
+        "status": "failed"
+      },
+      {
+        "kind": "copy",
+        "status": "failed"
+      },
+      {
+        "kind": "bidi",
+        "status": "passed"
+      },
+      {
+        "kind": "brand",
+        "status": "failed"
+      },
+      {
+        "kind": "layout",
+        "status": "warning"
+      },
+      {
+        "kind": "layout",
+        "status": "passed"
+      }
+    ],
+    "findings": [
+      "REQUIRED_PAGE_VARIANT_MISSING",
+      "OFF_CANVAS_NODE",
+      "INVALID_FONT_FAMILY",
+      "EXACT_COPY_MISSING",
+      "OFFICIAL_LOGO_MISSING_OR_MUTATED",
+      "SAFE_ZONE_BREACH",
+      "SAFE_ZONE_BREACH"
+    ]
+  },
+  "requiredLogoNoDna": {
+    "criticalPass": false
+  },
+  "wrongEval": {
+    "dataset": "routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 0,
+    "failedCases": 200,
+    "passRate": 0,
+    "criticalViolations": 200
+  },
+  "namedEvalControl": {
+    "dataset": "routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 0,
+    "failedCases": 200,
+    "passRate": 0,
+    "criticalViolations": 200
+  },
+  "figmaArtifacts": {
+    "networkCalls": 0,
+    "bridgeConnected": false,
+    "createOk": true,
+    "exportOk": true,
+    "sourceByteSize": 645,
+    "sourceExists": true,
+    "renderOk": true,
+    "requestedDimensions": [
+      1080,
+      1350
+    ],
+    "rendered": [
+      {
+        "storageKey": "/private/tmp/hawa-deep-audit-20260910/.temp_artifacts/figma-renders/c6ac73d1-7a36-486c-900c-08d59f0ffe46/png/rev-1.png",
+        "byteSize": 8,
+        "width": 1080,
+        "height": 1350,
+        "exists": true
+      }
+    ],
+    "unknownPdfOk": false,
+    "unknownPdfBytes": []
+  },
+  "futureOutbox": {
+    "leasedBeforeAvailableAt": false
+  },
+  "concurrentOutbox": {
+    "leaseCounts": [
+      0,
+      0
+    ],
+    "sharedCommandIds": []
+  },
+  "freshProcess": {
+    "exitCode": 0,
+    "taskStatus": 200,
+    "state": "RECEIVED",
+    "headlineCkb": "سڵاو",
+    "copyCkb": "٢٥ دۆلار",
+    "listStatus": 200,
+    "listIncludesTask": true,
+    "listCount": 32,
+    "revisionStatus": 200
+  },
+  "scope": "All writes used isolated hawa_audit_20260910. All fetch calls intercepted; no real external publication. Real PostgreSQL and fresh Node subprocess. Frozen source snapshot."
+}

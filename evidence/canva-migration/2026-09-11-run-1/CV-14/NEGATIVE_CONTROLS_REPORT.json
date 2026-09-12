@@ -1,0 +1,216 @@
+{
+  "evaluatedAt": "2026-09-11T20:40:37.005Z",
+  "totalNegativeControls": 10,
+  "allRejectedForIntendedReason": true,
+  "controls": [
+    {
+      "id": "NC-01",
+      "defect": "Altered Date",
+      "expectedRuleId": "PROTECTED_TOKEN_MUTATED",
+      "status": "failed",
+      "finding": {
+        "ruleId": "PROTECTED_TOKEN_MUTATED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Protected token \"2026-09-15\" (type: date) was mutated or omitted in canvas text",
+        "nodeIds": [],
+        "evidence": {
+          "token": "2026-09-15",
+          "type": "date"
+        }
+      }
+    },
+    {
+      "id": "NC-02",
+      "defect": "Altered Statutory Decree",
+      "expectedRuleId": "PROTECTED_TOKEN_MUTATED",
+      "status": "failed",
+      "finding": {
+        "ruleId": "PROTECTED_TOKEN_MUTATED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Protected token \"یاسای ژمارە (٦)ی ساڵی ٢٠٢٢\" (type: legal_decree) was mutated or omitted in canvas text",
+        "nodeIds": [],
+        "evidence": {
+          "token": "یاسای ژمارە (٦)ی ساڵی ٢٠٢٢",
+          "type": "legal_decree"
+        }
+      }
+    },
+    {
+      "id": "NC-03",
+      "defect": "Confidentiality Policy Violation",
+      "expectedRuleId": "CONFIDENTIALITY_POLICY_VIOLATION",
+      "status": "failed",
+      "finding": {
+        "ruleId": "CONFIDENTIALITY_POLICY_VIOLATION",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "compliance",
+        "message": "Confidential or forbidden token \"internal_budget_confidential\" leaked into design canvas text",
+        "nodeIds": [
+          "node_headline"
+        ],
+        "evidence": {
+          "leakedToken": "internal_budget_confidential",
+          "nodeText": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە [internal_budget_confidential]"
+        }
+      }
+    },
+    {
+      "id": "NC-04",
+      "defect": "Wrong Official Logo Hash",
+      "expectedRuleId": "OFFICIAL_LOGO_MISSING_OR_MUTATED",
+      "status": "failed",
+      "finding": {
+        "ruleId": "OFFICIAL_LOGO_MISSING_OR_MUTATED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "brand",
+        "message": "Official primary logo hash does not exist as a visible canvas node",
+        "nodeIds": [],
+        "evidence": {
+          "expectedSha256": "accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7",
+          "approvedShas": [
+            "accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7",
+            "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+          ]
+        }
+      }
+    },
+    {
+      "id": "NC-05",
+      "defect": "Invisible Text",
+      "expectedRuleId": "INVISIBLE_TEXT_DEFECT",
+      "status": "failed",
+      "finding": {
+        "ruleId": "INVISIBLE_TEXT_DEFECT",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "typography",
+        "message": "Text node node_subheadline is invisible (opacity: 0, visible: undefined, color: undefined)",
+        "nodeIds": [
+          "node_subheadline"
+        ],
+        "evidence": {
+          "opacity": 0,
+          "background": "#0A1628"
+        }
+      }
+    },
+    {
+      "id": "NC-06",
+      "defect": "Text Overflow & Canvas Clipping",
+      "expectedRuleId": "TEXT_OVERFLOW_DEFECT",
+      "status": "failed",
+      "finding": {
+        "ruleId": "TEXT_OVERFLOW_DEFECT",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "layout",
+        "message": "Text node node_headline overflows canvas artboard (1080x1350) at bound (1200, 400)",
+        "nodeIds": [
+          "node_headline"
+        ],
+        "evidence": {
+          "box": {
+            "x": 800,
+            "y": 240,
+            "width": 400,
+            "height": 160
+          },
+          "canvas": {
+            "width": 1080,
+            "height": 1350
+          }
+        }
+      }
+    },
+    {
+      "id": "NC-07",
+      "defect": "Missing Kurdish Sorani Font Glyphs",
+      "expectedRuleId": "FONT_GLYPH_COVERAGE_DEFECT",
+      "status": "failed",
+      "finding": {
+        "ruleId": "FONT_GLYPH_COVERAGE_DEFECT",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "font",
+        "message": "Node node_headline contains Central Kurdish (Sorani) text but uses unsupported font \"Arial-Regular\" lacking required glyphs",
+        "nodeIds": [
+          "node_headline"
+        ],
+        "evidence": {
+          "fontName": "Arial-Regular",
+          "text": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە"
+        }
+      }
+    },
+    {
+      "id": "NC-08",
+      "defect": "Missing Required Aspect Ratio Variant",
+      "expectedRuleId": "REQUIRED_PAGE_VARIANT_MISSING",
+      "status": "failed",
+      "finding": {
+        "ruleId": "REQUIRED_PAGE_VARIANT_MISSING",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "layout",
+        "message": "Required brief variant (1080x1920) is missing from manifest pages",
+        "nodeIds": [],
+        "evidence": {
+          "missingVariant": {
+            "width": 1080,
+            "height": 1920
+          },
+          "availablePages": [
+            {
+              "width": 1080,
+              "height": 1350
+            },
+            {
+              "width": 1080,
+              "height": 1080
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "NC-09",
+      "defect": "Zero Renders Provided",
+      "expectedRuleId": "ZERO_RENDERS_DEFECT",
+      "status": "failed",
+      "finding": {
+        "ruleId": "ZERO_RENDERS_DEFECT",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "source_package",
+        "message": "No rendered outputs provided for visual inspection (zero renders)",
+        "nodeIds": [],
+        "evidence": {
+          "renderCount": 0
+        }
+      }
+    },
+    {
+      "id": "NC-10",
+      "defect": "Nonexistent Captured Output Package",
+      "expectedRuleId": "NONEXISTENT_PACKAGE_ERROR",
+      "status": "failed",
+      "finding": {
+        "ruleId": "NONEXISTENT_PACKAGE_ERROR",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "source_package",
+        "message": "Captured output package \"pkg_nonexistent_deadbeef\" does not exist in registry or staged storage",
+        "nodeIds": [],
+        "evidence": {
+          "packageId": "pkg_nonexistent_deadbeef"
+        }
+      }
+    }
+  ]
+}

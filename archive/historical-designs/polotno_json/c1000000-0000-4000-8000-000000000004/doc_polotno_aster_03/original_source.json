@@ -1,0 +1,32 @@
+{
+  "documentId": "doc_polotno_aster_03",
+  "taskId": "task_aster_active_03",
+  "clientId": "c1000000-0000-4000-8000-000000000004",
+  "title": "Aster Resort Weekend Package",
+  "sourceFormat": "polotno_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "3cbe82282542ce6f6614586aa1b90ba66ce78399a2aa76efd07edcb623d2e305",
+  "archivedAt": "2026-09-12T05:33:18.316Z",
+  "sourceContent": {
+    "pages": [
+      {
+        "id": "page_polotno_1",
+        "children": [
+          {
+            "id": "p_t1",
+            "type": "text",
+            "text": "ئاستێر ڕیزۆرت - حەوانەوەیەکی بێوێنە لە هەولێر"
+          },
+          {
+            "id": "p_t2",
+            "type": "text",
+            "text": "تایبەت بە کۆتایی هەفتە بۆ خێزانەکان"
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#1E293B"
+  }
+}

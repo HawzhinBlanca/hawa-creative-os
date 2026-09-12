@@ -1,0 +1,71 @@
+ M .gitignore
+ M MANIFEST.json
+ M SHA256SUMS.txt
+ M apps/core/package.json
+ M apps/core/src/app.ts
+ M apps/core/src/index.ts
+ M apps/core/tsconfig.tsbuildinfo
+ M apps/desk/src/App.tsx
+ M apps/desk/src/screens/DnaScreen.tsx
+ M apps/desk/src/screens/InboxScreen.tsx
+ M apps/desk/src/screens/LibraryScreen.tsx
+ M apps/desk/src/screens/ReviewScreen.tsx
+ M apps/desk/src/services/brandKits.ts
+ M apps/desk/src/services/draftStore.ts
+ M apps/desk/src/services/i18n.ts
+ M apps/worker/package.json
+ M apps/worker/src/index.ts
+ M apps/worker/tsconfig.tsbuildinfo
+ M config/clients/kaae.dna.json
+ M db/seed.sql
+ M infra/docker/docker-compose.prod.yml
+ M packages/creative/src/creative-director.ts
+ M packages/creative/src/design-router.ts
+ M packages/creative/src/index.ts
+ M packages/creative/src/templates/index.ts
+ M packages/creative/tsconfig.tsbuildinfo
+ M packages/db/src/check.ts
+ M packages/db/src/client.ts
+ M packages/db/src/index.ts
+ M packages/db/src/migrate.ts
+ M packages/db/src/repositories/outbox.repository.ts
+ M packages/db/src/repositories/task.repository.ts
+ M packages/db/src/types.ts
+ M packages/db/test/backup-restore.test.ts
+ M packages/db/test/db.test.ts
+ M packages/db/tsconfig.tsbuildinfo
+ M packages/evals/src/runner.ts
+ M packages/evals/test/evals.test.ts
+ M packages/evals/tsconfig.tsbuildinfo
+ M packages/integrations/src/figma-bridge-adapter.ts
+ M packages/integrations/src/google-publisher.ts
+ M packages/integrations/src/model-gateway.ts
+ M packages/integrations/src/outbound-notifier.ts
+ M packages/integrations/src/telegram-bridge.ts
+ M packages/integrations/test/integrations.test.ts
+ M packages/integrations/test/model-gateway.test.ts
+ M packages/integrations/tsconfig.tsbuildinfo
+ M packages/testkit/src/slo-daemon.ts
+ M packages/testkit/test/e2e-office-lifecycle.test.ts
+ M packages/testkit/test/kaae-omnichannel-figma-sync.test.ts
+ M packages/testkit/test/kaae-production-drill.test.ts
+ M packages/testkit/test/pilot-exit-drill.test.ts
+ M packages/testkit/tsconfig.tsbuildinfo
+ M pnpm-lock.yaml
+ M scripts/validate_pack.py
+?? apps/core/test/durable-intake.test.ts
+?? apps/core/test/durable-revisions-approvals.test.ts
+?? apps/core/test/milestone1-vertical-slice.test.ts
+?? data/
+?? output/audits/2026-09-09-product-quality/
+?? output/audits/2026-09-09-remediation-reality/
+?? output/audits/2026-09-10-deep-audit/
+?? packages/creative/src/kaae-graphics-learning.ts
+?? packages/creative/src/templates/kaae-institutional.template.ts
+?? packages/creative/test/kaae-graphics-learning.test.ts
+?? packages/creative/test/kaae-institutional-templates.test.ts
+?? packages/db/src/repositories/publication.repository.ts
+?? packages/db/src/repositories/revision.repository.ts
+?? packages/integrations/test/real-google-operations.test.ts
+?? scripts/deep_learn_kaae_graphics.swift
+?? scripts/ingest_kaae_graphics.ts

@@ -1,0 +1,22 @@
+{
+  "optimisticConcurrencyTest": {
+    "operator1": {
+      "status": 201,
+      "expectedTaskVersion": 1,
+      "outcome": "SUCCESS_VERSION_BUMPED_TO_2"
+    },
+    "operator2_concurrent": {
+      "status": 409,
+      "expectedTaskVersion": 1,
+      "outcome": "REJECTED_CONCURRENT_MODIFICATION",
+      "detail": "Concurrent modification detected: expected task version 1, current version is 2"
+    }
+  },
+  "staleChatActionDefense": {
+    "actionTargetRevision": "rev_race_1",
+    "currentTaskRevision": "rev_race_2",
+    "status": 409,
+    "detail": "Stale chat action: button references revision 'rev_race_1', but task is currently on revision 'rev_race_2'. Action rejected.",
+    "outcome": "REJECTED_STALE_CHAT_ACTION"
+  }
+}

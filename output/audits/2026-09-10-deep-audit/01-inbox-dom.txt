@@ -1,0 +1,155 @@
+- complementary:
+  - strong: Hawa Desk
+  - text: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library"
+    - button "Adapters"
+    - button "Actionable Operations"
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Inbox & Production Board" [level=1]
+  - text: Central operator desk, live task intake and pipeline transitions
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - generic: "Polled: 1:57:45 PM · 11 active API tasks"
+  - button "⚡ Simulate Inbound Brief":
+    - generic: ⚡
+    - generic: Simulate Inbound Brief
+  - button "↻ Sync Board"
+  - heading "Workflow Inbox & Task Queue" [level=1]
+  - generic: "7"
+  - text: needs action
+  - generic: "12"
+  - text: in production
+  - generic: "9"
+  - text: awaiting review
+  - generic: "0"
+  - text: unhandled breaches
+  - heading "New messages 11" [level=2]:
+    - text: New messages
+    - generic: "11"
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - heading "Decoy Task for Cross-Task Rejection Probe" [level=3]
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - heading "Decoy Task for Cross-Task Rejection Probe" [level=3]
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - heading "Decoy Task for Cross-Task Rejection Probe" [level=3]
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - heading "Decoy Task for Cross-Task Rejection Probe" [level=3]
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - 'heading "Telegram Client: /ping…" [level=3]'
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - 'heading "KAAE: I need a an invitation …" [level=3]'
+  - paragraph: تێکستی داواکراو…
+  - generic: c1000000-0000-4000-8000-000000000002
+  - generic: ckb
+  - generic: ⚡ $0.0013
+  - generic: LIVE · Desk
+  - generic: RECEIVED
+  - 'heading "Sewa Kader: Design it please…" [level=3]'
+  - paragraph: تێکستی داواکراو…
+  - generic: Aster
+  - generic: ckb
+  - generic: Telegram
+  - heading "Podcast guest card" [level=3]
+  - paragraph: “Use Dr. Lina Rahman and publish tomorrow…”
+  - generic: client 0.72
+  - generic: ckb
+  - generic: Hawa Desk
+  - heading "Summer offer variants" [level=3]
+  - paragraph: Exact price and three dimensions supplied.
+  - generic: Aster mapped
+  - generic: due today
+  - heading "Needs input 3" [level=2]:
+    - text: Needs input
+    - generic: "3"
+  - generic: routing blocked
+  - heading "“Make the same one again”" [level=3]
+  - paragraph: Two clients are allowed; no referenced design.
+  - button "Choose client"
+  - generic: missing fact
+  - heading "Event poster" [level=3]
+  - paragraph: Location and time conflict between message and attachment.
+  - button "Resolve facts"
+  - heading "In production 12" [level=2]:
+    - text: In production
+    - generic: "12"
+  - generic: asset lab
+  - heading "Nova One launch" [level=3]
+  - paragraph: 1/3 visual assets complete. Source task is safe.
+  - generic: QA
+  - heading "Health awareness card" [level=3]
+  - paragraph: Checking exact copy, source layers, font and RTL.
+  - heading "Review 9" [level=2]:
+    - text: Review
+    - generic: "9"
+  - generic: LIVE · AWAITING_APPROVAL
+  - generic: Office
+  - heading "Revision & Approval Live Container Drill" [level=3]
+  - paragraph: Deterministic QA completed. Awaiting decision.
+  - button "Review Candidate"
+  - button "⚡ Studio"
+  - generic: LIVE · APPROVED
+  - generic: Office
+  - heading "Revision & Approval Live Container Drill" [level=3]
+  - paragraph: "Verified creative brief: 1080x1080 social campaign with brand tokens."
+  - button "Review Candidate"
+  - button "⚡ Studio"
+  - generic: LIVE · APPROVED
+  - generic: Office
+  - heading "Revision & Approval Live Container Drill" [level=3]
+  - paragraph: "Verified creative brief: 1080x1080 social campaign with brand tokens."
+  - button "Review Candidate"
+  - button "⚡ Studio"
+  - generic: LIVE · APPROVED
+  - generic: Office
+  - heading "Revision & Approval Live Container Drill" [level=3]
+  - paragraph: "Verified creative brief: 1080x1080 social campaign with brand tokens."
+  - button "Review Candidate"
+  - button "⚡ Studio"
+  - generic: critical QA pass
+  - heading "Summer offer · revision 3" [level=3]
+  - paragraph: One visual warning; editable source complete.
+  - button "Review"
+  - generic: language review
+  - heading "Recruitment announcement" [level=3]
+  - paragraph: Mixed Sorani + URL + date.
+  - button "Inspect bidi"

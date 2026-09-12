@@ -1,0 +1,22 @@
+{
+  "taskId": "CV-05",
+  "name": "Ambiguous-Success Reconciliation Verification",
+  "generatedAt": "2026-09-11T22:43:50+03:00",
+  "invariantsVerified": ["FR-061", "NFR-001", "NFR-003", "NFR-014"],
+  "problemStatement": "An outbox command was submitted and processed by the downstream service (e.g. task transitioned to human_review in DB / workflow started), but the worker process crashed or network connection dropped before outboxRepo.markDelivered was written.",
+  "reconciliationMechanism": {
+    "step1": "Outbox consumer re-leases the unacknowledged command (state=leased, attempts=1).",
+    "step2": "TaskWorkflowDispatcher checks if downstream entity already reflects confirmed progress matching cmd.aggregate_id or cmd.idempotency_key.",
+    "step3": "Dispatcher observes task.state is already 'human_review' (prior execution succeeded).",
+    "step4": "Dispatcher synthesizes confirmed reconciliation receipt without re-running workflow or repeating external effects.",
+    "step5": "Outbox consumer marks command delivered in PostgreSQL with real timestamp."
+  },
+  "testEvidence": {
+    "testSuite": "apps/worker/test/durable-workflow-recovery.test.ts",
+    "testName": "proves ambiguous-success reconciliation when external progress exists but outbox delivery was unacknowledged",
+    "runnerCalledOnRetry": false,
+    "commandFinalState": "delivered",
+    "deliveredAtRecorded": true,
+    "duplicateSideEffects": 0
+  }
+}

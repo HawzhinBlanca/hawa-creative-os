@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-09-09T08:09:01.446853+00:00",
+  "commit": "f597bffbf8af3fb1bc65f1028dc161f095ab9ccf",
+  "files": {
+    "apps/core/src/app.ts": "80b70e6e04bb01be236101a884144c8cf60b7f3422d7531eb0de43415d488ca6",
+    "apps/core/dist/app.js": "eff97ebeaac0475fbdb6e31b390a7dff7a1a03e93a90394ebf804a0dfa7997ab",
+    "apps/worker/src/index.ts": "c9f2a4ab7093945a5a7dfaf9f556cefb9b0f45dbd0160786c186719b87972a0b",
+    "apps/worker/src/workflow.ts": "b11c217de0c31e09817e05e1830482c30641d71f276c719f7276d9b314fed266",
+    "packages/integrations/src/google-publisher.ts": "3889ea560775a7cb6fe08be5531c2cc477badfc7f056a989774fa97516c679e1",
+    "packages/integrations/src/figma-bridge-adapter.ts": "010130fbd6efffa570231f6602debb42585ecdafc7d208c94899bc52712bea9c",
+    "packages/evals/src/runner.ts": "4876b41ff54b09e8197068942e38102602ef01a9611994cfc378e40e4f2c2f01",
+    "packages/retrieval/src/retrieval-service.ts": "63b8a0790acefd991a6fb867de0fd5a260baeeea9193dafdb78ecb0c11c0f6d2",
+    "apps/desk/src/App.tsx": "db9d017ec1cafa17ecb7c04d084cfd6f73ea0cf97545719e23518ac9ce1324f6",
+    "apps/desk/src/screens/ReviewScreen.tsx": "64939e2d708343de640876c7573df4e494eb69000b5ff58d5cb2e0f5f2855a96",
+    "apps/desk/src/screens/InboxScreen.tsx": "371fdcd21e089b44d54968070e163b71dd41c7fa92615f8ecdb8eb868b99aabb",
+    "apps/desk/src/screens/OpsScreen.tsx": "3c4ba5f8f68827c5dd63619534855d9a35e9686d1be5bb4719fcbc6e3911b06d",
+    "apps/desk/src/screens/EvalScreen.tsx": "cc5dd24d5e0708f3def1cf48ee087ec2e3b79e4e37371d45183643783a8edb0f",
+    "apps/desk/src/screens/DnaScreen.tsx": "1c01ddcb76806cf2e486e3ddd6050e455a168a5ab00b51323a6b1d9ac445ed2d",
+    "apps/desk/src/screens/LibraryScreen.tsx": "8db0011d52b6f756ffd7003f4a7ec7fd18d2722377eb9cfabee21f30f462102c",
+    "infra/backup/backup_restore_drill.sh": "6ef2ef2658e7c31c17acd9557fa4e37d5c196dfb4db6cb4efd64da4616966d55",
+    "packages/db/test/backup-restore.test.ts": "d3c2ba2de77152f025bc40bcb0d92079b7082802689ee0a04a8757fef30063e4"
+  }
+}

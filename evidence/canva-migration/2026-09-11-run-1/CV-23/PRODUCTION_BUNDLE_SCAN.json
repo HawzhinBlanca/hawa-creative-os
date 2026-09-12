@@ -1,0 +1,37 @@
+{
+  "task": "CV-23",
+  "timestamp": "2026-09-12T02:25:00.000Z",
+  "productionBundle": {
+    "jsBundle": "index-C3wjmTdn.js",
+    "jsBundlePath": "apps/desk/dist/assets/index-C3wjmTdn.js",
+    "jsBundleSize": 432426,
+    "cssBundle": "index-DyjnQJgC.css",
+    "cssBundlePath": "apps/desk/dist/assets/index-DyjnQJgC.css",
+    "cssBundleSize": 30454
+  },
+  "staticAnalysisAudit": {
+    "polotnoLibraryImported": false,
+    "konvaCanvasImported": false,
+    "reviewScreenMonolithImported": false,
+    "canvasExportImported": false,
+    "embeddedBase64FontsInBundle": false,
+    "activeStudioAdapter": "CanvaDesignStudioAdapter",
+    "activeStudioProvider": "canva",
+    "retiredFigmaTransportRoutesScanned": [
+      "POST /tasks/:taskId/leases (410 GONE)",
+      "POST /tasks/:taskId/figma/lease (410 GONE)",
+      "DELETE /tasks/:taskId/leases/:leaseId (410 GONE)",
+      "POST /tasks/:taskId/figma/mutate (410 GONE)",
+      "GET /tasks/:taskId/figma/status (410 GONE)",
+      "GET /v1/figma/status (410 GONE)",
+      "GET /figma/status (410 GONE)"
+    ],
+    "verifiedEndpointsResponding": [
+      "/system/studio-status (200 OK -> activeStudio: canva)",
+      "/system/cutover/status (200 OK -> release: v2.0.0-canva-cutover)",
+      "/adapters/figma/cloud-status (200 OK -> status: decommissioned, under: CV-23)",
+      "/integrations/health (200 OK -> Canva healthy, Figma absent)"
+    ]
+  },
+  "verificationResult": "ZERO_RESIDUAL_LEGACY_RUNTIMES"
+}

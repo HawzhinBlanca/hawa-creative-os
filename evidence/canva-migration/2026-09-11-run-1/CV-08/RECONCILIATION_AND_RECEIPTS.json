@@ -1,0 +1,41 @@
+{
+  "taskId": "CV-08",
+  "name": "Outbound Honest Reconciliation & Zero-Invented Receipts Evidence",
+  "generatedAt": "2026-09-11T20:15:30.000Z",
+  "testSuite": "apps/core/test/waha-honest-adapter.test.ts",
+  "outboundDispatchIntegrity": {
+    "fakeReceiptGenerationProhibited": true,
+    "rules": [
+      "No notification receipt can be marked delivered=true without observed external message ID from WAHA HTTP response",
+      "Network failures and 5xx responses must yield retryable AppError with safeAction to retain in outbox",
+      "Session disconnects (SCAN_QR_CODE) must never invent delivery",
+      "Kill switch activation must halt outbound immediately while leaving outbox command pending"
+    ]
+  },
+  "reconciliationDrill": {
+    "outageCase": {
+      "sessionState": "OFFLINE",
+      "reconcileComplete": false,
+      "detectedGaps": [
+        {
+          "reason": "WAHA session is OFFLINE. Reconciliation paused.",
+          "from": "2026-09-11T20:00:00.000Z",
+          "to": "2026-09-11T20:15:00.000Z"
+        }
+      ],
+      "inventedEvents": 0
+    },
+    "healthyCase": {
+      "sessionState": "WORKING",
+      "reconcileComplete": true,
+      "detectedGaps": [],
+      "unconfirmedDeliveriesReported": 0
+    }
+  },
+  "databaseHealth": {
+    "targetDatabase": "hawa",
+    "productionTasksPreserved": 1449,
+    "productionOutboxPreserved": 1449,
+    "testPollutionCount": 0
+  }
+}

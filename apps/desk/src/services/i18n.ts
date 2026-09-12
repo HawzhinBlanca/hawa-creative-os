@@ -4,20 +4,24 @@ export type Locale = 'en' | 'ckb';
 
 export interface TranslationSchema {
   screens: {
+    work: string;
+    clients: string;
+    settings: string;
     inbox: string;
     review: string;
     dna: string;
     library: string;
-    settings: string;
     ops: string;
     eval: string;
   };
   screenSubtitles: {
+    work: string;
+    clients: string;
+    settings: string;
     inbox: string;
     review: string;
     dna: string;
     library: string;
-    settings: string;
     ops: string;
     eval: string;
   };
@@ -37,6 +41,7 @@ export interface TranslationSchema {
     title: string;
     subtitle: string;
     autosaved: string;
+    clientLabel: string;
     taskTitleLabel: string;
     taskTitlePlaceholder: string;
     taskCopyEnLabel: string;
@@ -72,27 +77,31 @@ export interface TranslationSchema {
 export const translations: Record<Locale, TranslationSchema> = {
   en: {
     screens: {
-      inbox: 'Inbox & Production Board',
-      review: 'Task Review & Approval',
+      work: 'Work Desk',
+      clients: 'Client DNA & Library',
+      settings: 'Settings & Adapters',
+      inbox: 'Work Desk (Queue)',
+      review: 'Work Desk (Detail)',
       dna: 'Client DNA & Brand Governance',
       library: 'Creative Library & Retrieval Evidence',
-      settings: 'Adapters & Model Registry',
       ops: 'Actionable Operations & Health',
       eval: 'Model Evaluations & Canary Tournaments',
     },
     screenSubtitles: {
-      inbox: 'Central operator desk, live task intake and pipeline transitions',
-      review: 'Figma Agent Studio, live staging proof evidence, and publishing gate',
+      work: 'Actionable creative queue, Canva Studio handoff, and verified delivery gate',
+      clients: 'Client brand tokens, approved copy invariants, vector assets, and destinations',
+      settings: 'Connected channel bridges, honest health probes, and audit logs',
+      inbox: 'Actionable task intake queue and pipeline transitions',
+      review: 'Task detail, Canva handoff, captured preview, and publishing gate',
       dna: 'Brand tokens, approved copy invariants, and versioned client rules',
       library: 'Verified vector assets, SHA-256 fingerprints, and retrieval embeddings',
-      settings: 'Connected channel bridges, ComfyUI worker sandbox, and model cascade status',
       ops: 'Real-time SLO latencies, circuit breakers, and storage reconciliation audits',
       eval: 'Adversarial red-team safety benchmarks, copy-guard, and golden suites',
     },
     sidebar: {
       brandSubtitle: 'Private Creative OS',
       coreHealthy: 'Core healthy',
-      healthDetails: 'Telegram active · Desk canonical · WAHA quarantined',
+      healthDetails: 'Live System Health · Canva Connected · Desk Canonical',
     },
     header: {
       searchPlaceholder: 'Search tasks, clients, copy, hashes…',
@@ -105,6 +114,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       title: 'Create Task in Hawa Desk',
       subtitle: 'Canonical office intake with client scope lock and exact copy preservation.',
       autosaved: '💾 Autosaved',
+      clientLabel: 'Client / Brand Space',
       taskTitleLabel: 'Task Title (English)',
       taskTitlePlaceholder: 'e.g. Summer VIP Campaign',
       taskCopyEnLabel: 'Primary Headline & Offer (English)',
@@ -126,9 +136,9 @@ export const translations: Record<Locale, TranslationSchema> = {
       decisionGate: 'Decision Gate',
       safeZones: 'Safe Zones',
       bidiIsolates: 'Bidi Isolates',
-      fontFamily: 'Typography',
-      fontWeight: 'Weight',
-      accentColor: 'Accent',
+      fontFamily: 'Font family',
+      fontWeight: 'Font weight',
+      accentColor: 'Accent color',
       layers: 'Layers',
       semanticDiff: 'Compare R2',
       approvePublish: 'Approve & Publish to Drive',
@@ -138,20 +148,24 @@ export const translations: Record<Locale, TranslationSchema> = {
   },
   ckb: {
     screens: {
-      inbox: 'سندووقی هاتوو و تابلۆی بەرهەمهێنان',
-      review: 'پێداچوونەوە و پەسەندکردنی ئەرک',
+      work: 'دێسکی کار',
+      clients: 'ناسنامەی کڕیاران و کتێبخانە',
+      settings: 'ڕێکخستنەکان و تەندروستی سیستم',
+      inbox: 'دێسکی کار (سندووق)',
+      review: 'دێسکی کار (وردەکاری)',
       dna: 'ناسنامەی کڕیار و یاساکانی براند',
       library: 'کتێبخانەی داهێنەرانە و بەڵگەکان',
-      settings: 'ڕێکخستنی مۆدێل و پەیوەندییەکان',
       ops: 'تەندروستی کردارەکی و چاودێری',
       eval: 'هەڵسەنگاندنی مۆدێلەکان و تاقیکردنەوەکان',
     },
     screenSubtitles: {
+      work: 'سندووقی ئەرکەکان، دەستکاریکردن لە کانڤا و بڵاوکردنەوەی سەلمێنراو',
+      clients: 'یاساکانی براند، کۆپی پەسەندکراو، ئاسێتەکان و ڕێڕەوی کارکردن',
+      settings: 'پەیوەندییەکانی تێلێگرام، پشکنەری تەندروستی ڕاستەقینە و تۆمارەکان',
       inbox: 'سەکۆی ناوەندیی ئۆفیس و گۆڕانکارییەکانی بەرهەمهێنان',
-      review: 'دەستکاریکەری ڤێکتۆری هایکەنس، بەڵگەکان و بڵاوکردنەوە',
+      review: 'وردەکاری ئەرک، دەستکاریکردن لە کانڤا و بڵاوکردنەوەی فەرمی',
       dna: 'یاساکانی براند، کۆپی پەسەندکراو و مێژووی کڕیار',
       library: 'ئاسێتە ڤێکتۆرییەکان، کۆدی ئاسایش و بەڵگەنامەکان',
-      settings: 'پەیوەندییەکانی تێلێگرام، کرێکاری کۆمفی و مۆدێلەکان',
       ops: 'خێرایی کارکردن و هەماهەنگی کۆگاکانی درایڤ و شیتس',
       eval: 'تاقیکردنەوەی ئاسایش لە بەرامبەر هێرش و تێکدان',
     },
@@ -171,6 +185,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       title: 'دروستکردنی ئەرک لە هاوا دێسک',
       subtitle: 'داخڵکردنی ناوەندیی ئۆفیس بە پاراستنی تەواوی تێکست و براند.',
       autosaved: '💾 پاشەکەوتکراوە',
+      clientLabel: 'کڕیار / براند',
       taskTitleLabel: 'ناونیشانی ئەرک (ئینگلیزی)',
       taskTitlePlaceholder: 'بۆ نموونە: Summer VIP Campaign',
       taskCopyEnLabel: 'تێکستی سەرەکی و ئۆفەر (ئینگلیزی)',

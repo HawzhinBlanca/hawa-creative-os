@@ -32,6 +32,14 @@ export interface OfficialAsset {
   prohibitedModifications?: string[];
 }
 
+export interface CanvaClientMapping {
+  canvaTeamId: string;
+  canvaBrandKitId: string;
+  canvaTemplateIds: Record<string, string>;
+  canvaFolderId?: string;
+  verifiedAt?: ISODateTime;
+}
+
 export interface ClientDNA {
   tenantId: UUID;
   clientId: UUID;
@@ -57,6 +65,7 @@ export interface ClientDNA {
     spreadsheetId: string;
     sheetId: number;
   };
+  canvaMapping?: CanvaClientMapping;
   approvalPolicy: {
     requiredRoles: string[];
     allowAutoApproval: boolean;
@@ -76,6 +85,31 @@ export function validateClientDna(dna: ClientDNA): Result<ClientDNA, AppError> {
         safeAction: 'Fill missing fields in Client DNA Editor in Hawa Desk',
       },
     };
+  }
+
+  if (dna.canvaMapping) {
+    if (!dna.canvaMapping.canvaTeamId || !dna.canvaMapping.canvaTeamId.trim()) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_CANVA_TEAM_MAPPING',
+          message: 'Canva team ID is missing or empty; kit names alone are insufficient',
+          retryable: false,
+          safeAction: 'Specify verified Canva Team ID in Client DNA settings',
+        },
+      };
+    }
+    if (!dna.canvaMapping.canvaBrandKitId || !dna.canvaMapping.canvaBrandKitId.trim()) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_CANVA_BRAND_KIT_MAPPING',
+          message: 'Canva Brand Kit ID is missing or empty; kit names alone are insufficient',
+          retryable: false,
+          safeAction: 'Specify verified Canva Brand Kit ID in Client DNA settings',
+        },
+      };
+    }
   }
 
   if (!dna.destinations.googleSharedDriveId || !dna.destinations.productionFolderId) {

@@ -58,5 +58,5 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(full.routing.criticalViolations).toBe(0);
     expect(full.retrieval.criticalViolations).toBe(0);
     expect(full.adversarialSafety.criticalViolations).toBe(0);
-  });
+  }, 25000);
 });

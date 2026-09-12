@@ -1,0 +1,45 @@
+{
+  "suite": "packages/contracts/test/canva-binding.contract.test.ts",
+  "executed_at": "2026-09-11T22:30:40Z",
+  "framework": "Vitest 3.2.7",
+  "tests_passed": 6,
+  "tests_failed": 0,
+  "duration_ms": 218,
+  "test_cases": [
+    {
+      "name": "proves server-derived client ownership: a design URL alone cannot select a client",
+      "status": "passed",
+      "tested_code": "FOREIGN_CLIENT_DENIAL",
+      "assertion": "rejects crossClientRequest with FOREIGN_CLIENT_DENIAL error code"
+    },
+    {
+      "name": "rejects foreign or unknown design IDs: cannot spoof or mismatch design ID",
+      "status": "passed",
+      "tested_code": "UNKNOWN_DESIGN_DENIAL",
+      "assertion": "rejects unknownDesignRequest with UNKNOWN_DESIGN_DENIAL error code"
+    },
+    {
+      "name": "rejects stale requests via optimistic locking: expected version must match current binding version",
+      "status": "passed",
+      "tested_code": "STALE_VERSION_CONFLICT",
+      "assertion": "rejects staleRequest with STALE_VERSION_CONFLICT error code and retryable=true"
+    },
+    {
+      "name": "strictly enforces snapshot completeness: incomplete snapshot cannot be represented as fully observed source",
+      "status": "passed",
+      "tested_code": "INCOMPLETE_SNAPSHOT_ERROR",
+      "assertion": "rejects incompleteRequest with INCOMPLETE_SNAPSHOT_ERROR error code"
+    },
+    {
+      "name": "rejects empty artifact sets",
+      "status": "passed",
+      "tested_code": "INVALID_REQUEST",
+      "assertion": "rejects empty artifacts array"
+    },
+    {
+      "name": "accepts valid, fully-observed capture sets satisfying all invariants",
+      "status": "passed",
+      "assertion": "validateCanvaCaptureInvariants returns { ok: true }"
+    }
+  ]
+}

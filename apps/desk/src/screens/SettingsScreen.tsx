@@ -268,17 +268,25 @@ export const SettingsScreen: React.FC = () => {
                 </td>
               </tr>
               <tr>
-                <td><b>Figma Agent Studio</b></td>
-                <td>master creative & buzz factory</td>
-                <td><span className="pill ok">v2.0 Bridge Connected</span></td>
+                <td><b>Canva Native Studio</b></td>
+                <td>admitted multi-page brand studio (ADR 020/021)</td>
+                <td><span className="pill ok">Production Active (CV-22)</span></td>
                 <td>
                   <button
                     className="btn"
                     style={{ fontSize: 11 }}
                     onClick={() => setActiveModal('proof')}
                   >
-                    Bridge status
+                    Studio status
                   </button>
+                </td>
+              </tr>
+              <tr>
+                <td><b>Legacy Figma Bridge</b></td>
+                <td>decommissioned under CV-23 (ADR 021)</td>
+                <td><span className="pill" style={{ background: '#fee2e2', color: '#991b1b' }}>Retired (410 GONE)</span></td>
+                <td>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Decommissioned</span>
                 </td>
               </tr>
             </tbody>
@@ -349,22 +357,20 @@ export const SettingsScreen: React.FC = () => {
             )}
           </div>
 
-          {/* Horizon 18 (Option 3): Cloud Figma Agent Studio Sync */}
-          <h3 style={{ marginTop: 24 }}>Figma Cloud Agent Studio (Horizon 18)</h3>
+          {/* Canva Native Studio (ADR 020 / CV-22 / CV-23) */}
+          <h3 style={{ marginTop: 24 }}>Canva Native Studio (Production Active)</h3>
           <div className="rule" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <b>Cloud Document & Template Engine</b>
+                <b>Multi-Page Brand Studio & Native Asset Ingress</b>
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
-                  File Key: <code>{telegramStatus?.figma?.fileKey || 'figma_kaae_master_library'}</code> · Mode: <b>{telegramStatus?.figma?.mode || 'cloud_connected'}</b>
+                  Active Engine: <code>CanvaDesignStudioAdapter</code> · Release: <b>v2.0.0-canva-cutover</b>
                 </p>
               </div>
-              <span className={`pill ${telegramStatus?.figma?.configured ? 'ok' : 'ok'}`}>
-                {telegramStatus?.figma?.configured ? 'Cloud Connected' : 'Sandbox Staging Verified'}
-              </span>
+              <span className="pill ok">Sole Active Studio</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
-              🔒 <b>Invariant #14 Enforced:</b> Autonomous agent generation is strictly confined to <code>30_AI_STAGING</code> page. Core master pages (<code>00_COVER</code> through <code>20_PUBLICATION_PREP</code>) are immutable.
+              🎨 <b>Multi-Client Scope Admitted:</b> KAAE, Drustee, and Aster. Full multi-page support, bounding box clamping, Vazirmatn font glyph mapping, and revision locks. Legacy Figma &amp; Polotno runtimes decommissioned.
             </div>
           </div>
 
@@ -475,19 +481,19 @@ export const SettingsScreen: React.FC = () => {
           }}
         >
           <div className="panel" style={{ width: 540, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ marginTop: 0 }}>Figma Agent Studio v2.0 Bridge Status</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>ADR-0016 Compliance · Verified 2026-09-06 · Loopback ws://127.0.0.1:43001</p>
+            <h2 style={{ marginTop: 0 }}>Canva Native Studio v2.0 Status</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>ADR-020/021 Compliance · Release v2.0.0-canva-cutover · Active Design Studio</p>
             <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', marginBottom: 12 }}>
-              <b style={{ color: '#065f46' }}>✓ Figma Desktop Bridge Active</b>
+              <b style={{ color: '#065f46' }}>✓ Canva Native Studio Active</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#047857' }}>
-                Local WebSocket Plugin API bridge operational. Autonomous writes restricted to <code>30_AI_STAGING</code> with mandatory task write leases and expected revision checking.
+                Canva REST v1 + Autofill API adapter operational. Native multi-page compositions, Brand Kit asset ingestion, and immutable source captures are certified.
               </p>
             </div>
             <div className="finding" style={{ borderColor: '#2563eb', background: '#eff6ff' }}>
-              <b style={{ color: '#1d4ed8' }}>✓ Dual Production Pipeline Active</b>
+              <b style={{ color: '#1d4ed8' }}>✓ Legacy Runtimes Decommissioned</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#1e40af' }}>
-                <b>Route A (Figma Buzz)</b> for rapid template substitution & smart resizing (1:1, 4:5, 9:16, 16:9).<br/>
-                <b>Route B (Figma Design)</b> for master brand systems & freeform compositions.
+                <b>Figma Bridge &amp; Leases Transport:</b> Retired under CV-23 with HTTP 410 GONE.<br/>
+                <b>Polotno &amp; Custom Editor:</b> Completely removed from production bundles.
               </p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>

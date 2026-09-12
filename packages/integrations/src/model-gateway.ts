@@ -26,11 +26,36 @@ export interface ModelPricing {
   outputPer1M: number;
 }
 
+export function parseModelJsonResponse<T = unknown>(rawText: string): T {
+  const trimmed = rawText.trim();
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {}
+
+  const codeBlockMatch = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim()) as T;
+    } catch {}
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) as T;
+    } catch {}
+  }
+
+  throw new Error(`Failed to parse model JSON output: ${trimmed.substring(0, 100)}...`);
+}
+
 export class ResilientModelGateway implements ModelGateway {
   private readonly circuitBreakers: Map<string, CircuitBreaker> = new Map();
   private readonly tracer = new OfficeTracer();
   private readonly phoenix = new PhoenixClient();
   private readonly faultInjections: Map<string, number> = new Map();
+  private readonly admissions: Map<string, 'primary' | 'canary' | 'fallback' | 'retired' | 'blocked'> = new Map();
 
   // Pricing Table ($ per 1M tokens)
   private readonly pricing: Record<string, ModelPricing> = {
@@ -44,19 +69,19 @@ export class ResilientModelGateway implements ModelGateway {
   private readonly fallbackRegistry: Record<ModelRole, ProviderCandidate[]> = {
     intake_router: [
       { provider: 'google', model: 'gemini-3.8-flash' },
-      { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
       { provider: 'openai', model: 'gpt-4o' },
       { provider: 'local', model: 'deterministic-router-v1' },
     ],
     brief_builder: [
       { provider: 'google', model: 'gemini-3.8-flash' },
-      { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
       { provider: 'openai', model: 'gpt-4o' },
       { provider: 'local', model: 'deterministic-brief-v1' },
     ],
     creative_director: [
       { provider: 'openai', model: 'gpt-5.6-sol' },
-      { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
       { provider: 'google', model: 'gemini-3.8-flash' },
       { provider: 'local', model: 'layout-engine-v1' },
     ],
@@ -68,12 +93,12 @@ export class ResilientModelGateway implements ModelGateway {
     ],
     feedback_classifier: [
       { provider: 'google', model: 'gemini-3.8-flash' },
-      { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
       { provider: 'local', model: 'keyword-classifier-v1' },
     ],
     rule_miner: [
       { provider: 'openai', model: 'gpt-5.6-sol' },
-      { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+      { provider: 'anthropic', model: 'claude-sonnet-5' },
       { provider: 'google', model: 'gemini-3.8-flash' },
     ],
     embedding_multimodal: [
@@ -99,6 +124,14 @@ export class ResilientModelGateway implements ModelGateway {
     this.faultInjections.set(provider, failureCount);
   }
 
+  setDeploymentAdmission(exactModelId: string, status: 'primary' | 'canary' | 'fallback' | 'retired' | 'blocked'): void {
+    this.admissions.set(exactModelId, status);
+  }
+
+  getDeploymentAdmission(exactModelId: string): 'primary' | 'canary' | 'fallback' | 'retired' | 'blocked' {
+    return this.admissions.get(exactModelId) || 'primary';
+  }
+
   getCircuitBreakerSnapshot(provider: string): CircuitBreakerSnapshot | undefined {
     return this.circuitBreakers.get(provider)?.getSnapshot();
   }
@@ -111,9 +144,13 @@ export class ResilientModelGateway implements ModelGateway {
   async resolve(_ctx: RequestContext, role: ModelRole, _constraints?: JsonObject): Promise<Result<ModelDeploymentRef>> {
     const cascade = this.fallbackRegistry[role] || [{ provider: 'google', model: 'gemini-3.8-flash' }];
     
-    // Find first provider with closed or half-open circuit breaker
+    // Find first provider with admitted status and closed or half-open circuit breaker
     let selected = cascade[0];
     for (const candidate of cascade) {
+      const admission = this.getDeploymentAdmission(candidate.model);
+      if (admission === 'retired' || admission === 'blocked') {
+        continue;
+      }
       const breaker = this.circuitBreakers.get(candidate.provider);
       if (!breaker || breaker.canExecute()) {
         selected = candidate;
@@ -147,6 +184,17 @@ export class ResilientModelGateway implements ModelGateway {
     let lastError: any = null;
 
     for (const candidate of cascade) {
+      // Check deployment admission status (FR-056, FR-057)
+      const admission = this.getDeploymentAdmission(candidate.model);
+      if (admission === 'retired' || admission === 'blocked') {
+        span.addEvent('model_unadmitted_skipped', {
+          provider: candidate.provider,
+          exactModelId: candidate.model,
+          status: admission,
+        });
+        continue;
+      }
+
       const breaker = this.circuitBreakers.get(candidate.provider);
       if (breaker && !breaker.canExecute()) {
         span.addEvent('circuit_skipped', {
@@ -180,6 +228,8 @@ export class ResilientModelGateway implements ModelGateway {
 
       let output: unknown;
       let liveSuccess = false;
+      let actualInputTokens: number | undefined;
+      let actualOutputTokens: number | undefined;
 
       // Check for live provider API keys
       const promptText = (request.inputs || []).map((i) => i.text || '').join('\n') || (request as any).prompt || '';
@@ -200,8 +250,12 @@ export class ResilientModelGateway implements ModelGateway {
             const body: any = await apiRes.json();
             const textPart = body.candidates?.[0]?.content?.parts?.[0]?.text;
             if (textPart) {
-              output = JSON.parse(textPart);
+              output = parseModelJsonResponse(textPart);
               liveSuccess = true;
+              if (body.usageMetadata) {
+                actualInputTokens = body.usageMetadata.promptTokenCount;
+                actualOutputTokens = body.usageMetadata.candidatesTokenCount;
+              }
             }
           }
         } catch {
@@ -217,7 +271,7 @@ export class ResilientModelGateway implements ModelGateway {
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-              model: candidate.model.startsWith('claude-opus-5') ? 'claude-3-5-sonnet-20241022' : candidate.model,
+              model: candidate.model, // Preserve exact admitted model ID without hidden remapping
               max_tokens: 1024,
               messages: [{ role: 'user', content: `${promptText}\n\nRespond ONLY with valid JSON.` }],
             }),
@@ -226,8 +280,12 @@ export class ResilientModelGateway implements ModelGateway {
             const body: any = await apiRes.json();
             const textContent = body.content?.[0]?.text;
             if (textContent) {
-              output = JSON.parse(textContent);
+              output = parseModelJsonResponse(textContent);
               liveSuccess = true;
+              if (body.usage) {
+                actualInputTokens = body.usage.input_tokens;
+                actualOutputTokens = body.usage.output_tokens;
+              }
             }
           }
         } catch {
@@ -242,8 +300,8 @@ export class ResilientModelGateway implements ModelGateway {
               Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             },
             body: JSON.stringify({
-              model: candidate.model.startsWith('gpt-5') ? 'gpt-4o' : candidate.model,
-              messages: [{ role: 'user', content: promptText }],
+              model: candidate.model, // Preserve exact admitted model ID without hidden remapping
+              messages: [{ role: 'user', content: `${promptText}\n\nRespond ONLY with a valid JSON object.` }],
               response_format: { type: 'json_object' },
             }),
           });
@@ -251,8 +309,12 @@ export class ResilientModelGateway implements ModelGateway {
             const body: any = await apiRes.json();
             const content = body.choices?.[0]?.message?.content;
             if (content) {
-              output = JSON.parse(content);
+              output = parseModelJsonResponse(content);
               liveSuccess = true;
+              if (body.usage) {
+                actualInputTokens = body.usage.prompt_tokens;
+                actualOutputTokens = body.usage.completion_tokens;
+              }
             }
           }
         } catch {
@@ -305,8 +367,8 @@ export class ResilientModelGateway implements ModelGateway {
         (output as any).provenance = liveSuccess ? 'live_provider' : 'deterministic_fallback';
       }
 
-      const inputTokens = 520;
-      const outputTokens = 140;
+      const inputTokens = actualInputTokens ?? (request as any).usage?.inputTokens ?? 520;
+      const outputTokens = actualOutputTokens ?? (request as any).usage?.outputTokens ?? 140;
       const rates = this.pricing[candidate.provider] || { inputPer1M: 0.1, outputPer1M: 0.4 };
       const estimatedCostUsd = Number(((inputTokens * rates.inputPer1M + outputTokens * rates.outputPer1M) / 1_000_000).toFixed(6));
       const latencyMs = Date.now() - startTime;

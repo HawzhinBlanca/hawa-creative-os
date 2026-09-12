@@ -1,0 +1,500 @@
+{
+  "timestamp": "2026-09-11T21:00:06.434Z",
+  "traces": [
+    {
+      "client": "KAAE Accreditation",
+      "taskId": "216fa612-1a72-4222-83d1-7f82f1bded53",
+      "revisionId": "5cde2171-495c-44a8-99c2-7002fbb9b28a",
+      "status": "COMPLETE",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+      "expectedFolderMatch": false,
+      "sheetRowUrl": "https://docs.google.com/spreadsheets/d/1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ#gid=0&range=A101",
+      "filesCount": 12,
+      "receipt": {
+        "publicationId": "6550e496-5e89-47c2-9aaa-2fee65b54866",
+        "publicationKey": "pub_omni_216fa612-1a72-4222-83d1-7f82f1bded53",
+        "driveFolderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+        "driveFiles": [
+          {
+            "artifactId": "b3daaf08-c952-4468-9fe1-72b7c6349032",
+            "fileId": "emulated_file_b3daaf08-c952-4468-9fe1-72b7c6349032",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--feed-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "5860ccd1df094c8f168f72cfe8870bfcf1da08451c9a935cd94086f6bb394123",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_b3daaf08-c952-4468-9fe1-72b7c6349032/view"
+          },
+          {
+            "artifactId": "49f13903-750d-429e-bdd8-45e04f551b46",
+            "fileId": "emulated_file_49f13903-750d-429e-bdd8-45e04f551b46",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--feed-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "81015fddfe42c0c6c7648bd3c5ccffe3503360df94d21ee6df4807bb5ff8bff7",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_49f13903-750d-429e-bdd8-45e04f551b46/view"
+          },
+          {
+            "artifactId": "4b2b5d28-1510-456b-bbdb-6d76341c055d",
+            "fileId": "emulated_file_4b2b5d28-1510-456b-bbdb-6d76341c055d",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--feed.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "9df29f445e8bab9e01f71f4edcd788dbd58ee3cfc1442f531b57c63018f2f9fc",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_4b2b5d28-1510-456b-bbdb-6d76341c055d/view"
+          },
+          {
+            "artifactId": "6b83cecb-0765-4201-bfb4-8217210fad87",
+            "fileId": "emulated_file_6b83cecb-0765-4201-bfb4-8217210fad87",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--story-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "2b1babf6e90b205a0962f917d22921111abdef11502690a3230bc142c807bc7c",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_6b83cecb-0765-4201-bfb4-8217210fad87/view"
+          },
+          {
+            "artifactId": "d43cd29a-2c99-4992-b7b7-fe89c834f13d",
+            "fileId": "emulated_file_d43cd29a-2c99-4992-b7b7-fe89c834f13d",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--story-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "0a3fd179162e912f7afad94d5c8ba11a7e24a49ee7c7e8ff82790f567cfbf135",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_d43cd29a-2c99-4992-b7b7-fe89c834f13d/view"
+          },
+          {
+            "artifactId": "df0e88c9-887c-4ff0-a8c8-e5d0d5586a8e",
+            "fileId": "emulated_file_df0e88c9-887c-4ff0-a8c8-e5d0d5586a8e",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--story.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "c00080e2b888602ff766f83bee07935743a38de84c5083bfa7cf39cbaf05e8dd",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_df0e88c9-887c-4ff0-a8c8-e5d0d5586a8e/view"
+          },
+          {
+            "artifactId": "5cf1ca74-18be-40cc-8df6-9e6615c86488",
+            "fileId": "emulated_file_5cf1ca74-18be-40cc-8df6-9e6615c86488",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--square-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "5c0b11ad92c0243eeafd1ce5473b88331d599e6f27a2603285e990882c086678",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_5cf1ca74-18be-40cc-8df6-9e6615c86488/view"
+          },
+          {
+            "artifactId": "f0be5c3d-387f-4819-a66b-ee2f855ba922",
+            "fileId": "emulated_file_f0be5c3d-387f-4819-a66b-ee2f855ba922",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--square-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "55818560bfe65c299e6c7719220425e23759337bb362b474fe4f7acca824c0fd",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_f0be5c3d-387f-4819-a66b-ee2f855ba922/view"
+          },
+          {
+            "artifactId": "f32612a5-0fca-403e-992e-efa4e7fb296b",
+            "fileId": "emulated_file_f32612a5-0fca-403e-992e-efa4e7fb296b",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--square.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "188e9085f9bdcf154f471e09b483262b8ab4e592c058042cef0c06092ee81fd3",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_f32612a5-0fca-403e-992e-efa4e7fb296b/view"
+          },
+          {
+            "artifactId": "48fc807a-86aa-4d37-821c-2c989d3008b2",
+            "fileId": "emulated_file_48fc807a-86aa-4d37-821c-2c989d3008b2",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--landscape-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "346491e7625d754c17b860b349b2798570044c7cc9d11ce0bb3ae003299d744e",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_48fc807a-86aa-4d37-821c-2c989d3008b2/view"
+          },
+          {
+            "artifactId": "1a0f41b2-c6d3-4c36-9217-fc21b6329af9",
+            "fileId": "emulated_file_1a0f41b2-c6d3-4c36-9217-fc21b6329af9",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--landscape-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "e82653db543eb239a56403a42d1d2b03bfc93f6580c6641e673086cff76d78a0",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_1a0f41b2-c6d3-4c36-9217-fc21b6329af9/view"
+          },
+          {
+            "artifactId": "7da8e747-419a-4158-8674-ae31e6ade22c",
+            "fileId": "emulated_file_7da8e747-419a-4158-8674-ae31e6ade22c",
+            "folderId": "1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr",
+            "name": "kurdistan-accrediting-association-for-education--kaae--landscape.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "8ec107bde3c3f5ec59ebe5a29843c9c640172101340531624f0132402c31b1f0",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_7da8e747-419a-4158-8674-ae31e6ade22c/view"
+          }
+        ],
+        "sheet": {
+          "spreadsheetId": "1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ",
+          "sheetId": 0,
+          "rowKey": "216fa612-1a72-4222-83d1-7f82f1bded53",
+          "rowNumber": 101,
+          "expectedHash": "74f8623fc99092b4a9a60814ddb24822e9c9f99f6c9cab9d02497b7549d22001",
+          "observedHash": "74f8623fc99092b4a9a60814ddb24822e9c9f99f6c9cab9d02497b7549d22001",
+          "synced": true
+        },
+        "completedAt": "2026-09-11T21:00:05.902Z",
+        "state": "complete",
+        "detail": {
+          "verified": true,
+          "filesUploaded": 12
+        },
+        "clientId": "c1000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "client": "Drustee Hospital",
+      "taskId": "8f364a4a-15c4-418f-90b1-831f3c8897d1",
+      "revisionId": "731752aa-11e4-4b53-b487-07b7281acbc8",
+      "status": "COMPLETE",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/folder_drustee_prod_verified",
+      "expectedFolderMatch": true,
+      "sheetRowUrl": "https://docs.google.com/spreadsheets/d/sheet_drustee_campaigns_456#gid=0&range=A101",
+      "filesCount": 12,
+      "receipt": {
+        "publicationId": "baee8cad-128a-4d9c-b77d-6b5437c4c746",
+        "publicationKey": "pub_omni_8f364a4a-15c4-418f-90b1-831f3c8897d1",
+        "driveFolderId": "folder_drustee_prod_verified",
+        "driveFiles": [
+          {
+            "artifactId": "13667fa5-317f-4acb-8ce7-4dfed8f8b437",
+            "fileId": "emulated_file_13667fa5-317f-4acb-8ce7-4dfed8f8b437",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-feed-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "ce78b2165e0dac8ada5a22f1f0f2fe530b0f533fc1f04b5e74c4c7d4f70e2dcf",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_13667fa5-317f-4acb-8ce7-4dfed8f8b437/view"
+          },
+          {
+            "artifactId": "9944f420-751a-4282-9a5a-9aa0a3d16f0d",
+            "fileId": "emulated_file_9944f420-751a-4282-9a5a-9aa0a3d16f0d",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-feed-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "6fc4d3e1be1768d446415e56f96f8d0c7420ac0f82197b7aa630ef3674080a8d",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_9944f420-751a-4282-9a5a-9aa0a3d16f0d/view"
+          },
+          {
+            "artifactId": "607f0f4c-ab4a-4c43-9ab5-c5edadd828a6",
+            "fileId": "emulated_file_607f0f4c-ab4a-4c43-9ab5-c5edadd828a6",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-feed.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "7bd1acf516f6276107a75c3cbe3890aab46a6ce090c33de876a0160317e3c1c2",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_607f0f4c-ab4a-4c43-9ab5-c5edadd828a6/view"
+          },
+          {
+            "artifactId": "033df1b7-0804-46c2-b6e4-b1c1d857f024",
+            "fileId": "emulated_file_033df1b7-0804-46c2-b6e4-b1c1d857f024",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-story-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "729c09483d0dc30321671935b71f225a555e41626f49338317f658ee0e769c08",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_033df1b7-0804-46c2-b6e4-b1c1d857f024/view"
+          },
+          {
+            "artifactId": "91fe302c-0a11-421c-9680-f84403cf8e02",
+            "fileId": "emulated_file_91fe302c-0a11-421c-9680-f84403cf8e02",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-story-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "9fb07377af819b3a2b4280fdfc454f3ce2cee172a42e194a35fffbab7ad28758",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_91fe302c-0a11-421c-9680-f84403cf8e02/view"
+          },
+          {
+            "artifactId": "2f58a3c4-4dac-49d8-aa5d-978d93d38ec5",
+            "fileId": "emulated_file_2f58a3c4-4dac-49d8-aa5d-978d93d38ec5",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-story.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "827a6a7c865382fbee6014c9b29eb4a4d1a929ba4269c917ef5941830d66aba8",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_2f58a3c4-4dac-49d8-aa5d-978d93d38ec5/view"
+          },
+          {
+            "artifactId": "9ffc7280-b96b-4157-86dc-12a7b2940c00",
+            "fileId": "emulated_file_9ffc7280-b96b-4157-86dc-12a7b2940c00",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-square-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "15bba306f8a3e85ed1e17b4db978f9120641cbd6d4cfbf9f4a218412b851d5cf",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_9ffc7280-b96b-4157-86dc-12a7b2940c00/view"
+          },
+          {
+            "artifactId": "733e141f-7f70-4040-9352-e98bb12f96f1",
+            "fileId": "emulated_file_733e141f-7f70-4040-9352-e98bb12f96f1",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-square-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "c3e737a0d05462c83a5e6cb2362e935d6e9753e7b398eaa51d3ad008f97585f0",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_733e141f-7f70-4040-9352-e98bb12f96f1/view"
+          },
+          {
+            "artifactId": "78d874e5-504c-4d90-af18-29987b170e64",
+            "fileId": "emulated_file_78d874e5-504c-4d90-af18-29987b170e64",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-square.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "a7d5ff94a0a02d8c2d4f7eb2888bb0969e6bfe77dae7363bb0cccce0006c9389",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_78d874e5-504c-4d90-af18-29987b170e64/view"
+          },
+          {
+            "artifactId": "78132894-0806-4d24-9e2b-3844d613d936",
+            "fileId": "emulated_file_78132894-0806-4d24-9e2b-3844d613d936",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-landscape-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "9a85de9872e196995b2751c2c1512301c2fef346a76e82c7af8c29ff5701f7db",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_78132894-0806-4d24-9e2b-3844d613d936/view"
+          },
+          {
+            "artifactId": "f1099615-5712-442b-81b0-d6761f424e83",
+            "fileId": "emulated_file_f1099615-5712-442b-81b0-d6761f424e83",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-landscape-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "e9ef39f0179240b797e4bfb46f998f2078d3b62fe1a85c1a122f9186ff62b0b6",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_f1099615-5712-442b-81b0-d6761f424e83/view"
+          },
+          {
+            "artifactId": "359ccc49-f8b6-41d7-b17c-5b02656d17ad",
+            "fileId": "emulated_file_359ccc49-f8b6-41d7-b17c-5b02656d17ad",
+            "folderId": "folder_drustee_prod_verified",
+            "name": "drustee-evidence-first-health-landscape.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "69e191143c2c3825ff506d79910e42c72a46b4c31d91576fa8a2ab76cd7d386b",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_359ccc49-f8b6-41d7-b17c-5b02656d17ad/view"
+          }
+        ],
+        "sheet": {
+          "spreadsheetId": "sheet_drustee_campaigns_456",
+          "sheetId": 0,
+          "rowKey": "8f364a4a-15c4-418f-90b1-831f3c8897d1",
+          "rowNumber": 101,
+          "expectedHash": "1325f8c15fce399b48982a08690867f4fae13fc45ca316d78e6bf2cf4cd4cfc1",
+          "observedHash": "1325f8c15fce399b48982a08690867f4fae13fc45ca316d78e6bf2cf4cd4cfc1",
+          "synced": true
+        },
+        "completedAt": "2026-09-11T21:00:06.166Z",
+        "state": "complete",
+        "detail": {
+          "verified": true,
+          "filesUploaded": 12
+        },
+        "clientId": "client-drustee"
+      }
+    },
+    {
+      "client": "Aster Hotel Erbil",
+      "taskId": "5994b9a5-70cb-4024-85c0-82c5eda892bf",
+      "revisionId": "9b8ca1ba-673d-4ace-9fd7-af6059544b2e",
+      "status": "COMPLETE",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/folder_aster_prod",
+      "expectedFolderMatch": true,
+      "sheetRowUrl": "https://docs.google.com/spreadsheets/d/sheet_aster_deliverables#gid=0&range=A101",
+      "filesCount": 12,
+      "receipt": {
+        "publicationId": "d160be60-223e-46a3-8172-39fb8d191803",
+        "publicationKey": "pub_omni_5994b9a5-70cb-4024-85c0-82c5eda892bf",
+        "driveFolderId": "folder_aster_prod",
+        "driveFiles": [
+          {
+            "artifactId": "fbcf9a2b-3445-4674-abb3-8932a643603b",
+            "fileId": "emulated_file_fbcf9a2b-3445-4674-abb3-8932a643603b",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-feed-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "c49e5e2cb93842dff94a51ed2d1ac428e9cd46c23a714d3b2b231fa486f5ed56",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_fbcf9a2b-3445-4674-abb3-8932a643603b/view"
+          },
+          {
+            "artifactId": "10641326-be3e-4045-9c6f-7c2e2e5fd039",
+            "fileId": "emulated_file_10641326-be3e-4045-9c6f-7c2e2e5fd039",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-feed-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "6848a0f31cedcf547a68ab4cbe8bd0b1e25b198a501742fbd2b6a8467b8edf37",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_10641326-be3e-4045-9c6f-7c2e2e5fd039/view"
+          },
+          {
+            "artifactId": "a3f62a6b-dc13-4f75-b232-99ae51ab0dc7",
+            "fileId": "emulated_file_a3f62a6b-dc13-4f75-b232-99ae51ab0dc7",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-feed.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "8f1faa1c3784f38230d7c6ec6de099f4edf4ea6aed4d6a569fffd6a6e23a6b64",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_a3f62a6b-dc13-4f75-b232-99ae51ab0dc7/view"
+          },
+          {
+            "artifactId": "57f37752-0f01-4932-a558-04f14c1e0907",
+            "fileId": "emulated_file_57f37752-0f01-4932-a558-04f14c1e0907",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-story-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "f3e13fd04a815c7363de8428c20bd6c2ad94c1e29de163932d40f57d210a809b",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_57f37752-0f01-4932-a558-04f14c1e0907/view"
+          },
+          {
+            "artifactId": "cc71f01d-a147-497a-a309-3a096792b515",
+            "fileId": "emulated_file_cc71f01d-a147-497a-a309-3a096792b515",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-story-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "27c5816fa079cba44f79d8eedf29bd26309fb64e96295f6a807fa1b59f22f891",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_cc71f01d-a147-497a-a309-3a096792b515/view"
+          },
+          {
+            "artifactId": "de41eb58-edcf-4af4-8398-c2cce25ac86d",
+            "fileId": "emulated_file_de41eb58-edcf-4af4-8398-c2cce25ac86d",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-story.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "b3233bc5b05a9fb252e38f42ab7f73d20ad05d15e8192bd460fc5e281dafbbc4",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_de41eb58-edcf-4af4-8398-c2cce25ac86d/view"
+          },
+          {
+            "artifactId": "11091026-de1c-47e4-add5-8a72fd3a8391",
+            "fileId": "emulated_file_11091026-de1c-47e4-add5-8a72fd3a8391",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-square-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "e29f473ccfa2fde35ca1137064467f4461d7933b9e034d67bdb37eaf6afd5046",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_11091026-de1c-47e4-add5-8a72fd3a8391/view"
+          },
+          {
+            "artifactId": "68f91c3c-1b38-4281-ac5b-2dcaa620bea5",
+            "fileId": "emulated_file_68f91c3c-1b38-4281-ac5b-2dcaa620bea5",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-square-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "8433d1758f5ed916a11e71069eee2f24b26afdf1012ec69fd80d4d669926c3eb",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_68f91c3c-1b38-4281-ac5b-2dcaa620bea5/view"
+          },
+          {
+            "artifactId": "5ff98116-3658-4672-8ad0-628837318260",
+            "fileId": "emulated_file_5ff98116-3658-4672-8ad0-628837318260",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-square.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "3d96429eeb7f48230e860929f04963a7a240211f2d6b9a5c650c8721a444e5e2",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_5ff98116-3658-4672-8ad0-628837318260/view"
+          },
+          {
+            "artifactId": "256aac4e-1ff6-4bd5-8aa6-78a18d2cbb35",
+            "fileId": "emulated_file_256aac4e-1ff6-4bd5-8aa6-78a18d2cbb35",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-landscape-retina.png",
+            "mimeType": "image/png",
+            "observedSize": 350000,
+            "expectedSha256": "b76ca15d92449e97525d328f95e4e70a5730386a090a9d01f030e84cadc594e2",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_256aac4e-1ff6-4bd5-8aa6-78a18d2cbb35/view"
+          },
+          {
+            "artifactId": "f93da291-59f2-435c-a4c6-0935305c119c",
+            "fileId": "emulated_file_f93da291-59f2-435c-a4c6-0935305c119c",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-landscape-vector.svg",
+            "mimeType": "image/svg+xml",
+            "observedSize": 45000,
+            "expectedSha256": "349f3843fd9d14e191717fcb08bed1a2f7cd8f77c312c6a1f0a1c60594fd97a4",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_f93da291-59f2-435c-a4c6-0935305c119c/view"
+          },
+          {
+            "artifactId": "6148d170-e24b-4939-b196-86b54eae5e8c",
+            "fileId": "emulated_file_6148d170-e24b-4939-b196-86b54eae5e8c",
+            "folderId": "folder_aster_prod",
+            "name": "aster-hotel---resort-landscape.hyc",
+            "mimeType": "application/json",
+            "observedSize": 18000,
+            "expectedSha256": "9c615cff5760fb9b77e5ad0c52d4c02365a3992b60da3418115e117ea06c5199",
+            "verified": true,
+            "webViewLink": "https://drive.google.com/file/d/emulated_file_6148d170-e24b-4939-b196-86b54eae5e8c/view"
+          }
+        ],
+        "sheet": {
+          "spreadsheetId": "sheet_aster_deliverables",
+          "sheetId": 0,
+          "rowKey": "5994b9a5-70cb-4024-85c0-82c5eda892bf",
+          "rowNumber": 101,
+          "expectedHash": "5e90449c5815917473381c8f9546daf5ef7a0580aabe6b2888d2db8bf214b8e0",
+          "observedHash": "5e90449c5815917473381c8f9546daf5ef7a0580aabe6b2888d2db8bf214b8e0",
+          "synced": true
+        },
+        "completedAt": "2026-09-11T21:00:06.433Z",
+        "state": "complete",
+        "detail": {
+          "verified": true,
+          "filesUploaded": 12
+        },
+        "clientId": "client-aster"
+      }
+    }
+  ]
+}

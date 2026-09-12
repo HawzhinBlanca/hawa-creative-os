@@ -1,6 +1,25 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+export function resolveWorkspaceFile(relativePath: string): string {
+  const candidates = [
+    resolve(process.cwd(), relativePath),
+    resolve(process.cwd(), '../../', relativePath),
+    resolve(process.cwd(), '../', relativePath),
+    resolve(__dirname, '../../../', relativePath),
+    resolve(__dirname, '../../', relativePath),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return resolve(process.cwd(), relativePath);
+}
 
 export interface MigrationResult {
   success: boolean;
@@ -18,27 +37,40 @@ export function parseSchemaSql(sqlContent: string): {
   triggers: string[];
   policies: string[];
 } {
-  // Extract table names
-  const tableMatches = [...sqlContent.matchAll(/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-zA-Z0-9_.]+)/gi)];
-  const tables = tableMatches.map((m) => m[1]);
+  const statements: string[] = [];
+  const tables: string[] = [];
+  const enums: string[] = [];
+  const triggers: string[] = [];
+  const policies: string[] = [];
 
-  // Extract enum types
-  const enumMatches = [...sqlContent.matchAll(/CREATE\s+TYPE\s+([a-zA-Z0-9_.]+)\s+AS\s+ENUM/gi)];
-  const enums = enumMatches.map((m) => m[1]);
+  const lines = sqlContent.split('\n');
+  let currentStatement = '';
 
-  // Extract triggers
-  const triggerMatches = [...sqlContent.matchAll(/CREATE\s+TRIGGER\s+([a-zA-Z0-9_.]+)/gi)];
-  const triggers = triggerMatches.map((m) => m[1]);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('--') || trimmed.length === 0) continue;
 
-  // Extract RLS policies
-  const policyMatches = [...sqlContent.matchAll(/CREATE\s+POLICY\s+([a-zA-Z0-9_.]+)/gi)];
-  const policies = policyMatches.map((m) => m[1]);
+    currentStatement += line + '\n';
+    if (trimmed.endsWith(';')) {
+      statements.push(currentStatement.trim());
+      currentStatement = '';
+    }
+  }
 
-  // Split statements roughly by semicolon outside blocks
-  const statements = sqlContent
-    .split(/;\s*$/m)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith('--'));
+  // Extract metadata
+  for (const stmt of statements) {
+    const tableMatch = stmt.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:hawa\.)?([a-zA-Z0-9_]+)/i);
+    if (tableMatch) tables.push(tableMatch[1]);
+
+    const enumMatch = stmt.match(/CREATE\s+TYPE\s+(?:hawa\.)?([a-zA-Z0-9_]+)\s+AS\s+ENUM/i);
+    if (enumMatch) enums.push(enumMatch[1]);
+
+    const triggerMatch = stmt.match(/CREATE\s+TRIGGER\s+([a-zA-Z0-9_]+)/i);
+    if (triggerMatch) triggers.push(triggerMatch[1]);
+
+    const policyMatch = stmt.match(/CREATE\s+POLICY\s+([a-zA-Z0-9_]+)/i);
+    if (policyMatch) policies.push(policyMatch[1]);
+  }
 
   return { statements, tables, enums, triggers, policies };
 }
@@ -49,7 +81,7 @@ export async function runMigrations(options: {
   dryRun?: boolean;
 } = {}): Promise<MigrationResult> {
   const start = Date.now();
-  const filePath = options.schemaPath || resolve(process.cwd(), 'db/schema.sql');
+  const filePath = options.schemaPath || resolveWorkspaceFile('db/schema.sql');
   const sqlContent = readFileSync(filePath, 'utf-8');
 
   const { statements, tables, enums, triggers, policies } = parseSchemaSql(sqlContent);

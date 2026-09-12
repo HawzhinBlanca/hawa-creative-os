@@ -1,0 +1,20 @@
+{
+  "documentId": "doc_figma_agency_q1_09",
+  "taskId": "t-legacy-figma-q1-01",
+  "clientId": "c1000000-0000-4000-8000-000000000001",
+  "title": "Legacy External Agency Q1 Master Presentation",
+  "sourceFormat": "figma_rest_ref",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "cd3c68e68b3618ca9cc0a69992abf8dbd034f812dea8817a06de724f9c0fd3e2",
+  "archivedAt": "2026-09-11T23:02:03.372Z",
+  "sourceContent": {
+    "figmaFileKey": "fig_external_agency_revoked_key_9921",
+    "nodeId": "12:44",
+    "originalUrl": "https://www.figma.com/file/fig_external_agency_revoked_key_9921/Q1-Master"
+  },
+  "metadata": {
+    "inaccessible": true,
+    "tokenRevoked": true,
+    "blockerReason": "External vendor OAuth lease expired in 2025; workspace inaccessible without client admin renewal"
+  }
+}

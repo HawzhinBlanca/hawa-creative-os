@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pg from 'pg';
-import { parseSchemaSql } from './migrate.js';
+import { parseSchemaSql, resolveWorkspaceFile } from './migrate.js';
 
 export async function checkDatabaseSchema(): Promise<{
   valid: boolean;
@@ -11,8 +11,8 @@ export async function checkDatabaseSchema(): Promise<{
   policiesCount: number;
   liveDbChecked: boolean;
 }> {
-  const schemaPath = resolve(process.cwd(), 'db/schema.sql');
-  const rlsPath = resolve(process.cwd(), 'db/rls.sql');
+  const schemaPath = resolveWorkspaceFile('db/schema.sql');
+  const rlsPath = resolveWorkspaceFile('db/rls.sql');
 
   if (!existsSync(schemaPath)) {
     throw new Error(`db/schema.sql not found at ${schemaPath}`);

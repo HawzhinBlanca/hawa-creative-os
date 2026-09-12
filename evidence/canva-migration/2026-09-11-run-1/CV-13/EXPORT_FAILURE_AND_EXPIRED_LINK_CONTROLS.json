@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-09-11T20:36:55.919Z",
+  "defectRejections": [
+    {
+      "defect": "Missing/Empty output",
+      "code": "MISSING_EXPORT_OUTPUT",
+      "message": "Artifact buffer is missing or empty. Cannot capture zero-byte output."
+    },
+    {
+      "defect": "Eight-byte placeholder/corrupt file",
+      "code": "CORRUPT_OR_EMPTY_ARTIFACT",
+      "message": "Rejecting 8-byte corrupt/placeholder file (8 bytes). Invariant: Eight-byte outputs cannot become ready (CV-13)."
+    },
+    {
+      "defect": "Wrong format / HTML error",
+      "code": "WRONG_FORMAT_OUTPUT",
+      "message": "Wrong format output: Buffer does not start with valid PNG magic bytes (0x89PNG)."
+    },
+    {
+      "defect": "RGB PDF for print preflight",
+      "code": "PRINT_PREFLIGHT_DEFECT",
+      "message": "PDF Print preflight defect: File color space is not CMYK (FR-038)."
+    },
+    {
+      "defect": "Expired download URL",
+      "code": "EXPIRED_DOWNLOAD_URL",
+      "message": "Temporary Canva download URL has expired. Ephemeral links cannot be treated as durable backups (CV-13)."
+    }
+  ],
+  "uncertainJobReconciliation": {
+    "jobId": "job_exp_e86e46d03bd84a93",
+    "reconcileCount": 1,
+    "status": "success",
+    "guarantee": "Uncertain export jobs are reconciled by polling rather than repeating duplicate export requests."
+  },
+  "acceptance": "Missing, eight-byte, wrong-format, corrupt, and expired-link outputs are strictly blocked."
+}

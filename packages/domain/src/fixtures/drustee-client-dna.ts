@@ -1,0 +1,142 @@
+import type { ClientDNA } from '../client-dna.js';
+
+export const drusteeClientDNA: ClientDNA = {
+  tenantId: 'a0000000-0000-4000-8000-000000000001',
+  clientId: 'c1000000-0000-4000-8000-000000000003',
+  name: 'Drustee Evidence-First Botanical Health',
+  code: 'DRUSTEE',
+  version: 1,
+  status: 'active',
+  defaultLocale: 'ckb',
+  defaultDirection: 'rtl',
+  colors: [
+    {
+      name: 'Drustee Mint Emerald',
+      hex: '#10B981',
+      role: 'primary',
+      cmyk: '65,0,55,0',
+      pantone: 'PANTONE 7724 C',
+    },
+    {
+      name: 'Drustee Deep Forest',
+      hex: '#065F46',
+      role: 'secondary',
+      cmyk: '85,30,70,50',
+      pantone: 'PANTONE 7736 C',
+    },
+    {
+      name: 'Drustee Golden Citrus',
+      hex: '#F59E0B',
+      role: 'accent',
+      cmyk: '0,40,95,0',
+    },
+    {
+      name: 'Drustee Clean Herbal Cream',
+      hex: '#FAF5EE',
+      role: 'background',
+      cmyk: '0,2,5,2',
+    },
+    {
+      name: 'Drustee High-Legibility Dark Slate',
+      hex: '#1E293B',
+      role: 'text',
+      cmyk: '0,0,0,88',
+    },
+  ],
+  fonts: [
+    {
+      family: 'Vazirmatn',
+      style: 'Bold',
+      weight: '700',
+      role: 'display',
+      license: 'SIL Open Font License (Kurdish Sorani Primary)',
+      supportedLocales: ['ckb', 'ar'],
+    },
+    {
+      family: 'Vazirmatn',
+      style: 'Regular',
+      weight: '400',
+      role: 'body',
+      license: 'SIL Open Font License',
+      supportedLocales: ['ckb', 'ar'],
+    },
+    {
+      family: 'Plus Jakarta Sans',
+      style: 'Normal',
+      weight: '600',
+      role: 'display',
+      license: 'SIL Open Font License (Secondary Latin)',
+      supportedLocales: ['en'],
+    },
+  ],
+  assets: [
+    {
+      assetId: 'f2000000-0000-4000-8000-000000000010',
+      name: 'Drustee Botanical Primary Vector Logo',
+      role: 'logo_primary',
+      storageKey: 'clients/drustee/brand/assets/drustee-logo-primary.svg',
+      sha256: '6a3f120199e43681c2f8832a819b91811a2f64e26a7cb0195e3479a9578107ef',
+      mimeType: 'image/svg+xml',
+      minimumWidthPx: 120,
+      clearSpacePx: 24,
+      allowedBackgrounds: ['#FAF5EE', '#FFFFFF', '#065F46'],
+      prohibitedModifications: [
+        'Do not alter green botanical leaf hue',
+        'Do not invert text on non-approved background',
+      ],
+    },
+    {
+      assetId: 'f2000000-0000-4000-8000-000000000011',
+      name: 'Drustee Certified GMP Stamp',
+      role: 'badge',
+      storageKey: 'clients/drustee/brand/assets/drustee-gmp-badge.svg',
+      sha256: '14b036573714249a5bba1b426618d3d92fe7a6850c9dc8ab870c5ffeb2a06141',
+      mimeType: 'image/svg+xml',
+      minimumWidthPx: 64,
+      clearSpacePx: 12,
+    },
+  ],
+  guidelines: {
+    voiceAndTone:
+      'Scientific, trustworthy, evidence-based, warm and accessible in Kurdish Sorani. Reassuring tone focused on health wellness and genuine clinical transparency.',
+    prohibitedPhrases: [
+      'Magic cure',
+      'Instant miracle',
+      '100% cure guarantee',
+      'Replaces hospital treatment',
+      'Unverified remedy',
+    ],
+    requiredDisclaimers: [
+      'تەواوکەری خۆراکییە و جێگەی دەرمان و ڕاوێژی پزیشکی پسپۆڕ ناگرێتەوە.',
+      'Approved by Kurdistan Ministry of Health Regulation No. 14/2021.',
+    ],
+    layoutRules: [
+      'Preserve botanical leaf emblem proportions without shear or distortion.',
+      'Maintain RTL layout symmetry for all Kurdish nutritional facts tables.',
+      'Pair Mint Emerald (#10B981) with Clean Forest (#065F46) and Cream (#FAF5EE).',
+    ],
+  },
+  destinations: {
+    googleSharedDriveId: '1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr_DRUSTEE',
+    productionFolderId: '1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr_DRUSTEE_PROD',
+    archiveFolderId: '1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr_DRUSTEE_ARCHIVE',
+    spreadsheetId: '1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ',
+    sheetId: 1,
+  },
+  canvaMapping: {
+    canvaTeamId: 'team_drustee_erbil',
+    canvaBrandKitId: 'kit_drustee_2026',
+    canvaTemplateIds: {
+      supplement_feed: 'DAF_drustee_feed_01',
+      wellness_story: 'DAF_drustee_story_02',
+      clinical_square: 'DAF_drustee_sq_03',
+    },
+    verifiedAt: '2026-09-11T20:00:00Z',
+  },
+  approvalPolicy: {
+    requiredRoles: ['pharmacist_consultant', 'creative_director'],
+    allowAutoApproval: false,
+    autoApprovalEligibleTemplates: [],
+  },
+  updatedAt: '2026-09-11T12:00:00Z',
+};

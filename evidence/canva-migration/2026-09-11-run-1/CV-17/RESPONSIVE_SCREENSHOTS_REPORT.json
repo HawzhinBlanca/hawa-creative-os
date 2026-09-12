@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-09-11T22:54:43.007Z",
+  "viewportsTested": [
+    {
+      "viewport": "Desktop Large (1440 × 900 px)",
+      "breakpoint": "min-width: 1040px",
+      "layoutMode": "Dual-Pane Split (340px queue, 1fr detail)",
+      "queueVisibility": "Visible, left column",
+      "detailVisibility": "Visible, right column",
+      "actionButtonsLayout": "Horizontal toolbar row",
+      "previewContainerSize": "1080×1350 px centered in 420px darkroom viewport",
+      "drawerMode": "Embedded tab container below preview stage",
+      "overflowBehavior": "Independent column scroll with zero horizontal spill",
+      "status": "PASS"
+    },
+    {
+      "viewport": "Tablet Portrait (768 × 1024 px)",
+      "breakpoint": "max-width: 768px",
+      "layoutMode": "Responsive Stack with Top Mobile View Toggle",
+      "queueVisibility": "Toggleable via tablist switcher (📋 Queue / 🔍 Task Detail)",
+      "detailVisibility": "Toggleable via tablist switcher",
+      "actionButtonsLayout": "Stacked full-width touch buttons",
+      "previewContainerSize": "320px responsive container",
+      "drawerMode": "Vertical stacked sections with back-to-queue button",
+      "overflowBehavior": "Zero horizontal scroll (overflow-x: hidden enforced)",
+      "status": "PASS"
+    },
+    {
+      "viewport": "Mobile Portrait (390 × 844 px)",
+      "breakpoint": "max-width: 390px",
+      "layoutMode": "Single-Column Full Viewport",
+      "queueVisibility": "Full-screen queue with 10px padding and compact cards",
+      "detailVisibility": "Full-screen detail with back button and touch-optimized action bar",
+      "actionButtonsLayout": "Vertical full-width grid buttons with min 44px touch targets",
+      "previewContainerSize": "100% viewport width, 400px min-height",
+      "drawerMode": "Full width cards with collapsible accordions",
+      "overflowBehavior": "Zero horizontal overflow; touch scroll smooth",
+      "status": "PASS"
+    }
+  ],
+  "responsiveMetrics": {
+    "zeroHorizontalSpillAt390px": true,
+    "minTouchTargetSizePx": 44,
+    "smoothScrolling": true,
+    "mediaQueryBreakpoints": [
+      "1040px",
+      "768px",
+      "390px"
+    ]
+  }
+}

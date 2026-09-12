@@ -25,25 +25,37 @@ import { RetrievalService } from '@hawa/retrieval';
 import { TaskRepository, IngressRepository, OutboxRepository } from '@hawa/db';
 
 function createInMemoryDatabase() {
-  const store = {
-    tasks: [] as any[],
-    task_events: [] as any[],
-    raw_ingress_events: [] as any[],
-    outbox: [] as any[],
+  const outboxList: any[] = [];
+  const store: Record<string, any[]> = {
+    tasks: [],
+    task_events: [],
+    raw_ingress_events: [],
+    outbox: outboxList,
+    outbox_commands: outboxList,
   };
 
-  const createQueryBuilder = (table: keyof typeof store) => {
+  const createQueryBuilder = (table: string) => {
+    if (!store[table]) store[table] = [];
     let whereClauses: Array<{ col: string; op: string; val: any }> = [];
     let valuesToInsert: any = null;
     let valuesToSet: any = null;
+    let limitCount: number | null = null;
 
     const builder: any = {
       selectAll: () => builder,
       select: () => builder,
       returningAll: () => builder,
       returning: () => builder,
-      where: (col: string, op: string, val: any) => {
-        whereClauses.push({ col, op, val });
+      where: (col: any, op?: string, val?: any) => {
+        if (typeof col === 'function') {
+          whereClauses.push({ col: 'state', op: '=', val: 'pending' });
+        } else {
+          whereClauses.push({ col, op: op!, val });
+        }
+        return builder;
+      },
+      limit: (n: number) => {
+        limitCount = n;
         return builder;
       },
       values: (val: any) => {
@@ -55,9 +67,15 @@ function createInMemoryDatabase() {
         return builder;
       },
       executeTakeFirst: async () => {
-        const list = store[table].filter((row) => {
-          return whereClauses.every((w) => row[w.col] === w.val);
-        });
+        const matchWhere = (row: any) => {
+          return whereClauses.every((w) => {
+            if (w.op === 'in' && Array.isArray(w.val)) {
+              return w.val.includes(row[w.col]);
+            }
+            return row[w.col] === w.val;
+          });
+        };
+        const list = store[table].filter(matchWhere);
         return list[0] || null;
       },
       executeTakeFirstOrThrow: async () => {
@@ -78,8 +96,16 @@ function createInMemoryDatabase() {
         return res;
       },
       execute: async () => {
+        const matchWhere = (row: any) => {
+          return whereClauses.every((w) => {
+            if (w.op === 'in' && Array.isArray(w.val)) {
+              return w.val.includes(row[w.col]);
+            }
+            return row[w.col] === w.val;
+          });
+        };
         if (valuesToSet) {
-          const updated = store[table].filter((r) => whereClauses.every((w) => r[w.col] === w.val));
+          const updated = store[table].filter(matchWhere);
           for (const row of updated) {
             Object.assign(row, valuesToSet);
           }
@@ -90,9 +116,11 @@ function createInMemoryDatabase() {
           store[table].push(newRow);
           return [newRow];
         }
-        return store[table].filter((row) => {
-          return whereClauses.every((w) => row[w.col] === w.val);
-        });
+        let list = store[table].filter(matchWhere);
+        if (limitCount !== null) {
+          list = list.slice(0, limitCount);
+        }
+        return list;
       },
     };
     return builder;
@@ -130,7 +158,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
     const studio = new HyCanvasStudioAdapter();
-    const publisher = new GooglePublisher();
+    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test_token' });
 
     // =========================================================================
     // STEP 1: Non-authoritative Ingress & Webhook Authentication

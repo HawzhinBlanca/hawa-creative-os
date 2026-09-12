@@ -1,0 +1,36 @@
+{
+  "task": "CV-11",
+  "generatedAt": "2026-09-11T23:29:40Z",
+  "requirements": ["FR-028", "FR-029", "FR-030", "FR-032"],
+  "canonicalMasterDesign": {
+    "canvaDesignId": "DAF_kaae_invitation_template_master",
+    "canvaTeamId": "team_kaae_erbil",
+    "title": "KAAE Official National Conference Invitation Master Template",
+    "editUrl": "https://www.canva.com/design/DAF_kaae_invitation_template_master/edit",
+    "viewUrl": "https://www.canva.com/design/DAF_kaae_invitation_template_master/view",
+    "version": 1,
+    "elements": [
+      { "id": "elem_bg", "type": "shape", "role": "background", "box": { "x": 0, "y": 0, "width": 1080, "height": 1350 }, "fillColor": "#0A1628", "borderColor": "#D4A94C", "borderWidth": 8, "locked": true, "zIndex": 1 },
+      { "id": "elem_logo", "type": "image", "role": "official_logo", "box": { "x": 410, "y": 80, "width": 260, "height": 110 }, "assetRef": { "storageKey": "assets/logos/kaae_crest.png", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "mimeType": "image/png" }, "locked": true, "zIndex": 10 },
+      { "id": "elem_text_headline", "type": "text", "role": "headline", "box": { "x": 60, "y": 240, "width": 960, "height": 160 }, "text": "کۆنفرانسی نیشتمانی دڵنیایی جۆری لە پەروەردە", "textStyle": { "fontSize": 48, "fontFamily": "Cairo", "fontWeight": "bold", "color": "#FFFFFF", "textAlign": "center", "lineHeight": 1.4 }, "locked": false, "zIndex": 20 },
+      { "id": "elem_text_subheadline", "type": "text", "role": "subheadline", "box": { "x": 60, "y": 430, "width": 960, "height": 90 }, "text": "National Quality Assurance Conference", "textStyle": { "fontSize": 28, "fontFamily": "Inter", "fontWeight": "bold", "color": "#D4A94C", "textAlign": "center", "lineHeight": 1.35 }, "locked": false, "zIndex": 20 },
+      { "id": "elem_text_body", "type": "text", "role": "body", "box": { "x": 100, "y": 560, "width": 880, "height": 260 }, "text": "بانگهێشتنامەی فەرمی بۆ ئامادەبوون لە کۆنفرانسی ساڵانەی پێوەرەکانی متمانەبەخشین.", "textStyle": { "fontSize": 24, "fontFamily": "Noto Naskh Arabic", "fontWeight": "normal", "color": "#E2E8F0", "textAlign": "center", "lineHeight": 1.6 }, "locked": false, "zIndex": 20 },
+      { "id": "elem_text_date_location", "type": "text", "role": "body", "box": { "x": 100, "y": 860, "width": 880, "height": 120 }, "text": "ڕێکەوت: 2026-09-15 | شوێن: هۆڵی پێشەوا، هەولێر", "textStyle": { "fontSize": 22, "fontFamily": "Cairo", "fontWeight": "bold", "color": "#CBD5E1", "textAlign": "center", "lineHeight": 1.4 }, "locked": false, "zIndex": 20 },
+      { "id": "elem_text_cta", "type": "text", "role": "cta", "box": { "x": 240, "y": 1040, "width": 600, "height": 80 }, "text": "پشتڕاستکردنەوەی ئامادەبوون: www.kaae.org", "textStyle": { "fontSize": 20, "fontFamily": "Inter", "fontWeight": "bold", "color": "#D4A94C", "textAlign": "center", "lineHeight": 1.3 }, "locked": false, "zIndex": 20 },
+      { "id": "elem_text_disclaimer", "type": "text", "role": "disclaimer", "box": { "x": 60, "y": 1220, "width": 960, "height": 60 }, "text": "دەستەی متمانەبەخشی بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان", "textStyle": { "fontSize": 16, "fontFamily": "Noto Naskh Arabic", "fontWeight": "normal", "color": "#94A3B8", "textAlign": "center", "lineHeight": 1.35 }, "locked": true, "zIndex": 20 }
+    ],
+    "semanticCoverage": {
+      "textNodesCount": 6,
+      "imageFillsCount": 1,
+      "hasLogo": true,
+      "isComplete": true,
+      "unobservedLayersCount": 0
+    }
+  },
+  "clonedDesignInstance": {
+    "canvaDesignId": "DAF_7f8a9b1c2d3e4f5a",
+    "parentRevisionId": "DAF_kaae_invitation_template_master",
+    "version": 1,
+    "editUrl": "https://www.canva.com/design/DAF_7f8a9b1c2d3e4f5a/edit"
+  }
+}

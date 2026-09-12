@@ -11,6 +11,7 @@ function createMockDb() {
     task_events: [] as any[],
     raw_ingress_events: [] as any[],
     outbox: [] as any[],
+    outbox_commands: [] as any[],
   };
 
   const createQueryBuilder = (table: keyof typeof store) => {
@@ -24,8 +25,12 @@ function createMockDb() {
       select: () => builder,
       returningAll: () => builder,
       returning: () => builder,
-      where: (col: string, op: string, val: any) => {
-        whereClauses.push({ col, op, val });
+      where: (col: any, op?: string, val?: any) => {
+        if (typeof col === 'function') {
+          whereClauses.push({ col: 'state', op: '=', val: 'pending' });
+        } else {
+          whereClauses.push({ col, op: op!, val });
+        }
         return builder;
       },
       values: (val: any) => {
@@ -42,7 +47,12 @@ function createMockDb() {
       },
       executeTakeFirst: async () => {
         const list = store[table].filter((row) => {
-          return whereClauses.every((w) => row[w.col] === w.val);
+          return whereClauses.every((w) => {
+            if (w.op === 'in' && Array.isArray(w.val)) {
+              return w.val.includes(row[w.col]);
+            }
+            return row[w.col] === w.val;
+          });
         });
         return list[0] || null;
       },
@@ -64,8 +74,16 @@ function createMockDb() {
         return res;
       },
       execute: async () => {
+        const matchWhere = (row: any) => {
+          return whereClauses.every((w) => {
+            if (w.op === 'in' && Array.isArray(w.val)) {
+              return w.val.includes(row[w.col]);
+            }
+            return row[w.col] === w.val;
+          });
+        };
         if (valuesToSet) {
-          const updated = store[table].filter((r) => whereClauses.every((w) => r[w.col] === w.val));
+          const updated = store[table].filter(matchWhere);
           for (const row of updated) {
             Object.assign(row, valuesToSet);
           }
@@ -76,9 +94,7 @@ function createMockDb() {
           store[table].push(newRow);
           return [newRow];
         }
-        let list = store[table].filter((row) => {
-          return whereClauses.every((w) => row[w.col] === w.val);
-        });
+        let list = store[table].filter(matchWhere);
         if (limitCount !== null) {
           list = list.slice(0, limitCount);
         }

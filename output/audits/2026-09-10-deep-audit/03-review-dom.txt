@@ -1,0 +1,200 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library"
+    - button "Adapters"
+    - button "Actionable Operations"
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Task Review & Approval" [level=1]
+  - text: Figma Agent Studio, live staging proof evidence, and publishing gate
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - generic: "BRAND KIT:"
+  - combobox "Select active brand kit":
+    - option "🌿 EVIDENCE FIRST Drustee Evidence-First Health"
+    - option "🛡️ VERIFIED LOT SEBAR Verified Health"
+    - option "⚡ STUDIO OS Hawa Creative OS"
+    - option "🚀 2-HOUR DELIVERY Erbil Retail Express"
+    - option "🏛️ LAW NO. 6 OF 2022 Kurdistan Accrediting Association for Education" [selected]
+    - option "⚡ 0% TRANSFER FEE FastPay Mobile Wallet"
+    - option "🏥 24/7 EXPRESS CARE Aster Pharmacy Kurdistan"
+  - button "🎨 + Kit":
+    - generic: 🎨
+    - generic: + Kit
+  - 'generic "Autonomous persistence: working draft is saved to browser IndexedDB with zero cloud dependency"':
+    - generic: 💾 IndexedDB synced
+  - button "⚡ $0.042 / $48.2 Mo":
+    - generic: ⚡
+    - generic: $0.042
+    - generic: /
+    - generic: $48.2 Mo
+  - button "🇬🇧 English"
+  - button "☀️ کوردی"
+  - button "🔀 Bilingual"
+  - button "↖ Select"
+  - button "✋ Hand"
+  - button "Portrait"
+  - button "Square"
+  - button "Story"
+  - button "Billboard"
+  - button "🖼️ Single View":
+    - generic: 🖼️ Single View
+  - button "⚡ Auto-Reflow":
+    - generic: ⚡ Auto-Reflow
+  - button "📱 Send WhatsApp":
+    - generic: 📱 Send WhatsApp
+  - generic: "🏛️ KAAE DELIVERABLES:"
+  - button "📜 1:1 Mandate"
+  - button "📢 4:5 Standards"
+  - button "🧭 1:1 Roadmap"
+  - button "📱 9:16 Story"
+  - button "📜 A4 Certificate"
+  - generic: "💼 COMMERCIAL:"
+  - button "💳 1:1 FastPay"
+  - button "🏥 4:5 Aster"
+  - button "🌿 1:1 Drustee"
+  - button "↩"
+  - button "↪"
+  - button "⏱ Timeline"
+  - button "Safe Zones"
+  - button "📱 Social UI"
+  - button "Bidi Isolates"
+  - button "🎨 Figma Studio v2.0":
+    - generic: 🎨
+    - generic: Figma Studio
+    - generic: v2.0
+  - button "⚡ Desktop"
+  - button "🌐 Web"
+  - button "🔍 Diff (3 Δ)":
+    - generic: 🔍
+    - generic: Diff (3 Δ)
+  - button "📥 Import Backup"
+  - button "🎁 Master Kit (.zip)":
+    - generic: 🎁
+    - generic: Master Kit (.zip)
+  - button "🚀 4-in-1 Campaign (.zip)":
+    - generic: 🚀
+    - generic: 4-in-1 Campaign (.zip)
+  - button "⚡ Export ▾"
+  - button "?"
+  - button "📑 Layers (4)"
+  - button "🎨 Assets"
+  - button "📋 Brief"
+  - button "💬 Comments (0)"
+  - button "+ Text"
+  - button "+ Shape"
+  - button "+ Badge"
+  - generic: ◻
+  - generic "Double-click to rename": Price & Offer Badge
+  - button "Hide layer Price & Offer Badge": 👁
+  - button "Lock layer Price & Offer Badge": 🔓
+  - button "Bring layer Price & Offer Badge forward": ▲
+  - button "Send layer Price & Offer Badge backward": ▼
+  - button "Delete layer Price & Offer Badge": ✕
+  - generic: T
+  - generic "Double-click to rename": Headline (Vector Text)
+  - button "Hide layer Headline (Vector Text)": 👁
+  - button "Lock layer Headline (Vector Text)": 🔓
+  - button "Bring layer Headline (Vector Text) forward": ▲
+  - button "Send layer Headline (Vector Text) backward": ▼
+  - button "Delete layer Headline (Vector Text)": ✕
+  - generic: ★
+  - generic "Double-click to rename": Verified Brand Logo
+  - button "Hide layer Verified Brand Logo": 👁
+  - button "Lock layer Verified Brand Logo": 🔓
+  - button "Bring layer Verified Brand Logo forward": ▲
+  - button "Send layer Verified Brand Logo backward": ▼
+  - button "Delete layer Verified Brand Logo": ✕
+  - generic: ◻
+  - generic "Double-click to rename": Organic Accent Shape
+  - button "Hide layer Organic Accent Shape": 👁
+  - button "Lock layer Organic Accent Shape": 🔓
+  - button "Bring layer Organic Accent Shape forward": ▲
+  - button "Send layer Organic Accent Shape backward": ▼
+  - button "Delete layer Organic Accent Shape": ✕
+  - button "Duplicate (Cmd+D)"
+  - button "Delete"
+  - generic: Portrait
+  - generic: ·
+  - generic: 480 × 600
+  - generic: ·
+  - generic: 100%
+  - generic "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc":
+    - img "Kurdistan Accrediting Association for Education"
+  - generic: Headline (Vector Text) · 408×110 (36, 100)
+  - generic "Drag to Rotate"
+  - generic: Revision & Approval Live Container Drill
+  - generic: 50% off on all services across Erbil & Sulaymaniyah.
+  - generic: www.kaae.org
+  - generic: info@kaae.krd
+  - button "−"
+  - generic "Click to reset to 100%": 100%
+  - button "+"
+  - button "Fit View"
+  - 'heading "Layer: Headline (Vector Text)" [level=2]'
+  - button "Deselect"
+  - generic: TRANSFORM & DIMENSIONS
+  - text: "X:"
+  - spinbutton "Layer X Position in pixels": "36"
+  - text: "Y:"
+  - spinbutton "Layer Y Position in pixels": "100"
+  - text: "W:"
+  - spinbutton "Layer Width in pixels": "408"
+  - text: "H:"
+  - spinbutton "Layer Height in pixels": "110"
+  - generic: "Rotation:"
+  - generic: 0°
+  - slider "Layer Rotation in degrees": "0"
+  - generic: "Opacity:"
+  - generic: 100%
+  - slider "Layer Opacity percentage": "100"
+  - generic: "Aspect Ratio:"
+  - button "🔓 Free"
+  - generic: ALIGN TO ARTBOARD
+  - button "⇤"
+  - button "⇹"
+  - button "⇥"
+  - button "⤒"
+  - button "⬍"
+  - button "⤓"
+  - button "▲ Forward (])"
+  - button "▼ Backward ([)"
+  - generic: EFFECTS & SHADOW
+  - generic: "Drop Shadow:"
+  - button "Disabled"
+  - generic: HEADLINE CONTENT & COPY
+  - generic: "English Lead:"
+  - textbox "English Lead Headline": Revision & Approval Live Container Drill
+  - generic: "Kurdish Sorani:"
+  - textbox "Kurdish Sorani Headline": ئۆفەری تایبەتی ڕەمەزان
+  - text: ⚡ Real-Time QC Verification
+  - text: "WCAG Contrast:"
+  - generic: 13.11:1 (AAA)
+  - generic: "Protected Tokens: ✗ Altered"
+  - generic: "Layout Drift: 3 Δ modifications"
+  - button "Semantic Diff (3 Δ modifications)"
+  - button "✓ Approve & Publish"
+  - button "Save Working Revision"
+  - generic: Revision instructions for design repair
+  - textbox "Revision instructions for design repair":
+    - /placeholder: Revision instructions...
+  - button "Request Repair (2 left)"

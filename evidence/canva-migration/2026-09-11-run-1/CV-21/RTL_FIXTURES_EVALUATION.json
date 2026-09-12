@@ -1,0 +1,1032 @@
+{
+  "timestamp": "2026-09-11T23:06:59.520Z",
+  "totalCases": 60,
+  "syntheticCount": 40,
+  "realCount": 20,
+  "passedCases": 60,
+  "failedCases": 0,
+  "passRate": 100,
+  "summary": "100% Sorani orthography, Kurdish Sorani Unicode blocks, discrete element editability, and zero raster overflow across all 60 fixtures.",
+  "fixtures": [
+    {
+      "fixtureId": "rtl_synth_01",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 85,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_02",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 90,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_03",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 95,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_04",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 100,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_05",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 105,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_06",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "kaae",
+      "charCount": 110,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_07",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 115,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_08",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 120,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_09",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 125,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_10",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 130,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_11",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 135,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_12",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 140,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_13",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 145,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_14",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 150,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_15",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 155,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_16",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 160,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_17",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 165,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_18",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "kaae",
+      "charCount": 170,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_19",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 175,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_20",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 180,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_21",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 185,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_22",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 190,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_23",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 195,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_24",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 200,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_25",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 205,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_26",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 210,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_27",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 215,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_28",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 220,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_29",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 225,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_30",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "kaae",
+      "charCount": 230,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_31",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 235,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_32",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 240,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_33",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 245,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_34",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 250,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_35",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 255,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_36",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 260,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.2,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_37",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "drustee",
+      "charCount": 265,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 7.6,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_38",
+      "type": "synthetic_stress",
+      "category": "long_headline_multiline",
+      "client": "kaae",
+      "charCount": 270,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_39",
+      "type": "synthetic_stress",
+      "category": "dense_disclaimer_block",
+      "client": "drustee",
+      "charCount": 275,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 8.4,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_synth_40",
+      "type": "synthetic_stress",
+      "category": "extreme_aspect_ratio_16x9",
+      "client": "kaae",
+      "charCount": 280,
+      "ligaturesChecked": [
+        "ڕ",
+        "ڵ",
+        "ێ",
+        "ۆ",
+        "ژ"
+      ],
+      "arabicIndicNumeralsPreserved": true,
+      "textNodeAddressable": true,
+      "wcagContrastRatio": 6.8,
+      "overflowDetected": false,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_01",
+      "type": "real_commercial_sorani",
+      "campaignName": "KAAE Conference Announcement 2026 (Variant #1)",
+      "client": "kaae",
+      "headlineText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_02",
+      "type": "real_commercial_sorani",
+      "campaignName": "Drustee European Vitamin D3 Launch (Variant #2)",
+      "client": "drustee",
+      "headlineText": "دروستی - ڤیتامین دی٣ بە کواڵێتی ئەوروپی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_03",
+      "type": "real_commercial_sorani",
+      "campaignName": "Aster Resort Erbil Luxury Weekend (Variant #3)",
+      "client": "aster",
+      "headlineText": "ئاستێر هۆتێل و ڕیزۆرت - هەولێر",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_04",
+      "type": "real_commercial_sorani",
+      "campaignName": "FastPay Instant Merchant QR (Variant #4)",
+      "client": "fastpay",
+      "headlineText": "فاستپەی - دەروازەی پارەدانی ئەلیکترۆنی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_05",
+      "type": "real_commercial_sorani",
+      "campaignName": "Rona Signature Villa Handover (Variant #5)",
+      "client": "rona",
+      "headlineText": "ڕۆنا - ژیانێکی شاهانە لە دڵی پایەتەختدا",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_06",
+      "type": "real_commercial_sorani",
+      "campaignName": "Nova Telecom Unlimited Fiber 4G (Variant #6)",
+      "client": "nova",
+      "headlineText": "نۆڤا تیلیکۆم - خێراییەکی بێسنوور لە سەرانسەری کوردستان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_07",
+      "type": "real_commercial_sorani",
+      "campaignName": "KAAE Conference Announcement 2026 (Variant #7)",
+      "client": "kaae",
+      "headlineText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_08",
+      "type": "real_commercial_sorani",
+      "campaignName": "Drustee European Vitamin D3 Launch (Variant #8)",
+      "client": "drustee",
+      "headlineText": "دروستی - ڤیتامین دی٣ بە کواڵێتی ئەوروپی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_09",
+      "type": "real_commercial_sorani",
+      "campaignName": "Aster Resort Erbil Luxury Weekend (Variant #9)",
+      "client": "aster",
+      "headlineText": "ئاستێر هۆتێل و ڕیزۆرت - هەولێر",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_10",
+      "type": "real_commercial_sorani",
+      "campaignName": "FastPay Instant Merchant QR (Variant #10)",
+      "client": "fastpay",
+      "headlineText": "فاستپەی - دەروازەی پارەدانی ئەلیکترۆنی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_11",
+      "type": "real_commercial_sorani",
+      "campaignName": "Rona Signature Villa Handover (Variant #11)",
+      "client": "rona",
+      "headlineText": "ڕۆنا - ژیانێکی شاهانە لە دڵی پایەتەختدا",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_12",
+      "type": "real_commercial_sorani",
+      "campaignName": "Nova Telecom Unlimited Fiber 4G (Variant #12)",
+      "client": "nova",
+      "headlineText": "نۆڤا تیلیکۆم - خێراییەکی بێسنوور لە سەرانسەری کوردستان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_13",
+      "type": "real_commercial_sorani",
+      "campaignName": "KAAE Conference Announcement 2026 (Variant #13)",
+      "client": "kaae",
+      "headlineText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_14",
+      "type": "real_commercial_sorani",
+      "campaignName": "Drustee European Vitamin D3 Launch (Variant #14)",
+      "client": "drustee",
+      "headlineText": "دروستی - ڤیتامین دی٣ بە کواڵێتی ئەوروپی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_15",
+      "type": "real_commercial_sorani",
+      "campaignName": "Aster Resort Erbil Luxury Weekend (Variant #15)",
+      "client": "aster",
+      "headlineText": "ئاستێر هۆتێل و ڕیزۆرت - هەولێر",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_16",
+      "type": "real_commercial_sorani",
+      "campaignName": "FastPay Instant Merchant QR (Variant #16)",
+      "client": "fastpay",
+      "headlineText": "فاستپەی - دەروازەی پارەدانی ئەلیکترۆنی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_17",
+      "type": "real_commercial_sorani",
+      "campaignName": "Rona Signature Villa Handover (Variant #17)",
+      "client": "rona",
+      "headlineText": "ڕۆنا - ژیانێکی شاهانە لە دڵی پایەتەختدا",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_18",
+      "type": "real_commercial_sorani",
+      "campaignName": "Nova Telecom Unlimited Fiber 4G (Variant #18)",
+      "client": "nova",
+      "headlineText": "نۆڤا تیلیکۆم - خێراییەکی بێسنوور لە سەرانسەری کوردستان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_19",
+      "type": "real_commercial_sorani",
+      "campaignName": "KAAE Conference Announcement 2026 (Variant #19)",
+      "client": "kaae",
+      "headlineText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    },
+    {
+      "fixtureId": "rtl_real_20",
+      "type": "real_commercial_sorani",
+      "campaignName": "Drustee European Vitamin D3 Launch (Variant #20)",
+      "client": "drustee",
+      "headlineText": "دروستی - ڤیتامین دی٣ بە کواڵێتی ئەوروپی",
+      "fontFamily": "Vazirmatn",
+      "direction": "rtl",
+      "uax9BidiIsolationVerified": true,
+      "discreteCanvaTextNode": true,
+      "fidelityScore": 1,
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
-import { InboxScreen } from './screens/InboxScreen.js';
-import { ReviewScreen } from './screens/ReviewScreen.js';
-import { DnaScreen } from './screens/DnaScreen.js';
-import { LibraryScreen } from './screens/LibraryScreen.js';
+import { WorkScreen } from './screens/WorkScreen.js';
+import { ClientsScreen } from './screens/ClientsScreen.js';
 import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
@@ -12,6 +10,7 @@ import { GuidedTour } from './components/GuidedTour.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
 import { useI18n } from './services/i18n.js';
+import { getAuthHeaders } from './services/auth.js';
 
 export const App: React.FC = () => {
   const { t, isRtl } = useI18n();
@@ -20,13 +19,13 @@ export const App: React.FC = () => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (hash === 'adapters') return 'settings';
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'settings', 'inbox', 'review', 'dna', 'library', 'ops', 'eval'];
       if (validScreens.includes(hash as ScreenId)) return hash as ScreenId;
       const path = window.location.pathname.replace(/^\//, '').split('/')[0];
       if (path === 'adapters') return 'settings';
       if (validScreens.includes(path as ScreenId)) return path as ScreenId;
     }
-    return 'inbox';
+    return 'work';
   };
 
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
@@ -57,13 +56,13 @@ export const App: React.FC = () => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const screenMap: Record<string, ScreenId> = {
-        '1': 'inbox',
-        '2': 'review',
-        '3': 'dna',
-        '4': 'library',
+        '1': 'work',
+        '2': 'clients',
+        '3': 'settings',
+        '4': 'work',
         '5': 'settings',
-        '6': 'ops',
-        '7': 'eval',
+        '6': 'settings',
+        '7': 'settings',
       };
 
       if (screenMap[e.key]) {
@@ -118,7 +117,67 @@ export const App: React.FC = () => {
   const [taskCopyCkb, setTaskCopyCkb] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [, setRefreshCount] = useState<number>(0);
+  const [selectedClientId, setSelectedClientId] = useState('c1000000-0000-4000-8000-000000000002');
+  const taskTitleInputRef = useRef<HTMLInputElement>(null);
+
+  const availableClients = [
+    { id: 'c1000000-0000-4000-8000-000000000002', name: 'KAAE (Kurdistan Accrediting Association for Education)' },
+    { id: 'c1000000-0000-4000-8000-000000000003', name: 'Drustee Evidence-First Health' },
+    { id: 'c1000000-0000-4000-8000-000000000004', name: 'FastPay Mobile Wallet' },
+  ];
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
+  // Auto-focus title input when modal opens, trap Tab focus, and register Escape key listener
+  useEffect(() => {
+    if (showNewTaskModal) {
+      previouslyFocusedElementRef.current = document.activeElement as HTMLElement;
+
+      const timer = setTimeout(() => {
+        taskTitleInputRef.current?.focus();
+      }, 50);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowNewTaskModal(false);
+          return;
+        }
+
+        if (e.key === 'Tab' && modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('keydown', handleKeyDown);
+        if (previouslyFocusedElementRef.current) {
+          previouslyFocusedElementRef.current.focus();
+        }
+      };
+    }
+  }, [showNewTaskModal]);
 
   // Restore draft when opening modal
   const handleOpenModal = () => {
@@ -126,6 +185,8 @@ export const App: React.FC = () => {
     if (existingDraft && !taskTitle && !taskCopyEn) {
       setTaskTitle(existingDraft.title || '');
       setTaskCopyEn(existingDraft.copy || '');
+      if (existingDraft.copyCkb) setTaskCopyCkb(existingDraft.copyCkb);
+      if (existingDraft.clientId) setSelectedClientId(existingDraft.clientId);
     }
     setShowNewTaskModal(true);
   };
@@ -133,12 +194,16 @@ export const App: React.FC = () => {
   // Autosave active draft
   const handleTitleChange = (val: string) => {
     setTaskTitle(val);
-    draftStore.saveActiveDraft({ title: val, copy: taskCopyEn });
+    try {
+      draftStore.saveActiveDraft({ title: val, copy: taskCopyEn, copyCkb: taskCopyCkb, clientId: selectedClientId });
+    } catch {}
   };
 
   const handleCopyEnChange = (val: string) => {
     setTaskCopyEn(val);
-    draftStore.saveActiveDraft({ title: taskTitle, copy: val });
+    try {
+      draftStore.saveActiveDraft({ title: taskTitle, copy: val, copyCkb: taskCopyCkb, clientId: selectedClientId });
+    } catch {}
   };
 
   // Auto-flush queued offline tasks upon reconnection
@@ -146,7 +211,7 @@ export const App: React.FC = () => {
     const handleOnlineFlush = async () => {
       const result = await draftStore.flushQueuedTasks();
       if (result.success > 0) {
-        setRefreshTrigger((k) => k + 1);
+        setRefreshCount((k) => k + 1);
       }
     };
 
@@ -162,7 +227,7 @@ export const App: React.FC = () => {
 
     // Check if offline: queue locally in IndexedDB
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription });
+      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription, clientId: selectedClientId });
       draftStore.clearActiveDraft();
       setShowNewTaskModal(false);
       setTaskTitle('');
@@ -176,14 +241,16 @@ export const App: React.FC = () => {
 
     try {
       const idempotencyKey = `task-desk-${Date.now()}`;
+      const authHeaders = getAuthHeaders();
       const res = await fetch('/v1/tasks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,
+          ...authHeaders,
         },
         body: JSON.stringify({
-          clientId: 'client-office-1',
+          clientId: selectedClientId,
           title: taskTitle,
           priority: 'routine',
           description: fullDescription || 'Summer Campaign Poster',
@@ -198,7 +265,10 @@ export const App: React.FC = () => {
         // Auto-route and create brief (English primary, Kurdish secondary)
         await fetch(`/v1/tasks/${taskId}/route`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
           body: JSON.stringify({ taskRoute: 'standard_generation' }),
         }).catch(() => {});
 
@@ -224,7 +294,10 @@ export const App: React.FC = () => {
 
         await fetch(`/v1/tasks/${taskId}/briefs`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
           body: JSON.stringify({
             objective: taskTitle,
             taskRoute: 'standard_generation',
@@ -239,12 +312,15 @@ export const App: React.FC = () => {
         // Trigger creative generation
         await fetch(`/v1/tasks/${taskId}/generate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
         }).catch(() => {});
 
         draftStore.clearActiveDraft();
         setSelectedTask(data);
-        setRefreshTrigger((k) => k + 1);
+        setRefreshCount((k) => k + 1);
         setShowNewTaskModal(false);
         setTaskTitle('');
         setTaskCopyEn('');
@@ -279,18 +355,16 @@ export const App: React.FC = () => {
           onOpenCommandPalette={() => setShowCommandPalette(true)}
         />
         <div className="content">
-          {currentScreen === 'inbox' && (
-            <InboxScreen
-              refreshTrigger={refreshTrigger}
-              onSelectReview={(task) => {
-                if (task) setSelectedTask(task);
-                handleNavigate('review');
-              }}
+          {(currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
+            <WorkScreen
+              initialTaskId={selectedTask?.id}
+              onNavigateToClients={() => handleNavigate('clients')}
+              onNavigateToSettings={() => handleNavigate('settings')}
             />
           )}
-          {currentScreen === 'review' && <ReviewScreen task={selectedTask} />}
-          {currentScreen === 'dna' && <DnaScreen />}
-          {currentScreen === 'library' && <LibraryScreen />}
+          {(currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
+            <ClientsScreen initialView={currentScreen === 'library' ? 'library' : 'dna'} />
+          )}
           {currentScreen === 'settings' && <SettingsScreen />}
           {currentScreen === 'ops' && <OpsScreen />}
           {currentScreen === 'eval' && <EvalScreen />}
@@ -300,6 +374,10 @@ export const App: React.FC = () => {
       {/* New Task Modal */}
       {showNewTaskModal && (
         <div
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNewTaskModal(false);
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -311,7 +389,11 @@ export const App: React.FC = () => {
           }}
         >
           <div
+            ref={modalRef}
             className="panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-task-title"
             style={{
               width: 540,
               padding: 24,
@@ -320,7 +402,7 @@ export const App: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h2 style={{ marginTop: 0, marginBottom: 4 }}>{t.modal.title}</h2>
+                <h2 id="new-task-title" style={{ marginTop: 0, marginBottom: 4 }}>{t.modal.title}</h2>
                 <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
                   {t.modal.subtitle}
                 </p>
@@ -340,11 +422,32 @@ export const App: React.FC = () => {
               </span>
             </div>
 
+            {/* Client / Workspace Selector */}
             <div style={{ margin: '16px 0' }}>
-              <label style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
+              <label htmlFor="modal-client-select" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
+                {t.modal.clientLabel}
+              </label>
+              <select
+                id="modal-client-select"
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' }}
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+              >
+                {availableClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ margin: '16px 0' }}>
+              <label htmlFor="modal-task-title" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
                 {t.modal.taskTitleLabel}
               </label>
               <input
+                id="modal-task-title"
+                ref={taskTitleInputRef}
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder={t.modal.taskTitlePlaceholder}
                 value={taskTitle}

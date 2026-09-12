@@ -1,0 +1,16 @@
+{
+  "documentId": "doc_kaae_annual_report_07",
+  "taskId": "t-kaae-annual-report-2025",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "title": "KAAE 2025 Annual Institutional Accreditation Report",
+  "sourceFormat": "legacy_zip_pack",
+  "lifecycleState": "archived",
+  "sourceSha256": "baf859883e743ae3399532c1dcf28c4118035b0fc265aedced65f13311e856c4",
+  "archivedAt": "2026-09-11T23:02:03.372Z",
+  "sourceContent": {
+    "packId": "kaae_report_pack_2025_signed",
+    "deliveredAt": "2025-12-30T10:00:00Z",
+    "driveUrl": "https://drive.google.com/drive/folders/kaae_2025_archive"
+  },
+  "metadata": {}
+}

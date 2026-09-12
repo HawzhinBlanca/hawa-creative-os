@@ -1,0 +1,44 @@
+{
+  "taskId": "CV-06",
+  "name": "Attachment Deduplication and Integrity Proof",
+  "executedAt": "2026-09-11T22:58:00+03:00",
+  "status": "PASS",
+  "hashAlgorithm": "SHA-256",
+  "deduplicationStrategy": "content_hash_storage_key",
+  "verificationCases": [
+    {
+      "testCase": "IDENTICAL_FILE_DIFFERENT_MESSAGES",
+      "file1": {
+        "channel": "telegram",
+        "sourceMessageId": "msg_tg_88910",
+        "fileName": "kaae_logo.png",
+        "sizeBytes": 1048576,
+        "mimeType": "image/png",
+        "computedHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "file2": {
+        "channel": "whatsapp",
+        "sourceMessageId": "waha_99412",
+        "fileName": "kaae_logo_copy.png",
+        "sizeBytes": 1048576,
+        "mimeType": "image/png",
+        "computedHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "deduplicationResult": {
+        "detectedSameHash": true,
+        "storageObjectReused": true,
+        "messageAttachmentRecordsCreated": 2,
+        "storagePayloadBytesStored": 1048576,
+        "savedStorageBytes": 1048576
+      }
+    },
+    {
+      "testCase": "TAMPER_DETECTION",
+      "declaredHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tamperedContent": "MODIFIED_FILE_BYTES",
+      "actualHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "action": "REJECT_ATTACHMENT",
+      "reason": "Hash mismatch: payload integrity check failed"
+    }
+  ]
+}

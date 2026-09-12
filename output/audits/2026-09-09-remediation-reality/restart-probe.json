@@ -1,0 +1,2 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+{"freshProcessLookup":{"status":404,"body":{"type":"https://hawa.design/errors/404","title":"Task Not Found","status":404,"detail":"No task found with id 7cf1e1aa-d6af-4fdc-ad41-f2ea5178ad3b","instance":"http://localhost/v1/tasks/7cf1e1aa-d6af-4fdc-ad41-f2ea5178ad3b"}}}

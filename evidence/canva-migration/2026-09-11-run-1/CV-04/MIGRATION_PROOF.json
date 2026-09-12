@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "executed_at": "2026-09-11T22:26:40Z",
+  "task": "CV-04",
+  "migration_name": "001_canva_bindings",
+  "target_database": "hawa_test",
+  "host": "127.0.0.1:54332",
+  "role": "hawa_owner",
+  "production_database_status": {
+    "database": "hawa",
+    "tasks_before": 1449,
+    "tasks_after": 1449,
+    "pollution_count": 0,
+    "status": "UNTOUCHED"
+  },
+  "migration_phases": [
+    {
+      "phase": "forward_migration_initial",
+      "script": "packages/db/migrations/001_canva_bindings.sql",
+      "exit_code": 0,
+      "tables_created": ["hawa.canva_bindings", "hawa.canva_capture_sets"],
+      "indexes_created": [
+        "idx_canva_bindings_task",
+        "idx_canva_bindings_client",
+        "idx_canva_bindings_design",
+        "idx_canva_capture_sets_binding",
+        "idx_canva_capture_sets_task"
+      ],
+      "post_migration_table_count": 54
+    },
+    {
+      "phase": "rollback_drill",
+      "script": "packages/db/migrations/001_canva_bindings_down.sql",
+      "exit_code": 0,
+      "tables_dropped": ["hawa.canva_capture_sets", "hawa.canva_bindings"],
+      "post_rollback_table_count": 52
+    },
+    {
+      "phase": "forward_recovery_reapplication",
+      "script": "packages/db/migrations/001_canva_bindings.sql",
+      "exit_code": 0,
+      "tables_verified": ["hawa.canva_bindings", "hawa.canva_capture_sets"],
+      "final_table_count": 54,
+      "status": "ACTIVE_VERIFIED"
+    }
+  ]
+}

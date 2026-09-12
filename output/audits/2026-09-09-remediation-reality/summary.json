@@ -1,0 +1,19 @@
+{
+  "fake_bearer_task_status": 201,
+  "spoofed_desk_task_status": 201,
+  "unauthenticated_approval_status": 201,
+  "empty_design_task_state": "APPROVED",
+  "foreign_task_revision_decision_status": 201,
+  "missing_file_publication_state": "complete",
+  "missing_file_verified": true,
+  "wrong_model_passed": {
+    "dataset": "routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 200,
+    "failedCases": 0,
+    "passRate": 100,
+    "criticalViolations": 0
+  },
+  "network_attempts": 0,
+  "live_api_task_count": 1
+}

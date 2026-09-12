@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-11T23:02:03.373Z",
+  "sampledReopenTest": {
+    "targetCanvaId": "DAF_mig_doc_kaae_invitation_01",
+    "testedFieldRole": "headline",
+    "beforeText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان",
+    "afterText": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکانی هەرێم (دەستکاری کرا)",
+    "totalElementsPreserved": 6,
+    "unmodifiedElementsIntact": true,
+    "assessment": "PASS: One-field edit performed without clobbering other elements, assets, or background framing"
+  },
+  "sampledRollbackTest": {
+    "testedDocumentId": "doc_drustee_vitamin_d3_02",
+    "sourceSha256": "d3293a9ca46717f409c465ec58be3f9844d7af8f10a68d53b1d376bcfd3fd628",
+    "rollbackSuccessful": true,
+    "sourceSha256Verified": true,
+    "originalLayersRestored": 4,
+    "assessment": "PASS: Bit-exact historical .hyc source restored from immutable archive with SHA-256 integrity match"
+  }
+}

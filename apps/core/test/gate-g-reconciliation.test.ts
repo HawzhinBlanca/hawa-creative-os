@@ -39,7 +39,7 @@ describe('Gate G: Google Drive & Sheets Self-Healing Reconciliation Daemon (FR-0
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer test_art_director_token',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
       },
       body: JSON.stringify({
         decision: 'approved',

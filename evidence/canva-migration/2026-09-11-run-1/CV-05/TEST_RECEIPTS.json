@@ -1,0 +1,63 @@
+{
+  "taskId": "CV-05",
+  "name": "Test Receipts & Execution Verification",
+  "generatedAt": "2026-09-11T22:44:00+03:00",
+  "testSuites": [
+    {
+      "name": "apps/worker/test/durable-workflow-recovery.test.ts",
+      "totalTests": 6,
+      "passed": 6,
+      "failed": 0,
+      "tests": [
+        "proves stable workflow and effect IDs across durable execution",
+        "proves crash after expensive external studio compose does NOT repeat the effect on resume (Invariant #10 & #12)",
+        "proves unknown outbox commands fail visibly and are never marked delivered (no no-op completion)",
+        "proves outbox dispatcher requires confirmed submission and marks delivered only upon receipt",
+        "proves duplicate-dispatch negative protection: re-dispatching same command returns existing receipt without re-running",
+        "proves ambiguous-success reconciliation when external progress exists but outbox delivery was unacknowledged"
+      ]
+    },
+    {
+      "name": "apps/worker/test/outbox-consumer.test.ts",
+      "totalTests": 3,
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        "leases pending commands, executes handler, and marks delivered in PostgreSQL",
+        "retries failing commands with incremented attempt and backoff",
+        "dead-letters commands when max attempts are exhausted"
+      ]
+    },
+    {
+      "name": "apps/worker/test/workflow.test.ts",
+      "totalTests": 1,
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        "runs complete workflow slice from intake to AWAITING_APPROVAL with live editable document and passing QA"
+      ]
+    }
+  ],
+  "monorepoWideVerification": {
+    "totalTestFiles": 84,
+    "passedTestFiles": 84,
+    "totalTests": 535,
+    "passedTests": 535,
+    "failedTests": 0,
+    "exitCode": 0
+  },
+  "productionDatabaseIntegrity": {
+    "database": "hawa",
+    "host": "127.0.0.1:54332",
+    "tasksCount": 1449,
+    "outboxDeliveredCount": 1449,
+    "outboxPendingCount": 0,
+    "testPollution": 0
+  },
+  "specificationIntegrity": {
+    "validator": "python3 scripts/validate_pack.py",
+    "passCount": 464,
+    "warnCount": 0,
+    "failCount": 0
+  }
+}

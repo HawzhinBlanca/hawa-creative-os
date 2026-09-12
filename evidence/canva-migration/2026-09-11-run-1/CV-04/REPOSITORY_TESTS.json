@@ -1,0 +1,37 @@
+{
+  "suite": "packages/db/test/canva-binding.repository.test.ts",
+  "executed_at": "2026-09-11T22:31:14Z",
+  "framework": "Vitest 3.2.7",
+  "tests_passed": 4,
+  "tests_failed": 0,
+  "duration_ms": 226,
+  "test_cases": [
+    {
+      "name": "proves server-derived ownership: creates binding when task exists and belongs to client",
+      "status": "passed",
+      "verified_fields": ["canva_design_id", "client_id", "version", "status"]
+    },
+    {
+      "name": "denies cross-client binding: fails if requested client does not match task client",
+      "status": "passed",
+      "error_thrown": "Server-derived ownership denial: task belongs to client c1000000-0000-4000-8000-000000000002, cannot bind for client c1000000-0000-4000-8000-000000000004"
+    },
+    {
+      "name": "denies binding a design already bound to a foreign client",
+      "status": "passed",
+      "error_thrown": "Foreign client denial: Canva design DAHU6ovIEc4 is already bound to client c1000000-0000-4000-8000-000000000002"
+    },
+    {
+      "name": "captureArtifactSet: enforces client match, design ID match, optimistic locking, and snapshot completeness",
+      "status": "passed",
+      "sub_checks": [
+        "Foreign client denial verified",
+        "Design mismatch denial verified",
+        "Stale version conflict verified",
+        "Snapshot incompleteness denial verified",
+        "Version bumped from 1 to 2",
+        "Subsequent capture requires version 2"
+      ]
+    }
+  ]
+}

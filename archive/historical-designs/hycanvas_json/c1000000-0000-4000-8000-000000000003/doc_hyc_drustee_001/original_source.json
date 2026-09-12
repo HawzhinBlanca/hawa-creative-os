@@ -1,0 +1,35 @@
+{
+  "documentId": "doc_hyc_drustee_001",
+  "taskId": "task_drustee_active_01",
+  "clientId": "c1000000-0000-4000-8000-000000000003",
+  "title": "Drustee Vitamin D3 Launch Campaign",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "fdbcb45e981ff28f4f005f48de52f3e5a4bf8d5c3564b696df9394498bb18700",
+  "archivedAt": "2026-09-12T05:33:18.314Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "layers": [
+      {
+        "id": "l_bg",
+        "type": "frame",
+        "fill": "#01585F",
+        "width": 1080,
+        "height": 1350
+      },
+      {
+        "id": "l_title",
+        "type": "text",
+        "text": "دروستی - تەندروستی خێزانەکەت",
+        "fontFamily": "Vazirmatn"
+      },
+      {
+        "id": "l_discl",
+        "type": "text",
+        "text": "بەرهەمێکی باوەڕپێکراو لەلایەن وەزارەتی تەندروستی",
+        "fontFamily": "Vazirmatn"
+      }
+    ]
+  },
+  "metadata": {}
+}

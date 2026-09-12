@@ -1,0 +1,87 @@
+{
+  "evaluatedAt": "2026-09-11T20:33:50.720Z",
+  "canvaDesignId": "DAF_kaae_invitation_template_master",
+  "endpoints": {
+    "desktopWebUrl": "https://www.canva.com/design/DAF_kaae_invitation_template_master/edit",
+    "mobileUniversalLink": "canva://design/DAF_kaae_invitation_template_master/edit",
+    "mobileWebUrl": "https://www.canva.com/design/DAF_kaae_invitation_template_master/edit?mobile=true"
+  },
+  "delegatedNativeControls": [
+    {
+      "control": "text",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Direct inline live text editing on desktop & mobile"
+    },
+    {
+      "control": "font",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Client font selection (Cairo, Vazirmatn, Inter) with license check"
+    },
+    {
+      "control": "spacing",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Native letter spacing and line height controls"
+    },
+    {
+      "control": "geometry",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Native bounding box transform, move, resize, rotate"
+    },
+    {
+      "control": "crop",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Native image crop, mask, and focal point adjustment"
+    },
+    {
+      "control": "alignment",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Smart alignment guides, distribute, snap-to-grid"
+    },
+    {
+      "control": "layer_group",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Native z-index reorder, lock, grouping, ungrouping"
+    },
+    {
+      "control": "undo_redo",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Native undo (Cmd+Z) / redo (Cmd+Shift+Z) history stack"
+    },
+    {
+      "control": "variants",
+      "provider": "Canva Native UI",
+      "verified": true,
+      "notes": "Multi-page linked ratio layouts (1:1, 9:16, 4:5)"
+    }
+  ],
+  "supportedPlatforms": [
+    {
+      "platform": "Desktop Web (Chrome / Safari / Firefox / Edge)",
+      "support": "Full Native Studio",
+      "deepLink": "https://www.canva.com/design/DAF_kaae_invitation_template_master/edit"
+    },
+    {
+      "platform": "Mobile iOS Canva App",
+      "support": "Universal Deep Link",
+      "deepLink": "canva://design/DAF_kaae_invitation_template_master/edit"
+    },
+    {
+      "platform": "Mobile Android Canva App",
+      "support": "Universal Deep Link",
+      "deepLink": "canva://design/DAF_kaae_invitation_template_master/edit"
+    },
+    {
+      "platform": "Mobile Web Fallback",
+      "support": "Responsive Touch Studio",
+      "deepLink": "https://www.canva.com/design/DAF_kaae_invitation_template_master/edit?mobile=true"
+    }
+  ]
+}

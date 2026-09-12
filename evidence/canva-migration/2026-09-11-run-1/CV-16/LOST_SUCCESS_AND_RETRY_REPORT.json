@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-09-11T21:00:06.449Z",
+  "scenario": "Lost Success Network Timeout and Idempotent Retry",
+  "attempt1": {
+    "status": "success",
+    "publicationId": "14062de6-a531-48e8-bd89-3edafd50db4a",
+    "driveFilesCreated": 1,
+    "sheetRowsAppended": 1
+  },
+  "attempt2_lost_success_replay": {
+    "status": "success",
+    "publicationId": "14062de6-a531-48e8-bd89-3edafd50db4a",
+    "identicalReceiptReused": true,
+    "duplicateDriveFilesCreated": 0,
+    "duplicateSheetRowsAppended": 0
+  },
+  "conflicting_payload_rejection": {
+    "status": "correctly_denied",
+    "errorCode": "IDEMPOTENCY_CONFLICT",
+    "errorMessage": "Publication key 'pub_key_lost_success_proof' already exists with differing payload"
+  },
+  "sheets_upsert_proof": {
+    "status": "success",
+    "sheetRowUpdated": true,
+    "updatedRowNumber": 42,
+    "method": "PUT /values/A42:G42"
+  }
+}

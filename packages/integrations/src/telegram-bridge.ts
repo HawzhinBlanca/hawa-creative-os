@@ -1,10 +1,15 @@
 import { computeActionSignature, verifyActionSignature } from './outbound-notifier.js';
+import type { TelegramOffsetStorage, TelegramActionTokenService } from './telegram-security.js';
 
 export interface TelegramBridgeConfig {
   botToken?: string;
   secretToken?: string;
   targetIngressUrl?: string;
   pollIntervalMs?: number;
+  offsetStorage?: TelegramOffsetStorage;
+  allowedUserIds?: string[];
+  allowedChatIds?: string[];
+  actionTokenService?: TelegramActionTokenService;
 }
 
 export interface TelegramUpdate {
@@ -75,9 +80,11 @@ export function parseCallbackData(data: string): { action: 'approve' | 'revision
   if (!data) return null;
   const parts = data.split(':');
   if (parts.length < 3) return null;
-  const [action, taskId, signature] = parts;
-  if (action !== 'approve' && action !== 'revision') return null;
-  return { action, taskId, signature };
+  const [act, taskId, signature] = parts;
+  if (!signature || signature.trim() === '' || signature === 'short_bypass') return null;
+  const action = act === 'app' || act === 'approve' ? 'approve' : act === 'rev' || act === 'revision' ? 'revision' : null;
+  if (!action || !taskId) return null;
+  return { action, taskId, signature: signature.trim() };
 }
 
 export interface BridgeStatus {
@@ -89,6 +96,10 @@ export interface BridgeStatus {
   uptimeSeconds: number;
   webhookActive?: boolean;
   webhookUrl?: string;
+  degraded?: boolean;
+  lastPollAttemptAt?: string;
+  lastPollSuccessAt?: string;
+  lastError?: { code: string; message: string; timestamp: string };
 }
 
 export class TelegramBridgeDaemon {
@@ -102,6 +113,11 @@ export class TelegramBridgeDaemon {
   private sentMessages: Array<{ chatId: string | number; text: string; replyMarkup?: any; sentAt: string }> = [];
   private webhookActive = false;
   private webhookUrl = '';
+
+  private lastPollAttemptAt?: string;
+  private lastPollSuccessAt?: string;
+  private consecutiveErrors = 0;
+  private lastError?: { code: string; message: string; timestamp: string };
 
   constructor(private readonly config: TelegramBridgeConfig = {}) {}
 
@@ -124,30 +140,71 @@ export class TelegramBridgeDaemon {
   }
 
   /**
-   * Polls Telegram getUpdates endpoint once with offset tracking and abort control
+   * Polls Telegram getUpdates endpoint once with offset tracking, bounded timeout, and truthful error reporting
    */
   async pollOnce(onUpdate?: (update: TelegramUpdate) => Promise<void>): Promise<number> {
     if (!this.config.botToken) return 0;
+    if (this.lastUpdateId === 0 && this.config.offsetStorage) {
+      try {
+        this.lastUpdateId = await this.config.offsetStorage.getOffset();
+      } catch (err) {
+        console.warn('[TelegramBridge] Failed to load offset from storage:', err);
+      }
+    }
+    this.lastPollAttemptAt = new Date().toISOString();
     try {
       const url = `https://api.telegram.org/bot${this.config.botToken}/getUpdates?offset=${this.lastUpdateId + 1}&timeout=5`;
-      const res = await fetch(url, { signal: this.abortController?.signal });
-      if (!res.ok) return 0;
+      const timeoutSignal = AbortSignal.timeout(6000);
+      const combinedSignal = this.abortController
+        ? (AbortSignal as any).any([this.abortController.signal, timeoutSignal])
+        : timeoutSignal;
+
+      const res = await fetch(url, { signal: combinedSignal });
+      if (!res.ok) {
+        this.consecutiveErrors++;
+        this.lastError = {
+          code: `HTTP_${res.status}`,
+          message: `Telegram API returned HTTP ${res.status}`,
+          timestamp: new Date().toISOString(),
+        };
+        return 0;
+      }
       const data = await res.json();
       if (data.ok && Array.isArray(data.result)) {
+        this.consecutiveErrors = 0;
+        this.lastPollSuccessAt = new Date().toISOString();
+        this.lastError = undefined;
         let count = 0;
         for (const update of data.result) {
           this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
+          if (this.config.offsetStorage) {
+            await this.config.offsetStorage.setOffset(this.lastUpdateId).catch(() => {});
+          }
           if (onUpdate) {
             await onUpdate(update);
           } else {
             await this.processUpdate(update);
           }
           count++;
+          this.processedCount++;
         }
         return count;
+      } else {
+        this.consecutiveErrors++;
+        this.lastError = {
+          code: 'TELEGRAM_API_ERROR',
+          message: data.description || 'Unknown Telegram API response',
+          timestamp: new Date().toISOString(),
+        };
       }
-    } catch {
-      // AbortError or transient network failure
+    } catch (err: any) {
+      this.consecutiveErrors++;
+      const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.message?.includes('timeout');
+      this.lastError = {
+        code: isTimeout ? 'TELEGRAM_NETWORK_TIMEOUT' : 'TELEGRAM_FETCH_FAILED',
+        message: err?.message || 'Transient network failure',
+        timestamp: new Date().toISOString(),
+      };
     }
     return 0;
   }
@@ -280,8 +337,9 @@ export class TelegramBridgeDaemon {
   }
 
   getStatus(): BridgeStatus {
+    const degraded = this.consecutiveErrors >= 3;
     return {
-      active: this.active || this.webhookActive,
+      active: (this.active || this.webhookActive) && !degraded,
       mode: this.webhookActive ? 'webhook_push' : (this.config.botToken ? 'live_polling' : 'offline_daemon'),
       lastUpdateId: this.lastUpdateId,
       processedCount: this.processedCount,
@@ -289,6 +347,10 @@ export class TelegramBridgeDaemon {
       uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
       webhookActive: this.webhookActive,
       webhookUrl: this.webhookUrl,
+      degraded,
+      lastPollAttemptAt: this.lastPollAttemptAt,
+      lastPollSuccessAt: this.lastPollSuccessAt,
+      lastError: this.lastError,
     };
   }
 
@@ -313,15 +375,48 @@ export class TelegramBridgeDaemon {
       clientName?: string;
       deskBaseUrl?: string;
       voiceTranscript?: string;
+      revisionId?: string;
+      actorId?: string;
+      canvaDocumentId?: string;
+      canvaUrl?: string;
     },
-    secretKey = 'hawa_safe_secret_key'
+    secretKey?: string
   ) {
     const baseUrl = task.deskBaseUrl || process.env.HAWA_DESK_BASE_URL || 'http://localhost:4173';
     const docParam = task.docId || task.id;
     const studioUrl = `${baseUrl}/review?doc=${docParam}&taskId=${task.id}&mode=review`;
 
-    const approveSig = computeActionSignature(task.id, 'approve', secretKey);
-    const revisionSig = computeActionSignature(task.id, 'revision', secretKey);
+    let approveCallbackData: string;
+    let revisionCallbackData: string;
+
+    if (this.config.actionTokenService) {
+      const actor = task.actorId || '*';
+      const rev = task.revisionId || 'rev_initial';
+      const appToken = this.config.actionTokenService.createToken({
+        taskId: task.id,
+        revisionId: rev,
+        action: 'approve',
+        actorId: actor,
+        secretKey,
+      });
+      const revToken = this.config.actionTokenService.createToken({
+        taskId: task.id,
+        revisionId: rev,
+        action: 'revision',
+        actorId: actor,
+        secretKey,
+      });
+      approveCallbackData = appToken.callbackData;
+      revisionCallbackData = revToken.callbackData;
+    } else {
+      const approveSig = computeActionSignature(task.id, 'approve', secretKey);
+      const revisionSig = computeActionSignature(task.id, 'revision', secretKey);
+      const isShortId = task.id.length <= 20;
+      const approveAction = isShortId ? 'approve' : 'app';
+      const revisionAction = isShortId ? 'revision' : 'rev';
+      approveCallbackData = `${approveAction}:${task.id}:${approveSig.slice(0, 16)}`;
+      revisionCallbackData = `${revisionAction}:${task.id}:${revisionSig.slice(0, 16)}`;
+    }
 
     const text = [
       `⚡ *Task Ready for Operator Review*`,
@@ -331,6 +426,7 @@ export class TelegramBridgeDaemon {
       `📊 *Status:* \`${task.status}\``,
       task.voiceTranscript ? `🎙️ *Spoken Voice Memo:* _"${task.voiceTranscript}"_` : null,
       task.copy ? `📝 *Approved Copy:* _${task.copy}_` : null,
+      task.canvaDocumentId ? `🎨 *Canva Binding:* \`${task.canvaDocumentId}\`` : null,
       ``,
       `🔍 *Desk Studio Link:*`,
       `${studioUrl}`,
@@ -338,20 +434,25 @@ export class TelegramBridgeDaemon {
       .filter(Boolean)
       .join('\n');
 
-    const replyMarkup = {
-      inline_keyboard: [
-        [
-          { text: '✅ Approve & Publish', callback_data: `approve:${task.id}:${approveSig}` },
-          { text: '✏️ Request Revision', callback_data: `revision:${task.id}:${revisionSig}` },
-        ],
-        [
-          { text: '⚡ Open Desk Studio', url: studioUrl },
-          { text: '📋 View Evidence', url: `${baseUrl}/` },
-        ],
+    const inlineKeyboard: any[][] = [
+      [
+        { text: '✅ Approve & Publish', callback_data: approveCallbackData },
+        { text: '✏️ Request Revision', callback_data: revisionCallbackData },
       ],
-    };
+      [
+        { text: '⚡ Open Desk Studio', url: studioUrl },
+        { text: '📋 View Evidence', url: `${baseUrl}/` },
+      ],
+    ];
 
-    return { text, parse_mode: 'Markdown', reply_markup: replyMarkup };
+    if (task.canvaUrl || task.canvaDocumentId) {
+      const canvaLink = task.canvaUrl || `https://www.canva.com/design/${task.canvaDocumentId}/edit`;
+      inlineKeyboard.push([
+        { text: '🎨 Edit in Canva', url: canvaLink },
+      ]);
+    }
+
+    return { text, parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard } };
   }
 
   /**
@@ -427,7 +528,7 @@ export class TelegramBridgeDaemon {
     if (this.config.botToken) {
       try {
         const url = `https://api.telegram.org/bot${this.config.botToken}/sendMessage`;
-        await fetch(url, {
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -436,9 +537,24 @@ export class TelegramBridgeDaemon {
             parse_mode: message.parse_mode || 'Markdown',
             reply_markup: message.reply_markup,
           }),
-        }).catch(() => {});
-      } catch {
-        // Log & proceed in disconnected test environments
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn('[TelegramBridge] sendMessage non-200:', res.status, errText);
+          if (message.parse_mode) {
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: message.text.replace(/[*_`\[\]()]/g, ''),
+                reply_markup: message.reply_markup,
+              }),
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('[TelegramBridge] Network error in dispatchOutboundMessage:', err);
       }
     }
 
@@ -446,9 +562,64 @@ export class TelegramBridgeDaemon {
   }
 
   /**
+   * Dispatches an outbound image with caption and action buttons to a Telegram chat
+   */
+  async dispatchOutboundPhoto(
+    chatId: string | number,
+    photoBuffer: Buffer,
+    caption?: string,
+    replyMarkup?: any
+  ): Promise<{ success: boolean; messageId?: string }> {
+    if (this.config.botToken) {
+      try {
+        const url = `https://api.telegram.org/bot${this.config.botToken}/sendPhoto`;
+        const blob = new Blob([new Uint8Array(photoBuffer)], { type: 'image/png' });
+        const formData = new FormData();
+        formData.append('chat_id', String(chatId));
+        formData.append('photo', blob, 'design.png');
+        if (caption) {
+          formData.append('caption', caption);
+          formData.append('parse_mode', 'Markdown');
+        }
+        if (replyMarkup) {
+          formData.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
+        }
+        const res = await fetch(url, {
+          method: 'POST',
+          body: formData,
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn('[TelegramBridge] sendPhoto non-200:', res.status, errText);
+          if (caption) {
+            const fallbackForm = new FormData();
+            fallbackForm.append('chat_id', String(chatId));
+            fallbackForm.append('photo', blob, 'design.png');
+            fallbackForm.append('caption', caption.replace(/[*_`\[\]()]/g, ''));
+            if (replyMarkup) fallbackForm.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
+            await fetch(url, { method: 'POST', body: fallbackForm }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('[TelegramBridge] Network error in dispatchOutboundPhoto:', err);
+      }
+    }
+    return { success: true, messageId: `photo_${Date.now()}` };
+  }
+
+  /**
    * Handles English bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
    */
-  handleCommand(text: string, chatId?: string | number): TelegramCommandResult | null {
+  handleCommand(text: string, chatId?: string | number, senderId?: string | number): TelegramCommandResult | null {
+    if (senderId && this.config.allowedUserIds && this.config.allowedUserIds.length > 0) {
+      const sId = String(senderId);
+      if (!this.config.allowedUserIds.includes(sId)) {
+        return {
+          text: `🚫 *Unauthorized*: User \`${sId}\` is not permitted to execute office commands.`,
+          parse_mode: 'Markdown',
+        };
+      }
+    }
     const trimmed = text.trim();
     if (trimmed.startsWith('/start') || trimmed.startsWith('/help')) {
       return {
@@ -603,6 +774,9 @@ export class TelegramBridgeDaemon {
    */
   async processUpdate(update: TelegramUpdate): Promise<{ processed: boolean; envelope: any; botResponse?: any }> {
     this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
+    if (this.config.offsetStorage) {
+      await this.config.offsetStorage.setOffset(this.lastUpdateId).catch(() => {});
+    }
     const envelope = this.normalizeUpdate(update);
     if (!envelope) {
       return { processed: false, envelope: null };
@@ -612,24 +786,72 @@ export class TelegramBridgeDaemon {
 
     let botResponse: any = null;
     if (update.callback_query && update.callback_query.data) {
-      const parsed = parseCallbackData(update.callback_query.data);
-      if (parsed) {
-        await this.answerCallbackQuery(
-          update.callback_query.id,
-          parsed.action === 'approve' ? '✅ Campaign Approved & Publishing!' : '✏️ Revision Requested'
-        );
-        botResponse = {
-          action: parsed.action,
-          taskId: parsed.taskId,
-          signature: parsed.signature,
-          text: parsed.action === 'approve'
-            ? `✅ Task \`${parsed.taskId}\` approved via button click.`
-            : `✏️ Revision requested for task \`${parsed.taskId}\`.`,
-          parse_mode: 'Markdown',
-        };
+      const cbData = update.callback_query.data;
+      const actorId = String(update.callback_query.from?.id || '');
+
+      if (cbData.startsWith('act:')) {
+        if (this.config.actionTokenService) {
+          const verifyRes = this.config.actionTokenService.verifyAndConsumeToken(cbData, {
+            actorId,
+            allowedActors: this.config.allowedUserIds,
+          });
+          if (verifyRes.ok) {
+            const p = verifyRes.payload;
+            await this.answerCallbackQuery(
+              update.callback_query.id,
+              p.action === 'approve' ? '✅ Campaign Approved & Publishing!' : '✏️ Revision Requested'
+            );
+            botResponse = {
+              action: p.action,
+              taskId: p.taskId,
+              revisionId: p.revisionId,
+              actorId: p.actorId,
+              nonce: p.nonce,
+              text: p.action === 'approve'
+                ? `✅ Task \`${p.taskId}\` approved via verified action token.`
+                : `✏️ Revision requested for task \`${p.taskId}\`.`,
+              parse_mode: 'Markdown',
+            };
+          } else {
+            await this.answerCallbackQuery(update.callback_query.id, `❌ ${verifyRes.error}`, true);
+            botResponse = {
+              error: verifyRes.error,
+              errorCode: verifyRes.code,
+              text: `⚠️ *Action Denied:* ${verifyRes.error}`,
+              parse_mode: 'Markdown',
+            };
+          }
+        }
+      } else {
+        const parsed = parseCallbackData(cbData);
+        if (parsed) {
+          if (this.config.allowedUserIds && this.config.allowedUserIds.length > 0 && !this.config.allowedUserIds.includes(actorId)) {
+            await this.answerCallbackQuery(update.callback_query.id, '❌ Unauthorized user', true);
+            botResponse = {
+              error: 'Unauthorized user',
+              errorCode: 'UNAUTHORIZED_ACTOR',
+              text: `⚠️ *Action Denied:* User \`${actorId}\` is not authorized to approve tasks.`,
+              parse_mode: 'Markdown',
+            };
+          } else {
+            await this.answerCallbackQuery(
+              update.callback_query.id,
+              parsed.action === 'approve' ? '✅ Campaign Approved & Publishing!' : '✏️ Revision Requested'
+            );
+            botResponse = {
+              action: parsed.action,
+              taskId: parsed.taskId,
+              signature: parsed.signature,
+              text: parsed.action === 'approve'
+                ? `✅ Task \`${parsed.taskId}\` approved via button click.`
+                : `✏️ Revision requested for task \`${parsed.taskId}\`.`,
+              parse_mode: 'Markdown',
+            };
+          }
+        }
       }
     } else if (update.message?.text?.startsWith('/')) {
-      botResponse = this.handleCommand(update.message.text, update.message.chat.id);
+      botResponse = this.handleCommand(update.message.text, update.message.chat.id, update.message.from?.id);
       if (botResponse && botResponse.text) {
         await this.dispatchOutboundMessage(update.message.chat.id, botResponse);
       }

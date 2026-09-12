@@ -1,0 +1,1 @@
+Created separate database hawa_audit_20260910 from live schema-only dump. Unmodified repo seed failed; corrected ONLY in-memory audit seed tenant IDs to continue independent probes. No production data copied or changed.

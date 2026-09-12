@@ -249,7 +249,7 @@ export const BRAND_KITS: Record<string, BrandKit> = {
 
 export const getBrandKit = (id: string): BrandKit => {
   const custom = getCustomBrandKits();
-  return custom[id] || BRAND_KITS[id] || BRAND_KITS.hawa;
+  return custom[id] || BRAND_KITS[id] || BRAND_KITS.kaae || BRAND_KITS.hawa;
 };
 
 const CUSTOM_BRAND_KITS_KEY = 'hawa_custom_brand_kits';

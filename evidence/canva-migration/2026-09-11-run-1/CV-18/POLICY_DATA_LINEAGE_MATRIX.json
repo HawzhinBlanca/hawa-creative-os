@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-09-11T22:58:49.446Z",
+  "governanceScope": "Hawa Governed Learning & Permitted Data Lineage (FR-052..FR-055, FR-066, FR-067, NFR-007)",
+  "invariants": [
+    {
+      "id": "INVARIANT_6",
+      "description": "Studio feedback loop requires human sign-off gate before promoting rules to Client DNA",
+      "enforcedBy": "FeedbackMiner.promoteRule & apps/core /candidate-rules/:ruleId/promote",
+      "status": "ACTIVE_ENFORCED"
+    },
+    {
+      "id": "CLIENT_SCOPE_ISOLATION",
+      "description": "Candidate rules and feedback are client-scoped by default and never cross-pollinate between tenants",
+      "enforcedBy": "FeedbackMiner.candidateRules partitioning by clientId",
+      "status": "ACTIVE_ENFORCED"
+    },
+    {
+      "id": "REJECTED_DESIGN_ISOLATION",
+      "description": "Rejected designs are strictly prohibited from becoming positive training/generation examples",
+      "enforcedBy": "FeedbackMiner.recordNegativeFeedback & rejectedTaskIds set",
+      "status": "ACTIVE_ENFORCED"
+    },
+    {
+      "id": "CANVA_IP_VENDOR_RESTRICTION",
+      "description": "Restricted Canva-derived elements and internal weights are prohibited in external model fine-tuning and benchmarks",
+      "enforcedBy": "FeedbackMiner.evaluateDataRetrievalBoundary",
+      "status": "ACTIVE_ENFORCED"
+    }
+  ],
+  "lineageCategories": [
+    {
+      "category": "client_owned",
+      "description": "Client brand assets, approved copy, official palettes, licensed/OFL typography",
+      "permittedPurposes": [
+        "client_generation",
+        "operator_review",
+        "dna_snapshot"
+      ],
+      "prohibitedPurposes": [
+        "external_fine_tuning",
+        "multi_tenant_sharing"
+      ],
+      "retentionPolicy": "Permanent with client authorization, cryptographically snapshotted"
+    },
+    {
+      "category": "canva_derived_restricted",
+      "description": "Canva proprietary vector elements, stock graphics, and internal layout heuristics",
+      "permittedPurposes": [
+        "in_canvas_rendering",
+        "operator_preview"
+      ],
+      "prohibitedPurposes": [
+        "external_fine_tuning",
+        "public_benchmarks",
+        "standalone_vector_export"
+      ],
+      "retentionPolicy": "Ephemeral cache only, bound to specific document and task ID"
+    }
+  ]
+}

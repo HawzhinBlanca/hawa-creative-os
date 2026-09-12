@@ -1,0 +1,25 @@
+{
+  "task_id": "CV-01",
+  "drill_name": "Independent Database Snapshot Restoration Verification",
+  "timestamp": "2026-09-11T22:18:25+03:00",
+  "source_dump": "/Users/hawzhin/Documents/Hawdesign-Backups/2026-09-11-canva-migration-baseline/hawa_production_dump.sql",
+  "target_database": "hawa_baseline_restore_test",
+  "postgres_version": "PostgreSQL 17.0 (Debian 17.0-1.pgdg120+1) on x86_64-pc-linux-gnu",
+  "execution_steps": [
+    "DROP DATABASE IF EXISTS hawa_baseline_restore_test",
+    "CREATE DATABASE hawa_baseline_restore_test OWNER hawa_owner",
+    "psql -U hawa_owner -d hawa_baseline_restore_test < hawa_production_dump.sql",
+    "Row count validation across critical tables",
+    "DROP DATABASE hawa_baseline_restore_test (cleanup)"
+  ],
+  "verification_results": {
+    "tasks_count_live": 1449,
+    "tasks_count_restored": 1449,
+    "outbox_count_live": 1449,
+    "outbox_count_restored": 1449,
+    "task_events_count_live": 1890,
+    "task_events_count_restored": 1890,
+    "parity_status": "EXACT_MATCH_100_PERCENT"
+  },
+  "status": "PASS"
+}

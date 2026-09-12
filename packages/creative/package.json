@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hawa/contracts": "workspace:*",
-    "@hawa/domain": "workspace:*"
+    "@hawa/domain": "workspace:*",
+    "@hawa/integrations": "workspace:*"
   }
 }

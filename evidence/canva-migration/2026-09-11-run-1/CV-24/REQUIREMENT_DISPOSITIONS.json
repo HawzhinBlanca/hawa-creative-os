@@ -1,0 +1,1383 @@
+[
+  {
+    "id": "FR-001",
+    "name": "Canonical task creation",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/unified-ingress-postgres.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-06/",
+    "verified": true
+  },
+  {
+    "id": "FR-002",
+    "name": "Raw event retention",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/unified-ingress-postgres.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-06/",
+    "verified": true
+  },
+  {
+    "id": "FR-003",
+    "name": "Webhook verification",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06",
+      "CV-07",
+      "CV-08"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/telegram-first-class-adapter.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-07/",
+    "verified": true
+  },
+  {
+    "id": "FR-004",
+    "name": "Event idempotency",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-05",
+      "CV-06",
+      "CV-07",
+      "CV-08"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/integrations/test/unified-ingress.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-06/",
+    "verified": true
+  },
+  {
+    "id": "FR-005",
+    "name": "Task promotion",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06",
+      "CV-08"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/waha-honest-adapter.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-08/",
+    "verified": true
+  },
+  {
+    "id": "FR-006",
+    "name": "Manual intake",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06",
+      "CV-17"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/hawa-work-desk-cv17.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-17/",
+    "verified": true
+  },
+  {
+    "id": "FR-007",
+    "name": "Client channel mapping",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-07",
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-008",
+    "name": "Deterministic routing first",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-009",
+    "name": "Candidate-limited AI routing",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-010",
+    "name": "Ambiguity gate",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06",
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/unified-ingress-postgres.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-06/",
+    "verified": true
+  },
+  {
+    "id": "FR-011",
+    "name": "Scope lock",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-04",
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/contracts/test/canva-binding.contract.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-04/",
+    "verified": true
+  },
+  {
+    "id": "FR-012",
+    "name": "Wrong-client correction",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-06",
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-013",
+    "name": "Design brief schema",
+    "sourceDoc": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+    "tasks": [
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/creative-planner-asset-route.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-10/",
+    "verified": true
+  },
+  {
+    "id": "FR-014",
+    "name": "No invented facts",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-10",
+      "CV-14"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/creative-planner-asset-route.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-10/",
+    "verified": true
+  },
+  {
+    "id": "FR-015",
+    "name": "Exact-copy lock",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-10",
+      "CV-14"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-016",
+    "name": "Task route selection",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/creative-planner-asset-route.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-10/",
+    "verified": true
+  },
+  {
+    "id": "FR-017",
+    "name": "Client DNA",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-018",
+    "name": "Knowledge ingestion",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-019",
+    "name": "Curated ingestion scope",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-020",
+    "name": "Hybrid retrieval",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/retrieval/test/search-engine.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-021",
+    "name": "Client-first retrieval filter",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-022",
+    "name": "Positive/negative separation",
+    "sourceDoc": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-023",
+    "name": "Retrieval evidence",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-09"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/evals/test/evals.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-024",
+    "name": "Private composition reference",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/creative-planner-asset-route.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-10/",
+    "verified": true
+  },
+  {
+    "id": "FR-025",
+    "name": "Asset architecture",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-10",
+      "CV-11"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-native-design.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-11/",
+    "verified": true
+  },
+  {
+    "id": "FR-026",
+    "name": "Independent visual assets",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-10",
+      "CV-11"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-native-design.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-11/",
+    "verified": true
+  },
+  {
+    "id": "FR-027",
+    "name": "Approved logos only",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-09",
+      "CV-11",
+      "CV-14"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/client-knowledge-assets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-09/",
+    "verified": true
+  },
+  {
+    "id": "FR-028",
+    "name": "Editable source",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-02",
+      "CV-11",
+      "CV-19"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-native-design.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-11/",
+    "verified": true
+  },
+  {
+    "id": "FR-029",
+    "name": "Canonical creative document",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-02",
+      "CV-04",
+      "CV-11",
+      "CV-19"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "packages/contracts/test/canva-binding.contract.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-04/",
+    "verified": true
+  },
+  {
+    "id": "FR-030",
+    "name": "Studio adapter",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-02",
+      "CV-04",
+      "CV-11",
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "FR-031",
+    "name": "Local edit preservation",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-11",
+      "CV-12"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "packages/db/test/canva-binding.repository.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-05/",
+    "verified": true
+  },
+  {
+    "id": "FR-032",
+    "name": "Design versioning",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-04",
+      "CV-11",
+      "CV-12",
+      "CV-13",
+      "CV-19"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-033",
+    "name": "Multi-format variants",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-11",
+      "CV-12",
+      "CV-13"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "packages/db/test/canva-binding.repository.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-05/",
+    "verified": true
+  },
+  {
+    "id": "FR-034",
+    "name": "Sorani support",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-12",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-035",
+    "name": "Arabic support",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-12",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-036",
+    "name": "Language metadata",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-12",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-037",
+    "name": "Font management",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-09",
+      "CV-11",
+      "CV-12",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-038",
+    "name": "Deterministic render QA",
+    "sourceDoc": "docs/05_CREATIVE_ENGINE.md",
+    "tasks": [
+      "CV-13",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-039",
+    "name": "Visual QA",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-040",
+    "name": "Bounded repair",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-10",
+      "CV-14"
+    ],
+    "disposition": "RECONCILE_SOURCE_GUARANTEE",
+    "testFile": "apps/core/test/canva-manual-bounded-edit.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-12/",
+    "verified": true
+  },
+  {
+    "id": "FR-041",
+    "name": "Human review",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-07",
+      "CV-12",
+      "CV-15"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-042",
+    "name": "Structured revision",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-12",
+      "CV-15"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-043",
+    "name": "Approval authority",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-07",
+      "CV-15"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-044",
+    "name": "Approval immutability",
+    "sourceDoc": "docs/11_QA_RTL_MULTILINGUAL.md",
+    "tasks": [
+      "CV-04",
+      "CV-15"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-045",
+    "name": "Publication package",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-13"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-046",
+    "name": "Deterministic Drive destination",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-immutable-capture.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-13/",
+    "verified": true
+  },
+  {
+    "id": "FR-047",
+    "name": "Idempotent Drive upload",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-048",
+    "name": "Publication verification",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-049",
+    "name": "Sheets upsert",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-050",
+    "name": "Publication reconciliation",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-051",
+    "name": "Thread notification",
+    "sourceDoc": "docs/13_GOOGLE_DRIVE_SHEETS.md",
+    "tasks": [
+      "CV-07",
+      "CV-08",
+      "CV-16"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "FR-052",
+    "name": "Feedback ledger",
+    "sourceDoc": "docs/18_FEEDBACK_LEARNING.md",
+    "tasks": [
+      "CV-18"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/human-approval-binding.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-15/",
+    "verified": true
+  },
+  {
+    "id": "FR-053",
+    "name": "Rule proposals",
+    "sourceDoc": "docs/18_FEEDBACK_LEARNING.md",
+    "tasks": [
+      "CV-18"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/human-approval-binding.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-15/",
+    "verified": true
+  },
+  {
+    "id": "FR-054",
+    "name": "Rule governance",
+    "sourceDoc": "docs/18_FEEDBACK_LEARNING.md",
+    "tasks": [
+      "CV-18"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/human-approval-binding.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-15/",
+    "verified": true
+  },
+  {
+    "id": "FR-055",
+    "name": "Evaluation-case creation",
+    "sourceDoc": "docs/18_FEEDBACK_LEARNING.md",
+    "tasks": [
+      "CV-18",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/verified-delivery-drive-sheets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-16/",
+    "verified": true
+  },
+  {
+    "id": "FR-056",
+    "name": "Model registry",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-03",
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/verified-delivery-drive-sheets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-16/",
+    "verified": true
+  },
+  {
+    "id": "FR-057",
+    "name": "Model admission",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-03",
+      "CV-10",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/verified-delivery-drive-sheets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-16/",
+    "verified": true
+  },
+  {
+    "id": "FR-058",
+    "name": "Model fallback",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-03",
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/verified-delivery-drive-sheets.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-16/",
+    "verified": true
+  },
+  {
+    "id": "FR-059",
+    "name": "Provider outage handling",
+    "sourceDoc": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+    "tasks": [
+      "CV-03",
+      "CV-10",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-060",
+    "name": "Workflow recovery",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-05",
+      "CV-20",
+      "CV-22"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-061",
+    "name": "Manual workflow control",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-05",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-062",
+    "name": "Capacity control",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-05",
+      "CV-10"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/governed-learning-cv18.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-18/",
+    "verified": true
+  },
+  {
+    "id": "FR-063",
+    "name": "Operational inbox",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-17"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/governed-learning-cv18.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-18/",
+    "verified": true
+  },
+  {
+    "id": "FR-064",
+    "name": "Operations evidence",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-01",
+      "CV-17",
+      "CV-20",
+      "CV-23",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-065",
+    "name": "AI tracing",
+    "sourceDoc": "docs/10_WORKFLOW_RELIABILITY.md",
+    "tasks": [
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-066",
+    "name": "Data minimization",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-06",
+      "CV-09",
+      "CV-18",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-067",
+    "name": "Local-only policy",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-09",
+      "CV-18",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-068",
+    "name": "Prompt-injection boundary",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-06",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-069",
+    "name": "Audit trail",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-01",
+      "CV-15",
+      "CV-20",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-070",
+    "name": "Backup and restore",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-01",
+      "CV-19",
+      "CV-20",
+      "CV-22",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/cutover-reversible-release-cv22.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-22/",
+    "verified": true
+  },
+  {
+    "id": "FR-071",
+    "name": "Adapter health",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-07",
+      "CV-08",
+      "CV-17",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-072",
+    "name": "WhatsApp isolation",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-08",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "FR-073",
+    "name": "ComfyUI isolation",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-20",
+      "CV-23"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/historical-migration-cv19.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-19/",
+    "verified": true
+  },
+  {
+    "id": "FR-074",
+    "name": "Upstream pinning",
+    "sourceDoc": "docs/14_SECURITY_THREAT_MODEL.md",
+    "tasks": [
+      "CV-03",
+      "CV-20",
+      "CV-22",
+      "CV-23",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/cutover-reversible-release-cv22.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-22/",
+    "verified": true
+  },
+  {
+    "id": "FR-075",
+    "name": "Studio fallback export",
+    "sourceDoc": "docs/06_EDITABLE_DOCUMENT_STRATEGY.md",
+    "tasks": [
+      "CV-02",
+      "CV-13",
+      "CV-19",
+      "CV-22",
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "FR-076",
+    "name": "Accessibility",
+    "sourceDoc": "docs/06_EDITABLE_DOCUMENT_STRATEGY.md",
+    "tasks": [
+      "CV-17"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/historical-migration-cv19.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-19/",
+    "verified": true
+  },
+  {
+    "id": "FR-077",
+    "name": "Search and history",
+    "sourceDoc": "docs/17_UI_UX.md",
+    "tasks": [
+      "CV-17",
+      "CV-19"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/historical-migration-cv19.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-19/",
+    "verified": true
+  },
+  {
+    "id": "FR-078",
+    "name": "Office configuration",
+    "sourceDoc": "docs/17_UI_UX.md",
+    "tasks": [
+      "CV-17"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/historical-migration-cv19.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-19/",
+    "verified": true
+  },
+  {
+    "id": "FR-079",
+    "name": "Cost controls",
+    "sourceDoc": "docs/17_UI_UX.md",
+    "tasks": [
+      "CV-10",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/testkit/test/three-client-production-pilot.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-21/",
+    "verified": true
+  },
+  {
+    "id": "FR-080",
+    "name": "Safe deletion",
+    "sourceDoc": "docs/17_UI_UX.md",
+    "tasks": [
+      "CV-19",
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "NFR-001",
+    "name": "Reliability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-05",
+      "CV-20",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "NFR-002",
+    "name": "Availability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "NFR-003",
+    "name": "Recovery",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-05",
+      "CV-20",
+      "CV-22"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/cutover-reversible-release-cv22.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-22/",
+    "verified": true
+  },
+  {
+    "id": "NFR-004",
+    "name": "Performance",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-17",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/qa/test/rtl.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "NFR-005",
+    "name": "Scalability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/qa/test/rtl.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "NFR-006",
+    "name": "Security",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-06",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/auth-negative-controls.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "NFR-007",
+    "name": "Privacy",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-03",
+      "CV-06",
+      "CV-18",
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/auth-negative-controls.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "NFR-008",
+    "name": "Editability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-12",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "NFR-009",
+    "name": "Multilingual correctness",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-12",
+      "CV-14",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-work-quality-inspection.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-14/",
+    "verified": true
+  },
+  {
+    "id": "NFR-010",
+    "name": "Portability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-02",
+      "CV-19"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/contracts/test/canva-binding.contract.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-04/",
+    "verified": true
+  },
+  {
+    "id": "NFR-011",
+    "name": "Observability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "NFR-012",
+    "name": "Maintainability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "NFR-013",
+    "name": "Upgrade safety",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-03",
+      "CV-20",
+      "CV-22"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/cutover-reversible-release-cv22.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-22/",
+    "verified": true
+  },
+  {
+    "id": "NFR-014",
+    "name": "Determinism",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-05",
+      "CV-14"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/governed-learning-cv18.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-18/",
+    "verified": true
+  },
+  {
+    "id": "NFR-015",
+    "name": "Auditability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-01",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-24/",
+    "verified": true
+  },
+  {
+    "id": "NFR-016",
+    "name": "Usability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-12",
+      "CV-17",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/testkit/test/three-client-production-pilot.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-21/",
+    "verified": true
+  },
+  {
+    "id": "NFR-017",
+    "name": "Failure clarity",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-20"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-20/",
+    "verified": true
+  },
+  {
+    "id": "NFR-018",
+    "name": "Cost efficiency",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-10",
+      "CV-21",
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "NFR-019",
+    "name": "Vendor independence",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-02",
+      "CV-19"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/canva-native-design.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-11/",
+    "verified": true
+  },
+  {
+    "id": "NFR-020",
+    "name": "Data integrity",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-04",
+      "CV-13",
+      "CV-20",
+      "CV-22"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/cutover-reversible-release-cv22.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-22/",
+    "verified": true
+  },
+  {
+    "id": "NFR-021",
+    "name": "Accessibility",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-17",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/evals/test/evals.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-21/",
+    "verified": true
+  },
+  {
+    "id": "NFR-022",
+    "name": "Internationalization",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-17",
+      "CV-21"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/testkit/test/three-client-production-pilot.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-21/",
+    "verified": true
+  },
+  {
+    "id": "NFR-023",
+    "name": "Deployment simplicity",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-23"
+    ],
+    "disposition": "DECOMMISSIONED_PER_SPEC",
+    "testFile": "apps/core/test/decommission-figma-editor-runtime-cv23.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-23/",
+    "verified": true
+  },
+  {
+    "id": "NFR-024",
+    "name": "Testability",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-20",
+      "CV-21",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "apps/core/test/fault-recovery-security-cv20.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-24/",
+    "verified": true
+  },
+  {
+    "id": "NFR-025",
+    "name": "Evidence discipline",
+    "sourceDoc": "MASTER_SPEC.md",
+    "tasks": [
+      "CV-21",
+      "CV-24"
+    ],
+    "disposition": "SATISFIED_CANVA_MIGRATION",
+    "testFile": "packages/testkit/test/three-client-production-pilot.test.ts",
+    "evidencePath": "evidence/canva-migration/2026-09-11-run-1/CV-24/",
+    "verified": true
+  }
+]

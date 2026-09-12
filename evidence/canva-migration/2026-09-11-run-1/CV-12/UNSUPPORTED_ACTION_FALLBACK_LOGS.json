@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-11T20:33:50.724Z",
+  "targetDesignId": "DAF_kaae_invitation_template_master",
+  "totalOperationsEvaluated": 2,
+  "unsupportedActionsFlagged": 2,
+  "actions": [
+    {
+      "code": "UNSUPPORTED_NATIVE_OPERATION",
+      "recommendedAction": "HUMAN_ACTION_RECOMMENDED",
+      "actionName": "MANUAL_CANVA_VECTOR_TWEAK",
+      "targetElementId": "elem_bg",
+      "reason": "Automated execution of 'arbitrary_vector_morph' would violate non-regeneration invariant FR-031.",
+      "canvaGuidance": "Open the native Canva editor at https://www.canva.com/design/DAF_kaae_invitation_template_master/edit to perform this edit manually with native Canva controls."
+    },
+    {
+      "code": "UNSUPPORTED_NATIVE_OPERATION",
+      "recommendedAction": "HUMAN_ACTION_RECOMMENDED",
+      "actionName": "MANUAL_CANVA_MAGIC_EXPAND",
+      "targetElementId": "elem_logo",
+      "reason": "Automated execution of 'lossy_raster_overdraw' would violate non-regeneration invariant FR-031.",
+      "canvaGuidance": "Open the native Canva editor at https://www.canva.com/design/DAF_kaae_invitation_template_master/edit to perform this edit manually with native Canva controls."
+    }
+  ],
+  "nonRegenerationGuarantee": "Full-design regeneration strictly blocked. Operators are guided to native Canva tools via deep links without dropped copy."
+}

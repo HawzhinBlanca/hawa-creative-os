@@ -1,0 +1,53 @@
+{
+  "taskId": "CV-07",
+  "name": "Callback Action Token Security Matrix",
+  "executedAt": "2026-09-11T23:07:00+03:00",
+  "status": "PASS",
+  "securityControls": [
+    {
+      "controlId": "CTL-01-REPLAY-DEFENSE",
+      "threat": "Replay attack where attacker re-submits previously approved callback payload",
+      "mechanism": "Single-use cryptographic nonces and consumedTokens Map",
+      "testResult": "PASS",
+      "responseStatus": 403,
+      "responseCode": "REPLAY_DETECTED",
+      "evidence": "Second execution rejected with 'has already been consumed'"
+    },
+    {
+      "controlId": "CTL-02-STALE-TOKEN-DEFENSE",
+      "threat": "Execution of an outdated or expired approval token",
+      "mechanism": "expiresAt epoch timestamp boundary (24 hour ceiling)",
+      "testResult": "PASS",
+      "responseStatus": 403,
+      "responseCode": "EXPIRED",
+      "evidence": "Expired action token rejected with 'Action token expired at...'"
+    },
+    {
+      "controlId": "CTL-03-UNKNOWN-ACTOR-DEFENSE",
+      "threat": "Unauthorized or unknown Telegram user clicks approval button",
+      "mechanism": "allowedUserIds allowlist and token.actorId binding",
+      "testResult": "PASS",
+      "responseStatus": 403,
+      "responseCode": "UNAUTHORIZED_ACTOR",
+      "evidence": "User not authorized to execute actions on this office task"
+    },
+    {
+      "controlId": "CTL-04-STALE-REVISION-DEFENSE",
+      "threat": "Approval of revision A when designer has already started revision B",
+      "mechanism": "token.revisionId checked against current task revision",
+      "testResult": "PASS",
+      "responseStatus": 409,
+      "responseCode": "STALE_REVISION",
+      "evidence": "Action token was generated for revision rev_1, but current task revision is rev_2"
+    },
+    {
+      "controlId": "CTL-05-MINIAPP-IDENTITY",
+      "threat": "Attacker injects forged identity parameters into Telegram Web App initData",
+      "mechanism": "HMAC-SHA256 signature verification over alphabetically sorted key-value pairs with WebAppData secret",
+      "testResult": "PASS",
+      "responseStatus": 401,
+      "responseCode": "INVALID_SIGNATURE",
+      "evidence": "Tampered initData hash rejected; valid initData grants authenticated operator session"
+    }
+  ]
+}

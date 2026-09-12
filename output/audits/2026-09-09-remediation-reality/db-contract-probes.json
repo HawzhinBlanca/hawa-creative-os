@@ -1,0 +1,5 @@
+{
+  "status": "blocked_before_queries",
+  "reason": "Core DATABASE_URL authentication failed with SQLSTATE 28P01",
+  "followup": "Equivalent read-only SQL statements tested via PostgreSQL local socket; see sql-contract-errors.log"
+}

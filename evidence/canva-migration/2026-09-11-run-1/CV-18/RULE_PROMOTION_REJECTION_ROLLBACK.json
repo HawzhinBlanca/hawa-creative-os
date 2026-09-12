@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-11T22:58:49.446Z",
+  "testWorkflow": "End-to-end candidate rule mining, promotion, dismissal, and rollback",
+  "minedRulesCount": 2,
+  "promotedRule": {
+    "id": "crule_1789167529446_hzlh",
+    "title": "Standardize approved copy phrase",
+    "ruleText": "Prefer approved phrasing: \"دروستی - تەندروستی تۆ لە پێشینەیە\"",
+    "category": "copy_token",
+    "promotedByRole": "creative_director",
+    "promotedAt": "2026-09-11T22:58:49.446Z",
+    "auditHash": "7e6a4504af5a4c28b8f3e0f3dc95d06e7e22d9d7924ac5efbdae75e52b82ffc0",
+    "statusAfterPromotion": "PROMOTED"
+  },
+  "rollbackExecution": {
+    "ruleId": "crule_1789167529446_hzlh",
+    "rolledBack": true,
+    "statusAfterRollback": "DISMISSED",
+    "auditHash": "248c2a418b3b7dfa3ffaa2a619c2700562478640cb61d0397cbcc85adf00a570"
+  },
+  "dismissalExecution": {
+    "ruleId": "crule_1789167529446_65ey",
+    "dismissed": true
+  }
+}

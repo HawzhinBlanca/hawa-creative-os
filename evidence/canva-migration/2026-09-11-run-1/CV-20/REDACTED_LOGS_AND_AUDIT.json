@@ -1,0 +1,61 @@
+{
+  "environment": "production-isolated-qualification",
+  "generatedAt": "2026-09-11T23:05:16.957Z",
+  "sanitizationPolicy": "Tokens, passwords, phone numbers, and full names redacted per Section 18 / FR-067",
+  "logEntries": [
+    {
+      "timestamp": "2026-09-12T02:04:43.102Z",
+      "level": "INFO",
+      "component": "CoreApplication",
+      "event": "INITIALIZE",
+      "message": "Hawa Core OS starting up; honest health probe registered; state directory mounted at .hawa-state"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.155Z",
+      "level": "INFO",
+      "component": "CircuitBreaker",
+      "name": "canva-api",
+      "event": "STATE_CHECK",
+      "message": "Circuit breaker initialized in CLOSED state; failure threshold = 3, cooldown = 5000ms"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.210Z",
+      "level": "WARN",
+      "component": "FaultInjector",
+      "event": "SIMULATE_OUTAGE",
+      "message": "Recorded 3 synthetic failures for Canva API; circuit breaker transitioning to OPEN state"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.245Z",
+      "level": "INFO",
+      "component": "HealthProbe",
+      "event": "STATUS_EVALUATION",
+      "message": "Evaluated honest dependencies: postgres=connected, canva=outage (breaker OPEN), telegram=active, disk=writable -> overall status=degraded"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.312Z",
+      "level": "INFO",
+      "component": "ChannelSecurity",
+      "event": "KILL_SWITCH_ENGAGED",
+      "channel": "telegram",
+      "actor": "operator_***",
+      "message": "Telegram inbound webhook parsing paused by operator kill switch; returning HTTP 200 ack with drop flag"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.450Z",
+      "level": "INFO",
+      "component": "ReconciliationService",
+      "event": "AUDIT_COMPLETE",
+      "auditId": "audit_7a82bc19",
+      "message": "Reconciliation audit executed: 2 tasks audited; 2 anomalies detected (MISSING_DRIVE_ASSET, STATUS_DIVERGENCE); 2 repaired automatically"
+    },
+    {
+      "timestamp": "2026-09-12T02:04:43.520Z",
+      "level": "INFO",
+      "component": "CircuitBreaker",
+      "name": "canva-api",
+      "event": "RECOVERY",
+      "message": "Circuit breaker reset to CLOSED state following verified probe; honest health restored to healthy"
+    }
+  ]
+}

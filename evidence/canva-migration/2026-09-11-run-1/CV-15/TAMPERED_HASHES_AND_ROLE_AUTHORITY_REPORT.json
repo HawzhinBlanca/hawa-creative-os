@@ -1,0 +1,40 @@
+{
+  "hashTamperingDefenses": {
+    "tamperedArtifactSetHash": {
+      "status": 422,
+      "rejected": true,
+      "detail": "Submitted captured artifact set hash 'tampered_forged_hash_000' does not match stored Merkle root 'authentic_merkle_root_sha256_hash_999'"
+    },
+    "tamperedQcReportHash": {
+      "status": 422,
+      "rejected": true,
+      "detail": "Submitted QC report hash does not match stored QC run hash"
+    }
+  },
+  "roleAuthorityMatrix": {
+    "art_director": {
+      "status": 201,
+      "authorized": true
+    },
+    "creative_director": {
+      "status": 201,
+      "authorized": true
+    },
+    "client_reviewer": {
+      "status": 201,
+      "authorized": true
+    },
+    "office_admin": {
+      "status": 201,
+      "authorized": true
+    },
+    "external_guest": {
+      "status": 403,
+      "authorized": false
+    },
+    "viewer": {
+      "status": 403,
+      "authorized": false
+    }
+  }
+}

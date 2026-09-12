@@ -1,0 +1,82 @@
+{
+  "/v1/health": {
+    "status": 200,
+    "body": {
+      "status": "healthy",
+      "timestamp": "2026-09-10T11:01:11.489Z"
+    }
+  },
+  "/v1/ready": {
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "dependencies": {
+        "postgres": "connected",
+        "restate": "connected",
+        "studio": "sandbox_emulated"
+      }
+    }
+  },
+  "/v1/integrations/health": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "integrationId": "int_telegram",
+          "kind": "telegram",
+          "state": "healthy",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        },
+        {
+          "integrationId": "int_waha",
+          "kind": "waha",
+          "state": "healthy",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        },
+        {
+          "integrationId": "int_google_drive",
+          "kind": "google_drive",
+          "state": "healthy",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        },
+        {
+          "integrationId": "int_google_sheets",
+          "kind": "google_sheets",
+          "state": "healthy",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        },
+        {
+          "integrationId": "int_phoenix",
+          "kind": "phoenix",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        },
+        {
+          "integrationId": "int_figma_bridge",
+          "kind": "figma_agent_studio",
+          "state": "sandbox_emulated",
+          "checkedAt": "2026-09-10T11:01:11.491Z"
+        }
+      ]
+    }
+  },
+  "/v1/tasks": {
+    "status": 200,
+    "body": {
+      "count": 11,
+      "states": [
+        "AWAITING_APPROVAL",
+        "RECEIVED",
+        "APPROVED",
+        "RECEIVED",
+        "APPROVED",
+        "RECEIVED",
+        "APPROVED",
+        "RECEIVED",
+        "RECEIVED",
+        "RECEIVED",
+        "RECEIVED"
+      ]
+    }
+  }
+}

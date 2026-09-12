@@ -1,0 +1,1 @@
+Copied current source to /tmp/hawa-deep-audit-20260910; pnpm dependencies reused, workspace package links remapped to copy; compiled copy only. Three live-database tests retargeted solely to isolated database name. No .env copied.

@@ -1,0 +1,30 @@
+item_category,identifier,prior_role,removal_type,status,justification
+file,apps/desk/src/screens/ReviewScreen.tsx,Monolithic 9500-line Konva custom editor canvas,PERMANENT_DELETION,DECOMMISSIONED,Superseded by Canva Native Studio (ADR 020/021) and WorkScreen
+file,apps/desk/src/services/polotnoEngine.ts,Polotno store binding and draft conversion,PERMANENT_DELETION,DECOMMISSIONED,Third-party editor runtime eliminated (ADR 018 retired)
+file,apps/desk/src/services/historyTree.ts,Custom branching undo/redo canvas tree,PERMANENT_DELETION,DECOMMISSIONED,Obsolete with native Canva versioning and revision locking
+file,apps/desk/src/services/canvasExport.ts,Custom Konva/SVG multi-format canvas exporter,PERMANENT_DELETION,DECOMMISSIONED,Canva native export pipelines now handle 4-format omnichannel exports
+file,apps/desk/src/services/reflowEngine.ts,Custom canvas element reflow engine,PERMANENT_DELETION,DECOMMISSIONED,Unreferenced after ReviewScreen retirement
+file,apps/desk/src/assets/editorPresets.ts,Hardcoded vector artboards and SVGs for canvas,PERMANENT_DELETION,DECOMMISSIONED,Replaced by live Canva Brand Kits and template autofill
+file,apps/desk/src/services/cairoFontBase64.ts,Embedded base64 Cairo font (222 KB),PERMANENT_DELETION,DECOMMISSIONED,Obsolete; web fonts and Canva cloud fonts used instead
+file,apps/desk/src/services/interFontBase64.ts,Embedded base64 Inter font (124 KB),PERMANENT_DELETION,DECOMMISSIONED,Obsolete; web fonts and Canva cloud fonts used instead
+file,apps/desk/src/services/vazirmatnFontBase64.ts,Embedded base64 Vazirmatn font (62 KB),PERMANENT_DELETION,DECOMMISSIONED,Obsolete; web fonts and Canva cloud fonts used instead
+file,apps/desk/scripts/generate_drustee_pilot_campaign.ts,Legacy audit script importing canvasExport,PERMANENT_DELETION,DECOMMISSIONED,Historical test script retired with canvasExport
+test,apps/desk/test/canvasExport.test.ts,Legacy canvas export test suite (10 tests),PERMANENT_DELETION,DECOMMISSIONED,Canvas exporter removed from codebase
+test,apps/desk/test/historyTree.test.ts,Legacy history tree test suite (3 tests),PERMANENT_DELETION,DECOMMISSIONED,History tree removed from codebase
+test,apps/desk/test/polotnoEngine.test.ts,Legacy Polotno engine test suite (9 tests),PERMANENT_DELETION,DECOMMISSIONED,Polotno store removed from codebase
+test,packages/creative/test/history-tree.test.ts,Legacy history tree test suite (11 tests),PERMANENT_DELETION,DECOMMISSIONED,History tree removed from codebase
+test,packages/testkit/test/manual-editor-qualification.test.ts,Legacy manual editor qualification suite (15 tests),PERMANENT_DELETION,DECOMMISSIONED,Custom editor engine removed from codebase
+test,packages/testkit/test/kaae-live-slice.test.ts,Legacy manual editor live slice suite (7 tests),PERMANENT_DELETION,DECOMMISSIONED,Custom editor and Polotno removed from codebase
+test,packages/testkit/test/kaae-production-drill.test.ts,Legacy canvas export production drill (9 tests),PERMANENT_DELETION,DECOMMISSIONED,Custom canvas exporter removed from codebase
+dependency,polotno@^4.12.1,Proprietary canvas SDK in apps/desk,PACKAGE_REMOVAL,DECOMMISSIONED,Eliminated third-party commercial dependency and 59 transitive packages
+route,POST /tasks/:taskId/leases,Active Figma task write lease acquisition,RETIRED_410_GONE,DECOMMISSIONED,Replaced by Canva Native Studio lock-free revision control
+route,POST /tasks/:taskId/figma/lease,Alias for Figma write lease acquisition,RETIRED_410_GONE,DECOMMISSIONED,Replaced by Canva Native Studio lock-free revision control
+route,DELETE /tasks/:taskId/leases/:leaseId,Figma task write lease release,RETIRED_410_GONE,DECOMMISSIONED,Figma lease transport decommissioned
+route,POST /tasks/:taskId/figma/mutate,Figma curated mutation bridge transport,RETIRED_410_GONE,DECOMMISSIONED,Canva Autofill and REST mutations replace Figma commands
+route,GET /tasks/:taskId/figma/status,Figma staging status and node inspection,RETIRED_410_GONE,DECOMMISSIONED,Figma inspection route retired
+route,GET /v1/figma/status,Global Figma bridge status endpoint,RETIRED_410_GONE,DECOMMISSIONED,Figma global bridge retired
+route,GET /figma/status,Global Figma bridge status endpoint alias,RETIRED_410_GONE,DECOMMISSIONED,Figma global bridge retired
+env_var,POLOTNO_KEY,Commercial API key for Polotno editor,ENV_PRUNED,DECOMMISSIONED,No longer referenced anywhere in active code or deployments
+env_var,FIGMA_ACCESS_TOKEN,API token for Figma REST bridge,ENV_RETIRED,DECOMMISSIONED,Retired from active production runtime; kept only in archive audits
+env_var,FIGMA_DESKTOP_BRIDGE_PORT,WebSocket port 43001 for local Figma bridge,ENV_PRUNED,DECOMMISSIONED,Local bridge WebSocket transport removed from production
+service,figma_desktop_bridge,Local WebSocket daemon for Figma plugin,SERVICE_RETIRED,DECOMMISSIONED,Replaced by Canva cloud REST & Autofill integrations

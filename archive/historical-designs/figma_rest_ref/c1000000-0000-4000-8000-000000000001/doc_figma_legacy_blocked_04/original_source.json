@@ -1,0 +1,18 @@
+{
+  "documentId": "doc_figma_legacy_blocked_04",
+  "taskId": "task_figma_blocked_04",
+  "clientId": "c1000000-0000-4000-8000-000000000001",
+  "title": "Legacy Q1 Campaign in Figma Team Space",
+  "sourceFormat": "figma_rest_ref",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "a9be9fccd8e500765d8d1fe655be93a504c255d1824d8313c72cc7413b2a891f",
+  "archivedAt": "2026-09-12T05:33:18.316Z",
+  "sourceContent": {
+    "figmaFileKey": "f_key_revoked_4920412",
+    "nodeId": "0:1"
+  },
+  "metadata": {
+    "inaccessible": true,
+    "tokenRevoked": true
+  }
+}

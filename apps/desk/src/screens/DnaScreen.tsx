@@ -88,66 +88,6 @@ export interface ClientDnaSnapshot {
 // Fallback seed clients for initial render or offline resiliency
 const FALLBACK_CLIENTS: ClientSummary[] = [
   {
-    clientId: 'client-drustee',
-    name: 'Drustee Evidence-First Health',
-    code: 'DRUSTEE',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colorsCount: 3,
-    rulesCount: 3,
-    snapshotsCount: 1,
-  },
-  {
-    clientId: 'client-office-1',
-    name: 'Hawa Creative',
-    code: 'HAWA',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colorsCount: 3,
-    rulesCount: 3,
-    snapshotsCount: 1,
-  },
-  {
-    clientId: 'client-aster',
-    name: 'Aster Hotel & Resort',
-    code: 'ASTER',
-    version: 12,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colorsCount: 3,
-    rulesCount: 3,
-    snapshotsCount: 2,
-  },
-  {
-    clientId: 'client-nova',
-    name: 'Nova Tech Systems',
-    code: 'NOVA',
-    version: 8,
-    status: 'active',
-    defaultLocale: 'en',
-    defaultDirection: 'ltr',
-    colorsCount: 3,
-    rulesCount: 2,
-    snapshotsCount: 2,
-  },
-  {
-    clientId: 'client-rona',
-    name: 'Rona Haute Couture',
-    code: 'RONA',
-    version: 4,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colorsCount: 3,
-    rulesCount: 2,
-    snapshotsCount: 1,
-  },
-  {
     clientId: 'c1000000-0000-4000-8000-000000000002',
     name: 'Kurdistan Accrediting Association for Education (KAAE)',
     code: 'KAAE',
@@ -160,6 +100,7 @@ const FALLBACK_CLIENTS: ClientSummary[] = [
     snapshotsCount: 1,
   },
 ];
+
 
 const DRUSTEE_FALLBACK_DNA: ClientDNA = {
   tenantId: 'tenant-drustee',
@@ -221,18 +162,6 @@ const DRUSTEE_FALLBACK_DNA: ClientDNA = {
   updatedAt: new Date().toISOString(),
 };
 
-const DRUSTEE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
-  {
-    snapshotId: 'snap_init_drustee_1',
-    clientId: 'client-drustee',
-    version: 1,
-    sha256: 'sha256_d4dd10cb26e9ba2c1cb2beedea869141b54de6196ba93487dc76ec119f5eb574',
-    commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
-    createdBy: 'art_director',
-    createdAt: new Date().toISOString(),
-    dna: DRUSTEE_FALLBACK_DNA,
-  },
-];
 
 const KAAE_FALLBACK_DNA: ClientDNA = {
   tenantId: 'tenant-kaae',
@@ -278,6 +207,19 @@ const KAAE_FALLBACK_DNA: ClientDNA = {
   },
   updatedAt: new Date().toISOString(),
 };
+
+const KAAE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
+  {
+    snapshotId: 'snap_init_kaae_1',
+    clientId: 'c1000000-0000-4000-8000-000000000002',
+    version: 1,
+    sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
+    commitMessage: 'Official KAAE accreditation standards lock: Midnight Navy / Kurdistan Gold palette, Kurdish Law No. 6 citation, and 21-ray sun seal',
+    createdBy: 'academic_board',
+    createdAt: new Date().toISOString(),
+    dna: KAAE_FALLBACK_DNA,
+  },
+];
 
 // WCAG Contrast Helper
 function getLuminance(hex: string): number {
@@ -341,9 +283,9 @@ export interface FontInspectionResult {
 
 export const DnaScreen: React.FC = () => {
   const [clients, setClients] = useState<ClientSummary[]>(FALLBACK_CLIENTS);
-  const [selectedClientId, setSelectedClientId] = useState<string>('client-drustee');
-  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(DRUSTEE_FALLBACK_DNA);
-  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>(DRUSTEE_FALLBACK_SNAPSHOTS);
+  const [selectedClientId, setSelectedClientId] = useState<string>('c1000000-0000-4000-8000-000000000002');
+  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(KAAE_FALLBACK_DNA);
+  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>(KAAE_FALLBACK_SNAPSHOTS);
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -358,16 +300,16 @@ export const DnaScreen: React.FC = () => {
   // Candidate rules from governed learning loop
   const [candidateRules, setCandidateRules] = useState<CandidateRule[]>([
     {
-      ruleId: 'rule_rtl_logo_anchor',
-      clientId: 'client-drustee',
-      proposedRule: 'Enforce top-right brand logo anchor in RTL Kurdish layouts',
-      category: 'layout',
-      confidence: 0.96,
-      evidenceOccurrences: 6,
-      evidenceDigestSha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      ruleId: 'rule_kaae_sun_seal_prominence',
+      clientId: 'c1000000-0000-4000-8000-000000000002',
+      proposedRule: 'Maintain 21-ray sun seal in top center/right with clear safe margin',
+      category: 'brand_mark',
+      confidence: 0.98,
+      evidenceOccurrences: 8,
+      evidenceDigestSha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
       detectedAt: new Date().toISOString(),
       status: 'proposed',
-      rationale: 'Derived from 6 consecutive approved campaign deliverables with 0 counterexamples',
+      rationale: 'Derived from 8 verified official KAAE certificates and accreditation keynotes',
     },
   ]);
 
@@ -446,7 +388,8 @@ export const DnaScreen: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          setClients(data);
+          const kaaeOnly = data.filter((c: any) => c.clientId === 'c1000000-0000-4000-8000-000000000002' || c.code === 'KAAE');
+          setClients(kaaeOnly.length > 0 ? kaaeOnly : FALLBACK_CLIENTS);
         }
       }
     } catch (err) {

@@ -4,6 +4,8 @@
  * and Invariant #12 (idempotency key deduplication).
  */
 
+import crypto from 'node:crypto';
+
 export interface WahaRawPayload {
   event?: string;
   session?: string;
@@ -18,6 +20,13 @@ export interface WahaRawPayload {
     hasMedia?: boolean;
     mediaUrl?: string;
     mimetype?: string;
+    participant?: string;
+    author?: string;
+    key?: {
+      id?: string;
+      remoteJid?: string;
+      participant?: string;
+    };
     _data?: any;
   };
   // Flat payload support
@@ -31,6 +40,7 @@ export interface WahaRawPayload {
   mediaUrl?: string;
   mimetype?: string;
   clientId?: string;
+  participant?: string;
 }
 
 export interface WahaNormalizedMessage {
@@ -46,6 +56,16 @@ export interface WahaNormalizedMessage {
   mediaMimeType?: string;
   detectedClientId?: string;
   direction: 'rtl';
+  isGroup: boolean;
+  groupJid?: string;
+  isDisallowedGroup?: boolean;
+  rawPayloadHash?: string;
+}
+
+export interface WahaIngressOptions {
+  secretToken?: string;
+  allowedGroupJids?: string[];
+  killSwitchEnabled?: boolean;
 }
 
 /**
@@ -76,10 +96,38 @@ export const PHONE_CLIENT_DIRECTORY: Record<string, string> = {
   '9647709998877': 'client-rona',
 };
 
-import crypto from 'node:crypto';
+export function computeWahaPayloadHash(payload: string | Buffer | Uint8Array | ArrayBuffer): string {
+  const hasher = crypto.createHash('sha256');
+  if (typeof payload === 'string') {
+    hasher.update(payload, 'utf8');
+  } else if (payload instanceof ArrayBuffer) {
+    hasher.update(Buffer.from(payload));
+  } else {
+    hasher.update(payload);
+  }
+  return hasher.digest('hex');
+}
 
 export class WahaIngressHandler {
-  constructor(private readonly secretToken?: string) {}
+  readonly secretToken?: string;
+  readonly allowedGroupJids?: string[];
+  readonly killSwitchActive: boolean;
+
+  constructor(optionsOrSecret?: string | WahaIngressOptions) {
+    if (typeof optionsOrSecret === 'string') {
+      this.secretToken = optionsOrSecret;
+      this.allowedGroupJids = undefined;
+      this.killSwitchActive = false;
+    } else if (optionsOrSecret) {
+      this.secretToken = optionsOrSecret.secretToken;
+      this.allowedGroupJids = optionsOrSecret.allowedGroupJids;
+      this.killSwitchActive = optionsOrSecret.killSwitchEnabled === false;
+    } else {
+      this.secretToken = undefined;
+      this.allowedGroupJids = undefined;
+      this.killSwitchActive = false;
+    }
+  }
 
   /**
    * Verifies incoming webhook request headers.
@@ -92,7 +140,7 @@ export class WahaIngressHandler {
   /**
    * Verifies HMAC-SHA256 signature against webhook raw payload with timing-safe comparison.
    */
-  verifySignature(payload: string | Buffer | ArrayBuffer, signature?: string): boolean {
+  verifySignature(payload: string | Buffer | Uint8Array | ArrayBuffer, signature?: string): boolean {
     if (!this.secretToken) return true; // Optional in local test mode
     if (!signature) return false;
     try {
@@ -116,14 +164,34 @@ export class WahaIngressHandler {
   }
 
   /**
+   * Checks whether a JID represents a WhatsApp group
+   */
+  isGroup(jid: string): boolean {
+    return typeof jid === 'string' && jid.endsWith('@g.us');
+  }
+
+  /**
+   * Checks whether a group is explicitly allowlisted
+   */
+  isGroupAllowed(jid: string): boolean {
+    if (!this.isGroup(jid)) return true; // Direct chats are not group-restricted
+    if (!this.allowedGroupJids || this.allowedGroupJids.length === 0) return true;
+    return this.allowedGroupJids.includes(jid);
+  }
+
+  /**
    * Normalizes incoming raw WAHA payload into canonical message representation.
    */
-  normalize(raw: WahaRawPayload): WahaNormalizedMessage {
-    const data = raw.payload || raw;
-    const rawId = data.id || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const fromRaw = data.from || 'unknown@c.us';
-    const phoneClean = fromRaw.replace(/[^0-9]/g, '');
-    const senderName = data.pushname || 'WhatsApp Client';
+  normalize(raw: WahaRawPayload, rawBodyBytes?: Uint8Array | Buffer | string | ArrayBuffer): WahaNormalizedMessage {
+    const data: any = raw.payload || raw;
+    const rawId = data.id || data.key?.id || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const fromRaw = data.from || data.key?.remoteJid || 'unknown@c.us';
+    const isGroup = this.isGroup(fromRaw);
+    const isDisallowed = isGroup && !this.isGroupAllowed(fromRaw);
+
+    const participantRaw = data.participant || data.author || data.key?.participant || fromRaw;
+    const phoneClean = participantRaw.replace(/[^0-9]/g, '') || fromRaw.replace(/[^0-9]/g, '');
+    const senderName = data.pushname || data._data?.notifyName || 'WhatsApp Client';
     const text = data.body || data.caption || '';
     const normalizedText = normalizeKurdishIncomingText(text);
 
@@ -153,6 +221,8 @@ export class WahaIngressHandler {
       }
     }
 
+    const rawPayloadHash = rawBodyBytes ? computeWahaPayloadHash(rawBodyBytes) : undefined;
+
     return {
       platform: 'whatsapp',
       messageId: rawId,
@@ -166,6 +236,10 @@ export class WahaIngressHandler {
       mediaMimeType: data.mimetype,
       detectedClientId,
       direction: 'rtl',
+      isGroup,
+      groupJid: isGroup ? fromRaw : undefined,
+      isDisallowedGroup: isDisallowed,
+      rawPayloadHash,
     };
   }
 }

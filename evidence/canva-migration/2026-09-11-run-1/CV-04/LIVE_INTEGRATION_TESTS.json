@@ -1,0 +1,42 @@
+{
+  "suite": "packages/db/test/canva-binding.integration.test.ts",
+  "executed_at": "2026-09-11T22:31:55Z",
+  "target_database": "hawa_test",
+  "port": 54332,
+  "framework": "Vitest 3.2.7",
+  "tests_passed": 5,
+  "tests_failed": 0,
+  "duration_ms": 284,
+  "test_cases": [
+    {
+      "name": "1. Successfully persists Canva binding into live PostgreSQL table hawa.canva_bindings",
+      "status": "passed",
+      "verified_query": "SELECT * FROM hawa.canva_bindings WHERE id = $1",
+      "returned_rows": 1
+    },
+    {
+      "name": "2. Enforces foreign client denial in live database: refuses capture if client ID is mismatched",
+      "status": "passed",
+      "error_thrown": "Foreign client denial"
+    },
+    {
+      "name": "3. Enforces optimistic concurrency in live database: refuses capture with stale version",
+      "status": "passed",
+      "error_thrown": "Stale version conflict"
+    },
+    {
+      "name": "4. Enforces snapshot completeness invariant in live database: rejects incomplete observation",
+      "status": "passed",
+      "error_thrown": "Snapshot incompleteness denial"
+    },
+    {
+      "name": "5. Successfully records verified artifact capture set in PostgreSQL and increments binding version to 2",
+      "status": "passed",
+      "verified_post_conditions": [
+        "Capture set version = 2",
+        "Binding version updated to 2 in hawa.canva_bindings",
+        "listCaptureSetsForTask returned 1 record with exact hash"
+      ]
+    }
+  ]
+}

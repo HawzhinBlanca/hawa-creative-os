@@ -115,4 +115,8 @@ export class CircuitBreaker {
   reset(): void {
     this.transitionTo('CLOSED');
   }
+
+  getState(): CircuitBreakerState {
+    return this.getSnapshot().state;
+  }
 }

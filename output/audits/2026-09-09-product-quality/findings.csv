@@ -1,0 +1,13 @@
+finding,severity,requirements,gates,observation,evidence
+HQ-01,critical,FR-060;NFR-001;NFR-003,C;H,Maps lose task across process; no registered Restate services,probes.json;restart-probe.json;runtime.log
+HQ-02,critical,FR-047;FR-048;FR-049;FR-050,G,Publisher/reconciler manufacture success,probes.json
+HQ-03,critical,FR-043;FR-044;FR-069;NFR-015,B;F,Unverified sessions and cross-task revision decisions accepted,probes.json
+HQ-04,critical,FR-015;FR-041;FR-045,E;F;G,Absent QA defaults to pass; empty design approved,probes.json;screenshots/04-live-review.png
+HQ-05,high,FR-028;FR-029;FR-030,A,Canonical Figma path operates locally without real readback,probes.json;screenshots/05-figma-proof.png
+HQ-06,high,FR-065,D,Wrong model gets 200/200; visual rubric gets 10/10 without model,probes.json;screenshots/09-evaluations.png
+HQ-07,high,FR-064;FR-071;NFR-003,C;H,Literal health and simulated restore,runtime.log;screenshots/08-operations.png
+HQ-08,high,FR-017;FR-063,B;F,Fixed workload counts and client hardcode in intake,screenshots/02-desktop-inbox.png;screenshots/03-new-task.png
+HQ-09,high,FR-041,F,Review overload and weak visible composition,screenshots/04-live-review.png
+HQ-10,high,FR-041,F,Focus escapes dialog; mobile canvas clips and fit remains 100%,screenshots/03-new-task.png;screenshots/11-mobile-review.png;screenshots/12-mobile-canvas.png;screenshots/13-mobile-fit.png
+HQ-11,high,FR-020;FR-023;FR-025,D,Fixed creative topology and synthetic vector/rerank scores,source-fingerprints.json
+HQ-12,medium,NFR-011,release,Three suite failures; monolithic control paths,tests.log;desk-build.log

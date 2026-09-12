@@ -1,0 +1,54 @@
+{
+  "evaluatedAt": "2026-09-11T23:16:40.072Z",
+  "systemHealth": {
+    "status": "healthy",
+    "timestamp": "2026-09-11T23:16:40.072Z",
+    "lastVerifiedProgressAt": "2026-09-11T23:16:40.058Z",
+    "dependencies": {
+      "postgres": "connected",
+      "canva": "connected",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "unconfigured",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "unconfigured"
+    }
+  },
+  "studioStatus": {
+    "status": "online",
+    "activeStudio": "canva",
+    "studioVersion": "v2.0.0-canva-cutover",
+    "admittedClients": [
+      "kaae",
+      "drustee",
+      "aster"
+    ],
+    "admittedTaskClasses": [
+      "routine_announcement",
+      "social_media_post",
+      "institutional_invitation",
+      "promotional_graphic"
+    ],
+    "rollbackTarget": "v1.4.0-legacy-archive",
+    "circuitBreaker": {
+      "name": "canva-api",
+      "state": "CLOSED",
+      "consecutiveFailures": 0,
+      "totalTrips": 0,
+      "lastStateChangeAt": "2026-09-11T23:16:40.054Z"
+    },
+    "timestamp": "2026-09-11T23:16:40.069Z"
+  },
+  "circuitBreaker": {
+    "name": "canva-api",
+    "state": "CLOSED",
+    "consecutiveFailures": 0,
+    "totalTrips": 0,
+    "lastStateChangeAt": "2026-09-11T23:16:40.054Z"
+  },
+  "dataIntegrity": {
+    "postgresTasks": 1449,
+    "postgresOutboxCommands": 1449,
+    "verifiedZeroPollution": true
+  }
+}

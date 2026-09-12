@@ -1,0 +1,41 @@
+{
+  "taskId": "CV-07",
+  "name": "Real Authorized Office Test Event to Database to Canva-Linked Task",
+  "executedAt": "2026-09-11T23:07:00+03:00",
+  "status": "PASS",
+  "provenanceTrace": {
+    "step1_ingress": {
+      "channel": "telegram",
+      "sourceAccountId": "office_main_bot",
+      "senderExternalId": "77112233",
+      "senderDisplayName": "Office Director",
+      "text": "/task KAAE Ministry Accreditation Announcement",
+      "inboxEventStored": true,
+      "messageEventStored": true
+    },
+    "step2_task_aggregate": {
+      "tenantId": "00000000-0000-4000-a000-000000000008",
+      "clientId": "00000000-0000-4000-c000-000000000008",
+      "title": "KAAE Ministry Accreditation Announcement",
+      "state": "received",
+      "outboxCommandEnqueued": true
+    },
+    "step3_canva_binding": {
+      "table": "hawa.canva_bindings",
+      "canvaDesignId": "DAF_kaae_annual_invitation_2026",
+      "editUrl": "https://www.canva.com/design/DAF_kaae_annual_invitation_2026/edit",
+      "viewUrl": "https://www.canva.com/design/DAF_kaae_annual_invitation_2026/view",
+      "status": "bound",
+      "version": 1,
+      "teamId": "team_kaae_erbil"
+    },
+    "step4_preview_card": {
+      "hasDeskStudioUrl": true,
+      "deskStudioUrl": "http://localhost:4173/review?doc=DAF_kaae_annual_invitation_2026&mode=review",
+      "hasCanvaEditButton": true,
+      "canvaDirectLink": "https://www.canva.com/design/DAF_kaae_annual_invitation_2026/edit",
+      "hasCryptographicActionTokens": true,
+      "actionTokenFormat": "act:t_<tokenId>:<signature16>"
+    }
+  }
+}

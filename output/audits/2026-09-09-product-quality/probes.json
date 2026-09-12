@@ -1,0 +1,233 @@
+{
+  "anonymousCreate": {
+    "status": 401,
+    "body": {
+      "id": "a7227c8c-75a3-4cde-9652-2a043a14de57",
+      "title": "Audit ordinary task",
+      "status": "REJECTED_UNAUTHORIZED",
+      "error": "Authentication required: anonymous or unauthorized task creation is denied"
+    }
+  },
+  "forgedBearerCreate": {
+    "status": 401,
+    "body": {
+      "id": "afce4fac-b31e-42bd-ac85-c49c327d5f9b",
+      "title": "Audit non-credential bearer",
+      "status": "REJECTED_UNAUTHORIZED",
+      "error": "Authentication required: anonymous or unauthorized task creation is denied"
+    }
+  },
+  "spoofedDeskCreate": {
+    "status": 401,
+    "body": {
+      "id": "4c833d14-2855-459b-99d3-2726100724f7",
+      "title": "Audit client header",
+      "status": "REJECTED_UNAUTHORIZED",
+      "error": "Authentication required: anonymous or unauthorized task creation is denied"
+    }
+  },
+  "newRevision": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to create a design revision",
+      "instance": "http://localhost/v1/tasks/afce4fac-b31e-42bd-ac85-c49c327d5f9b/revisions"
+    }
+  },
+  "unauthenticatedDecision": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to record review decisions",
+      "instance": "http://localhost/v1/tasks/afce4fac-b31e-42bd-ac85-c49c327d5f9b/revisions/undefined/decisions"
+    }
+  },
+  "foreignTaskRevisionDecision": {
+    "status": 401,
+    "body": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to record review decisions",
+      "instance": "http://localhost/v1/tasks/4c833d14-2855-459b-99d3-2726100724f7/revisions/undefined/decisions"
+    }
+  },
+  "taskAAfterDecision": {
+    "status": 200,
+    "body": {
+      "id": "afce4fac-b31e-42bd-ac85-c49c327d5f9b",
+      "title": "Audit non-credential bearer",
+      "status": "REJECTED_UNAUTHORIZED",
+      "error": "Authentication required: anonymous or unauthorized task creation is denied"
+    }
+  },
+  "noRevisionExportPackage": {
+    "status": 404,
+    "body": {
+      "type": "https://hawa.design/errors/404",
+      "title": "Revision Not Found",
+      "status": 404,
+      "detail": "Task has no revision to export",
+      "instance": "http://localhost/v1/tasks/4c833d14-2855-459b-99d3-2726100724f7/export-package"
+    }
+  },
+  "readiness": {
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "dependencies": {
+        "postgres": "disconnected",
+        "restate": "disconnected",
+        "studio": "sandbox_emulated"
+      }
+    }
+  },
+  "integrationHealth": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "integrationId": "int_telegram",
+          "kind": "telegram",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        },
+        {
+          "integrationId": "int_waha",
+          "kind": "waha",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        },
+        {
+          "integrationId": "int_google_drive",
+          "kind": "google_drive",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        },
+        {
+          "integrationId": "int_google_sheets",
+          "kind": "google_sheets",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        },
+        {
+          "integrationId": "int_phoenix",
+          "kind": "phoenix",
+          "state": "unconfigured",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        },
+        {
+          "integrationId": "int_figma_bridge",
+          "kind": "figma_agent_studio",
+          "state": "sandbox_emulated",
+          "checkedAt": "2026-09-09T09:43:44.697Z"
+        }
+      ]
+    }
+  },
+  "publishMissingPhysicalFile": {
+    "ok": true,
+    "value": {
+      "publicationId": "0b970fd9-b53a-4baa-98cf-bf19d4f2495b",
+      "publicationKey": "audit",
+      "driveFolderId": "drive_folder_audit-invented-folder",
+      "driveFiles": [
+        {
+          "artifactId": "audit",
+          "fileId": "",
+          "folderId": "drive_folder_audit-invented-folder",
+          "name": "audit.png",
+          "mimeType": "image/png",
+          "observedSize": 999,
+          "expectedSha256": "invented",
+          "verified": false
+        }
+      ],
+      "sheet": {
+        "spreadsheetId": "audit",
+        "sheetId": 0,
+        "rowKey": "afce4fac-b31e-42bd-ac85-c49c327d5f9b",
+        "rowNumber": 101,
+        "expectedHash": "not-a-real-hash",
+        "observedHash": "not-a-real-hash",
+        "synced": false
+      },
+      "state": "failed",
+      "detail": {
+        "verified": false,
+        "filesUploaded": 0
+      }
+    }
+  },
+  "emptyPublication": {
+    "ok": true,
+    "value": {
+      "publicationId": "05501ad6-b888-4e55-999c-a18fb2a84dd0",
+      "publicationKey": "audit-empty",
+      "driveFolderId": "drive_folder_audit-invented-folder",
+      "driveFiles": [],
+      "sheet": {
+        "spreadsheetId": "audit",
+        "sheetId": 0,
+        "rowKey": "afce4fac-b31e-42bd-ac85-c49c327d5f9b",
+        "rowNumber": 101,
+        "expectedHash": "not-a-real-hash",
+        "observedHash": "not-a-real-hash",
+        "synced": false
+      },
+      "state": "failed",
+      "detail": {
+        "verified": false,
+        "filesUploaded": 0
+      }
+    }
+  },
+  "reconcileFailedPublication": {
+    "ok": false,
+    "error": {
+      "code": "RECONCILIATION_FAILED",
+      "message": "Cannot reconcile unverified publication 05501ad6-b888-4e55-999c-a18fb2a84dd0: missing files or unconfigured destination",
+      "retryable": false,
+      "safeAction": "Resolve publication errors before attempting reconciliation"
+    }
+  },
+  "figmaUnknownInspect": {
+    "ok": false,
+    "error": {
+      "code": "FILE_NOT_FOUND",
+      "message": "Figma file audit-unknown-file not found in bridge staging memory",
+      "retryable": false,
+      "safeAction": "Verify fileKey exists or initialize bridge staging document before inspecting"
+    }
+  },
+  "figmaUnknownRender": {
+    "ok": false,
+    "error": {
+      "code": "DOCUMENT_NOT_FOUND",
+      "message": "Document audit-nonexistent not found in Figma adapter",
+      "retryable": false,
+      "safeAction": "Ensure document is created before rendering"
+    }
+  },
+  "deliberatelyWrongModelScore": {
+    "dataset": "routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 0,
+    "failedCases": 200,
+    "passRate": 0,
+    "criticalViolations": 0
+  },
+  "visualJudgeScoreWithoutModel": {
+    "dataset": "visual_judge_rubric.json",
+    "totalCases": 10,
+    "passedCases": 0,
+    "failedCases": 10,
+    "passRate": 0,
+    "criticalViolations": 1
+  },
+  "networkAttempts": 0
+}

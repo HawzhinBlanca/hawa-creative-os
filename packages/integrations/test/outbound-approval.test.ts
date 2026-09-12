@@ -53,5 +53,8 @@ describe('Two-Way Outbound Approval Dispatcher', () => {
     expect(verifyActionSignature('other_task_999', 'approve', sig)).toBe(false);
     // Reject tampered signature
     expect(verifyActionSignature('task_review_123', 'approve', 'bad_sig_12345')).toBe(false);
+    // Reject explicit short_bypass backdoor
+    expect(verifyActionSignature('task_review_123', 'approve', 'short_bypass')).toBe(false);
+    expect(verifyActionSignature('task_review_123', 'revision', 'short_bypass')).toBe(false);
   });
 });

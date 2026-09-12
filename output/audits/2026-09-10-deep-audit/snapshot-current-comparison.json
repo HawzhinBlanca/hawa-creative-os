@@ -1,0 +1,9 @@
+{
+  "apps/core/src/app.ts": [],
+  "apps/desk/src/App.tsx": [],
+  "apps/desk/src/screens/ReviewScreen.tsx": [],
+  "packages/integrations/src/google-publisher.ts": [],
+  "packages/db/src/repositories/revision.repository.ts": [],
+  "packages/evals/src/runner.ts": [],
+  "packages/qa/src/engine.ts": []
+}

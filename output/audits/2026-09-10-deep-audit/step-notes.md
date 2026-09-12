@@ -1,0 +1,10 @@
+1. Inbox: accepted screenshot. Clear title, but horizontal navigation clips at default 572px; live API count 11 coexists with broad 7/12/9 counters and test-drill cards. Verify counters and fixture separation in source. No task submission.
+2. Intake: accepted screenshot. Dialog semantics and autofocus improved; Shift+Tab from client escapes to background Inspect bidi. KAAE expanded as Arts & Architecture Enterprise (needs comparison with actual DNA). No credentials entered or task submitted.
+3. Existing awaiting-approval task review: KAAE selected; generic 50% off copy and Ramadan translation appear, Protected Tokens Altered yet Approve & Publish enabled. Read-only review; no approval/export. Source trace required for task/revision hydration.
+4. Figma Hub: claims every design exists live, BRIDGE CONNECTED, fake-looking symbolic file key and fixed lease. Need validate real bridge source/runtime. No external Figma navigation.
+5. DNA: explicit structured brand data is helpful, but verified asset fingerprints are symbolic strings and candidate rule uses confidence/history claims; UI client taxonomy conflicts across screens. Background-vs-itself contrast incorrectly labeled Fail.
+6–7. Library: previews improve recognizability. FastPay Client Isolation filter still shows Aster podcast and Same client (Aster) evidence. Counts unchanged. Confirmed presentation/filter defect, not yet proof of backend tenant data exposure.
+8. Operations: labeled live telemetry shows seed probes, 14m backup, 100% sync and 18 invocations; Figma sandbox_emulated conflicts with Hub CONNECTED. No operations triggered.
+9. Evaluations: 134/134 and admitted models coexist with Cases 0. No tournament run, no provider cost.
+10. Adapters: Bridge Connected and sandbox_emulated on same page; fixed admitted model copy and provider Active signals need validation. No secrets panel opened, no chat dispatch, no external setting changes.
+11–12. Mobile 390x844: document fits width; Fit View now changes zoom to 33% (improvement). 95 buttons; first viewport mostly toolbar. Fits very small artboard within large canvas and requires extensive scroll to approval. Screenshots accepted.

@@ -1,0 +1,68 @@
+{
+  "brokenAnchors": [],
+  "images": [
+    {
+      "alt": "Step 1: current inbox",
+      "complete": true,
+      "width": 572
+    },
+    {
+      "alt": "Step 2: intake dialog",
+      "complete": true,
+      "width": 572
+    },
+    {
+      "alt": "Step 3: desktop review",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 4: Figma panel",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 5: brand governance",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 6: creative library",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 7: FastPay filter with Aster result",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 8: operations",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 9: evaluation status",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 10: adapters",
+      "complete": true,
+      "width": 1440
+    },
+    {
+      "alt": "Step 11: mobile toolbar",
+      "complete": true,
+      "width": 390
+    },
+    {
+      "alt": "Step 12: mobile fit",
+      "complete": true,
+      "width": 390
+    }
+  ],
+  "scrollWidth": 1280,
+  "title": "Hawa — deep independent audit · 10 September 2026",
+  "width": 1280
+}

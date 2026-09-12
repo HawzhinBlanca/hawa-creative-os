@@ -1,0 +1,256 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library"
+    - button "Adapters"
+    - button "Actionable Operations" [active]
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Actionable Operations & Health" [level=1]
+  - text: Real-time SLO latencies, circuit breakers, and storage reconciliation audits
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - generic: Live telemetry active · Last checked 1:59:40 PM
+  - button "⚡ Run Synthetic Benchmark"
+  - button "↻ Refresh"
+  - heading "Operations & Telemetry Overview" [level=1]
+  - generic: "0"
+  - text: critical incidents
+  - generic: "0"
+  - text: recoverable failures
+  - generic: "2"
+  - text: adapter degraded
+  - generic: 14m
+  - text: last backup age
+  - heading "SLO & Latency Performance Telemetry" [level=2]
+  - generic: "P99 < 1500ms SLO: COMPLIANT"
+  - generic: "Error Budget: 100%"
+  - generic: 72ms
+  - text: P50 Latency (Median)
+  - generic: 97ms
+  - text: P95 Latency
+  - generic: 97ms
+  - text: P99 Latency (<1500ms)
+  - generic: "12"
+  - text: Synthetic Probes
+  - generic: 100%
+  - text: Success Rate
+  - generic: MULTI-MODEL PROVIDER CIRCUIT BREAKERS
+  - generic: google
+  - generic: CLOSED
+  - generic: anthropic
+  - generic: CLOSED
+  - generic: openai
+  - generic: CLOSED
+  - generic: local
+  - generic: CLOSED
+  - generic: RECENT SYNTHETIC CAMPAIGN PROBES
+  - table:
+    - rowgroup:
+      - row "Probe ID Scenario Total Latency Stages (Ingress / Compose / QA / Publish) Invariants Timestamp":
+        - columnheader "Probe ID"
+        - columnheader "Scenario"
+        - columnheader "Total Latency"
+        - columnheader "Stages (Ingress / Compose / QA / Publish)"
+        - columnheader "Invariants"
+        - columnheader "Timestamp"
+    - rowgroup:
+      - row "seed_probe_12 NAWROZ SPRING 97ms 2ms / 14ms / 11ms / 4ms ✓ 6/6 Invariants 10:19:09 UTC":
+        - cell "seed_probe_12":
+          - code: seed_probe_12
+        - cell "NAWROZ SPRING"
+        - cell "97ms":
+          - generic: 97ms
+        - cell "2ms / 14ms / 11ms / 4ms"
+        - cell "✓ 6/6 Invariants":
+          - generic: ✓ 6/6 Invariants
+        - cell "10:19:09 UTC"
+      - row "seed_probe_11 NAWROZ SPRING 92ms 2ms / 14ms / 11ms / 4ms ✓ 6/6 Invariants 10:18:09 UTC":
+        - cell "seed_probe_11":
+          - code: seed_probe_11
+        - cell "NAWROZ SPRING"
+        - cell "92ms":
+          - generic: 92ms
+        - cell "2ms / 14ms / 11ms / 4ms"
+        - cell "✓ 6/6 Invariants":
+          - generic: ✓ 6/6 Invariants
+        - cell "10:18:09 UTC"
+      - row "seed_probe_10 NAWROZ SPRING 87ms 2ms / 14ms / 11ms / 4ms ✓ 6/6 Invariants 10:17:09 UTC":
+        - cell "seed_probe_10":
+          - code: seed_probe_10
+        - cell "NAWROZ SPRING"
+        - cell "87ms":
+          - generic: 87ms
+        - cell "2ms / 14ms / 11ms / 4ms"
+        - cell "✓ 6/6 Invariants":
+          - generic: ✓ 6/6 Invariants
+        - cell "10:17:09 UTC"
+      - row "seed_probe_9 NAWROZ SPRING 82ms 2ms / 14ms / 11ms / 4ms ✓ 6/6 Invariants 10:16:09 UTC":
+        - cell "seed_probe_9":
+          - code: seed_probe_9
+        - cell "NAWROZ SPRING"
+        - cell "82ms":
+          - generic: 82ms
+        - cell "2ms / 14ms / 11ms / 4ms"
+        - cell "✓ 6/6 Invariants":
+          - generic: ✓ 6/6 Invariants
+        - cell "10:16:09 UTC"
+      - row "seed_probe_8 NAWROZ SPRING 77ms 2ms / 14ms / 11ms / 4ms ✓ 6/6 Invariants 10:15:09 UTC":
+        - cell "seed_probe_8":
+          - code: seed_probe_8
+        - cell "NAWROZ SPRING"
+        - cell "77ms":
+          - generic: 77ms
+        - cell "2ms / 14ms / 11ms / 4ms"
+        - cell "✓ 6/6 Invariants":
+          - generic: ✓ 6/6 Invariants
+        - cell "10:15:09 UTC"
+  - heading "🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger 100% In Sync" [level=2]:
+    - generic: 🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger
+    - generic: 100% In Sync
+  - generic: Deterministic audit of PostgreSQL operational truth against Google Drive asset hashes and Google Sheets reporting mirror (FR-049, FR-050)
+  - button "Run Reconciliation Audit"
+  - generic: "12"
+  - text: Tasks Audited
+  - generic: "24"
+  - text: Drive Files
+  - generic: "12"
+  - text: Sheet Rows
+  - generic: "12"
+  - text: In Sync
+  - generic: "0"
+  - text: Drifts Repaired
+  - heading "⚡ Client AI Generation Budgets & Cost Governance Langfuse / Helicone Grade" [level=2]:
+    - generic: ⚡
+    - generic: Client AI Generation Budgets & Cost Governance
+    - generic: Langfuse / Helicone Grade
+  - paragraph: Real-time token & GPU spend meters, automated quota enforcement, and tenant margin protection.
+  - button "🔄 Refresh Budgets"
+  - text: Drustee Evidence-First Health
+  - code: client-drustee
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $10.00
+  - generic: "0.0% Used (Remaining: $10.00)"
+  - text: Aster Hotel & Resort
+  - code: client-aster
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $5.00
+  - generic: "0.0% Used (Remaining: $5.00)"
+  - text: Nova Tech Systems
+  - code: client-nova
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $8.00
+  - generic: "0.0% Used (Remaining: $8.00)"
+  - text: Rona Haute Couture
+  - code: client-rona
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $5.00
+  - generic: "0.0% Used (Remaining: $5.00)"
+  - text: Hawa Creative Internal
+  - code: client-office-1
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $20.00
+  - generic: "0.0% Used (Remaining: $20.00)"
+  - text: c1000000-0000-4000-8000-000000000002
+  - code: c1000000-0000-4000-8000-000000000002
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $5.00
+  - generic: "0.0% Used (Remaining: $5.00)"
+  - text: kaae
+  - code: kaae
+  - generic: HEALTHY
+  - button "⚙ Adjust Cap"
+  - text: "Monthly Spend:"
+  - generic: $0.00
+  - text: of
+  - generic: $5.00
+  - generic: "0.0% Used (Remaining: $5.00)"
+  - heading "Actionable operations" [level=2]
+  - table:
+    - rowgroup:
+      - row "Component / Task State Evidence Safe action":
+        - columnheader "Component / Task"
+        - columnheader "State"
+        - columnheader "Evidence"
+        - columnheader "Safe action"
+    - rowgroup:
+      - row "WAHA (WhatsApp) active QR connected · cursor current Verify":
+        - cell "WAHA (WhatsApp)"
+        - cell "active":
+          - generic: active
+        - cell "QR connected · cursor current"
+        - cell "Verify":
+          - button "Verify"
+      - row "Drive publication verified Google Shared Drive target reachable Check":
+        - cell "Drive publication"
+        - cell "verified":
+          - generic: verified
+        - cell "Google Shared Drive target reachable"
+        - cell "Check":
+          - button "Check"
+      - row "Google Sheets Ledger connected Durable transaction append enabled Verify":
+        - cell "Google Sheets Ledger"
+        - cell "connected":
+          - generic: connected
+        - cell "Durable transaction append enabled"
+        - cell "Verify":
+          - button "Verify"
+  - heading "Component health" [level=2]
+  - generic: TELEGRAM (int_telegram)
+  - paragraph: "Status: healthy · Checked 10:59:40 UTC"
+  - generic: WAHA (int_waha)
+  - paragraph: "Status: healthy · Checked 10:59:40 UTC"
+  - generic: GOOGLE DRIVE (int_google_drive)
+  - paragraph: "Status: healthy · Checked 10:59:40 UTC"
+  - generic: GOOGLE SHEETS (int_google_sheets)
+  - paragraph: "Status: healthy · Checked 10:59:40 UTC"
+  - generic: PHOENIX (int_phoenix)
+  - paragraph: "Status: unconfigured · Checked 10:59:40 UTC"
+  - generic: FIGMA AGENT_STUDIO (int_figma_bridge)
+  - paragraph: "Status: sandbox_emulated · Checked 10:59:40 UTC"
+  - generic: PostgreSQL 17
+  - paragraph: PITR WAL archiving current · RLS tenant & client context active
+  - generic: Restate 1.7.x
+  - paragraph: 18 active durable invocations · deterministic replay verified

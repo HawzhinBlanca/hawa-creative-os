@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-11T22:54:43.008Z",
+  "metricComparison": {
+    "beforeCV17": {
+      "architecture": "Legacy in-browser Polotno canvas editor & giant toolbars",
+      "jsBundleBytes": 2034411,
+      "jsBundleKb": 1986.73,
+      "gzipBytes": 779601,
+      "gzipKb": 761.33,
+      "buildDurationMs": 1540,
+      "warningOver500Kb": true
+    },
+    "afterCV17": {
+      "architecture": "Lean Hawa Work Desk (Canva Studio Architecture ADR 020)",
+      "jsBundleBytes": 442746,
+      "jsBundleKb": 432.37,
+      "gzipBytes": 122634,
+      "gzipKb": 119.76,
+      "buildDurationMs": 499,
+      "warningOver500Kb": false
+    },
+    "reduction": {
+      "absoluteJsBytesSaved": 1591665,
+      "percentageJsReduction": "78.2%",
+      "absoluteGzipBytesSaved": 656967,
+      "percentageGzipReduction": "84.3%",
+      "buildSpeedupFactor": "3.08x faster"
+    }
+  },
+  "verificationSummary": "Eliminated all heavy client-side canvas engines and toolbars from primary operator workspace. Single production bundle under 433 kB."
+}

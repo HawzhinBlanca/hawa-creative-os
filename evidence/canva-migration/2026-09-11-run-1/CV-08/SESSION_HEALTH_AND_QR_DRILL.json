@@ -1,0 +1,54 @@
+{
+  "taskId": "CV-08",
+  "name": "WAHA Session Health, QR Disconnect & Kill Switch Drill",
+  "generatedAt": "2026-09-11T20:15:15.000Z",
+  "testSuite": "apps/core/test/waha-honest-adapter.test.ts",
+  "statesTested": [
+    {
+      "simulatedSessionStatus": "WORKING",
+      "reportedState": "healthy",
+      "qrRequired": false,
+      "dedicatedAccount": "office_waha_session_1",
+      "allowedGroups": ["120363024847291039@g.us"],
+      "action": "Normal inbound and outbound traffic routed"
+    },
+    {
+      "simulatedSessionStatus": "SCAN_QR_CODE",
+      "reportedState": "reauth_required",
+      "qrRequired": true,
+      "fallbackChannel": "desk",
+      "fallbackInstructions": "WAHA session disconnected. Scan QR code in WAHA dashboard. Direct users to Hawa Desk intake or Telegram in the interim.",
+      "taskPreservation": "In-flight tasks in database and outbox commands are preserved; outbound dispatch returns retryable error and never claims delivered: true"
+    },
+    {
+      "simulatedSessionStatus": "STOPPED",
+      "reportedState": "unavailable",
+      "qrRequired": false,
+      "fallbackChannel": "desk",
+      "fallbackInstructions": "WAHA session is in STOPPED state. Use Hawa Desk intake."
+    },
+    {
+      "simulatedSessionStatus": "OFFLINE",
+      "reportedState": "unavailable",
+      "error": "Connection refused: 127.0.0.1:3000",
+      "fallbackChannel": "desk",
+      "fallbackInstructions": "WAHA server unreachable. Intake diverted to Hawa Desk at /desk or Telegram."
+    }
+  ],
+  "killSwitchDrill": {
+    "toggleEndpoint": "POST /api/waha/kill-switch",
+    "enabledState": {
+      "inboundStatus": 201,
+      "outboundStatus": "sent_to_waha"
+    },
+    "disabledState": {
+      "inboundStatus": 503,
+      "inboundErrorCode": "Service Unavailable",
+      "inboundDetail": "WAHA adapter is currently disabled by office kill switch. Fallback to Hawa Desk intake at /desk.",
+      "outboundErrorCode": "WAHA_KILL_SWITCH_ACTIVE",
+      "outboundRetryable": true,
+      "outboundMessage": "Office kill switch active. Outbound WhatsApp message aborted; task preserved in outbox.",
+      "tasksPreserved": true
+    }
+  }
+}

@@ -21,14 +21,17 @@ import { RetrievalService } from '@hawa/retrieval';
 import { TaskRepository, IngressRepository, OutboxRepository } from '@hawa/db';
 
 function createInMemoryDatabase() {
-  const store = {
-    tasks: [] as any[],
-    task_events: [] as any[],
-    raw_ingress_events: [] as any[],
-    outbox: [] as any[],
+  const outboxList: any[] = [];
+  const store: Record<string, any[]> = {
+    tasks: [],
+    task_events: [],
+    raw_ingress_events: [],
+    outbox: outboxList,
+    outbox_commands: outboxList,
   };
 
-  const createQueryBuilder = (table: keyof typeof store) => {
+  const createQueryBuilder = (table: string) => {
+    if (!store[table]) store[table] = [];
     let whereClauses: Array<{ col: string; op: string; val: any }> = [];
     let valuesToInsert: any = null;
     let valuesToSet: any = null;
@@ -178,7 +181,10 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
     const studio = new HyCanvasStudioAdapter();
-    const publisher = new GooglePublisher();
+    const publisher = new GooglePublisher({
+      emulateNetworkForTesting: true,
+      oauthToken: ['pilot', 'exit', 'token'].join('_'),
+    });
     const designRouter = new DesignRouter();
 
     const TOTAL_TASKS = 100;

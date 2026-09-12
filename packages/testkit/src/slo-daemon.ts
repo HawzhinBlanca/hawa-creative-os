@@ -93,7 +93,7 @@ export class SyntheticTrafficDaemon {
   private readonly creativeDirector = new CreativeDirectorRunner();
   private readonly qaEngine = new DeterministicQAEngine();
   private readonly studio = new HyCanvasStudioAdapter();
-  private readonly publisher = new GooglePublisher();
+  private readonly publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'slo_test_token' });
   private readonly retrieval = new RetrievalService();
   readonly modelGateway = new ResilientModelGateway();
 

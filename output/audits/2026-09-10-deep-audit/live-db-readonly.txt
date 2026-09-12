@@ -1,0 +1,8 @@
+tasks|240
+events|400
+outbox|240
+publications|18
+ERROR:  column "status" does not exist
+LINE 1: ...ications',count(*) FROM hawa.publications; SELECT status,cou...
+                                                             ^
+HINT:  Perhaps you meant to reference the column "outbox_commands.state".

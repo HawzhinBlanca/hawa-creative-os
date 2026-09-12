@@ -1,0 +1,134 @@
+- complementary:
+  - strong: Hawa Desk
+  - generic: Private Creative OS
+  - navigation:
+    - button "Inbox"
+    - button "Task Review"
+    - button "Client DNA"
+    - button "Creative Library" [active]
+    - button "Adapters"
+    - button "Actionable Operations"
+    - button "Model Evaluations"
+  - generic: Core healthy
+  - generic: Telegram active · Desk canonical · WAHA quarantined
+- main:
+  - heading "Creative Library & Retrieval Evidence" [level=1]
+  - text: Verified vector assets, SHA-256 fingerprints, and retrieval embeddings
+  - button "🇬🇧 English (Primary) ⇄ کوردی":
+    - generic: 🇬🇧 English (Primary)
+    - generic: ⇄
+    - generic: کوردی
+  - button "🚀 Tour":
+    - generic: 🚀
+    - generic: Tour
+  - 'generic "Real-time SSE event stream: connected"':
+    - generic: Live Stream
+  - button "🔍 Search tasks, clients, copy, hashes… ⌘K":
+    - generic: 🔍
+    - generic: Search tasks, clients, copy, hashes…
+    - generic: ⌘K
+  - button "+ New task"
+  - button "+ Upload & Ingest Asset"
+  - generic: "Client Isolation:"
+  - combobox "Filter library assets by client isolation":
+    - option "🏢 All Client Corpi" [selected]
+    - option "Hawa Creative (client-office-1)"
+    - option "Drustee Evidence-First Health (client-drustee)"
+    - option "Aster Hotel & Resort (client-aster)"
+    - option "Nova Tech Systems (client-nova)"
+    - option "Rona Haute Couture (client-rona)"
+    - option "FastPay Mobile Wallet (client-fastpay)"
+    - option "Kurdistan Accrediting Association for Education (KAAE) (c1000000-0000-4000-8000-000000000002)"
+  - button "All Items"
+  - button "Templates (46)"
+  - button "Assets (1204)"
+  - button "Negative Examples (67)"
+  - heading "Verified Vector Assets and Commercial Templates" [level=2]
+  - generic: "318"
+  - text: approved designs
+  - generic: "46"
+  - text: editable templates
+  - generic: "1204"
+  - text: verified assets
+  - generic: "67"
+  - text: negative examples
+  - img "KAAE Official Real Logo"
+  - generic: "SHA-256: 40dab5f8ca1fe647…"
+  - heading "kaae-official-logo.png" [level=3]
+  - generic: Official Emblem
+  - generic: KAAE
+  - generic: 2687×2687 HD
+  - button "📥 Insert into Canvas"
+  - generic: LAW NO. 6 OF 2022
+  - generic: Institutional Accreditation Mandate
+  - generic: 100% Compliance · 12 Core Standards · 2026 Cycle
+  - heading "KAAE Institutional Mandate · 1:1 Square" [level=3]
+  - generic: Figma Buzz
+  - generic: KAAE
+  - generic: 1080 × 1080
+  - button "📥 Load Mandate Template"
+  - generic: STANDARDS CRITERIA
+  - generic: Higher Education Standards
+  - generic: 01 Governance · 02 Faculty · 03 Facilities
+  - heading "KAAE Higher Ed Standards · 4:5 Feed" [level=3]
+  - generic: Figma Buzz
+  - generic: KAAE
+  - generic: 1080 × 1350
+  - button "📥 Load Standards Template"
+  - generic: 2026 – 2028 ROADMAP
+  - generic: Strategic Quality Roadmap
+  - generic: 4 Phased National Deployment Milestones
+  - heading "KAAE Strategic Roadmap · 1:1 Keynote" [level=3]
+  - generic: Figma Buzz
+  - generic: KAAE
+  - generic: 1080 × 1080
+  - button "📥 Load Roadmap Template"
+  - generic: KAAE · دەستەی متمانەبەخشی
+  - generic: Institutional Accreditation Diploma
+  - generic: LAW NO. 6 OF 2022
+  - heading "KAAE Institutional Diploma · A4 Landscape" [level=3]
+  - generic: Figma Master
+  - generic: KAAE
+  - generic: A4 @ 300DPI
+  - button "📥 Load Certificate Staging"
+  - generic: ⚡ 0% FEES · CBI LICENSED
+  - generic: Instant Money Transfer
+  - generic: "خەڵاتی بەخێرهاتن: ٥٬٠٠٠ دینار کاشباک"
+  - heading "FastPay Fintech Promo · 1:1 Square" [level=3]
+  - generic: Vector Live
+  - generic: FastPay
+  - generic: 1080 × 1080
+  - button "📥 Load FastPay Template"
+  - generic: 🏥 24/7 CLINICAL CARE
+  - generic: Healthcare & Prescriptions
+  - generic: "داشکاندنی وەرزی: ٪٢٥ بۆ هەموو ڤیتامینەکان"
+  - heading "Aster Healthcare Campaign · 4:5 Feed" [level=3]
+  - generic: Vector Live
+  - generic: Aster Pharmacy
+  - generic: 1080 × 1350
+  - button "📥 Load Aster Template"
+  - generic: 🌿 100% ORGANIC GMP
+  - generic: Clinical Health Supplements
+  - generic: بڕوانامەی نێودەوڵەتی GMP و کۆنتڕۆڵی جۆری
+  - heading "Drustee Organic Supplement · 1:1 Square" [level=3]
+  - generic: Vector Live
+  - generic: Drustee Health
+  - generic: 1080 × 1080
+  - button "📥 Load Drustee Template"
+  - generic: میوانی نوێ
+  - heading "Podcast guest · approved" [level=3]
+  - generic: Figma Buzz
+  - generic: Aster
+  - generic: ckb
+  - button "📥 Load Podcast Template"
+  - generic: SUMMER OFFER
+  - heading "Retail offer family" [level=3]
+  - generic: template v7
+  - generic: 3 formats
+  - button "📥 Load Retail Template"
+  - heading "Retrieval evidence" [level=3]
+  - generic: Why this appears
+  - paragraph: Same client (Aster), campaign type (retail_offer), language (ckb), and active template family. Approved after one revision.
+  - generic: Source integrity
+  - paragraph: Design hash, manifest, Drive ID and Client DNA version are available and locked.
+  - button "Open semantic source"

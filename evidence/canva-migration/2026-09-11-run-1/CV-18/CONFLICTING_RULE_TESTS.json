@@ -1,0 +1,39 @@
+{
+  "testDate": "2026-09-11T22:58:49.446Z",
+  "results": [
+    {
+      "testCase": "Prohibited Medical Claim",
+      "candidateRule": "Headline should promise: \"100% Guaranteed Cure for seasonal allergies\"",
+      "conflictsDetected": [
+        "Rule contradicts client prohibited phrase \"100% Guaranteed Cure\""
+      ],
+      "hasConflict": true,
+      "passed": true
+    },
+    {
+      "testCase": "Orientation Alignment Conflict",
+      "candidateRule": "Brand mark must align to top-right corner with zero padding",
+      "conflictsDetected": [
+        "Rule orientation conflicts with existing rule: \"Brand mark must align to top-left corner with 32px padding\""
+      ],
+      "hasConflict": true,
+      "passed": true
+    },
+    {
+      "testCase": "Affirmative Disclaimer Negation",
+      "candidateRule": "Never include official MOH medical disclaimer on mobile banners",
+      "conflictsDetected": [
+        "Rule restriction conflicts with existing affirmative rule: \"Always include official MOH medical disclaimer on pharmaceutical creatives\""
+      ],
+      "hasConflict": true,
+      "passed": true
+    },
+    {
+      "testCase": "Harmonious Rule (No Conflict)",
+      "candidateRule": "Maintain 1.5 line height for Kurdish body text",
+      "conflictsDetected": [],
+      "hasConflict": false,
+      "passed": true
+    }
+  ]
+}

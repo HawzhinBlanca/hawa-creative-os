@@ -1,0 +1,30 @@
+{
+  "taskId": "CV-07",
+  "name": "Telegram Bridge Outage Recovery and Offset Persistence Proof",
+  "executedAt": "2026-09-11T23:07:00+03:00",
+  "status": "PASS",
+  "verificationRecords": [
+    {
+      "dimension": "OFFSET_PERSISTENCE",
+      "initialOffset": 4500,
+      "processedUpdateId": 4501,
+      "storageType": "TelegramOffsetStorage",
+      "persistedOffset": 4501,
+      "resumedAfterRestart": true,
+      "duplicateWorkPrevented": true
+    },
+    {
+      "dimension": "NETWORK_FAILURE_HONESTY",
+      "scenario": "api.telegram.org returns HTTP 502 / network timeout",
+      "consecutiveErrorsRecorded": 3,
+      "reportedStatus": {
+        "active": false,
+        "degraded": true,
+        "mode": "live_polling",
+        "lastErrorCode": "HTTP_502",
+        "fabricatedSuccess": false
+      },
+      "guarantee": "Network failure is visible and never replaced with fabricated Telegram success"
+    }
+  ]
+}

@@ -45,7 +45,7 @@ describe('KAAE Omnichannel Publish & Figma Bridge Live Sync Integration', () => 
     });
 
     it('publishes KAAE omnichannel package and returns verified receipt with synced spreadsheet audit row', async () => {
-      const publisher = new GooglePublisher();
+      const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test_token' });
       const exportDir = path.join(rootDir, 'exports', 'KAAE_2026_PRODUCTION');
 
       const manifestPath = path.join(exportDir, 'campaign_manifest.json');

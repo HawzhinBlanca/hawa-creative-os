@@ -1,0 +1,23 @@
+{
+  "task_id": "CV-01",
+  "database": "hawa",
+  "port": 54332,
+  "verified_at": "2026-09-11T22:18:29+03:00",
+  "tables": {
+    "tasks_total": 1449,
+    "tasks_by_state": {
+      "received": 1275,
+      "human_review": 66,
+      "approved": 60,
+      "complete": 47,
+      "brief_draft": 1
+    },
+    "outbox_commands_total": 1449,
+    "outbox_commands_delivered": 1449,
+    "outbox_commands_pending": 0,
+    "task_events_total": 1890,
+    "task_events_state_changed": 67
+  },
+  "test_pollution_detected": 0,
+  "status": "UNTOUCHED_100_PERCENT"
+}

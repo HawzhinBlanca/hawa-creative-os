@@ -39,66 +39,66 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
   // Inbound Brief Simulator State
   const [showSimulator, setShowSimulator] = useState(false);
-  const [simulatorPreset, setSimulatorPreset] = useState<'kaae' | 'drustee' | 'aster' | 'nova' | 'rona'>('kaae');
+  const [simulatorPreset, setSimulatorPreset] = useState<'kaae_accreditation' | 'kaae_feed' | 'kaae_stage' | 'kaae_story' | 'kaae_executive'>('kaae_accreditation');
   const [simulating, setSimulating] = useState(false);
   const [simulationStep, setSimulationStep] = useState(0);
   const [simulatedTask, setSimulatedTask] = useState<LiveTask | null>(null);
 
   const SIMULATOR_PRESETS = {
-    kaae: {
+    kaae_accreditation: {
       client: 'c1000000-0000-4000-8000-000000000002',
-      clientName: 'KAAE (Accreditation)',
+      clientName: 'KAAE Accreditation Diploma',
       platform: 'web_portal',
       icon: '🏛️',
       title: '2026 Higher Education Institutional Quality Certification',
-      headlineEn: 'Official 2026 Institutional Accreditation Cycle',
-      headlineCkb: 'دەستپێکردنی فەرمیی خولی باوەڕپێدانی دامەزراوەیی بۆ ساڵی ٢٠٢٦',
+      headlineEn: 'Official 2026 Institutional Accreditation Diploma',
+      headlineCkb: 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا',
       copyEn: 'Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Review',
-      copyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · هەڵسەنگاندنی نیشتمانی',
+      copyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · متمانەی فەرمی دەبەخشرێت بە زانکۆی کوردستان',
     },
-    drustee: {
-      client: 'client-drustee',
-      clientName: 'Drustee Supplements',
+    kaae_feed: {
+      client: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE 4:5 Feed Decree',
       platform: 'mobile_desk',
-      icon: '🌿',
-      title: 'Active Vitamin D3 + K2 Launch Drops',
-      headlineEn: 'Pure Vitamin D3 + K2 Drops',
-      headlineCkb: 'ڤیتامین D3 + K2 ی زانستی',
-      copyEn: '5000 IU / 100mcg · Third-Party Lab Tested · GMP Certified',
-      copyCkb: '٥٠٠٠ یەکەی نێودەوڵەتی · پشکنراوی تاقیگەیی باوەڕپێکراو',
+      icon: '📜',
+      title: 'Official Board of Trustees Decree Announcement',
+      headlineEn: 'National Quality Standards for Higher Education',
+      headlineCkb: 'ستانداردە نیشتمانییەکانی کوالێتی خوێندنی باڵا',
+      copyEn: '12 Core Standards · Continuous Improvement & Accountability',
+      copyCkb: '١٢ ستانداردی نایابی ئەکادیمی و پێداچوونەوەی ڕێکخراوەیی',
     },
-    aster: {
-      client: 'client-aster',
-      clientName: 'Aster Hotel & Resort',
-      platform: 'whatsapp',
-      icon: '💬',
-      title: 'Friday VIP Rooftop Dinner & Live Oud',
-      headlineEn: 'Friday VIP Rooftop Dinner & Live Oud',
-      headlineCkb: 'شەوی تایبەتی هەینی لە هۆتێل ئاستێر',
-      copyEn: 'Special Friday VIP Dinner Menu · Call 0750 123 4567',
-      copyCkb: 'پێشکه‌شکردنی خواردنی تایبه‌ت له‌ شه‌وانی هه‌ینی له‌ هۆتێل ئاستێر له‌ هه‌ولێر',
+    kaae_stage: {
+      client: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE 16:9 Keynote Stage',
+      platform: 'web_portal',
+      icon: '🎤',
+      title: 'National Quality Summit Keynote Backdrop',
+      headlineEn: 'Kurdistan National Quality Summit 2026',
+      headlineCkb: 'لووتکەی نیشتمانیی کوالێتی لە هەرێمی کوردستان ٢٠٢٦',
+      copyEn: 'Under the Auspices of the Prime Minister · Erbil International Convention Center',
+      copyCkb: 'بە سەرپەرشتی سەرۆکی ئەنجومەنی وەزیران · تەلاری کۆنگرە نێودەوڵەتییەکانی هەولێر',
     },
-    nova: {
-      client: 'client-nova',
-      clientName: 'Nova Tech Systems',
+    kaae_story: {
+      client: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE 9:16 Story Advisory',
       platform: 'telegram',
-      icon: '✈️',
-      title: 'Cloud & AI Summit Erbil 2026',
-      headlineEn: 'Cloud & AI Summit Erbil 2026',
-      headlineCkb: 'کۆنگره‌ی نێوده‌وڵه‌تی ته‌کنه‌لۆجیا و ژیری ده‌ستکرد',
-      copyEn: 'International AI & Cloud Summit 2026 · Register at novatech.krd',
-      copyCkb: 'کۆنگره‌ی نێوده‌وڵه‌تی ته‌کنه‌لۆجیا و ژیری ده‌ستکرد له‌ هه‌ولێر',
-    },
-    rona: {
-      client: 'client-rona',
-      clientName: 'Rona Haute Couture',
-      platform: 'mobile_desk',
       icon: '📱',
-      title: 'Autumn Luxury Velvet Collection',
-      headlineEn: 'Autumn Luxury Velvet Collection',
-      headlineCkb: 'کۆلێکشن نوێی پاییزه‌ لە دیزاینی ڕۆنا',
-      copyEn: 'Exclusive Autumn Velvet Collection · Erbil Empire World',
-      copyCkb: 'کۆلێکشن نوێی پاییزه‌ له‌ دیزاینی ڕۆنا له‌ ئیمپایەر وۆڕڵد هەولێر',
+      title: 'Peer Evaluator Network Workshop Advisory',
+      headlineEn: 'Peer Evaluator Applications Open',
+      headlineCkb: 'دەرفەتی بەشداریکردن لە تۆڕی هەڵسەنگێنەرانی هاوتا',
+      copyEn: 'Deadline October 15, 2026 · Apply at kaae.org',
+      copyCkb: 'دوا مۆڵەت: ١٥ی تشرینی یەکەمی ٢٠٢٦ · پێشکەشکردن لە ڕێگەی kaae.org',
+    },
+    kaae_executive: {
+      client: 'c1000000-0000-4000-8000-000000000002',
+      clientName: 'KAAE 1:1 Executive Statement',
+      platform: 'web_portal',
+      icon: '✍️',
+      title: 'Presidential Statement by Dr. Boushra Rahal Alameh',
+      headlineEn: 'Statutory Commitment to Academic Integrity',
+      headlineCkb: 'پەیامی سەرۆکی دەستە بۆ پاراستنی دەستپاکی ئەکادیمی',
+      copyEn: 'Quality is non-negotiable for our nation’s future.',
+      copyCkb: 'کوالێتی پەروەردە بەردی بناغەی داهاتووی نیشتمانمانە.',
     },
   };
 
@@ -343,7 +343,7 @@ export const InboxScreen: React.FC<InboxScreenProps> = ({ refreshTrigger = 0, on
 
           {/* Preset Buttons */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
-            {(['kaae', 'drustee', 'aster', 'nova', 'rona'] as const).map((key) => {
+            {(['kaae_accreditation', 'kaae_feed', 'kaae_stage', 'kaae_story', 'kaae_executive'] as const).map((key) => {
               const p = SIMULATOR_PRESETS[key];
               const isSelected = simulatorPreset === key;
               return (

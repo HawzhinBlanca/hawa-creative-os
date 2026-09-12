@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-09-11T22:58:49.447Z",
+  "testSuite": "Canva Vendor IP & Excluded Data Isolation (FR-055, NFR-007)",
+  "evaluations": [
+    {
+      "queryPurpose": "client_generation",
+      "permittedItemsCount": 4,
+      "permittedItems": [
+        {
+          "id": "c1000000-0000-4000-8000-000000000003_logo",
+          "type": "vector_logo",
+          "name": "Official Brand Logo",
+          "lineage": "client_owned"
+        },
+        {
+          "id": "c1000000-0000-4000-8000-000000000003_palette",
+          "type": "brand_palette",
+          "name": "Approved Color Tokens",
+          "lineage": "client_owned"
+        },
+        {
+          "id": "c1000000-0000-4000-8000-000000000003_copy",
+          "type": "approved_copy",
+          "name": "Verbatim Approved Copy Blocks",
+          "lineage": "client_owned"
+        },
+        {
+          "id": "c1000000-0000-4000-8000-000000000003_typography",
+          "type": "font_metadata",
+          "name": "OFL Font Vazirmatn Spec",
+          "lineage": "client_owned"
+        }
+      ],
+      "restrictedExcludedItemsCount": 2,
+      "restrictedExcludedItems": [
+        {
+          "id": "canva_stock_template_elem_01",
+          "type": "canva_proprietary_vector",
+          "name": "Canva Stock Ornament Element #4821",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Canva stock assets cannot be extracted for model fine-tuning or style-memory"
+        },
+        {
+          "id": "canva_layout_heuristic_internal",
+          "type": "canva_internal_weights",
+          "name": "Canva Magic Switch Layout Heuristic Graph",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Internal Canva heuristics prohibited in external benchmarks"
+        }
+      ],
+      "assessment": "PASS: Client-owned materials accessible for generation; proprietary Canva IP isolated and restricted"
+    },
+    {
+      "queryPurpose": "external_fine_tuning",
+      "permittedItemsCount": 0,
+      "permittedItems": [],
+      "restrictedExcludedItemsCount": 2,
+      "restrictedExcludedItems": [
+        {
+          "id": "canva_stock_template_elem_01",
+          "type": "canva_proprietary_vector",
+          "name": "Canva Stock Ornament Element #4821",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Canva stock assets cannot be extracted for model fine-tuning or style-memory"
+        },
+        {
+          "id": "canva_layout_heuristic_internal",
+          "type": "canva_internal_weights",
+          "name": "Canva Magic Switch Layout Heuristic Graph",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Internal Canva heuristics prohibited in external benchmarks"
+        }
+      ],
+      "assessment": "PASS: Zero client assets and zero Canva vendor IP allowed for external fine-tuning"
+    },
+    {
+      "queryPurpose": "benchmark",
+      "permittedItemsCount": 0,
+      "permittedItems": [],
+      "restrictedExcludedItemsCount": 2,
+      "restrictedExcludedItems": [
+        {
+          "id": "canva_stock_template_elem_01",
+          "type": "canva_proprietary_vector",
+          "name": "Canva Stock Ornament Element #4821",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Canva stock assets cannot be extracted for model fine-tuning or style-memory"
+        },
+        {
+          "id": "canva_layout_heuristic_internal",
+          "type": "canva_internal_weights",
+          "name": "Canva Magic Switch Layout Heuristic Graph",
+          "lineage": "canva_derived_restricted",
+          "reason": "Vendor IP restriction: Internal Canva heuristics prohibited in external benchmarks"
+        }
+      ],
+      "assessment": "PASS: Proprietary layout heuristics and client assets blocked from external benchmark export"
+    }
+  ]
+}

@@ -40,7 +40,7 @@ export interface DesignBrief {
   projectId?: UUID;
   clientDnaVersion: number;
   objective: string;
-  taskRoute: 'template_fill' | 'editable_composition' | 'creative_director' | 'human_only';
+  taskRoute: 'template_fill' | 'editable_composition' | 'creative_director' | 'multi_format_composition' | 'human_only';
   primaryLanguage: string;
   direction: 'rtl' | 'ltr';
   variants: DesignVariant[];

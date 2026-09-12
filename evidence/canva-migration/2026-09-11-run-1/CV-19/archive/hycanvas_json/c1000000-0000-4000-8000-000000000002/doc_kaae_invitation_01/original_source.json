@@ -1,0 +1,45 @@
+{
+  "documentId": "doc_kaae_invitation_01",
+  "taskId": "t-kaae-invitation-2026",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "title": "KAAE Official National Conference Invitation",
+  "sourceFormat": "hycanvas_json",
+  "lifecycleState": "active_inflight",
+  "sourceSha256": "e5429696b32a8d71377f629241163246a8adcda713dd37978202dab2e3d7a148",
+  "archivedAt": "2026-09-11T23:02:03.370Z",
+  "sourceContent": {
+    "version": "0.3.9",
+    "layers": [
+      {
+        "id": "bg",
+        "type": "frame",
+        "fill": "#0A1628",
+        "width": 1080,
+        "height": 1350
+      },
+      {
+        "id": "title",
+        "type": "text",
+        "text": "کۆنفرانسی نیشتمانی بۆ دڵنیایی جۆری زانکۆکان"
+      },
+      {
+        "id": "sub",
+        "type": "text",
+        "text": "دەستەی متمانەبەخشی بە دامەزراوەکانی پەروەردە و خوێندنی باڵا"
+      },
+      {
+        "id": "cta",
+        "type": "text",
+        "text": "پشتڕاستکردنەوەی ئامادەبوون: www.kaae.org"
+      },
+      {
+        "id": "discl",
+        "type": "text",
+        "text": "دەستەی متمانەبەخشی بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان"
+      }
+    ]
+  },
+  "metadata": {
+    "primaryColor": "#0A1628"
+  }
+}

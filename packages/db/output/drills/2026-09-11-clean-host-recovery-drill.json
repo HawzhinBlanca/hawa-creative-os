@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-09-11T19:30:10.645Z",
+  "liveTableCount": 54,
+  "liveEnumCount": 11,
+  "livePolicyCount": 94,
+  "backupDurationMs": 140,
+  "rpoVerifiedMinutes": 0.25,
+  "restoreDurationMs": 354,
+  "rtoVerifiedSeconds": 0.354,
+  "restoredTableCount": 54,
+  "restoredEnumCount": 11,
+  "restoredPolicyCount": 94,
+  "schemaParityPercent": 100,
+  "rlsIsolationVerified": true,
+  "drillStatus": "SUCCESS"
+}
