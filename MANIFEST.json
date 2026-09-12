@@ -169,47 +169,47 @@
     },
     {
       "path": "archive/historical-designs/figma_rest_ref/c1000000-0000-4000-8000-000000000001/doc_figma_legacy_blocked_04/original_source.json",
-      "sha256": "900026ec3db76e5fd335d44087abf60fd299e2f3a31c28a9e6f61516542065c2",
+      "sha256": "c9f3540cd32ccaeba67ad4bccbf023f59674039ae6ade649f5e18e943941c190",
       "bytes": 561
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_hyc_kaae_active_02/original_source.json",
-      "sha256": "7e4616c2ba4b875c5b747a11d5f14969f3372a34baab13de03156a9db8123952",
+      "sha256": "0b40ba477fe2c26d07eebbc7dc67b90ed456db7d1e204b324c314fed97df5956",
       "bytes": 1062
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_ledger_sample_08/original_source.json",
-      "sha256": "89e3d98a3a5a14ce3776db2936b919ec765f95b77b4f85daa3969967e71db6c5",
+      "sha256": "08877e7f707aeb5bc3fb36d54fe7c925b38e449919d60c9bf069706bcea86f28",
       "bytes": 565
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_rollback_sample_07/original_source.json",
-      "sha256": "77ddf06c0f58fc19c87b7a4edb7729a61a866079875b3b2941d0ba8ea72c4b60",
+      "sha256": "9cd4bab75dbd1ac6f4b46325de960ea3bc414dcb18f23463152ff7a44ce60e00",
       "bytes": 622
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_http_test_01/original_source.json",
-      "sha256": "9a78b14c484a50d3e7eaa6f2441929223abb046ee2f74e7eeb371c6afeb2082a",
+      "sha256": "71812c592ec42e11cef188c21996bd7567758d3ac442a2285ef80650551890e3",
       "bytes": 568
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_hyc_drustee_001/original_source.json",
-      "sha256": "cd63b4142262bfb48f28d41d6652af0f5394aa5d59ac9669d377a15652991b5a",
+      "sha256": "68079dde7eb91d01ed1948052d6c78b522c54955bece8f939221abad5fea30ea",
       "bytes": 996
     },
     {
       "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_reopen_test_06/original_source.json",
-      "sha256": "ef1e08bc463cd6c3e55b683a931a4beb72a256398f7de7fb7e56a397bb396b13",
+      "sha256": "722daa74a75a7b132ca177cc323c83701d945235ba10aac1be0e54f1000c8777",
       "bytes": 689
     },
     {
       "path": "archive/historical-designs/legacy_zip_pack/c1000000-0000-4000-8000-000000000005/doc_archive_fastpay_05/original_source.json",
-      "sha256": "b909caf0982bc9b50295b2912349c462fe18f9f15639ebd0849cd3f3ed0a663d",
+      "sha256": "fe331b5a727e6d579c7cdf18871463902d0c5f524d487bec0dfa1bb5faade04d",
       "bytes": 533
     },
     {
       "path": "archive/historical-designs/polotno_json/c1000000-0000-4000-8000-000000000004/doc_polotno_aster_03/original_source.json",
-      "sha256": "1754a650f1a04d37812f1a7b0bb89c0e34d3a701c1ac8f32b154183de8ef3dd7",
+      "sha256": "74d7e6b234f35fef4ad4553496b0f762506022aae673a1af49ccbff81beab9c2",
       "bytes": 907
     },
     {

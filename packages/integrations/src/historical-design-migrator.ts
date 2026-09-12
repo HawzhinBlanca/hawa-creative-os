@@ -81,6 +81,8 @@ export class HistoricalDesignMigrator {
   constructor(archiveRoot?: string) {
     if (archiveRoot) {
       this.archiveRoot = archiveRoot;
+    } else if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+      this.archiveRoot = path.resolve(process.cwd(), 'node_modules/.cache/historical-designs-test');
     } else {
       const rootDir = process.cwd().includes('/apps/')
         ? path.resolve(process.cwd(), '../../archive/historical-designs')
@@ -125,10 +127,13 @@ export class HistoricalDesignMigrator {
       sha256: sourceSha256,
     });
 
-    // Write to disk if directory exists or can be created
+    // Write to disk if directory exists or can be created (preserving immutability if already archived)
     try {
-      fs.mkdirSync(fullDirPath, { recursive: true });
-      fs.writeFileSync(path.join(fullDirPath, 'original_source.json'), JSON.stringify(archiveEntry, null, 2));
+      const targetFilePath = path.join(fullDirPath, 'original_source.json');
+      if (!fs.existsSync(targetFilePath)) {
+        fs.mkdirSync(fullDirPath, { recursive: true });
+        fs.writeFileSync(targetFilePath, JSON.stringify(archiveEntry, null, 2));
+      }
     } catch {
       // Graceful fallback for sandboxed/virtual test environments
     }
