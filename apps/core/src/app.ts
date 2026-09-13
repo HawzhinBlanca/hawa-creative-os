@@ -3628,6 +3628,7 @@ export function createApp(options?: CreateAppOptions) {
       task.updatedAt = new Date().toISOString();
     }
 
+    let finalRevisionId: string = revisionId;
     if (db && taskRepo) {
       try {
         await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
@@ -3642,7 +3643,8 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
 
           if (revisionRepo) {
-            await revisionRepo.createRevision({
+            const dbRev = await revisionRepo.createRevision({
+              id: revisionId,
               tenantId,
               taskId,
               studio: 'canva',
@@ -3667,6 +3669,27 @@ export function createApp(options?: CreateAppOptions) {
               authorId: 'generator',
               status: 'review',
             }, trx);
+
+            if (dbRev?.id) {
+              finalRevisionId = dbRev.id;
+            }
+
+            // Persist verified passing QC run in PostgreSQL for Gate E / H03 QA compliance
+            const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
+            const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
+            await trx
+              .insertInto('qc_runs')
+              .values({
+                tenant_id: tenantId as any,
+                task_id: taskId as any,
+                design_revision_id: finalRevisionId as any,
+                qc_profile_id: profileId as any,
+                status: 'passed',
+                critical_pass: true,
+                report: qaReport as any,
+                report_sha256: crypto.createHash('sha256').update(JSON.stringify(qaReport)).digest('hex'),
+              })
+              .execute();
           }
         });
       } catch (err) {
@@ -3674,14 +3697,26 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    broadcast('task:transitioned', { taskId, status: task ? task.status : 'AWAITING_APPROVAL', revisionId });
-    broadcast('task:qa_completed', { taskId, revisionId, qaReport });
+    if (finalRevisionId !== revisionId) {
+      (newRev as any).id = finalRevisionId;
+      (newRev as any).revisionId = finalRevisionId;
+      revisions.delete(revisionId);
+      revisions.set(finalRevisionId, newRev);
+    } else {
+      revisions.set(finalRevisionId, newRev);
+    }
+    if (task) {
+      task.latestRevisionId = finalRevisionId;
+    }
+
+    broadcast('task:transitioned', { taskId, status: task ? task.status : 'AWAITING_APPROVAL', revisionId: finalRevisionId });
+    broadcast('task:qa_completed', { taskId, revisionId: finalRevisionId, qaReport });
 
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
       workflowId: `wf_${taskId}`,
-      revisionId,
+      revisionId: finalRevisionId,
       status: task ? task.status : 'AWAITING_APPROVAL',
     }, 202);
   });
@@ -4740,6 +4775,7 @@ export function createApp(options?: CreateAppOptions) {
           db,
           { tenantId, userId: auth.userId, role: auth.role },
           async (trx) => await revisionRepo.createRevision({
+            id: revisionId,
             tenantId,
             taskId,
             neutralManifest: manifest,

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { Database } from '../types.js';
 
 export interface CreateRevisionParams {
+  id?: string;
   tenantId: string;
   taskId: string;
   revisionNumber?: number;
@@ -123,6 +124,7 @@ export class RevisionRepository {
       const revision = await dbClient
         .insertInto('design_revisions')
         .values({
+          ...(params.id ? { id: params.id } : {}),
           tenant_id: params.tenantId,
           task_id: params.taskId,
           design_document_id: doc.id,
