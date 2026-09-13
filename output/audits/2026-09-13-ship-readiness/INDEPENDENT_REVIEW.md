@@ -222,3 +222,9 @@ Commit `fc91145`; redeployed afterwards. Not a real credential and nothing to ro
 
 ### 15a. Console rotation attempt (01:45 Baghdad, 14 September)
 The user ran the helper: Telegram token and Gemini key were left unchanged; the Canva client secret that was written was refused by Canva (`invalid_client`) while the previous one was still accepted. The helper had verified only the format, which was insufficient. The accepted secret was restored, core and worker recreated, and the helper now verifies a Canva secret with Canva's token endpoint before writing it (commit `72c4027`). Pre-rotation backup folders deleted at the user's request after confirming the live file is verified and identical to the last rollback copy. Still owed: Telegram token, Canva client secret, Gemini key.
+
+### 15b. Final state of the console rotations (02:00 Baghdad, 14 September)
+Second helper run: Telegram token rotated and the old one confirmed dead; Anthropic and Gemini keys rotated and verified live. The user then stopped. Accepted, with reasoning:
+- **Canva client secret not rotated.** The live secret is the original; Canva accepts it; the connection is active and its tokens are sealed under the rotated key. Exposure of the secret was limited to owner-only files on this machine, now deleted. Rotate later through the helper (which now verifies with Canva) when convenient; nothing depends on it.
+- **Old Anthropic and Gemini keys still valid in their consoles.** The new keys are the only ones in use here; the old ones sat in the same deleted local files. Deleting them is two clicks each (console.anthropic.com API keys; aistudio.google.com/app/apikey) and is the one remaining risk worth closing, because a live unused key can spend money if it ever leaked elsewhere.
+All rollback folders deleted; the local audit reports no exposed or committable credential material.
