@@ -246,3 +246,14 @@ The automatic path refused every Arabic-script character. The brand font (Minion
 **Live proof on the office stack** (task `a4651ddd…`, request key `sorani-live-2026-09-14-b`): Opus 5 plan accepted; PPTX import created Canva design **`DAHVHsEGaLc`**; PNG and PPTX exports retrieved; QA on Canva's own export: `copyPass: true` (Canva preserved the exact Kurdish copy), `fontPass: true` with `observedFonts: ["Noto Sans Arabic"]` (Canva has the typeface and kept it), `rtlPass: false` because Canva's export omits the paragraph `rtl` attribute, now explained by `rtlNote` and verified visually instead. The exported PNG (`sorani-live-DAHVHsEGaLc.png`, filed beside this report) shows correct Sorani glyph shaping (ڕ ڵ ێ ۆ ە), right-to-left flow with the Latin "KAAE" at the visual start, Eastern Arabic digits, right alignment, brand navy and gold, logo above the text.
 First live attempt failed honestly (`PLAN_BRAND_OR_DIMENSIONS_CHANGED`, no Canva document) because the validator demanded the brand font on the Sorani block while the model had named the script typeface; fixed in `1849de1` and covered by the real-database test. Requesters of a Sorani draft are now told the typeface is provisional (`65fad69`).
 Gates: full suite 115 files / 831 tests; typecheck 0; scanner 0; pack valid.
+
+### 16c. Dependency advisories (commit `d3247c3`)
+`pnpm audit` reported two high (image-size ≤2.0.2 via pptxgenjs: infinite loops in ICNS/JXL/HEIF parsers) and two moderate (vitest/@vitest/mocker <4.1.11: path traversal in a mock redirect). vitest upgraded to 4.1.11; the full suite passes on it (833 tests). The image-size fix is not published (latest 2.0.2, patched ≥2.0.3), so an override cannot resolve; the two advisories are recorded as justified exceptions in `pnpm-workspace.yaml` with the reason (pptxgenjs sizes only the office's own PNG logo, never user images) and are to be removed the moment 2.0.3 ships. The stale `pnpm` field in `package.json`, which pnpm 11 ignores, was removed.
+
+### 16d. Hardening (commit `05a8ab0`)
+| Item | What changed | Verified by |
+|---|---|---|
+| Watchdog blind to a full disk or a stale backup | alerts at ≥90% disk use, when the newest nightly dump is older than 26 h, or when none exists | `--status` pass |
+| Session issue shared the general 30 r/s lane | nginx `location = /v1/auth/session` at 10 requests per minute per address (burst 5) | `nginx -t`; live probe after deploy |
+| Credential comparison with `===` | `crypto.timingSafeEqual` on equal-length buffers for admin, art-director, reviewer and operator keys | auth suites |
+| Tasks carried no language | intake records `ckb` for Arabic-script requests and `en` otherwise (office heuristic, correctable by the art director) | DB-gated test with a Sorani and an English request |
