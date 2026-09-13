@@ -50,6 +50,7 @@ services:
       PORT: 3001
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
+      HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
     extra_hosts:
       - "api.telegram.org:149.154.167.99"
     volumes:
@@ -81,6 +82,7 @@ services:
       PORT: 9080
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
+      HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
     networks:
       - core
       - egress

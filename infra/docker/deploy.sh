@@ -13,6 +13,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 COMPOSE=(docker compose -f "${SCRIPT_DIR}/docker-compose.prod.yml")
 [[ -f "${SCRIPT_DIR}/canva-release.override.yml" ]] && COMPOSE+=(-f "${SCRIPT_DIR}/canva-release.override.yml")
 APPLY=0; [[ "${1:-}" == "--apply" ]] && APPLY=1
+# The running build must be able to say which commit it is (GET /v1/system/cutover/status).
+export HAWA_BUILD_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 
 echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo apply || echo pre-flight)) ==="
 
