@@ -2,14 +2,15 @@
 set -euo pipefail
 
 # ==============================================================================
-# Hawa Creative OS: Production Database Backup & Clean-Host Recovery Drill
+# Hawa Creative OS: schema, RLS and seed parity drill (clean-host rebuild check).
+# This is NOT a data backup: production data backups are taken by infra/backup/nightly_backup.sh.
 # ==============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 echo "================================================================================"
-echo "⚡ Hawa Creative OS: Production Database Backup & Clean-Host Recovery Drill"
+echo "⚡ Hawa Creative OS: schema/RLS/seed parity drill (data backups: infra/backup/nightly_backup.sh)"
 echo "================================================================================"
 
 SNAPSHOT_DIR="${ROOT_DIR}/dist/snapshots"
@@ -17,7 +18,7 @@ mkdir -p "${SNAPSHOT_DIR}"
 TIMESTAMP="$(date -u +"%Y%m%d_%H%M%SZ")"
 SNAPSHOT_FILE="${SNAPSHOT_DIR}/hawa_prod_snapshot_${TIMESTAMP}.sql"
 
-echo "1. Generating atomic recovery snapshot..."
+echo "1. Generating schema+RLS+seed parity snapshot (no data)..."
 cat << 'EOF' > "${SNAPSHOT_FILE}"
 -- =============================================================================
 -- HAWA CREATIVE OS PRODUCTION RECOVERY SNAPSHOT

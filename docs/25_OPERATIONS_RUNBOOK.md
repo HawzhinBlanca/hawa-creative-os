@@ -103,6 +103,27 @@ pre-flight runs it and refuses to continue while any such file is readable by ot
 committable. It never deletes anything: after a rotation, move old snapshots off the checkout to an
 encrypted location or delete them yourself.
 
+## Backups
+
+`infra/backup/nightly_backup.sh` runs every night at 03:30 (launch agent `design.hawa.nightly-backup`)
+and on demand. It takes a `pg_dump` in custom format, writes a SHA-256 sidecar, restores the dump into a
+scratch database on the same server to prove it loads and holds the live task count, drops the scratch
+database, keeps the 14 newest dumps, and sends a Telegram alert to the operator chat only on failure.
+`--list` shows what exists; `backup.log` in `infra/backup/snapshots/` records every run. The deploy
+script also writes a plain SQL snapshot before every migration. Both live under the gitignored,
+owner-only `infra/backup/snapshots/`. Restore: `pg_restore -U hawa_owner -d hawa --clean --if-exists
+<file>` inside the postgres container, after stopping core and worker.
+
+## Watchdog and self-healing
+
+`infra/ops/watchdog.sh` runs at login and every five minutes (launch agent `design.hawa.watchdog`).
+Docker Desktop is not configured to start at login, so the watchdog starts it, brings the stack up
+with `compose up -d --no-build` when fewer than six containers run, then checks core `/v1/health` and
+the worker health. Any problem is sent to the operator chat at most once per 30 minutes; recovery is
+announced once. `--status` prints the assessment without acting; `--announce` proves the alert path.
+Agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
+Install or refresh both agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
+
 ## Golden rule
 
 Do not “fix” an incident by manually editing database state or deleting evidence. Use audited repair/reconciliation commands or a documented migration reviewed by another operator.
