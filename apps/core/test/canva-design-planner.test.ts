@@ -55,7 +55,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('sets Sorani blocks right-to-left in the provisional script typeface and records it in the manifest',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',
       rawText:'Use navy.\n---\nEXACT TITLE\n\nوۆرکشۆپی دڵنیایی جۆری بۆ بەرپرسانی زانکۆکان، ٢٨ی ئەیلوول ٢٠٢٦',designInstructions:'Use navy.',exactCopy:[]})).task.id;
-    const remote=vi.fn(async()=>response('claude-opus-5',plan)); // the model returns the reference font for every block; the server decides script font and direction
+    const modelPlan=structuredClone(plan) as any;modelPlan.text[1].fontFamily='Noto Sans Arabic'; // the model may name the script typeface on the Sorani block; the server decides direction either way
+    const remote=vi.fn(async()=>response('claude-opus-5',modelPlan));
     const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'sorani-key-01',1200,1697);
     expect(result.status).toBe('submitted');expect(remote).toHaveBeenCalledTimes(1);

@@ -109,7 +109,9 @@ export class CanvaDesignPlanner {
         }
       }
       const plan=layout.parse(JSON.parse(cleanJson)) as EditableTransferPlan;
-      if(plan.width!==width||plan.height!==height||plan.text.some(t=>t.fontFamily!==request.reference.rules.fontFamily))throw new Error('PLAN_BRAND_OR_DIMENSIONS_CHANGED');
+      // Every block must name the brand font, except that a Sorani block may already name the declared script typeface; the server normalises it below either way.
+      const fontAdmitted=(t:any)=>t.fontFamily===request.reference.rules.fontFamily||(request.rtlFont&&request.copyScripts?.[t.copyIndex]==='arabic'&&t.fontFamily===request.rtlFont);
+      if(plan.width!==width||plan.height!==height||plan.text.some(t=>!fontAdmitted(t)))throw new Error('PLAN_BRAND_OR_DIMENSIONS_CHANGED');
       if(!plan.logo||plan.logo.width<100||Math.abs(plan.logo.width/plan.logo.height-request.logoAspect)/request.logoAspect>.01)throw new Error('LOGO_ASPECT_CHANGED');
       // Sorani blocks are set right-to-left in the reference pack's script typeface. The model only places them; the server decides direction and font.
       let rtlBlocks=0;
