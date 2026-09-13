@@ -1376,18 +1376,24 @@ export function createApp(options?: CreateAppOptions) {
     let resolvedRole: string | null = null;
     let resolvedUserId: string = '00000000-0000-4000-b000-000000000001';
     let resolvedDisplayName: string = 'Primary Operator';
+    // Constant-time comparison: a wrong key costs the same whether it differs in the first or last byte.
+    const same = (candidate: string, configured: string | undefined): boolean => {
+      if (!configured) return false;
+      const a = Buffer.from(candidate), b = Buffer.from(configured);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    };
 
     // 1. Validate by secret key / token
     if (key) {
-      if (key === adminKey || (process.env.HAWA_ADMIN_KEY && key === process.env.HAWA_ADMIN_KEY)) {
+      if (same(key, adminKey)) {
         resolvedRole = 'administrator';
         resolvedUserId = '00000000-0000-4000-b000-000000000002';
         resolvedDisplayName = 'Administrator';
-      } else if ((reviewerKey && key === reviewerKey) || (artDirectorKey && key === artDirectorKey)) {
+      } else if (same(key, reviewerKey) || same(key, artDirectorKey)) {
         resolvedRole = 'art_director';
         resolvedUserId = '00000000-0000-4000-b000-000000000002';
         resolvedDisplayName = 'Art Director';
-      } else if (key === operatorKey || (process.env.HAWA_BEARER_TOKEN && key === process.env.HAWA_BEARER_TOKEN) || (process.env.HAWA_API_KEY && key === process.env.HAWA_API_KEY)) {
+      } else if (same(key, operatorKey) || same(key, process.env.HAWA_BEARER_TOKEN) || same(key, process.env.HAWA_API_KEY)) {
         resolvedRole = 'operator';
         resolvedUserId = '00000000-0000-4000-b000-000000000001';
         resolvedDisplayName = 'Primary Operator';

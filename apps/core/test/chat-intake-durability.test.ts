@@ -98,6 +98,13 @@ describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
     expect(sent.text).not.toContain('canva.com/design');
     expect(sent.text).toContain('Stranger &lt;b&gt;');
   });
+  it('records the request language from its script (Sorani for Arabic script, English otherwise)', async () => {
+    const ku = await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: 'lang-' + randomUUID().slice(0, 8), clientId: null, title: 'وۆرکشۆپ', rawText: 'وۆرکشۆپی دڵنیایی جۆری', designInstructions: '', exactCopy: [] });
+    const en = await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: 'lang-' + randomUUID().slice(0, 8), clientId: null, title: 'Workshop', rawText: 'Quality assurance workshop', designInstructions: '', exactCopy: [] });
+    const rows = await db.selectFrom('tasks').select(['id', 'language']).where('id', 'in', [ku.task.id, en.task.id]).execute();
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.language]))).toEqual({ [ku.task.id]: 'ckb', [en.task.id]: 'en' });
+  });
+
   it('schedules exactly one durable automatic draft for a scoped KAAE request', async () => {
     // The disposable database accumulates rows across runs; a fresh chat id keeps the daily cap out of this test.
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '100000');

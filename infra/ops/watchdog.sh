@@ -55,6 +55,17 @@ else
   [[ "$wsum" == healthy* ]] || problems+=("worker ${wsum}")
 fi
 
+# 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting)
+used="$(df -P "$ROOT" | awk 'NR==2{gsub("%","",$5); print $5}')"
+[[ "${used:-0}" -lt 90 ]] || problems+=("disk ${used}% used")
+newest="$(ls -t "$ROOT"/infra/backup/snapshots/hawa_*.dump 2>/dev/null | head -1 || true)"
+if [[ -n "$newest" ]]; then
+  age=$(( NOW - $(stat -f '%m' "$newest" 2>/dev/null || stat -c '%Y' "$newest") ))
+  [[ "$age" -lt $((26 * 3600)) ]] || problems+=("newest backup is $((age / 3600)) h old")
+else
+  problems+=("no nightly backup found in infra/backup/snapshots")
+fi
+
 if [[ ${#problems[@]} -eq 0 ]]; then
   echo "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
