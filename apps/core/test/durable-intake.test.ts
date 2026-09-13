@@ -3,12 +3,12 @@ import { createApp } from '../src/app.js';
 import { createDb, withRlsContext } from '@hawa/db';
 
 describe('Milestone A: Honest, Authenticated, Durable Task Intake Integration', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -160,7 +160,10 @@ describe('Milestone A: Honest, Authenticated, Durable Task Intake Integration', 
   });
 
   it('5. Database outage behavior: returns 503 and never fabricates 201 success when DB is down', async () => {
-    const badDb = createDb('postgresql://hawa_app:invalid_pass@127.0.0.1:54332/hawa_test');
+    // Same host, deliberately wrong credential: authentication fails, so every query fails.
+    const unreachable = new URL(process.env.TEST_DATABASE_URL!);
+    unreachable.password = `wrong-${Date.now()}`;
+    const badDb = createDb(unreachable.href);
     const brokenApp = createApp({ db: badDb });
 
     const res = await brokenApp.request('/v1/tasks', {

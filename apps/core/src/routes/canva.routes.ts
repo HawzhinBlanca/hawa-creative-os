@@ -48,6 +48,10 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     return c.json(await planner!.generate(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.width,body.height),202);
   }));
   ctx.registerRoute('post','/tasks/:taskId/canva/plans/:operationId/resume',protect(async(c,s)=>c.json(await planner!.resume(s,c.req.param('taskId'),c.req.param('operationId')))));
+  ctx.registerRoute('post','/tasks/:taskId/canva/plans/:operationId/abandon',protect(async(c,s)=>{
+    const body=await c.req.json().catch(()=>({}));
+    return c.json(await planner!.abandon(s,c.req.param('taskId'),c.req.param('operationId'),body.reason));
+  }));
   ctx.registerRoute('post','/tasks/:taskId/canva/imports/:operationId/resume',protect(async(c,s,api)=>c.json(await api.resumeImport(s,c.req.param('taskId'),c.req.param('operationId')))));
   ctx.registerRoute('post','/tasks/:taskId/canva/design',protect(async(c,s,api)=>{
     const body=await c.req.json().catch(()=>({}));

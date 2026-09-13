@@ -4,11 +4,11 @@ import { createDb } from '@hawa/db';
 import { CircuitBreaker, ReconciliationService } from '@hawa/integrations';
 
 describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,

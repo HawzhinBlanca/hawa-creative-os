@@ -188,6 +188,65 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
         expect(res.error.retryable).toBe(true);
       }
     });
+
+    it('proves Google Gemini call uses x-goog-api-key header without URL query parameter leakage and forwards multimodal images', async () => {
+      const originalKey = process.env.GEMINI_API_KEY;
+      const originalFetch = globalThis.fetch;
+      const testKey = 'AIzaSyModelGatewaySecret123';
+      process.env.GEMINI_API_KEY = testKey;
+
+      let capturedUrl: string | undefined;
+      let capturedHeaders: Record<string, string> | undefined;
+      let capturedBody: any;
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        capturedBody = JSON.parse(init?.body as string);
+        return new Response(JSON.stringify({
+          candidates: [{
+            content: {
+              parts: [{
+                text: JSON.stringify({
+                  passed: true,
+                  rubricScores: { hierarchy: 9, legibility: 9, balance: 9, artifacts: 0, brandResemblance: 9, culturalAppropriateness: 9 },
+                  findings: [],
+                  overallScore: 9.0,
+                }),
+              }],
+            },
+          }],
+          usageMetadata: { promptTokenCount: 150, candidatesTokenCount: 50 },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }) as any;
+
+      try {
+        const dummyBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        const res = await gateway.generateStructured(ctx, {
+          role: 'visual_judge',
+          prompt: 'Evaluate layout quality',
+          inputs: [
+            { kind: 'image', mimeType: 'image/png', data: dummyBase64 },
+          ],
+        });
+
+        expect(res.ok).toBe(true);
+        expect(capturedUrl).toBeDefined();
+        // Proof 1: No secret key in query string
+        expect(capturedUrl).not.toContain(testKey);
+        expect(capturedUrl).not.toContain('?key=');
+        // Proof 2: Key in header
+        expect(capturedHeaders?.['x-goog-api-key']).toBe(testKey);
+        // Proof 3: Multimodal image was NOT dropped for visual judge
+        expect(capturedBody?.contents?.[0]?.parts?.length).toBeGreaterThanOrEqual(2);
+        const imagePart = capturedBody?.contents?.[0]?.parts?.find((p: any) => p.inline_data);
+        expect(imagePart).toBeDefined();
+        expect(imagePart.inline_data.data).toBe(dummyBase64);
+      } finally {
+        process.env.GEMINI_API_KEY = originalKey;
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 
   describe('Multimodal Embeddings & Reranking', () => {

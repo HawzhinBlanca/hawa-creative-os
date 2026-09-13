@@ -54,12 +54,12 @@ export interface CaptureArtifactSetParams {
 export class CanvaBindingRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
-  async findById(id: string) {
-    return await this.db
-      .selectFrom('canva_bindings')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+  async findById(id: string, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db).selectFrom('canva_bindings').selectAll().where('id', '=', id);
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.executeTakeFirst();
   }
 
   async findByTaskId(tenantId: string, taskId: string, directionName: string = 'primary') {

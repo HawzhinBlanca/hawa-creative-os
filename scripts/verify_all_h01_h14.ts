@@ -13,8 +13,9 @@ import { CircuitBreaker } from '../packages/integrations/src/index.js';
 import { globalFeedbackMiner } from '../packages/creative/src/index.js';
 
 const BASE_URL = 'http://127.0.0.1:8080';
-const REVIEWER_KEY = 'hawa_prod_reviewer_art_director_key_entropy_8814';
-const OPERATOR_KEY = 'hawa_prod_operator_bearer_token_entropy_7721';
+const REVIEWER_KEY = process.env.HAWA_REVIEWER_KEY;
+const OPERATOR_KEY = process.env.HAWA_BEARER_TOKEN;
+if (!REVIEWER_KEY || !OPERATOR_KEY) throw new Error('HAWA_REVIEWER_KEY and HAWA_BEARER_TOKEN must be set; this script has no built-in credentials');
 
 interface TaskEvidence {
   taskId: string;

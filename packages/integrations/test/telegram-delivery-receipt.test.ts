@@ -31,6 +31,24 @@ describe('Telegram outbound receipts',()=>{
     expect(await new TelegramBridgeDaemon().dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_NOT_CONFIGURED'});
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('caps in-memory sentMessages history to 500 entries to prevent memory leaks', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ok: true, result: { message_id: 1, chat: { id: 123 } } })));
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    for (let i = 0; i < 550; i++) {
+      await bridge.dispatchOutboundMessage(123, { text: `Message ${i}` });
+    }
+    const messages = bridge.getSentMessages();
+    expect(messages.length).toBe(500);
+    expect(messages[messages.length - 1].text).toBe('Message 549');
+    expect(messages[0].text).toBe('Message 50');
+  });
+  it('rejects dispatchOutboundPhoto with empty or invalid buffer', async () => {
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    const emptyRes = await bridge.dispatchOutboundPhoto(123, Buffer.alloc(0), 'caption');
+    expect(emptyRes).toEqual({ success: false, error: 'INVALID_PHOTO_BUFFER' });
+    const nullRes = await bridge.dispatchOutboundPhoto(123, null as any, 'caption');
+    expect(nullRes).toEqual({ success: false, error: 'INVALID_PHOTO_BUFFER' });
+  });
 });
 
 describe('Telegram ingress acknowledgment ordering',()=>{

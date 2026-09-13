@@ -76,4 +76,44 @@ describe('VdpInvitationBatchRunner & Personalization Engine', () => {
     const hashes = new Set(batch.map((b) => b.manifestHash));
     expect(hashes.size).toBe(3); // Every guest produces a unique cryptographic manifest
   });
+
+  it('safely handles null/empty/undefined inputs without crashing', () => {
+    expect(computeHonoreeFontSize('')).toBe(22);
+    expect(computeHonoreeFontSize(null as any)).toBe(22);
+    expect(computeHonoreeFontSize(undefined as any)).toBe(22);
+    expect(formatHonoreeLine({} as any)).toBe('');
+    expect(formatHonoreeLine(null as any)).toBe('');
+  });
+
+  it('personalizes replaceText operations and inserts guest affiliation', () => {
+    const templateOps = [
+      { op: 'replaceText' as const, nodeId: 'inv_salutation', text: '[Guest Name]' },
+      { op: 'replaceText' as const, nodeId: 'inv_affiliation', text: '[Affiliation]' },
+    ];
+    const guest: VdpGuestRecord = {
+      id: 'g4',
+      honorific: 'Minister',
+      fullName: 'Dara Rashid',
+      titleOrAffiliation: 'Ministry of Planning, KRG',
+    };
+
+    const { operations, honoreeText } = personalizeInvitationOperations(templateOps, guest);
+    expect(honoreeText).toBe('Minister Dara Rashid');
+    expect(operations[0]).toMatchObject({ op: 'replaceText', text: 'Minister Dara Rashid' });
+    expect(operations[1]).toMatchObject({ op: 'replaceText', text: 'Ministry of Planning, KRG' });
+  });
+
+  it('clears template affiliation placeholder when guest has no affiliation', () => {
+    const templateOps = [
+      { op: 'replaceText' as const, nodeId: 'inv_salutation', text: '[Guest Name]' },
+      { op: 'replaceText' as const, nodeId: 'inv_affiliation', text: '[Affiliation]' },
+    ];
+    const guest: VdpGuestRecord = {
+      id: 'g5',
+      fullName: 'Aram Tahir',
+    };
+
+    const { operations } = personalizeInvitationOperations(templateOps, guest);
+    expect(operations[1]).toMatchObject({ op: 'replaceText', text: '' });
+  });
 });

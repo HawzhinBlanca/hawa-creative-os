@@ -350,7 +350,13 @@ export class CanvaConnectService {
   }
 }
 export async function downloadCanvaExport(value: string, customFetch: typeof fetch = fetch): Promise<Buffer> {
-  const u = new URL(value);
+  let u: URL;
+  try {
+    u = new URL(value);
+  } catch {
+    // `throw` (not the `fail` helper) so TypeScript's definite-assignment analysis sees the exit.
+    throw new CanvaFlowError(422, 'CANVA_EXPORT_HOST_DENIED', 'Export URL is not an admitted Canva download host');
+  }
   if (u.protocol !== 'https:' || !['export-download.canva.com','document-export.canva.com'].includes(u.hostname) || u.port || u.username || u.password) fail(422,'CANVA_EXPORT_HOST_DENIED','Export URL is not an admitted Canva download host');
   const response = await customFetch(u.href,{ redirect:'error',signal:AbortSignal.timeout(30000) });
   if (!response.ok || !response.body) fail(502,'CANVA_EXPORT_DOWNLOAD_FAILED','Canva export download failed');

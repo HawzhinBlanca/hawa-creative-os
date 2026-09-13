@@ -907,6 +907,67 @@ export class CanvaNativeAdapter {
     // Clone design for preview
     const previewDesign: CanvaNativeDesign = JSON.parse(JSON.stringify(design));
 
+    // Validate that all referenced elements exist and that expectedText matches
+    for (const op of params.operations) {
+      if (op.op === 'replace_text') {
+        const el = previewDesign.pages.flatMap((p) => p.elements).find((e) => e.id === op.elementId);
+        if (!el) {
+          return {
+            ok: false,
+            error: {
+              code: 'ELEMENT_NOT_FOUND',
+              message: `Target element '${op.elementId}' not found in design '${params.canvaDesignId}'.`,
+              retryable: false,
+              safeAction: 'Provide valid element ID from readback manifest',
+              detail: { elementId: op.elementId },
+            },
+          };
+        }
+        if (op.expectedText !== undefined && (el.text || '') !== op.expectedText) {
+          return {
+            ok: false,
+            error: {
+              code: 'EXPECTED_TEXT_MISMATCH',
+              message: `Expected text mismatch on element '${op.elementId}'. Expected '${op.expectedText}' but found '${el.text || ''}'.`,
+              retryable: false,
+              safeAction: 'Re-read design state to resolve concurrent text changes',
+              detail: { elementId: op.elementId, expectedText: op.expectedText, actualText: el.text || '' },
+            },
+          };
+        }
+      } else if (op.op === 'adjust_geometry' || op.op === 'adjust_style' || op.op === 'swap_asset' || op.op === 'set_crop') {
+        const el = previewDesign.pages.flatMap((p) => p.elements).find((e) => e.id === op.elementId);
+        if (!el) {
+          return {
+            ok: false,
+            error: {
+              code: 'ELEMENT_NOT_FOUND',
+              message: `Target element '${op.elementId}' not found in design '${params.canvaDesignId}'.`,
+              retryable: false,
+              safeAction: 'Provide valid element ID from readback manifest',
+              detail: { elementId: op.elementId },
+            },
+          };
+        }
+      } else if (op.op === 'group_elements' || op.op === 'set_lock') {
+        const allElements = previewDesign.pages.flatMap((p) => p.elements);
+        for (const elId of op.elementIds) {
+          if (!allElements.some((e) => e.id === elId)) {
+            return {
+              ok: false,
+              error: {
+                code: 'ELEMENT_NOT_FOUND',
+                message: `Target element '${elId}' not found in design '${params.canvaDesignId}'.`,
+                retryable: false,
+                safeAction: 'Provide valid element IDs from readback manifest',
+                detail: { elementId: elId },
+              },
+            };
+          }
+        }
+      }
+    }
+
     // Apply bounded operations to preview design
     for (const op of params.operations) {
       for (const page of previewDesign.pages) {
@@ -1222,7 +1283,31 @@ export class CanvaNativeAdapter {
       };
     }
 
+    if (!design.pages || design.pages.length === 0) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_DESIGN_STRUCTURE',
+          message: `Master design '${params.masterDesignId}' has no artboard pages.`,
+          retryable: false,
+          safeAction: 'Ensure design contains at least one artboard before creating linked variants',
+        },
+      };
+    }
+
     const masterPage = design.pages[0];
+    if (!masterPage || !masterPage.width || !masterPage.height || masterPage.width <= 0 || masterPage.height <= 0) {
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_DESIGN_STRUCTURE',
+          message: `Master artboard has invalid dimensions (width: ${masterPage?.width}, height: ${masterPage?.height}).`,
+          retryable: false,
+          safeAction: 'Ensure master artboard has positive width and height',
+        },
+      };
+    }
+
     const newPages: CanvaNativePage[] = [masterPage];
 
     for (const variant of params.variantRatios) {

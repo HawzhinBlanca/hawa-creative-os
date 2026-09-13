@@ -77,6 +77,23 @@ export interface TelegramCommandResult extends TelegramOutboundMessage {
   notes?: string;
 }
 
+/**
+ * Escapes text for Telegram `parse_mode: 'HTML'`. User-controlled strings (sender names,
+ * titles, copy) must always pass through this; otherwise a single `<` or `&` makes Telegram
+ * reject the whole message with HTTP 400 and the requester hears nothing.
+ */
+export function escapeTelegramHtml(value: unknown): string {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Escapes text for Telegram legacy `parse_mode: 'Markdown'`.
+ * Neutralises `_`, `*`, `` ` ``, and `[` so user content cannot break entity parsing.
+ */
+export function escapeTelegramMarkdown(value: unknown): string {
+  return String(value ?? '').replace(/([_*`\[])/g, '\\$1');
+}
+
 export function parseCallbackData(data: string): { action: 'approve' | 'revision'; taskId: string; signature: string } | null {
   if (!data) return null;
   const parts = data.split(':');
@@ -228,7 +245,8 @@ export class TelegramBridgeDaemon {
           // Continue polling loop on non-fatal error
         }
         if (!this.active) break;
-        await new Promise((r) => setTimeout(r, 800));
+        const backoff = this.consecutiveErrors > 0 ? Math.min(30000, 1000 * Math.pow(2, Math.min(5, this.consecutiveErrors))) : 800;
+        await new Promise((r) => setTimeout(r, backoff));
       }
     };
 
@@ -360,6 +378,13 @@ export class TelegramBridgeDaemon {
     return [...this.sentMessages];
   }
 
+  private recordSentMessage(msg: { chatId: string | number; text: string; replyMarkup?: any; sentAt: string }) {
+    this.sentMessages.push(msg);
+    if (this.sentMessages.length > 500) {
+      this.sentMessages.splice(0, this.sentMessages.length - 500);
+    }
+  }
+
   clearSentMessages() {
     this.sentMessages = [];
   }
@@ -426,15 +451,16 @@ export class TelegramBridgeDaemon {
       revisionCallbackData = `${revisionAction}:${task.id}:${revisionSig.slice(0, 16)}`;
     }
 
+    const esc = escapeTelegramMarkdown;
     const text = [
       `⚡ *Task Ready for Operator Review*`,
       ``,
-      `🎯 *Title:* ${task.title}`,
-      `🏢 *Client:* ${task.clientName || 'Hawa Creative Office'}`,
-      `📊 *Status:* \`${task.status}\``,
-      task.voiceTranscript ? `🎙️ *Spoken Voice Memo:* _"${task.voiceTranscript}"_` : null,
-      task.copy ? `📝 *Approved Copy:* _${task.copy}_` : null,
-      task.canvaDocumentId ? `🎨 *Canva Binding:* \`${task.canvaDocumentId}\`` : null,
+      `🎯 *Title:* ${esc(task.title)}`,
+      `🏢 *Client:* ${esc(task.clientName || 'Hawa Creative Office')}`,
+      `📊 *Status:* \`${task.status.replace(/`/g, '')}\``,
+      task.voiceTranscript ? `🎙️ *Spoken Voice Memo:* _"${esc(task.voiceTranscript)}"_` : null,
+      task.copy ? `📝 *Approved Copy:* _${esc(task.copy)}_` : null,
+      task.canvaDocumentId ? `🎨 *Canva Binding:* \`${task.canvaDocumentId.replace(/`/g, '')}\`` : null,
       ``,
       `🔍 *Desk Studio Link:*`,
       `${studioUrl}`,
@@ -473,13 +499,14 @@ export class TelegramBridgeDaemon {
     sheetUrl?: string;
     workflowId?: string;
   }) {
+    const esc = escapeTelegramMarkdown;
     const text = [
       `✅ *Deliverables Approved & Published*`,
       ``,
-      `🎯 *Task:* ${task.title}`,
+      `🎯 *Task:* ${esc(task.title)}`,
       `📁 *Google Drive Folder:* ${task.driveUrl}`,
       task.sheetUrl ? `📊 *Google Sheets Audit Row:* ${task.sheetUrl}` : null,
-      task.workflowId ? `🆔 *Restate Workflow ID:* \`${task.workflowId}\`` : null,
+      task.workflowId ? `🆔 *Restate Workflow ID:* \`${task.workflowId.replace(/`/g, '')}\`` : null,
       `⏰ *Delivered At:* ${new Date().toUTCString()}`,
     ]
       .filter(Boolean)
@@ -540,13 +567,31 @@ export class TelegramBridgeDaemon {
       });
       const body = await res.json().catch(() => null) as any;
       if (!res.ok || body?.ok !== true) {
+        // If entity parsing failed in Markdown mode, retry once as plain text
+        if (message.parse_mode && (body?.description?.includes('can\'t parse entities') || body?.error_code === 400)) {
+          const retryRes = await fetch(`https://api.telegram.org/bot${this.config.botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message.text,
+              ...(message.reply_markup ? {reply_markup: message.reply_markup} : {}),
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const retryBody = await retryRes.json().catch(() => null) as any;
+          if (retryRes.ok && retryBody?.ok === true && Number.isSafeInteger(retryBody.result?.message_id)) {
+            this.recordSentMessage({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
+            return { success: true, messageId: String(retryBody.result.message_id) };
+          }
+        }
         return { success: false, error: `TELEGRAM_REJECTED_${body?.error_code || res.status}` };
       }
       if (!Number.isSafeInteger(body.result?.message_id) || body.result.message_id <= 0 ||
           String(body.result?.chat?.id) !== String(chatId)) {
         return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
       }
-      this.sentMessages.push({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
+      this.recordSentMessage({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
       return { success: true, messageId: String(body.result.message_id) };
     } catch {
       // A lost response can follow a successful send. Never automatically resend it.
@@ -562,50 +607,60 @@ export class TelegramBridgeDaemon {
     photoBuffer: Buffer,
     caption?: string,
     replyMarkup?: any
-  ): Promise<{ success: boolean; messageId?: string }> {
-    if (this.config.botToken) {
-      try {
-        const url = `https://api.telegram.org/bot${this.config.botToken}/sendPhoto`;
-        const blob = new Blob([new Uint8Array(photoBuffer)], { type: 'image/png' });
-        const formData = new FormData();
-        formData.append('chat_id', String(chatId));
-        formData.append('photo', blob, 'design.png');
-        if (caption) {
-          const safeCaption = caption.length > 1024 ? caption.slice(0, 1020) + '…' : caption;
-          formData.append('caption', safeCaption);
-          formData.append('parse_mode', 'Markdown');
-        }
-        if (replyMarkup) {
-          formData.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
-        }
-        const res = await fetch(url, {
-          method: 'POST',
-          body: formData,
-        });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.warn('[TelegramBridge] sendPhoto non-200:', res.status, errText);
-          if (caption) {
-            const fallbackForm = new FormData();
-            fallbackForm.append('chat_id', String(chatId));
-            fallbackForm.append('photo', blob, 'design.png');
-            fallbackForm.append('caption', caption.replace(/[*_`\[\]()]/g, ''));
-            if (replyMarkup) fallbackForm.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
-            await fetch(url, { method: 'POST', body: fallbackForm }).catch(() => {});
-          }
-        }
-      } catch (err) {
-        console.warn('[TelegramBridge] Network error in dispatchOutboundPhoto:', err);
-      }
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
+    if (!photoBuffer || !Buffer.isBuffer(photoBuffer) || photoBuffer.length === 0) {
+      return { success: false, error: 'INVALID_PHOTO_BUFFER' };
     }
-    return { success: true, messageId: `photo_${Date.now()}` };
+    try {
+      const url = `https://api.telegram.org/bot${this.config.botToken}/sendPhoto`;
+      const blob = new Blob([new Uint8Array(photoBuffer)], { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('chat_id', String(chatId));
+      formData.append('photo', blob, 'design.png');
+      if (caption) {
+        const safeCaption = caption.length > 1024 ? caption.slice(0, 1020) + '…' : caption;
+        formData.append('caption', escapeTelegramMarkdown(safeCaption));
+        formData.append('parse_mode', 'Markdown');
+      }
+      if (replyMarkup) {
+        formData.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(20000),
+      });
+      const body = await res.json().catch(() => null) as any;
+      if (res.ok && body?.ok === true && Number.isSafeInteger(body.result?.message_id)) {
+        return { success: true, messageId: String(body.result.message_id) };
+      }
+      // If failed and caption was present, retry with plain unformatted caption
+      if (caption) {
+        const fallbackForm = new FormData();
+        fallbackForm.append('chat_id', String(chatId));
+        fallbackForm.append('photo', blob, 'design.png');
+        fallbackForm.append('caption', caption.replace(/[*_`\[\]()]/g, ''));
+        if (replyMarkup) fallbackForm.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
+        const fbRes = await fetch(url, { method: 'POST', body: fallbackForm, signal: AbortSignal.timeout(20000) });
+        const fbBody = await fbRes.json().catch(() => null) as any;
+        if (fbRes.ok && fbBody?.ok === true && Number.isSafeInteger(fbBody.result?.message_id)) {
+          return { success: true, messageId: String(fbBody.result.message_id) };
+        }
+      }
+      return { success: false, error: `TELEGRAM_PHOTO_FAILED_${body?.error_code || res.status}` };
+    } catch {
+      return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+    }
   }
 
   /**
    * Handles English bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
    */
   handleCommand(text: string, chatId?: string | number, senderId?: string | number): TelegramCommandResult | null {
-    if (senderId && this.config.allowedUserIds && this.config.allowedUserIds.length > 0) {
+    const trimmed = text.trim();
+    const isPublicCommand = trimmed.startsWith('/start') || trimmed.startsWith('/help');
+    if (!isPublicCommand && senderId && this.config.allowedUserIds && this.config.allowedUserIds.length > 0) {
       const sId = String(senderId);
       if (!this.config.allowedUserIds.includes(sId)) {
         return {
@@ -614,18 +669,14 @@ export class TelegramBridgeDaemon {
         };
       }
     }
-    const trimmed = text.trim();
     if (trimmed.startsWith('/start') || trimmed.startsWith('/help')) {
       return {
         text:
           `👋 *Welcome to Hawa Creative OS Bot*\n\n` +
-          `Available commands:\n` +
-          `• \`/status\` - Inspect engine, bridge & ingress status\n` +
-          `• \`/review <id>\` - Generate interactive Studio review card\n` +
-          `• \`/approve <id>\` - Approve task and publish to Google Drive & Sheets\n` +
-          `• \`/publish <id>\` - Trigger omnichannel publishing\n` +
-          `• \`/revise <id> [notes]\` - Request design revision\n` +
-          `• Send any text or voice note to capture an ad task into Hawa Desk.`,
+          `You can send design requests directly to this bot!\n\n` +
+          `• Send any design brief or text prompt to create an editable design in Canva.\n` +
+          `• Send voice notes in Kurdish or English.\n\n` +
+          `_Note: Official publication to Google Drive & Sheets requires Art Director review and approval in Hawa Desk._`,
         parse_mode: 'Markdown',
       };
     }
@@ -655,7 +706,7 @@ export class TelegramBridgeDaemon {
       return {
         action: 'approve' as const,
         taskId,
-        text: `⏳ *Processing approval & omnichannel publication for task \`${taskId}\`...*`,
+        text: `⏳ *Processing approval & omnichannel publication for task \`${taskId.replace(/`/g, '')}\`...*`,
         parse_mode: 'Markdown',
       };
     }
@@ -674,7 +725,7 @@ export class TelegramBridgeDaemon {
         action: 'revision' as const,
         taskId,
         notes,
-        text: `✏️ *Revision request logged for task \`${taskId}\`:*\n_${notes}_`,
+        text: `✏️ *Revision request logged for task \`${taskId.replace(/`/g, '')}\`:*\n_${escapeTelegramMarkdown(notes)}_`,
         parse_mode: 'Markdown',
       };
     }
@@ -828,19 +879,38 @@ export class TelegramBridgeDaemon {
               parse_mode: 'Markdown',
             };
           } else {
-            await this.answerCallbackQuery(
-              update.callback_query.id,
-              parsed.action === 'approve' ? '✅ Campaign Approved & Publishing!' : '✏️ Revision Requested'
-            );
-            botResponse = {
-              action: parsed.action,
-              taskId: parsed.taskId,
-              signature: parsed.signature,
-              text: parsed.action === 'approve'
-                ? `✅ Task \`${parsed.taskId}\` approved via button click.`
-                : `✏️ Revision requested for task \`${parsed.taskId}\`.`,
-              parse_mode: 'Markdown',
-            };
+            const hmacKey = this.config.secretToken || process.env.HAWA_ACTION_HMAC_SECRET;
+            let isValid = true;
+            if (hmacKey) {
+              try {
+                isValid = verifyActionSignature(parsed.taskId, parsed.action, parsed.signature, hmacKey);
+              } catch {
+                isValid = false;
+              }
+            }
+            if (!isValid) {
+              await this.answerCallbackQuery(update.callback_query.id, '❌ Invalid or forged action signature', true);
+              botResponse = {
+                error: 'Invalid or forged action signature',
+                errorCode: 'INVALID_SIGNATURE',
+                text: `⚠️ *Action Denied:* Invalid or forged action signature.`,
+                parse_mode: 'Markdown',
+              };
+            } else {
+              await this.answerCallbackQuery(
+                update.callback_query.id,
+                parsed.action === 'approve' ? '✅ Campaign Approved & Publishing!' : '✏️ Revision Requested'
+              );
+              botResponse = {
+                action: parsed.action,
+                taskId: parsed.taskId,
+                signature: parsed.signature,
+                text: parsed.action === 'approve'
+                  ? `✅ Task \`${parsed.taskId}\` approved via button click.`
+                  : `✏️ Revision requested for task \`${parsed.taskId}\`.`,
+                parse_mode: 'Markdown',
+              };
+            }
           }
         }
       }

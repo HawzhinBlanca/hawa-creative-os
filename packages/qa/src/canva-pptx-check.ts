@@ -21,13 +21,39 @@ export function checkCanvaPptx(bytes:Uint8Array,expectedCopy:string[],requiredFo
   const texts:string[]=[],fonts:string[]=[];let unresolvedFont=false;
   for(const shape of shapes){
     const paragraphs:any[]=[];find(shape,'a:p',paragraphs);let text='';
-    for(const paragraph of paragraphs){const nodes:any[]=[];find(paragraph,'a:t',nodes);text+=nodes.map(n=>n.map((x:any)=>String(x['#text']??'')).join('')).join('')+'\n';}
+    for(const paragraph of paragraphs){
+      const nodes:any[]=[];find(paragraph,'a:t',nodes);
+      for(const n of nodes){
+        if(Array.isArray(n))text+=n.map((x:any)=>String(x?.['#text']??'')).join('');
+        else if(n&&typeof n==='object')text+=String(n['#text']??'');
+        else if(typeof n==='string')text+=n;
+      }
+      text+='\n';
+    }
     if(!text.trim())continue;texts.push(text.trim());
     const runs:any[]=[];find(shape,'a:r',runs);
     if(!runs.length)unresolvedFont=true;
-    for(const run of runs){const properties:any[]=[];find(run,'a:rPr',properties);let face:string|undefined;
-      for(const props of properties)for(const child of props)if(child['a:latin'])face=child[':@']?.['@_typeface'];
-      if(!face)unresolvedFont=true;else fonts.push(face);
+    for(const run of runs){
+      const properties:any[]=[];find(run,'a:rPr',properties);
+      const runFaces:string[]=[];
+      const inspectChild=(child:any)=>{
+        if(!child||typeof child!=='object')return;
+        for(const tag of ['a:latin','a:cs','a:ea']){
+          if(child[tag]){
+            const tf=child[':@']?.['@_typeface']||(child[tag]as any)?.['@_typeface'];
+            if(tf&&typeof tf==='string'&&tf.trim())runFaces.push(tf.trim());
+          }
+        }
+      };
+      for(const props of properties){
+        if(Array.isArray(props)){for(const child of props)inspectChild(child);}
+        else if(props&&typeof props==='object'){inspectChild(props);}
+      }
+      if(!runFaces.length){unresolvedFont=true;}
+      else{
+        const matched=runFaces.find(f=>f===requiredFont||f.startsWith(requiredFont+' '));
+        fonts.push(matched||runFaces[0]);
+      }
     }
   }
   const normalize=(s:string)=>s.replace(/\s+/g,' ').trim();

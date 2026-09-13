@@ -6,7 +6,7 @@ import type { Database } from '../src/types.js';
 import type { Kysely } from 'kysely';
 
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '54332';
-const TEST_DB_URL = process.env.POSTGRES_LIVE_URL || `postgresql://hawa_owner:hawa_production_secure_pass@127.0.0.1:${POSTGRES_PORT}/hawa_test`;
+const TEST_DB_URL = process.env.POSTGRES_LIVE_URL || process.env.TEST_DATABASE_OWNER_URL!;
 
 describe('CanvaBindingRepository — Live Database Integration Suite (hawa_test)', () => {
   let pool: pg.Pool;

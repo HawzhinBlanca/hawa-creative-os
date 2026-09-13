@@ -44,9 +44,47 @@ describe('QA: Contrast, Layout Bounds & Safe Zone Validation', () => {
       expect(resNormal.passesAA).toBe(false);
       expect(resLarge.passesAA).toBe(true);
     });
+
+    it('correctly resolves named CSS color keywords and 4-digit hex codes', () => {
+      const ratioKeyword = getContrastRatio('white', 'black');
+      expect(Math.round(ratioKeyword)).toBe(21);
+
+      const ratioHex4 = getContrastRatio('#fff', '#000');
+      expect(Math.round(ratioHex4)).toBe(21);
+
+      const ratioTransparent = getContrastRatio('#000000', 'transparent');
+      expect(Math.round(ratioTransparent)).toBe(21);
+
+      const ratioInvalid = getContrastRatio('#not-a-color', '#fff');
+      expect(Number.isFinite(ratioInvalid)).toBe(true);
+      expect(ratioInvalid).toBeGreaterThanOrEqual(1.0);
+    });
+
+    it('supports modern CSS Level 4 space-separated rgb and percentage rgb notations', () => {
+      const ratioSpace = getContrastRatio('rgb(255 255 255)', '#000000');
+      expect(Math.round(ratioSpace)).toBe(21);
+
+      const ratioPercentage = getContrastRatio('rgb(100%, 100%, 100%)', '#000000');
+      expect(Math.round(ratioPercentage)).toBe(21);
+    });
   });
 
   describe('Safe Zone Specifications & Violations', () => {
+    it('gracefully guards against non-positive dimensions without zero division', () => {
+      const specZero = getSafeZoneSpec(0, 0);
+      expect(specZero.topMarginPx).toBeGreaterThan(0);
+      expect(specZero.bottomMarginPx).toBeGreaterThan(0);
+
+      const specNegative = getSafeZoneSpec(-100, -200);
+      expect(specNegative.topMarginPx).toBeGreaterThan(0);
+
+      const nodes = [{ id: 'headline', role: 'headline', text: 'Title', x: 100, y: 100, width: 200, height: 50 }];
+      const violations = checkSafeZoneViolations(nodes, 1080, 0);
+      // Valid node should not have negative safeLimit or false breach
+      for (const v of violations) {
+        expect(v.safeLimit).toBeGreaterThan(0);
+      }
+    });
     it('computes 9:16 vertical story safe zones for native platform UI', () => {
       const spec = getSafeZoneSpec(1080, 1920);
       expect(spec.topMarginPx).toBeGreaterThanOrEqual(240); // Profile and status bar
@@ -104,6 +142,27 @@ describe('QA: Contrast, Layout Bounds & Safe Zone Validation', () => {
 
       const res = checkTextContainerOverflow(fittingNode);
       expect(res.overflows).toBe(false);
+    });
+
+    it('safely handles zero width, zero fontSize, and non-string text without throwing or NaN', () => {
+      const resZero = checkTextContainerOverflow({
+        id: 'zero_node',
+        text: '',
+        fontSize: 0,
+        width: 0,
+        height: 0,
+      });
+      expect(resZero.overflows).toBe(false);
+      expect(Number.isFinite(resZero.estimatedHeight)).toBe(true);
+
+      const resNullText = checkTextContainerOverflow({
+        id: 'null_text',
+        text: null as any,
+        fontSize: 16,
+        width: 200,
+        height: 50,
+      });
+      expect(resNullText.overflows).toBe(false);
     });
   });
 

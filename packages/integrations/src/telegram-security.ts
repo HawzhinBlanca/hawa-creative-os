@@ -61,7 +61,9 @@ export class TelegramActionTokenService {
   private defaultSecret: string;
 
   constructor(secret?: string) {
-    this.defaultSecret = secret || process.env.HAWA_ACTION_HMAC_SECRET || 'hawa_telegram_action_default_hmac_secret_2026';
+    const configured = secret || process.env.HAWA_ACTION_HMAC_SECRET;
+    if (!configured) throw new Error('HAWA_ACTION_HMAC_SECRET is not configured; Telegram action tokens cannot be issued');
+    this.defaultSecret = configured;
   }
 
   private computeSignature(payload: TelegramActionTokenPayload, secret: string): string {

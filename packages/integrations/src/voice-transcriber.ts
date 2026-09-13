@@ -66,10 +66,14 @@ export class KurdishVoiceTranscriber {
     if (!rawTranscript && base64Data && geminiKey && !geminiKey.startsWith('mock-')) {
       try {
         const mimeType = req.audioMimeType || 'audio/ogg';
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+        const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
         const response = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiKey,
+          },
+          signal: AbortSignal.timeout(30000),
           body: JSON.stringify({
             contents: [
               {
@@ -106,7 +110,18 @@ export class KurdishVoiceTranscriber {
     }
 
     if (!rawTranscript) {
-      rawTranscript = 'سڵاو کاکە، پۆستێکی نەورۆزمان بۆ بکە بۆ دەرمانخانەی ئاستەر، داشکاندنی لەسەدا بیست و پێنج تا دەی مانگ، تەلەفۆن صفر حەوت سەد و پەنجا ١٢٣٤٥٦٧';
+      // Nothing was transcribed and no caption was supplied. An empty result is the only honest
+      // answer; inventing a sample brief would create a task the requester never asked for.
+      return {
+        transcript: '',
+        normalizedText: '',
+        detectedLanguage: 'ckb',
+        confidence: 0,
+        durationSeconds: req.durationSeconds || 0,
+        protectedTokens: [],
+        objective: 'Untranscribed voice note',
+        missingFacts: ['transcript'],
+      };
     }
     
     const normalizedText = normalizeKurdishSpokenText(rawTranscript);

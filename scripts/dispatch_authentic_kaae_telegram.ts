@@ -2,8 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 async function dispatchToTelegram() {
-  const botToken = '8975998512:AAELwUMofl2S-Rho0zrXjVL66tlJzTAfHzI';
-  const chatId = '7191500129';
+  // Credentials and the target chat come only from the environment; never commit either.
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_DISPATCH_CHAT_ID;
+  if (!botToken || !chatId) throw new Error('TELEGRAM_BOT_TOKEN and TELEGRAM_DISPATCH_CHAT_ID are required');
   const filePath = path.resolve('exports/kaae_presidential_invitation_master.png');
 
   if (!fs.existsSync(filePath)) {
@@ -34,7 +36,7 @@ _Full verbatim content preserved adhering to KAAE royal navy and gold brand guid
         { text: '✏️ Request Revision', callback_data: 'act:revise_kaae_presidential_master' }
       ],
       [
-        { text: '🎨 Open in Hawa Desk Studio', url: 'https://restaurant-threatened-replaced-reason.trycloudflare.com/review?taskId=551aea6e-702e-4c80-ad99-d8b1720fabc4&mode=review' }
+        { text: '🎨 Open in Hawa Desk Studio', url: `${process.env.HAWA_PUBLIC_URL || 'https://hawa.invalid'}/review?taskId=551aea6e-702e-4c80-ad99-d8b1720fabc4&mode=review` }
       ]
     ]
   });

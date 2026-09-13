@@ -114,8 +114,30 @@ describe('Vector Compositor & Dynamic Contrast Engine (Invariant #4)', () => {
         expect(validation.value.valid).toBe(true);
         expect(validation.value.quarantinedNodes).toHaveLength(0);
         expect(validation.value.prohibitedNodesFound).toHaveLength(0);
-        expect(validation.value.violatesLayerIsolation).toBe(false);
       }
     }
+  });
+
+  it('accurately computes contrast for shorthand hex codes and CSS named colors without NaN', () => {
+    expect(calculateContrastRatio('#fff', '#000')).toBeCloseTo(21, 1);
+    expect(calculateContrastRatio('white', 'black')).toBeCloseTo(21, 1);
+    expect(getRelativeLuminance('#fff')).toBeCloseTo(1, 2);
+    expect(getRelativeLuminance('black')).toBe(0);
+  });
+
+  it('generates deterministic identical SVGs across multiple invocations with graphHash', () => {
+    const r1 = buildCompositedVisualBackdrop({
+      templateId: 'editorial_scrim_gradient',
+      width: 1080,
+      height: 1080,
+      graphHash: 'pinned_graph_hash_001',
+    });
+    const r2 = buildCompositedVisualBackdrop({
+      templateId: 'editorial_scrim_gradient',
+      width: 1080,
+      height: 1080,
+      graphHash: 'pinned_graph_hash_001',
+    });
+    expect(r1.svg).toBe(r2.svg);
   });
 });

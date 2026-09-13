@@ -6,6 +6,7 @@ import {
   withRlsContext,
 } from '@hawa/db';
 import type { IngressPersistencePort } from '@hawa/integrations';
+import { CHANNEL_INGRESS_USER_ID, PRIMARY_OPERATOR_USER_ID } from '@hawa/contracts';
 
 export class PostgresIngressPersistenceAdapter implements IngressPersistencePort {
   constructor(
@@ -15,12 +16,13 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
     private readonly resolveUserId?: (tenantId: string) => string
   ) {}
 
+  /**
+   * Rows written because a message arrived belong to the Channel Ingress service identity (ADR-027);
+   * migration 012 grants it the operator role on every tenant. A resolver can still override per tenant.
+   */
   private getUserId(tenantId: string): string {
     if (this.resolveUserId) return this.resolveUserId(tenantId);
-    if (tenantId.startsWith('00000000-0000-4000-a000-')) {
-      return tenantId.replace('a000', 'b000');
-    }
-    return '00000000-0000-4000-b000-000000000001';
+    return CHANNEL_INGRESS_USER_ID;
   }
 
   async recordInboxEvent(params: {
@@ -40,7 +42,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: this.getUserId(params.tenantId),
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         return await this.ingressRepo.recordInboxEvent(params, trx);
@@ -70,7 +72,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: this.getUserId(params.tenantId),
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         return await this.ingressRepo.recordMessageEvent(params, trx);
@@ -95,7 +97,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: this.getUserId(params.tenantId),
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         return await this.ingressRepo.recordAttachment(params, trx);
@@ -115,7 +117,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: this.getUserId(params.tenantId),
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         const task = await this.ingressRepo.findTaskByMessageExternal(
@@ -146,7 +148,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
     enqueueOutbox?: boolean;
   }): Promise<{ task: { id: string; state: string }; created: boolean }> {
     const effectiveUserId =
-      params.userId && params.userId !== '00000000-0000-4000-b000-000000000001'
+      params.userId && params.userId !== PRIMARY_OPERATOR_USER_ID && params.userId !== CHANNEL_INGRESS_USER_ID
         ? params.userId
         : this.getUserId(params.tenantId);
 
@@ -155,7 +157,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: effectiveUserId,
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         const result = await this.taskRepo.createTaskAggregate(
@@ -198,7 +200,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId,
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         const task = await this.taskRepo.findById(params.taskId, params.tenantId, trx);
@@ -232,7 +234,7 @@ export class PostgresIngressPersistenceAdapter implements IngressPersistencePort
       {
         tenantId: params.tenantId,
         userId: this.getUserId(params.tenantId),
-        role: 'administrator',
+        role: 'operator',
       },
       async (trx) => {
         await trx

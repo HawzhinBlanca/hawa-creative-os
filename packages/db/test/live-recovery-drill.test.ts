@@ -5,12 +5,19 @@ import { resolve } from 'node:path';
 import pg from 'pg';
 
 const POSTGRES_PORT = process.env.POSTGRES_PORT || '54332';
-const OWNER_URL = process.env.POSTGRES_OWNER_URL || `postgresql://hawa_owner:hawa_production_secure_pass@127.0.0.1:${POSTGRES_PORT}/postgres`;
-const LIVE_DB_URL = process.env.POSTGRES_LIVE_URL || `postgresql://hawa_owner:hawa_production_secure_pass@127.0.0.1:${POSTGRES_PORT}/hawa_test`;
-const APP_PASSWORD = process.env.POSTGRES_APP_PASSWORD || 'hawa_app_secure_runtime_pass_2026';
+// Credentials come only from the environment. The drill is opt-in (POSTGRES_DISASTER_DRILL_ENABLED)
+// and refuses to run with anything less than explicit owner and app credentials.
+const OWNER_URL = process.env.POSTGRES_OWNER_URL || '';
+const LIVE_DB_URL = process.env.POSTGRES_LIVE_URL || '';
+const APP_PASSWORD = process.env.POSTGRES_APP_PASSWORD || '';
 const DRILL_DB_NAME = 'hawa_clean_recovery_drill';
-const DRILL_DB_URL = `postgresql://hawa_owner:hawa_production_secure_pass@127.0.0.1:${POSTGRES_PORT}/${DRILL_DB_NAME}`;
-const DRILL_APP_URL = `postgresql://hawa_app:${APP_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${DRILL_DB_NAME}`;
+if (process.env.POSTGRES_DISASTER_DRILL_ENABLED && (!OWNER_URL || !LIVE_DB_URL || !APP_PASSWORD)) {
+  throw new Error('Disaster drill requires POSTGRES_OWNER_URL, POSTGRES_LIVE_URL and POSTGRES_APP_PASSWORD');
+}
+const withDatabase = (url: string, name: string) => { if (!url) return ''; const u = new URL(url); u.pathname = `/${name}`; return u.href; };
+const withUser = (url: string, user: string, password: string) => { if (!url) return ''; const u = new URL(url); u.username = user; u.password = password; return u.href; };
+const DRILL_DB_URL = withDatabase(OWNER_URL, DRILL_DB_NAME);
+const DRILL_APP_URL = withUser(DRILL_DB_URL, 'hawa_app', APP_PASSWORD);
 
 interface DrillMetrics {
   timestamp: string;
@@ -80,7 +87,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
     // Execute live pg_dump from the production container
     const liveDbName = LIVE_DB_URL.split('/').pop() || 'hawa_test';
     const dumpCmd = `docker exec hawa-production-postgres-1 pg_dump -U hawa_owner ${liveDbName}`;
-    const backupSql = execSync(dumpCmd, { maxBuffer: 32 * 1024 * 1024, encoding: 'utf-8' });
+    const backupSql = execSync(dumpCmd, { maxBuffer: 128 * 1024 * 1024, encoding: 'utf-8' });
     
     const backupEnd = performance.now();
     const backupDurationMs = Math.round(backupEnd - backupStart);

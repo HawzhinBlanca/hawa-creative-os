@@ -4,6 +4,9 @@ import {
   DesignRouter,
   CreativeDirectorRunner,
   TemplateEngine,
+  HoldoutCopyAuditor,
+  encodeEditableTransfer,
+  renderOperationsToSvg,
 } from '../src/index.js';
 
 describe('Creative: Brief, Router & Studio Operations', () => {
@@ -99,6 +102,102 @@ describe('Creative: Brief, Router & Studio Operations', () => {
 
       expect(ops.length).toBe(2);
       expect(ops.some((o) => o.op === 'replaceText' && o.text === 'بەخێربێن بۆ ئاستەر')).toBe(true);
+
+      // Verify HoldoutCopyAuditor audits replaceText operations without dropping them
+      const auditor = new HoldoutCopyAuditor();
+      const auditRes = auditor.auditCandidateCopy(briefRes.value, { operations: ops as any });
+      expect(auditRes.ok).toBe(true);
+      if (auditRes.ok) {
+        expect(auditRes.value.exactMatch).toBe(true);
+      }
     }
+  });
+
+  it('encodeEditableTransfer: accepts and normalizes 3-digit hex colors without crashing', async () => {
+    const plan = {
+      width: 1080,
+      height: 1350,
+      background: '#fff',
+      text: [
+        {
+          copyIndex: 0,
+          x: 60,
+          y: 200,
+          width: 960,
+          height: 100,
+          fontSize: 32,
+          fontFamily: 'Arial',
+          color: '#000',
+          align: 'center' as const,
+        },
+      ],
+      shapes: [
+        {
+          x: 60,
+          y: 350,
+          width: 960,
+          height: 10,
+          color: '#f00',
+        },
+      ],
+    };
+
+    const copy = ['Official KAAE Announcement'];
+    const result = await encodeEditableTransfer(plan, copy);
+    expect(result).toBeDefined();
+    expect(result.bytes).toBeInstanceOf(Buffer);
+    expect(result.bytes.length).toBeGreaterThan(1000);
+    expect(result.manifest.plan.background).toBe('#fff');
+  });
+
+  it('HoldoutCopyAuditor: handles briefs where exactCopy is undefined without throwing TypeError', () => {
+    const auditor = new HoldoutCopyAuditor();
+    const brief: any = {
+      taskId: 't-none',
+      clientId: 'c-none',
+      clientDnaVersion: 1,
+      objective: 'No copy test',
+      rawRequestText: 'Simple layout without exact copy',
+      exactCopy: undefined,
+    };
+    const auditRes = auditor.auditCandidateCopy(brief, 'Some candidate copy text');
+    expect(auditRes.ok).toBe(true);
+    if (auditRes.ok) {
+      expect(auditRes.value.preservedBlocksCount).toBe(0);
+      expect(auditRes.value.exactMatch).toBe(true);
+    }
+  });
+
+  it('renderOperationsToSvg: escapes XML special characters in attributes to prevent XML malformation', () => {
+    const ops: any[] = [
+      {
+        op: 'addVector',
+        nodeId: 'vec_<foo>&"bar"',
+        x: 10,
+        y: 20,
+        source: '<path d="M0 0 L10 10"/>',
+      },
+      {
+        op: 'addText',
+        nodeId: 'txt_<title>&"quotes"',
+        x: 20,
+        y: 40,
+        width: 300,
+        height: 100,
+        text: 'Title & More',
+        style: {
+          fontSize: 24,
+          fontFamily: 'Foo & Bar "Sans"',
+          color: '#000000',
+        },
+      },
+    ];
+
+    const svg = renderOperationsToSvg(ops, 1080, 1350);
+    expect(svg).toContain('id="vec_&lt;foo&gt;&amp;&quot;bar&quot;"');
+    expect(svg).toContain('id="txt_&lt;title&gt;&amp;&quot;quotes&quot;"');
+    expect(svg).toContain('font-family="Foo &amp; Bar &apos;Sans&apos;"');
+    expect(svg).not.toContain('id="vec_<foo>');
+    expect(svg).not.toContain('font-family="Foo & Bar "Sans""');
   });
 });

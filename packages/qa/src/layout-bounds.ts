@@ -10,24 +10,26 @@ export interface SafeZoneSpec {
 }
 
 export function getSafeZoneSpec(pageWidth: number, pageHeight: number): SafeZoneSpec {
-  const aspectRatio = pageWidth / pageHeight;
+  const safeWidth = Number.isFinite(pageWidth) && pageWidth > 0 ? pageWidth : 1080;
+  const safeHeight = Number.isFinite(pageHeight) && pageHeight > 0 ? pageHeight : 1080;
+  const aspectRatio = safeWidth / safeHeight;
 
   // 9:16 Vertical Story / Reel format (e.g. 1080x1920)
-  if (Math.abs(aspectRatio - 9 / 16) < 0.05 || (pageWidth === 1080 && pageHeight === 1920)) {
+  if (Math.abs(aspectRatio - 9 / 16) < 0.05 || (safeWidth === 1080 && safeHeight === 1920)) {
     return {
-      topMarginPx: Math.round(pageHeight * 0.13), // ~250px top header safe zone
-      bottomMarginPx: Math.round(pageHeight * 0.177), // ~340px bottom CTA/reply bar
-      leftMarginPx: Math.round(pageWidth * 0.06), // ~65px left
-      rightMarginPx: Math.round(pageWidth * 0.06), // ~65px right
+      topMarginPx: Math.round(safeHeight * 0.13), // ~250px top header safe zone
+      bottomMarginPx: Math.round(safeHeight * 0.177), // ~340px bottom CTA/reply bar
+      leftMarginPx: Math.round(safeWidth * 0.06), // ~65px left
+      rightMarginPx: Math.round(safeWidth * 0.06), // ~65px right
     };
   }
 
   // 4:5 Feed Portrait (1080x1350) or 1:1 Square (1080x1080)
   return {
-    topMarginPx: Math.round(pageHeight * 0.05), // 5% border margin
-    bottomMarginPx: Math.round(pageHeight * 0.05),
-    leftMarginPx: Math.round(pageWidth * 0.05),
-    rightMarginPx: Math.round(pageWidth * 0.05),
+    topMarginPx: Math.round(safeHeight * 0.05), // 5% border margin
+    bottomMarginPx: Math.round(safeHeight * 0.05),
+    leftMarginPx: Math.round(safeWidth * 0.05),
+    rightMarginPx: Math.round(safeWidth * 0.05),
   };
 }
 
@@ -59,7 +61,9 @@ export function checkSafeZoneViolations(
   pageWidth: number,
   pageHeight: number
 ): SafeZoneViolation[] {
-  const spec = getSafeZoneSpec(pageWidth, pageHeight);
+  const safeWidth = Number.isFinite(pageWidth) && pageWidth > 0 ? pageWidth : 1080;
+  const safeHeight = Number.isFinite(pageHeight) && pageHeight > 0 ? pageHeight : 1080;
+  const spec = getSafeZoneSpec(safeWidth, safeHeight);
   const violations: SafeZoneViolation[] = [];
 
   for (const node of nodes) {
@@ -81,7 +85,7 @@ export function checkSafeZoneViolations(
 
     // Bottom breach
     const nodeBottom = node.y + node.height;
-    const maxAllowedBottom = pageHeight - spec.bottomMarginPx;
+    const maxAllowedBottom = safeHeight - spec.bottomMarginPx;
     if (nodeBottom > maxAllowedBottom) {
       violations.push({
         nodeId: node.id,
@@ -107,7 +111,7 @@ export function checkSafeZoneViolations(
 
     // Right breach
     const nodeRight = node.x + node.width;
-    const maxAllowedRight = pageWidth - spec.rightMarginPx;
+    const maxAllowedRight = safeWidth - spec.rightMarginPx;
     if (nodeRight > maxAllowedRight) {
       violations.push({
         nodeId: node.id,
@@ -142,10 +146,12 @@ export function checkSocialOverlayCollisions(
   pageWidth: number,
   pageHeight: number
 ): SocialOverlayCollision[] {
+  const safeWidth = Number.isFinite(pageWidth) && pageWidth > 0 ? pageWidth : 1080;
+  const safeHeight = Number.isFinite(pageHeight) && pageHeight > 0 ? pageHeight : 1080;
   const collisions: SocialOverlayCollision[] = [];
-  const aspectRatio = pageWidth / pageHeight;
-  const isStory = Math.abs(aspectRatio - 9 / 16) < 0.05 || (pageWidth === 1080 && pageHeight === 1920);
-  const isFeed = Math.abs(aspectRatio - 4 / 5) < 0.05 || Math.abs(aspectRatio - 1) < 0.05 || (pageWidth === 1080 && pageHeight === 1350);
+  const aspectRatio = safeWidth / safeHeight;
+  const isStory = Math.abs(aspectRatio - 9 / 16) < 0.05 || (safeWidth === 1080 && safeHeight === 1920);
+  const isFeed = Math.abs(aspectRatio - 4 / 5) < 0.05 || Math.abs(aspectRatio - 1) < 0.05 || (safeWidth === 1080 && safeHeight === 1350);
 
   for (const node of nodes) {
     const isCritical = Boolean(
@@ -159,9 +165,9 @@ export function checkSocialOverlayCollisions(
     if (!isCritical) continue;
 
     if (isStory) {
-      const headerDanger = Math.round(pageHeight * 0.14);
-      const footerDanger = Math.round(pageHeight * 0.80);
-      const sideMargin = Math.round(pageWidth * 0.05);
+      const headerDanger = Math.round(safeHeight * 0.14);
+      const footerDanger = Math.round(safeHeight * 0.80);
+      const sideMargin = Math.round(safeWidth * 0.05);
       const nodeBottom = node.y + node.height;
       const nodeRight = node.x + node.width;
 
@@ -182,7 +188,7 @@ export function checkSocialOverlayCollisions(
           nodeId: node.id,
           role: node.role,
           zone: 'footer_ui',
-          zoneLabel: `Instagram Story Message/Action Bar (bottom ${pageHeight - footerDanger}px)`,
+          zoneLabel: `Instagram Story Message/Action Bar (bottom ${safeHeight - footerDanger}px)`,
           overlapPx: nodeBottom - footerDanger,
         });
       }
@@ -198,21 +204,21 @@ export function checkSocialOverlayCollisions(
         });
       }
 
-      if (nodeRight > pageWidth - sideMargin) {
+      if (nodeRight > safeWidth - sideMargin) {
         collisions.push({
           platform: 'instagram_story',
           nodeId: node.id,
           role: node.role,
           zone: 'side_gutter',
           zoneLabel: `Story Right Edge Gutter (${sideMargin}px)`,
-          overlapPx: nodeRight - (pageWidth - sideMargin),
+          overlapPx: nodeRight - (safeWidth - sideMargin),
         });
       }
 
       // Reels/Story Right-Side Interaction Rail (Like, Comment, Share)
-      const railTop = Math.round(pageHeight * 0.45);
-      const railBottom = Math.round(pageHeight * 0.82);
-      const railLeft = pageWidth - Math.round(pageWidth * 0.09); // rightmost 9%
+      const railTop = Math.round(safeHeight * 0.45);
+      const railBottom = Math.round(safeHeight * 0.82);
+      const railLeft = safeWidth - Math.round(safeWidth * 0.09); // rightmost 9%
       if (nodeRight > railLeft && node.y < railBottom && nodeBottom > railTop) {
         collisions.push({
           platform: 'instagram_story',
@@ -224,8 +230,8 @@ export function checkSocialOverlayCollisions(
         });
       }
     } else if (isFeed) {
-      const footerDanger = Math.round(pageHeight * 0.88);
-      const sideMargin = Math.round(pageWidth * 0.04);
+      const footerDanger = Math.round(safeHeight * 0.88);
+      const sideMargin = Math.round(safeWidth * 0.04);
       const nodeBottom = node.y + node.height;
       const nodeRight = node.x + node.width;
 
@@ -235,7 +241,7 @@ export function checkSocialOverlayCollisions(
           nodeId: node.id,
           role: node.role,
           zone: 'footer_ui',
-          zoneLabel: `Meta Feed Bottom Action Tray (bottom ${pageHeight - footerDanger}px)`,
+          zoneLabel: `Meta Feed Bottom Action Tray (bottom ${safeHeight - footerDanger}px)`,
           overlapPx: nodeBottom - footerDanger,
         });
       }
@@ -251,14 +257,14 @@ export function checkSocialOverlayCollisions(
         });
       }
 
-      if (nodeRight > pageWidth - sideMargin) {
+      if (nodeRight > safeWidth - sideMargin) {
         collisions.push({
           platform: 'meta_feed',
           nodeId: node.id,
           role: node.role,
           zone: 'side_gutter',
           zoneLabel: `Meta Feed Right Margin Gutter (${sideMargin}px)`,
-          overlapPx: nodeRight - (pageWidth - sideMargin),
+          overlapPx: nodeRight - (safeWidth - sideMargin),
         });
       }
     }
@@ -281,16 +287,21 @@ export function checkTextContainerOverflow(node: {
   estimatedHeight: number;
   containerHeight: number;
 } {
+  const safeFontSize = Number.isFinite(node.fontSize) && node.fontSize > 0 ? node.fontSize : 16;
+  const safeWidth = Number.isFinite(node.width) && node.width > 0 ? node.width : 1;
+  const safeHeight = Number.isFinite(node.height) && node.height > 0 ? node.height : 0;
+  const safeText = typeof node.text === 'string' ? node.text : '';
+
   // Approximate average character width for Kurdish Sorani / Arabic at font size S is ~0.55 * S
-  const avgCharWidth = node.fontSize * 0.55;
-  const charsPerLine = Math.max(1, Math.floor(node.width / avgCharWidth));
-  const estimatedLines = Math.ceil(node.text.length / charsPerLine);
-  const estimatedHeight = estimatedLines * (node.fontSize * 1.3); // 1.3 line-height
+  const avgCharWidth = safeFontSize * 0.55;
+  const charsPerLine = Math.max(1, Math.floor(safeWidth / avgCharWidth));
+  const estimatedLines = Math.max(1, Math.ceil(safeText.length / charsPerLine));
+  const estimatedHeight = estimatedLines * (safeFontSize * 1.3); // 1.3 line-height
 
   return {
-    overflows: estimatedHeight > node.height * 1.05, // 5% tolerance
+    overflows: safeHeight > 0 ? estimatedHeight > safeHeight * 1.05 : safeText.length > 0, // 5% tolerance
     estimatedHeight: Math.round(estimatedHeight),
-    containerHeight: node.height,
+    containerHeight: safeHeight,
   };
 }
 

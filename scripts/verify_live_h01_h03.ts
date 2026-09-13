@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 
 const BASE_URL = 'http://127.0.0.1:8080';
-const REVIEWER_KEY = 'hawa_prod_reviewer_art_director_key_entropy_8814';
-const OPERATOR_KEY = 'hawa_prod_operator_bearer_token_entropy_7721';
-const ADMIN_KEY = 'hawa_prod_admin_secret_key_entropy_9912';
+const REVIEWER_KEY = process.env.HAWA_REVIEWER_KEY;
+const OPERATOR_KEY = process.env.HAWA_BEARER_TOKEN;
+const ADMIN_KEY = process.env.HAWA_ADMIN_KEY;
+if (!REVIEWER_KEY || !OPERATOR_KEY || !ADMIN_KEY) throw new Error('HAWA_REVIEWER_KEY, HAWA_BEARER_TOKEN and HAWA_ADMIN_KEY must be set; this script has no built-in credentials');
 
 interface ProbeResult {
   step: string;

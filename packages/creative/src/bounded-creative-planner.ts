@@ -166,34 +166,59 @@ export class BoundedCreativePlanner {
     const estimatedCostUsd = isTemplateRoutine ? 0.000000 : 0.002500; // Template fill has zero deep-model cost (NFR-018)
 
     const clientId = brief.clientId || 'client-office-1';
-    const budgetCheck = this.costGovernor.checkBudget(clientId, estimatedCostUsd);
-    if (!budgetCheck.allowed) {
-      return {
-        ok: false,
-        error: {
-          code: 'BUDGET_EXCEEDED',
-          message: budgetCheck.reason || `Client ${clientId} exceeded monthly AI budget cap`,
-          retryable: false,
-          safeAction: 'Request human authorization for additional AI generation credits',
-          detail: { budgetCheck },
-        },
-      };
+    let reservationId: string | undefined;
+    if (typeof this.costGovernor.reserveBudget === 'function') {
+      const reservation = this.costGovernor.reserveBudget({ clientId, amountUsd: estimatedCostUsd });
+      if (!reservation.allowed) {
+        return {
+          ok: false,
+          error: {
+            code: 'BUDGET_EXCEEDED',
+            message: reservation.reason || `Client ${clientId} exceeded monthly AI budget cap`,
+            retryable: false,
+            safeAction: 'Request human authorization for additional AI generation credits',
+            detail: { budgetCheck: reservation },
+          },
+        };
+      }
+      reservationId = reservation.reservationId;
+    } else {
+      const budgetCheck = this.costGovernor.checkBudget(clientId, estimatedCostUsd);
+      if (!budgetCheck.allowed) {
+        return {
+          ok: false,
+          error: {
+            code: 'BUDGET_EXCEEDED',
+            message: budgetCheck.reason || `Client ${clientId} exceeded monthly AI budget cap`,
+            retryable: false,
+            safeAction: 'Request human authorization for additional AI generation credits',
+            detail: { budgetCheck },
+          },
+        };
+      }
     }
 
     // 3. Create Plan with Visual Ingredient Bounding (FR-025, FR-026, FR-024)
     const planRes = this.createBoundedPlan(brief, clientDna, targetFormat);
     if (!planRes.ok) {
+      if (reservationId && typeof this.costGovernor.releaseReservation === 'function') {
+        this.costGovernor.releaseReservation(reservationId);
+      }
       return planRes;
     }
     const plan = planRes.value;
 
     // 4. Generate Studio Operations
-    const primaryLogoSha256 = clientDna?.assets.find((a) => a.role === 'logo_primary')?.sha256 || 'kaae_primary_logo_sha256_mock';
+    const primaryLogo = clientDna?.assets.find((a) => a.role === 'logo_primary' || a.role === 'logo_symbol');
+    const primaryLogoSha256 = primaryLogo?.sha256 || 'kaae_primary_logo_sha256_mock';
     const operations = this.director.generateStudioOperations(brief, plan, primaryLogoSha256, targetFormat);
 
     // 5. Holdout Copy Audit (FR-014, FR-015)
     const holdoutRes = this.holdoutAuditor.auditCandidateCopy(brief, { operations });
     if (!holdoutRes.ok) {
+      if (reservationId && typeof this.costGovernor.releaseReservation === 'function') {
+        this.costGovernor.releaseReservation(reservationId);
+      }
       return {
         ok: false,
         error: holdoutRes.error,
@@ -210,6 +235,7 @@ export class BoundedCreativePlanner {
       inputTokens: isTemplateRoutine ? 0 : 520,
       outputTokens: isTemplateRoutine ? 0 : 140,
       costUsd: estimatedCostUsd,
+      reservationId,
     });
 
     const formatSpec = this.director.resolveCanonicalFormat(brief, targetFormat);
@@ -268,11 +294,14 @@ export class BoundedCreativePlanner {
       };
     }
 
-    // Apply bounded repair adjustments
-    const updatedOperations = [...candidate.operations];
+    // Apply bounded repair adjustments to a deep-cloned operations copy
+    const updatedOperations = candidate.operations.map((op) => ({
+      ...op,
+      style: op.style ? { ...op.style } : undefined,
+    }));
     // Example repair: recalculate safe text line height or adjust padding
     for (const op of updatedOperations) {
-      if (op.op === 'addText' && op.style) {
+      if ((op.op === 'addText' || op.op === 'replaceText') && op.style) {
         op.style.lineHeight = Math.max(op.style.lineHeight || 1.38, 1.42); // Adjust diacritic safe height
       }
     }

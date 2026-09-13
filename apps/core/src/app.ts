@@ -12,6 +12,7 @@ import type {
   DesignStudioAdapter,
   StudioOperation,
 } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import {
   TaskStateMachine,
   extractProtectedTokens,
@@ -132,8 +133,10 @@ import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter
 import { EvaluationRunner } from '@hawa/evals';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
-import type { CanvaServiceOptions } from './services/canva-connect-service.js';
+import { escapeTelegramHtml } from '@hawa/integrations';
+import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
+import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -194,11 +197,14 @@ const channelKillSwitches = {
 
 export interface CreateAppOptions {
   canvaOptions?: CanvaServiceOptions;
+  canvaConnectService?: CanvaConnectService;
   db?: Kysely<Database>;
   publicationRepo?: PublicationRepository;
   telegramActionTokenService?: TelegramActionTokenService;
   telegramBridge?: TelegramBridgeDaemon;
 }
+
+const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
@@ -208,6 +214,7 @@ export function createApp(options?: CreateAppOptions) {
   const outboxRepo = db ? new OutboxRepository(db) : null;
   const revisionRepo = db ? new RevisionRepository(db) : null;
   const canvaBindingRepo = db ? new CanvaBindingRepository(db) : null;
+  const canvaConnectService = options?.canvaConnectService || (db ? new CanvaConnectService(db, options?.canvaOptions) : null);
   const publicationRepo = options?.publicationRepo || (db ? new PublicationRepository(db) : null);
   const ingressPersistence = (db && ingressRepo && taskRepo)
     ? new PostgresIngressPersistenceAdapter(db, ingressRepo, taskRepo)
@@ -294,7 +301,8 @@ export function createApp(options?: CreateAppOptions) {
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
   const evalRunner = new EvaluationRunner(modelGateway);
-  const sloDaemon = new SyntheticTrafficDaemon(12);
+  // Zero seed probes: every SLO data point must come from a probe that actually ran.
+  const sloDaemon = new SyntheticTrafficDaemon(0);
   const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
   const telegramActionTokenService =
@@ -307,13 +315,13 @@ export function createApp(options?: CreateAppOptions) {
     options?.telegramBridge ||
     new TelegramBridgeDaemon({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
-      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || 'expected_office_secret',
+      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '',
       targetIngressUrl: 'http://127.0.0.1:8080/api/webhooks/telegram',
       deskBaseUrl:
         process.env.PUBLIC_TUNNEL_URL ||
         process.env.HAWA_PUBLIC_URL ||
         process.env.HAWA_DESK_BASE_URL ||
-        'https://restaurant-threatened-replaced-reason.trycloudflare.com',
+        'http://127.0.0.1:8080',
       actionTokenService: telegramActionTokenService,
       allowedUserIds: telegramAllowedUsers,
     });
@@ -944,6 +952,10 @@ export function createApp(options?: CreateAppOptions) {
   ]);
   clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
 
+  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
+  const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const adminUserId = '00000000-0000-4000-b000-000000000002';
+
   interface IssuedSession {
     authenticated: boolean;
     tenantId: string;
@@ -951,20 +963,97 @@ export function createApp(options?: CreateAppOptions) {
     actorId: string;
     role: string;
     displayName: string;
+    expiresAt?: number;
+    /** Last time PostgreSQL confirmed this session (revocation from another instance is honoured within a minute). */
+    checkedAt?: number;
   }
   const issuedSessions = new Map<string, IssuedSession>();
+  const SESSION_RECHECK_MS = 60000;
+  const sessionHash = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+  const sessionRls = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+
+  async function persistSession(token: string, session: IssuedSession): Promise<boolean> {
+    if (!db) return false;
+    try {
+      await withRlsContext(db, sessionRls, (trx) => sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at)
+        VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)})`.execute(trx));
+      return true;
+    } catch (err) {
+      console.error('[core:sessions] could not persist session; it will not survive a restart:', err);
+      return false;
+    }
+  }
+  async function revokeSession(token: string): Promise<void> {
+    issuedSessions.delete(token);
+    if (!db) return;
+    try {
+      await withRlsContext(db, sessionRls, (trx) => sql`UPDATE hawa.desk_sessions SET revoked_at=now() WHERE token_hash=${sessionHash(token)} AND revoked_at IS NULL`.execute(trx));
+    } catch (err) {
+      console.error('[core:sessions] could not record revocation:', err);
+    }
+  }
+  /**
+   * Loads a Desk session from PostgreSQL on a cache miss (fresh process, other instance) and
+   * re-validates cached sessions periodically so a revocation elsewhere takes effect.
+   */
+  async function ensureSessionLoaded(token: string | undefined): Promise<void> {
+    if (!db || !token || !token.startsWith('hawa_sess_')) return;
+    const cached = issuedSessions.get(token);
+    if (cached && cached.checkedAt && Date.now() - cached.checkedAt < SESSION_RECHECK_MS) return;
+    try {
+      const row = await withRlsContext(db, sessionRls, async (trx) => (await sql<any>`SELECT tenant_id,user_id,actor_id,role,display_name,expires_at,revoked_at
+        FROM hawa.desk_sessions WHERE token_hash=${sessionHash(token)}`.execute(trx)).rows[0]);
+      if (!row || row.revoked_at || new Date(row.expires_at).getTime() <= Date.now()) {
+        if (cached && row && (row.revoked_at || new Date(row.expires_at).getTime() <= Date.now())) issuedSessions.delete(token);
+        else if (cached && !row) issuedSessions.delete(token);
+        return;
+      }
+      issuedSessions.set(token, {
+        authenticated: true, tenantId: row.tenant_id, userId: row.user_id, actorId: row.actor_id, role: row.role,
+        displayName: row.display_name, expiresAt: new Date(row.expires_at).getTime(), checkedAt: Date.now(),
+      });
+    } catch (err) {
+      // Database trouble must not log everyone out: keep whatever the cache already knows.
+      console.warn('[core:sessions] lookup failed; using cached sessions only:', err);
+    }
+  }
+  const bearerTokenOf = (c: any): string | undefined => {
+    const header = c.req.header('Authorization');
+    if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
+    if (String(c.req.path || '').endsWith('/events/stream')) return c.req.query('access_token') || undefined;
+    return undefined;
+  };
+
+  function saveSession(token: string, session: IssuedSession) {
+    if (issuedSessions.size > 5000) {
+      const now = Date.now();
+      for (const [k, s] of issuedSessions) {
+        if (s.expiresAt && now > s.expiresAt) issuedSessions.delete(k);
+      }
+      if (issuedSessions.size > 5000) {
+        const firstKey = issuedSessions.keys().next().value;
+        if (firstKey) issuedSessions.delete(firstKey);
+      }
+    }
+    issuedSessions.set(token, session);
+  }
 
   function verifyRequestAuth(c: any): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
-    const authHeader = c.req.header('Authorization');
+    let authHeader = c.req.header('Authorization');
+    // EventSource cannot set headers: the live event stream alone may carry the session token as
+    // an `access_token` query parameter (served on loopback; the token is the same Desk session).
+    if (!authHeader && String(c.req.path || '').endsWith('/events/stream')) {
+      const queryToken = c.req.query('access_token');
+      if (queryToken) authHeader = `Bearer ${queryToken}`;
+    }
     const botSecret = c.req.header('x-telegram-bot-api-secret-token');
-
-    const defaultTenantId = '00000000-0000-4000-a000-000000000001';
-    const operatorUserId = '00000000-0000-4000-b000-000000000001';
-    const adminUserId = '00000000-0000-4000-b000-000000000002';
 
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (botSecret) {
-      if (expectedSecret && botSecret === expectedSecret) {
+      // The webhook secret is shared with the Telegram platform. It authenticates webhook
+      // deliveries only and must never act as an operator credential for the rest of the API.
+      const isWebhookPath = String(c.req.path || '').startsWith('/api/webhooks/');
+      if (isWebhookPath && expectedSecret && botSecret === expectedSecret) {
         return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: 'telegram_bot', role: 'adapter', displayName: 'Telegram Bridge' };
       }
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
@@ -978,7 +1067,12 @@ export function createApp(options?: CreateAppOptions) {
         }
 
         if (issuedSessions.has(token)) {
-          return issuedSessions.get(token)!;
+          const session = issuedSessions.get(token)!;
+          if (session.expiresAt && Date.now() > session.expiresAt) {
+            issuedSessions.delete(token);
+            return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+          }
+          return session;
         }
 
         const adminKeys = new Set([
@@ -1025,6 +1119,43 @@ export function createApp(options?: CreateAppOptions) {
   // Honest Health & Readiness Probes (CV-20, FR-064, FR-073) - Zero hardcoded health!
   let lastVerifiedProgressAt = new Date().toISOString();
 
+  // The model credential is probed with a token-free request (GET /v1/models) at most every five
+  // minutes. A dead key must show up in /health, not as silent 401s inside the worker's journal.
+  let modelProviderProbe: { at: number; status: string } = { at: 0, status: 'unverified' };
+  const probeModelProvider = async (): Promise<string> => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return 'unconfigured';
+    if (process.env.VITEST || process.env.NODE_ENV === 'test') return 'unverified';
+    if (Date.now() - modelProviderProbe.at < 300000) return modelProviderProbe.status;
+    let status = 'unreachable';
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/models?limit=1', {
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        signal: AbortSignal.timeout(5000),
+      });
+      status = res.status === 401 || res.status === 403 ? 'unauthorized' : res.ok ? 'connected' : `http_${res.status}`;
+    } catch { status = 'unreachable'; }
+    modelProviderProbe = { at: Date.now(), status };
+    return status;
+  };
+
+  // The bot credential is probed with getMe at most every five minutes: a revoked or stale token
+  // must show in /health, not as a silent poll loop that never receives updates again.
+  let telegramProbe: { at: number; status: string } = { at: 0, status: 'unverified' };
+  const probeTelegram = async (): Promise<string> => {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) return 'unconfigured';
+    if (process.env.VITEST || process.env.NODE_ENV === 'test') return 'unverified';
+    if (Date.now() - telegramProbe.at < 300000) return telegramProbe.status;
+    let status = 'unreachable';
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(5000) });
+      status = res.status === 401 ? 'unauthorized' : res.ok ? 'connected' : `http_${res.status}`;
+    } catch { status = 'unreachable'; }
+    telegramProbe = { at: Date.now(), status };
+    return status;
+  };
+
   const honestHealthHandler = async (c: any) => {
     let dbStatus = 'connected';
     if (db) {
@@ -1048,7 +1179,9 @@ export function createApp(options?: CreateAppOptions) {
 
     const hasTelegram = Boolean(process.env.TELEGRAM_BOT_TOKEN) && !channelKillSwitches.telegram;
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL) && !channelKillSwitches.waha;
-    const telegramStatus = channelKillSwitches.telegram ? 'kill_switch_active' : (hasTelegram ? 'active' : 'unconfigured');
+    const bridgeStatus = typeof (telegramBridge as any)?.getStatus === 'function' ? (telegramBridge as any).getStatus() : null;
+    const telegramStatus = channelKillSwitches.telegram ? 'kill_switch_active'
+      : (hasTelegram ? (bridgeStatus?.degraded ? 'degraded' : 'active') : 'unconfigured');
     const wahaStatus = channelKillSwitches.waha ? 'kill_switch_active' : (hasWaha ? 'active' : 'unconfigured');
 
     let diskStatus = 'writable';
@@ -1060,8 +1193,12 @@ export function createApp(options?: CreateAppOptions) {
       diskStatus = 'read_only';
     }
 
+    const modelProviderStatus = await probeModelProvider();
+    const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || channelKillSwitches.telegram || channelKillSwitches.waha;
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || channelKillSwitches.telegram || channelKillSwitches.waha
+      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
+      || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -1076,15 +1213,73 @@ export function createApp(options?: CreateAppOptions) {
         waha: wahaStatus,
         disk: diskStatus,
         restate: Boolean(process.env.RESTATE_INGRESS_URL) ? 'connected' : 'unconfigured',
+        modelProvider: modelProviderStatus,
+        telegramApi: telegramApiStatus,
+        ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
       },
     }, isUnhealthy ? 503 : 200);
   };
 
-  // Helper to register routes for both /v1/... and /api/v1/...
+  // Helper to register routes for /v1/..., /api/v1/..., /api/... and /...
+  // All routes are deny-by-default: unless the route is an explicit public probe/asset/webhook
+  // or the session endpoint, an unauthenticated caller gets 401 before the handler runs.
+  // Handlers that still read the in-memory task map fall back to PostgreSQL after a restart and
+  // hydrate the map, so a persisted task never answers 404 only because this process is new.
+  async function resolveTaskWithFallback(taskId: string): Promise<any | undefined> {
+    const cached = tasks.get(taskId);
+    if (cached) return cached;
+    if (!db || !taskRepo || !isValidUuid(taskId)) return undefined;
+    try {
+      const dbTask: any = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        (trx) => taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx));
+      if (!dbTask) return undefined;
+      const hydrated: any = {
+        id: dbTask.id, tenantId: dbTask.tenant_id, clientId: dbTask.client_id, projectId: dbTask.project_id,
+        status: String(dbTask.state || 'received').toUpperCase(), state: dbTask.state, priority: dbTask.priority,
+        title: dbTask.title, description: dbTask.description, version: dbTask.version,
+        latestRevisionId: dbTask.current_design_revision_id || undefined,
+        createdAt: dbTask.created_at, updatedAt: dbTask.updated_at,
+      };
+      tasks.set(taskId, hydrated);
+      return hydrated;
+    } catch (err) {
+      console.warn('[core:task_hydrate] PostgreSQL lookup failed:', err);
+      return undefined;
+    }
+  }
+
+  const PUBLIC_MUTATION_PATHS = new Set(['/auth/session']);
+  const isPublicMutation = (path: string) => PUBLIC_MUTATION_PATHS.has(path) || path.startsWith('/webhooks/');
+
+  const PUBLIC_READ_PATHS = new Set([
+    '/auth/session',
+    '/health',
+    '/ready',
+    '/system/studio-status',
+    '/system/cutover/status',
+    '/adapters/telegram/status',
+  ]);
+  const isPublicRead = (path: string) =>
+    PUBLIC_READ_PATHS.has(path) ||
+    path.startsWith('/fonts/cdn/') ||
+    path.startsWith('/adapters/figma/') ||
+    path.includes('figma') ||
+    path.startsWith('/webhooks/');
+
   const registerRoute = (method: 'get' | 'post' | 'put' | 'delete', path: string, handler: any) => {
-    (app as any)[method](`/v1${path}`, handler);
-    (app as any)[method](`/api/v1${path}`, handler);
-    (app as any)[method](path, handler);
+    const isPublic = method === 'get' ? isPublicRead(path) : isPublicMutation(path);
+    const guarded = isPublic
+      ? handler
+      : async (c: any, next: any) => {
+          await ensureSessionLoaded(bearerTokenOf(c));
+          const auth = verifyRequestAuth(c);
+          if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+          return handler(c, next);
+        };
+    (app as any)[method](`/v1${path}`, guarded);
+    (app as any)[method](`/api/v1${path}`, guarded);
+    (app as any)[method](`/api${path}`, guarded);
+    (app as any)[method](path, guarded);
   };
 
   const handleDecommissionedFigmaRoute = (c: any) => {
@@ -1151,6 +1346,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Authenticated Session Endpoints (H01, FR-076, FR-078)
   registerRoute('get', '/auth/session', async (c: any) => {
+    await ensureSessionLoaded(bearerTokenOf(c));
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'No active session or valid credentials found');
@@ -1221,11 +1417,14 @@ export function createApp(options?: CreateAppOptions) {
       role: resolvedRole,
       displayName: resolvedDisplayName,
     };
-    issuedSessions.set(sessionToken, sessionRecord);
+    const issued = { ...sessionRecord, expiresAt: Date.now() + 24 * 60 * 60 * 1000, checkedAt: Date.now() };
+    saveSession(sessionToken, issued);
+    const durable = await persistSession(sessionToken, issued);
 
     return c.json({
       ok: true,
       token: sessionToken,
+      durable,
       tenantId: '00000000-0000-4000-a000-000000000001',
       user: {
         id: resolvedUserId,
@@ -1239,7 +1438,7 @@ export function createApp(options?: CreateAppOptions) {
     const authHeader = c.req.header('Authorization');
     if (authHeader) {
       const token = authHeader.replace(/^Bearer\s*/, '').trim();
-      issuedSessions.delete(token);
+      await revokeSession(token);
     }
     return c.json({ ok: true }, 200);
   });
@@ -1264,28 +1463,30 @@ export function createApp(options?: CreateAppOptions) {
     let clientId = explicitClientId || null;
     if (!clientId) {
       const lower = rawText.toLowerCase();
+      // Latin brand keywords match whole words only ('faster' is not FastPay, 'corona' is not Rona).
+      const word = (w: string) => new RegExp(`\\b${w}\\b`).test(lower);
       if (
-        lower.includes('kaae') ||
+        word('kaae') ||
         rawText.includes('باوەڕپێدان') ||
         rawText.includes('کەی ئەی') ||
-        lower.includes('accreditation') ||
-        lower.includes('university') ||
+        word('accreditation') ||
+        word('university') ||
         rawText.includes('زانکۆ')
       ) {
         clientId = KAAE_CLIENT_ID;
-      } else if (lower.includes('fastpay') || rawText.includes('فاستپەی') || rawText.includes('پارەدان') || rawText.includes('کاشباک')) {
+      } else if (word('fastpay') || rawText.includes('فاستپەی') || rawText.includes('پارەدان') || rawText.includes('کاشباک')) {
         clientId = 'client-fastpay';
-      } else if (lower.includes('aster') || rawText.includes('ئاستەر') || rawText.includes('دەرمانخانە') || rawText.includes('ئاستێر')) {
+      } else if (word('aster') || rawText.includes('ئاستەر') || rawText.includes('دەرمانخانە') || rawText.includes('ئاستێر')) {
         clientId = 'client-aster';
-      } else if (lower.includes('drustee') || rawText.includes('دروستی') || rawText.includes('تەواوکەر') || rawText.includes('ڤیتامین') || rawText.includes('دەرمان')) {
+      } else if (word('drustee') || rawText.includes('دروستی') || rawText.includes('تەواوکەر') || rawText.includes('ڤیتامین') || rawText.includes('دەرمان')) {
         clientId = 'client-drustee';
-      } else if (lower.includes('nova') || rawText.includes('نۆڤا') || rawText.includes('تەکنەلۆجیا')) {
+      } else if (word('nova') || rawText.includes('نۆڤا') || rawText.includes('تەکنەلۆجیا')) {
         clientId = 'client-nova';
-      } else if (lower.includes('rona') || rawText.includes('ڕۆنا') || rawText.includes('مۆدە')) {
+      } else if (word('rona') || rawText.includes('ڕۆنا') || rawText.includes('مۆدە')) {
         clientId = 'client-rona';
-      } else if (platform === 'whatsapp') {
-        clientId = 'client-drustee';
       }
+      // No default client for either platform: an unrecognised sender stays unscoped and is
+      // assigned by the art director in Hawa Desk.
     }
 
     const isKaae = clientId === KAAE_CLIENT_ID;
@@ -1478,14 +1679,28 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     if (db) {
-      // Unknown client aliases pause as unscoped requests rather than guessing a UUID.
-      const durableClient = clientId && isValidUuid(clientId) ? clientId : null;
+      // Known chat aliases resolve to the seeded client rows. Unknown aliases stay unscoped:
+      // the art director assigns the client in Hawa Desk. Guessing a client would attribute a
+      // stranger's request, and the brand assets used to draft it, to the wrong client.
+      const CLIENT_ALIAS_TO_UUID: Record<string, string> = {
+        'client-kaae': KAAE_CLIENT_ID, 'kaae': KAAE_CLIENT_ID,
+        'client-drustee': 'c1000000-0000-4000-8000-000000000003', 'drustee': 'c1000000-0000-4000-8000-000000000003',
+        'client-fastpay': 'c1000000-0000-4000-8000-000000000004', 'fastpay': 'c1000000-0000-4000-8000-000000000004',
+        'client-hawa': 'c1000000-0000-4000-8000-000000000001', 'hawa': 'c1000000-0000-4000-8000-000000000001',
+      };
+      const durableClient = clientId && isValidUuid(clientId)
+        ? clientId
+        : (clientId && CLIENT_ALIAS_TO_UUID[clientId]) || null;
       const persisted = await persistChatIntake(db, {
         platform, sourceEventId, sourceChannelId, rawText, rawJson: input.rawJson,
         clientId: durableClient, title, headlineEn, headlineCkb, copyEn, copyCkb,
-        designInstructions: clientInstructions, exactCopy, autoGenerate,
+        designInstructions: clientInstructions, exactCopy,
+        // Automatic drafting needs a scoped client; unscoped requests wait for the art director.
+        autoGenerate: Boolean(autoGenerate && durableClient),
+        variant: { width: variantWidth, height: variantHeight },
       });
       taskId = persisted.task.id;
+      task.autoGenerateDeclined = persisted.autoGenerateDeclined;
       task.id = taskId; task.tenantId = persisted.tenantId; task.clientId = persisted.task.client_id;
       task.status = toApiTaskStatus(persisted.task.state); task.state = persisted.task.state;
       task.createdAt = persisted.task.created_at; task.updatedAt = persisted.task.updated_at;
@@ -1521,30 +1736,49 @@ export function createApp(options?: CreateAppOptions) {
     // 5. Outbound Telegram Dispatch
     if (platform === 'telegram' && sourceChannelId && sourceChannelId !== 'tg_default') {
       let clientDisplayName = isKaae ? 'KAAE (Accreditation)' : senderName;
-      if (clientId === 'client-fastpay') clientDisplayName = 'FastPay Mobile Wallet';
+      if (clientId === 'client-fastpay' || clientId === 'c1000000-0000-4000-8000-000000000004') clientDisplayName = 'FastPay Mobile Wallet';
       else if (clientId === 'client-aster') clientDisplayName = 'Aster Pharmacy';
-      else if (clientId === 'client-drustee') clientDisplayName = 'Drustee Health';
+      else if (clientId === 'client-drustee' || clientId === 'c1000000-0000-4000-8000-000000000003') clientDisplayName = 'Drustee Health';
+      else if (clientId === 'c1000000-0000-4000-8000-000000000001') clientDisplayName = 'Hawa Studio';
 
       const publicDeskBase =
         deskBaseUrl ||
         process.env.PUBLIC_TUNNEL_URL ||
         process.env.HAWA_PUBLIC_URL ||
         process.env.HAWA_DESK_BASE_URL ||
-        'https://restaurant-threatened-replaced-reason.trycloudflare.com';
+        'http://127.0.0.1:8080';
 
-      if (autoGenerate) {
-        notification = await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-          text: `Request ${taskId} saved. Your editable Canva draft is queued. Follow its progress in Hawa Desk; review is required before release.`,
-        });
-      } else {
-        notification = await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-          text: `📥 *Brief Received & Queued in Hawa Desk*\n\n` +
-            `🎯 *Task ID:* \`${taskId}\`\n` +
-            `🏢 *Client:* ${isKaae ? 'KAAE' : clientDisplayName}\n` +
-            `⚡ Our creative director has registered your brief. Type \`/status\` to check progress.`,
-          parse_mode: 'Markdown',
-        });
-      }
+      // The Canva draft itself is produced by the durable worker workflow (Restate), never inline
+      // in the webhook: the model call and the Canva import can take minutes, must survive a Core
+      // restart, and must never run twice. The worker reports the outcome back through
+      // POST /v1/tasks/:taskId/notifications/canva-status, which sends the link or the reason.
+      const deskLink = `${publicDeskBase}/#task-${taskId}`;
+      const clientLabel = escapeTelegramHtml(isKaae ? 'KAAE (Accreditation)' : clientDisplayName);
+      const safeTitle = escapeTelegramHtml(title || 'Campaign Design');
+      const automaticDraft = Boolean(autoGenerate && task.clientId && !task.autoGenerateDeclined);
+      const capNote = task.autoGenerateDeclined
+        ? `\n\n⏳ <i>The daily limit for automatic drafts has been reached${task.autoGenerateDeclined === 'SENDER_DAILY_CAP' ? ' for this chat' : ' for the office'}. Your request is saved and the art director will design it in Canva.</i>`
+        : '';
+      const scopeNote = (task.clientId
+        ? ''
+        : `\n\n⚠️ <i>No client could be identified from the message. The art director will assign it in Hawa Desk before any design work starts.</i>`) + capNote;
+      const text =
+        `📥 <b>${automaticDraft ? 'Request saved. Preparing your Canva draft' : 'Brief received and queued in Hawa Desk'}</b>\n\n` +
+        `📌 <b>Task ID:</b> <code>${taskId}</code>\n` +
+        `🏢 <b>Client:</b> ${clientLabel}\n` +
+        `📜 <b>Title:</b> ${safeTitle}\n` +
+        `📐 <b>Format:</b> ${variantWidth}×${variantHeight} (${variantAspect})\n\n` +
+        (automaticDraft
+          ? `✏️ An editable Canva draft is being prepared automatically. You will receive the Canva link in this chat when it is ready, or an explanation if it cannot be produced automatically.\n`
+          : `⚡ The art director has received your brief and will design it in Canva.\n`) +
+        `<i>Every design is reviewed by the art director in Hawa Desk before release.</i>` + scopeNote;
+      // Telegram only accepts public http(s) button URLs; a local Desk address goes in the text instead.
+      const deskButton = /^https:\/\//.test(deskLink) ? { inline_keyboard: [[{ text: '🖥 Open in Hawa Desk', url: deskLink }]] } : undefined;
+      notification = await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+        text: deskButton ? text : `${text}\n\n🖥 Hawa Desk: ${escapeTelegramHtml(deskLink)}`,
+        parse_mode: 'HTML',
+        ...(deskButton ? { reply_markup: deskButton } : {}),
+      });
     }
 
     if (notification && !notification.success) console.warn(`[TelegramBridge] Request saved but notification failed: ${notification.error}`);
@@ -1578,7 +1812,7 @@ export function createApp(options?: CreateAppOptions) {
       if (taskRepo && db && isValidUuid(taskId)) {
         try {
           const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-          await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+          await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
             await taskRepo.transitionState({
               taskId,
               tenantId,
@@ -1607,7 +1841,7 @@ export function createApp(options?: CreateAppOptions) {
     if (taskRepo && db && isValidUuid(taskId)) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-        await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+        await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
           await taskRepo.transitionState({
             taskId,
             tenantId,
@@ -1717,7 +1951,7 @@ export function createApp(options?: CreateAppOptions) {
     if (taskRepo && db && isValidUuid(taskId)) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-        await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+        await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
           await taskRepo.transitionState({
             taskId,
             tenantId,
@@ -1856,10 +2090,18 @@ export function createApp(options?: CreateAppOptions) {
     const sourceEventId = String(json.update_id ?? json.eventId ?? '');
     if (json.update_id == null && !json.eventId) return problem(c, 400, 'Missing event ID', 'Telegram must supply a stable update ID');
     const verifiedSender = String(json.callback_query?.from?.id || json.message?.from?.id || json.edited_message?.from?.id || '');
-    if (isProduction && (!telegramIntakeUsers.length || !telegramIntakeUsers.includes(verifiedSender))) {
+    const isIntakeOpen = telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
+    if (isProduction && !isIntakeOpen && (!telegramIntakeUsers.length || !telegramIntakeUsers.includes(verifiedSender))) {
       return problem(c, 403, 'Forbidden', 'Sender is not in the configured office allowlist');
     }
     if (json.callback_query || /^\/(approve|publish|revise|reject)\b/i.test(json.message?.text || '')) {
+      if (json.callback_query?.id) {
+        await telegramBridge?.answerCallbackQuery(
+          json.callback_query.id,
+          'Desk review required: Approve in Hawa Desk',
+          true
+        ).catch(() => {});
+      }
       return problem(c, 422, 'Desk review required', 'Use authenticated Hawa Desk review bound to a captured revision; chat actions cannot approve or modify a design');
     }
 
@@ -2016,9 +2258,24 @@ export function createApp(options?: CreateAppOptions) {
 
     const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
 
+    // An update without usable text (sticker, photo without caption, chat-member event, or a voice
+    // note that could not be transcribed) is acknowledged and skipped. Persisting it would throw,
+    // the poller would retry the same update forever, and every later message would be blocked.
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+      const reason = voiceObj ? 'VOICE_NOT_TRANSCRIBED' : 'NO_TEXT';
+      if (sourceChannelId !== 'tg_default' && (msg.chat?.id || voiceObj)) {
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text: voiceObj
+            ? 'Your voice note was received but could not be transcribed. Please send the brief as text so nothing is guessed.'
+            : 'Please send your design brief as text (or a voice note); this message contained no text to work with.',
+        }).catch(() => undefined);
+      }
+      return c.json({ ok: true, ignored: true, reason, updateId: sourceEventId }, 200);
+    }
+
     // Handle bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
     if (typeof rawText === 'string' && rawText.startsWith('/')) {
-      const cmdReply = telegramBridge.handleCommand(rawText, sourceChannelId);
+      const cmdReply = telegramBridge.handleCommand(rawText, sourceChannelId, verifiedSender || undefined);
       if (cmdReply) {
         if (cmdReply.action === 'approve' && cmdReply.taskId) {
           const senderId = String(msg?.from?.id || '');
@@ -2115,8 +2372,8 @@ export function createApp(options?: CreateAppOptions) {
         feedbackTargetTask = tasks.get(uuidMatch[1]);
         if (!feedbackTargetTask && taskRepo && db) {
           try {
-            const dbTask = await withRlsContext(db, { tenantId: 'a0000000-0000-4000-8000-000000000001' }, async (trx) => {
-              return await taskRepo.findById(uuidMatch[1], 'a0000000-0000-4000-8000-000000000001', trx);
+            const dbTask = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID }, async (trx) => {
+              return await taskRepo.findById(uuidMatch[1], DEFAULT_TENANT_ID, trx);
             });
             if (dbTask) {
               feedbackTargetTask = {
@@ -2153,8 +2410,8 @@ export function createApp(options?: CreateAppOptions) {
         feedbackTargetTask = tasks.get(textUuidMatch[1]);
         if (!feedbackTargetTask && taskRepo && db) {
           try {
-            const dbTask = await withRlsContext(db, { tenantId: 'a0000000-0000-4000-8000-000000000001' }, async (trx) => {
-              return await taskRepo.findById(textUuidMatch[1], 'a0000000-0000-4000-8000-000000000001', trx);
+            const dbTask = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID }, async (trx) => {
+              return await taskRepo.findById(textUuidMatch[1], DEFAULT_TENANT_ID, trx);
             });
             if (dbTask) {
               feedbackTargetTask = {
@@ -2229,7 +2486,7 @@ export function createApp(options?: CreateAppOptions) {
         try {
           const tenantId = feedbackTargetTask.tenantId && isValidUuid(feedbackTargetTask.tenantId)
             ? feedbackTargetTask.tenantId
-            : 'a0000000-0000-4000-8000-000000000001';
+            : DEFAULT_TENANT_ID;
           await withRlsContext(db, { tenantId }, async (trx) => {
             await trx
               .insertInto('feedback_events')
@@ -2531,6 +2788,9 @@ export function createApp(options?: CreateAppOptions) {
     const expectedSecret = process.env.WAHA_WEBHOOK_SECRET;
 
     const rawBody = await c.req.arrayBuffer();
+    if (isProduction && !expectedSecret) {
+      return problem(c, 503, 'Service Unavailable', 'WAHA_WEBHOOK_SECRET is not configured; unauthenticated WhatsApp intake is refused in production');
+    }
     if (expectedSecret) {
       const secretMatches = secret && (secret === expectedSecret || secret === `Bearer ${expectedSecret}`);
       const sigMatches = signature && wahaIngress.verifySignature(rawBody, signature);
@@ -2703,6 +2963,9 @@ export function createApp(options?: CreateAppOptions) {
 
   // Unified Ingress Endpoint (CV-06, FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-010, FR-012)
   app.post('/api/ingress/unified', async (c) => {
+    // Only an authenticated adapter or operator may declare a verified inbound message.
+    const ingressAuth = verifyRequestAuth(c);
+    if (!ingressAuth.authenticated) return problem(c, 401, 'Unauthorized', 'Authentication required for unified ingress');
     let body: any;
     try {
       body = await c.req.json();
@@ -2719,7 +2982,12 @@ export function createApp(options?: CreateAppOptions) {
       );
     }
 
-    const tenantId = body.tenantId || '00000000-0000-4000-a000-000000000001';
+    // The tenant comes from the credential. Only an administrator may address another tenant
+    // (office bootstrap and fixtures); an operator always writes into their own tenant.
+    const requestedTenant = typeof body.tenantId === 'string' && isValidUuid(body.tenantId) ? body.tenantId : null;
+    const tenantId = ingressAuth.role === 'administrator' && requestedTenant
+      ? requestedTenant
+      : (ingressAuth.tenantId || '00000000-0000-4000-a000-000000000001');
     const result = await unifiedIngress.ingest({
       tenantId,
       channel: body.channel,
@@ -2733,8 +3001,8 @@ export function createApp(options?: CreateAppOptions) {
       senderDisplayName: body.senderDisplayName,
       text: body.text || '',
       rawPayload: body.rawPayload || body,
-      verified: body.verified !== false,
-      verificationMethod: body.verificationMethod || 'api_token',
+      verified: true,
+      verificationMethod: 'api_token',
       occurredAt: body.occurredAt,
       receivedAt: body.receivedAt,
       attachments: body.attachments || [],
@@ -2821,7 +3089,10 @@ export function createApp(options?: CreateAppOptions) {
   app.post('/api/auth/telegram-miniapp', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const initData = body.initData;
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || 'mock_telegram_bot_token_production_2026';
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      return problem(c, 503, 'Service Unavailable', 'Telegram bot token is not configured');
+    }
     const verification = verifyTelegramMiniAppInitData(initData, botToken);
     if (!verification.ok) {
       return problem(c, 401, 'Unauthorized', verification.error);
@@ -2830,12 +3101,23 @@ export function createApp(options?: CreateAppOptions) {
     if (telegramAllowedUsers.length > 0 && !telegramAllowedUsers.includes(userIdStr)) {
       return problem(c, 403, 'Forbidden', `Telegram user ${userIdStr} is not an authorized office operator`);
     }
+    const sessionToken = `tg_miniapp_sess_${Buffer.from(JSON.stringify(verification.value.user)).toString('base64url')}`;
+    const displayName = [verification.value.user.first_name, verification.value.user.last_name].filter(Boolean).join(' ') || `Telegram User ${userIdStr}`;
+    saveSession(sessionToken, {
+      authenticated: true,
+      tenantId: defaultTenantId,
+      userId: operatorUserId,
+      actorId: `tg_${userIdStr}`,
+      role: 'operator',
+      displayName,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    });
     return c.json({
       ok: true,
       user: verification.value.user,
       authDate: verification.value.authDate,
       authenticated: true,
-      sessionToken: `tg_miniapp_sess_${Buffer.from(JSON.stringify(verification.value.user)).toString('base64url')}`,
+      sessionToken,
     });
   });
 
@@ -3191,7 +3473,7 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
     return c.json(task);
   });
@@ -3289,7 +3571,7 @@ export function createApp(options?: CreateAppOptions) {
     }
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -3360,7 +3642,7 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    broadcast('task:transitioned', { taskId, status: task.status, clientId: task.clientId });
+    broadcast('task:transitioned', { taskId, status: task?.status ?? 'BRIEFING', clientId: task?.clientId ?? resolvedClientId });
 
     return c.json({
       commandId: crypto.randomUUID(),
@@ -3376,7 +3658,7 @@ export function createApp(options?: CreateAppOptions) {
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -3479,7 +3761,7 @@ export function createApp(options?: CreateAppOptions) {
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -4039,61 +4321,46 @@ export function createApp(options?: CreateAppOptions) {
     }
   });
 
-  registerRoute('post', '/tasks/:taskId/notifications/canva-ready', async (c: any) => {
+  // The durable worker reports every terminal Canva outcome here (ready, rejected, uncertain …).
+  // The requester always learns what happened; a failed chat message never fails the workflow.
+  const canvaStatusHandler = async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Authentication Required');
     if (!db || !taskRepo) return problem(c, 503, 'Database Required');
     const taskId = c.req.param('taskId');
+    if (!isValidUuid(taskId)) return problem(c, 422, 'Invalid Identifier', 'Use a valid task identifier');
     const body = await c.req.json().catch(() => ({}));
-    const designId = body.designId;
+    const clean = (v: unknown) => (typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 64) : undefined);
+    const status = clean(body.status) || 'DRAFT_READY';
+    const code = clean(body.code);
+    const designId = typeof body.designId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(body.designId) ? body.designId : undefined;
     const canvaUrl = designId ? `https://www.canva.com/design/${designId}/edit` : undefined;
 
     const task = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, trx =>
       taskRepo.findById(taskId, auth.tenantId!, trx));
     if (!task) return problem(c, 404, 'Task Not Found');
 
-    let sourceChannelId: string | undefined;
-    const events = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx => {
-      return (await sql<any>`SELECT source_account_id, source_event_id, payload FROM hawa.inbox_events 
-        WHERE tenant_id = ${auth.tenantId}::uuid AND source_account_id = 'telegram' 
-        ORDER BY received_at DESC LIMIT 50`.execute(trx)).rows;
-    });
-
-    for (const ev of events || []) {
-      const p = ev.payload;
-      if (p?.taskId === taskId || ev.source_event_id?.includes(taskId)) {
-        sourceChannelId = ev.source_event_id.split(':')[0];
-        break;
-      }
-    }
-
-    if (!sourceChannelId) {
-      const taskEvent = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx => {
-        return (await sql<any>`SELECT data FROM hawa.task_events 
-          WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created' LIMIT 1`.execute(trx)).rows[0];
-      });
-      const d = taskEvent?.data?.payload || taskEvent?.data;
-      if (d?.sourcePlatform === 'telegram' && d?.sourceChannelId) {
-        sourceChannelId = String(d.sourceChannelId);
-      }
-    }
+    const created = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+      (await sql<any>`SELECT data FROM hawa.task_events
+        WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
+        ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]);
+    const source = created?.data?.payload || created?.data || {};
+    const sourceChannelId = source?.sourcePlatform === 'telegram' && source?.sourceChannelId ? String(source.sourceChannelId) : undefined;
 
     let notificationSent = false;
     let notificationError: string | undefined;
-    if (sourceChannelId && canvaUrl) {
-      const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-        text: `🎨 *Your Canva draft is ready!*\n\n` +
-          `📌 *Task:* ${task.title || taskId}\n` +
-          `🔗 *Edit in Canva:* ${canvaUrl}\n\n` +
-          `_Review your design in Canva. Once finished, inspect the export in Hawa Desk before release._`,
-        parse_mode: 'Markdown',
-      });
+    if (sourceChannelId) {
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl });
+      const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, message);
       notificationSent = dispatchRes.success;
       if (!dispatchRes.success) notificationError = dispatchRes.error;
+    } else {
+      notificationError = 'NO_TELEGRAM_SOURCE';
     }
-
-    return c.json({ ok: true, taskId, notificationSent, notificationError, designId, canvaUrl });
-  });
+    return c.json({ ok: true, taskId, status, code, notificationSent, notificationError, designId, canvaUrl });
+  };
+  registerRoute('post', '/tasks/:taskId/notifications/canva-status', canvaStatusHandler);
+  registerRoute('post', '/tasks/:taskId/notifications/canva-ready', canvaStatusHandler);
 
   registerRoute('get', '/tasks/:taskId/editor-url', async (c: any) => {
     const auth = verifyRequestAuth(c);
@@ -4129,8 +4396,17 @@ export function createApp(options?: CreateAppOptions) {
   registerRoute('get', '/tasks/:taskId/export-package', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    if (canvaConnectService) {
+      return c.json({
+        error: 'STUDIO_EXPORT_PACKAGE_RETIRED',
+        statusCode: 410,
+        message: 'The legacy export package endpoint was retired under ADR-025. Use /v1/tasks/:taskId/canva/artifacts/:artifactId for native Canva exports.',
+        activeStudio: 'canva_native',
+        decommissionedUnder: 'ADR-025',
+      }, 410);
+    }
     const taskId = c.req.param('taskId');
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const rev = task.latestRevisionId ? revisions.get(task.latestRevisionId) : undefined;
@@ -4176,7 +4452,7 @@ export function createApp(options?: CreateAppOptions) {
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -4203,7 +4479,12 @@ export function createApp(options?: CreateAppOptions) {
     else if (control === 'resume') targetStatus = 'PLANNING';
     else if (control === 'cancel') targetStatus = 'OPERATOR_REQUIRED';
     else if (control === 'retry') targetStatus = 'PLANNING';
-    else if (control === 'approve') targetStatus = 'APPROVED';
+    else if (control === 'approve') {
+      if (!isAuthorizedReviewerRole(auth.role)) {
+        return problem(c, 403, 'Forbidden', 'Only an authorized reviewer (art_director, creative_director, administrator) can approve tasks');
+      }
+      targetStatus = 'APPROVED';
+    }
 
     const trans = sm.transition(targetStatus, { type: 'user', id: auth.actorId || 'operator' }, reason);
     if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
@@ -4339,7 +4620,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       dbTask = await withRlsContext(
@@ -4636,7 +4917,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for review desk');
     }
 
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const revId = c.req.query('revisionId') || task.latestRevisionId || 'rev-1';
@@ -4697,7 +4978,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for chat approval action');
     }
 
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -4737,7 +5018,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId);
+    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     let dbTask: any = null;
     if (taskRepo && db) {
       dbTask = await withRlsContext(
@@ -4885,7 +5166,7 @@ export function createApp(options?: CreateAppOptions) {
   // Register Task Node Reviewer Comment (Gate F: Reviewer comments with role policy)
   registerRoute('post', '/tasks/:taskId/comments', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -6086,6 +6367,9 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   registerRoute('get', '/search', (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+
     const q = (c.req.query('q') || c.req.query('query') || '').trim();
     const clientId = c.req.query('clientId');
     const category = (c.req.query('category') || 'all') as SearchCategory;
@@ -6127,7 +6411,7 @@ export function createApp(options?: CreateAppOptions) {
   // --- Two-Way Outbound Review Dispatch (FR-014, FR-081) ---
   registerRoute('post', '/campaigns/:taskId/dispatch-review', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -6174,7 +6458,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 403, 'Forbidden', 'Invalid action signature');
     }
 
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     if (action === 'approve') {
@@ -6235,7 +6519,7 @@ export function createApp(options?: CreateAppOptions) {
       if (taskRepo && db) {
         try {
           const tenantId = task.tenantId && task.tenantId.includes('-') ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-          await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+          await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
             await taskRepo.transitionState({
               taskId,
               tenantId,
@@ -6312,7 +6596,7 @@ export function createApp(options?: CreateAppOptions) {
     const targetRevisionId = body.designRevisionId;
     const requestedApprovalId = body.approvalId;
 
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     // Invariant: B cannot ship using A's approval (CV-15)
@@ -6364,7 +6648,7 @@ export function createApp(options?: CreateAppOptions) {
   registerRoute('post', '/tasks/:taskId/revisions/:revisionId/evaluate-rubric', async (c: any) => {
     const taskId = c.req.param('taskId');
     const revisionId = c.req.param('revisionId');
-    const task = tasks.get(taskId);
+    const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
     const clientId = task.clientId || defaultClientId;
     const client = clientDnas.get(clientId);
@@ -6588,13 +6872,27 @@ export function createApp(options?: CreateAppOptions) {
     process.env.NODE_ENV !== 'test' &&
     process.env.VITEST !== 'true'
   ) {
+    const poisonedUpdateAttempts = new Map<number, number>();
     telegramBridge.startPolling(async (update) => {
+      const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+      if (!secret) {
+        console.error('[TelegramBridge] Ingress dispatch halted: TELEGRAM_WEBHOOK_SECRET is not configured');
+        return;
+      }
+      const attempts = (poisonedUpdateAttempts.get(update.update_id) || 0) + 1;
+      poisonedUpdateAttempts.set(update.update_id, attempts);
+      if (attempts > 3) {
+        // Three failed deliveries of the same update: skip it so the office queue keeps moving.
+        console.error(`[TelegramBridge] Update ${update.update_id} failed ${attempts - 1} times; skipping it to unblock intake`);
+        poisonedUpdateAttempts.delete(update.update_id);
+        return;
+      }
       try {
         const res = await app.request('/api/webhooks/telegram?generate=true', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET || 'expected_office_secret',
+            'x-telegram-bot-api-secret-token': secret,
           },
           body: JSON.stringify(update),
         });
@@ -6610,6 +6908,7 @@ export function createApp(options?: CreateAppOptions) {
             console.log(`[TelegramBridge] Ingress update ${update.update_id} processed successfully`);
           }
         }
+        poisonedUpdateAttempts.delete(update.update_id);
       } catch (err) {
         console.error('[TelegramBridge] Ingress error processing update:', err);
         throw err;

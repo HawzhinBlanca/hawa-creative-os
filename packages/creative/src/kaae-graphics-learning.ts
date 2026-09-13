@@ -137,7 +137,30 @@ function parseImageDimensions(buffer: Buffer): { width: number; height: number }
     };
   }
 
-  // JPEG: scan for SOF0 (0xFFC0) or SOF2 (0xFFC2) markers
+  // WebP: RIFF ... WEBP
+  if (buffer.length >= 30 && buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') {
+    const chunkType = buffer.subarray(12, 16).toString();
+    if (chunkType === 'VP8X' && buffer.length >= 30) {
+      const width = 1 + buffer.readUIntLE(24, 3);
+      const height = 1 + buffer.readUIntLE(27, 3);
+      if (width > 0 && height > 0) return { width, height };
+    }
+    if (chunkType === 'VP8L' && buffer.length >= 25 && buffer[20] === 0x2f) {
+      const b0 = buffer[21], b1 = buffer[22], b2 = buffer[23], b3 = buffer[24];
+      const width = 1 + (((b1 & 0x3f) << 8) | b0);
+      const height = 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6));
+      if (width > 0 && height > 0) return { width, height };
+    }
+    if (chunkType === 'VP8 ' && buffer.length >= 30) {
+      if (buffer[23] === 0x9d && buffer[24] === 0x01 && buffer[25] === 0x2a) {
+        const width = buffer.readUInt16LE(26) & 0x3fff;
+        const height = buffer.readUInt16LE(28) & 0x3fff;
+        if (width > 0 && height > 0) return { width, height };
+      }
+    }
+  }
+
+  // JPEG: scan for SOF markers (SOF0: 0xC0, SOF1: 0xC1, SOF2: 0xC2, SOF3: 0xC3)
   if (buffer.length > 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
     let offset = 2;
     while (offset < buffer.length - 8) {
@@ -146,13 +169,35 @@ function parseImageDimensions(buffer: Buffer): { width: number; height: number }
         continue;
       }
       const marker = buffer[offset + 1];
-      if (marker === 0xc0 || marker === 0xc2) {
-        const height = buffer.readUInt16BE(offset + 5);
-        const width = buffer.readUInt16BE(offset + 7);
-        return { width, height };
+      if (marker === 0xd9 || marker === 0xda) break; // EOI or SOS
+      if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2 || marker === 0xc3) {
+        if (offset + 8 <= buffer.length) {
+          const height = buffer.readUInt16BE(offset + 5);
+          const width = buffer.readUInt16BE(offset + 7);
+          if (width > 0 && height > 0) return { width, height };
+        }
       }
+      if (offset + 4 > buffer.length) break;
       const length = buffer.readUInt16BE(offset + 2);
+      if (length < 2) break;
       offset += 2 + length;
+    }
+  }
+
+  // SVG: scan root <svg> element for width/height and viewBox
+  const head = buffer.subarray(0, Math.min(buffer.length, 8192)).toString('utf8');
+  if (head.includes('<svg')) {
+    const svgTagMatch = head.match(/<svg[^>]*>/i);
+    if (svgTagMatch) {
+      const tag = svgTagMatch[0];
+      const wMatch = tag.match(/\bwidth=["']\s*([0-9.]+)(?:px)?\s*["']/i);
+      const hMatch = tag.match(/\bheight=["']\s*([0-9.]+)(?:px)?\s*["']/i);
+      const vbMatch = tag.match(/\bviewBox=["']\s*([0-9.-]+)[,\s]+([0-9.-]+)[,\s]+([0-9.-]+)[,\s]+([0-9.-]+)\s*["']/i);
+      const width = wMatch ? parseFloat(wMatch[1]) : vbMatch ? parseFloat(vbMatch[3]) : 0;
+      const height = hMatch ? parseFloat(hMatch[1]) : vbMatch ? parseFloat(vbMatch[4]) : 0;
+      if (width > 0 && height > 0) {
+        return { width: Math.round(width), height: Math.round(height) };
+      }
     }
   }
 

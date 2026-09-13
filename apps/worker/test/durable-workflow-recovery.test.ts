@@ -37,8 +37,7 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
 
   beforeEach(async () => {
     const testDbUrl =
-      process.env.TEST_DATABASE_URL ||
-      'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+      process.env.TEST_DATABASE_URL!;
     db = createDb(testDbUrl);
     outboxRepo = new OutboxRepository(db);
     taskRepo = new TaskRepository(db);
@@ -49,7 +48,6 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
       { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
       async (trx) => {
         await trx.deleteFrom('outbox_commands').where('tenant_id', '=', testTenantId).execute();
-        await trx.deleteFrom('tasks').where('tenant_id', '=', testTenantId).execute();
       }
     );
   });
@@ -452,5 +450,65 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
 
     expect(record).toBeDefined();
     expect(record?.state).toBe('pending');
+  });
+
+  it('proves TaskWorkflowRunner transitions task record in PostgreSQL from received to human_review without swallowed conflict', async () => {
+    const idempotencyKey = 'idem-db-trans-42';
+
+    // 1. Create real task in PostgreSQL in initial 'received' state
+    const createdRes = await withRlsContext(
+      db,
+      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
+      async (trx) => {
+        return await taskRepo.createTaskAggregate(
+          {
+            tenantId: testTenantId,
+            userId: adminUserId,
+            title: 'Kurdish Campaign Poster',
+            description: 'پۆستەری کەمپینی بەهارە',
+            clientId: testClientId,
+            idempotencyKey,
+            enqueueOutbox: false,
+          },
+          trx
+        );
+      }
+    );
+    const taskId = createdRes.task.id;
+
+    const initialTask = await withRlsContext(
+      db,
+      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
+      async (trx) => taskRepo.findById(taskId, testTenantId, trx)
+    );
+    expect(initialTask?.state).toBe('received');
+
+    // 2. Run TaskWorkflowRunner with db configured
+    const journal = new DurableStepJournal(`task-wf-${taskId}`);
+    const runner = new TaskWorkflowRunner({ db, studio: new SimulatedStudioFixture() });
+
+    const output = await runner.run(
+      {
+        taskId,
+        tenantId: testTenantId,
+        clientId: testClientId,
+        rawText: 'پۆستەری کەمپینی بەهارە',
+        sourcePlatform: 'desk',
+        idempotencyKey,
+      },
+      journal
+    );
+
+    expect(output.status).toBe('AWAITING_APPROVAL');
+
+    // 3. Verify PostgreSQL task record actually moved to human_review instead of failing silently
+    const finalTask = await withRlsContext(
+      db,
+      { tenantId: testTenantId, userId: adminUserId, role: 'administrator' },
+      async (trx) => taskRepo.findById(taskId, testTenantId, trx)
+    );
+
+    expect(finalTask).toBeDefined();
+    expect(finalTask?.state).toBe('human_review');
   });
 });

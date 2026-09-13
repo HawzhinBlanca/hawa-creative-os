@@ -86,6 +86,39 @@ describe('SVG Sanitization Engine', () => {
     expect(res.sanitized).not.toContain('iframe');
     expect(res.sanitized).not.toContain('phishing.site');
   });
+
+  it('neutralizes slash-separated event handlers without whitespace (<svg/onload=...>)', () => {
+    const maliciousSvg = '<svg/onload=alert(1)><circle/onload=steal() /></svg>';
+    const res = sanitizeSvg(maliciousSvg);
+    expect(res.violations.some((v) => v.includes('inline event handler'))).toBe(true);
+    expect(res.sanitized).not.toContain('onload');
+    expect(res.sanitized).not.toContain('alert');
+  });
+
+  it('neutralizes unquoted javascript: schemes in href attributes', () => {
+    const maliciousSvg = '<svg><a href=javascript:alert(1)><text>click</text></a></svg>';
+    const res = sanitizeSvg(maliciousSvg);
+    expect(res.violations.some((v) => v.includes('malicious URI scheme'))).toBe(true);
+    expect(res.sanitized).not.toContain('javascript:alert');
+    expect(res.sanitized).toContain('href="#blocked"');
+  });
+
+  it('strips malicious CSS directives from inline style attributes', () => {
+    const maliciousSvg = '<svg><circle style="background:url(javascript:alert(1))" /><rect style="behavior:url(test); expression(alert(2))" /></svg>';
+    const res = sanitizeSvg(maliciousSvg);
+    expect(res.violations.some((v) => v.includes('malicious CSS directive from style'))).toBe(true);
+    expect(res.sanitized).not.toContain('javascript:');
+    expect(res.sanitized).not.toContain('expression');
+  });
+
+  it('blocks dangerous <base> elements and attribute animation tags', () => {
+    const maliciousSvg = '<svg><base href="http://evil.com/" /><set attributeName="href" to="javascript:alert(1)" /></svg>';
+    const res = sanitizeSvg(maliciousSvg);
+    expect(res.violations.some((v) => v.includes('<base>'))).toBe(true);
+    expect(res.violations.some((v) => v.includes('attribute animation'))).toBe(true);
+    expect(res.sanitized).not.toContain('<base');
+    expect(res.sanitized).not.toContain('<set');
+  });
 });
 
 describe('Asset Upload Validation & Security Engine', () => {
@@ -154,5 +187,19 @@ describe('Asset Upload Validation & Security Engine', () => {
 
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => v.includes('exceeds maximum permitted'))).toBe(true);
+  });
+
+  it('proves SVG Buffer and Uint8Array payloads are properly sanitized rather than bypassed', () => {
+    const svgBuffer = Buffer.from('<svg><script>alert(1)</script><circle cx="10" cy="10" r="5"/></svg>');
+    const res = validateUploadedAsset({
+      filename: 'vector.svg',
+      mimeType: 'image/svg+xml',
+      sizeBytes: svgBuffer.length,
+      content: svgBuffer,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.sanitizedContent).toBeDefined();
+    expect(res.sanitizedContent).not.toContain('<script');
   });
 });

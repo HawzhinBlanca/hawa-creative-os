@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Hawa pre-commit gate: nothing with credential material and no stale manifest may be committed.
+# Install once with: bash infra/ci/install_hooks.sh
+set -Eeuo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+python3 infra/security/security_scan.py --self-test >/dev/null
+python3 infra/security/security_scan.py
+python3 scripts/validate_pack.py >/dev/null || { echo "validate_pack failed; run: python3 scripts/refresh_manifest.py && python3 scripts/validate_pack.py"; exit 1; }

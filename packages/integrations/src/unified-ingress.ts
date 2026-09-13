@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 import type {
   MessageEnvelope,
   NormalizedAttachment,
@@ -107,17 +108,33 @@ export function sanitizeIngressContent(text: string): { sanitized: string; viola
     violations.push('Stripped ASCII control characters or null bytes');
   }
 
-  // 2. Strip HTML/Script tags
-  if (/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi.test(cleaned)) {
-    cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  // 2. Strip HTML/Script tags and unclosed/self-closing elements
+  const scriptRegex = /<script\b[^>]*\/?>[\s\S]*?(?:<\/script>|$)|<script\b[^>]*\/?>/gi;
+  if (scriptRegex.test(cleaned)) {
+    cleaned = cleaned.replace(scriptRegex, '');
     violations.push('Stripped executable script tags');
   }
-  if (/<(iframe|object|embed|form)\b[^>]*>.*?<\/\1>/gi.test(cleaned)) {
-    cleaned = cleaned.replace(/<(iframe|object|embed|form)\b[^>]*>.*?<\/\1>/gi, '');
+
+  const dangerousTagsRegex = /<(iframe|object|embed|form|applet|meta|link|base)\b[^>]*\/?>[\s\S]*?(?:<\/\1>|$)|<(iframe|object|embed|form|applet|meta|link|base)\b[^>]*\/?>/gi;
+  if (dangerousTagsRegex.test(cleaned)) {
+    cleaned = cleaned.replace(dangerousTagsRegex, '');
     violations.push('Stripped dangerous embedded HTML tags');
   }
 
-  // 3. Normalize Kurdish Sorani orthography
+  // 3. Strip event handlers and javascript: URI schemes
+  const eventHandlerRegex = /(?:[\s/])+(on[a-zA-Z0-9_-]+)\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi;
+  if (eventHandlerRegex.test(cleaned)) {
+    cleaned = cleaned.replace(eventHandlerRegex, '');
+    violations.push('Stripped dangerous inline event handlers');
+  }
+
+  const jsProtocolRegex = /(?:href|src|data|action)\s*=\s*(?:'javascript:[^']*'|"javascript:[^"]*"|javascript:[^\s>]+)/gi;
+  if (jsProtocolRegex.test(cleaned)) {
+    cleaned = cleaned.replace(jsProtocolRegex, '');
+    violations.push('Stripped javascript: pseudo-protocol URIs');
+  }
+
+  // 4. Normalize Kurdish Sorani orthography
   // Convert Arabic Yeh (\u064A) -> Kurdish/Farsi Yeh (ی)
   // Convert Arabic Kaf (\u0643) -> Keheh (ک)
   // Preserve Zero-Width Non-Joiner (ZWNJ, \u200C)
@@ -126,7 +143,7 @@ export function sanitizeIngressContent(text: string): { sanitized: string; viola
     .replace(/\u0643/g, 'ک')
     .replace(/\r\n/g, '\n');
 
-  // 4. Bound max text length (10,000 characters)
+  // 5. Bound max text length (10,000 characters)
   const MAX_TEXT_LENGTH = 10_000;
   if (cleaned.length > MAX_TEXT_LENGTH) {
     cleaned = cleaned.slice(0, MAX_TEXT_LENGTH);
@@ -205,11 +222,23 @@ export function validateIngressAttachment(attachment: IngressAttachmentInput): {
     }
   }
 
+  // Verify hash integrity against content if content is provided
   let hash = attachment.sha256;
-  if (!hash && attachment.content) {
-    hash = createHash('sha256').update(attachment.content).digest('hex');
+  if (attachment.content) {
+    const computedHash = createHash('sha256').update(attachment.content).digest('hex');
+    if (hash && hash.toLowerCase() !== computedHash.toLowerCase()) {
+      return {
+        valid: false,
+        reason: `Attachment SHA-256 hash mismatch: claimed ${hash} but computed ${computedHash}`,
+        sha256: (attachment.sha256 || '0'.repeat(64)) as SHA256,
+        storageKey: attachment.storageKey || `rejected_${Date.now()}`,
+        scanState: 'rejected',
+      };
+    }
+    hash = computedHash;
   }
-  if (!hash || hash.length !== 64) {
+
+  if (!hash || hash.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(hash)) {
     return {
       valid: false,
       reason: 'Missing or invalid SHA-256 hash',
@@ -219,7 +248,13 @@ export function validateIngressAttachment(attachment: IngressAttachmentInput): {
     };
   }
 
-  const storageKey = attachment.storageKey || `attachments/${hash}/${attachment.filename}`;
+  // Sanitize filename to prevent path traversal
+  const rawBase = path.basename(attachment.filename.replace(/\\/g, '/')).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeFilename = (!rawBase || rawBase === '.' || rawBase === '..')
+    ? `attachment_${Date.now()}.${ext || 'bin'}`
+    : rawBase;
+
+  const storageKey = attachment.storageKey || `attachments/${hash}/${safeFilename}`;
   return { valid: true, sha256: hash as SHA256, storageKey, scanState: 'clean' };
 }
 
@@ -239,6 +274,7 @@ export interface IngressIntentEvaluation {
 }
 
 import { KAAE_CLIENT_ID } from './waha-ingress.js';
+import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 
 /**
  * Intent evaluation engine enforcing the conversational gate:
@@ -753,7 +789,7 @@ export class UnifiedIngressService {
 
     const taskResult = await this.persistence.createTaskAggregate({
       tenantId: input.tenantId,
-      userId: '00000000-0000-4000-b000-000000000001',
+      userId: CHANNEL_INGRESS_USER_ID,
       idempotencyKey,
       title: taskTitle,
       description: sanitizedText,

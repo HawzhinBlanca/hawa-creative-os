@@ -1,3 +1,5 @@
+import { getAuthToken } from './auth.js';
+
 export type StreamConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
 export interface SystemEventPayload<T = any> {
@@ -44,7 +46,9 @@ class EventStreamService {
     this.setStatus('connecting');
 
     try {
-      this.eventSource = new EventSource(this.endpoint);
+      // EventSource cannot send headers; the stream accepts the session token as a query parameter.
+      const token = getAuthToken();
+      this.eventSource = new EventSource(token ? `${this.endpoint}?access_token=${encodeURIComponent(token)}` : this.endpoint);
 
       this.eventSource.addEventListener('open', () => {
         this.setStatus('connected');

@@ -134,7 +134,12 @@ export class WahaIngressHandler {
    */
   verifySecret(providedSecret?: string): boolean {
     if (!this.secretToken) return true; // Optional in local test mode
-    return providedSecret === this.secretToken;
+    if (!providedSecret || typeof providedSecret !== 'string') return false;
+    const cleanSecret = providedSecret.replace(/^Bearer\s+/i, '').trim();
+    const expectedBuf = Buffer.from(this.secretToken);
+    const actualBuf = Buffer.from(cleanSecret);
+    if (expectedBuf.length !== actualBuf.length) return false;
+    return crypto.timingSafeEqual(expectedBuf, actualBuf);
   }
 
   /**
@@ -196,7 +201,9 @@ export class WahaIngressHandler {
     const normalizedText = normalizeKurdishIncomingText(text);
 
     // Derive or map client ID before any retrieval (Invariant #4 & #6)
-    let detectedClientId = raw.clientId || PHONE_CLIENT_DIRECTORY[phoneClean];
+    // The webhook secret/signature is the trust boundary: an authenticated adapter may name the
+    // client explicitly; otherwise the sender's phone directory entry or a brand keyword decides.
+    let detectedClientId: string | undefined = raw.clientId || PHONE_CLIENT_DIRECTORY[phoneClean];
     if (!detectedClientId) {
       const lower = text.toLowerCase();
       if (
@@ -216,9 +223,8 @@ export class WahaIngressHandler {
         detectedClientId = 'client-nova';
       } else if (lower.includes('rona') || text.includes('ڕۆنا') || text.includes('مۆدە')) {
         detectedClientId = 'client-rona';
-      } else {
-        detectedClientId = 'client-drustee';
       }
+      // Otherwise the message stays unscoped; the art director assigns the client in Hawa Desk.
     }
 
     const rawPayloadHash = rawBodyBytes ? computeWahaPayloadHash(rawBodyBytes) : undefined;

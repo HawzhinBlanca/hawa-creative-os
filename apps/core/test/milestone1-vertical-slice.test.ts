@@ -8,14 +8,14 @@ import { GooglePublisher } from '@hawa/integrations';
 import { DeterministicQAEngine } from '@hawa/qa';
 
 describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage -> Editable Design -> QA -> Approval -> Delivery & Recovery', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const publicationRepo = new PublicationRepository(db);
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
     'Content-Type': 'application/json',

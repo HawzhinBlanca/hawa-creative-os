@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createDb, type Kysely, type Database, OutboxRepository, withRlsContext } from '@hawa/db';
+import { createDb, type Kysely, type Database, OutboxRepository, withRlsContext, sql } from '@hawa/db';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 
 describe('Worker: Durable Outbox Consumer', () => {
@@ -10,8 +10,7 @@ describe('Worker: Durable Outbox Consumer', () => {
 
   beforeEach(async () => {
     const testDbUrl =
-      process.env.TEST_DATABASE_URL ||
-      'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+      process.env.TEST_DATABASE_URL!;
     db = createDb(testDbUrl);
     outboxRepo = new OutboxRepository(db);
 
@@ -71,6 +70,7 @@ describe('Worker: Durable Outbox Consumer', () => {
     expect(record).toBeDefined();
     expect(record?.state).toBe('delivered');
     expect(record?.delivered_at).toBeDefined();
+    expect(record?.leased_until).toBeNull();
   });
 
   it('retries failing commands with incremented attempt and backoff', async () => {
@@ -112,6 +112,7 @@ describe('Worker: Durable Outbox Consumer', () => {
     expect(record?.last_error).toContain('Simulated external delivery timeout');
     expect(record?.available_at).toBeDefined();
     expect(new Date(record!.available_at!).getTime()).toBeGreaterThan(Date.now());
+    expect(record?.leased_until).toBeNull();
   });
 
   it('dead-letters commands when max attempts are exhausted', async () => {
@@ -150,5 +151,64 @@ describe('Worker: Durable Outbox Consumer', () => {
     expect(record?.state).toBe('failed');
     expect(record?.attempts).toBe(1);
     expect(record?.last_error).toContain('Fatal unrecoverable error');
+    expect(record?.leased_until).toBeNull();
+  });
+
+  it('isolates command failures so a SQL abort in one command does not rollback previous successful commands or prevent retry tracking', async () => {
+    const task1Id = crypto.randomUUID();
+    const task2Id = crypto.randomUUID();
+    const key1 = `test-batch-success-${crypto.randomUUID()}`;
+    const key2 = `test-batch-sqlerr-${crypto.randomUUID()}`;
+
+    await withRlsContext(db, { tenantId: testTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
+      await outboxRepo.enqueue({
+        tenantId: testTenantId,
+        aggregateType: 'task',
+        aggregateId: task1Id,
+        commandType: 'test.success_in_batch',
+        idempotencyKey: key1,
+        payload: { task1Id },
+      }, trx);
+      await outboxRepo.enqueue({
+        tenantId: testTenantId,
+        aggregateType: 'task',
+        aggregateId: task2Id,
+        commandType: 'test.sql_error_in_batch',
+        idempotencyKey: key2,
+        payload: { task2Id },
+      }, trx);
+    });
+
+    const consumer = new OutboxConsumer(db, {
+      tenantId: testTenantId,
+      userId: adminUserId,
+      batchSize: 10,
+      handlers: {
+        'test.success_in_batch': async () => {
+          // Normal success
+        },
+        'test.sql_error_in_batch': async (_cmd, trx) => {
+          // Trigger a raw SQL error that aborts the Postgres transaction
+          await (sql`SELECT * FROM nonexistent_fatal_table_123`).execute(trx);
+        },
+      },
+    });
+
+    const summary = await consumer.processBatch(5);
+    expect(summary.leased).toBe(2);
+    expect(summary.succeeded).toBe(1);
+    expect(summary.retried).toBe(1);
+
+    const rec1 = await withRlsContext(db, { tenantId: testTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
+      return await outboxRepo.findByIdempotencyKey(testTenantId, key1, trx);
+    });
+    expect(rec1?.state).toBe('delivered');
+
+    const rec2 = await withRlsContext(db, { tenantId: testTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
+      return await outboxRepo.findByIdempotencyKey(testTenantId, key2, trx);
+    });
+    expect(rec2?.state).toBe('pending');
+    expect(rec2?.attempts).toBe(1);
+    expect(rec2?.last_error).toContain('nonexistent_fatal_table_123');
   });
 });

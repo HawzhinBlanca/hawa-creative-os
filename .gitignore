@@ -12,6 +12,7 @@ __pycache__
 .env.*
 !.env.example
 !.env.production.example
+!.env.test.example
 *.log
 *.tsbuildinfo
 output/*
@@ -22,3 +23,4 @@ exports/
 .hawa-state/
 scratch/
 *staged-exports/
+infra/backup/snapshots/

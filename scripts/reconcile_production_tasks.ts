@@ -1,10 +1,8 @@
 import { createDb, reconcileTasksFromEvents } from '../packages/db/src/index.js';
 
 async function main() {
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.TEST_DATABASE_URL ||
-    'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL;
+  if (!connectionString) throw new Error('DATABASE_URL (or TEST_DATABASE_URL) is required; this script has no default database');
 
   const isDryRun = process.argv.includes('--dry-run');
 

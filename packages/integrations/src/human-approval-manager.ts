@@ -16,6 +16,7 @@
 
 import crypto from 'node:crypto';
 import type { Result, AppError, UUID, SHA256, ISODateTime } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import {
   type ApprovalState,
   type ApprovalActor,
@@ -348,7 +349,7 @@ export class HumanApprovalManager {
       const auditEntry = this.appendAuditEntry({
         eventType: 'publication.denied',
         actor: {
-          userId: '00000000-0000-4000-b000-000000000001',
+          userId: SYSTEM_AUTOMATION_USER_ID,
           displayName: 'Google Publisher',
           role: 'system',
           verifiedServerSide: true,
@@ -368,7 +369,7 @@ export class HumanApprovalManager {
     const auditEntry = this.appendAuditEntry({
       eventType: 'publication.authorized',
       actor: {
-        userId: '00000000-0000-4000-b000-000000000001',
+        userId: SYSTEM_AUTOMATION_USER_ID,
         displayName: 'Google Publisher',
         role: 'system',
         verifiedServerSide: true,

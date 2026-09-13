@@ -132,6 +132,7 @@ export class OutboxRepository {
       .set({
         state: 'delivered',
         delivered_at: new Date(),
+        leased_until: null,
       })
       .where('id', '=', id)
       .returningAll()
@@ -146,6 +147,7 @@ export class OutboxRepository {
         state: 'failed',
         attempts: eb('attempts', '+', 1),
         last_error: error,
+        leased_until: null,
       }))
       .where('id', '=', id)
       .returningAll()
@@ -168,6 +170,7 @@ export class OutboxRepository {
           state: 'failed',
           attempts,
           last_error: error,
+          leased_until: null,
         })
         .where('id', '=', id)
         .returningAll()
@@ -182,6 +185,7 @@ export class OutboxRepository {
           attempts,
           available_at: nextAvailableAt,
           last_error: error,
+          leased_until: null,
         })
         .where('id', '=', id)
         .returningAll()

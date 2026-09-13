@@ -18,8 +18,7 @@ import crypto from 'node:crypto';
 
 describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
   const connectionString =
-    process.env.TEST_DATABASE_URL ||
-    'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+    process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const tenantId = '00000000-0000-4000-a000-000000000008';
   const userId = '00000000-0000-4000-b000-000000000008';
@@ -65,7 +64,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token'}`,
+        'Authorization': `Bearer ${process.env.HAWA_ADMIN_KEY!}`,
       },
       body: JSON.stringify({
         tenantId,
@@ -387,6 +386,15 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     expect(body.authenticated).toBe(true);
     expect(body.user.id).toBe(parseInt(authorizedUserId, 10));
     expect(body.sessionToken).toContain('tg_miniapp_sess_');
+
+    // Verify session token can access protected authenticated endpoints
+    const authSessionRes = await app.request('/api/auth/session', {
+      headers: { Authorization: `Bearer ${body.sessionToken}` },
+    });
+    expect(authSessionRes.status).toBe(200);
+    const authSessionBody = await authSessionRes.json();
+    expect(authSessionBody.authenticated).toBe(true);
+    expect(authSessionBody.user.role).toBe('operator');
 
     // B. Negative control: Tampered initData (hash mismatch)
     const tamperedInitData = validInitData.replace(hash, '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');

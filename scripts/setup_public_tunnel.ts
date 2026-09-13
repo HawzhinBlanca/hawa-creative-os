@@ -11,7 +11,8 @@ async function main() {
 
   const coreBaseUrl = process.env.HAWA_CORE_URL || 'http://127.0.0.1:8080';
   const targetWebhookUrl = process.argv[2] || process.env.TELEGRAM_WEBHOOK_URL || 'https://preview-office.kaae.org/api/webhooks/telegram';
-  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET || 'kaae_office_secret_production_entropy_99f3b817';
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!webhookSecret) throw new Error('TELEGRAM_WEBHOOK_SECRET must be set; this script has no built-in secret');
 
   console.log(`[1/4] Inspecting Hawa Core at ${coreBaseUrl}...`);
   try {

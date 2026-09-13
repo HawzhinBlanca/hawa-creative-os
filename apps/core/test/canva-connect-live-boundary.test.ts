@@ -14,7 +14,7 @@ describe('Canva token and download security',()=>{
     expect(()=>c.open(v,'tenant:other')).toThrow();expect(()=>new CanvaTokenCipher('b2'.repeat(32)).open(v,'tenant:actor')).toThrow();
     const bytes=Buffer.from(v,'base64');bytes[30]^=1;expect(()=>c.open(bytes.toString('base64'),'tenant:actor')).toThrow();
   });
-  it.each(['http://export-download.canva.com/a','https://evil.test/a','https://www.canva.com/a','https://export-download.canva.com.evil.test/a','https://user:pass@export-download.canva.com/a'])('rejects untrusted export URL %s without network',async u=>{
+  it.each(['', 'not-a-url', 'javascript:alert(1)', ':::invalid', 'http://export-download.canva.com/a','https://evil.test/a','https://www.canva.com/a','https://export-download.canva.com.evil.test/a','https://user:pass@export-download.canva.com/a'])('rejects untrusted or malformed export URL %s without network',async u=>{
     const f=vi.fn();await expect(downloadCanvaExport(u,f)).rejects.toThrow();expect(f).not.toHaveBeenCalled();
   });
   it('rejects an oversized stream and never adds bearer credentials or follows redirects',async()=>{
@@ -221,7 +221,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   it('runs the export path through the non-owner runtime database role',async()=>{
     await bind();const runtimeUrl=new URL(process.env.HAWA_ISOLATED_RUNTIME_DB || url!);
     if(runtimeUrl.pathname!=='/hawa_repair')throw new Error('Disposable runtime database required');
-    runtimeUrl.username='hawa_app';if(!process.env.HAWA_ISOLATED_RUNTIME_DB)runtimeUrl.password='';const runtimeDb=createDb(runtimeUrl.href);
+    runtimeUrl.username='hawa_app';if(!process.env.HAWA_ISOLATED_RUNTIME_DB)runtimeUrl.password=process.env.HAWA_APP_PASSWORD || new URL(process.env.TEST_DATABASE_URL!).password;const runtimeDb=createDb(runtimeUrl.href);
     try {
       const runtimeService=new CanvaConnectService(runtimeDb,options);
       expect((await runtimeService.status(scope)).authorized).toBe(true);

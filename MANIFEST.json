@@ -3,19 +3,34 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-03T00:00:00Z",
+  "generatedAt": "2026-09-13T21:17:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 175,
+  "fileCount": 177,
   "files": [
     {
+      "path": ".claude/settings.local.json",
+      "sha256": "05a36c1c7bea612783179b25dd3837a79752203c5386ed333d6a03b30183929c",
+      "bytes": 76
+    },
+    {
+      "path": ".dockerignore",
+      "sha256": "ddc69d2503eb8cc2dd38192163e440a2b4ddc6a1f1f9fdffad7372c7a3bdf889",
+      "bytes": 113
+    },
+    {
       "path": ".env.example",
-      "sha256": "731c2e4ba93570d1a1a2376cb4b2fe84f8d2cdc45e1038efb7049a65d16f7b6f",
-      "bytes": 501
+      "sha256": "c8bc82a6ee958d6006ccf0d5b168796857d011498d3cffa3d1ecd9a78c178809",
+      "bytes": 519
+    },
+    {
+      "path": ".env.test.example",
+      "sha256": "b3b288c876c30ddaf3e8663d30cb9c1895eb3b166cf4af2dad4b44036002425f",
+      "bytes": 884
     },
     {
       "path": "AGENTS.md",
@@ -34,8 +49,8 @@
     },
     {
       "path": "DOCUMENT_INDEX.md",
-      "sha256": "fd3ed92f2353f72dba3e9219b7bc080454ae8bedc614129904ebc00d9a002889",
-      "bytes": 20830
+      "sha256": "59c0f3d135f03c5fe859af4e2b0484d46a186e155d24584b691179a9bf12f2f0",
+      "bytes": 20469
     },
     {
       "path": "LICENSE_NOTICE.md",
@@ -44,13 +59,13 @@
     },
     {
       "path": "MASTER_SPEC.md",
-      "sha256": "ad3375fe5707bb02c83142817eb042678f54d148d004b8e83681544fcde454c1",
-      "bytes": 12166
+      "sha256": "e2d9d976b110c13bb3b4e480613eadeec54c8dd356a0d334fc7e96e82cf33779",
+      "bytes": 12548
     },
     {
       "path": "README.md",
-      "sha256": "195fb3d28cf8381560c63b518c10b00faa9fa5f81e4840d4b2cdef6515a4ae51",
-      "bytes": 2476
+      "sha256": "0b2520a7e15158fbc4aef64b671d90152983c4f7a83a49e71fd2963bc6a3b437",
+      "bytes": 2858
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -158,59 +173,49 @@
       "bytes": 7398
     },
     {
+      "path": "adrs/022_verified_canva_handoff.md",
+      "sha256": "ba72b6d2e4608a0d5cfbe18cb26c673e0fed25b4ce3c8655cf2ad64dbf04431d",
+      "bytes": 1709
+    },
+    {
+      "path": "adrs/023_canva_connect_authorization_and_exports.md",
+      "sha256": "b651a9d9538722809c7bea5d22a13a3bf283a540ecf7c80b2c2ec780eaf862ed",
+      "bytes": 1941
+    },
+    {
+      "path": "adrs/024_canva_editable_transfer.md",
+      "sha256": "4a2b08ba391aa17ed4f8efdeb254d4a7bd47606b198faea390d90efe00c19b5f",
+      "bytes": 2793
+    },
+    {
+      "path": "adrs/025_canva_only_archive.md",
+      "sha256": "93a8644b9ae80daecce1a19ec43b672cb4418e6121ac5f10fe1a0dbe8a863acc",
+      "bytes": 1357
+    },
+    {
+      "path": "adrs/026_single_durable_canva_draft_path.md",
+      "sha256": "b3a323688c0614cc3635b58d24e2927c8122e024db945448dff9c904740aa751",
+      "bytes": 2712
+    },
+    {
+      "path": "adrs/027_service_identities_for_adapters_and_automation.md",
+      "sha256": "ce0949081d3275eab7ee8337af19b8e25c6597bafb653a4440efa339785f2d77",
+      "bytes": 3449
+    },
+    {
+      "path": "api/canva-connect.openapi.json",
+      "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
+      "bytes": 21896
+    },
+    {
       "path": "api/events.md",
       "sha256": "9be75a7f90d84222cf734e548a6b38073cad75b5fe5b6e0a96312abe611ccacc",
       "bytes": 3137
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "f173bd07230c5f99372f0bcf303b6c807742cd64a491b5f3a800472b0ad9b868",
-      "bytes": 18180
-    },
-    {
-      "path": "archive/historical-designs/figma_rest_ref/c1000000-0000-4000-8000-000000000001/doc_figma_legacy_blocked_04/original_source.json",
-      "sha256": "c9f3540cd32ccaeba67ad4bccbf023f59674039ae6ade649f5e18e943941c190",
-      "bytes": 561
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_hyc_kaae_active_02/original_source.json",
-      "sha256": "0b40ba477fe2c26d07eebbc7dc67b90ed456db7d1e204b324c314fed97df5956",
-      "bytes": 1062
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_ledger_sample_08/original_source.json",
-      "sha256": "08877e7f707aeb5bc3fb36d54fe7c925b38e449919d60c9bf069706bcea86f28",
-      "bytes": 565
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000002/doc_rollback_sample_07/original_source.json",
-      "sha256": "9cd4bab75dbd1ac6f4b46325de960ea3bc414dcb18f23463152ff7a44ce60e00",
-      "bytes": 622
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_http_test_01/original_source.json",
-      "sha256": "71812c592ec42e11cef188c21996bd7567758d3ac442a2285ef80650551890e3",
-      "bytes": 568
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_hyc_drustee_001/original_source.json",
-      "sha256": "68079dde7eb91d01ed1948052d6c78b522c54955bece8f939221abad5fea30ea",
-      "bytes": 996
-    },
-    {
-      "path": "archive/historical-designs/hycanvas_json/c1000000-0000-4000-8000-000000000003/doc_reopen_test_06/original_source.json",
-      "sha256": "722daa74a75a7b132ca177cc323c83701d945235ba10aac1be0e54f1000c8777",
-      "bytes": 689
-    },
-    {
-      "path": "archive/historical-designs/legacy_zip_pack/c1000000-0000-4000-8000-000000000005/doc_archive_fastpay_05/original_source.json",
-      "sha256": "fe331b5a727e6d579c7cdf18871463902d0c5f524d487bec0dfa1bb5faade04d",
-      "bytes": 533
-    },
-    {
-      "path": "archive/historical-designs/polotno_json/c1000000-0000-4000-8000-000000000004/doc_polotno_aster_03/original_source.json",
-      "sha256": "74d7e6b234f35fef4ad4553496b0f762506022aae673a1af49ccbff81beab9c2",
-      "bytes": 907
+      "sha256": "d69cb658fead74e2ffeb87b19f8edefbd1113d8ad1162d162348a34b0a0ffdac",
+      "bytes": 20116
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -239,8 +244,8 @@
     },
     {
       "path": "config/upstream-components.example.yaml",
-      "sha256": "145111ce2f3e8419663b314d207f9de69c93fd3ec200a1e302379df8b6b4e3f8",
-      "bytes": 1169
+      "sha256": "371219d0ab0af7864cfe72f9178c3db11a2347db5fcf9f96fa57435d91ca2f92",
+      "bytes": 1125
     },
     {
       "path": "contracts/asset-provider.ts",
@@ -294,23 +299,18 @@
     },
     {
       "path": "db/seed.sql",
-      "sha256": "97df7efe33699bf6607d8dcdf3d45bc28d03a21684104329057ffa3d585fd12b",
-      "bytes": 3848
+      "sha256": "b07c4ef64ac00d2d64c3e17672e52748ac99a23d3bf13cddd56e4ad2fbc431db",
+      "bytes": 4372
     },
     {
       "path": "deployment/Caddyfile",
-      "sha256": "72e1e8d4af7f6d59461a559a061187c94ff8bb3eb6f2101ee5d378e0b17428f5",
-      "bytes": 672
+      "sha256": "1b5282bc21582d2b7cb9439244b23bdcebc2bec06816ff534b68ff9431e02ef6",
+      "bytes": 660
     },
     {
       "path": "deployment/Dockerfile.hawa",
       "sha256": "e8adf35cb3f021d775cdbf72660f4d9967fc14a622363c3a83644e10c33fda5a",
       "bytes": 899
-    },
-    {
-      "path": "deployment/Dockerfile.hycanvas",
-      "sha256": "53643bf72c545cabe58327154ce5eacea1818da9f59612446a2d78a862ffc021",
-      "bytes": 728
     },
     {
       "path": "deployment/backup.sh",
@@ -319,28 +319,23 @@
     },
     {
       "path": "deployment/docker-compose.yml",
-      "sha256": "29a28f70e812093df2cef75d95f4d6f373949adf14a9a408cb67a06800a68400",
-      "bytes": 7480
+      "sha256": "83840547f4ec48fbfbfe17079588d05bfa064e30940071e7496800642cb72bf9",
+      "bytes": 6237
     },
     {
       "path": "deployment/env.example",
-      "sha256": "7ffeea11a52c38b1497d525a05a20f7277e4fe78a52b01a0545b9581a67d35a8",
-      "bytes": 2826
+      "sha256": "2110b13166361c172bedced864e987f6a83e28f67c17ed718df3506ad7235918",
+      "bytes": 2508
     },
     {
       "path": "deployment/init-databases.sh",
-      "sha256": "c8b927ffaf830b9ca44ccb7ceaf5417ce77cd8841fb2803f00365cf9f738f259",
-      "bytes": 1779
+      "sha256": "48c1b1b1cda6ef02fb8959a3beb015db6ec25c5b6793ab8e89d0e080a77f9069",
+      "bytes": 1279
     },
     {
       "path": "deployment/restore-test.sh",
       "sha256": "7c6b61a1dc8a9fad88d0b9ef5b18508367a5ac86dcc60e09701f78718a187290",
       "bytes": 1294
-    },
-    {
-      "path": "deployment/vendor/hycanvas/README.md",
-      "sha256": "48daf0fbf98532cf5d69bc3dffffb8b5e24266308b28b220fb0a35a140fd2d56",
-      "bytes": 555
     },
     {
       "path": "diagrams/architecture.dot",
@@ -434,8 +429,8 @@
     },
     {
       "path": "docs/06_EDITABLE_DOCUMENT_STRATEGY.md",
-      "sha256": "d65f37663eb2895954f64370635506da8837be705fa8d9570476262e78055b33",
-      "bytes": 5512
+      "sha256": "19d1f1fb3949b12f0a6f02936593845e919802074feb0e5f54ef357ce73acfa9",
+      "bytes": 5656
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
@@ -529,8 +524,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "38abd123471e1154f1d531292f0da3613083ab67b99ce7708eb632e219b3f63b",
-      "bytes": 2021
+      "sha256": "d6870cbd8fc3dda302ac1733679d1a457ada0da6c1238dc2f41e7b5f54b3f3e6",
+      "bytes": 5120
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -614,8 +609,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cdcf13b7a61902bbfd848394f509ef0d4b59dd37c8bf6b9aa1ca465a70880457",
-      "bytes": 41965
+      "sha256": "d12d0a5bfd8dabe1e2d8944ca60430cdb98bdc29a3a1471eed9b5cd31fc4ee77",
+      "bytes": 82272
     },
     {
       "path": "plans/user-stories.csv",
@@ -666,11 +661,6 @@
       "path": "runbooks/03_model_provider_outage.md",
       "sha256": "4e1a4ce787d1968a322e24c84c532f70a1ddb6c7681335f9a121eac95ce5cdaa",
       "bytes": 854
-    },
-    {
-      "path": "runbooks/04_hycanvas_incident.md",
-      "sha256": "cbb6990892b63cae1e955327ff1071a9a693d6171ea28551a816c0245ce23ebe",
-      "bytes": 806
     },
     {
       "path": "runbooks/05_rtl_failure.md",
@@ -769,13 +759,18 @@
     },
     {
       "path": "scripts/dispatch_authentic_kaae_telegram.ts",
-      "sha256": "7afef9e9d1ed4bdab626028505d4104cc3ba28614663e180263de6d3a01a4322",
-      "bytes": 2363
+      "sha256": "0426fe429a4a0777af3d8b2d16b913c8b52a519f15b39a732ecd9ef72a289488",
+      "bytes": 2563
     },
     {
       "path": "scripts/drain_outbox.ts",
-      "sha256": "637cecbdfac1dce8d6e6ee6457bc557134493dc69a4f7db468584b4f88054258",
-      "bytes": 2023
+      "sha256": "68ffd82ae2e003c4676cb43bcc4f90528bca4add8e614bd751b86a991239ac4e",
+      "bytes": 2054
+    },
+    {
+      "path": "scripts/execute_independent_live_vertical_slice.ts",
+      "sha256": "3eb9fda23c2e9af3a53e3bb557243e70c14874b53d6c1e73d9421b742f418d08",
+      "bytes": 16177
     },
     {
       "path": "scripts/execute_live_vertical_slice.ts",
@@ -786,11 +781,6 @@
       "path": "scripts/export_kaae_deliverables.ts",
       "sha256": "4c5c40bb5c8e77e2297028203ffc9521312fbbb7de9232d2a9c6e89e167d01d6",
       "bytes": 24113
-    },
-    {
-      "path": "scripts/generate_figma_studio_eval_design.ts",
-      "sha256": "2bd862b76c1b56f756c57f26f1f0c3a9692491eae6ef47f89de774940f846486",
-      "bytes": 19338
     },
     {
       "path": "scripts/ingest_kaae_graphics.ts",
@@ -814,8 +804,13 @@
     },
     {
       "path": "scripts/reconcile_production_tasks.ts",
-      "sha256": "39b9883be1cbcc7ddb3e99b871fed7c462a6adb83114c8d028547a980ed07e62",
-      "bytes": 1460
+      "sha256": "4bb501b454ad044ef8b007d4934822101a2475520370ecbf11d43bc998ef5014",
+      "bytes": 1491
+    },
+    {
+      "path": "scripts/refresh_manifest.py",
+      "sha256": "3067e75ce0ad28a1f2f0cf6a4262831b8c373c10ee067aec4474d28695b2a085",
+      "bytes": 2712
     },
     {
       "path": "scripts/render_10_out_of_10_designs.ts",
@@ -824,8 +819,8 @@
     },
     {
       "path": "scripts/render_brand_dna_invitation.ts",
-      "sha256": "2d44e3e562fb0e81e1c52e0927f17fcd25135d302ccfecec1cf2e1d4d1bd59a1",
-      "bytes": 13372
+      "sha256": "8b2c7c89bb18f86d3bd7a3f41008634c470ab819cfb22625c48bd7c288771750",
+      "bytes": 13613
     },
     {
       "path": "scripts/render_kaae_pro_brand_designs.ts",
@@ -843,9 +838,14 @@
       "bytes": 33743
     },
     {
+      "path": "scripts/run_independent_completion_audit.ts",
+      "sha256": "633110bedd284ce4fa4c1f70ec06808b7b510afec2d88f4ea4db2cd42b4e1752",
+      "bytes": 75127
+    },
+    {
       "path": "scripts/setup_public_tunnel.ts",
-      "sha256": "259e44ff5d9f45edb7ab31973185592c8912bc376b1790cd9b799d3c1f03c304",
-      "bytes": 4212
+      "sha256": "9361a7fbb191775d2fd915665b8afdd2907d563a5f1eec8dadddc53f8baa36bb",
+      "bytes": 4274
     },
     {
       "path": "scripts/smoke_test_10_of_10.ts",
@@ -853,24 +853,34 @@
       "bytes": 13785
     },
     {
-      "path": "scripts/sync_kaae_figma_bridge.ts",
-      "sha256": "d91d0a798707d7061b8f192a8eb26612cd035fa64374d7473492368eec2c3646",
-      "bytes": 11994
-    },
-    {
       "path": "scripts/test_gateway_models.ts",
       "sha256": "a274670bdeff4f5030b295971f4f6c2a461f60df9bb61326114f88e85bf97104",
       "bytes": 3029
     },
     {
-      "path": "scripts/test_kaae_full_english_pipeline.ts",
-      "sha256": "33fa22862250d1fe16499ceaffa51958dfb5473305472c0033dc1e1b03618922",
-      "bytes": 44348
+      "path": "scripts/test_opus5_critique.py",
+      "sha256": "3e2c58819201c48e9e230e73493019b0a080fa5c86ec51dd216cd684ba3e37d9",
+      "bytes": 3912
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "29058f94d40f8fc99cb14e3f7d8a5988e4b3c234f35b23df893904dd5b567863",
-      "bytes": 21233
+      "sha256": "5a1932e455631b690672df8df7709ecf722244842116d60e6f8bc0cb1b0cde71",
+      "bytes": 23810
+    },
+    {
+      "path": "scripts/verify_all_h01_h14.ts",
+      "sha256": "e93e3c7cef38f91313185a75685cd01f37d24c07a5ac8580a2b4284b08770d96",
+      "bytes": 25071
+    },
+    {
+      "path": "scripts/verify_live_h01_h03.ts",
+      "sha256": "2eeef4b5962c5e178f04447532af5aa0b9f10040ba1af932d8a05542050a975a",
+      "bytes": 10084
+    },
+    {
+      "path": "scripts/verify_live_h04_h05_h10.ts",
+      "sha256": "1a82c0e6124450372c915da9578f7472dbe5569e2872a9de881c72e163bca504",
+      "bytes": 6915
     },
     {
       "path": "ui/design-system.md",

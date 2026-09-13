@@ -17,8 +17,7 @@ import crypto from 'node:crypto';
 
 describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () => {
   const connectionString =
-    process.env.TEST_DATABASE_URL ||
-    'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+    process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const tenantId = '00000000-0000-4000-a000-000000000008';
   const userId = '00000000-0000-4000-b000-000000000008';
@@ -95,7 +94,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token'}`,
+        'Authorization': `Bearer ${process.env.HAWA_ADMIN_KEY!}`,
       },
       body: JSON.stringify({
         tenantId,

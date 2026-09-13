@@ -65,4 +65,32 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect((await planner.generate(scope,id,'lost-key-002',1200,1697)).status).toBe('uncertain');
     expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
+  it('lets an operator abandon an uncertain plan so the task can be planned again; evidence stays',async()=>{
+    const id=await intake(),lost=vi.fn(async()=>{throw new Error('lost');}),{planner}=make(lost);
+    const stuck=await planner.generate(scope,id,'abandon-key-01',1200,1697);expect(stuck.status).toBe('uncertain');
+    await expect(planner.abandon(scope,id,stuck.planId,'')).rejects.toThrow('reason');
+    const retired=await planner.abandon(scope,id,stuck.planId,'Model outage confirmed; retry.');expect(retired.status).toBe('abandoned');
+    await expect(planner.abandon(scope,id,stuck.planId,'twice')).rejects.toThrow('cannot be abandoned');
+    await expect(sql`UPDATE hawa.canva_design_plans SET diagnostic='tamper' WHERE id=${stuck.planId}::uuid`.execute(db)).rejects.toThrow('final');
+    const good=vi.fn(async()=>response()),{api:api2,planner:planner2}=make(good);
+    const fresh=await planner2.generate(scope,id,'abandon-key-02',1200,1697);
+    expect(good).toHaveBeenCalledTimes(1);expect(fresh.status).toBe('submitted');expect(api2.importEditableDesign).toHaveBeenCalledTimes(1);
+    const rows=(await sql<any>`SELECT status FROM hawa.canva_design_plans WHERE task_id=${id}::uuid ORDER BY created_at`.execute(db)).rows.map(r=>r.status);
+    expect(rows).toEqual(['abandoned','planned']);
+  });
+  it('correctly parses model output wrapped in markdown codeblocks and conversational intro/outro',async()=>{
+    const id=await intake();
+    const conversationalText = `Here is the academic invitation design layout you requested:\n\n\`\`\`json\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n\nI have followed all brand rules carefully.`;
+    const remote = vi.fn(async() => Response.json({
+      id:'msg-conversational-test',
+      model:'claude-opus-5',
+      stop_reason:'end_turn',
+      usage:{input_tokens:120,output_tokens:450},
+      content:[{type:'text',text:conversationalText}]
+    }));
+    const {api,planner}=make(remote);
+    const result=await planner.generate(scope,id,'conv-key-001',1200,1697);
+    expect(result.status).toBe('submitted');
+    expect(api.importEditableDesign).toHaveBeenCalled();
+  });
 });

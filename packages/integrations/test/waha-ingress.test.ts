@@ -17,7 +17,10 @@ describe('WAHA Ingress & Normalization Engine (FR-004, FR-071)', () => {
   it('normalizes incoming WAHA webhook payload and computes deterministic idempotency key', () => {
     const handler = new WahaIngressHandler('office_waha_secret_token');
     expect(handler.verifySecret('office_waha_secret_token')).toBe(true);
+    expect(handler.verifySecret('Bearer office_waha_secret_token')).toBe(true);
     expect(handler.verifySecret('wrong_token')).toBe(false);
+    expect(handler.verifySecret('short')).toBe(false);
+    expect(handler.verifySecret(undefined)).toBe(false);
 
     const rawPayload = {
       event: 'message',

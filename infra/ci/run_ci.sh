@@ -14,13 +14,14 @@ cd "${ROOT_DIR}"
 echo ""
 echo "[1/7] Validating Master Blueprint Pack (Gate A)..."
 python3 scripts/validate_pack.py
-echo "✓ Master Blueprint passed (PASS=418 WARN=0 FAIL=0)."
+echo "✓ Master Blueprint passed."
 
 # Step 2: Zero Secret Leakage (Gate B)
 echo ""
 echo "[2/7] Scanning for credentials and secret leakage (Gate B)..."
+python3 infra/security/security_scan.py --self-test
 python3 infra/security/security_scan.py
-echo "✓ Security hygiene passed: 0 secrets detected."
+echo "✓ Security hygiene passed: 0 secrets in committable files."
 
 # Step 3: Strict Monorepo Typecheck (Gate C)
 echo ""
@@ -30,9 +31,9 @@ echo "✓ Type safety passed: 0 compilation errors."
 
 # Step 4: Full Unit, Property & Chaos Test Suite (Gates D-P)
 echo ""
-echo "[4/7] Running complete Vitest suite (21 files, 147 tests) (Gates D-P)..."
+echo "[4/7] Running complete Vitest suite (Gates D-P)..."
 pnpm test
-echo "✓ All 147 tests passed across all domain, QA, and integration packages."
+echo "✓ Vitest suite passed."
 
 # Step 5: Canonical Desk PWA Production Build (Gate H)
 echo ""
@@ -50,7 +51,7 @@ echo "✓ 49 tables, 11 enums, and 24 RLS policies verified."
 echo ""
 echo "[7/7] Validating supply chain SBOM and Docker Compose topology (Gates Q, S)..."
 pnpm run sbom
-docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production.example config --quiet
+docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.example config --quiet
 echo "✓ CycloneDX 1.7 SBOM and Docker Compose topology valid."
 
 echo ""

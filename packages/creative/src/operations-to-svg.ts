@@ -42,8 +42,9 @@ export function getKaaeOfficialLogoDataUri(): string {
   return '';
 }
 
-export function escapeXml(unsafe: string): string {
-  return unsafe
+/** Accepts any value: style fields such as fontWeight arrive as numbers, and a throw here abandons the whole preview. */
+export function escapeXml(unsafe: unknown): string {
+  return String(unsafe ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -100,7 +101,7 @@ export function renderOperationsToSvg(
       const svgMatch = source.match(/<svg[^>]*>([\s\S]*?)<\/svg>/i);
       const inner = svgMatch ? svgMatch[1].replace(/<defs>[\s\S]*?<\/defs>/gi, '').trim() : source;
       bodyParts.push(
-        `<g id="${op.nodeId || 'vec'}" transform="translate(${op.x || 0}, ${op.y || 0})">${inner}</g>`
+        `<g id="${escapeXml(op.nodeId || 'vec')}" transform="translate(${op.x || 0}, ${op.y || 0})">${inner}</g>`
       );
     } else if (op.op === 'addImage') {
       const sha = op.asset.sha256.replace(/^sha256_/, '');
@@ -171,7 +172,7 @@ export function renderOperationsToSvg(
 
       const fontStyleAttr = style.fontStyle ? ` font-style="${style.fontStyle}"` : '';
       bodyParts.push(
-        `<text id="${op.nodeId || 'txt'}" x="${textX}" y="${y + fontSize}" fill="${color}" font-family="${fontFamily}" font-size="${fontSize}px" font-weight="${fontWeight}"${fontStyleAttr} text-anchor="${anchor}" letter-spacing="${style.letterSpacing || '0px'}">${textContent}</text>`
+        `<text id="${escapeXml(op.nodeId || 'txt')}" x="${textX}" y="${y + fontSize}" fill="${escapeXml(color)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}px" font-weight="${escapeXml(fontWeight)}"${fontStyleAttr} text-anchor="${anchor}" letter-spacing="${escapeXml(style.letterSpacing || '0px')}">${textContent}</text>`
       );
     }
   }

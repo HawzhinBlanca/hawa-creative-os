@@ -404,5 +404,92 @@ describe('CV-12: Qualify Native Manual Editing & Bounded AI Edits', () => {
       const storyBg = storyPage.elements.find((el) => el.role === 'background')!;
       expect(storyBg.box.height).toBe(1920);
     });
+
+    it('rejects createLinkedVariants on design with empty artboards or zero dimensions', async () => {
+      const emptyDesignId = 'DAF_empty_artboards';
+      adapter.registerDesign({
+        canvaDesignId: emptyDesignId,
+        title: 'Empty Design',
+        tenantId,
+        clientId: kaaeClientDNA.clientId,
+        taskId: crypto.randomUUID(),
+        canvaTeamId: 'team_default',
+        pages: [],
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        editUrl: `https://www.canva.com/design/${emptyDesignId}/edit`,
+        viewUrl: `https://www.canva.com/design/${emptyDesignId}/view`,
+        semanticCoverage: { textNodesCount: 0, imageFillsCount: 0, hasLogo: false, isComplete: false, unobservedLayersCount: 0 },
+      });
+
+      const emptyRes = await adapter.createLinkedVariants({
+        masterDesignId: emptyDesignId,
+        variantRatios: [{ name: 'Square', width: 1080, height: 1080 }],
+      });
+      expect(emptyRes.ok).toBe(false);
+      if (emptyRes.ok) return;
+      expect(emptyRes.error.code).toBe('INVALID_DESIGN_STRUCTURE');
+    });
+
+    it('rejects stageEditTransaction targeting nonexistent elements or violating expectedText optimistic lock', async () => {
+      const dupRes = await adapter.duplicateAndFillTemplate({
+        templateDesignId: masterTemplateId,
+        newTitle: 'KAAE Concurrency Lock Drill',
+        taskId: crypto.randomUUID(),
+        clientId: kaaeClientDNA.clientId,
+        tenantId,
+        substitutions: {},
+      });
+      expect(dupRes.ok).toBe(true);
+      if (!dupRes.ok) return;
+      const designId = dupRes.value.canvaDesignId;
+      const designHash = adapter.computeObservationHash(dupRes.value);
+
+      const leaseRes = await adapter.acquireAutomationLease({
+        taskId: crypto.randomUUID(),
+        canvaDesignId: designId,
+        holderId: 'concurrency_lock_tester',
+      });
+      expect(leaseRes.ok).toBe(true);
+      if (!leaseRes.ok) return;
+
+      // 1. Nonexistent element rejected
+      const nonExistentRes = await adapter.stageEditTransaction({
+        leaseId: leaseRes.value.leaseId,
+        canvaDesignId: designId,
+        expectedSourceSha256: designHash,
+        operations: [
+          {
+            op: 'replace_text',
+            elementId: 'completely_nonexistent_element_404',
+            text: 'Will fail',
+          },
+        ],
+      });
+      expect(nonExistentRes.ok).toBe(false);
+      if (!nonExistentRes.ok) {
+        expect(nonExistentRes.error.code).toBe('ELEMENT_NOT_FOUND');
+      }
+
+      // 2. Expected text mismatch rejected
+      const expectedTextMismatchRes = await adapter.stageEditTransaction({
+        leaseId: leaseRes.value.leaseId,
+        canvaDesignId: designId,
+        expectedSourceSha256: designHash,
+        operations: [
+          {
+            op: 'replace_text',
+            elementId: 'elem_text_headline',
+            text: 'New Headline',
+            expectedText: 'Deliberately incorrect expectation',
+          },
+        ],
+      });
+      expect(expectedTextMismatchRes.ok).toBe(false);
+      if (!expectedTextMismatchRes.ok) {
+        expect(expectedTextMismatchRes.error.code).toBe('EXPECTED_TEXT_MISMATCH');
+      }
+    });
   });
 });

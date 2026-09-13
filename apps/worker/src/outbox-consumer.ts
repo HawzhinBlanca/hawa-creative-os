@@ -30,6 +30,7 @@ export type OutboxCommandHandler = (
 
 export interface OutboxConsumerOptions {
   tenantId?: string;
+  tenantIds?: string[];
   userId?: string;
   batchSize?: number;
   leaseSeconds?: number;
@@ -130,89 +131,104 @@ export class OutboxConsumer {
     const leaseSeconds = this.options.leaseSeconds || 60;
     const maxAttempts = this.options.maxAttempts || 5;
     const backoffBase = this.options.backoffBaseSeconds || 5;
-    const tenantId = this.options.tenantId || '00000000-0000-4000-a000-000000000001';
+    const configuredTenantIds = this.options.tenantIds && this.options.tenantIds.length > 0
+      ? this.options.tenantIds
+      : [this.options.tenantId || '00000000-0000-4000-a000-000000000001'];
     const userId = this.options.userId || '00000000-0000-4000-b000-000000000002';
 
-    return await withRlsContext(
-      this.db,
-      { tenantId, userId, role: 'administrator' },
-      async (trx) => {
-        const summary: BatchProcessingSummary = {
-          leased: 0,
-          succeeded: 0,
-          retried: 0,
-          deadLettered: 0,
-          errors: [],
-        };
+    const aggregateSummary: BatchProcessingSummary = {
+      leased: 0,
+      succeeded: 0,
+      retried: 0,
+      deadLettered: 0,
+      errors: [],
+    };
 
-        // 1. Atomically lease pending/expired commands with FOR UPDATE SKIP LOCKED
-        const leasedCommands = (await this.outboxRepo.leasePending(
-          limit,
-          leaseSeconds,
-          trx
-        )) as OutboxCommandRecord[];
-
-        summary.leased = leasedCommands.length;
-        if (leasedCommands.length === 0) {
-          return summary;
+    for (const tenantId of configuredTenantIds) {
+      // 1. Atomically lease pending/expired commands with FOR UPDATE SKIP LOCKED
+      const leasedCommands = (await withRlsContext(
+        this.db,
+        { tenantId, userId, role: 'administrator' },
+        async (trx) => {
+          return (await this.outboxRepo.leasePending(
+            limit,
+            leaseSeconds,
+            trx
+          )) as OutboxCommandRecord[];
         }
+      )) || [];
 
-        // 2. Process each command idempotently
-        for (const cmd of leasedCommands) {
-          try {
-            const handler = this.handlers.get(cmd.command_type) || this.handlers.get('*');
-            if (!handler) {
-              // Unknown commands fail visibly; no no-op handler can claim useful completion
-              throw new Error(
-                `[OutboxConsumer] Unknown command_type '${cmd.command_type}'. Unknown commands fail visibly; no no-op handler can claim useful completion.`
-              );
+      aggregateSummary.leased += leasedCommands.length;
+      if (leasedCommands.length === 0) {
+        continue;
+      }
+
+      // 2. Process each command idempotently in its own isolated transaction
+      for (const cmd of leasedCommands) {
+        try {
+          const handler = this.handlers.get(cmd.command_type) || this.handlers.get('*');
+          if (!handler) {
+            // Unknown commands fail visibly; no no-op handler can claim useful completion
+            throw new Error(
+              `[OutboxConsumer] Unknown command_type '${cmd.command_type}'. Unknown commands fail visibly; no no-op handler can claim useful completion.`
+            );
+          }
+
+          await withRlsContext(
+            this.db,
+            { tenantId: cmd.tenant_id, userId, role: 'administrator' },
+            async (cmdTrx) => {
+              await handler(cmd, cmdTrx);
+              // 3. Mark successfully delivered only upon confirmed execution
+              await this.outboxRepo.markDelivered(cmd.id, cmdTrx);
             }
+          );
+          aggregateSummary.succeeded++;
+        } catch (err: any) {
+          const errorMessage = err?.message || String(err);
+          aggregateSummary.errors.push({
+            id: cmd.id,
+            commandType: cmd.command_type,
+            error: errorMessage,
+          });
 
-            await handler(cmd, trx);
-
-            // 3. Mark successfully delivered only upon confirmed execution
-            await this.outboxRepo.markDelivered(cmd.id, trx);
-            summary.succeeded++;
-          } catch (err: any) {
-            const errorMessage = err?.message || String(err);
-            summary.errors.push({
-              id: cmd.id,
-              commandType: cmd.command_type,
-              error: errorMessage,
-            });
-
-            // 4. Retry with exponential backoff or dead-letter if attempts >= maxAttempts
-            try {
-              const updated = await this.outboxRepo.retryOrDeadLetter(
-                cmd.id,
-                errorMessage,
-                maxAttempts,
-                backoffBase,
-                trx
-              );
-              if (updated.state === 'failed') {
-                summary.deadLettered++;
-                console.error(
-                  `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) DEAD-LETTERED after ${updated.attempts} attempts: ${errorMessage}`
-                );
-              } else {
-                summary.retried++;
-                console.warn(
-                  `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) scheduled for retry (attempt ${updated.attempts}): ${errorMessage}`
+          // 4. Retry with exponential backoff or dead-letter in a fresh clean transaction
+          try {
+            const updated = await withRlsContext(
+              this.db,
+              { tenantId: cmd.tenant_id, userId, role: 'administrator' },
+              async (retryTrx) => {
+                return await this.outboxRepo.retryOrDeadLetter(
+                  cmd.id,
+                  errorMessage,
+                  maxAttempts,
+                  backoffBase,
+                  retryTrx
                 );
               }
-            } catch (retryErr) {
+            );
+            if (updated.state === 'failed') {
+              aggregateSummary.deadLettered++;
               console.error(
-                `[OutboxConsumer] Failed to update retry status for command ${cmd.id}:`,
-                retryErr
+                `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) DEAD-LETTERED after ${updated.attempts} attempts: ${errorMessage}`
+              );
+            } else {
+              aggregateSummary.retried++;
+              console.warn(
+                `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) scheduled for retry (attempt ${updated.attempts}): ${errorMessage}`
               );
             }
+          } catch (retryErr) {
+            console.error(
+              `[OutboxConsumer] Failed to update retry status for command ${cmd.id}:`,
+              retryErr
+            );
           }
         }
-
-        return summary;
       }
-    );
+    }
+
+    return aggregateSummary;
   }
 
   start(pollIntervalMs?: number): { stop: () => void } {

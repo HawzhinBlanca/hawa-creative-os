@@ -68,6 +68,21 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
       expect(res.status).toBe(401);
     });
 
+    it('rejects anonymous reads of client, task and operations data', async () => {
+      for (const path of ['/v1/clients', '/v1/operations/failures', '/v1/tasks', '/v1/migration/ledger']) {
+        const res = await app.request(path, { headers: { 'x-enforce-auth': '1' } });
+        expect(res.status, path).toBe(401);
+      }
+      expect((await app.request('/v1/system/studio-status')).status).toBe(200);
+    });
+
+    it('never accepts the webhook secret as an operator credential for the API', async () => {
+      const res = await app.request('/v1/tasks', {
+        headers: { 'x-telegram-bot-api-secret-token': testWebhookSecret },
+      });
+      expect(res.status).toBe(401);
+    });
+
     it('accepts configured webhook secret from environment', async () => {
       const res = await app.request('/api/webhooks/telegram', {
         method: 'POST',
@@ -77,7 +92,9 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
         },
         body: JSON.stringify({ update_id: 103 }),
       });
-      expect(res.status).toBe(201);
+      // Authenticated, and an update without text is acknowledged (not turned into an empty task).
+      expect(res.status).toBe(200);
+      expect((await res.json()).ignored).toBe(true);
     });
   });
 
@@ -118,6 +135,72 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
         body: JSON.stringify({ wahaEndpoint: 'http://127.0.0.1:3000' }),
       });
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('4. Telegram Adapter Management Authentication', () => {
+    it('rejects anonymous requests to Telegram webhook endpoints with 401', async () => {
+      const resRegister = await app.request('/v1/adapters/telegram/webhook/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'https://evil.com/webhook' }),
+      });
+      expect(resRegister.status).toBe(401);
+
+      const resDelete = await app.request('/v1/adapters/telegram/webhook/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dropPendingUpdates: true }),
+      });
+      expect(resDelete.status).toBe(401);
+
+      const resPoll = await app.request('/v1/adapters/telegram/poll-now', {
+        method: 'POST',
+      });
+      expect(resPoll.status).toBe(401);
+
+      const resInfo = await app.request('/v1/adapters/telegram/webhook/info', {
+        method: 'GET',
+      });
+      expect(resInfo.status).toBe(401);
+    });
+
+    it('rejects non-admin operator requests to Telegram webhook modification with 403', async () => {
+      const resRegister = await app.request('/v1/adapters/telegram/webhook/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${testOperatorToken}`,
+        },
+        body: JSON.stringify({ url: 'https://evil.com/webhook' }),
+      });
+      expect(resRegister.status).toBe(403);
+
+      const resDelete = await app.request('/v1/adapters/telegram/webhook/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${testOperatorToken}`,
+        },
+        body: JSON.stringify({ dropPendingUpdates: true }),
+      });
+      expect(resDelete.status).toBe(403);
+    });
+
+    it('rejects anonymous access to /v1/search with 401', async () => {
+      const res = await app.request('/v1/search?q=drustee', {
+        headers: { 'x-enforce-auth': 'true' },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects anonymous access to /v1/campaigns/:taskId/dispatch-review with 401', async () => {
+      const res = await app.request('/v1/campaigns/task-123/dispatch-review', {
+        method: 'POST',
+        headers: { 'x-enforce-auth': 'true', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: '+9647501234567' }),
+      });
+      expect(res.status).toBe(401);
     });
   });
 });

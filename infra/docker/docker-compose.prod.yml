@@ -43,11 +43,12 @@ services:
     env_file:
       - .env.production
     environment:
+      # Credentials and office policy (DATABASE_URL, TELEGRAM_WEBHOOK_SECRET,
+      # TELEGRAM_ALLOWED_USERS, TELEGRAM_INTAKE_ALLOWED_USERS …) come only from .env.production.
+      # No default value here may ever be usable in production.
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@postgres:5432/hawa
-      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-kaae_office_secret_production_entropy_99f3b817}
-      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-7191500129}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
     extra_hosts:
       - "api.telegram.org:149.154.167.99"
@@ -78,7 +79,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 9080
-      DATABASE_URL: postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@postgres:5432/hawa
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
     networks:
       - core
@@ -102,7 +103,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hawa}
       POSTGRES_USER: ${POSTGRES_USER:-hawa_owner}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hawa_production_secure_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/docker/.env (see infra/docker/.env.example)}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:54332:5432"

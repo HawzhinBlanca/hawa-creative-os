@@ -529,4 +529,7 @@ export async function deleteWorkingDraft(draftId: string): Promise<void> {
 
   const storage = getEffectiveStorage();
   storage.removeItem(DRAFT_KEY_PREFIX + draftId);
+  if (storage.getItem('hawa_last_active_draft_id') === draftId) {
+    storage.removeItem('hawa_last_active_draft_id');
+  }
 }

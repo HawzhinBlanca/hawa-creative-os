@@ -274,6 +274,15 @@ export function checkKurdishTypographyClearance(
  * Checks that bidirectional switches do not cause punctuation bleed or inverted runs.
  */
 export function validateMixedDirectionRuns(text: string): MixedDirectionValidation {
+  if (!text || typeof text !== 'string') {
+    return {
+      isValid: true,
+      hasMixedRuns: false,
+      runs: [],
+      errors: [],
+    };
+  }
+
   const hasRtl = RTL_CHAR_REGEX.test(text);
   const hasLtr = LTR_CHAR_REGEX.test(text);
   const errors: string[] = [];
@@ -334,6 +343,14 @@ export interface KurdishOrthographyReport {
  * - Flags Arabic city names in Sorani copy (أربيل -> هەولێر, دهوك -> دهۆک, السليمانية -> سلێمانی, كركوك -> کەرکووک)
  */
 export function validateKurdishOrthography(text: string): KurdishOrthographyReport {
+  if (!text || typeof text !== 'string') {
+    return {
+      valid: true,
+      issues: [],
+      normalizedText: '',
+    };
+  }
+
   const issues: KurdishOrthographyIssue[] = [];
   let normalized = text;
 
@@ -367,12 +384,12 @@ export function validateKurdishOrthography(text: string): KurdishOrthographyRepo
 
   // 3. City Orthography Standardizations
   const cityChecks = [
-    { regex: /(?<=^|[\s،.!?؛])[أا]ربيل(?=$|[\s،.!?؛])/gu, recommended: 'هەولێر' },
-    { regex: /(?<=^|[\s،.!?؛])(ال)?سليماني[ةه](?=$|[\s،.!?؛])/gu, recommended: 'سلێمانی' },
-    { regex: /(?<=^|[\s،.!?؛])دهو[كک](?=$|[\s،.!?؛])/gu, recommended: 'دهۆک' },
-    { regex: /(?<=^|[\s،.!?؛])(كركوك|كەركوك|کەرکوک)(?=$|[\s،.!?؛])/gu, recommended: 'کەرکووک' },
-    { regex: /(?<=^|[\s،.!?؛])حلبج[ةه](?=$|[\s،.!?؛])/gu, recommended: 'هەڵەبجە' },
-    { regex: /(?<=^|[\s،.!?؛])زاخو(?=$|[\s،.!?؛])/gu, recommended: 'زاخۆ' },
+    { regex: /(?<=^|[\s\p{P}])[أا]رب[يی]ل(?=$|[\s\p{P}])/gu, recommended: 'هەولێر' },
+    { regex: /(?<=^|[\s\p{P}])(ال)?[سش]ل[يی]مان[يی][ةه](?=$|[\s\p{P}])/gu, recommended: 'سلێمانی' },
+    { regex: /(?<=^|[\s\p{P}])دهو[كک](?=$|[\s\p{P}])/gu, recommended: 'دهۆک' },
+    { regex: /(?<=^|[\s\p{P}])(كركوك|كەركوك|کەرکوک|[كک][ە]?[ر][كک]و[كک])(?=$|[\s\p{P}])/gu, recommended: 'کەرکووک' },
+    { regex: /(?<=^|[\s\p{P}])حلبج[ةه](?=$|[\s\p{P}])/gu, recommended: 'هەڵەبجە' },
+    { regex: /(?<=^|[\s\p{P}])زاخو(?=$|[\s\p{P}])/gu, recommended: 'زاخۆ' },
   ];
 
   for (const cc of cityChecks) {

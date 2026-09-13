@@ -49,7 +49,11 @@ export class HoldoutCopyAuditor {
     }
     if (input.operations && input.operations.length > 0) {
       return input.operations
-        .filter((op) => op.op === 'addText' && typeof op.text === 'string')
+        .filter(
+          (op) =>
+            (op.op === 'addText' || op.op === 'replaceText' || op.op === 'replace_text') &&
+            typeof op.text === 'string'
+        )
         .map((op) => op.text!)
         .join(' ');
     }
@@ -161,7 +165,7 @@ export class HoldoutCopyAuditor {
       value: {
         auditedTokensCount: expectedTokens.length,
         preservedTokens: expectedTokens,
-        preservedBlocksCount: brief.exactCopy.length,
+        preservedBlocksCount: (brief.exactCopy || []).length,
         exactMatch: true,
         normalizedText: normalizedCandidate,
       },

@@ -469,5 +469,54 @@ describe('CV-06: Unified Desk, Telegram, and WhatsApp Ingress Engine', () => {
       expect(clean.sanitized).toBe('SecretMessagePayload');
       expect(clean.violations).toContain('Stripped ASCII control characters or null bytes');
     });
+
+    it('adversarially strips unclosed, self-closing scripts, iframes, embeds, and event handlers', () => {
+      const dirty = '<script src="evil.js"/>Hello <iframe src="javascript:alert(1)"> <embed src="evil.swf"/> <img src=x onerror=alert(1)> <svg/onload=alert(2)>';
+      const clean = sanitizeIngressContent(dirty);
+
+      expect(clean.sanitized).not.toContain('<script');
+      expect(clean.sanitized).not.toContain('<iframe');
+      expect(clean.sanitized).not.toContain('<embed');
+      expect(clean.sanitized).not.toContain('onerror=');
+      expect(clean.sanitized).not.toContain('onload=');
+      expect(clean.violations.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('7. Ingress Attachment Hash Integrity & Storage Traversal Defense', () => {
+    it('rejects attachment when supplied sha256 checksum does not match content bytes (forged hash attack)', () => {
+      const fakePayload = Buffer.from('Malicious payload posing as official logo');
+      const forgedCleanHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // Hash of empty string
+
+      const result = validateIngressAttachment({
+        filename: 'trusted_logo.png',
+        mimeType: 'image/png',
+        byteSize: fakePayload.length,
+        content: fakePayload,
+        sha256: forgedCleanHash,
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.scanState).toBe('rejected');
+      expect(result.reason).toContain('mismatch');
+    });
+
+    it('neutralizes path traversal in attachment filename storage key', () => {
+      const content = Buffer.from('Safe binary');
+      const sha256 = createHash('sha256').update(content).digest('hex');
+
+      const result = validateIngressAttachment({
+        filename: '../../../../etc/passwd',
+        mimeType: 'image/png',
+        byteSize: content.length,
+        content,
+        sha256,
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.storageKey).not.toContain('..');
+      expect(result.storageKey).toContain('passwd');
+      expect(result.storageKey.startsWith('attachments/')).toBe(true);
+    });
   });
 });

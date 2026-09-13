@@ -186,6 +186,25 @@ describe('Horizon 2: Kurdish Sorani & Arabic RTL Typography Supremacy', () => {
       expect(report.normalizedText).toContain('سلێمانی');
     });
 
+    it('detects Arabic city names adjacent to Kurdish question mark and quotes', () => {
+      const sample = 'ئایا دەچیتە «أربيل»؟ یاخود دهوك؟';
+      const report = validateKurdishOrthography(sample);
+
+      expect(report.valid).toBe(false);
+      expect(report.normalizedText).toContain('«هەولێر»؟');
+      expect(report.normalizedText).toContain('دهۆک؟');
+    });
+
+    it('safely handles null or undefined text without throwing in orthography and mixed direction validators', () => {
+      const orthoNull = validateKurdishOrthography(null as any);
+      expect(orthoNull.valid).toBe(true);
+      expect(orthoNull.normalizedText).toBe('');
+
+      const mixedNull = validateMixedDirectionRuns(null as any);
+      expect(mixedNull.isValid).toBe(true);
+      expect(mixedNull.runs).toHaveLength(0);
+    });
+
     it('flags social platform safe zone collisions for 9:16 Instagram Story header and action bar', () => {
       const storyNodes = [
         { id: 'logo_top', role: 'logo', x: 100, y: 100, width: 200, height: 60 }, // y=100 is in top 14% (14% of 1920 = 269px)

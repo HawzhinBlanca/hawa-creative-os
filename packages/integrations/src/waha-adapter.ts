@@ -93,7 +93,9 @@ export class WahaAdapter implements MessageAdapter {
       let verified = false;
       if (secret) {
         const cleanSecret = secret.replace(/^Bearer\s+/i, '').trim();
-        if (cleanSecret === this.config.webhookSecret) {
+        const expectedBuf = Buffer.from(this.config.webhookSecret);
+        const actualBuf = Buffer.from(cleanSecret);
+        if (expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf)) {
           verified = true;
         }
       }

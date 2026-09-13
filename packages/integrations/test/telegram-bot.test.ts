@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 afterEach(()=>vi.restoreAllMocks());
 import { TelegramBridgeDaemon } from '../src/telegram-bridge.js';
+import { computeActionSignature } from '../src/outbound-notifier.js';
 
 describe('Telegram Bot & Bidirectional Feedback Engine', () => {
   it('formats an English preview card with canonical Desk deep link', () => {
@@ -91,12 +92,16 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
     expect(sent[0].text).toContain('Hawa Telegram Bridge Status');
   });
 
-  it('processes incoming Telegram callback query for button approval', async () => {
+  it('processes incoming Telegram callback query with verified signature and rejects forged signature', async () => {
     const bridge = new TelegramBridgeDaemon();
-    const update = {
+    const taskId = 'task-kaae-888';
+    const validSig = computeActionSignature(taskId, 'approve');
+
+    // 1. Forged signature rejected
+    const forgedUpdate = {
       update_id: 102,
       callback_query: {
-        id: 'cb-query-123',
+        id: 'cb-query-122',
         from: { id: 9876, is_bot: false, first_name: 'Hawzhin' },
         message: {
           message_id: 502,
@@ -104,16 +109,33 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
           date: Math.floor(Date.now() / 1000),
           text: 'Campaign preview',
         },
-        data: 'approve:task-kaae-888:mock_signature_hash',
+        data: `approve:${taskId}:forged_signature_hash`,
       },
     };
+    const forgedResult = await bridge.processUpdate(forgedUpdate as any);
+    expect(forgedResult.processed).toBe(true);
+    expect(forgedResult.botResponse?.errorCode).toBe('INVALID_SIGNATURE');
 
-    const result = await bridge.processUpdate(update as any);
-    expect(result.processed).toBe(true);
-    expect(result.botResponse).not.toBeNull();
-    expect(result.botResponse.action).toBe('approve');
-    expect(result.botResponse.taskId).toBe('task-kaae-888');
-    expect(result.botResponse.signature).toBe('mock_signature_hash');
+    // 2. Valid signature approved
+    const validUpdate = {
+      update_id: 103,
+      callback_query: {
+        id: 'cb-query-123',
+        from: { id: 9876, is_bot: false, first_name: 'Hawzhin' },
+        message: {
+          message_id: 503,
+          chat: { id: 9876, type: 'private' },
+          date: Math.floor(Date.now() / 1000),
+          text: 'Campaign preview',
+        },
+        data: `approve:${taskId}:${validSig.slice(0, 16)}`,
+      },
+    };
+    const validResult = await bridge.processUpdate(validUpdate as any);
+    expect(validResult.processed).toBe(true);
+    expect(validResult.botResponse?.action).toBe('approve');
+    expect(validResult.botResponse?.taskId).toBe(taskId);
+    expect(validResult.botResponse?.signature).toBe(validSig.slice(0, 16));
   });
 
   it('handles slash commands for two-way approval and revision', () => {

@@ -105,4 +105,42 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
       }
     }
   });
+
+  it('accurately parses SVG dimensions and detects landscape format', () => {
+    const tempSvg = path.join(repoRoot, 'packages/creative/test/fixtures_temp_widescreen.svg');
+    try {
+      fs.writeFileSync(
+        tempSvg,
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080"><rect width="1920" height="1080" fill="#0A1628"/></svg>'
+      );
+      const extraction = engine.analyzeReferenceFile(tempSvg);
+      expect(extraction.dimensions.width).toBe(1920);
+      expect(extraction.dimensions.height).toBe(1080);
+      expect(extraction.format).toBe('landscape');
+      expect(extraction.aspectRatio).toContain('16:9');
+    } finally {
+      if (fs.existsSync(tempSvg)) {
+        fs.unlinkSync(tempSvg);
+      }
+    }
+  });
+
+  it('accurately parses square SVG dimensions from viewBox', () => {
+    const tempSvg = path.join(repoRoot, 'packages/creative/test/fixtures_temp_square.svg');
+    try {
+      fs.writeFileSync(
+        tempSvg,
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080"><rect width="1080" height="1080" fill="#160874"/></svg>'
+      );
+      const extraction = engine.analyzeReferenceFile(tempSvg);
+      expect(extraction.dimensions.width).toBe(1080);
+      expect(extraction.dimensions.height).toBe(1080);
+      expect(extraction.format).toBe('square');
+      expect(extraction.aspectRatio).toContain('1:1');
+    } finally {
+      if (fs.existsSync(tempSvg)) {
+        fs.unlinkSync(tempSvg);
+      }
+    }
+  });
 });

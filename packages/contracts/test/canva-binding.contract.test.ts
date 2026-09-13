@@ -135,6 +135,25 @@ describe('Canva Studio Binding & Capture Contracts (ADR 020 / CV-04)', () => {
     }
   });
 
+  it('strictly rejects capture with unobserved layers even if isComplete is flagged true', () => {
+    const unobservedRequest: CaptureCanvaArtifactSetRequest = {
+      ...validRequest,
+      semanticCoverage: {
+        textNodesCount: 5,
+        imageFillsCount: 2,
+        hasLogo: true,
+        isComplete: true, // Attempt to falsely certify completeness
+        unobservedLayersCount: 2, // But 2 layers remain unobserved
+      },
+    };
+
+    const result = validateCanvaCaptureInvariants(unobservedRequest, validBinding);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('INCOMPLETE_SNAPSHOT_ERROR');
+    }
+  });
+
   it('rejects empty artifact sets', () => {
     const emptyArtifactsRequest: CaptureCanvaArtifactSetRequest = {
       ...validRequest,

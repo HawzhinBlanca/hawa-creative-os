@@ -7,6 +7,9 @@ import {
   persistWorkingDraft,
   loadWorkingDraft,
   getEffectiveStorage,
+  deleteWorkingDraft,
+  getLastActiveDraftId,
+  setCustomDurableStorage,
   type SavedCanvasDraft,
   type DraftSaveState,
 } from '../src/services/draftStorage.js';
@@ -208,5 +211,30 @@ describe('Hawa Desk — Offline Draft Storage Engine & Reconciliation (ME-02, ME
     // Verify it was NOT given a new valid hash in storage
     const inStorage = JSON.parse(storage.getItem('hawa_draft_unhashed_draft_test')!);
     expect(inStorage.sha256Proof).toBeUndefined();
+  });
+
+  it('deleteWorkingDraft purges the draft and cleans up hawa_last_active_draft_id', async () => {
+    const map = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => { map.set(k, v); },
+      removeItem: (k: string) => { map.delete(k); },
+      clear: () => { map.clear(); },
+    };
+    setCustomDurableStorage(storage);
+
+    const draft: SavedCanvasDraft = {
+      ...sampleDraft,
+      id: 'draft_to_delete_01',
+    };
+
+    await persistWorkingDraft(draft);
+    expect(getLastActiveDraftId()).toBe('draft_to_delete_01');
+
+    await deleteWorkingDraft('draft_to_delete_01');
+    expect(await loadWorkingDraft('draft_to_delete_01')).toBeNull();
+    expect(getLastActiveDraftId()).toBeNull();
+
+    setCustomDurableStorage(null);
   });
 });

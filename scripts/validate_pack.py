@@ -30,7 +30,7 @@ IGNORED_TOP_LEVEL = {
     ".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
     ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output",
     "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma",
-    "scratch", ".hawa-state", "data"
+    "scratch", ".hawa-state", "data", "archive"
 }
 IGNORED_ANYWHERE = {"__pycache__", ".DS_Store"}
 WORKSPACE_ROOT_FILES = {
@@ -279,8 +279,9 @@ def validate_yaml_and_config() -> None:
             fail(f"{path.relative_to(ROOT)} parses as YAML: {exc}")
     compose = yaml.safe_load((ROOT / "deployment/docker-compose.yml").read_text(encoding="utf-8"))
     services = set(compose.get("services", {}))
-    require({"caddy", "app", "migrate", "postgres", "restate", "hycanvas", "phoenix", "comfyui", "retrieval-worker"} <= services, "Compose declares every selected deployable service")
-    require(compose["services"]["hycanvas"].get("profiles") == ["studio-hycanvas"], "HyCanvas is disabled until its admission profile is enabled")
+    require({"caddy", "app", "migrate", "postgres", "restate", "phoenix", "comfyui", "retrieval-worker"} <= services, "Compose declares every selected deployable service")
+    if "hycanvas" in compose.get("services", {}):
+        require(compose["services"]["hycanvas"].get("profiles") == ["studio-hycanvas"], "HyCanvas is disabled until its admission profile is enabled")
     require(compose["networks"]["core"].get("internal") is True, "core Compose network is internal")
     require(compose["networks"]["gpu_jobs"].get("internal") is True, "GPU worker network is internal")
 
@@ -406,6 +407,35 @@ def validate_manifest() -> None:
         ok("all SHA256SUMS hashes match")
 
 
+def validate_production_compose() -> None:
+    """The deployed compose file (infra/docker) must carry no usable credential and stay loopback-bound."""
+    path = ROOT / "infra/docker/docker-compose.prod.yml"
+    if not path.exists():
+        warn("infra/docker/docker-compose.prod.yml not present")
+        return
+    text = path.read_text(encoding="utf-8")
+    compose = yaml.safe_load(text)
+    require(not re.search(r"\$\{[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY)[A-Z0-9_]*:-", text), "production compose declares no default value for any credential variable")
+    require(not re.search(r"postgres(?:ql)?://[^\s:/@'\"]+:(?!\$\{)[^\s@'\"]{4,}@", text), "production compose embeds no database password")
+    services = compose.get("services", {})
+    for name in ("core", "worker"):
+        require(".env.production" in (services.get(name, {}).get("env_file") or []), f"{name} reads credentials from .env.production")
+    require(compose.get("networks", {}).get("core", {}).get("internal") is True, "production core network is internal")
+    pg_ports = [str(p) for p in services.get("postgres", {}).get("ports", [])]
+    require(all(p.startswith("127.0.0.1:") for p in pg_ports), "production PostgreSQL port is bound to loopback only")
+    example = (ROOT / "infra/docker/.env.production.example").read_text(encoding="utf-8")
+    documented = {line.split("=", 1)[0] for line in example.splitlines() if line and not line.startswith("#") and "=" in line}
+    required = {"TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_ALLOWED_USERS", "TELEGRAM_INTAKE_ALLOWED_USERS",
+                "HAWA_ADMIN_KEY", "HAWA_ART_DIRECTOR_KEY", "HAWA_BEARER_TOKEN", "HAWA_ACTION_HMAC_SECRET", "WAHA_WEBHOOK_SECRET",
+                "CANVA_CLIENT_ID", "CANVA_CLIENT_SECRET", "CANVA_TOKEN_ENCRYPTION_KEY", "ANTHROPIC_API_KEY",
+                "AUTO_GENERATE_CHAT_DESIGNS", "AUTO_GENERATE_DAILY_CAP_PER_SENDER", "AUTO_GENERATE_DAILY_CAP_GLOBAL"}
+    missing = sorted(required - documented)
+    require(not missing, "every security-relevant runtime variable is documented in .env.production.example" + (f"; missing={missing}" if missing else ""))
+    require(not any("replace_with" not in line.lower() and any(k in line for k in ("SECRET=", "TOKEN=", "_KEY=")) and len(line.split("=", 1)[1]) > 24
+                    for line in example.splitlines() if line and not line.startswith("#") and "=" in line),
+            "the example env carries placeholders, never long credential-looking values")
+
+
 def main() -> int:
     for fn in (
         validate_required_files,
@@ -415,6 +445,7 @@ def main() -> int:
         validate_sql,
         validate_contracts,
         validate_yaml_and_config,
+        validate_production_compose,
         validate_markup_and_diagrams,
         validate_documents,
         validate_security_hygiene,

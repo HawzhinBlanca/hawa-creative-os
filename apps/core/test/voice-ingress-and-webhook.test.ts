@@ -49,16 +49,22 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
 
   it('manages Telegram webhook lifecycle via /v1/adapters/telegram/webhook endpoints', async () => {
     // 1. Get webhook info
-    const infoRes = await app.request('/v1/adapters/telegram/webhook/info');
+    const infoRes = await app.request('/v1/adapters/telegram/webhook/info', { headers: { Authorization: 'Bearer test_admin_key' } });
     expect(infoRes.status).toBe(200);
     const infoJson = await infoRes.json();
     expect(infoJson.ok).toBe(true);
     expect(infoJson.status).toBeDefined();
 
-    // 2. Register webhook
+    // 2. Register webhook (administrator only: an operator credential is refused)
+    const operatorAttempt = await app.request('/v1/adapters/telegram/webhook/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' },
+      body: JSON.stringify({ url: 'https://preview-office.kaae.org/api/webhooks/telegram' }),
+    });
+    expect(operatorAttempt.status).toBe(403);
     const regRes = await app.request('/v1/adapters/telegram/webhook/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' },
       body: JSON.stringify({
         url: 'https://preview-office.kaae.org/api/webhooks/telegram',
         secretToken: mockWebhookSecret,
@@ -73,7 +79,7 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
     // 3. Delete webhook
     const delRes = await app.request('/v1/adapters/telegram/webhook/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' },
       body: JSON.stringify({ dropPendingUpdates: true }),
     });
     expect(delRes.status).toBe(200);

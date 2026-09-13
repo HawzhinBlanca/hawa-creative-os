@@ -83,7 +83,11 @@ export class CanvaConnectClient {
 
   constructor(options: CanvaConnectClientOptions = {}) {
     this.refreshToken = options.refreshToken;
-    this.apiKey = options.accessToken || options.apiKey || process.env.CANVA_ACCESS_TOKEN;
+    if (options.accessToken) {
+      this.accessToken = options.accessToken;
+      this.tokenExpiresAt = Date.now() + 3600 * 1000;
+    }
+    this.apiKey = options.apiKey || (!options.accessToken ? process.env.CANVA_ACCESS_TOKEN : undefined);
     this.clientId = options.clientId || process.env.CANVA_CLIENT_ID;
     this.clientSecret = options.clientSecret || process.env.CANVA_CLIENT_SECRET;
     this.baseUrl = options.baseUrl || process.env.CANVA_BASE_URL || 'https://api.canva.com/rest/v1';
@@ -92,7 +96,7 @@ export class CanvaConnectClient {
   }
 
   public isConfigured(): boolean {
-    return Boolean(this.apiKey || (this.clientId && this.clientSecret));
+    return Boolean(this.accessToken || this.apiKey || (this.clientId && this.clientSecret));
   }
 
   private assertConfigured(): void {
@@ -271,19 +275,25 @@ export class CanvaConnectClient {
   private async getAuthHeader(): Promise<string> {
     this.assertConfigured();
 
-    if (this.apiKey) {
-      return `Bearer ${this.apiKey}`;
-    }
-
-    // Use active token if unexpired
+    // 1. Use active OAuth access token if unexpired
     if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) {
       return `Bearer ${this.accessToken}`;
     }
 
-    // If refresh token exists, rotate via serialized refresh
+    // 2. If refresh token exists, rotate via serialized refresh
     if (this.refreshToken) {
       const refreshed = await this.refreshAccessToken();
       return `Bearer ${refreshed.access_token}`;
+    }
+
+    // 3. Use active access token even if close to expiry if no refresh token exists
+    if (this.accessToken) {
+      return `Bearer ${this.accessToken}`;
+    }
+
+    // 4. Fall back to static API key if configured
+    if (this.apiKey) {
+      return `Bearer ${this.apiKey}`;
     }
 
     throw new CanvaNotConfiguredError('Canva user authorization is required: complete Authorization Code with PKCE before making API calls');
@@ -414,7 +424,8 @@ export class CanvaConnectClient {
         return status.job.urls;
       }
       if (status.job.status === 'failed') {
-        throw new Error('Canva export job failed');
+        const detail = status.job.error?.code ? ` [${status.job.error.code}]: ${status.job.error.message || ''}` : '';
+        throw new Error(`Canva export job failed${detail}`);
       }
       if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
@@ -425,7 +436,15 @@ export class CanvaConnectClient {
 
 /** Provider links may be opaque. Never use this parser to infer a user-supplied design ID. */
 export function validateCanvaProviderLink(value: string): string {
-  const u = new URL(value);
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('Invalid provider editor URL: expected a valid URL string');
+  }
+  let u: URL;
+  try {
+    u = new URL(value);
+  } catch {
+    throw new Error('Invalid provider editor URL: malformed URL');
+  }
   if (u.protocol !== 'https:' || u.hostname !== 'www.canva.com' || u.port || u.username || u.password ||
       !/^\/(?:api\/design|design|d)\//.test(u.pathname)) throw new Error('Invalid provider editor URL');
   return u.href;

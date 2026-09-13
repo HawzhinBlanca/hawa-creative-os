@@ -31,14 +31,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO users (id, email, display_name)
 VALUES 
   ('00000000-0000-4000-b000-000000000001'::uuid, 'operator@hawa.office', 'Primary Operator'),
-  ('00000000-0000-4000-b000-000000000002'::uuid, 'artdirector@hawa.office', 'Art Director')
+  ('00000000-0000-4000-b000-000000000002'::uuid, 'artdirector@hawa.office', 'Art Director'),
+  -- Service identities (ADR-027): rows nobody pressed a button for are not attributed to a person.
+  ('00000000-0000-4000-b000-000000000010'::uuid, 'ingress@hawa.office', 'Channel Ingress'),
+  ('00000000-0000-4000-b000-000000000011'::uuid, 'automation@hawa.office', 'System Automation')
 ON CONFLICT (id) DO NOTHING;
 
 -- Tenant memberships
 INSERT INTO tenant_memberships (tenant_id, user_id, role, active)
 VALUES
   ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000001'::uuid, 'operator', true),
-  ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000002'::uuid, 'administrator', true)
+  ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000002'::uuid, 'administrator', true),
+  ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000010'::uuid, 'operator', true),
+  ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000011'::uuid, 'operator', true)
 ON CONFLICT (tenant_id, user_id, role) DO NOTHING;
 
 -- Canonical Clients

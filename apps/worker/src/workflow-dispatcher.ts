@@ -72,14 +72,30 @@ export class TaskWorkflowDispatcher {
             tenantId: cmd.tenant_id,
             rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
             canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
+            canvaVariant: cmd.payload?.variant,
             sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
             clientId: cmd.payload?.clientId,
             idempotencyKey,
           }),
         });
 
-        if (!res.ok && res.status !== 409) {
-          throw new Error(`Restate ingress rejected submission: ${res.status} ${res.statusText}`);
+        if (res.status === 409) {
+          const receipt: WorkflowSubmissionReceipt = {
+            workflowId,
+            aggregateId: cmd.aggregate_id,
+            status: 'submitted',
+            idempotencyKey,
+            submittedAt: new Date().toISOString(),
+            receiptId: `inv_conflict_reconciled_${cmd.aggregate_id.slice(0, 8)}`,
+            reconciled: true,
+          };
+          this.inFlightSubmissions.set(idempotencyKey, receipt);
+          return receipt;
+        }
+
+        if (!res.ok) {
+          const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+          throw new Error(`Restate ingress rejected submission: ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`);
         }
 
         const accepted=await res.json().catch(()=>({})) as any;
@@ -110,6 +126,7 @@ export class TaskWorkflowDispatcher {
       clientId: cmd.payload?.clientId,
       rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
             canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
+            canvaVariant: cmd.payload?.variant,
       sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
       idempotencyKey,
     };

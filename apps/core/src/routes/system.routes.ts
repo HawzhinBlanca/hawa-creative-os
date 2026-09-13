@@ -1,4 +1,5 @@
 import type { RouteContext } from './types.js';
+import { withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,6 +7,7 @@ import path from 'node:path';
 export function registerSystemRoutes(ctx: RouteContext) {
   const {
     app,
+    db,
     registerRoute,
     honestHealthHandler,
     telegramBridge,
@@ -34,6 +36,15 @@ export function registerSystemRoutes(ctx: RouteContext) {
   app.get('/ready', honestHealthHandler);
   app.get('/v1/ready', honestHealthHandler);
 
+  const requireAdministrator = (c: any): Response | null => {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+    if (auth.role !== 'administrator') return problem(c, 403, 'Administrator Required', 'Only an administrator may change Telegram delivery or inspect configuration');
+    return null;
+  };
+
   // Telegram Adapter Status & On-Demand Polling (FR-001, FR-002, Horizon 17 & 18)
   registerRoute('get', '/adapters/telegram/status', (c: any) => {
     const status = telegramBridge?.getStatus() || { status: 'idle', mode: 'poll', pollingActive: false };
@@ -49,15 +60,20 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   registerRoute('post', '/adapters/telegram/poll-now', async (c: any) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
+    }
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!secret) {
+      return c.json({ ok: false, error: 'TELEGRAM_WEBHOOK_SECRET is not configured' }, 503);
     }
     const count = await telegramBridge.pollOnce(async (update) => {
       await app.request('/api/webhooks/telegram?generate=true', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET || 'expected_office_secret',
+          'x-telegram-bot-api-secret-token': secret,
         },
         body: JSON.stringify(update),
       });
@@ -66,7 +82,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // Telegram Webhook Management (Horizon 17 / Option 2)
+  // Re-pointing the bot's update stream is an administrator-only action: anyone able to call it
+  // could redirect every office brief and approval to their own server.
   registerRoute('post', '/adapters/telegram/webhook/register', async (c: any) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }
@@ -75,7 +94,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
     if (!url) {
       return problem(c, 400, 'Bad Request', 'Missing webhook URL');
     }
-    const secret = body.secretToken || process.env.TELEGRAM_WEBHOOK_SECRET || 'expected_office_secret';
+    const secret = body.secretToken || process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!secret) {
+      return problem(c, 400, 'Bad Request', 'TELEGRAM_WEBHOOK_SECRET is not configured');
+    }
     const result = await telegramBridge.setWebhook(url, secret);
     return c.json({
       ok: result.ok,
@@ -85,6 +107,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   registerRoute('post', '/adapters/telegram/webhook/delete', async (c: any) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }
@@ -99,6 +122,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   registerRoute('get', '/adapters/telegram/webhook/info', async (c: any) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }
@@ -110,18 +134,40 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 200);
   });
 
-  // Cloud Figma Live Bridge Status (Horizon 18 / Decommissioned CV-23)
-  registerRoute('get', '/adapters/figma/cloud-status', handleDecommissionedFigmaRoute);
-
-  if (handleDecommissionedFigmaRoute) {
-    registerRoute('post', '/tasks/:taskId/leases', handleDecommissionedFigmaRoute);
-    registerRoute('post', '/tasks/:taskId/figma/lease', handleDecommissionedFigmaRoute);
-    registerRoute('delete', '/tasks/:taskId/leases/:leaseId', handleDecommissionedFigmaRoute);
-    registerRoute('post', '/tasks/:taskId/figma/mutate', handleDecommissionedFigmaRoute);
-    registerRoute('get', '/tasks/:taskId/figma/status', handleDecommissionedFigmaRoute);
-    registerRoute('get', '/v1/figma/status', handleDecommissionedFigmaRoute);
-    registerRoute('get', '/figma/status', handleDecommissionedFigmaRoute);
+  // Cloud Figma Live Bridge Status (Decommissioned CV-23)
+  const FIGMA_TOMBSTONES: Array<['get' | 'post' | 'delete', string]> = [
+    ['get', '/adapters/figma/cloud-status'],
+    ['post', '/tasks/:taskId/leases'],
+    ['post', '/tasks/:taskId/figma/lease'],
+    ['delete', '/tasks/:taskId/leases/:leaseId'],
+    ['post', '/tasks/:taskId/figma/mutate'],
+    ['get', '/tasks/:taskId/figma/status'],
+    ['get', '/v1/figma/status'],
+    ['get', '/figma/status'],
+  ];
+  for (const [method, path] of FIGMA_TOMBSTONES) {
+    registerRoute(method, path, handleDecommissionedFigmaRoute);
   }
+
+  // Dead-lettered outbox commands (state = failed) can be requeued by an administrator after the
+  // cause recorded in last_error is fixed. Nothing is re-run silently; the response lists the ids.
+  registerRoute('post', '/system/outbox/requeue', async (c: any) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
+    if (!db) return problem(c, 503, 'Database Required', 'Outbox requeue requires durable storage');
+    const body = await c.req.json().catch(() => ({}));
+    const ids: string[] = Array.isArray(body.ids) ? body.ids.filter((v: unknown) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)) : [];
+    if (!ids.length && body.all !== true) return problem(c, 422, 'Nothing Selected', 'Pass {"ids":[…]} or {"all":true}');
+    const auth = verifyRequestAuth(c);
+    const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    const rows: Array<{ id: string; aggregate_id: string; command_type: string }> = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+      let query = trx.updateTable('outbox_commands')
+        .set({ state: 'pending', attempts: 0, available_at: new Date(), leased_until: null } as any)
+        .where('state', '=', 'failed');
+      if (ids.length) query = query.where('id', 'in', ids);
+      return (await query.returning(['id', 'aggregate_id', 'command_type']).execute()) as any;
+    });
+    return c.json({ ok: true, requeued: rows.length, commands: rows }, 200);
+  });
 
   // Real-time Server-Sent Events (SSE) Stream
   registerRoute('get', '/events/stream', (c: any) => {

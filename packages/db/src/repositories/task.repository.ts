@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
+import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import type { Database, TasksTable, TaskEventsTable, TaskState } from '../types.js';
 
 export class IdempotencyConflictError extends Error {
@@ -471,7 +472,7 @@ export class TaskRepository {
 
     const result = await this.createTaskAggregate({
       tenantId: params.tenantId,
-      userId: params.userId || '00000000-0000-4000-b000-000000000001',
+      userId: params.userId || CHANNEL_INGRESS_USER_ID,
       idempotencyKey: params.idempotencyKey,
       title: params.title || 'Untitled Task',
       description: params.description || '',
@@ -498,19 +499,46 @@ export class TaskRepository {
     return { task: taskWithStatus, created: result.created };
   }
 
-  async lockClientScope(taskId: string, clientId: string, projectId?: string) {
-    const task = await this.findById(taskId);
+  async lockClientScope(
+    taskId: string,
+    clientId: string,
+    projectId?: string,
+    tenantId?: string,
+    trx?: Kysely<Database>
+  ) {
+    const task = await this.findById(taskId, tenantId, trx);
     if (!task) throw new TaskNotFoundError(`Task ${taskId} not found`);
 
-    const updated = await this.db
+    // Invariant: Keep client scope immutable once set / retrieval begins
+    if (task.client_id && task.client_id !== clientId) {
+      throw new Error(
+        `Client scope is immutable: Task ${taskId} is already locked to client ${task.client_id}, cannot re-lock to client ${clientId}`
+      );
+    }
+
+    if (task.client_id === clientId && (!projectId || task.project_id === projectId)) {
+      return {
+        ...task,
+        client_scope_locked: true,
+        status: (task.state || 'received').toUpperCase(),
+      };
+    }
+
+    const client = trx || this.db;
+    let query = client
       .updateTable('tasks')
       .set({
         client_id: clientId,
         project_id: projectId || null,
+        updated_at: new Date(),
       })
-      .where('id', '=', taskId)
-      .returningAll()
-      .executeTakeFirstOrThrow();
+      .where('id', '=', taskId);
+
+    if (tenantId || task.tenant_id) {
+      query = query.where('tenant_id', '=', tenantId || task.tenant_id);
+    }
+
+    const updated = await query.returningAll().executeTakeFirstOrThrow();
 
     return {
       ...updated,
@@ -536,12 +564,14 @@ export class TaskRepository {
       ? (actorType as any)
       : 'system';
 
-    const normalizedToState = toStatus.toLowerCase() as TaskState;
+    const normalizedToState = toDbTaskState(toStatus);
+    const normalizedFromState = fromStatus ? toDbTaskState(fromStatus) : undefined;
 
     const updated = await this.transitionState({
       taskId,
       tenantId: task.tenant_id,
       expectedVersion: Number(task.version),
+      fromState: normalizedFromState,
       toState: normalizedToState,
       actorType: resolvedActorType,
       actorId,
@@ -551,7 +581,7 @@ export class TaskRepository {
 
     return {
       ...updated,
-      status: toStatus,
+      status: toApiTaskStatus(updated.state),
     };
   }
 }

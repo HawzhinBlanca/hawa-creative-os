@@ -13,7 +13,7 @@ import { DeterministicQAEngine } from '@hawa/qa';
 import { extractProtectedTokens } from '@hawa/domain';
 
 describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Drustee, FastPay)', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
@@ -65,7 +65,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
     },
   ];
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
   it('1. Proves three-client knowledge-pack independence and zero cross-client rule leakage (P29)', async () => {
     for (const client of clients) {
       // Check DNA retrieval
-      const dnaRes = await app.request(`/v1/clients/${client.id}/dna`);
+      const dnaRes = await app.request(`/v1/clients/${client.id}/dna`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN!}` } });
       expect(dnaRes.status).toBe(200);
       const dna = await dnaRes.json();
 
@@ -89,7 +89,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
       }
 
       // Check Candidate Rules isolation
-      const rulesRes = await app.request(`/v1/clients/${client.id}/candidate-rules`);
+      const rulesRes = await app.request(`/v1/clients/${client.id}/candidate-rules`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN!}` } });
       expect(rulesRes.status).toBe(200);
       const rulesData = await rulesRes.json();
       expect(rulesData.candidateRules.every((r: any) => r.clientId === client.id)).toBe(true);
@@ -151,7 +151,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
     };
 
     for (const client of clients) {
-      const dnaRes = await app.request(`/v1/clients/${client.id}/dna`);
+      const dnaRes = await app.request(`/v1/clients/${client.id}/dna`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN!}` } });
       const dna = await dnaRes.json();
 
       for (const prompt of client.prompts) {

@@ -5,16 +5,9 @@ import { execSync } from 'node:child_process';
 const width = 1080;
 const height = 1350;
 
-// Read official KAAE logo SVG and clean up
-const logoSvgPath = path.resolve('apps/desk/public/assets/logos/kaae-logo-primary.svg');
-const rawLogoSvg = fs.readFileSync(logoSvgPath, 'utf8')
-  .replace(/<\?xml.*?\?>/g, '')
-  .replace(/<!DOCTYPE.*?>/g, '');
-
-// Extract inner content of the SVG
-const logoInner = rawLogoSvg
-  .replace(/<svg[^>]*>/, '')
-  .replace(/<\/svg>/, '');
+// Read official KAAE master logo PNG (verified master asset SHA256 40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc)
+const logoPngPath = path.resolve('packages/creative/assets/logos/kaae-official-logo.png');
+const officialLogoBase64 = fs.readFileSync(logoPngPath).toString('base64');
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -52,6 +45,13 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <pattern id="kaaeTriangles" width="36" height="36" patternUnits="userSpaceOnUse">
       <polygon points="18,4 32,28 4,28" fill="none" stroke="#4770A3" stroke-width="0.5" stroke-opacity="0.04"/>
     </pattern>
+
+    <!-- Official Emblem Radial Illumination Aura -->
+    <radialGradient id="emblemAura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2A5996" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#183864" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0A1628" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
   <style>
@@ -99,52 +99,49 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <rect x="24" y="24" width="${width - 48}" height="${height - 48}" rx="8" fill="none" stroke="#234674" stroke-width="1.2" stroke-opacity="0.4"/>
   <rect x="28" y="28" width="${width - 56}" height="${height - 56}" rx="6" fill="none" stroke="#F7B500" stroke-width="0.75" stroke-opacity="0.25"/>
 
-  <!-- 2. Header Area: Official KAAE Emblem & Clear Space (Page 6 & 7 Compliance) -->
-  <!-- Official Vector Logo scaled with exact aspect ratio (850x600 -> 170x120), centered at X: 540, Y: 46 -->
-  <!-- Note: Zero filters, zero drop-shadows, zero distortions, 100% original brand vectors -->
-  <g transform="translate(455, 46) scale(0.2)">
-    ${logoInner}
-  </g>
+  <!-- 2. Header Area: Verified Official Master KAAE Emblem (SHA256 40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc) -->
+  <circle cx="540" cy="118" r="125" fill="url(#emblemAura)"/>
+  <image href="data:image/png;base64,${officialLogoBase64}" x="450" y="28" width="180" height="180" preserveAspectRatio="xMidYMid meet"/>
 
   <!-- Institutional Title below emblem -->
-  <text x="540" y="186" text-anchor="middle" class="sans-bold" font-size="12" fill="#F7B500" letter-spacing="3.5">
+  <text x="540" y="214" text-anchor="middle" class="sans-bold" font-size="12" fill="#F7B500" letter-spacing="3.5">
     KURDISTAN ACCREDITING ASSOCIATION FOR EDUCATION
   </text>
-  <text x="540" y="206" text-anchor="middle" class="sans-medium" font-size="10.5" fill="#94A3B8" letter-spacing="2">
+  <text x="540" y="232" text-anchor="middle" class="sans-medium" font-size="10.5" fill="#94A3B8" letter-spacing="2">
     STATUTORY QUALITY ASSURANCE &amp; ACCREDITATION AUTHORITY · LAW NO. 6 OF 2022
   </text>
 
   <!-- 3. Main Title Section -->
-  <text x="540" y="246" text-anchor="middle" class="sans-bold" font-size="11" fill="#F7B500" letter-spacing="3">
+  <text x="540" y="266" text-anchor="middle" class="sans-bold" font-size="11" fill="#F7B500" letter-spacing="3">
     OFFICIAL PRESIDENTIAL &amp; MINISTERIAL CONVOCATION
   </text>
 
-  <text x="540" y="282" text-anchor="middle" class="minion-bold" font-size="28" fill="#FFFFFF" letter-spacing="0.5">
+  <text x="540" y="300" text-anchor="middle" class="minion-bold" font-size="28" fill="#FFFFFF" letter-spacing="0.5">
     The National Standards for Quality Assurance in Education
   </text>
 
   <!-- Signature KAAE Brand Gold Accent Bar (Underline Anchor from Page 1 & Page 5) -->
-  <rect x="440" y="298" width="200" height="4" rx="2" fill="#F7B500"/>
+  <rect x="440" y="314" width="200" height="4" rx="2" fill="#F7B500"/>
 
-  <text x="540" y="324" text-anchor="middle" class="minion-italic" font-size="17" fill="#E2E8F0">
+  <text x="540" y="338" text-anchor="middle" class="minion-italic" font-size="16" fill="#E2E8F0">
     Advancing Institutional Rigor &amp; Academic Excellence Across the Kurdistan Region
   </text>
 
   <!-- 4. Honored Recipient Plinth Card -->
-  <g transform="translate(180, 344)">
-    <rect width="720" height="48" rx="8" fill="#0E1E34" stroke="#254A78" stroke-width="1"/>
+  <g transform="translate(180, 356)">
+    <rect width="720" height="46" rx="8" fill="#0E1E34" stroke="#254A78" stroke-width="1"/>
     <!-- Gold top border highlight -->
     <path d="M 0,8 Q 0,0 8,0 L 712,0 Q 720,0 720,8" fill="none" stroke="#F7B500" stroke-width="1.8"/>
-    <text x="360" y="31" text-anchor="middle" class="minion-italic" font-size="22" font-weight="700" fill="#FFF2D1">
+    <text x="360" y="30" text-anchor="middle" class="minion-italic" font-size="21" font-weight="700" fill="#FFF2D1">
       Mr. / Ms. / Dr. [Full Name]
     </text>
   </g>
 
   <!-- Formal Invitation Prose -->
-  <text x="540" y="420" text-anchor="middle" class="minion-regular" font-size="17" fill="#CBD5E1">
+  <text x="540" y="428" text-anchor="middle" class="minion-regular" font-size="16.5" fill="#CBD5E1">
     The Kurdistan Accrediting Association for Education cordially requests the honor of your presence
   </text>
-  <text x="540" y="444" text-anchor="middle" class="minion-regular" font-size="17" fill="#CBD5E1">
+  <text x="540" y="450" text-anchor="middle" class="minion-regular" font-size="16.5" fill="#CBD5E1">
     at this landmark national convocation and official presentation.
   </text>
 

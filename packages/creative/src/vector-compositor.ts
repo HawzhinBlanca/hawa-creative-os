@@ -28,17 +28,49 @@ export interface VectorCompositeResult {
   dimensions: { width: number; height: number };
 }
 
+const NAMED_COLORS: Record<string, [number, number, number]> = {
+  black: [0, 0, 0],
+  white: [255, 255, 255],
+  red: [255, 0, 0],
+  green: [0, 128, 0],
+  blue: [0, 0, 255],
+  yellow: [255, 255, 0],
+  gold: [255, 215, 0],
+  navy: [0, 0, 128],
+  transparent: [0, 0, 0],
+};
+
 /**
  * Calculates relative luminance for WCAG contrast compliance.
  */
 export function getRelativeLuminance(hex: string): number {
-  const cleanHex = hex.replace('#', '');
-  const r = parseInt(cleanHex.slice(0, 2), 16) / 255;
-  const g = parseInt(cleanHex.slice(2, 4), 16) / 255;
-  const b = parseInt(cleanHex.slice(4, 6), 16) / 255;
+  if (!hex || typeof hex !== 'string') return 0;
+  const clean = hex.trim().toLowerCase().replace('#', '');
 
-  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  if (NAMED_COLORS[clean]) {
+    const [r, g, b] = NAMED_COLORS[clean];
+    const toLinear = (c: number) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    return Math.min(1, Math.max(0, 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)));
+  }
+
+  let fullHex = clean;
+  if (clean.length === 3 || clean.length === 4) {
+    fullHex = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
+  }
+
+  const r = parseInt(fullHex.slice(0, 2), 16) || 0;
+  const g = parseInt(fullHex.slice(2, 4), 16) || 0;
+  const b = parseInt(fullHex.slice(4, 6), 16) || 0;
+
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const lum = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return isNaN(lum) ? 0 : Math.min(1, Math.max(0, lum));
 }
 
 /**
@@ -50,6 +82,16 @@ export function calculateContrastRatio(foregroundHex: string, backgroundHex: str
   const lighter = Math.max(l1, l2);
   const darker = Math.min(l1, l2);
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+export interface SmartContrastScrimOptions {
+  width: number;
+  height: number;
+  textPosition?: 'top' | 'center' | 'bottom' | 'full';
+  scrimColor?: string;
+  scrimOpacity?: number;
+  blurRadius?: number;
+  scrimId?: string;
 }
 
 /**
@@ -65,7 +107,7 @@ export function generateSmartContrastScrim(options: SmartContrastScrimOptions): 
     scrimOpacity = 0.55,
   } = options;
 
-  const scrimId = `scrim_${Math.random().toString(36).slice(2, 8)}`;
+  const scrimId = options.scrimId || `scrim_${width}_${height}_${textPosition}`;
 
   let y1 = '0%';
   let y2 = '100%';
@@ -305,6 +347,7 @@ export function buildCompositedVisualBackdrop(options: {
       textPosition: scrimPosition,
       scrimColor: '#000000',
       scrimOpacity,
+      scrimId: graphHash ? `scrim_${graphHash.slice(0, 8)}_${scrimPosition}` : undefined,
     });
 
     // Insert scrim before closing </svg>

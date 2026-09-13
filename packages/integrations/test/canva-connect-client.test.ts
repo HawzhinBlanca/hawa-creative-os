@@ -228,4 +228,50 @@ describe('Canva OAuth admission', () => {
     await expect(client.getDesign('DAexample')).rejects.toThrow('PKCE');
     expect(transport).not.toHaveBeenCalled();
   });
+
+  it('uses refreshed token on subsequent API requests after token rotation', async () => {
+    let capturedAuthHeader: string | null = null;
+    const transport = vi.fn().mockImplementation(async (url: string, init: any) => {
+      if (url.includes('/oauth/token')) {
+        return {
+          ok: true,
+          json: async () => ({
+            access_token: 'newly_refreshed_access_token_999',
+            refresh_token: 'new_refresh_token_888',
+            expires_in: 3600,
+          }),
+        };
+      }
+      if (url.includes('/designs/')) {
+        capturedAuthHeader = init.headers['Authorization'];
+        return {
+          ok: true,
+          json: async () => ({
+            design: {
+              id: 'DAF_refreshed_1',
+              urls: {
+                edit_url: 'https://www.canva.com/design/DAF_refreshed_1/edit',
+                view_url: 'https://www.canva.com/design/DAF_refreshed_1/view',
+              },
+              created_at: 1000,
+              updated_at: 2000,
+            },
+          }),
+        };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const client = new CanvaConnectClient({
+      accessToken: 'initial_stale_token_111',
+      refreshToken: 'valid_refresh_token_222',
+      clientId: 'client_id_test',
+      clientSecret: 'client_secret_test',
+      customFetch: transport,
+    });
+
+    await client.refreshAccessToken();
+    await client.getDesign('DAF_refreshed_1');
+    expect(capturedAuthHeader).toBe('Bearer newly_refreshed_access_token_999');
+  });
 });

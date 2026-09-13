@@ -8,11 +8,11 @@ import {
 } from '@hawa/integrations';
 
 describe('CV-19: Historical Design Migration & Archive Subsystem', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,
@@ -271,19 +271,25 @@ describe('CV-19: Historical Design Migration & Archive Subsystem', () => {
     const canvaDesignId = migJson.record.targetCanvaId;
 
     // 2. Query ledger via HTTP
-    const ledgerRes = await app.request('/v1/migration/ledger');
+    const ledgerRes = await app.request('/v1/migration/ledger', {
+      headers: authHeaders,
+    });
     expect(ledgerRes.status).toBe(200);
     const ledgerJson = await ledgerRes.json();
     expect(ledgerJson.count).toBeGreaterThan(0);
 
     // 3. Query ledger CSV format
-    const csvRes = await app.request('/v1/migration/ledger?format=csv');
+    const csvRes = await app.request('/v1/migration/ledger?format=csv', {
+      headers: authHeaders,
+    });
     expect(csvRes.status).toBe(200);
     const csvText = await csvRes.text();
     expect(csvText).toContain('doc_http_test_01');
 
     // 4. Query reconciliation summary via HTTP
-    const reconRes = await app.request('/v1/migration/reconciliation');
+    const reconRes = await app.request('/v1/migration/reconciliation', {
+      headers: authHeaders,
+    });
     expect(reconRes.status).toBe(200);
     const reconJson = await reconRes.json();
     expect(reconJson.silentlyDroppedCount).toBe(0);

@@ -22,6 +22,9 @@ export interface PersonalizedInvitationDeliverable {
  * Calculates optimal font size for personalized honoree lines to guarantee zero overflow.
  */
 export function computeHonoreeFontSize(text: string, baseFontSize = 22, maxCharsAtBase = 32): number {
+  if (!text || typeof text !== 'string') {
+    return baseFontSize;
+  }
   if (text.length <= maxCharsAtBase) {
     return baseFontSize;
   }
@@ -35,11 +38,14 @@ export function computeHonoreeFontSize(text: string, baseFontSize = 22, maxChars
  * Formats standard diplomatic protocol honoree line.
  */
 export function formatHonoreeLine(guest: VdpGuestRecord): string {
+  if (!guest || typeof guest !== 'object') return '';
   const parts: string[] = [];
-  if (guest.honorific && guest.honorific.trim().length > 0) {
+  if (guest.honorific && typeof guest.honorific === 'string' && guest.honorific.trim().length > 0) {
     parts.push(guest.honorific.trim());
   }
-  parts.push(guest.fullName.trim());
+  if (guest.fullName && typeof guest.fullName === 'string' && guest.fullName.trim().length > 0) {
+    parts.push(guest.fullName.trim());
+  }
   return parts.join(' ');
 }
 
@@ -58,17 +64,40 @@ export function personalizeInvitationOperations(
   const computedFontSize = computeHonoreeFontSize(honoreeText, 22, 34);
 
   const personalizedOps = templateOperations.map((op): StudioOperation => {
-    if (op.op === 'addText' && (op.nodeId === 'inv_salutation' || op.role === 'honoree')) {
+    if (
+      (op.op === 'addText' || op.op === 'replaceText') &&
+      (op.nodeId === 'inv_salutation' || op.nodeId === 'inv_honoree' || (op as any).role === 'honoree')
+    ) {
+      if (op.op === 'addText') {
+        return {
+          ...op,
+          text: honoreeText,
+          style: {
+            ...(op.style as Record<string, any>),
+            fontSize: computedFontSize,
+            fontStyle: 'italic',
+            fontWeight: '600',
+            color: '#FFD15C', // Protocol gold personalization tier
+          },
+        };
+      } else {
+        return {
+          ...op,
+          text: honoreeText,
+        };
+      }
+    }
+    if (
+      (op.op === 'addText' || op.op === 'replaceText') &&
+      (op.nodeId === 'inv_affiliation' || (op as any).role === 'affiliation')
+    ) {
+      const affText =
+        guest.titleOrAffiliation && typeof guest.titleOrAffiliation === 'string'
+          ? guest.titleOrAffiliation.trim()
+          : '';
       return {
         ...op,
-        text: honoreeText,
-        style: {
-          ...(op.style as Record<string, any>),
-          fontSize: computedFontSize,
-          fontStyle: 'italic',
-          fontWeight: '600',
-          color: '#FFD15C', // Protocol gold personalization tier
-        },
+        text: affText,
       };
     }
     return op;
@@ -79,6 +108,13 @@ export function personalizeInvitationOperations(
     honoreeText,
     computedFontSize,
   };
+}
+
+function canonicalStringify(obj: any): string {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalStringify).join(',') + ']';
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalStringify(obj[k])).join(',') + '}';
 }
 
 /**
@@ -97,7 +133,7 @@ export class VdpInvitationBatchRunner {
       );
 
       const opHash = createHash('sha256')
-        .update(JSON.stringify(operations))
+        .update(canonicalStringify(operations))
         .digest('hex');
 
       return {

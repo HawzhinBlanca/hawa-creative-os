@@ -35,6 +35,43 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
 
     expect(result.missingFacts).toContain('exact_price_or_discount');
   });
+
+  it('proves Gemini REST call passes API key via x-goog-api-key header and does not leak it in URL query parameter', async () => {
+    const originalKey = process.env.GEMINI_API_KEY;
+    const originalFetch = globalThis.fetch;
+    const testKey = 'AIzaSySecretKey999888777';
+    process.env.GEMINI_API_KEY = testKey;
+
+    let capturedUrl: string | undefined;
+    let capturedHeaders: Record<string, string> | undefined;
+
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      capturedUrl = url.toString();
+      capturedHeaders = init?.headers as Record<string, string>;
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'داشکاندنی بەهارە' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as any;
+
+    try {
+      const transcriber = new KurdishVoiceTranscriber();
+      const res = await transcriber.transcribe({
+        audioBuffer: Buffer.from('fake-audio-bytes'),
+        audioMimeType: 'audio/ogg',
+      });
+
+      expect(res.transcript).toBe('داشکاندنی بەهارە');
+      expect(capturedUrl).toBeDefined();
+      // Security Proof: URL must NOT contain the plaintext API key in query parameters
+      expect(capturedUrl).not.toContain(testKey);
+      expect(capturedUrl).not.toContain('?key=');
+      // Must pass key in x-goog-api-key header
+      expect(capturedHeaders?.['x-goog-api-key']).toBe(testKey);
+    } finally {
+      process.env.GEMINI_API_KEY = originalKey;
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe('TelegramBridgeDaemon (FR-001 - FR-004)', () => {

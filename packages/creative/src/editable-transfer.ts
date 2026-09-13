@@ -14,7 +14,13 @@ export interface TransferLogo { bytes: Buffer; sha256: string; mimeType: 'image/
 /** Encodes a validated layout while taking factual copy exclusively from the saved request. */
 export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: string[], logo?: TransferLogo) {
   const hex = (color: string) => {
-    if (!/^#?[a-fA-F0-9]{6}$/.test(color)) throw new Error('Invalid color'); return color.replace('#','');
+    let c = color.trim();
+    if (/^#?[a-fA-F0-9]{3}$/.test(c)) {
+      const raw = c.replace('#', '');
+      c = `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
+    }
+    if (!/^#?[a-fA-F0-9]{6}$/.test(c)) throw new Error('Invalid color');
+    return c.replace('#', '');
   };
   if (![plan.width,plan.height].every(n=>Number.isInteger(n)&&n>=320&&n<=4000)) throw new Error('Unsupported canvas dimensions');
   if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new Error('Missing or excessive factual copy');

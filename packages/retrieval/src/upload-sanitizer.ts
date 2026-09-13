@@ -1,3 +1,4 @@
+import path from 'node:path';
 import crypto from 'node:crypto';
 import type { Result, AppError, SHA256 } from '@hawa/contracts';
 
@@ -89,18 +90,32 @@ export function sanitizeUntrustedUpload(
     let svgText = rawBuf.toString('utf8');
 
     // Neutralize dangerous tags and handlers
-    if (/<script[\s>]/i.test(svgText) || /onload\s*=/i.test(svgText) || /javascript:/i.test(svgText)) {
+    if (
+      /<script\b/i.test(svgText) ||
+      /(?:[\s/]|^)on[a-zA-Z0-9_-]+\s*=/i.test(svgText) ||
+      /javascript:/i.test(svgText) ||
+      /<(foreignobject|object|embed|iframe|base|form|animate|set)\b/i.test(svgText) ||
+      /style\s*=\s*["'][^"']*(?:javascript:|expression|@import)/i.test(svgText)
+    ) {
       warnings.push('Active script execution payload neutralized from SVG asset');
       svgText = svgText
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/onload\s*=\s*["'][^"']*["']/gi, '')
-        .replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href=""');
+        .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+        .replace(/<script\b[^>]*\/?>/gi, '')
+        .replace(/<(foreignobject|object|embed|iframe|base|form)\b[^>]*>([\s\S]*?)<\/\1>/gi, '')
+        .replace(/<(foreignobject|object|embed|iframe|base|form)\b[^>]*\/?>/gi, '')
+        .replace(/<(set|animate|animateTransform)\b[^>]*(href|javascript:)[^>]*\/?>/gi, '')
+        .replace(/(?:[\s/]|^)(on[a-zA-Z0-9_-]{3,30})\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        .replace(/(href|xlink:href|src|action)\s*=\s*(?:"\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^"]*javascript:)[^"]*"|'\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^']*javascript:)[^']*'|(?:javascript:|vbscript:|data:)[^\s>]+)/gi, '$1=""')
+        .replace(/style\s*=\s*(?:"[^"]*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^"]*"|'[^']*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^']*')/gi, 'style=""');
     }
 
-    // Neutralize XML DOCTYPE external entities (XXE)
-    if (/<!DOCTYPE[\s\S]*?\[[\s\S]*?ENTITY[\s\S]*?\]>/i.test(svgText)) {
+    // Neutralize XML DOCTYPE external entities (XXE) and DTD definitions
+    if (/<!DOCTYPE/i.test(svgText) || /<!ENTITY/i.test(svgText) || /SYSTEM\s+["']/i.test(svgText)) {
       warnings.push('XML DTD entity declarations neutralized from SVG');
-      svgText = svgText.replace(/<!DOCTYPE[\s\S]*?>/i, '');
+      svgText = svgText
+        .replace(/<!DOCTYPE\s+[^\[>]+(?:\[[\s\S]*?\])?\s*>/gi, '')
+        .replace(/<!DOCTYPE[^>]*>/gi, '')
+        .replace(/<!(?:ENTITY|ELEMENT|ATTLIST|NOTATION)\b[\s\S]*?>/gi, '');
     }
 
     cleanBuf = Buffer.from(svgText, 'utf8');
@@ -109,10 +124,14 @@ export function sanitizeUntrustedUpload(
   // 4. Compute cryptographic SHA-256
   const sha256 = crypto.createHash('sha256').update(cleanBuf).digest('hex') as SHA256;
 
+  // Sanitize filename: extract basename, strip directory traversal and dangerous characters
+  const rawBasename = path.basename(input.filename || '').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
+  const cleanFilename = rawBasename.length > 0 ? rawBasename : 'unnamed_asset';
+
   return {
     ok: true,
     value: {
-      filename: input.filename.replace(/[^a-zA-Z0-9._-]/g, '_'),
+      filename: cleanFilename,
       mimeType: input.mimeType,
       byteSize: cleanBuf.length,
       sha256,

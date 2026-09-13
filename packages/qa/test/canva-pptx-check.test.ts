@@ -19,4 +19,14 @@ describe('Canva native round-trip inspection',()=>{
   const big=zipSync({'ppt/slides/slide1.xml':new Uint8Array(9*1024*1024)});expect(()=>checkCanvaPptx(big,['x'],'Minion')).toThrow('inspection limit');
   const entity=zipSync({'ppt/presentation.xml':strToU8('<p/>'),'ppt/slides/slide1.xml':strToU8('<!DOCTYPE x [<!ENTITY x SYSTEM "file:///private">]><p/>')});expect(()=>checkCanvaPptx(entity,['x'],'Minion')).toThrow('entities');
  });
+ it('detects Kurdish complex script font in a:cs run properties', () => {
+  const kurdishPptx = zipSync({
+   'ppt/presentation.xml': strToU8('<p:presentation/>'),
+   'ppt/slides/slide1.xml': strToU8('<p:sld><p:sp><p:txBody><a:p><a:r><a:rPr><a:cs typeface="Rabar 021"/></a:rPr><a:t>سڵاو جیهان</a:t></a:r></a:p></p:txBody></p:sp></p:sld>'),
+  });
+  const r = checkCanvaPptx(kurdishPptx, ['سڵاو جیهان'], 'Rabar 021');
+  expect(r.copyPass).toBe(true);
+  expect(r.fontPass).toBe(true);
+  expect(r.observedFonts).toContain('Rabar 021');
+ });
 });

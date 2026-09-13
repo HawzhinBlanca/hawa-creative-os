@@ -11,8 +11,9 @@ export function sanitizeSvgContent(raw: string | undefined | null): string {
   let cleaned = raw;
 
   // 1. Strip XML DOCTYPE and ENTITY declarations (XXE defense)
+  cleaned = cleaned.replace(/<!DOCTYPE\s+[^\[>]+(?:\[[\s\S]*?\])?\s*>/gi, '');
   cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
-  cleaned = cleaned.replace(/<!ENTITY[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<!(?:ENTITY|ELEMENT|ATTLIST|NOTATION)\b[\s\S]*?>/gi, '');
 
   // 2. DOMPurify sanitization (when running in DOM-capable environments)
   if (typeof DOMPurify !== 'undefined' && typeof DOMPurify.sanitize === 'function') {
@@ -72,8 +73,8 @@ export function sanitizeSvgContent(raw: string | undefined | null): string {
     cleaned = cleaned.replace(new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi'), '');
   }
 
-  // 5. Strip ANY inline event handlers (on* attributes)
-  cleaned = cleaned.replace(/\s+(on[a-zA-Z0-9_-]+)\s*=\s*("([^"]*)"|'([^']*)'|[^\s>]+)/gi, '');
+  // 5. Strip ANY inline event handlers (on* attributes, supporting whitespace or slash boundaries)
+  cleaned = cleaned.replace(/(?:[\s/]|^)(on[a-zA-Z0-9_-]+)\s*=\s*("([^"]*)"|'([^']*)'|[^\s>]+)/gi, '');
 
   // 6. Neutralize dangerous URL schemes in href, xlink:href, src, action
   cleaned = cleaned.replace(/(href|xlink:href|src|action)\s*=\s*["']?\s*(javascript:|vbscript:|data:text\/html)/gi, '$1="#blocked"');

@@ -367,9 +367,16 @@ export class ResilientModelGateway implements ModelGateway {
         (candidate.provider === 'anthropic' && Boolean(process.env.ANTHROPIC_API_KEY)) ||
         (candidate.provider === 'openai' && Boolean(process.env.OPENAI_API_KEY));
 
+      const anyCloudCredentialsConfigured = Boolean(
+        process.env.GEMINI_API_KEY ||
+        process.env.GOOGLE_AI_API_KEY ||
+        process.env.ANTHROPIC_API_KEY ||
+        process.env.OPENAI_API_KEY
+      );
+
       if (!isLocal && !hasCredentials) {
-        // If cloud egress is explicitly mandated without local fallback:
-        if ((request.egressPolicy as any)?.mode === 'cloud_allowed') {
+        // If cloud egress is explicitly mandated without local fallback OR if other cloud providers have live credentials:
+        if ((request.egressPolicy as any)?.mode === 'cloud_allowed' || anyCloudCredentialsConfigured) {
           span.addEvent('missing_provider_credentials', { provider: candidate.provider });
           lastError = {
             code: 'MISSING_PROVIDER_CREDENTIALS',
@@ -409,12 +416,34 @@ export class ResilientModelGateway implements ModelGateway {
       if (candidate.provider === 'google' && (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY)) {
         const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate.model}:generateContent?key=${googleKey}`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate.model}:generateContent`;
+
+          const parts: any[] = [{ text: promptText }];
+          const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
+          for (const img of imageParts) {
+            let base64Data: string | undefined = (img as any).data || (img as any).base64;
+            if (!base64Data && img.storageKey && fs.existsSync(img.storageKey)) {
+              base64Data = fs.readFileSync(img.storageKey).toString('base64');
+            }
+            if (base64Data) {
+              parts.push({
+                inline_data: {
+                  mime_type: img.mimeType || 'image/png',
+                  data: base64Data,
+                },
+              });
+            }
+          }
+
           const apiRes = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': googleKey!,
+            },
+            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: promptText }] }],
+              contents: [{ role: 'user', parts }],
               generationConfig: { responseMimeType: 'application/json' },
             }),
           });
@@ -491,6 +520,7 @@ export class ResilientModelGateway implements ModelGateway {
               'x-api-key': process.env.ANTHROPIC_API_KEY,
               'anthropic-version': '2023-06-01',
             },
+            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
               model: candidate.model,
               max_tokens: request.maxOutputTokens || 2048,
@@ -541,15 +571,37 @@ export class ResilientModelGateway implements ModelGateway {
         }
       } else if (candidate.provider === 'openai' && process.env.OPENAI_API_KEY) {
         try {
+          const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
+          let openaiContent: any = `${promptText}\n\nRespond ONLY with a valid JSON object.`;
+          if (request.role === 'visual_judge' && imageParts.length > 0) {
+            const contentBlocks: any[] = [{ type: 'text', text: openaiContent }];
+            for (const img of imageParts) {
+              let base64Data: string | undefined = (img as any).data || (img as any).base64;
+              if (!base64Data && img.storageKey && fs.existsSync(img.storageKey)) {
+                base64Data = fs.readFileSync(img.storageKey).toString('base64');
+              }
+              if (base64Data) {
+                contentBlocks.push({
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${img.mimeType || 'image/png'};base64,${base64Data}`,
+                  },
+                });
+              }
+            }
+            openaiContent = contentBlocks;
+          }
+
           const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             },
+            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
               model: candidate.model,
-              messages: [{ role: 'user', content: `${promptText}\n\nRespond ONLY with a valid JSON object.` }],
+              messages: [{ role: 'user', content: openaiContent }],
               response_format: { type: 'json_object' },
             }),
           });

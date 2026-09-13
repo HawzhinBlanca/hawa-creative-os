@@ -46,6 +46,14 @@ function createMockDb() {
         return builder;
       },
       executeTakeFirst: async () => {
+        if (valuesToSet) {
+          const row = store[table].find((r) => whereClauses.every((w) => r[w.col] === w.val));
+          if (row) {
+            Object.assign(row, valuesToSet);
+            return row;
+          }
+          return null;
+        }
         const list = store[table].filter((row) => {
           return whereClauses.every((w) => {
             if (w.op === 'in' && Array.isArray(w.val)) {
@@ -139,6 +147,13 @@ describe('DB Repositories: Isolation & Audit Trail', () => {
     const lockedTask = await taskRepo.lockClientScope(res.task.id, 'client-db-1');
     expect(lockedTask.client_scope_locked).toBe(true);
 
+    // Re-locking to the same client is idempotent
+    const relockedTask = await taskRepo.lockClientScope(res.task.id, 'client-db-1');
+    expect(relockedTask.client_scope_locked).toBe(true);
+
+    // Attempting to rebind to a foreign client is rejected by immutability invariant
+    await expect(taskRepo.lockClientScope(res.task.id, 'client-db-2')).rejects.toThrow('Client scope is immutable');
+
     // Update status to BRIEFING
     const updated = await taskRepo.updateStatus(
       res.task.id,
@@ -150,6 +165,18 @@ describe('DB Repositories: Isolation & Audit Trail', () => {
     );
     expect(updated.status).toBe('BRIEFING');
     expect(store.task_events.length).toBe(2);
+
+    // Invalid fromStatus transition fails with ConcurrencyConflictError
+    await expect(
+      taskRepo.updateStatus(
+        res.task.id,
+        'COMPOSING', // Task is in BRIEFING (brief_draft), not COMPOSING (studio_composition)
+        'AWAITING_APPROVAL',
+        'worker-1',
+        'workflow',
+        'Illegal state transition attempt'
+      )
+    ).rejects.toThrow();
   });
 
   it('IngressRepository: detects and deduplicates duplicate raw events', async () => {

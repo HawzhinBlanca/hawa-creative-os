@@ -35,7 +35,9 @@ jobs:
         run: python3 scripts/validate_pack.py
 
       - name: Gate B — Zero Secret Leakage Scan
-        run: python3 infra/security/security_scan.py
+        run: |
+          python3 infra/security/security_scan.py --self-test
+          python3 infra/security/security_scan.py
 
   typecheck-and-tests:
     name: Typecheck & Test Suite (Gates C, D, E, F, G, H, I, K, L, M, N, O, P)
@@ -72,7 +74,7 @@ jobs:
       - name: Gate C — Strict TypeScript Build (14 packages)
         run: pnpm typecheck
 
-      - name: Gates D-P — Full Vitest Suite (21 files, 147 tests)
+      - name: Gates D-P — Full Vitest Suite
         run: pnpm test
 
       - name: Gate H — Canonical Desk PWA Production Build
@@ -129,5 +131,5 @@ jobs:
 
       - name: Gate S — Validate Docker Compose Topology
         run: |
-          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.production.example config --quiet
+          docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.example config --quiet
           echo "Docker Compose declarative topology valid."

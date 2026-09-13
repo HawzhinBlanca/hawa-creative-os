@@ -7,8 +7,7 @@ import { createHash } from 'node:crypto';
 
 describe('CV-06: Unified Ingress PostgreSQL Production Integration Tests', () => {
   const connectionString =
-    process.env.TEST_DATABASE_URL ||
-    'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+    process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const tenantId = '00000000-0000-4000-a000-000000000007';
   const userId = '00000000-0000-4000-b000-000000000007';
@@ -19,7 +18,7 @@ describe('CV-06: Unified Ingress PostgreSQL Production Integration Tests', () =>
   const service = new UnifiedIngressService(persistence);
   const app = createApp({ db });
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,
@@ -282,10 +281,14 @@ describe('CV-06: Unified Ingress PostgreSQL Production Integration Tests', () =>
   });
 
   it('5. Tests /api/ingress/unified endpoint via HTTP request', async () => {
+    // Unified ingress is an authenticated boundary: an anonymous caller may not declare verified messages.
+    const anonymous = await app.request('/api/ingress/unified', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', text: 'x' }) });
+    expect(anonymous.status).toBe(401);
     const res = await app.request('/api/ingress/unified', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${testBearer}`,
       },
       body: JSON.stringify({
         tenantId,

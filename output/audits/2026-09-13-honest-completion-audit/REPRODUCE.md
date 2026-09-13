@@ -77,7 +77,7 @@ curl -i -s http://127.0.0.1:8080/v1/tasks
 # Expected: HTTP/1.1 401 Unauthorized, Content-Type: application/json, {"title":"Unauthorized"}
 
 # 2. Authenticated request loads persisted tasks
-curl -s -H "Authorization: Bearer hawa_prod_operator_bearer_token_entropy_7721" \
+curl -s -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   "http://127.0.0.1:8080/v1/tasks?limit=5" | jq '{ total: .total, sample_title: .items[0].title }'
 # Expected: HTTP 200 with real database tasks (total > 1400)
 ```
@@ -86,14 +86,14 @@ curl -s -H "Authorization: Bearer hawa_prod_operator_bearer_token_entropy_7721" 
 ```bash
 # 1. Operator role spoofing rejected
 curl -s -X POST http://127.0.0.1:8080/v1/tasks/00000000-0000-4000-8000-000000000001/revisions/00000000-0000-4000-8000-000000000002/decisions \
-  -H "Authorization: Bearer hawa_prod_operator_bearer_token_entropy_7721" \
+  -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   -H "Content-Type: application/json" \
   -d '{"action":"APPROVED","actorRole":"operator","comment":"spoofed approval"}' | jq .
 # Expected: HTTP 403 Forbidden ("Only reviewers or art directors can approve revisions")
 
 # 2. Invalid action rejected
 curl -s -X POST http://127.0.0.1:8080/v1/tasks/00000000-0000-4000-8000-000000000001/revisions/00000000-0000-4000-8000-000000000002/decisions \
-  -H "Authorization: Bearer hawa_prod_reviewer_art_director_key_entropy_8814" \
+  -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   -H "Content-Type: application/json" \
   -d '{"action":"MAYBE_APPROVE","actorRole":"art_director"}' | jq .
 # Expected: HTTP 400 Bad Request ("INVALID_ACTION")
@@ -105,14 +105,14 @@ KEY="idemp_probe_$(date +%s)"
 
 # First request
 curl -s -X POST http://127.0.0.1:8080/v1/tasks \
-  -H "Authorization: Bearer hawa_prod_operator_bearer_token_entropy_7721" \
+  -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   -H "Idempotency-Key: $KEY" \
   -H "Content-Type: application/json" \
   -d '{"title":"Original Task","clientId":"c1000000-0000-4000-8000-000000000002","brief":"Initial brief"}'
 
 # Replay with altered payload
 curl -i -s -X POST http://127.0.0.1:8080/v1/tasks \
-  -H "Authorization: Bearer hawa_prod_operator_bearer_token_entropy_7721" \
+  -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   -H "Idempotency-Key: $KEY" \
   -H "Content-Type: application/json" \
   -d '{"title":"Tampered Task","clientId":"c1000000-0000-4000-8000-000000000002","brief":"Tampered brief"}'
@@ -147,7 +147,7 @@ curl -i -s -X POST https://api.openai.com/v1/chat/completions \
 ### H12: Google Drive Service Account Credentials Missing (FAIL)
 ```bash
 curl -i -s -X POST http://127.0.0.1:8080/v1/tasks/00000000-0000-4000-8000-000000000001/publish \
-  -H "Authorization: Bearer hawa_prod_reviewer_art_director_key_entropy_8814" \
+  -H "Authorization: Bearer $HAWA_KEY_FROM_ENV" \
   -H "Content-Type: application/json" \
   -d '{"destination":"google_drive"}'
 # Expected Output: HTTP 422 Unprocessable Entity ("CREDENTIALS_MISSING")

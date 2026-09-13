@@ -17,6 +17,7 @@ export interface CostReceipt {
   costUsd: number;
   timestamp: string;
   status: 'COMMITTED' | 'QUOTA_REJECTED';
+  reservationId?: string;
 }
 
 export interface ClientBudgetConfig {
@@ -25,6 +26,7 @@ export interface ClientBudgetConfig {
   month: string;
   capUsd: number;
   spentUsd: number;
+  reservedUsd?: number;
   warningThreshold: number; // 0.8 = 80%
   status: 'HEALTHY' | 'WARNING' | 'EXCEEDED';
   receipts: CostReceipt[];
@@ -34,14 +36,33 @@ export interface BudgetCheckResult {
   allowed: boolean;
   reason?: string;
   currentUsageUsd: number;
+  reservedUsd?: number;
   remainingUsd: number;
   capUsd: number;
   utilizationPercent: number;
   warningTriggered: boolean;
 }
 
+export interface BudgetReservation {
+  id: string;
+  clientId: string;
+  amountUsd: number;
+  expiresAt: number;
+}
+
+export interface BudgetReservationResult {
+  allowed: boolean;
+  reservationId?: string;
+  reason?: string;
+  remainingUsd: number;
+  capUsd: number;
+  currentUsageUsd: number;
+  reservedUsd: number;
+}
+
 export class CostGovernor {
   private budgets = new Map<string, ClientBudgetConfig>();
+  private reservations = new Map<string, BudgetReservation>();
 
   public readonly pricingRates: Record<string, { inputPer1M: number; outputPer1M: number; gpuPerSec?: number }> = {
     'google:gemini-1.5-pro': { inputPer1M: 1.25, outputPer1M: 5.0 },
@@ -86,6 +107,76 @@ export class CostGovernor {
     }
   }
 
+  private cleanExpiredReservations(): void {
+    const now = Date.now();
+    for (const [id, res] of this.reservations.entries()) {
+      if (res.expiresAt <= now) {
+        this.reservations.delete(id);
+      }
+    }
+  }
+
+  public getActiveReservationUsd(clientId: string): number {
+    this.cleanExpiredReservations();
+    let total = 0;
+    for (const res of this.reservations.values()) {
+      if (res.clientId === clientId) {
+        total += res.amountUsd;
+      }
+    }
+    return Number(total.toFixed(6));
+  }
+
+  public reserveBudget(params: {
+    clientId: string;
+    amountUsd: number;
+    leaseDurationMs?: number;
+  }): BudgetReservationResult {
+    const clientId = params.clientId;
+    const amountUsd = Math.max(0, Number(params.amountUsd) || 0);
+    const leaseDurationMs = Math.max(1000, Math.min(600_000, Number(params.leaseDurationMs) || 60_000));
+
+    const budget = this.getOrCreateClientBudget(clientId);
+    this.cleanExpiredReservations();
+    const activeReserved = this.getActiveReservationUsd(clientId);
+    const projected = Number((budget.spentUsd + activeReserved + amountUsd).toFixed(6));
+    const effectiveSpent = Number((budget.spentUsd + activeReserved).toFixed(6));
+    const remainingUsd = Number(Math.max(0, budget.capUsd - effectiveSpent).toFixed(6));
+
+    if (projected > budget.capUsd) {
+      return {
+        allowed: false,
+        reason: `Monthly AI budget exceeded for client ${clientId}. Cap: $${budget.capUsd.toFixed(2)}, Current: $${budget.spentUsd.toFixed(2)}${activeReserved > 0 ? `, Active Reservations: $${activeReserved.toFixed(4)}` : ''}, Required: $${amountUsd.toFixed(4)}.`,
+        remainingUsd,
+        capUsd: budget.capUsd,
+        currentUsageUsd: budget.spentUsd,
+        reservedUsd: activeReserved,
+      };
+    }
+
+    const reservationId = `res_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    this.reservations.set(reservationId, {
+      id: reservationId,
+      clientId,
+      amountUsd,
+      expiresAt: Date.now() + leaseDurationMs,
+    });
+
+    return {
+      allowed: true,
+      reservationId,
+      remainingUsd: Number(Math.max(0, budget.capUsd - projected).toFixed(6)),
+      capUsd: budget.capUsd,
+      currentUsageUsd: budget.spentUsd,
+      reservedUsd: Number((activeReserved + amountUsd).toFixed(6)),
+    };
+  }
+
+  public releaseReservation(reservationId?: string): boolean {
+    if (!reservationId) return false;
+    return this.reservations.delete(reservationId);
+  }
+
   public getOrCreateClientBudget(clientId: string, clientName?: string): ClientBudgetConfig {
     const currentMonth = this.getCurrentMonth();
     let config = this.budgets.get(clientId);
@@ -95,7 +186,7 @@ export class CostGovernor {
         clientId,
         clientName: clientName || clientId,
         month: currentMonth,
-        capUsd: config?.capUsd ?? 5.0,
+        capUsd: config && Number.isFinite(config.capUsd) ? config.capUsd : 5.0,
         spentUsd: 0.0,
         warningThreshold: 0.8,
         status: 'HEALTHY',
@@ -104,6 +195,7 @@ export class CostGovernor {
       this.budgets.set(clientId, config);
     }
 
+    config.reservedUsd = this.getActiveReservationUsd(clientId);
     return config;
   }
 
@@ -116,8 +208,12 @@ export class CostGovernor {
     const key = `${provider}:${model}`.toLowerCase();
     const rates = this.pricingRates[key] || { inputPer1M: 0.5, outputPer1M: 1.5, gpuPerSec: 0.0003 };
 
-    const tokenCost = (tokens.input * rates.inputPer1M + tokens.output * rates.outputPer1M) / 1_000_000;
-    const gpuCost = gpuSeconds * (rates.gpuPerSec || 0.0003);
+    const safeInput = Math.max(0, Number(tokens?.input) || 0);
+    const safeOutput = Math.max(0, Number(tokens?.output) || 0);
+    const safeGpu = Math.max(0, Number(gpuSeconds) || 0);
+
+    const tokenCost = (safeInput * rates.inputPer1M + safeOutput * rates.outputPer1M) / 1_000_000;
+    const gpuCost = safeGpu * (rates.gpuPerSec || 0.0003);
 
     return Number((tokenCost + gpuCost).toFixed(6));
   }
@@ -127,15 +223,20 @@ export class CostGovernor {
    */
   public checkBudget(clientId: string, estimatedCostUsd: number): BudgetCheckResult {
     const budget = this.getOrCreateClientBudget(clientId);
-    const projected = Number((budget.spentUsd + estimatedCostUsd).toFixed(6));
-    const remainingUsd = Number(Math.max(0, budget.capUsd - budget.spentUsd).toFixed(6));
-    const utilizationPercent = Math.min(100, Math.round((budget.spentUsd / budget.capUsd) * 100));
+    const safeCost = Math.max(0, Number(estimatedCostUsd) || 0);
+    this.cleanExpiredReservations();
+    const activeReserved = this.getActiveReservationUsd(clientId);
+    const projected = Number((budget.spentUsd + activeReserved + safeCost).toFixed(6));
+    const effectiveSpent = Number((budget.spentUsd + activeReserved).toFixed(6));
+    const remainingUsd = Number(Math.max(0, budget.capUsd - effectiveSpent).toFixed(6));
+    const utilizationPercent = Math.min(100, Math.round((effectiveSpent / budget.capUsd) * 100));
 
     if (projected > budget.capUsd) {
       return {
         allowed: false,
-        reason: `Monthly AI budget exceeded for client ${clientId}. Cap: $${budget.capUsd.toFixed(2)}, Current: $${budget.spentUsd.toFixed(2)}, Required: $${estimatedCostUsd.toFixed(4)}.`,
+        reason: `Monthly AI budget exceeded for client ${clientId}. Cap: $${budget.capUsd.toFixed(2)}, Current: $${budget.spentUsd.toFixed(2)}${activeReserved > 0 ? `, Active Reservations: $${activeReserved.toFixed(4)}` : ''}, Required: $${safeCost.toFixed(4)}.`,
         currentUsageUsd: budget.spentUsd,
+        reservedUsd: activeReserved,
         remainingUsd,
         capUsd: budget.capUsd,
         utilizationPercent: 100,
@@ -148,6 +249,7 @@ export class CostGovernor {
     return {
       allowed: true,
       currentUsageUsd: budget.spentUsd,
+      reservedUsd: activeReserved,
       remainingUsd,
       capUsd: budget.capUsd,
       utilizationPercent,
@@ -175,6 +277,7 @@ export class CostGovernor {
 
   /**
    * Commits an executed operation's cost receipt into the client's financial ledger.
+   * Incurred spend is strictly added to spentUsd even if exceeding the cap.
    */
   public recordUsage(params: {
     clientId: string;
@@ -186,17 +289,27 @@ export class CostGovernor {
     outputTokens: number;
     gpuSeconds?: number;
     costUsd?: number;
+    reservationId?: string;
   }): CostReceipt {
     const budget = this.getOrCreateClientBudget(params.clientId);
-    const actualCost = params.costUsd ?? this.calculateEstimatedCost(
-      params.provider,
-      params.model,
-      { input: params.inputTokens, output: params.outputTokens },
-      params.gpuSeconds ?? 0
-    );
+    const computedCost = params.costUsd !== undefined && Number.isFinite(Number(params.costUsd))
+      ? Math.max(0, Number(params.costUsd))
+      : this.calculateEstimatedCost(
+          params.provider,
+          params.model,
+          { input: params.inputTokens, output: params.outputTokens },
+          params.gpuSeconds ?? 0
+        );
+    const actualCost = Math.max(0, Number(computedCost) || 0);
 
-    const check = this.checkBudget(params.clientId, actualCost);
-    const status = check.allowed ? 'COMMITTED' : 'QUOTA_REJECTED';
+    // If a reservation was provided for this task, consume/release it so it is not double-counted
+    if (params.reservationId) {
+      this.releaseReservation(params.reservationId);
+    }
+
+    // Determine status relative to cap before commit
+    const projected = Number((budget.spentUsd + actualCost).toFixed(6));
+    const status = projected <= budget.capUsd ? 'COMMITTED' : 'QUOTA_REJECTED';
 
     const receipt: CostReceipt = {
       id: `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -205,24 +318,26 @@ export class CostGovernor {
       role: params.role,
       provider: params.provider,
       model: params.model,
-      inputTokens: params.inputTokens,
-      outputTokens: params.outputTokens,
-      gpuSeconds: params.gpuSeconds ?? 0,
+      inputTokens: Math.max(0, Number(params.inputTokens) || 0),
+      outputTokens: Math.max(0, Number(params.outputTokens) || 0),
+      gpuSeconds: Math.max(0, Number(params.gpuSeconds) || 0),
       costUsd: actualCost,
       timestamp: new Date().toISOString(),
-      status
+      status,
+      reservationId: params.reservationId,
     };
 
-    if (status === 'COMMITTED') {
-      budget.spentUsd = Number((budget.spentUsd + actualCost).toFixed(6));
-      const ratio = budget.spentUsd / budget.capUsd;
-      if (ratio >= 1.0) {
-        budget.status = 'EXCEEDED';
-      } else if (ratio >= budget.warningThreshold) {
-        budget.status = 'WARNING';
-      } else {
-        budget.status = 'HEALTHY';
-      }
+    // INVARIANT: Incurred compute costs MUST ALWAYS be debited to spentUsd.
+    // External APIs have already consumed real dollars. Discarding actual spend on quota breach
+    // causes ledger freeze and allows clients to incur unlimited unrecorded spend.
+    budget.spentUsd = Number((budget.spentUsd + actualCost).toFixed(6));
+    const ratio = budget.spentUsd / budget.capUsd;
+    if (ratio >= 1.0) {
+      budget.status = 'EXCEEDED';
+    } else if (ratio >= budget.warningThreshold) {
+      budget.status = 'WARNING';
+    } else {
+      budget.status = 'HEALTHY';
     }
 
     budget.receipts.unshift(receipt);
@@ -235,7 +350,8 @@ export class CostGovernor {
 
   public allocateBudget(clientId: string, newCapUsd: number): ClientBudgetConfig {
     const budget = this.getOrCreateClientBudget(clientId);
-    budget.capUsd = Number(Math.max(0.1, newCapUsd).toFixed(2));
+    const safeCap = Number.isFinite(newCapUsd) ? Number(Math.max(0.1, newCapUsd).toFixed(2)) : 5.0;
+    budget.capUsd = safeCap;
     const ratio = budget.spentUsd / budget.capUsd;
     if (ratio >= 1.0) {
       budget.status = 'EXCEEDED';
@@ -248,7 +364,10 @@ export class CostGovernor {
   }
 
   public getAllSummaries(): ClientBudgetConfig[] {
-    return Array.from(this.budgets.values());
+    return Array.from(this.budgets.values()).map(b => {
+      b.reservedUsd = this.getActiveReservationUsd(b.clientId);
+      return b;
+    });
   }
 }
 

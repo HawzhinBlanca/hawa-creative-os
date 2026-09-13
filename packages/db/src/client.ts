@@ -10,8 +10,10 @@ export interface RlsContext {
 }
 
 export function createDb(connectionString?: string): Kysely<Database> {
+  const resolved = connectionString || process.env.DATABASE_URL;
+  if (!resolved) throw new Error('createDb requires a connection string or DATABASE_URL; there is no default database');
   const pool = new pg.Pool({
-    connectionString: connectionString || process.env.DATABASE_URL || 'postgres://hawa_app:hawa_production_secure_pass@localhost:5432/hawa',
+    connectionString: resolved,
     max: 20,
     idleTimeoutMillis: 30000,
   });

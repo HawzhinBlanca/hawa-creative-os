@@ -7,11 +7,11 @@ import {
 } from '@hawa/creative';
 
 describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
-  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY!;
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,
@@ -229,7 +229,9 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
     const ruleId = propJson.proposal.id;
 
     // 2. List candidate rules
-    const listRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000003/candidate-rules');
+    const listRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000003/candidate-rules', {
+      headers: authHeaders,
+    });
     expect(listRes.status).toBe(200);
     const listJson = await listRes.json();
     expect(listJson.candidateRules.some((r: any) => r.id === ruleId)).toBe(true);
@@ -268,7 +270,9 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
     expect(negJson.negativeExampleRecorded).toBe(true);
 
     // 6. Query data lineage boundary via HTTP
-    const lineRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000003/learning/data-lineage?purpose=external_fine_tuning');
+    const lineRes = await app.request('/v1/clients/c1000000-0000-4000-8000-000000000003/learning/data-lineage?purpose=external_fine_tuning', {
+      headers: authHeaders,
+    });
     expect(lineRes.status).toBe(200);
     const lineJson = await lineRes.json();
     expect(lineJson.permittedItems).toHaveLength(0);

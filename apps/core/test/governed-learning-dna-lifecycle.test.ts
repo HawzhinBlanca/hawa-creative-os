@@ -3,14 +3,14 @@ import { createApp } from '../src/app.js';
 import { createDb } from '@hawa/db';
 
 describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollback Lifecycle', () => {
-  const connectionString = process.env.TEST_DATABASE_URL || 'postgresql://hawa_app:hawa_app_secure_runtime_pass_2026@127.0.0.1:54332/hawa_test';
+  const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const app = createApp({ db });
 
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const drusteeClientId = 'c1000000-0000-4000-8000-000000000003';
 
-  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY!;
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -57,13 +57,17 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
   });
 
   it('2. Enforces multi-tenant client isolation: Drustee candidate rules never leak into KAAE', async () => {
-    const drusteeRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`);
+    const drusteeRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`, {
+      headers: authHeaders,
+    });
     expect(drusteeRes.status).toBe(200);
     const drusteeData = await drusteeRes.json();
     expect(drusteeData.count).toBeGreaterThan(0);
     expect(drusteeData.candidateRules.every((r: any) => r.clientId === drusteeClientId)).toBe(true);
 
-    const kaaeRes = await app.request(`/v1/clients/${kaaeClientId}/candidate-rules`);
+    const kaaeRes = await app.request(`/v1/clients/${kaaeClientId}/candidate-rules`, {
+      headers: authHeaders,
+    });
     expect(kaaeRes.status).toBe(200);
     const kaaeData = await kaaeRes.json();
     // KAAE must not contain Drustee's mined candidate rules
@@ -71,7 +75,9 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
   });
 
   it('3. Candidate rule promotion requires authentication and role verification', async () => {
-    const listRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`);
+    const listRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`, {
+      headers: authHeaders,
+    });
     const listData = await listRes.json();
     const candidateRule = listData.candidateRules[0];
     expect(candidateRule).toBeDefined();
@@ -94,11 +100,15 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
   });
 
   it('4. Authorized rule promotion increments Client DNA version and seals immutable snapshot', async () => {
-    const dnaBeforeRes = await app.request(`/v1/clients/${drusteeClientId}/dna`);
+    const dnaBeforeRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, {
+      headers: authHeaders,
+    });
     const dnaBefore = await dnaBeforeRes.json();
     const initialVersion = dnaBefore.version || 1;
 
-    const listRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`);
+    const listRes = await app.request(`/v1/clients/${drusteeClientId}/candidate-rules`, {
+      headers: authHeaders,
+    });
     const listData = await listRes.json();
     const candidateRule = listData.candidateRules[0];
 
@@ -115,13 +125,17 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
     expect(promoteData.auditHash).toMatch(/^[a-f0-9]{64}$/);
 
     // Verify DNA version incremented
-    const dnaAfterRes = await app.request(`/v1/clients/${drusteeClientId}/dna`);
+    const dnaAfterRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, {
+      headers: authHeaders,
+    });
     const dnaAfter = await dnaAfterRes.json();
     expect(dnaAfter.version).toBe(initialVersion + 1);
     expect(dnaAfter.guidelines.layoutRules).toContain(candidateRule.ruleText);
 
     // Verify snapshot created
-    const snapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`);
+    const snapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`, {
+      headers: authHeaders,
+    });
     const snaps = await snapsRes.json();
     expect(snaps.length).toBeGreaterThan(0);
     expect(snaps[0].version).toBe(dnaAfter.version);
@@ -131,7 +145,9 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
 
   it('5. In-flight tasks remain pinned to their creation DNA version and are never mutated', async () => {
     // Current DNA is at version N
-    const dnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`);
+    const dnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, {
+      headers: authHeaders,
+    });
     const currentDna = await dnaRes.json();
     const pinnedVersion = currentDna.version;
 
@@ -175,7 +191,9 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
 
   it('6. Executes authorized DNA rollback to previous version and creates rollback audit snapshot', async () => {
     // Check available snapshots
-    const snapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`);
+    const snapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`, {
+      headers: authHeaders,
+    });
     const snaps = await snapsRes.json();
     expect(snaps.length).toBeGreaterThanOrEqual(2);
 
@@ -200,12 +218,16 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
     expect(rollbackData.revertedToVersion).toBe(targetVersion);
 
     // Verify active DNA is now restored
-    const activeDnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`);
+    const activeDnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, {
+      headers: authHeaders,
+    });
     const activeDna = await activeDnaRes.json();
     expect(activeDna.version).toBe(rollbackData.activeVersion);
 
     // Verify new rollback audit snapshot is committed
-    const updatedSnapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`);
+    const updatedSnapsRes = await app.request(`/v1/clients/${drusteeClientId}/snapshots`, {
+      headers: authHeaders,
+    });
     const updatedSnaps = await updatedSnapsRes.json();
     expect(updatedSnaps[0].commitMessage).toContain(`Rollback to baseline v${targetVersion}`);
     expect(updatedSnaps[0].sha256).toMatch(/^(sha256_)?[a-f0-9]{64}$/);

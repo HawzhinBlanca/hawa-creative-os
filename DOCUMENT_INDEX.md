@@ -215,13 +215,11 @@
 |---|---|
 | [`deployment/Caddyfile`](deployment/Caddyfile) | Deployment/recovery artifact: Caddyfile. |
 | [`deployment/Dockerfile.hawa`](deployment/Dockerfile.hawa) | Deployment/recovery artifact: Dockerfile.hawa. |
-| [`deployment/Dockerfile.hycanvas`](deployment/Dockerfile.hycanvas) | Deployment/recovery artifact: Dockerfile.hycanvas. |
 | [`deployment/backup.sh`](deployment/backup.sh) | Deployment/recovery artifact: backup.sh. |
 | [`deployment/docker-compose.yml`](deployment/docker-compose.yml) | Deployment/recovery artifact: docker-compose.yml. |
 | [`deployment/env.example`](deployment/env.example) | Deployment/recovery artifact: env.example. |
 | [`deployment/init-databases.sh`](deployment/init-databases.sh) | First-boot creation of isolated Hawa, HyCanvas, and Phoenix databases/roles. |
 | [`deployment/restore-test.sh`](deployment/restore-test.sh) | Deployment/recovery artifact: restore-test.sh. |
-| [`deployment/vendor/hycanvas/README.md`](deployment/vendor/hycanvas/README.md) | Deployment/recovery artifact: README.md. |
 
 ## Incident runbooks
 
@@ -230,7 +228,6 @@
 | [`runbooks/01_task_failure.md`](runbooks/01_task_failure.md) | Runbook: Failed or Stuck Task |
 | [`runbooks/02_adapter_gap.md`](runbooks/02_adapter_gap.md) | Runbook: Messaging Adapter Gap or Outage |
 | [`runbooks/03_model_provider_outage.md`](runbooks/03_model_provider_outage.md) | Runbook: Model Provider Outage or Regression |
-| [`runbooks/04_hycanvas_incident.md`](runbooks/04_hycanvas_incident.md) | Runbook: Editable Studio Incident |
 | [`runbooks/05_rtl_failure.md`](runbooks/05_rtl_failure.md) | Runbook: Sorani/Arabic/RTL Failure |
 | [`runbooks/06_publication_reconciliation.md`](runbooks/06_publication_reconciliation.md) | Runbook: Drive/Sheets Publication Divergence |
 | [`runbooks/07_security_incident.md`](runbooks/07_security_incident.md) | Runbook: Security or Cross-Client Incident |

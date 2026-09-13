@@ -234,7 +234,7 @@ export function validateCanvaCaptureInvariants(
   }
 
   // 4. Invariant: Snapshot incompleteness cannot be represented as a fully observed source
-  if (!request.semanticCoverage.isComplete) {
+  if (!request.semanticCoverage.isComplete || (request.semanticCoverage.unobservedLayersCount ?? 0) > 0) {
     return {
       ok: false,
       error: {

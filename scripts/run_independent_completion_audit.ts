@@ -15,9 +15,10 @@ import { TaskWorkflowController } from '../packages/domain/src/workflow-controll
 import type { RequestContext } from '@hawa/contracts';
 
 const BASE_URL = process.env.HAWA_CORE_URL || 'http://127.0.0.1:8080';
-const REVIEWER_KEY = process.env.HAWA_REVIEWER_KEY || 'hawa_prod_reviewer_art_director_key_entropy_8814';
-const OPERATOR_KEY = process.env.HAWA_BEARER_TOKEN || 'hawa_prod_operator_bearer_token_entropy_7721';
-const TELEGRAM_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || 'kaae_office_secret_production_entropy_99f3b817';
+const REVIEWER_KEY = process.env.HAWA_REVIEWER_KEY;
+const OPERATOR_KEY = process.env.HAWA_BEARER_TOKEN;
+const TELEGRAM_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+if (!REVIEWER_KEY || !OPERATOR_KEY || !TELEGRAM_SECRET) throw new Error('HAWA_REVIEWER_KEY, HAWA_BEARER_TOKEN and TELEGRAM_WEBHOOK_SECRET must be set; this script has no built-in credentials');
 const AUDIT_OUT_DIR = path.resolve('output/audits/2026-09-13-honest-completion-audit');
 
 interface AuditCheck {
