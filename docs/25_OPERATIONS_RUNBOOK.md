@@ -124,6 +124,17 @@ announced once. `--status` prints the assessment without acting; `--announce` pr
 Agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
 Install or refresh both agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
 
+## Sorani Kurdish drafts
+
+Automatic drafts set English and Sorani Kurdish copy (ADR-028). Kurdish blocks are set right-to-left in
+the script typeface declared in `packages/creative/assets/kaae-reference.json` (`rules.scriptFonts.arabic`,
+currently the provisional `Noto Sans Arabic`; Canva has it and keeps it on export). When the client's
+Kurdish typeface is confirmed, change that one field and delete `scriptFontNote`; requesters stop seeing
+the provisional note automatically. QA evidence on the exported PPTX: `copyPass` (exact copy), `fontPass`
+(brand font on Latin objects, script typeface on Arabic objects), `rtlNote` (Canva exports omit the
+paragraph direction flag; direction is checked visually). Any other script or emoji is refused before a
+paid call with `COPY_UNSUPPORTED` and saved for manual design.
+
 ## Golden rule
 
 Do not “fix” an incident by manually editing database state or deleting evidence. Use audited repair/reconciliation commands or a documented migration reviewed by another operator.
