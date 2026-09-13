@@ -22,7 +22,10 @@ verify_telegram() { # prints bot username on success
 }
 verify_gemini() { local code; code="$(http "https://generativelanguage.googleapis.com/v1beta/models?key=$1")"; [[ "$code" == "200" ]] && echo "ok (HTTP 200)" || { echo "REJECTED (HTTP $code)"; return 1; }; }
 verify_anthropic() { local code; code="$(http https://api.anthropic.com/v1/models -H "x-api-key: $1" -H 'anthropic-version: 2023-06-01')"; [[ "$code" == "200" ]] && echo "ok (HTTP 200)" || { echo "REJECTED (HTTP $code)"; return 1; }; }
-verify_canva_secret() { [[ ${#1} -ge 32 ]] && echo "format ok (verified live after redeploy via /v1/integrations/canva/status)" || { echo "REJECTED: too short to be a Canva client secret"; return 1; }; }
+verify_canva_secret() { # Canva has no read-only credential check; a refresh with a bogus token answers invalid_grant when the secret is right, invalid_client when it is wrong
+  local cid; cid="$(current CANVA_CLIENT_ID)"; [[ -n "$cid" ]] || { echo "REJECTED: CANVA_CLIENT_ID is not configured"; return 1; }
+  local body; body="$(curl -s -m 20 -u "$cid:$1" -X POST https://api.canva.com/rest/v1/oauth/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=refresh_token&refresh_token=deliberately-invalid' || true)"
+  if [[ "$body" == *invalid_grant* ]]; then echo "ok (Canva accepts this client secret)"; elif [[ "$body" == *invalid_client* ]]; then echo "REJECTED: Canva says this client secret is invalid for $cid"; return 1; else echo "REJECTED: could not verify with Canva (${body:0:80})"; return 1; fi; }
 
 if [[ "${1:-}" == "--check" ]]; then
   echo "Telegram bot token: $(verify_telegram "$(current TELEGRAM_BOT_TOKEN)" || true)"
