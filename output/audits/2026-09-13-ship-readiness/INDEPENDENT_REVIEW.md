@@ -257,3 +257,9 @@ Gates: full suite 115 files / 831 tests; typecheck 0; scanner 0; pack valid.
 | Session issue shared the general 30 r/s lane | nginx `location = /v1/auth/session` at 10 requests per minute per address (burst 5) | `nginx -t`; live probe after deploy |
 | Credential comparison with `===` | `crypto.timingSafeEqual` on equal-length buffers for admin, art-director, reviewer and operator keys | auth suites |
 | Tasks carried no language | intake records `ckb` for Arabic-script requests and `en` otherwise (office heuristic, correctable by the art director) | DB-gated test with a Sorani and an English request |
+
+### 16e. Verification of batch D on the live stack (04:25 Baghdad)
+The login lane did nothing at first: nginx's configuration is bind-mounted, and `compose up -d` does not recreate a container whose only change is the content of a mounted file, so nginx kept the old configuration. After `nginx -s reload` a burst of nine wrong-key attempts answered `401 ×6, 503 ×3`, and a real login afterwards succeeded. `deploy.sh` now reloads nginx after every `up` (commit `3eabebe`). Health `healthy`, release `05a8ab0`, watchdog `healthy`, Desk served with its sign-in prompt (no credential was entered). Nightly backup and watchdog agents remain loaded.
+
+## 17. State at 04:30 Baghdad, 14 September
+Commits since the user left: `7521017` (backups, watchdog, log rotation), `4d5e05e` `1849de1` `65fad69` (Sorani drafts), `450fb49` (docs), `d3247c3` (dependencies), `05a8ab0` (hardening), `4f1fe26` (docs), `3eabebe` (nginx reload). Production runs `05a8ab0` plus the reload fix in the deploy script. Tree clean. Full suite 115 files / 833 tests on vitest 4.1.11. Open for the user: rotate the Canva client secret through the helper; delete the old Anthropic and Gemini keys in their consoles; delete the stray volume `hawa-canva-live-pg` if unwanted; confirm the brand's Kurdish typeface for the reference pack.
