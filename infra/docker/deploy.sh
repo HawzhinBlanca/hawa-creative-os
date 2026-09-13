@@ -77,6 +77,8 @@ echo "✓ schema upgrades applied or verified"
 # 7. Build and start
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" build core worker desk
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
+# nginx.conf is bind-mounted: compose does not recreate nginx when only the file changed, so reload it explicitly.
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null 2>&1 && echo "✓ nginx configuration reloaded" || echo "! nginx reload skipped (container not running yet?)"
 echo "✓ containers started"
 
 # 8. Verify health truthfully (dependencies, not just HTTP 200)
