@@ -65,6 +65,12 @@ Use fallback/reconciliation and track root cause.
 - Database roles: `ALTER ROLE hawa_owner PASSWORD …` and `ALTER ROLE hawa_app PASSWORD …`, then update `infra/docker/.env` (`POSTGRES_PASSWORD`, `DATABASE_URL`).
 - Never keep a credential in a script, a test, a compose default or an audit document; `infra/security/security_scan.py` blocks commits that do.
 
+Rotation record: generated values go only into `infra/docker/.env.production`, `infra/docker/.env` and
+`.env.test` (all `0600`, all gitignored). Test suites read their database credentials from `.env.test`
+(see `.env.test.example`); rotate the PostgreSQL passwords with `ALTER ROLE` and update all three files
+in the same step, then redeploy so the containers pick up the new values. Keep the pre-rotation copies
+outside the checkout.
+
 ## Redeploy
 
 - `bash infra/docker/deploy.sh` runs the pre-flight (configuration present, no placeholders, compose valid, gates). `--apply` adds a `pg_dump` snapshot, versioned schema upgrades, build, start and a truthful health check (`/v1/health` dependencies must not be `unauthorized`, `unreachable`, `disconnected`, `read_only` or `outage`).
