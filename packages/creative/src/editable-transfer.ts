@@ -5,14 +5,17 @@ import { createHash } from 'node:crypto';
 export interface EditableTransferPlan {
   width: number; height: number; background: string;
   text: Array<{ copyIndex: number; x: number; y: number; width: number; height: number;
-    fontSize: number; fontFamily: string; color: string; align: 'left'|'center'|'right'; bold?: boolean }>;
+    fontSize: number; fontFamily: string; color: string; align: 'left'|'center'|'right'; bold?: boolean;
+    /** Right-to-left block (Sorani Kurdish): written with rtl="1", right alignment and lang="ku". Set by the server, never by the model. */
+    rtl?: boolean }>;
   shapes: Array<{ x: number; y: number; width: number; height: number; color: string }>;
   logo?: { x: number; y: number; width: number; height: number };
 }
 export interface TransferLogo { bytes: Buffer; sha256: string; mimeType: 'image/png'|'image/jpeg' }
 
 /** Encodes a validated layout while taking factual copy exclusively from the saved request. */
-export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: string[], logo?: TransferLogo) {
+export interface TransferOptions { /** Script typefaces admitted by the client reference pack (for example the provisional Sorani font). */ extraFonts?: string[] }
+export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: string[], logo?: TransferLogo, options: TransferOptions = {}) {
   const hex = (color: string) => {
     let c = color.trim();
     if (/^#?[a-fA-F0-9]{3}$/.test(c)) {
@@ -26,7 +29,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new Error('Missing or excessive factual copy');
   if(plan.text.length!==copy.length || new Set(plan.text.map(t=>t.copyIndex)).size!==copy.length ||
     plan.text.some(t=>!Number.isInteger(t.copyIndex)||t.copyIndex<0||t.copyIndex>=copy.length)) throw new Error('Every exact-copy block must appear once');
-  const fonts=['Arial','Georgia','Verdana','Times New Roman','Minion Variable Concept'];
+  const fonts=['Arial','Georgia','Verdana','Times New Roman','Minion Variable Concept',...(options.extraFonts||[]).filter(f=>typeof f==='string'&&/^[A-Za-z0-9 ]{2,40}$/.test(f))];
   const bounds=(box:{x:number;y:number;width:number;height:number})=>{
     if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.x<0||box.y<0||box.width<=0||box.height<=0||
       box.x+box.width>plan.width||box.y+box.height>plan.height)throw new Error('Layout exceeds canvas bounds');
@@ -49,11 +52,12 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   for(const shape of plan.shapes)slide.addShape(pptx.ShapeType.rect,{x:shape.x/96,y:shape.y/96,w:shape.width/96,h:shape.height/96,
     fill:{color:hex(shape.color)},line:{color:hex(shape.color),transparency:100}});
   for(const t of plan.text)slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,
-    fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),align:t.align,bold:t.bold||false,
-    margin:0,lineSpacingMultiple:1.4,breakLine:false,vertAnchor:'top',paraSpaceAfterPt:0,fit:'resize'});
+    fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),align:t.rtl?'right':t.align,bold:t.bold||false,
+    margin:0,lineSpacingMultiple:1.4,breakLine:false,vertAnchor:'top',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
   if(plan.logo&&logo)slide.addImage({data:`${logo.mimeType};base64,${logo.bytes.toString('base64')}`,x:plan.logo.x/96,y:plan.logo.y/96,w:plan.logo.width/96,h:plan.logo.height/96});
   const bytes=await pptx.write({outputType:'nodebuffer'}) as Buffer;
   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),manifest:{width:plan.width,height:plan.height,
     copy,copySha256:createHash('sha256').update(JSON.stringify(copy)).digest('hex'),logoSha256:logo?.sha256||null,plan,
+    rtlBlocks:plan.text.filter(t=>t.rtl).map(t=>t.copyIndex),
     nativeVerification:'required',qaStatus:'not_run'}};
 }

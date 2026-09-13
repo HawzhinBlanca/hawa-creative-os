@@ -52,7 +52,7 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
     body = `No client could be identified from your message, so no automatic draft was started. The art director will assign the client in Hawa Desk and design it in Canva.\n`;
   } else if (status === 'DESIGN_REJECTED' && code === 'COPY_UNSUPPORTED') {
     title = '📥 <b>Request saved, manual design</b>';
-    body = `Automatic drafting currently supports English copy only. Your request, including all Kurdish text, is saved exactly as sent and the art director will design it in Canva manually.\n`;
+    body = `Automatic drafting sets English and Sorani Kurdish copy. This request contains text it cannot set safely (another script, symbols or emoji), so it is saved exactly as sent and the art director will design it in Canva manually.\n`;
   } else if (status === 'DESIGN_REJECTED' && code === 'CLIENT_REFERENCE_REQUIRED') {
     title = '📥 <b>Request saved, manual design</b>';
     body = `Automatic drafting is available for clients with a verified brand reference pack only. Your request is saved and the art director will design it in Canva manually.\n`;

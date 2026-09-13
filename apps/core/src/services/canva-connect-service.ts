@@ -317,7 +317,7 @@ export class CanvaConnectService {
         if(row.metadata.format==='pptx'){
           const source=await this.tx(s,async db=>(await sql<any>`SELECT manifest FROM hawa.canva_editable_sources WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND client_id=${row.client_id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
           if(!source?.manifest?.copy||!source.manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-          contentCheck=checkCanvaPptx(bytes,source.manifest.copy,source.manifest.reference.rules.fontFamily);
+          contentCheck=checkCanvaPptx(bytes,source.manifest.copy,source.manifest.reference.rules.fontFamily,{scriptFonts:source.manifest.reference.rules.scriptFonts});
         }else{
           const validated=validator.validateArtifactBytes(bytes,row.metadata.format==='png'?'png':'pdf_standard');
           if(!validated.ok)fail(422,validated.error.code,'Canva export failed byte validation; no capture was accepted');

@@ -20,5 +20,8 @@
     "@hawa/domain": "workspace:*",
     "@hawa/integrations": "workspace:*",
     "pptxgenjs": "4.0.1"
+  },
+  "devDependencies": {
+    "fflate": "0.8.3"
   }
 }

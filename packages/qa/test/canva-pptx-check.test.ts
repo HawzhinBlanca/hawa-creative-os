@@ -30,3 +30,33 @@ describe('Canva native round-trip inspection',()=>{
   expect(r.observedFonts).toContain('Rabar 021');
  });
 });
+
+describe('Sorani Kurdish round-trip evidence', async () => {
+  const { encodeEditableTransfer } = await import('../../creative/src/editable-transfer.js');
+  const copy = ['Quality Assurance Workshop', 'وۆرکشۆپی دڵنیایی جۆری بۆ بەرپرسانی زانکۆکان'];
+  const plan = {
+    width: 1080, height: 1080, background: '#0A1628',
+    text: [
+      { copyIndex: 0, x: 80, y: 300, width: 920, height: 120, fontSize: 48, fontFamily: 'Minion Variable Concept', color: '#F7B500', align: 'center' as const },
+      { copyIndex: 1, x: 80, y: 480, width: 920, height: 200, fontSize: 36, fontFamily: 'Noto Sans Arabic', color: '#FDF8F3', align: 'right' as const, rtl: true },
+    ],
+    shapes: [],
+  };
+  const { bytes } = await encodeEditableTransfer(plan, copy, undefined, { extraFonts: ['Noto Sans Arabic'] });
+
+  it('passes fonts per script and reports right-to-left evidence', () => {
+    const r = checkCanvaPptx(bytes, copy, 'Minion Variable Concept', { scriptFonts: { arabic: 'Noto Sans Arabic' } });
+    expect(r.copyPass).toBe(true);
+    expect(r.fontPass).toBe(true);
+    expect(r.rtlPass).toBe(true);
+    expect(r.arabicTextObjectCount).toBe(1);
+    expect(r.rtlTextObjectCount).toBe(1);
+    expect(r.observedFonts.sort()).toEqual(['Minion Variable Concept', 'Noto Sans Arabic']);
+  });
+
+  it('fails the font check when the Kurdish typeface was not admitted', () => {
+    const r = checkCanvaPptx(bytes, copy, 'Minion Variable Concept');
+    expect(r.fontPass).toBe(false);
+    expect(r.copyPass).toBe(true);
+  });
+});

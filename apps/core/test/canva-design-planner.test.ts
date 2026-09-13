@@ -6,6 +6,7 @@ import { createDb,sql } from '@hawa/db';
 import { CanvaDesignPlanner,savedDesignCopy } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
+import { checkCanvaPptx } from '@hawa/qa';
 
 describe('exact copy selection',()=>{
   it('keeps unfamiliar extra paragraphs and long headings; does not trust a lossy template parse',()=>{
@@ -50,6 +51,30 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await expect(sql`UPDATE hawa.canva_design_plans SET request='{}'::jsonb WHERE id=${saved.id}::uuid`.execute(db)).rejects.toThrow('immutable');
     await expect(planner.resume({...scope,actorId:randomUUID()},id,saved.id)).rejects.toThrow('not found');
     await expect(sql`UPDATE hawa.tasks SET client_id=NULL WHERE id=${id}::uuid`.execute(db)).rejects.toThrow();
+  });
+  it('sets Sorani blocks right-to-left in the provisional script typeface and records it in the manifest',async()=>{
+    const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\nوۆرکشۆپی دڵنیایی جۆری بۆ بەرپرسانی زانکۆکان، ٢٨ی ئەیلوول ٢٠٢٦',designInstructions:'Use navy.',exactCopy:[]})).task.id;
+    const remote=vi.fn(async()=>response('claude-opus-5',plan)); // the model returns the reference font for every block; the server decides script font and direction
+    const {api,planner}=make(remote);
+    const result=await planner.generate(scope,id,'sorani-key-01',1200,1697);
+    expect(result.status).toBe('submitted');expect(remote).toHaveBeenCalledTimes(1);
+    const sent=JSON.parse(remote.mock.calls[0][1].body);expect(sent.system).toContain('Sorani Kurdish');
+    expect(JSON.parse(sent.messages[0].content).copyScripts).toEqual(['latin','arabic']);
+    const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
+    expect(saved.status).toBe('planned');
+    expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1,rtlBlocks:1});
+    expect(saved.result.manifest.plan.text[1]).toMatchObject({rtl:true,align:'right',fontFamily:'Noto Sans Arabic'});
+    expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Minion Variable Concept'});
+    const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Minion Variable Concept',{scriptFonts:{arabic:'Noto Sans Arabic'}});
+    expect(check).toMatchObject({copyPass:true,fontPass:true,rtlPass:true,arabicTextObjectCount:1,rtlTextObjectCount:1});
+  });
+  it('refuses copy in a script the transfer cannot set, before any paid call',async()=>{
+    const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] CJK plan',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\n质量保证研讨会',designInstructions:'Use navy.',exactCopy:[]})).task.id;
+    const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
+    await expect(planner.generate(scope,id,'cjk-key-01',1200,1697)).rejects.toMatchObject({code:'COPY_UNSUPPORTED'});
+    expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it.each(['wrong-model','rewritten-copy','overlap','missing-block'])('rejects %s without a Canva side effect',async(mode)=>{
     const id=await intake(),bad=structuredClone(plan) as any;

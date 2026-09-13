@@ -13,7 +13,7 @@ describe('requester-facing Canva outcome messages', () => {
     expect(noDesign.reply_markup).toBeUndefined();
   });
   it('tells the truth about each rejection reason instead of a generic "queued"', () => {
-    expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' }).text).toContain('English copy only');
+    expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' }).text).toContain('English and Sorani Kurdish');
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'CLIENT_REFERENCE_REQUIRED' }).text).toContain('verified brand reference');
     expect(composeCanvaStatusMessage({ taskId, status: 'CLIENT_REQUIRED' }).text).toContain('No client could be identified');
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_UNCERTAIN' }).text).toContain('will not be retried automatically');
