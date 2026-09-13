@@ -1,0 +1,35 @@
+{
+  "drillName": "Milestone 8: Three-Client Production Qualification Pilot",
+  "executionTimestamp": "2026-09-13T12:37:26.085Z",
+  "status": "QUALIFIED_SUCCESS",
+  "totalTasksSimulated": 100,
+  "completedTasks": 100,
+  "completionRate": "100%",
+  "flattenedRasterLayers": 0,
+  "crossTenantContamination": 0,
+  "totalDurationMs": 154,
+  "averageLatencyMs": 136.16,
+  "clientsTested": [
+    {
+      "id": "c1000000-0000-4000-8000-000000000002",
+      "name": "KAAE (Kurdistan Accrediting Association for Education)",
+      "code": "kaae",
+      "domain": "education_accreditation",
+      "tasksProcessed": 34
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000003",
+      "name": "Drustee Brand",
+      "code": "drustee",
+      "domain": "clinical_supplements",
+      "tasksProcessed": 33
+    },
+    {
+      "id": "c1000000-0000-4000-8000-000000000004",
+      "name": "FastPay FinTech",
+      "code": "fastpay",
+      "domain": "fintech_wallet",
+      "tasksProcessed": 33
+    }
+  ]
+}

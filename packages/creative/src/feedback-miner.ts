@@ -1,11 +1,13 @@
 /**
  * Governed Learning & Studio Feedback Loop Miner (B-055, B-056, B-057, FR-052–FR-054)
- * Inspired by Cursor AST deltas and Figma Design Token Analytics.
+ * Inspired by structured edit deltas and design token comparisons.
  * Automatically analyzes human designer refinements against model proposals
  * and generates governed candidate rules for Client DNA review.
  */
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface CanvasLayerSnapshot {
   id: string;
@@ -255,12 +257,97 @@ export class FeedbackMiner {
     return newlyProposed;
   }
 
+  /**
+   * Hydrates rules from canonical Client DNA specification file if present.
+   */
+  public loadClientDnaRules(clientId?: string): void {
+    const isKaae =
+      !clientId ||
+      clientId === 'c1000000-0000-4000-8000-000000000002' ||
+      clientId === 'client-kaae' ||
+      clientId === 'client-office-1' ||
+      clientId.includes('kaae');
+    if (!isKaae) return;
+
+    try {
+      const candidates = [
+        path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json'),
+        path.join(process.cwd(), '..', '..', 'config', 'clients', 'kaae.dna.json'),
+        path.join(process.cwd(), '..', 'config', 'clients', 'kaae.dna.json'),
+        '/app/config/clients/kaae.dna.json',
+        '/Users/hawzhin/Hawdesign/config/clients/kaae.dna.json',
+      ];
+      const found = candidates.find((p) => fs.existsSync(p));
+      if (!found) return;
+
+      const dna = JSON.parse(fs.readFileSync(found, 'utf-8'));
+      const targetClientId = clientId || dna.clientId || 'c1000000-0000-4000-8000-000000000002';
+      const layoutRules: string[] = dna.guidelines?.layoutRules || [];
+
+      for (let i = 0; i < layoutRules.length; i++) {
+        const text = layoutRules[i];
+        const ruleKey = `${targetClientId}:persisted:${i}`;
+        if (!this.candidateRules.has(ruleKey)) {
+          const id = `rule_dna_${i}`;
+          const sha256Digest = crypto.createHash('sha256').update(text).digest('hex');
+          this.candidateRules.set(ruleKey, {
+            id,
+            clientId: targetClientId,
+            title: `Client DNA Rule #${i + 1}`,
+            category: 'layout',
+            ruleText: text,
+            rationale: 'Loaded from canonical Client DNA specification',
+            frequency: 1,
+            evidenceTaskIds: [],
+            status: 'PROMOTED',
+            promotedByRole: 'creative_director',
+            promotedAt: dna.updatedAt || new Date().toISOString(),
+            confidence: 1.0,
+            scope: 'client_scoped',
+            explicitness: 'explicit_operator_instruction',
+            provenance: {
+              taskId: 'dna_init',
+              clientId: targetClientId,
+              actor: { id: 'system', role: 'creative_director', name: 'Client DNA' },
+              recordedAt: dna.updatedAt || new Date().toISOString(),
+            },
+            examples: { positiveExampleTaskIds: [], negativeExampleTaskIds: [] },
+            conflicts: [],
+            sha256Digest,
+            dataLineage: 'client_owned',
+          });
+        }
+      }
+    } catch {
+      // Safe fallback if filesystem access is restricted
+    }
+  }
+
   public getCandidateRules(clientId?: string): CandidateRuleProposal[] {
+    const isKaae =
+      !clientId ||
+      clientId === 'c1000000-0000-4000-8000-000000000002' ||
+      clientId === 'client-kaae' ||
+      clientId === 'client-office-1' ||
+      clientId.includes('kaae');
+    if (isKaae && (!this.candidateRules.size || !Array.from(this.candidateRules.values()).some((r) => r.clientId === clientId))) {
+      this.loadClientDnaRules(clientId);
+    }
+
     const rules = Array.from(this.candidateRules.values());
     if (clientId) {
       return rules.filter((r) => r.clientId === clientId);
     }
     return rules;
+  }
+
+  /**
+   * Returns all active promoted rules for a client.
+   */
+  public getPromotedRules(clientId?: string): string[] {
+    return this.getCandidateRules(clientId)
+      .filter((r) => r.status === 'PROMOTED')
+      .map((r) => r.ruleText);
   }
 
   /**
@@ -401,15 +488,24 @@ export class FeedbackMiner {
 
   /**
    * Human sign-off gate: Promotes a candidate rule to permanent Client DNA.
-   * Strictly enforces Invariant #6 and role verification.
+   * Strictly enforces Invariant #6, role verification, and conflict detection.
    */
   public promoteRule(
     ruleId: string,
     role: 'art_director' | 'creative_director'
-  ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string } {
+  ): { promoted: boolean; rule?: CandidateRuleProposal; auditHash: string; reason?: string } {
+    if (role !== 'art_director' && role !== 'creative_director') {
+      return { promoted: false, auditHash: '', reason: 'UNAUTHORIZED_ROLE' };
+    }
+
     const rule = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
     if (!rule) {
-      return { promoted: false, auditHash: '' };
+      return { promoted: false, auditHash: '', reason: 'RULE_NOT_FOUND' };
+    }
+
+    // Conflicting rules stay pending and cannot be promoted (H11)
+    if (rule.conflicts && rule.conflicts.length > 0) {
+      return { promoted: false, rule, auditHash: '', reason: 'CONFLICTING_RULES_PENDING' };
     }
 
     rule.status = 'PROMOTED';

@@ -1,0 +1,60 @@
+{
+  "checkedAt": "2026-09-13T08:36:44.531537+00:00",
+  "head": "d07f79a6831bb1bb87f074309534b731fea40273",
+  "http": [
+    {
+      "route": "/v1/health",
+      "status": 200,
+      "type": "application/json",
+      "body": {
+        "status": "healthy",
+        "timestamp": "2026-09-13T08:36:44.558Z",
+        "lastVerifiedProgressAt": "2026-09-12T22:20:23.022Z",
+        "dependencies": {
+          "postgres": "connected",
+          "canva": "connected",
+          "canvaCircuitBreaker": "CLOSED",
+          "telegram": "active",
+          "waha": "active",
+          "disk": "writable",
+          "restate": "connected"
+        }
+      }
+    },
+    {
+      "route": "/v1/tasks",
+      "status": 401,
+      "type": "application/json"
+    },
+    {
+      "route": "/tasks",
+      "status": 200,
+      "type": "text/html"
+    }
+  ],
+  "containers": [
+    {
+      "name": "/hawa-production-core-1",
+      "imageId": "sha256:226c1201befcfff7210231f2903bb2144424958cfca63c420f61d503ac3acc5f",
+      "startedAt": "2026-09-12T22:20:22.838416875Z"
+    },
+    {
+      "name": "/hawa-production-desk-1",
+      "imageId": "sha256:38d4a4b2d0e1982781858d8cf634b1db08dffe9dde7e839acf6117fae534071a",
+      "startedAt": "2026-09-12T22:06:07.80995759Z"
+    },
+    {
+      "name": "/hawa-production-worker-1",
+      "imageId": "sha256:819228585c83afdb6aa7950d3a0ace4960ad7cc1e3bcaaee649b49f2e96728e4",
+      "startedAt": "2026-09-12T22:10:03.507237255Z"
+    }
+  ],
+  "sources": {
+    "apps/core/src/app.ts": "00e3d7d0258b9433f904e001a3be6381cbf8cc8b643e04b04bcf54d2e2a049ce",
+    "apps/desk/src/screens/WorkScreen.tsx": "cebd92845edc17ebfc7e02647957836f6cccecfe85f81911de2aca3b54019569",
+    "packages/integrations/src/canva-design-studio-adapter.ts": "b26a41b2d4872fde013d8d66eb7edd93b2d8fbac5bad4bcc61eed0c77e45ea02",
+    "packages/integrations/src/canva-capture-pipeline.ts": "26fa22c38fd666cff60140d4354fdc34e35f64b3d83d979a768d498944499201",
+    "packages/integrations/src/model-gateway.ts": "c22b50fa66884a8c0874b71e01caab9a41ee1bf7287858a317cbd777971bbe1d",
+    "scripts/execute_independent_live_vertical_slice.ts": "fbba5cd372f093a513d6874eb5c0dedfd30f30550992917cc51e7765405b3de8"
+  }
+}

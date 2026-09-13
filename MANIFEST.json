@@ -10,7 +10,7 @@
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 171,
+  "fileCount": 175,
   "files": [
     {
       "path": ".env.example",
@@ -768,9 +768,19 @@
       "bytes": 4120
     },
     {
+      "path": "scripts/dispatch_authentic_kaae_telegram.ts",
+      "sha256": "7afef9e9d1ed4bdab626028505d4104cc3ba28614663e180263de6d3a01a4322",
+      "bytes": 2363
+    },
+    {
       "path": "scripts/drain_outbox.ts",
       "sha256": "637cecbdfac1dce8d6e6ee6457bc557134493dc69a4f7db468584b4f88054258",
       "bytes": 2023
+    },
+    {
+      "path": "scripts/execute_live_vertical_slice.ts",
+      "sha256": "74ac53d5f068c7fb6c7b663353de01582464abcea065a57fa565a997ef43cb05",
+      "bytes": 19421
     },
     {
       "path": "scripts/export_kaae_deliverables.ts",
@@ -813,9 +823,19 @@
       "bytes": 45048
     },
     {
+      "path": "scripts/render_brand_dna_invitation.ts",
+      "sha256": "2d44e3e562fb0e81e1c52e0927f17fcd25135d302ccfecec1cf2e1d4d1bd59a1",
+      "bytes": 13372
+    },
+    {
       "path": "scripts/render_kaae_pro_brand_designs.ts",
       "sha256": "51e33a08f6116378210faaa0d36009b2df34565e45c117cc7f9610699e484281",
       "bytes": 28207
+    },
+    {
+      "path": "scripts/render_presidential_kaae_invitation.ts",
+      "sha256": "19f834f5d8bccb742f47e28e6584cdbcdc75e8ef55fdaf60e80e043a90d203cf",
+      "bytes": 13224
     },
     {
       "path": "scripts/render_pro_designer_showcase.ts",

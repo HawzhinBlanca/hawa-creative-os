@@ -9,8 +9,8 @@ import { EvalScreen } from './screens/EvalScreen.js';
 import { GuidedTour } from './components/GuidedTour.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
+import { submitManualTask, getPendingManualDraft } from './services/manualTaskIntake.js';
 import { useI18n } from './services/i18n.js';
-import { getAuthHeaders } from './services/auth.js';
 
 export const App: React.FC = () => {
   const { t, isRtl } = useI18n();
@@ -115,6 +115,9 @@ export const App: React.FC = () => {
   const [taskTitle, setTaskTitle] = useState('');
   const [taskCopyEn, setTaskCopyEn] = useState('');
   const [taskCopyCkb, setTaskCopyCkb] = useState('');
+  const [taskSubmissionError, setTaskSubmissionError] = useState<string | null>(null);
+  const [taskDesignInstructions, setTaskDesignInstructions] = useState('');
+  const [taskReferenceAssets, setTaskReferenceAssets] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [, setRefreshCount] = useState<number>(0);
@@ -181,164 +184,53 @@ export const App: React.FC = () => {
 
   // Restore draft when opening modal
   const handleOpenModal = () => {
-    const existingDraft = draftStore.getActiveDraft();
-    if (existingDraft && !taskTitle && !taskCopyEn) {
+    const pendingDraft = getPendingManualDraft();
+    const existingDraft = pendingDraft || draftStore.getActiveDraft();
+    if (existingDraft && (pendingDraft || (!taskTitle && !taskCopyEn))) {
       setTaskTitle(existingDraft.title || '');
       setTaskCopyEn(existingDraft.copy || '');
+      setTaskDesignInstructions(existingDraft.designInstructions || '');
+      setTaskReferenceAssets(existingDraft.referenceAssets || '');
       if (existingDraft.copyCkb) setTaskCopyCkb(existingDraft.copyCkb);
       if (existingDraft.clientId) setSelectedClientId(existingDraft.clientId);
     }
     setShowNewTaskModal(true);
   };
 
-  // Autosave active draft
-  const handleTitleChange = (val: string) => {
-    setTaskTitle(val);
-    try {
-      draftStore.saveActiveDraft({ title: val, copy: taskCopyEn, copyCkb: taskCopyCkb, clientId: selectedClientId });
-    } catch {}
-  };
-
-  const handleCopyEnChange = (val: string) => {
-    setTaskCopyEn(val);
-    try {
-      draftStore.saveActiveDraft({ title: taskTitle, copy: val, copyCkb: taskCopyCkb, clientId: selectedClientId });
-    } catch {}
-  };
-
-  // Auto-flush queued offline tasks upon reconnection
+  // Save every field; an unavailable browser store must be visible before submission.
   useEffect(() => {
-    const handleOnlineFlush = async () => {
-      const result = await draftStore.flushQueuedTasks();
-      if (result.success > 0) {
-        setRefreshCount((k) => k + 1);
-      }
-    };
+    if (!showNewTaskModal) return;
+    try {
+      draftStore.saveActiveDraft({ title: taskTitle, copy: taskCopyEn, copyCkb: taskCopyCkb,
+        clientId: selectedClientId, designInstructions: taskDesignInstructions, referenceAssets: taskReferenceAssets });
+    } catch {
+      setTaskSubmissionError('Your browser could not save this draft. Keep this window open and free browser storage before submitting.');
+    }
+  }, [showNewTaskModal, taskTitle, taskCopyEn, taskCopyCkb, selectedClientId, taskDesignInstructions, taskReferenceAssets]);
 
-    window.addEventListener('online', handleOnlineFlush);
-    return () => window.removeEventListener('online', handleOnlineFlush);
-  }, []);
+  const handleTitleChange = setTaskTitle;
+  const handleCopyEnChange = setTaskCopyEn;
 
   const handleCreateTask = async () => {
-    if (!taskTitle) return;
+    if (!taskTitle.trim() || isSubmitting) return;
     setIsSubmitting(true);
-
-    const fullDescription = [taskCopyEn, taskCopyCkb].filter(Boolean).join(' | ');
-
-    // Check if offline: queue locally in IndexedDB
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription, clientId: selectedClientId });
-      draftStore.clearActiveDraft();
-      setShowNewTaskModal(false);
-      setTaskTitle('');
-      setTaskCopyEn('');
-      setTaskCopyCkb('');
-      setIsSubmitting(false);
-      setAppToast('✓ Offline Mode: Task brief queued in local IndexedDB. It will submit automatically upon reconnecting.');
-      setTimeout(() => setAppToast(null), 5000);
-      return;
-    }
-
+    setTaskSubmissionError(null);
     try {
-      const idempotencyKey = `task-desk-${Date.now()}`;
-      const authHeaders = getAuthHeaders();
-      const res = await fetch('/v1/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey,
-          ...authHeaders,
-        },
-        body: JSON.stringify({
-          clientId: selectedClientId,
-          title: taskTitle,
-          priority: 'routine',
-          description: fullDescription || 'Summer Campaign Poster',
-          source: { platform: 'hawa_desk', externalId: 'operator-desk' },
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const taskId = data.id;
-
-        // Auto-route and create brief (English primary, Kurdish secondary)
-        await fetch(`/v1/tasks/${taskId}/route`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-          },
-          body: JSON.stringify({ taskRoute: 'standard_generation' }),
-        }).catch(() => {});
-
-        const exactCopyBlocks: any[] = [];
-        if (taskCopyEn) {
-          exactCopyBlocks.push({
-            role: 'headline',
-            text: taskCopyEn,
-            language: 'en',
-            direction: 'ltr',
-            approved: true,
-          });
-        }
-        if (taskCopyCkb) {
-          exactCopyBlocks.push({
-            role: taskCopyEn ? 'subheadline' : 'headline',
-            text: taskCopyCkb,
-            language: 'ckb',
-            direction: 'rtl',
-            approved: true,
-          });
-        }
-
-        await fetch(`/v1/tasks/${taskId}/briefs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-          },
-          body: JSON.stringify({
-            objective: taskTitle,
-            taskRoute: 'standard_generation',
-            primaryLanguage: taskCopyEn ? 'en' : 'ckb',
-            direction: taskCopyEn ? 'ltr' : 'rtl',
-            variants: [{ width: 1080, height: 1350, role: 'feed_post' }],
-            exactCopy: exactCopyBlocks,
-            requiredAssetRoles: ['logo_primary'],
-          }),
-        }).catch(() => {});
-
-        // Trigger creative generation
-        await fetch(`/v1/tasks/${taskId}/generate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-          },
-        }).catch(() => {});
-
-        draftStore.clearActiveDraft();
-        setSelectedTask(data);
-        setRefreshCount((k) => k + 1);
-        setShowNewTaskModal(false);
-        setTaskTitle('');
-        setTaskCopyEn('');
-        setTaskCopyCkb('');
-        handleNavigate('review');
-      } else {
-        setShowNewTaskModal(false);
-        handleNavigate('inbox');
-      }
-    } catch {
-      // Network failure: queue offline
-      draftStore.enqueueTask({ title: taskTitle, copy: fullDescription });
+      const data = await submitManualTask({ title: taskTitle, copy: taskCopyEn, copyCkb: taskCopyCkb,
+        clientId: selectedClientId, designInstructions: taskDesignInstructions, referenceAssets: taskReferenceAssets });
       draftStore.clearActiveDraft();
+      setSelectedTask(data);
+      setRefreshCount((k) => k + 1);
       setShowNewTaskModal(false);
       setTaskTitle('');
       setTaskCopyEn('');
       setTaskCopyCkb('');
-      handleNavigate('inbox');
+      setTaskDesignInstructions('');
+      setTaskReferenceAssets('');
+      setAppToast('Request saved. Create or link a Canva design to edit it. Automatic design composition is not connected.');
+      handleNavigate('review');
+    } catch (error) {
+      setTaskSubmissionError(error instanceof Error ? error.message : 'Request could not be confirmed. Your draft is retained; retry without changing it.');
     } finally {
       setIsSubmitting(false);
     }
@@ -360,6 +252,7 @@ export const App: React.FC = () => {
               initialTaskId={selectedTask?.id}
               onNavigateToClients={() => handleNavigate('clients')}
               onNavigateToSettings={() => handleNavigate('settings')}
+              onNewTask={handleOpenModal}
             />
           )}
           {(currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
@@ -418,12 +311,12 @@ export const App: React.FC = () => {
                 }}
                 title="Draft autosaves continuously to IndexedDB / local storage"
               >
-                {t.modal.autosaved}
+                Local browser draft
               </span>
             </div>
 
             {/* Client / Workspace Selector */}
-            <div style={{ margin: '16px 0' }}>
+            <div style={{ margin: '14px 0' }}>
               <label htmlFor="modal-client-select" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
                 {t.modal.clientLabel}
               </label>
@@ -441,7 +334,7 @@ export const App: React.FC = () => {
               </select>
             </div>
 
-            <div style={{ margin: '16px 0' }}>
+            <div style={{ margin: '14px 0' }}>
               <label htmlFor="modal-task-title" style={{ display: 'block', fontWeight: 650, fontSize: 13, marginBottom: 6 }}>
                 {t.modal.taskTitleLabel}
               </label>
@@ -455,8 +348,42 @@ export const App: React.FC = () => {
               />
             </div>
 
+            {/* Design Instructions / Direction */}
+            <div style={{ margin: '14px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label htmlFor="modal-design-instructions" style={{ fontWeight: 650, fontSize: 13 }}>
+                  Design Instructions &amp; Creative Direction
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Style &amp; Layout Constraints</span>
+              </div>
+              <textarea
+                id="modal-design-instructions"
+                style={{ width: '100%', height: 60, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                placeholder="e.g. Minimalist layout, emerald botanical palette, elegant Kurdish typography, formal institutional tone..."
+                value={taskDesignInstructions}
+                onChange={(e) => setTaskDesignInstructions(e.target.value)}
+              />
+            </div>
+
+            {/* Reference Brand Assets */}
+            <div style={{ margin: '14px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label htmlFor="modal-reference-assets" style={{ fontWeight: 650, fontSize: 13 }}>
+                  Reference Brand Assets
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>Authorized Assets</span>
+              </div>
+              <input
+                id="modal-reference-assets"
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                placeholder="e.g. logo_primary, product_packshot, certification_seal"
+                value={taskReferenceAssets}
+                onChange={(e) => setTaskReferenceAssets(e.target.value)}
+              />
+            </div>
+
             {/* Primary Copy (English) */}
-            <div style={{ margin: '16px 0' }}>
+            <div style={{ margin: '14px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <label style={{ fontWeight: 650, fontSize: 13 }}>
                   {t.modal.taskCopyEnLabel}
@@ -466,7 +393,7 @@ export const App: React.FC = () => {
               <textarea
                 dir="ltr"
                 lang="en"
-                style={{ width: '100%', height: 75, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder={t.modal.taskCopyEnPlaceholder}
                 value={taskCopyEn}
                 onChange={(e) => handleCopyEnChange(e.target.value)}
@@ -474,7 +401,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Secondary Copy (Kurdish Sorani) */}
-            <div style={{ margin: '16px 0' }}>
+            <div style={{ margin: '14px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <label style={{ fontWeight: 650, fontSize: 13 }}>
                   {t.modal.taskCopyCkbLabel}
@@ -484,22 +411,24 @@ export const App: React.FC = () => {
               <textarea
                 dir="rtl"
                 lang="ckb"
-                style={{ width: '100%', height: 75, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
+                style={{ width: '100%', height: 65, padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8 }}
                 placeholder={t.modal.taskCopyCkbPlaceholder}
                 value={taskCopyCkb}
                 onChange={(e) => setTaskCopyCkb(e.target.value)}
               />
               <small style={{ color: 'var(--muted)', display: 'block', marginTop: 4 }}>
-                {t.modal.copyLockNotice}
+                Your submitted copy is saved unchanged. Compare it with the Canva export before approving any design.
               </small>
             </div>
 
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then create or link a Canva design for manual editing. Automatic composition is not connected.</p>
+            {taskSubmissionError && <p role="alert" style={{ color: '#f87171' }}>{taskSubmissionError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
                 {t.modal.cancel}
               </button>
               <button className="btn primary" disabled={isSubmitting} onClick={handleCreateTask}>
-                {isSubmitting ? t.modal.submitting : t.modal.submit}
+                {isSubmitting ? 'Saving request…' : 'Save request'}
               </button>
             </div>
           </div>
@@ -554,4 +483,3 @@ export const App: React.FC = () => {
     </div>
   );
 };
-

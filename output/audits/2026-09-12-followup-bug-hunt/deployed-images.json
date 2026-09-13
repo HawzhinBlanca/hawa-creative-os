@@ -1,0 +1,17 @@
+[
+  {
+    "name": "/hawa-production-core-1",
+    "imageId": "sha256:93649d6483d124c6cdeac95494d33f0866cbc48ab843ed445b940e49ba008687",
+    "startedAt": "2026-09-12T20:39:40.674321425Z"
+  },
+  {
+    "name": "/hawa-production-desk-1",
+    "imageId": "sha256:9b7d8519f7e44dfd3a71a208d18a82a90c7865cc7ab7e78230e21bc7a655fb62",
+    "startedAt": "2026-09-12T18:37:07.667760008Z"
+  },
+  {
+    "name": "/hawa-production-worker-1",
+    "imageId": "sha256:f8f66cad705fb38acc8bfdb4f8be2beb3c8694966624b9da695a717c8a85fbde",
+    "startedAt": "2026-09-12T18:37:13.734634219Z"
+  }
+]

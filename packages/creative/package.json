@@ -18,6 +18,7 @@
   "dependencies": {
     "@hawa/contracts": "workspace:*",
     "@hawa/domain": "workspace:*",
-    "@hawa/integrations": "workspace:*"
+    "@hawa/integrations": "workspace:*",
+    "pptxgenjs": "4.0.1"
   }
 }

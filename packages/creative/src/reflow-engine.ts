@@ -7,7 +7,7 @@
  * - Square 1:1 (1080x1080 / preview 480x480)
  * - Landscape 16:9 (1920x1080 / preview 640x360)
  *
- * Implements Figma Auto-Layout & Canva Magic Switch constraint solver:
+ * Implements layout and resize constraint solver:
  * - Top-Safe Header & Logo Anchors
  * - Social UI Danger Zone Clearance (Story Top 14% & Bottom 20%, Feed Bottom 12%)
  * - Center-Safe Hero Visuals & Dynamic Badges

@@ -107,7 +107,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
         role: 'official_logo',
         locked: true,
         zIndex: 10,
-        assetSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' as SHA256,
+        assetSha256: (kaaeClientDNA.assets?.logos?.primary?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
         box: { x: 410, y: 80, width: 260, height: 110 },
       },
       {
@@ -162,7 +162,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
     ],
     assets: [
       {
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' as SHA256,
+        sha256: (kaaeClientDNA.assets?.logos?.primary?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
         mimeType: 'image/png',
         sourceId: 'logo_primary',
       },

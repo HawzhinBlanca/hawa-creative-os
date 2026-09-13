@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-09-12T20:54:57.568044+00:00",
+  "localLinksChecked": 50,
+  "missing": [],
+  "ledgerTasks": 14,
+  "selectedTests": {
+    "passed": 9,
+    "failed": 0,
+    "fullSuiteRun": false
+  },
+  "applicationCodeChangedByAuditor": false
+}

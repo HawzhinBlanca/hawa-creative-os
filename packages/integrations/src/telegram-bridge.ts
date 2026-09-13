@@ -5,6 +5,7 @@ export interface TelegramBridgeConfig {
   botToken?: string;
   secretToken?: string;
   targetIngressUrl?: string;
+  deskBaseUrl?: string;
   pollIntervalMs?: number;
   offsetStorage?: TelegramOffsetStorage;
   allowedUserIds?: string[];
@@ -154,7 +155,7 @@ export class TelegramBridgeDaemon {
     this.lastPollAttemptAt = new Date().toISOString();
     try {
       const url = `https://api.telegram.org/bot${this.config.botToken}/getUpdates?offset=${this.lastUpdateId + 1}&timeout=5`;
-      const timeoutSignal = AbortSignal.timeout(6000);
+      const timeoutSignal = AbortSignal.timeout(12000);
       const combinedSignal = this.abortController
         ? (AbortSignal as any).any([this.abortController.signal, timeoutSignal])
         : timeoutSignal;
@@ -176,15 +177,16 @@ export class TelegramBridgeDaemon {
         this.lastError = undefined;
         let count = 0;
         for (const update of data.result) {
-          this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
-          if (this.config.offsetStorage) {
-            await this.config.offsetStorage.setOffset(this.lastUpdateId).catch(() => {});
-          }
           if (onUpdate) {
             await onUpdate(update);
           } else {
             await this.processUpdate(update);
           }
+          // Telegram drops older updates after the next offset is sent. Advance
+          // only after ingress has durably accepted (or explicitly rejected) it.
+          const nextOffset = Math.max(this.lastUpdateId, update.update_id);
+          if (this.config.offsetStorage) await this.config.offsetStorage.setOffset(nextOffset);
+          this.lastUpdateId = nextOffset;
           count++;
           this.processedCount++;
         }
@@ -382,7 +384,13 @@ export class TelegramBridgeDaemon {
     },
     secretKey?: string
   ) {
-    const baseUrl = task.deskBaseUrl || process.env.HAWA_DESK_BASE_URL || 'http://localhost:4173';
+    const baseUrl =
+      task.deskBaseUrl ||
+      this.config.deskBaseUrl ||
+      process.env.PUBLIC_TUNNEL_URL ||
+      process.env.HAWA_PUBLIC_URL ||
+      process.env.HAWA_DESK_BASE_URL ||
+      'http://localhost:4173';
     const docParam = task.docId || task.id;
     const studioUrl = `${baseUrl}/review?doc=${docParam}&taskId=${task.id}&mode=review`;
 
@@ -516,49 +524,34 @@ export class TelegramBridgeDaemon {
   async dispatchOutboundMessage(
     chatId: string | number,
     message: { text: string; parse_mode?: string; reply_markup?: any }
-  ): Promise<{ success: boolean; messageId?: string }> {
-    const record = {
-      chatId,
-      text: message.text,
-      replyMarkup: message.reply_markup,
-      sentAt: new Date().toISOString(),
-    };
-    this.sentMessages.push(record);
-
-    if (this.config.botToken) {
-      try {
-        const url = `https://api.telegram.org/bot${this.config.botToken}/sendMessage`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: message.text,
-            parse_mode: message.parse_mode || 'Markdown',
-            reply_markup: message.reply_markup,
-          }),
-        });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.warn('[TelegramBridge] sendMessage non-200:', res.status, errText);
-          if (message.parse_mode) {
-            await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: message.text.replace(/[*_`\[\]()]/g, ''),
-                reply_markup: message.reply_markup,
-              }),
-            }).catch(() => {});
-          }
-        }
-      } catch (err) {
-        console.warn('[TelegramBridge] Network error in dispatchOutboundMessage:', err);
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${this.config.botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message.text,
+          ...(message.parse_mode ? {parse_mode: message.parse_mode} : {}),
+          ...(message.reply_markup ? {reply_markup: message.reply_markup} : {}),
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const body = await res.json().catch(() => null) as any;
+      if (!res.ok || body?.ok !== true) {
+        return { success: false, error: `TELEGRAM_REJECTED_${body?.error_code || res.status}` };
       }
+      if (!Number.isSafeInteger(body.result?.message_id) || body.result.message_id <= 0 ||
+          String(body.result?.chat?.id) !== String(chatId)) {
+        return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
+      }
+      this.sentMessages.push({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
+      return { success: true, messageId: String(body.result.message_id) };
+    } catch {
+      // A lost response can follow a successful send. Never automatically resend it.
+      return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
     }
-
-    return { success: true, messageId: `msg_${Date.now()}` };
   }
 
   /**
@@ -578,7 +571,8 @@ export class TelegramBridgeDaemon {
         formData.append('chat_id', String(chatId));
         formData.append('photo', blob, 'design.png');
         if (caption) {
-          formData.append('caption', caption);
+          const safeCaption = caption.length > 1024 ? caption.slice(0, 1020) + '…' : caption;
+          formData.append('caption', safeCaption);
           formData.append('parse_mode', 'Markdown');
         }
         if (replyMarkup) {

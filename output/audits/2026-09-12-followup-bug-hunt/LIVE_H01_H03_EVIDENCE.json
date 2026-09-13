@@ -1,0 +1,139 @@
+[
+  {
+    "step": "H01: 1. Unauthenticated task list",
+    "url": "http://127.0.0.1:8080/v1/tasks",
+    "status": 401,
+    "expectedStatus": 401,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "Authentication required to list tasks",
+      "instance": "http://127.0.0.1/v1/tasks"
+    },
+    "notes": "Must return 401 JSON problem details, not 200 text/html SPA shell"
+  },
+  {
+    "step": "H01: 2. Session login with Reviewer Key",
+    "url": "http://127.0.0.1:8080/v1/auth/session",
+    "status": 201,
+    "expectedStatus": 201,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "ok": true,
+      "token": "hawa_sess_03b29addc0454337b10a1ab5a9af4837",
+      "tenantId": "00000000-0000-4000-a000-000000000001",
+      "user": {
+        "id": "00000000-0000-4000-b000-000000000002",
+        "role": "art_director",
+        "displayName": "Art Director"
+      }
+    },
+    "notes": "Resolved role: art_director, token prefix: hawa_sess_..."
+  },
+  {
+    "step": "H01: 3. Authenticated paginated task list",
+    "url": "http://127.0.0.1:8080/v1/tasks?limit=10&offset=0",
+    "status": 200,
+    "expectedStatus": 200,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "total": 1451,
+      "itemCount": 10,
+      "sampleTaskTitle": "H01-H03 Live Verification Task"
+    },
+    "notes": "Loaded 10 items from database (total 1451)"
+  },
+  {
+    "step": "H01: 4. Reject invalid session token",
+    "url": "http://127.0.0.1:8080/v1/auth/session",
+    "status": 401,
+    "expectedStatus": 401,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "type": "https://hawa.design/errors/401",
+      "title": "Unauthorized",
+      "status": 401,
+      "detail": "No active session or valid credentials found",
+      "instance": "http://127.0.0.1/v1/auth/session"
+    }
+  },
+  {
+    "step": "H02: 5. Create real persistent task in PostgreSQL",
+    "url": "http://127.0.0.1:8080/v1/tasks",
+    "status": 201,
+    "expectedStatus": 201,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "id": "3dc798b0-8a48-462f-b261-c62b5ae7025e",
+      "title": "H01-H03 Live Verification Task"
+    }
+  },
+  {
+    "step": "H02: 6. Push revision with spoofed QA bypass",
+    "url": "http://127.0.0.1:8080/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions",
+    "status": 201,
+    "expectedStatus": 201,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "revisionId": "73207c60-9b96-407b-b712-0edc2ff20615",
+      "hasAcceptedSpoofedQa": false
+    },
+    "notes": "Server must not accept spoofed QA report"
+  },
+  {
+    "step": "H03: 7. Reject invalid action with 400",
+    "url": "http://127.0.0.1:8080/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions",
+    "status": 400,
+    "expectedStatus": 400,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "type": "https://hawa.design/errors/400",
+      "title": "Invalid Decision Action",
+      "status": 400,
+      "detail": "Decision action 'invalid_action_foo' is not supported. Supported actions: approve, revision_requested, reject, escalate",
+      "instance": "http://127.0.0.1/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions"
+    },
+    "notes": "Unknown action must return 400, not fall through or silently default"
+  },
+  {
+    "step": "H03: 8. Reject operator role spoofing with 403",
+    "url": "http://127.0.0.1:8080/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions",
+    "status": 403,
+    "expectedStatus": 403,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "type": "https://hawa.design/errors/403",
+      "title": "Forbidden",
+      "status": 403,
+      "detail": "Actor role 'operator' does not have authority to approve or reject designs. Legitimate reviewer role required.",
+      "instance": "http://127.0.0.1/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions"
+    },
+    "notes": "Server must ignore client role assertions and enforce authenticated server role"
+  },
+  {
+    "step": "H03: 9. Legitimate Reviewer approve with action: \"approve\"",
+    "url": "http://127.0.0.1:8080/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions",
+    "status": 412,
+    "expectedStatus": 412,
+    "passed": true,
+    "contentType": "application/json",
+    "data": {
+      "type": "https://hawa.design/errors/412",
+      "title": "Precondition Failed",
+      "status": 412,
+      "detail": "Precondition failed: Revision 73207c60-9b96-407b-b712-0edc2ff20615 cannot be approved without a verified, passing critical QA run",
+      "instance": "http://127.0.0.1/v1/tasks/3dc798b0-8a48-462f-b261-c62b5ae7025e/revisions/73207c60-9b96-407b-b712-0edc2ff20615/decisions"
+    },
+    "notes": "Action mapped cleanly; decision is NEVER silently converted to 'revision_requested'. Status: 412"
+  }
+]

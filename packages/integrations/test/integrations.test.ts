@@ -3,7 +3,6 @@ import {
   TelegramAdapter,
   WahaAdapter,
   GooglePublisher,
-  HyCanvasStudioAdapter,
   DirectModelGateway,
 } from '../src/index.js';
 import type { RequestContext, PublishRequest } from '@hawa/contracts';
@@ -76,35 +75,6 @@ describe('Integrations: Real Adapters & Providers', () => {
     }
   });
 
-  it('HyCanvasStudioAdapter: creates document, extracts manifest, and rejects stale revisions', async () => {
-    const studio = new HyCanvasStudioAdapter();
-    const created = await studio.create(ctx, {
-      name: 'Ad Poster',
-      pages: [{ id: 'p1', name: 'Page 1', width: 1080, height: 1080, unit: 'px', language: 'ckb', direction: 'rtl' }],
-      clientDnaVersion: 1,
-    });
-    expect(created.ok).toBe(true);
-    const docRef = (created as { ok: true; value: any }).value;
-
-    const manifestRes = await studio.getManifest(ctx, docRef);
-    expect(manifestRes.ok).toBe(true);
-    if (manifestRes.ok) {
-      expect(manifestRes.value.pages.length).toBe(1);
-    }
-
-    // Attempt apply with wrong expected hash
-    const staleRes = await studio.apply(ctx, {
-      document: docRef,
-      expectedSourceSha256: 'wrong_stale_hash',
-      operationBatchId: 'b1',
-      operations: [],
-      destructiveOperationsAllowed: false,
-    });
-    expect(staleRes.ok).toBe(false);
-    if (!staleRes.ok) {
-      expect(staleRes.error.code).toBe('STALE_REVISION_CONFLICT');
-    }
-  });
 
   it('GooglePublisher: publishes idempotently to Google Drive and Sheets', async () => {
     const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'unit_test_token' });

@@ -11,6 +11,7 @@ export interface KaaeCertificateParams {
   directorTitle?: string;
   logoSha256?: string;
   language?: 'en' | 'ckb' | 'ar';
+  learnedRules?: string[];
 }
 
 export const KAAE_PRIMARY_LOGO_SHA256 = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
@@ -28,6 +29,25 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
   const logoSha = params.logoSha256 || KAAE_PRIMARY_LOGO_SHA256;
   const isKurdish = params.language === 'ckb';
   const ops: StudioOperation[] = [];
+
+  let recipientFont = isKurdish ? 'Cairo' : 'Minion Variable Concept';
+  let programFont = isKurdish ? 'Cairo' : 'Minion Variable Concept';
+
+  if (params.learnedRules && params.learnedRules.length > 0) {
+    for (const rule of params.learnedRules) {
+      const lr = rule.toLowerCase();
+      if (!isKurdish) {
+        if (/cinzel/i.test(lr)) {
+          recipientFont = '"Cinzel", serif';
+        } else if (/playfair/i.test(lr)) {
+          recipientFont = '"Playfair Display", serif';
+        }
+        if (/cormorant/i.test(lr)) {
+          programFont = '"Cormorant Garamond", serif';
+        }
+      }
+    }
+  }
 
   const width = 3508;
   const height = 2480;
@@ -211,7 +231,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     style: {
       fontSize: 88,
       fontWeight: 'bold',
-      fontFamily: isKurdish ? 'Cairo' : 'Minion Variable Concept',
+      fontFamily: recipientFont,
       textAlign: 'center',
       color: '#2D4A73',
       lineHeight: 1.2,
@@ -275,7 +295,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
       fontSize: 64,
       fontWeight: '600',
       fontStyle: 'italic',
-      fontFamily: isKurdish ? 'Cairo' : 'Minion Variable Concept',
+      fontFamily: programFont,
       textAlign: 'center',
       color: '#4770A3',
     },

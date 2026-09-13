@@ -1,0 +1,38 @@
+{
+  admin off
+  email {$CADDY_ACME_EMAIL}
+  servers {
+    trusted_proxies static private_ranges
+  }
+}
+
+{$HAWA_DOMAIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    -Server
+  }
+
+  @studio path /studio* /api/v1/studio-proxy*
+  handle @studio {
+    uri strip_prefix /studio
+    reverse_proxy hycanvas:8005
+  }
+
+  @api path /api* /auth* /events*
+  handle @api {
+    reverse_proxy app:3000
+  }
+
+  handle {
+    reverse_proxy app:3000
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}

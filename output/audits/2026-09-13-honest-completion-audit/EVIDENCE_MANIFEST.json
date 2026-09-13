@@ -1,0 +1,42 @@
+{
+  "manifestVersion": "1.0.0",
+  "auditDate": "2026-09-13",
+  "finalVerdict": "ALL 14 AUDIT CHECKS PASS — SYSTEM QUALIFIED",
+  "scorecard": {
+    "pass": 14,
+    "partial": 0,
+    "blocked": 0,
+    "fail": 0,
+    "total": 14
+  },
+  "files": {
+    "COMPLETION_MATRIX.csv": {
+      "sizeBytes": 5003,
+      "sha256": "c49854df863a8d8d9fdb736f95b25b24f0cfe77c3ef3545ee18f8b3fa9836096"
+    },
+    "FINAL_VERIFICATION_REPORT.md": {
+      "sizeBytes": 11688,
+      "sha256": "f382105a0241a271af5e166059cd4c8e2e694e6daed165aa9011bf4c859b7f59"
+    },
+    "REPRODUCE.md": {
+      "sizeBytes": 6900,
+      "sha256": "b44c71b2686317ac97d0c4145f890f2ac13bcc6b1e5dd887094132a841441bfc"
+    },
+    "LIVE_VERTICAL_SLICE_RECEIPTS.json": {
+      "sizeBytes": 23233,
+      "sha256": "9adb05d4c68d94e5fb38903527d4c87e79e045992d86bd251e6e12025431862c"
+    },
+    "RAW_PROBES_EVIDENCE.json": {
+      "sizeBytes": 38836,
+      "sha256": "d6f8c4e41184c2cf59227a66ef41cd4a59ddc07f6fc4aa3699300a14459debe8"
+    },
+    "artifacts/task_slice_1789284247477_export.pdf": {
+      "sizeBytes": 102372,
+      "sha256": "733e8c44a52cc4574378a57c00e8b740d84afc1170580aa69bf2327560a213dd"
+    },
+    "artifacts/task_slice_1789284247477_export.png": {
+      "sizeBytes": 383323,
+      "sha256": "e10fbce747b502cf4c6e6d5e8043844fa9dd95e8c907c6f5b0b0fe11512b8104"
+    }
+  }
+}

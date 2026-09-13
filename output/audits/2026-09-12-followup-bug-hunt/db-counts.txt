@@ -1,0 +1,5 @@
+canva_bindings
+canva_capture_sets
+{"tasks" : 1449, "revisions" : 173, "briefs" : 0, "models" : 0}
+hycanvas|173
+{"canvaBindings" : 0, "captureSets" : 0}

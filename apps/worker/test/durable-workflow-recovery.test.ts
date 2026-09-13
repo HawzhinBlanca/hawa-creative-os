@@ -1,3 +1,4 @@
+import { FakeDesignStudioAdapter as SimulatedStudioFixture } from '../../../packages/testkit/src/fake-studio.js';
 /**
  * Hawa Creative OS — Durable Workflow Execution & Recovery Verification
  * Task: CV-05 (GEMINI_TASK_SHEET.md)
@@ -62,7 +63,7 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
   it('proves stable workflow and effect IDs across durable execution', async () => {
     const taskId = 'task-stable-id-1';
     const journal = new DurableStepJournal(`task-wf-${taskId}`);
-    const runner = new TaskWorkflowRunner();
+    const runner = new TaskWorkflowRunner({ studio: new SimulatedStudioFixture() });
 
     const output = await runner.run(
       {
@@ -378,7 +379,7 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
     expect(executionCount).toBe(1); // Still 1! Proves zero duplicate execution!
   });
 
-  it('proves ambiguous-success reconciliation when external progress exists but outbox delivery was unacknowledged', async () => {
+  it('does not treat a progressed task as proof of workflow submission', async () => {
     const taskId = crypto.randomUUID();
     const idempotencyKey = `idem-ambig-${crypto.randomUUID()}`;
 
@@ -433,11 +434,12 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
       batchSize: 5,
     });
 
-    // 2. Process batch — should reconcile against DB task state without calling runner
+    // 2. The runner must supply evidence; task state alone cannot acknowledge delivery.
     const summary = await consumer.processBatch(1);
 
-    expect(runnerCalled).toBe(false); // Runner must NOT be re-called!
-    expect(summary.succeeded).toBe(1);
+    expect(runnerCalled).toBe(true);
+    expect(summary.succeeded).toBe(0);
+    expect(summary.retried).toBe(1);
 
     // 3. Verify in PostgreSQL that outbox row was safely reconciled and marked delivered
     const record = await withRlsContext(
@@ -449,6 +451,6 @@ describe('CV-05: Durable Workflow Ownership & Crash-Recovery Suite', () => {
     );
 
     expect(record).toBeDefined();
-    expect(record?.state).toBe('delivered');
+    expect(record?.state).toBe('pending');
   });
 });

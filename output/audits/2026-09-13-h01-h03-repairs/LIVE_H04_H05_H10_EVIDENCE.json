@@ -1,0 +1,49 @@
+[
+  {
+    "suite": "H10: Client Asset Isolation",
+    "test": "Another client logo is not replaced with KAAE logo",
+    "passed": true,
+    "expected": false,
+    "actual": false,
+    "notes": "Clean: client isolation preserved"
+  },
+  {
+    "suite": "H05: Scoped Durable Idempotency",
+    "test": "Cross-tenant identical key does not leak document between tenants",
+    "passed": true,
+    "expected": false,
+    "actual": false,
+    "notes": "Tenant A doc: 7de46b69-739a-4b53-91b9-cc1ad9725d5c, Tenant B doc: c293b0a4-f77f-4e50-92a5-6203ec7ad12c"
+  },
+  {
+    "suite": "H05: Scoped Durable Idempotency",
+    "test": "Exact same key and payload resolves identical document reference",
+    "passed": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "suite": "H05: Scoped Durable Idempotency",
+    "test": "Same key with changed payload returns conflict error",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "notes": "Changed payload response: ok=false, code=IDEMPOTENCY_PAYLOAD_MISMATCH"
+  },
+  {
+    "suite": "H04: Authentic Canva Adapter",
+    "test": "Generates valid PKCE authorization URL with S256 challenge",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "notes": "Code challenge: S8UXLTP5AuIa..., Verifier length: 43"
+  },
+  {
+    "suite": "H08: Exact Brief & Copy Preservation",
+    "test": "Second Prime Minister paragraph does not overwrite the original keynote",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "notes": "Original preserved: true, Second preserved: true"
+  }
+]

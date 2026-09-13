@@ -1,3 +1,4 @@
+import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
 import crypto from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import type { RequestContext } from '@hawa/contracts';
@@ -13,7 +14,6 @@ import {
 } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
-  HyCanvasStudioAdapter,
   GooglePublisher,
   TelegramAdapter,
 } from '@hawa/integrations';
@@ -180,7 +180,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     const briefBuilder = new BriefBuilder();
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
-    const studio = new HyCanvasStudioAdapter();
+    const studio = new FakeDesignStudioAdapter();
     const publisher = new GooglePublisher({
       emulateNetworkForTesting: true,
       oauthToken: ['pilot', 'exit', 'token'].join('_'),
@@ -315,7 +315,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
 
             sm.transition('PLANNING', ctx.actor, 'Planning studio layout');
 
-            // 6. Creative Direction Plan & HyCanvas Structured Operations (Invariant #1, #2, #3)
+            // 6. Creative Direction Plan & simulated structured operations (Invariant #1, #2, #3)
             const designPlan = creativeDirector.createDesignPlan(brief, scenario.palette);
             expect(designPlan.zones.length).toBeGreaterThan(0);
             expect(designPlan.artDirectionReference.shippedInArtifact).toBe(false);

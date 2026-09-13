@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-09-12T11:40:00.000Z",
+  "auditSuite": "2026-09-12-canva-reality-check",
+  "scope": "Adversarial failure probes and negative control verifications",
+  "controls": [
+    {
+      "controlId": "NC-01",
+      "name": "Corrupt PNG Fixture Rejection",
+      "description": "Ensures that 40-byte truncated or header-only PNGs are rejected by deep chunk validation.",
+      "input": "40-byte PNG buffer (header + IHDR only; missing IDAT/IEND/CRC validation)",
+      "expectedResult": "Rejection with CORRUPT_OR_EMPTY_ARTIFACT",
+      "observedResult": {
+        "ok": false,
+        "error": "Corrupt or invalid PNG artifact: PNG missing required IDAT chunk"
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-02",
+      "name": "Corrupt PDF Fixture Rejection",
+      "description": "Ensures that 78-byte keyword-only fake PDFs are rejected by structural parser.",
+      "input": "78-byte PDF buffer (%PDF-1.7 header + text only; missing /Catalog, /Pages, xref, %%EOF)",
+      "expectedResult": "Rejection with CORRUPT_OR_EMPTY_ARTIFACT",
+      "observedResult": {
+        "ok": false,
+        "error": "Corrupt or invalid PDF artifact: Malformed PDF document: missing required structural elements (xref, trailer, /Root, /Pages catalog, or /Page object)"
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-03",
+      "name": "Cross-Tenant Document Write Defense",
+      "description": "Ensures that a request from Tenant B cannot modify a design created by Tenant A.",
+      "input": "Tenant 'audit-tenant-b' attempting to apply operations to document owned by 'audit-tenant-a'",
+      "expectedResult": "Rejection with UNAUTHORIZED_CROSS_TENANT",
+      "observedResult": {
+        "ok": false,
+        "errorCode": "UNAUTHORIZED_CROSS_TENANT",
+        "crossTenantWriteAccepted": false
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-04",
+      "name": "Nonexistent Document Render Defense",
+      "description": "Ensures that calling render() on a document ID that was never registered fails truthfully.",
+      "input": "RenderRequest referencing documentId 'never-existed'",
+      "expectedResult": "Rejection with DOCUMENT_NOT_FOUND",
+      "observedResult": {
+        "ok": false,
+        "errorCode": "DOCUMENT_NOT_FOUND",
+        "renderMissingAccepted": false
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-05",
+      "name": "Local-Only Model Egress Defense",
+      "description": "Ensures that when egressPolicy is 'local_only' or token budget is 0, no external HTTP calls are dispatched.",
+      "input": "generateStructured with egressPolicy.mode='local_only' and budget.maxCostUsd=0",
+      "expectedResult": "Zero network requests; deterministic fallback with usage.inputTokens=0, usage.outputTokens=0",
+      "observedResult": {
+        "networkCallsDispatched": 0,
+        "provider": "local",
+        "model": "layout-engine-v1",
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "estimatedCostUsd": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-06",
+      "name": "Unentitled Model Honest Blocker Handling",
+      "description": "Ensures that if an upstream model (e.g. gpt-6-astra) is unentitled, the provider receipt is recorded honestly without faking tokens, and fallback is explicit.",
+      "input": "OpenAI API request for gpt-6-astra on project proj_Joi7d0agEUBGRv7hTEVp6szc",
+      "expectedResult": "HTTP 403 recorded in MODEL_RECEIPTS.json; cascade to admitted deployment gpt-4.1 with live_provider provenance",
+      "observedResult": {
+        "httpStatus": 403,
+        "errorCode": "model_not_found",
+        "message": "Project `proj_Joi7d0agEUBGRv7hTEVp6szc` does not have access to model `gpt-6-astra`",
+        "cascadedModel": "gpt-4.1",
+        "provenance": "live_provider"
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-07",
+      "name": "Unsolicited Copy & Boilerplate Purge",
+      "description": "Ensures that unrequested statutory laws, email footers, and official banner decorations are not injected into native Canva text nodes.",
+      "input": "KAAE invitation exact copy from KAAE_INVITATION_EXACT_COPY.txt",
+      "expectedResult": "Zero unrequested text nodes matching statutory laws, info@, www., or banner decorations",
+      "observedResult": {
+        "unrequestedTextNodesCount": 0,
+        "unrequestedMatches": []
+      },
+      "passed": true
+    },
+    {
+      "controlId": "NC-08",
+      "name": "Extra Paragraph Preservation",
+      "description": "Ensures that supplementary body paragraphs in user briefs are not dropped or truncated.",
+      "input": "Invitation text + 'Accessibility assistance is available on request.'",
+      "expectedResult": "extraParagraphPreserved: true in parsed domain and rendered nodes",
+      "observedResult": {
+        "extraParagraphPreserved": true
+      },
+      "passed": true
+    }
+  ]
+}

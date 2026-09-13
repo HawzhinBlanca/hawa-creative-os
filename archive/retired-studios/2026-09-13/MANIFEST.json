@@ -1,0 +1,320 @@
+[
+  {
+    "source": "packages/integrations/src/figma-bridge-adapter.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/src/figma-bridge-adapter.ts",
+    "sha256": "a0e87425f2a0d1a5698a3b56893f0d0c22c82ff0dc49069ace77122b83f91c2c",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/src/hycanvas-adapter.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/src/hycanvas-adapter.ts",
+    "sha256": "75c3da3c6c2810f81a8c59eb0bfe43bc471b2c750a9dfe986b5f7fe248156b63",
+    "action": "moved"
+  },
+  {
+    "source": "packages/contracts/src/figma-bridge.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/contracts/src/figma-bridge.ts",
+    "sha256": "151606cb5afaad23577beb05b447e7ad98be04dc48fee81137682ea88f562482",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/src/fake-figma-bridge.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/src/fake-figma-bridge.ts",
+    "sha256": "8b9cf5eea7e7ce544e74be69d3328462f1edba8e481d0619bea95d7f7f3b5e8c",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/src/repositories/figma-lease.repository.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/src/repositories/figma-lease.repository.ts",
+    "sha256": "afa3b43a9d2a2e7fe29d9acaf0f8294f241e933c40a6e1317f8e53c6d9bda55e",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/src/repositories/design-job.repository.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/src/repositories/design-job.repository.ts",
+    "sha256": "808eab4304b0828c72d5beb11f85ecabf56449a8c272fa8ecaac79349dab81ed",
+    "action": "moved"
+  },
+  {
+    "source": "scripts/sync_kaae_figma_bridge.ts",
+    "archive": "archive/retired-studios/2026-09-13/scripts/sync_kaae_figma_bridge.ts",
+    "sha256": "d91d0a798707d7061b8f192a8eb26612cd035fa64374d7473492368eec2c3646",
+    "action": "moved"
+  },
+  {
+    "source": "scripts/generate_figma_studio_eval_design.ts",
+    "archive": "archive/retired-studios/2026-09-13/scripts/generate_figma_studio_eval_design.ts",
+    "sha256": "2bd862b76c1b56f756c57f26f1f0c3a9692491eae6ef47f89de774940f846486",
+    "action": "moved"
+  },
+  {
+    "source": "scripts/test_kaae_full_english_pipeline.ts",
+    "archive": "archive/retired-studios/2026-09-13/scripts/test_kaae_full_english_pipeline.ts",
+    "sha256": "33fa22862250d1fe16499ceaffa51958dfb5473305472c0033dc1e1b03618922",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/test/figma-agent-studio.test.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/test/figma-agent-studio.test.ts",
+    "sha256": "3555ad8aea5f0c3be53e43778868642b22d35ad8204712aa2b99ba6a079703fc",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/test/kaae-omnichannel-figma-sync.test.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/test/kaae-omnichannel-figma-sync.test.ts",
+    "sha256": "210595ca15db2b52effa3d2aeaedc83bda0a20a49b62664d5140a770de5b2d07",
+    "action": "moved"
+  },
+  {
+    "source": "deployment/Dockerfile.hycanvas",
+    "archive": "archive/retired-studios/2026-09-13/deployment/Dockerfile.hycanvas",
+    "sha256": "53643bf72c545cabe58327154ce5eacea1818da9f59612446a2d78a862ffc021",
+    "action": "moved"
+  },
+  {
+    "source": "apps/desk/src/screens/InboxScreen.tsx",
+    "archive": "archive/retired-studios/2026-09-13/apps/desk/src/screens/InboxScreen.tsx",
+    "sha256": "8bff40596fd0a1cfd407fa181767045d2132d351cf3c8e6bf457e73c6b69c440",
+    "action": "moved"
+  },
+  {
+    "source": "apps/desk/src/screens/LibraryScreen.tsx",
+    "archive": "archive/retired-studios/2026-09-13/apps/desk/src/screens/LibraryScreen.tsx",
+    "sha256": "8d5c2663d46e8ca86939e3f4e5a3fcf518ef5605b6b80ada4ce21189bb311c5d",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "apps/desk/src/components/GuidedTour.tsx",
+    "archive": "archive/retired-studios/2026-09-13/apps/desk/src/components/GuidedTour.tsx",
+    "sha256": "6a510a302e1bb7ce87e8d54945baf96fb4985c200c7b43a405efc812f26b1dca",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "packages/integrations/test/integrations.test.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/test/integrations.test.ts",
+    "sha256": "06ea9cc628353dc9a50659eed05130c02879d0dc62860cdba8ab7f1cacb61d05",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "packages/domain/src/types.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/domain/src/types.ts",
+    "sha256": "fb2ea71789d33df88c1c748d9ec5f095c9405ad85c7cd5bb9eee301bdca7f7dc",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "deployment/docker-compose.yml",
+    "archive": "archive/retired-studios/2026-09-13/deployment/docker-compose.yml",
+    "sha256": "29a28f70e812093df2cef75d95f4d6f373949adf14a9a408cb67a06800a68400",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "deployment/Caddyfile",
+    "archive": "archive/retired-studios/2026-09-13/deployment/Caddyfile",
+    "sha256": "72e1e8d4af7f6d59461a559a061187c94ff8bb3eb6f2101ee5d378e0b17428f5",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "config/upstream-components.example.yaml",
+    "archive": "archive/retired-studios/2026-09-13/config/upstream-components.example.yaml",
+    "sha256": "145111ce2f3e8419663b314d207f9de69c93fd3ec200a1e302379df8b6b4e3f8",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "deployment/env.example",
+    "archive": "archive/retired-studios/2026-09-13/deployment/env.example",
+    "sha256": "7ffeea11a52c38b1497d525a05a20f7277e4fe78a52b01a0545b9581a67d35a8",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "deployment/init-databases.sh",
+    "archive": "archive/retired-studios/2026-09-13/deployment/init-databases.sh",
+    "sha256": "c8b927ffaf830b9ca44ccb7ceaf5417ce77cd8841fb2803f00365cf9f738f259",
+    "action": "original preserved before replacement"
+  },
+  {
+    "source": "packages/creative/src/templates/kaae-announcement.template.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/creative/src/templates/kaae-announcement.template.ts",
+    "sha256": "73c34e2a619d6e3c6513b196d07ef93b4653a0ff67abea8b2e866417e26c8d29",
+    "action": "original preserved before Buzz section retirement"
+  },
+  {
+    "source": "packages/creative/test/kaae-creative-generation.test.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/creative/test/kaae-creative-generation.test.ts",
+    "sha256": "2183080394890c5f6117377622ec72aadf9ebada671493545f0f1de9c2e45a87",
+    "action": "original preserved before Buzz section retirement"
+  },
+  {
+    "source": "README.md",
+    "archive": "archive/retired-studios/2026-09-13/README.md",
+    "sha256": "195fb3d28cf8381560c63b518c10b00faa9fa5f81e4840d4b2cdef6515a4ae51",
+    "action": "original preserved before studio decision update"
+  },
+  {
+    "source": "MASTER_SPEC.md",
+    "archive": "archive/retired-studios/2026-09-13/MASTER_SPEC.md",
+    "sha256": "ad3375fe5707bb02c83142817eb042678f54d148d004b8e83681544fcde454c1",
+    "action": "original preserved before studio decision update"
+  },
+  {
+    "source": "runbooks/04_hycanvas_incident.md",
+    "archive": "archive/retired-studios/2026-09-13/runbooks/04_hycanvas_incident.md",
+    "sha256": "cbb6990892b63cae1e955327ff1071a9a693d6171ea28551a816c0245ce23ebe",
+    "action": "moved"
+  },
+  {
+    "source": "deployment/vendor/hycanvas/README.md",
+    "archive": "archive/retired-studios/2026-09-13/deployment/vendor/hycanvas/README.md",
+    "sha256": "48daf0fbf98532cf5d69bc3dffffb8b5e24266308b28b220fb0a35a140fd2d56",
+    "action": "moved"
+  },
+  {
+    "source": "packages/contracts/dist/figma-bridge.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/contracts/dist/figma-bridge.d.ts.map",
+    "sha256": "e6d5cff20383e10ce443143b4255eac51b3d61501c57864fd8e59220f7708399",
+    "action": "moved"
+  },
+  {
+    "source": "packages/contracts/dist/figma-bridge.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/contracts/dist/figma-bridge.js.map",
+    "sha256": "441225441759921c7d010e59bf131ee3cdd8afd7034855c68473e709cc72f6f0",
+    "action": "moved"
+  },
+  {
+    "source": "packages/contracts/dist/figma-bridge.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/contracts/dist/figma-bridge.d.ts",
+    "sha256": "7c2cb9fe625e58071e102a5e15ebab16394e30a1fb6a72c55eb66dfd8523e44d",
+    "action": "moved"
+  },
+  {
+    "source": "packages/contracts/dist/figma-bridge.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/contracts/dist/figma-bridge.js",
+    "sha256": "77379e565f91d446eb5984177dd9a539db80e01fe5ebf3d4f2c6b7aecede06fd",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/dist/fake-figma-bridge.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/dist/fake-figma-bridge.d.ts.map",
+    "sha256": "2d873b87675e58347fb8f75edf87869f0342b622497ba405c6626f1b1aefce59",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/dist/fake-figma-bridge.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/dist/fake-figma-bridge.d.ts",
+    "sha256": "13616ddfd60d1abd5d9f277b12d524b2ccfe31ae355e74c5bdc8641030a44062",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/dist/fake-figma-bridge.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/dist/fake-figma-bridge.js.map",
+    "sha256": "d614a73019d543096bc37742076002ea67d984f4d1c1fa81ce162acb84f2e455",
+    "action": "moved"
+  },
+  {
+    "source": "packages/testkit/dist/fake-figma-bridge.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/testkit/dist/fake-figma-bridge.js",
+    "sha256": "0c3f7e6ee50a26fd76674dbb38525f356be0c0de8addf7e57289b34a3382f115",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/figma-bridge-adapter.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/figma-bridge-adapter.d.ts.map",
+    "sha256": "67d13a2c6e88874cb0c808cce4cbfa4eb956fcd2da82954499a039ed1beb36ae",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/hycanvas-adapter.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/hycanvas-adapter.d.ts.map",
+    "sha256": "c0e181efb33dadb3f6bfbdd7ab10e71512b3d1b5093e4495e1e81d9ff754bbf7",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/figma-bridge-adapter.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/figma-bridge-adapter.d.ts",
+    "sha256": "3ecd50367c7e61660dcf8862df167ebc1f70cfc999c3001fa6e04b8a6ebbb2ef",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/figma-bridge-adapter.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/figma-bridge-adapter.js.map",
+    "sha256": "bbdd445cf06c18f4fba8f8a2b9efd3b1d9b1ceaea6dbfc38cc6d2f44a59fa150",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/hycanvas-adapter.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/hycanvas-adapter.js.map",
+    "sha256": "db5aefc1dd452281dd89462a744ff19fbc2d77a72c590679c87baf34c8f3dc75",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/figma-bridge-adapter.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/figma-bridge-adapter.js",
+    "sha256": "81b872fae863ed33ce1e4b2cb51b71cc52e4b3af2466102ca525807be55cd593",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/hycanvas-adapter.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/hycanvas-adapter.d.ts",
+    "sha256": "c73f7c9cc0e11273d4ebe574282330e227af375e84d2f3c36611b02a16564496",
+    "action": "moved"
+  },
+  {
+    "source": "packages/integrations/dist/hycanvas-adapter.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/integrations/dist/hycanvas-adapter.js",
+    "sha256": "f3d7c2fe1a3e170bea69bdfa6f65d6df788a833f71c4d11d0c91e4c0891f150c",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/design-job.repository.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/design-job.repository.d.ts.map",
+    "sha256": "b5131b1e5449823b24623bd8de8cfdcd182bfbb7ba08fed2a7e0e2cb47ac3b90",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/figma-lease.repository.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/figma-lease.repository.js.map",
+    "sha256": "b32a065d9b41917920ee8efde46d2a6dbb9cc8eb3a6a049b4d199f8c4a2dc386",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/design-job.repository.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/design-job.repository.js",
+    "sha256": "b5517dcd5728d0b7a08ec72b052bf4a1a90520db57293f46b0f716d745e6daa0",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/design-job.repository.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/design-job.repository.d.ts",
+    "sha256": "32c1bddd6b84959f0431dc84360acd5fbf804ccb6efdc5ca61482e2701d23516",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/design-job.repository.js.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/design-job.repository.js.map",
+    "sha256": "a5e72cddfec076c859c8044e85f1f1c387372a08678f4de6232446e37f83269f",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/figma-lease.repository.js",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/figma-lease.repository.js",
+    "sha256": "bee2959f550c525ec0749bb5ecfad8772afd711598705fc805459963467d9ec5",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/figma-lease.repository.d.ts.map",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/figma-lease.repository.d.ts.map",
+    "sha256": "3db1e3b437bb15148e09ce99179a679fef82b7b3a00ae10b9521d02bfd6c4088",
+    "action": "moved"
+  },
+  {
+    "source": "packages/db/dist/repositories/figma-lease.repository.d.ts",
+    "archive": "archive/retired-studios/2026-09-13/packages/db/dist/repositories/figma-lease.repository.d.ts",
+    "sha256": "fdd3ed9d931a22f8b5bf2b7a4ca5d2d4420908a60bc07f3c2aa65d4d26a72bca",
+    "action": "moved"
+  },
+  {
+    "source": "apps/desk/src/screens/ClientsScreen.tsx",
+    "archive": "archive/retired-studios/2026-09-13/apps/desk/src/screens/ClientsScreen.tsx",
+    "sha256": "226682014e10313effef5e710f52d5c5b1c7e233e09c858c328432bcb575dabc",
+    "action": "original_preserved_before_replacement"
+  }
+]

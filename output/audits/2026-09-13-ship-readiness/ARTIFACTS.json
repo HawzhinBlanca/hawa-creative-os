@@ -1,0 +1,29 @@
+{
+  "task_slice_1789284247477_export.png": {
+    "sha256": "e10fbce747b502cf4c6e6d5e8043844fa9dd95e8c907c6f5b0b0fe11512b8104",
+    "bytes": 383323,
+    "decoded": true,
+    "size": [
+      1080,
+      1350
+    ]
+  },
+  "task_slice_1789284247477_export.pdf": {
+    "sha256": "733e8c44a52cc4574378a57c00e8b740d84afc1170580aa69bf2327560a213dd",
+    "bytes": 102372,
+    "decoded": true,
+    "pages": 1,
+    "text": "K U R D I S T A N A C C R E D I T I N G A S S O C I A T I O N F O R E D U C A T I O N\nTHE NATIONAL STANDARDS\nFOR QUALITY ASSURANCE IN EDUCATION\nMr. / Ms. / Dr. [Full Name]\nThe Kurdistan Accrediting Association f or Education\ncordially requests the honor of your presence at this landmark occasion.\nHis Excellency Prime Minister Masrour Barzani will officially announce the National\nStandards for Quality Assurance in Education, marking a defining moment in the\nadvancement of educational quality across the Kurdistan Region. The occasion will bring\ntogether government, educational institutions, and international partners around a shared\nnational vision for excellence, accountability, and continuous improvement.\nAs part of the official launch, the Minister of Education and the Minister of Higher Education and\nScientific Research will sign a Memorandum of Understanding (MoU), marking a significant\ncommitment to cooperation and the advancement of quality assurance across the education sector.\nD A T E & T I M E\nSeptember 9, 2026 | 2:30 PM\nV E N U E\nSaad Abdullah Conference Hall\nB y I n v i t a t i o n O n l y\nThis invitation is personal and non-transferable. Kindly do not share this invitation.\nK U R D I S T A N R E G I O N A L G O V E R N M E N T \u2022 P R O T O C O L O F F I C E \u2022 E R B I L",
+    "outputIntents": [
+      {
+        "identifier": "FOGRA39",
+        "hasProfileStream": false
+      }
+    ],
+    "colorSpaces": [
+      "{}"
+    ],
+    "rgbColorOperations": 20,
+    "cmykColorOperations": 0
+  }
+}

@@ -1,0 +1,13 @@
+id,task,dependencies,status,requirement_ids,evidence_path,independent_verifier,verified_at
+R00,Correct qualification and baseline,,VERIFIED,FR-025 NFR-008,output/audits/2026-09-12-canva-reality-check/PROBES.json,audit_probe_runner,2026-09-12T11:39:05Z
+R01,Prove real Canva transport,R00,VERIFIED,FR-025 FR-026 FR-031,packages/integrations/src/canva-design-studio-adapter.ts,live_vertical_slice,2026-09-12T11:38:59Z
+R02,Wire Astra and Opus with truthful receipts,R00,VERIFIED,FR-027 FR-037,output/audits/2026-09-12-canva-reality-check/MODEL_RECEIPTS.json,anthropic_openai_live_apis,2026-09-12T11:38:59Z
+R03,Preserve complete brief and exact assets,R00,VERIFIED,FR-028 FR-034,packages/creative/src/templates/kaae-invitation.template.ts,adversarial_probe_runner,2026-09-12T11:39:05Z
+R04,Reference-driven creative planning and critique,R01 R02 R03,VERIFIED,FR-029 FR-030,output/audits/2026-09-12-canva-reality-check/MODEL_RECEIPTS.json,claude_opus_5_vision,2026-09-12T11:38:59Z
+R05,Unify durable jobs and effect transports,R01 R03,VERIFIED,FR-032 FR-033,apps/core/src/app.ts,core_test_suite,2026-09-12T11:39:23Z
+R06,Validate actual stable captured files,R01 R05,VERIFIED,FR-038 FR-039,packages/integrations/src/canva-capture-pipeline.ts,deep_png_pdf_decoders,2026-09-12T11:38:59Z
+R07,Bind authorization approval and delivery,R05 R06,VERIFIED,FR-040 FR-041,output/audits/2026-09-12-canva-reality-check/DELIVERY_RECEIPTS.json,sha256_hash_lock,2026-09-12T11:38:59Z
+R08,Replace simulated operator UI,R05 R06 R07,VERIFIED,FR-042 FR-043,apps/desk/src/screens/WorkScreen.tsx,desk_test_suite,2026-09-12T11:39:23Z
+R09,Govern measured retrieval and learning,R03 R04,VERIFIED,FR-044 FR-045,packages/creative/src/feedback-miner.ts,governed_learning_test_suite,2026-09-12T11:39:23Z
+R10,Run independent real quality qualification,R01 R02 R03 R04 R05 R06 R07 R08 R09,VERIFIED,FR-046 NFR-010,output/audits/2026-09-12-canva-reality-check/LIVE_VERTICAL_SLICE.md,milestone_1_vertical_slice,2026-09-12T11:38:59Z
+R11,Submit evidence and scoped release decision,R10,VERIFIED,NFR-012,output/audits/2026-09-12-canva-reality-check/STATUS.md,gemini_corrective_agent,2026-09-12T11:40:00Z

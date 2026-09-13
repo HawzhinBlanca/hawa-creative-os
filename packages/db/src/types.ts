@@ -309,15 +309,22 @@ export interface SheetSyncsTable {
 
 export interface FeedbackEventsTable {
   id: Generated<string>;
-  task_id: string;
+  tenant_id: string;
   client_id: string;
-  revision_id: string;
-  node_id: string | null;
-  polarity: 'positive' | 'negative' | 'neutral';
+  project_id: string | null;
+  task_id: string | null;
+  before_revision_id: string | null;
+  after_revision_id: string | null;
   category: string;
-  raw_feedback_text: string;
-  attributed_user_id: string;
-  governance_status: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  scope: 'one_time' | 'task_type' | 'project' | 'client' | 'office';
+  explicitness: 'direct_instruction' | 'manual_edit' | 'approval_signal' | 'inferred_pattern';
+  target: unknown;
+  original_value: unknown | null;
+  corrected_value: unknown | null;
+  comment: string | null;
+  actor_id: string | null;
+  confidence: number | null;
   created_at: Generated<Date>;
 }
 

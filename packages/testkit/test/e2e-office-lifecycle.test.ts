@@ -1,3 +1,4 @@
+import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
 import { describe, it, expect } from 'vitest';
 import type { RequestContext } from '@hawa/contracts';
 import {
@@ -17,7 +18,6 @@ import {
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
   TelegramAdapter,
-  HyCanvasStudioAdapter,
   GooglePublisher,
   DirectModelGateway,
 } from '@hawa/integrations';
@@ -157,7 +157,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     const briefBuilder = new BriefBuilder();
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
-    const studio = new HyCanvasStudioAdapter();
+    const studio = new FakeDesignStudioAdapter();
     const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test_token' });
 
     // =========================================================================

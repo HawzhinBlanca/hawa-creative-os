@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-09-12T20:47:30.861963+00:00",
+  "head": "d07f79a6831bb1bb87f074309534b731fea40273",
+  "http": [
+    {
+      "route": "/tasks",
+      "status": 200,
+      "type": "text/html",
+      "bytes": 881,
+      "sha256": "f7118f3c4fcf6e790b96bd49f14c36282d7fa89410f0bab98b19f3ace50d66c6",
+      "html": true
+    },
+    {
+      "route": "/v1/tasks",
+      "status": 401,
+      "type": "application/json",
+      "bytes": 165,
+      "sha256": "89c4c49675883d1ba4a32cbd84713a5b0c39c3ffde4d96bdf70bc0bebcbe7139",
+      "shape": [
+        "type",
+        "title",
+        "status",
+        "detail",
+        "instance"
+      ],
+      "count": null
+    },
+    {
+      "route": "/v1/health",
+      "status": 200,
+      "type": "application/json",
+      "bytes": 278,
+      "sha256": "0cce207d22c44a39f40c588a60dbfacb5248e11fe26075af99e3fb94ed072702",
+      "shape": [
+        "status",
+        "timestamp",
+        "lastVerifiedProgressAt",
+        "dependencies"
+      ],
+      "count": null
+    }
+  ],
+  "sourceHashes": {
+    "apps/desk/src/screens/WorkScreen.tsx": "00f4fa5c29a3b10aa087aee33959d6ca603bb23cdba5943ffd239ec8f0dd0306",
+    "apps/core/src/app.ts": "a066aed9ff1076b1dc680b1ab15dcab6a6f2f8db5b620809d00e0aa3fb5f30c5",
+    "packages/integrations/src/model-gateway.ts": "e31ec29786a21f981f3036490784b18b774badafcf2f9a5644450c3bf9746ceb",
+    "packages/integrations/src/canva-design-studio-adapter.ts": "ce35c4e5d92aa805bed6653f63915b1a2b77d73e25b5831d70f4fcfd11c58a4b",
+    "packages/integrations/src/canva-capture-pipeline.ts": "3fb5bbb20ce4f354810b5c448eeb75c6cfeb1b35da037fa4746bce3547b390dc"
+  }
+}

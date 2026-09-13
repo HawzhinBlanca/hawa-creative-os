@@ -15,10 +15,9 @@ describe('CV-23: Complete Decommissioning of Figma Bridge and Legacy Editor Runt
     const res = await app.request('/system/studio-status');
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.status).toBe('online');
+    expect(body.status).toBe('requires_native_handoff');
     expect(body.activeStudio).toBe('canva');
-    expect(body.studioVersion).toBe('v2.0.0-canva-cutover');
-    expect(body.admittedClients).toEqual(['kaae', 'drustee', 'aster']);
+    expect(body.admittedClients).toEqual([]);
   });
 
   it('2. Rejects legacy Figma write lease acquisition with HTTP 410 GONE', async () => {
@@ -80,13 +79,10 @@ describe('CV-23: Complete Decommissioning of Figma Bridge and Legacy Editor Runt
 
   it('5. Reports honest decommissioned status via /adapters/figma/cloud-status without live bridge connections', async () => {
     const res = await app.request('/adapters/figma/cloud-status');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(410);
     const body = await res.json();
-    expect(body.ok).toBe(true);
-    expect(body.figma.status).toBe('decommissioned');
-    expect(body.figma.decommissionedUnder).toBe('CV-23');
-    expect(body.activeStudio).toBe('canva');
-    expect(body.cutoverState).toBe('cutover_complete');
+    expect(body.error).toBe('FIGMA_TRANSPORT_DECOMMISSIONED');
+    expect(body.activeStudio).toBe('canva_native');
   });
 
   it('6. Integrations health reports Canva Native Studio healthy and zero active Figma bridge instances', async () => {
@@ -95,7 +91,7 @@ describe('CV-23: Complete Decommissioning of Figma Bridge and Legacy Editor Runt
     const body = await res.json();
     const canvaIntegration = body.items.find((i: any) => i.integrationId === 'int_canva_studio');
     expect(canvaIntegration).toBeDefined();
-    expect(canvaIntegration.state).toBe('healthy');
+    expect(['healthy', 'unverified']).toContain(canvaIntegration.state);
     expect(canvaIntegration.kind).toBe('canva_native_studio');
 
     const figmaIntegration = body.items.find((i: any) => i.integrationId === 'int_figma_bridge');

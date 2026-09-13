@@ -1,0 +1,32 @@
+{
+  "studioDocumentId": "DAF_22f6c04aa03e450c",
+  "initialDoc": {
+    "documentId": "cf0cdb4f-f378-434f-9d7c-dbd053bb30cb",
+    "studioDocumentId": "DAF_22f6c04aa03e450c",
+    "sourceRevision": 1,
+    "sourceSha256": "sha256_5f2b188ba421aecbf9dc26b615472fc62c9422d2c5e69a77d718ff7fdc97eed8",
+    "studio": "Canva",
+    "studioVersion": "2.0.0-canva-cutover",
+    "schemaVersion": "2.0.0"
+  },
+  "appliedDoc": {
+    "documentId": "cf0cdb4f-f378-434f-9d7c-dbd053bb30cb",
+    "studioDocumentId": "DAF_22f6c04aa03e450c",
+    "sourceRevision": 2,
+    "sourceSha256": "sha256_ed807c3c375693cff95e2795a18f422e61a05b759a95ca1a25b1801149f75bc7",
+    "studio": "Canva",
+    "studioVersion": "2.0.0-canva-cutover",
+    "schemaVersion": "2.0.0"
+  },
+  "editedDoc": {
+    "documentId": "cf0cdb4f-f378-434f-9d7c-dbd053bb30cb",
+    "studioDocumentId": "DAF_22f6c04aa03e450c",
+    "sourceRevision": 3,
+    "sourceSha256": "sha256_de028c30a4d9077693044f7827047e0368edfbc048f7c2a992134b290cb55979",
+    "studio": "Canva",
+    "studioVersion": "2.0.0-canva-cutover",
+    "schemaVersion": "2.0.0"
+  },
+  "operationCount": 18,
+  "manifestNodesCount": 19
+}

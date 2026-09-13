@@ -1,0 +1,150 @@
+Browser tab: 7, Title: "Hawa Desk — Private Creative OS", URL: "http://localhost:8080/#/settings".
+0 AXWebArea Hawa Desk — Private Creative OS, URL: localhost:8080/#/settings
+	1 container root
+		2 container Main Navigation
+			3 container
+				4 text Hawa Desk Private Creative OS
+			5 container Primary Navigation
+				6 button 💼 Work Desk, Help: Actionable task queue and Canva design review detail, ID: nav-work
+					7 text 💼
+					8 text Work Desk
+				9 button 🧬 Client DNA & Library, Help: Client DNA profiles, guidelines, tokens, and verified asset library, ID: nav-clients
+					10 text 🧬
+					11 text Client DNA & Library
+				12 button ⚙️ Settings & Adapters, Help: Channel bridges, honest health probes, and audit logs, ID: nav-settings
+					13 text ⚙️
+					14 text Settings & Adapters
+			15 container
+				16 text Core Healthy Canva Connected · PostgreSQL Live · Audit Sync
+		17 container
+			18 heading Settings & Adapters, Value: 1
+				19 text Settings & Adapters
+			20 text Connected channel bridges, honest health probes, and audit logs
+			21 button 🇬🇧 English (Primary) ⇄ کوردی, Help: Primary: English. Click to switch to Secondary: کوردی سۆرانی, ID: lang-toggle-btn
+				22 text 🇬🇧 English (Primary)
+				23 text ⇄
+				24 text کوردی
+			25 button 🚀 Tour, Help: Start 60-Second Operator Onboarding Tour, ID: tour-btn
+				26 text 🚀
+				27 text Tour
+			28 text Live Stream
+			29 button 🔍 Search tasks, clients, copy, hashes… ⌘K, Help: Global Omnisearch (⌘K / Ctrl+K), ID: omnisearch-btn
+				30 text 🔍
+				31 text Search tasks, clients, copy, hashes…
+				32 text ⌘K
+			33 button + New task
+			34 container settings
+				35 heading Settings & Platform Adapters, Value: 1
+					36 text Settings & Platform Adapters
+				37 heading Adapters and capabilities, Value: 2
+					38 text Adapters and capabilities
+				39 table
+					40 row
+						41 cell
+							42 text Adapter
+						43 cell
+							44 text Authority
+						45 cell
+							46 text State
+						47 cell
+							48 text Action
+					49 row
+						50 cell
+							51 text Hawa Desk
+						52 cell
+							53 text canonical
+						54 cell
+							55 text healthy
+						56 cell
+							57 text —
+					58 row
+						59 cell
+							60 text Telegram Bridge
+							61 container
+								62 text @ hawdesign_official_bot  ·  webhook / polling idle
+						63 cell
+							64 text capture & card dispatch
+						65 cell
+							66 text healthy
+						67 cell
+							68 button Test webhook
+							69 button Poll now
+					70 row
+						71 cell
+							72 text WAHA WhatsApp
+						73 cell
+							74 text capture only
+						75 cell
+							76 text quarantined
+						77 cell
+							78 button View admission
+					79 row
+						80 cell
+							81 text Canva Native Studio
+						82 cell
+							83 text admitted multi-page brand studio (ADR 020/021)
+						84 cell
+							85 text Production Active (CV-22)
+						86 cell
+							87 button Studio status
+					88 row
+						89 cell
+							90 text Legacy Figma Bridge
+						91 cell
+							92 text decommissioned under CV-23 (ADR 021)
+						93 cell
+							94 text Retired (410 GONE)
+						95 cell
+							96 text Decommissioned
+				97 heading Telegram Webhook & Public Tunnel (Horizon 17), Value: 3
+					98 text Telegram Webhook & Public Tunnel (Horizon 17)
+				99 text Instant Push Ingress (<50ms)
+				100 text Current Mode:
+				101 text 🔄 On-Demand Long Polling
+				102 text Polling Fallback
+				103 text Telegram Webhook URL
+				104 text field (settable) Description: Telegram Webhook URL, Value: https://preview-office.kaae.org/api/webhooks/telegram, ID: telegram-webhook-url-input
+				105 button Set Webhook
+				106 button Delete Webhook
+				107 heading Canva Native Studio (Production Active), Value: 3
+					108 text Canva Native Studio (Production Active)
+				109 text Multi-Page Brand Studio & Native Asset Ingress
+				110 text Active Engine: 
+				111 text CanvaDesignStudioAdapter
+				112 text  · Release:
+				113 text v2.0.0-canva-cutover
+				114 text Sole Active Studio 🎨
+				115 text Multi-Client Scope Admitted:
+				116 text KAAE, Drustee, and Aster. Full multi-page support, bounding box clamping, Vazirmatn font glyph mapping, and revision locks. Legacy Figma & Polotno runtimes decommissioned.
+				117 heading Network policy, Value: 3
+					118 text Network policy
+				119 text Private office / VPN only
+				120 text No public administration endpoints. Outbound provider egress is capability-scoped, token-budgeted, and audited in OpenTelemetry.
+				121 heading Model registry, Value: 2
+					122 text Model registry
+				123 text fast_router & brief_builder
+				124 text Gemini 3.8 Flash · exact snapshot 2026-09-03 · 100% token preservation
+				125 text creative_director
+				126 text GPT-5.6 Sol · creator/judge separation active · discrete editable nodes
+				127 text visual_judge (advisory)
+				128 text Claude Opus 5 · independent model family · cannot waive hard QA
+				129 heading Upstream locks, Value: 3
+					130 text Upstream locks
+				131 text No automatic upgrades
+				132 text Studio, workflow engine, Comfy nodes, models, and containers require offline evidence before admission.
+				133 heading Live API Credentials & Secret Store, Value: 3
+					134 text Live API Credentials & Secret Store
+				135 text Local & Cloud Provider Keys
+				136 container
+					137 text Stored securely in  .env.local  / Hawa Core Memory
+				138 button 🔑 Manage / Paste API Keys
+				139 container
+					140 text ✓ Google Workspace ADC : Active
+				141 container
+					142 text OpenAI :  Fallback Engine
+				143 container
+					144 text Anthropic :  Fallback Engine
+				145 container
+					146 text Telegram :  Disabled
+
+The focused UI element is 12 button ⚙️ Settings & Adapters, Help: Channel bridges, honest health probes, and audit logs, ID: nav-settings

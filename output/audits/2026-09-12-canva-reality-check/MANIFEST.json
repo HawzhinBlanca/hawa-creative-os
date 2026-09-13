@@ -1,0 +1,116 @@
+{
+  "createdAt": "2026-09-12T09:41:56.698120+00:00",
+  "meaning": "Byte integrity only, not proof of claim truth",
+  "files": [
+    {
+      "path": "GEMINI_CORRECTIVE_TASK_SHEET.md",
+      "bytes": 24738,
+      "sha256": "b8cb6ca12e7de100cc7c1da0a47db1eab47bfd27241a5c0cc88668e0e2e84acb"
+    },
+    {
+      "path": "INDEPENDENT_DECODERS.json",
+      "bytes": 359,
+      "sha256": "32dc1933384e2e8d538b5c7191581ba4eb4223a1e882880fb93b243e3e8377ed"
+    },
+    {
+      "path": "PROBES.json",
+      "bytes": 8823,
+      "sha256": "2930ec8e96ae8afcae618da13ddb075e9a6722b9a1c9d969579c610a95d77dc8"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2263,
+      "sha256": "cc99c9ff100746ffe652561645ba5b85e691db6e4f3fc947615ed690c77dce08"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 15182,
+      "sha256": "d9a442b0e68f3de88b6bd989cfeec5c1a7694b702938147ee33bd5d99cdb32ae"
+    },
+    {
+      "path": "RUNTIME_EVIDENCE.json",
+      "bytes": 3691,
+      "sha256": "e74814a90f149cc4257e6e911f612badc3a50bdd17721c1e027cc961a8a3abe5"
+    },
+    {
+      "path": "SOURCE_RECHECK.json",
+      "bytes": 1035,
+      "sha256": "63adf066ed4371a9de27fe99783e521da1dfbb9f8f8427e09143c700cb282c87"
+    },
+    {
+      "path": "TASK_LEDGER.csv",
+      "bytes": 1163,
+      "sha256": "0fbee1cd69cf7810a9e6dc1a261e68822ae540915ef62eff384a20dcb8c1f898"
+    },
+    {
+      "path": "capture-after-ax.txt",
+      "bytes": 7182,
+      "sha256": "fa19e1457218c35e618f2400be38dfd62b8efcc16b474a9a3cbdde6f5116bbc8"
+    },
+    {
+      "path": "capture-reopened-ax.txt",
+      "bytes": 7180,
+      "sha256": "b60c76ce6b0680877f1f2e10b3f4f0b36667e05892f046f33add57b9c793e86f"
+    },
+    {
+      "path": "invalid-keyword-only.pdf",
+      "bytes": 78,
+      "sha256": "92a75def7c8c3373abe4d4940d447d59ef8502cc77b2a1bf479e4050d827a247"
+    },
+    {
+      "path": "invalid-signature-only.png",
+      "bytes": 40,
+      "sha256": "e04534b355ffaa64aafbcf31812c25cf19a31c0bcbc38ed9f9ceefb23eaf318c"
+    },
+    {
+      "path": "probe.ts",
+      "bytes": 7135,
+      "sha256": "7f82da2f859121ce3e6e0df66d4bbfe4ee4bfa30c33d0749c06d0fbba341aff6"
+    },
+    {
+      "path": "screenshots/01-work-queue.png",
+      "bytes": 52898,
+      "sha256": "1f1e03d0edbe3c46116a07147f07270d337119161bffaba85c75fc3579febdc8"
+    },
+    {
+      "path": "screenshots/02-task-review.png",
+      "bytes": 47419,
+      "sha256": "e456f118f3242652fe48865e5f5195be3ee6b21ac65ed95373b5d687b1a01a52"
+    },
+    {
+      "path": "screenshots/03-settings.png",
+      "bytes": 48814,
+      "sha256": "7f64acb9aee7eaf5c879dff96732e3c4f46b9132024d52719d8293e9ed4bc147"
+    },
+    {
+      "path": "screenshots/04-settings-full.png",
+      "bytes": 42107,
+      "sha256": "0f95ba6d3c839f9bbd55d5a9aba79fa33ec24abc228e3959ff0bc5eb84be56cf"
+    },
+    {
+      "path": "screenshots/05-desktop-review.png",
+      "bytes": 102976,
+      "sha256": "b0f28a4e029a5ef0037843eba51fec8551296f10e054642e143c228db566c281"
+    },
+    {
+      "path": "screenshots/06-simulated-capture.png",
+      "bytes": 102972,
+      "sha256": "15c2cf421061a3d4cc4a278fa356ed4118c35c00f2006e2a201b3a9abb495ac7"
+    },
+    {
+      "path": "screenshots/07-capture-after-reload.png",
+      "bytes": 102985,
+      "sha256": "9fc2c7a70ebb911ef97aca8eb95a51dddec9871d981d18277deaa7c1e97c6f2a"
+    },
+    {
+      "path": "screenshots/08-desktop-settings.png",
+      "bytes": 118811,
+      "sha256": "6d64b0e70b76b0b1f228cd1954c1d4cca45825be15e7332832a3ed5f90fc94e8"
+    },
+    {
+      "path": "settings-ax.txt",
+      "bytes": 5819,
+      "sha256": "1968fa896f79db97b87e9e29591604e7767c30d6a3c1de05c01493cbdc53d0e7"
+    }
+  ]
+}

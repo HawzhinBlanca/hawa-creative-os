@@ -1,0 +1,810 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hawa Canva Connect integration",
+    "version": "0.1.0",
+    "description": "Implemented API; live account admission pending. Retrieved exports are not QA-approved captures."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "officeBearer": []
+    }
+  ],
+  "paths": {
+    "/v1/integrations/canva/status": {
+      "get": {
+        "operationId": "canvaConnectionStatus",
+        "tags": [
+          "Integrations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/integrations/canva/authorize": {
+      "post": {
+        "operationId": "canvaAuthorize",
+        "tags": [
+          "Integrations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/integrations/canva/callback": {
+      "get": {
+        "operationId": "canvaCallback",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          },
+          "400": {
+            "description": "Invalid, expired, reused, declined or failed authorization"
+          }
+        },
+        "security": [],
+        "description": "Requires matching HttpOnly browser state cookie and unconsumed ten-minute database state. Success/failure are plain text; code/token values are never echoed."
+      }
+    },
+    "/v1/integrations/canva/disconnect": {
+      "post": {
+        "operationId": "canvaDisconnect",
+        "tags": [
+          "Integrations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva": {
+      "get": {
+        "operationId": "canvaTaskState",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/editor": {
+      "get": {
+        "operationId": "canvaEditor",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/design": {
+      "post": {
+        "operationId": "canvaCreateBlankDesign",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          },
+          "202": {
+            "description": "Pending or uncertain operation; inspect status before retrying"
+          },
+          "201": {
+            "description": "Native blank design created and bound"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "width",
+                  "height"
+                ],
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 40,
+                    "maximum": 8000
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 40,
+                    "maximum": 8000
+                  }
+                },
+                "description": "Area must not exceed 25 million pixels. Creates blank editable canvas, not composed design."
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/exports": {
+      "post": {
+        "operationId": "canvaStartExport",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          },
+          "202": {
+            "description": "Pending or uncertain operation; inspect status before retrying"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "format",
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "format": {
+                    "enum": [
+                      "png",
+                      "pdf",
+                      "pptx"
+                    ]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "description": "PNG supports one page only. PDF is standard, not print-qualified. Maximum retrieved file size 25 MiB."
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/exports/{operationId}/resume": {
+      "post": {
+        "operationId": "canvaResumeExport",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/artifacts/{artifactId}": {
+      "get": {
+        "operationId": "canvaDownloadExport",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored immutable export bytes, with X-Content-SHA256 and attachment disposition",
+            "content": {
+              "image/png": {},
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          },
+          "404": {
+            "description": "No export for this task and actor"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/tasks/{taskId}/canva/generate": {
+      "post": {
+        "operationId": "canvaCreateBlankDesign",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          },
+          "202": {
+            "description": "Pending or uncertain operation; inspect status before retrying"
+          },
+          "201": {
+            "description": "Native blank design created and bound"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 640,
+                    "maximum": 2400
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 640,
+                    "maximum": 2400
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "summary": "Generate a draft with Claude Opus 5, retain exact-copy source, and import it into Canva; not a release approval"
+      }
+    },
+    "/v1/tasks/{taskId}/canva/plans": {
+      "get": {
+        "summary": "Read durable planning status and actual provider usage receipts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "taskId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actor-scoped plans; a planned source is not native QA approval"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/canva/plans/{operationId}/resume": {
+      "post": {
+        "operationId": "canvaResumeExport",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "summary": "Resume the existing plans checkpoint without repeating a model charge or document creation"
+      }
+    },
+    "/v1/tasks/{taskId}/canva/imports/{operationId}/resume": {
+      "post": {
+        "operationId": "canvaResumeExport",
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation result; no QA approval implied"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "409": {
+            "description": "Scope, stale binding, pending operation, or reconnect required"
+          },
+          "422": {
+            "description": "Invalid input or export content"
+          },
+          "502": {
+            "description": "Provider or storage operation failed"
+          },
+          "503": {
+            "description": "Database or configuration required"
+          }
+        },
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "summary": "Resume the existing imports checkpoint without repeating a model charge or document creation"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "officeBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing server-authenticated Hawa office actor; credentials never passed to Canva APIs from the browser."
+      }
+    }
+  }
+}

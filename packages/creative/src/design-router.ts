@@ -7,13 +7,13 @@ export type TaskRoute =
   | 'multi_format_composition'
   | 'human_only';
 
-export type FigmaRoute = 'buzz_template' | 'figma_freeform' | 'human';
+export type StudioRoute = 'canva_template' | 'canva_composition' | 'human';
 
 import type { CanonicalFormat } from './creative-director.js';
 
 export interface RouteResolution {
   route: TaskRoute;
-  figmaRoute: FigmaRoute;
+  studioRoute: StudioRoute;
   confidence: number;
   reasoning: string;
   matchedTemplateId?: string;
@@ -104,7 +104,7 @@ export class DesignRouter {
     if (isExplicitMultiFormat) {
       return {
         route: 'multi_format_composition',
-        figmaRoute: 'figma_freeform',
+        studioRoute: 'canva_composition',
         confidence: 0.96,
         reasoning: `Omnichannel multi-format request detected across ${detectedFormats.length} canonical formats (${detectedFormats.join(', ')})`,
         requiresHumanReview: false,
@@ -117,7 +117,7 @@ export class DesignRouter {
     if (bestTemplate && bestTemplate.matchScore >= 0.9) {
       return {
         route: 'template_fill',
-        figmaRoute: 'buzz_template',
+        studioRoute: 'canva_template',
         confidence: bestTemplate.matchScore,
         reasoning: `Matched high-confidence template ${bestTemplate.id}`,
         matchedTemplateId: bestTemplate.id,
@@ -137,7 +137,7 @@ export class DesignRouter {
     ) {
       return {
         route: 'template_fill',
-        figmaRoute: 'buzz_template',
+        studioRoute: 'canva_template',
         confidence: 0.98,
         reasoning: 'Direct match for KAAE University Eligibility Status Decree Archetype',
         matchedTemplateId: 'kaae_eligibility_decree',
@@ -155,7 +155,7 @@ export class DesignRouter {
     ) {
       return {
         route: 'template_fill',
-        figmaRoute: 'buzz_template',
+        studioRoute: 'canva_template',
         confidence: 0.98,
         reasoning: 'Direct match for KAAE Global Quality Milestone Archetype',
         matchedTemplateId: 'kaae_global_milestone',
@@ -172,7 +172,7 @@ export class DesignRouter {
     ) {
       return {
         route: 'template_fill',
-        figmaRoute: 'buzz_template',
+        studioRoute: 'canva_template',
         confidence: 0.98,
         reasoning: 'Direct match for KAAE Call for Peer Evaluators Archetype',
         matchedTemplateId: 'kaae_evaluator_call',
@@ -190,7 +190,7 @@ export class DesignRouter {
     ) {
       return {
         route: 'template_fill',
-        figmaRoute: 'buzz_template',
+        studioRoute: 'canva_template',
         confidence: 0.98,
         reasoning: 'Direct match for KAAE Analytics & Reach Metrics Card Archetype',
         matchedTemplateId: 'kaae_metrics_card',
@@ -209,7 +209,7 @@ export class DesignRouter {
     if (isComplex) {
       return {
         route: 'creative_director',
-        figmaRoute: 'figma_freeform',
+        studioRoute: 'canva_composition',
         confidence: 0.92,
         reasoning: 'Task classified as complex novel visual campaign, routing to Creative Director Runner',
         requiresHumanReview: false,
@@ -221,7 +221,7 @@ export class DesignRouter {
     if (brief.exactCopy.length <= 3 && brief.variants.length <= 2) {
       return {
         route: 'editable_composition',
-        figmaRoute: 'figma_freeform',
+        studioRoute: 'canva_composition',
         confidence: 0.88,
         reasoning: 'Routine request with simple copy and standard dimensions',
         requiresHumanReview: false,
@@ -232,7 +232,7 @@ export class DesignRouter {
     // 4. Ambiguity / low confidence
     return {
       route: 'human_only',
-      figmaRoute: 'human',
+      studioRoute: 'human',
       confidence: 0.65,
       reasoning: 'Low confidence routing match or highly customized requirement; pauses for human operator selection',
       requiresHumanReview: true,

@@ -12,8 +12,6 @@ x-hawa-environment: &hawa-environment
   DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
   RESTATE_ADMIN_URL: ${RESTATE_ADMIN_URL:-http://restate:9070}
   RESTATE_INGRESS_URL: ${RESTATE_INGRESS_URL:-http://restate:8080}
-  HYCANVAS_ENABLED: ${HYCANVAS_ENABLED:-false}
-  HYCANVAS_BASE_URL: ${HYCANVAS_BASE_URL:-http://hycanvas:8005}
   PHOENIX_COLLECTOR_ENDPOINT: ${PHOENIX_COLLECTOR_ENDPOINT:-http://phoenix:6006/v1/traces}
   STAGING_ROOT: /var/lib/hawa/staging
 
@@ -80,8 +78,6 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
       HAWA_DB_USER: ${HAWA_DB_USER:-hawa_app}
       HAWA_DB_PASSWORD: ${HAWA_DB_PASSWORD:?Set HAWA_DB_PASSWORD}
-      HYCANVAS_DB_USER: ${HYCANVAS_DB_USER:-hycanvas}
-      HYCANVAS_DB_PASSWORD: ${HYCANVAS_DB_PASSWORD:?Set HYCANVAS_DB_PASSWORD}
       PHOENIX_DB_USER: ${PHOENIX_DB_USER:-phoenix}
       PHOENIX_DB_PASSWORD: ${PHOENIX_DB_PASSWORD:?Set PHOENIX_DB_PASSWORD}
     command:
@@ -120,36 +116,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  # Enable only after docs/21_HYCANVAS_PROOF_SPRINT.md passes.
-  hycanvas:
-    profiles: [studio-hycanvas]
-    build:
-      context: .
-      dockerfile: Dockerfile.hycanvas
-    image: hawa-hycanvas:${HYCANVAS_VERSION:-v0.3.9}
-    restart: unless-stopped
-    env_file: [.env]
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: ${HYCANVAS_DATABASE_URL:?Set a separate HyCanvas database URL}
-      JWT_SECRET: ${HYCANVAS_JWT_SECRET:?Set HYCANVAS_JWT_SECRET}
-      APP_URL: https://${HAWA_DOMAIN:?Set HAWA_DOMAIN}/studio
-      BIND_HOST: 0.0.0.0
-      PORT: 8005
-      LOCAL_STORAGE_PATH: /var/lib/hycanvas/storage
-      DB_AUTO_MIGRATE: "true"
-    volumes:
-      - hycanvas_storage:/var/lib/hycanvas/storage
-    networks: [core]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8005/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    depends_on:
-      postgres: {condition: service_healthy}
 
   phoenix:
     image: ${PHOENIX_IMAGE:?Set PHOENIX_IMAGE to an immutable digest}
@@ -232,7 +198,6 @@ volumes:
   postgres_data: {}
   postgres_wal_archive: {}
   restate_data: {}
-  hycanvas_storage: {}
   phoenix_data: {}
   comfy_models: {}
   comfy_inputs: {}

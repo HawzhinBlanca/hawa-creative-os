@@ -6,6 +6,8 @@ import {
   buildKaaeMandateOperations,
   buildKaaeHigherEdStandardsOperations,
   buildKaaeStrategicRoadmapOperations,
+  buildKaaeInvitationOperations,
+  parseInvitationContent,
   buildFastpayPromoTemplate,
   buildAsterHealthcareTemplate,
   buildDrusteeClinicalTemplate,
@@ -528,10 +530,27 @@ export class CreativeDirectorRunner {
    */
   generateKaaeOperations(
     brief: DesignBrief,
-    templateType: 'announcement' | 'certificate' | 'mandate' | 'standards' | 'roadmap',
+    templateType: 'announcement' | 'certificate' | 'mandate' | 'standards' | 'roadmap' | 'invitation',
     customParams?: Record<string, any>
   ): StudioOperation[] {
-    if (templateType === 'certificate') {
+    if (templateType === 'invitation') {
+      const copyText =
+        customParams?.rawText ||
+        customParams?.copyEn ||
+        brief.exactCopy.map((c) => c.text).join('\n\n');
+      const parsed = parseInvitationContent(copyText);
+      const primaryVariant = brief.variants?.[0];
+      const width = customParams?.width || primaryVariant?.width || 1080;
+      const height = customParams?.height || primaryVariant?.height || 1350;
+
+      return buildKaaeInvitationOperations({
+        width,
+        height,
+        ...parsed,
+        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
+        ...customParams,
+      });
+    } else if (templateType === 'certificate') {
       const recipientBlock = brief.exactCopy.find((c) => c.role === 'headline') || brief.exactCopy[0];
       const programBlock = brief.exactCopy.find((c) => c.role === 'subheadline') || brief.exactCopy[1];
       return buildKaaeCertificateOperations({
@@ -667,7 +686,10 @@ export class CreativeDirectorRunner {
         ...customParams,
       });
     } else {
-      return this.generateKaaeOperations(brief, 'announcement', customParams);
+      const isInvitation =
+        brief.objective.toLowerCase().includes('invitation') ||
+        brief.exactCopy.some((c) => c.text.toLowerCase().includes('invitation') || c.text.includes('بانگهێشت'));
+      return this.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', customParams);
     }
   }
 }

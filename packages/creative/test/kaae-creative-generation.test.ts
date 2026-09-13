@@ -12,9 +12,6 @@ import {
   buildKaaeMandateOperations,
   buildKaaeHigherEdStandardsOperations,
   buildKaaeStrategicRoadmapOperations,
-  KAAE_MANDATE_BUZZ_MAPPING,
-  KAAE_STANDARDS_BUZZ_MAPPING,
-  KAAE_ROADMAP_BUZZ_MAPPING,
   KAAE_PRIMARY_LOGO_SHA256,
   KAAE_SYMBOL_SHA256,
 } from '../src/index.js';
@@ -364,26 +361,53 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         expect(headline?.text).toContain('Three-Year Strategic Roadmap');
       }
     });
+
+    it('dispatches to authentic VIP invitation template via generateKaaeOperations', () => {
+      const invitationText = `THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION
+
+Mr. / Ms. / Dr. [Full Name]
+
+The Kurdistan Accrediting Association for Education cordially requests the honor of your presence at this landmark occasion.
+
+His Excellency Prime Minister Masrour Barzani will officially announce the National Standards for Quality Assurance in Education, marking a defining moment in the advancement of educational quality across the Kurdistan Region.
+
+As part of the official launch, the Minister of Education and the Minister of Higher Education and Scientific Research will sign a Memorandum of Understanding (MoU).
+
+September 9, 2026 | 2:30 PM
+Saad Abdullah Conference Hall
+
+By Invitation Only
+
+This invitation is personal and non-transferable. Kindly do not share this invitation.`;
+
+      const briefRes = briefBuilder.build({
+        taskId: 'task-kaae-inv-001',
+        clientId: kaaeClientId,
+        clientDnaVersion: 1,
+        objective: 'KAAE VIP Official Invitation',
+        rawRequestText: invitationText,
+      });
+
+      expect(briefRes.ok).toBe(true);
+      if (briefRes.ok) {
+        const ops = director.generateKaaeOperations(briefRes.value, 'invitation', {
+          rawText: invitationText,
+          width: 1080,
+          height: 1350,
+        });
+
+        expect(ops.some(o => o.op === 'addImage' && o.asset.sha256 === KAAE_PRIMARY_LOGO_SHA256)).toBe(true);
+        expect(ops.filter(o => o.op === 'addText').some(o => o.text.includes('PROTOCOL OFFICE'))).toBe(false);
+        const titleNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_title');
+        expect(titleNode?.text).toContain('THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION');
+
+        const keynoteNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_keynote');
+        expect(keynoteNode?.text).toContain('Prime Minister Masrour Barzani');
+
+        const badgeNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_access_badge');
+        expect(badgeNode?.text).toContain('By Invitation Only');
+      }
+    });
   });
 
-  describe('Part 5: Figma Buzz Field Mappings & Ground-Truth Tokens', () => {
-    it('verifies KAAE Mandate Buzz Field Mapping conformity', () => {
-      expect(KAAE_MANDATE_BUZZ_MAPPING.templateId).toBe('kaae_mandate');
-      expect(KAAE_MANDATE_BUZZ_MAPPING.targetAspectRatios).toContain('1:1');
-      expect(KAAE_MANDATE_BUZZ_MAPPING.textFields.headlineEn).toContain('Institutional Accreditation Mandate');
-      expect(KAAE_MANDATE_BUZZ_MAPPING.mediaFields.logo.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
-    });
-
-    it('verifies KAAE Standards Buzz Field Mapping conformity', () => {
-      expect(KAAE_STANDARDS_BUZZ_MAPPING.templateId).toBe('kaae_standards');
-      expect(KAAE_STANDARDS_BUZZ_MAPPING.targetAspectRatios).toContain('4:5');
-      expect(KAAE_STANDARDS_BUZZ_MAPPING.textFields.std1Title).toContain('Mission, Governance');
-    });
-
-    it('verifies KAAE Roadmap Buzz Field Mapping conformity', () => {
-      expect(KAAE_ROADMAP_BUZZ_MAPPING.templateId).toBe('kaae_roadmap');
-      expect(KAAE_ROADMAP_BUZZ_MAPPING.targetAspectRatios).toContain('1:1');
-      expect(KAAE_ROADMAP_BUZZ_MAPPING.textFields.phase1Title).toBe('Comprehensive Institutional Audits');
-    });
-  });
 });

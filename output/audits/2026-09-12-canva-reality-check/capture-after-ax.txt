@@ -1,0 +1,121 @@
+Browser tab: 7, Title: "Hawa Desk — Private Creative OS", URL: "http://localhost:8080/#/work".
+0 AXWebArea Hawa Desk — Private Creative OS, URL: localhost:8080/#/work
+	1 container root
+		2 container Main Navigation
+			34 text Hawa Desk
+			35 text Private Creative OS
+			5 container Primary Navigation
+				6 button 💼 Work Desk, Help: Actionable task queue and Canva design review detail, ID: nav-work
+					7 text 💼
+					8 text Work Desk
+				9 button 🧬 Client DNA & Library, Help: Client DNA profiles, guidelines, tokens, and verified asset library, ID: nav-clients
+					10 text 🧬
+					11 text Client DNA & Library
+				12 button ⚙️ Settings & Adapters, Help: Channel bridges, honest health probes, and audit logs, ID: nav-settings
+					13 text ⚙️
+					14 text Settings & Adapters
+			15 container
+				16 text Core Healthy Canva Connected · PostgreSQL Live · Audit Sync
+		17 container
+			18 heading Work Desk, Value: 1
+				19 text Work Desk
+			20 text Actionable creative queue, Canva Studio handoff, and verified delivery gate
+			21 button 🇬🇧 English (Primary) ⇄ کوردی, Help: Primary: English. Click to switch to Secondary: کوردی سۆرانی, ID: lang-toggle-btn
+				22 text 🇬🇧 English (Primary)
+				23 text ⇄
+				24 text کوردی
+			25 button 🚀 Tour, Help: Start 60-Second Operator Onboarding Tour, ID: tour-btn
+				26 text 🚀
+				27 text Tour
+			28 text Live Stream
+			29 button 🔍 Search tasks, clients, copy, hashes… ⌘K, Help: Global Omnisearch (⌘K / Ctrl+K), ID: omnisearch-btn
+				30 text 🔍
+				31 text Search tasks, clients, copy, hashes…
+				32 text ⌘K
+			33 button + New task
+			36 container Hawa Work Desk
+				37 container Actionable Task Queue
+					38 heading Work Queue, Value: 2
+						39 text Work Queue
+					40 text 3
+					41 button Create New Task
+					42 text field (settable) Description: Search work queue, ID: queue-search-input
+					43 Task Status Filter
+						44 radio button All, Value: 1
+						45 radio button Needs Action, Value: 0
+						46 radio button Review, Value: 0
+						47 radio button In Design, Value: 0
+						48 radio button Complete, Value: 0
+					49 content list Tasks List
+						50 container 2026 Higher Education Institutional Quality Certification for KAAE Accreditation. Status: NEEDS APPROVAL
+							51 text KAAE Accreditation
+							52 text NEEDS APPROVAL
+							53 text 2026 Higher Education Institutional Quality Certification
+							54 text دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا
+							55 text ✈️ Telegram
+							56 text Rev v3
+						57 container Immune Support Clinical Dietary Supplement Feed for Drustee Hospital. Status: IN DESIGN
+							58 text Drustee Hospital
+							59 text IN DESIGN
+							60 text Immune Support Clinical Dietary Supplement Feed
+							61 text تەواوکەری خۆراکی کلینیکی بۆ بەهێزکردنی کۆئەندامی بەرگری لەش
+							62 text 💬 WhatsApp
+							63 text Rev v1
+						64 container Autumn Luxury Suite & Hospitality Keynote for Aster Hotel & Resort. Status: COMPLETE
+							65 text Aster Hotel & Resort
+							66 text COMPLETE
+							67 text Autumn Luxury Suite & Hospitality Keynote
+							68 text ئەزموونی حەوانەوەیەکی بێوێنە لە هەولێر لە ئاستەر هۆتێل
+							69 text 🖥️ Desk
+							70 text Rev v3
+				71 container Task Detail View
+					72 text KAAE Accreditation task-kaae-2026-001
+					73 heading 2026 Higher Education Institutional Quality Certification, Value: 1
+						74 text 2026 Higher Education Institutional Quality Certification
+					75 text NEEDS APPROVAL
+					76 container Next Recommended Action
+						77 container
+							78 text Next Action:  Automated QA preflight passed. Art Director review and sign-off required to authorize release.
+					79 toolbar Primary Task Actions
+						80 button Edit in Canva, Help: Open live document in native Canva Studio (FR-078), ID: btn-edit-in-canva
+						81 button Capture for Review, Help: Capture immutable release package and run automated QA checks (FR-078), ID: btn-capture-for-review
+						82 button Request Revision, Help: Request revision and log structured operator instructions (FR-078), ID: btn-request-revision
+						83 button Approve Captured Files, Help: Record human approval bound to captured revision (FR-041, FR-078), ID: btn-approve-captured
+						84 button (disabled) Deliver Approved Files, Help: Publish approved files to Google Drive and Google Sheets (FR-046, FR-078), ID: btn-deliver-approved
+					85 container Captured Design Preview
+						86 text Captured Review Package Revision v 3
+						87 button Toggle Fullscreen Zoom
+						88 container
+							89 text KAAE ACCREDITATION
+							90 heading دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا, Value: 2
+								91 text دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا
+							92 heading Official 2026 Institutional Accreditation Diploma, Value: 3
+								93 text Official 2026 Institutional Accreditation Diploma
+							94 text بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · متمانەی فەرمی دەبەخشرێت بە زانکۆی کوردستان Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Evaluation ✓ OFFICIAL ACCREDITATION RECORD 2026-09-12
+						95 text ASPECT RATIO 4:5 Feed (1080×1350) FORMATS PNG 24-bit + PDF Print PACKAGE SIZE 1.80 MB SHA-256 CHECKSUM
+						96 text b352df1dc30a3bc1d43c96089053c3bdc6bc83663473dc6b8a00eacb1ea5e8a2
+						97 button 📋 Copy, Help: Copy SHA-256 to clipboard
+					98 tab group Task Detail Sections
+						99 tab (selected, settable, boolean) 📝 Brief & Exact Copy, Value: 1
+						100 tab (selectable, settable, boolean) 🧬 Brand DNA, Value: 0
+						101 tab (selectable, settable, boolean) 🛡️ QA Preflight (Pass), Value: 0
+🛡️ QA Preflight (
+Pass
+)
+						102 tab (selectable, settable, boolean) 📜 History & Audit (5), Value: 0
+📜 History & Audit (
+5
+)
+					103 container Brief and Copy
+						104 container
+							105 text 🔒  Exact Copy Invariant (#1):  Approved copy blocks are locked against creative model hallucinations or silent rewriting.
+						106 text KURDISH SORANI HEADLINE (RTL ISOLATED)
+						107 text دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا
+						108 text ENGLISH HEADLINE
+						109 text Official 2026 Institutional Accreditation Diploma
+						110 text KURDISH BODY COPY
+						111 text بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · متمانەی فەرمی دەبەخشرێت بە زانکۆی کوردستان
+						112 text ENGLISH BODY COPY
+						113 text Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Evaluation
+
+The focused UI element is 0 AXWebArea Hawa Desk — Private Creative OS, URL: localhost:8080/#/work

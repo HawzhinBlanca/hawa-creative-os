@@ -14,3 +14,6 @@ export * from './templates/index.js';
 export * from './vazirmatn-font-base64.js';
 export * from './holdout-copy-auditor.js';
 export * from './bounded-creative-planner.js';
+export * from './operations-to-svg.js';
+export * from './vdp-personalizer.js';
+export * from './editable-transfer.js';

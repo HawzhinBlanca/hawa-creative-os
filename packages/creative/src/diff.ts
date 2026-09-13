@@ -44,7 +44,7 @@ export interface SemanticDocumentDiff {
 }
 
 /**
- * Computes a semantic diff between two revisions of a HyCanvas document manifest.
+ * Computes a semantic diff between two revisions of a structured document manifest.
  * Distinguishes text edits, spatial reflows, asset replacements, and structural tree additions/deletions.
  */
 export function diffDocumentManifests(

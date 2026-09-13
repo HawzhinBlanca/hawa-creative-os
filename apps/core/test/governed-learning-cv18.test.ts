@@ -11,7 +11,7 @@ describe('CV-18: Governed Learning and Permitted Data Lineage', () => {
   const db = createDb(connectionString);
   const app = createApp({ db });
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY || 'hawa_test_suite_operator_bearer_token';
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,

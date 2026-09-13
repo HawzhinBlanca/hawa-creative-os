@@ -293,3 +293,83 @@ export function checkTextContainerOverflow(node: {
     containerHeight: node.height,
   };
 }
+
+export interface NodeCollisionViolation {
+  nodeIdA: string;
+  roleA?: string;
+  nodeIdB: string;
+  roleB?: string;
+  intersectionAreaPx: number;
+  intersectionBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+/**
+ * Checks for Axis-Aligned Bounding Box (AABB) collisions between critical foreground elements.
+ * Critical foreground nodes include text blocks, headings, buttons, and badges.
+ * Excludes intentional background rectangles, scrims, and decorative borders.
+ */
+export function checkNodeCollisions(nodes: NodeRect[]): NodeCollisionViolation[] {
+  const violations: NodeCollisionViolation[] = [];
+
+  // Filter for critical foreground nodes that have non-zero dimensions
+  const critical = nodes.filter((n) => {
+    if (!n.width || !n.height || n.width <= 0 || n.height <= 0) return false;
+    const role = (n.role || '').toLowerCase();
+    if (role.includes('background') || role.includes('scrim') || role.includes('border') || role.includes('frame')) {
+      return false;
+    }
+    // Critical nodes have text or specific roles
+    return Boolean(
+      n.text ||
+      role.includes('headline') ||
+      role.includes('body') ||
+      role.includes('button') ||
+      role.includes('badge') ||
+      role.includes('cta') ||
+      role.includes('logo')
+    );
+  });
+
+  for (let i = 0; i < critical.length; i++) {
+    for (let j = i + 1; j < critical.length; j++) {
+      const a = critical[i];
+      const b = critical[j];
+
+      // If one is a parent container/box containing the other (e.g. card box vs card text label), skip
+      const aContainsB = a.x <= b.x && a.y <= b.y && (a.x + a.width >= b.x + b.width) && (a.y + a.height >= b.y + b.height);
+      const bContainsA = b.x <= a.x && b.y <= a.y && (b.x + b.width >= a.x + a.width) && (b.y + b.height >= a.y + a.height);
+      if (aContainsB || bContainsA) {
+        continue;
+      }
+
+      // Compute AABB intersection
+      const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+      const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+
+      // Disregard hairline touches (<= 2px tolerance for sub-pixel borders)
+      if (xOverlap > 2 && yOverlap > 2) {
+        violations.push({
+          nodeIdA: a.id,
+          roleA: a.role,
+          nodeIdB: b.id,
+          roleB: b.role,
+          intersectionAreaPx: Math.round(xOverlap * yOverlap),
+          intersectionBox: {
+            x: Math.max(a.x, b.x),
+            y: Math.max(a.y, b.y),
+            width: Math.round(xOverlap),
+            height: Math.round(yOverlap),
+          },
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+

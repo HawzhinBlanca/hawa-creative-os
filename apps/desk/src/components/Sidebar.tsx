@@ -19,7 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
   }>({
     status: 'checking',
     label: 'Checking Core...',
-    details: 'Probing database & services...',
+    details: 'Checking API availability...',
   });
 
   useEffect(() => {
@@ -32,8 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
           await res.json();
           setHealthStatus({
             status: 'ok',
-            label: 'Core Healthy',
-            details: 'Canva Connected · PostgreSQL Live · Audit Sync',
+            label: 'Core Reachable',
+            details: 'API responded · Canva and delivery require separate verification',
           });
         } else {
           setHealthStatus({
@@ -44,11 +44,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
         }
       } catch {
         if (!mounted) return;
-        // In local/offline demo mode, display honest offline status
         setHealthStatus({
-          status: 'ok',
-          label: 'Desk Standalone',
-          details: 'Canva Studio Ready · Local Desk Canonical',
+          status: 'degraded',
+          label: 'Core Disconnected',
+          details: 'API unreachable · check connection',
         });
       }
     };
@@ -125,5 +124,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
     </aside>
   );
 };
-
 

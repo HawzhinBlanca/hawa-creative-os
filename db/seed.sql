@@ -45,7 +45,7 @@ ON CONFLICT (tenant_id, user_id, role) DO NOTHING;
 INSERT INTO clients (id, tenant_id, code, name, default_language, status)
 VALUES
   ('c1000000-0000-4000-8000-000000000001'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'hawa', 'Hawa Studio / Office', 'en', 'active'),
-  ('c1000000-0000-4000-8000-000000000002'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'kaae', 'Kurdistan Arts & Architecture Enterprise', 'ckb', 'active'),
+  ('c1000000-0000-4000-8000-000000000002'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'kaae', 'Kurdistan Accrediting Association for Education', 'ckb', 'active'),
   ('c1000000-0000-4000-8000-000000000003'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'drustee', 'Drustee Brand', 'ckb', 'active'),
   ('c1000000-0000-4000-8000-000000000004'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'fastpay', 'FastPay FinTech', 'en', 'active')
 ON CONFLICT (id) DO NOTHING;

@@ -1,0 +1,196 @@
+{
+  "timestamp": "2026-09-13T08:36:44.920Z",
+  "scope": "Current source, intercepted provider responses, disposable objects; no live writes",
+  "idempotency": {
+    "crossTenantReturnedSameDocument": false,
+    "crossTenantResult": {
+      "ok": true,
+      "value": {
+        "documentId": "0b11788b-264a-45d3-9b2f-461b1e37b9c2",
+        "studioDocumentId": "DAHU6ovIEc4",
+        "sourceRevision": 1,
+        "sourceSha256": "sha256_62b54a56b6f7867e99daa7fe3e3b68a4b97ba6e3de4ccf33cb5baa411b57f758",
+        "studio": "Canva",
+        "studioVersion": "2.0.0-canva-cutover",
+        "schemaVersion": "2.0.0"
+      }
+    },
+    "changedPayloadReturnedSameDocument": false
+  },
+  "artifacts": {
+    "png": {
+      "ok": false,
+      "error": {
+        "code": "CORRUPT_OR_EMPTY_ARTIFACT",
+        "message": "Corrupt or invalid PNG artifact: Corrupt PNG image data: decompressed scanline buffer length (1 bytes) does not match expected size (5833350 bytes for 1080x1350 format)",
+        "retryable": false,
+        "safeAction": "Re-export valid PNG from Canva studio and re-download full file",
+        "detail": {
+          "byteLength": 66
+        }
+      }
+    },
+    "pdf": {
+      "ok": false,
+      "error": {
+        "code": "CORRUPT_OR_EMPTY_ARTIFACT",
+        "message": "Corrupt or invalid PDF artifact: Malformed PDF document: missing required structural elements (xref, trailer, startxref, /Root, /Pages catalog, or /Page object)",
+        "retryable": false,
+        "safeAction": "Re-export valid PDF from Canva studio and re-download full file",
+        "detail": {
+          "byteLength": 238
+        }
+      }
+    }
+  },
+  "missingCredentials": {
+    "ok": false,
+    "error": {
+      "code": "MISSING_PROVIDER_CREDENTIALS",
+      "message": "API credentials for cloud provider 'google' are not configured. Cannot claim provider execution (H06).",
+      "retryable": false,
+      "safeAction": "Wait for circuit breaker cooldown or check provider API quotas"
+    }
+  },
+  "synthesizedPass": {
+    "ok": false,
+    "error": {
+      "code": "SCHEMA_VALIDATION_FAILED",
+      "message": "Model output failed schema validation: Missing required property: 'passed'",
+      "retryable": false,
+      "safeAction": "Wait for circuit breaker cooldown or check provider API quotas"
+    }
+  },
+  "schemaRequests": [
+    {
+      "url": "https://api.openai.com/v1/chat/completions",
+      "body": {
+        "model": "gpt-5.6-sol",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Create a bright orange asymmetric landscape science poster. Do not use navy or gold.\n\nRespond ONLY with a valid JSON object."
+          }
+        ],
+        "response_format": {
+          "type": "json_object"
+        }
+      }
+    }
+  ],
+  "attemptBudget": {
+    "limit": 1,
+    "externalRequests": 1,
+    "requests": [
+      "https://api.openai.com/v1/chat/completions"
+    ],
+    "response": {
+      "ok": false,
+      "error": {
+        "code": "MODEL_CASCADE_EXHAUSTED",
+        "message": "OpenAI returned HTTP 503: Unavailable",
+        "retryable": true,
+        "safeAction": "Wait for circuit breaker cooldown or check provider API quotas"
+      }
+    },
+    "breaker": {
+      "name": "openai",
+      "state": "CLOSED",
+      "consecutiveFailures": 1,
+      "totalTrips": 0,
+      "lastFailureAt": "2026-09-13T08:36:44.918Z",
+      "lastStateChangeAt": "2026-09-13T08:36:44.918Z"
+    }
+  },
+  "blindJudge": {
+    "ok": false,
+    "error": {
+      "code": "MISSING_IMAGE_INPUT",
+      "message": "Visual judge image asset could not be resolved or does not exist: audit-nonexistent.png",
+      "retryable": false,
+      "safeAction": "Verify artifact storage path and capture completion before visual evaluation"
+    }
+  },
+  "visionRequests": [],
+  "canvaAuth": [
+    {
+      "url": "https://api.canva.com/rest/v1/oauth/token",
+      "body": "grant_type=client_credentials"
+    },
+    {
+      "url": "https://api.canva.com/rest/v1/designs",
+      "body": "{\"title\":\"Audit local intercepted request\"}"
+    }
+  ],
+  "copy": {
+    "extraFacts": [
+      {
+        "ruleId": "UNSOLICITED_CONTENT_DETECTED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Unapproved boilerplate or prohibited statutory citation detected in canvas: \"RSVP by September 1. Admission fee: $50.\"",
+        "nodeIds": [],
+        "evidence": {
+          "offendingText": "RSVP by September 1. Admission fee: $50.",
+          "forbiddenPattern": "admission fee"
+        }
+      },
+      {
+        "ruleId": "UNSOLICITED_CONTENT_DETECTED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Unapproved boilerplate or prohibited statutory citation detected in canvas: \"RSVP by September 1. Admission fee: $50.\"",
+        "nodeIds": [],
+        "evidence": {
+          "offendingText": "RSVP by September 1. Admission fee: $50.",
+          "forbiddenPattern": "admission fee:"
+        }
+      },
+      {
+        "ruleId": "UNSOLICITED_CONTENT_DETECTED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Unapproved boilerplate or prohibited statutory citation detected in canvas: \"RSVP by September 1. Admission fee: $50.\"",
+        "nodeIds": [],
+        "evidence": {
+          "offendingText": "RSVP by September 1. Admission fee: $50.",
+          "forbiddenPattern": "rsvp by"
+        }
+      },
+      {
+        "ruleId": "UNSOLICITED_CONTENT_DETECTED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Unapproved boilerplate or prohibited statutory citation detected in canvas: \"RSVP by September 1. Admission fee: $50.\"",
+        "nodeIds": [],
+        "evidence": {
+          "offendingText": "RSVP by September 1. Admission fee: $50.",
+          "forbiddenPattern": "fee: $"
+        }
+      }
+    ],
+    "duplicate": [
+      {
+        "ruleId": "DUPLICATE_COPY_DETECTED",
+        "severity": "critical",
+        "hardFailure": true,
+        "category": "copy",
+        "message": "Factual copy block \"September 9, 2026 | 2:30 PM\" appears 2 times in canvas (duplicate factual copy)",
+        "nodeIds": [],
+        "evidence": {
+          "approvedCopy": "September 9, 2026 | 2:30 PM",
+          "occurrences": 2
+        }
+      }
+    ]
+  },
+  "parserCollision": {
+    "added": "A second Prime Minister address will follow the main event.",
+    "originalKeynotePreserved": true,
+    "newParagraphPreserved": true
+  }
+}

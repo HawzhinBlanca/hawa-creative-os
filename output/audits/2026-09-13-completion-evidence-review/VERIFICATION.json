@@ -1,0 +1,132 @@
+{
+  "checkedAt": "2026-09-13T07:09:39.855049+00:00",
+  "artifacts": {
+    "task_slice_1789252197229_export.png": {
+      "bytes": 383130,
+      "sha256": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4",
+      "decoded": true,
+      "size": [
+        1080,
+        1350
+      ]
+    },
+    "task_slice_1789252197229_export.pdf": {
+      "bytes": 577,
+      "sha256": "18e28248bcc1362ac67a0502722b59d04d2068aac4c5b977eab4d7275d341d6c",
+      "decoded": false,
+      "error": "Broken xref table"
+    }
+  },
+  "manifest": [
+    {
+      "path": "COMPLETION_MATRIX.csv",
+      "matches": true
+    },
+    {
+      "path": "FINAL_VERIFICATION_REPORT.md",
+      "matches": true
+    },
+    {
+      "path": "LIVE_VERTICAL_SLICE_RECEIPTS.json",
+      "matches": true
+    },
+    {
+      "path": "RAW_PROBES_EVIDENCE.json",
+      "matches": true
+    },
+    {
+      "path": "REPRODUCE.md",
+      "matches": true
+    },
+    {
+      "path": "artifacts/task_slice_1789252197229_export.pdf",
+      "matches": true
+    },
+    {
+      "path": "artifacts/task_slice_1789252197229_export.png",
+      "matches": true
+    },
+    {
+      "path": "screenshots/desktop_workspace_queue_1789252132326.png",
+      "matches": true
+    },
+    {
+      "path": "screenshots/initial_page_1789252126268.png",
+      "matches": true
+    },
+    {
+      "path": "screenshots/mobile_queue_filter_pills_1789252142600.png",
+      "matches": true
+    },
+    {
+      "path": "screenshots/mobile_viewport_layout_1789252138542.png",
+      "matches": true
+    },
+    {
+      "path": "screenshots/task_detail_view_1789252165614.png",
+      "matches": true
+    }
+  ],
+  "opus": {
+    "status": 200,
+    "hasCritique": false
+  },
+  "rawCheckCounts": {
+    "H01": {
+      "status": "PASS",
+      "checks": 4
+    },
+    "H02": {
+      "status": "PASS",
+      "checks": 2
+    },
+    "H03": {
+      "status": "PASS",
+      "checks": 5
+    },
+    "H04": {
+      "status": "PASS",
+      "checks": 3
+    },
+    "H05": {
+      "status": "PASS",
+      "checks": 2
+    },
+    "H06": {
+      "status": "BLOCKED",
+      "checks": 3
+    },
+    "H07": {
+      "status": "PASS",
+      "checks": 3
+    },
+    "H08": {
+      "status": "PASS",
+      "checks": 3
+    },
+    "H09": {
+      "status": "PASS",
+      "checks": 3
+    },
+    "H10": {
+      "status": "PASS",
+      "checks": 2
+    },
+    "H11": {
+      "status": "PASS",
+      "checks": 3
+    },
+    "H12": {
+      "status": "PASS",
+      "checks": 2
+    },
+    "H13": {
+      "status": "PASS",
+      "checks": 1
+    },
+    "H14": {
+      "status": "PASS",
+      "checks": 3
+    }
+  }
+}

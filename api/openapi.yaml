@@ -16,6 +16,34 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/tasks/{taskId}/canva/generate:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1generate'
+  /v1/tasks/{taskId}/canva/plans:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1plans'
+  /v1/tasks/{taskId}/canva/plans/{operationId}/resume:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1plans~1{operationId}~1resume'
+  /v1/tasks/{taskId}/canva/imports/{operationId}/resume:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1imports~1{operationId}~1resume'
+  /v1/integrations/canva/status:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1status'
+  /v1/integrations/canva/authorize:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1authorize'
+  /v1/integrations/canva/callback:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1callback'
+  /v1/integrations/canva/disconnect:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1disconnect'
+  /v1/tasks/{taskId}/canva:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva'
+  /v1/tasks/{taskId}/canva/editor:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1editor'
+  /v1/tasks/{taskId}/canva/design:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1design'
+  /v1/tasks/{taskId}/canva/exports:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1exports'
+  /v1/tasks/{taskId}/canva/exports/{operationId}/resume:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1exports~1{operationId}~1resume'
+  /v1/tasks/{taskId}/canva/artifacts/{artifactId}:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1artifacts~1{artifactId}'
   /v1/tasks:
     get:
       tags: [Tasks]
@@ -373,6 +401,8 @@ paths:
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
+    officeBearer:
+      $ref: './canva-connect.openapi.json#/components/securitySchemes/officeBearer'
     oidc:
       type: openIdConnect
       openIdConnectUrl: https://accounts.google.com/.well-known/openid-configuration

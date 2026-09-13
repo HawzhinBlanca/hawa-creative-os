@@ -10,7 +10,7 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const drusteeClientId = 'c1000000-0000-4000-8000-000000000003';
 
-  const testBearer = process.env.HAWA_BEARER_TOKEN || 'hawa_test_suite_operator_bearer_token';
+  const testBearer = process.env.HAWA_ART_DIRECTOR_KEY || 'hawa_test_suite_operator_bearer_token';
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
     'Content-Type': 'application/json',

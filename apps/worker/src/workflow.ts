@@ -3,7 +3,8 @@ import type { RequestContext, Result, AppError, UUID, DesignStudioAdapter } from
 import { TaskStateMachine, type TaskStatus } from '@hawa/domain';
 import { BriefBuilder, CreativeDirectorRunner, DesignRouter } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
-import { FigmaBridgeAdapter, GooglePublisher, DirectModelGateway } from '@hawa/integrations';
+import { CanvaDesignStudioAdapter, GooglePublisher, DirectModelGateway } from '@hawa/integrations';
+import { runCanvaDraft } from './canva-draft-workflow.js';
 import { RetrievalService } from '@hawa/retrieval';
 import { OfficeTracer } from '@hawa/observability';
 import {
@@ -24,6 +25,7 @@ export interface WorkflowInput {
   sourcePlatform: string;
   priority?: string;
   idempotencyKey: string;
+  canvaAutoGenerate?: boolean;
 }
 
 export interface WorkflowOutput {
@@ -65,12 +67,16 @@ export class TaskWorkflowRunner {
     this.briefBuilder = options.briefBuilder || new BriefBuilder();
     this.creativeDirector = options.creativeDirector || new CreativeDirectorRunner();
     this.qaEngine = options.qaEngine || new DeterministicQAEngine();
-    this.studio = options.studio || new FigmaBridgeAdapter();
+    this.studio = options.studio || new CanvaDesignStudioAdapter();
     this.publisher = options.publisher || new GooglePublisher();
     this.retrieval = options.retrieval || new RetrievalService();
   }
 
   async run(input: WorkflowInput, ctx?: WorkflowDurableContext): Promise<WorkflowOutput> {
+    if(process.env.NODE_ENV==='production'||input.canvaAutoGenerate){
+      if(!ctx)throw new Error('Production Canva workflows require the durable Restate context');
+      return runCanvaDraft(input,ctx);
+    }
     const span = this.tracer.startSpan('TaskWorkflowRunner.run', undefined, {
       taskId: input.taskId,
       tenantId: input.tenantId,

@@ -66,7 +66,7 @@ export class FakeDesignStudioAdapter implements DesignStudioAdapter {
     return {
       ok: true,
       value: {
-        name: 'FakeHyCanvasStudio',
+        name: 'FakeDesignStudio',
         version: '0.3.9',
         healthy: true,
         capabilities: {
@@ -103,7 +103,7 @@ export class FakeDesignStudioAdapter implements DesignStudioAdapter {
       studioDocumentId: `fake-doc-${documentId}`,
       sourceRevision: 1,
       sourceSha256: hash,
-      studio: 'FakeHyCanvas',
+      studio: 'FakeDesignStudio',
       studioVersion: '0.3.9',
       schemaVersion: '1.0',
     };
@@ -119,7 +119,7 @@ export class FakeDesignStudioAdapter implements DesignStudioAdapter {
       studioDocumentId: `imported-${documentId}`,
       sourceRevision: 1,
       sourceSha256: source.sha256,
-      studio: 'FakeHyCanvas',
+      studio: 'FakeDesignStudio',
       studioVersion: '0.3.9',
       schemaVersion: source.studioSchemaVersion,
     };

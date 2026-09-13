@@ -1,0 +1,41 @@
+import { getAuthHeaders } from './auth.js';
+import type { ActiveDraft } from './draftStore.js';
+
+const PENDING_KEY = 'hawa_desk_pending_manual_intake_v1';
+
+export function getPendingManualDraft(): Omit<ActiveDraft, 'savedAt'> | null {
+  const raw = localStorage.getItem(PENDING_KEY);
+  return raw ? JSON.parse(raw).draft || null : null;
+}
+
+/** Freeze the whole request before the side effect. Uncertain replies retry the same key/body. */
+export async function submitManualTask(draft: Omit<ActiveDraft, 'savedAt'>) {
+  if (!navigator.onLine) throw new Error('You are offline. Your draft is retained. Reconnect and press Save request.');
+  const body = JSON.stringify({
+    clientId: draft.clientId, title: draft.title, priority: 'routine',
+    description: [draft.copy, draft.copyCkb].filter(Boolean).join('\n\n'),
+    copyEn: draft.copy, copyCkb: draft.copyCkb || '',
+    designInstructions: draft.designInstructions || '', referenceAssets: draft.referenceAssets || '',
+    workflow: 'canva_manual',
+    source: { platform: 'hawa_desk', externalId: 'operator-desk' },
+  });
+  const raw = localStorage.getItem(PENDING_KEY);
+  const pending = raw ? JSON.parse(raw) as { key: string; body: string; draft?: Omit<ActiveDraft, 'savedAt'> } : { key: `task-desk-${crypto.randomUUID()}`, body, draft };
+  if (pending.body !== body) throw new Error('The previous request has an unconfirmed result. Close and reopen this form to restore it, then retry before submitting a different request.');
+  localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+  let response: Response;
+  try {
+    response = await fetch('/v1/tasks', { method: 'POST', headers: {
+      'Content-Type': 'application/json', 'Idempotency-Key': pending.key, ...getAuthHeaders(),
+    }, body: pending.body, signal: AbortSignal.timeout(30000) });
+  } catch {
+    throw new Error('The server result is unconfirmed. Your full draft is retained. Retry unchanged to avoid a duplicate task.');
+  }
+  if (!response.ok) {
+    throw new Error(`Request was not confirmed (HTTP ${response.status}). Your full draft is retained. Retry unchanged after the problem is resolved.`);
+  }
+  const task = await response.json();
+  if (typeof task.id !== 'string' || !task.id) throw new Error('The server did not return a task ID. Retry unchanged; your draft is retained.');
+  localStorage.removeItem(PENDING_KEY);
+  return task;
+}

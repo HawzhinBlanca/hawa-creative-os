@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-09-12T21:46:24.197Z",
+  "otherClientLogoReplacedWithKaae": false,
+  "svgSha256": "35cfdc15d5da74816c36404cb47f9b97dc3c77367a95f25d9991c484985c6c70",
+  "rasterFailure": {
+    "rejected": true,
+    "error": "Rasterization failed for SVG (200x200): neither rsvg-convert nor magick could render image."
+  }
+}

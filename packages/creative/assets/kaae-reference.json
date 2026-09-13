@@ -1,0 +1,17 @@
+{
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "clientName": "KAAE",
+  "sourceUrl": "https://drive.google.com/file/d/1ZmSOzRhHFKWWvMG6hNhcMtjWPrASRuyF/view",
+  "sourceTitle": "BRAND GUIDLINES.pdf",
+  "sourceModifiedAt": "2025-05-26T17:30:04Z",
+  "retrievedAt": "2026-09-13",
+  "status": "reference_for_draft_not_release_approval",
+  "rules": {
+    "fontFamily": "Minion Variable Concept",
+    "palette": ["#e8b85c", "#4770a3", "#fff2db", "#17087a", "#3833a3", "#0f73de"],
+    "logo": "Use the supplied official logo unchanged, with its original aspect ratio. Minimum digital width 100px. Keep clear space around it equal to the height of its K.",
+    "body": "Left align digital body text. Use 1.4 line spacing, readable text and academic formality.",
+    "restriction": "Do not add reference-document factual copy, contact details, slogans, signatures or a seal to the invitation. Only the saved request supplies design copy."
+  },
+  "logoSha256": "40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc"
+}

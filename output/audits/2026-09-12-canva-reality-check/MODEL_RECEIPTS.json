@@ -1,0 +1,48 @@
+{
+  "astraReceipt": {
+    "timestamp": "2026-09-12T18:37:30.284Z",
+    "status": 403,
+    "modelRequested": "gpt-6-astra",
+    "response": {
+      "error": {
+        "message": "Project `proj_Joi7d0agEUBGRv7hTEVp6szc` does not have access to model `gpt-6-astra`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+      }
+    },
+    "entitled": false
+  },
+  "planningDeployment": {
+    "deploymentId": "8f4ef1ef-49e1-43cd-bc9c-56028c3edfb4",
+    "role": "creative_director",
+    "provider": "openai",
+    "exactModelId": "gpt-4.1",
+    "deploymentVersion": "2026-09-04"
+  },
+  "opusReceipt": {
+    "timestamp": "2026-09-12T18:38:03.941Z",
+    "status": 200,
+    "headers": {
+      "request-id": "req_011Cez2jwGT613orYFrjhjUL"
+    },
+    "modelRequested": "claude-opus-5",
+    "observedModel": "claude-opus-5",
+    "usage": {
+      "input_tokens": 2134,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1473,
+      "output_tokens_details": {
+        "thinking_tokens": 614
+      },
+      "service_tier": "standard",
+      "inference_geo": "global"
+    },
+    "critique": "```json\n{\n  \"passed\": true,\n  \"overallScore\": 3.9,\n  \"rubricScores\": {\n    \"hierarchy\": 4.0,\n    \"legibility\": 3.5,\n    \"balance\": 3.5,\n    \"brandResemblance\": 4.5\n  },\n  \"findings\": [\n    \"Primary hierarchy reads correctly at a glance: mark → institutional eyebrow → serif title → honoree line → detail cards. The gold eyebrow with the short centered rule is a disciplined, diplomatic-grade device.\",\n    \"Palette is on-brand and confident — deep navy field, a single gold accent family, white serif display. Nothing competes with the KAAE mark, and the thin gold keyline frame reads as stationery rather than decoration.\",\n    \"The two body paragraphs are the weakest zone. They are set at different measures (the second is visibly narrower and smaller), which reads as an accident rather than a deliberate tier. Unify to one measure and one size, or make the MoU note an explicitly smaller, clearly separated note.\",\n    \"Centered ragged setting across 6–7 lines produces an uneven, lumpy rag (e.g. the 'The' orphaned at the end of line 3). For a protocol piece, tighten the measure to ~55–60 characters and hand-break lines on phrase boundaries.\",\n    \"Body copy contrast is soft — light gray at ~15px on navy sits near the lower bound of comfortable reading, especially for the second paragraph. Raise to near-white at 80–85% opacity and add ~0.1em of leading.\",\n    \"The Date & Time / Venue cards are the strongest secondary element: matched heights, gold micro-labels, hairline dividers, and high-contrast serif values. Date and venue are unambiguous at distance.\",\n    \"Vertical rhythm slackens after the 'non-transferable' line — a large unresolved gap sits before the footer, making the lower third feel bottom-light relative to the dense middle.\",\n    \"The '[Full Name]' placeholder is honest as a template but should never ship; consider a ruled gold name line so an unfilled invitation still looks intentional.\",\n    \"Commendably free of unrequested boilerplate: no RSVP clutter, no dress-code block, no QR codes, no ornamental flourishes or drop shadows. The 'By Invitation Only' + non-transferable pair is justified by the event's protocol nature.\",\n    \"Overall this passes as a credible high-level diplomatic invitation; remaining work is typographic refinement of the body block, not conceptual or brand correction.\"\n  ]\n}\n```"
+  }
+}

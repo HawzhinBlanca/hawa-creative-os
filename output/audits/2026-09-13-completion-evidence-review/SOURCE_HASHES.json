@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-09-13T07:10:51.551759+00:00",
+  "sources": [
+    {
+      "path": "scripts/execute_independent_live_vertical_slice.ts",
+      "sha256": "b1f70a8ffbec1850ddb966da62dc23a3de4dcba5021d59591a0a8d395a13225d"
+    },
+    {
+      "path": "scripts/run_independent_completion_audit.ts",
+      "sha256": "bbb0c14b282963016c16261ea7960dae3f0f9d9cea133e2cc3bc94f4547a413c"
+    },
+    {
+      "path": "packages/db/test/live-recovery-drill.test.ts",
+      "sha256": "65eda9f1e8d60959b008ab2dd7d1bf71e537f738eaa7722f85cdb177ebeb976a"
+    },
+    {
+      "path": "packages/integrations/src/canva-design-studio-adapter.ts",
+      "sha256": "4721a82534f08ae12d8d4595bc1cf0d1143159311cba0b7ca035716e97fe915f"
+    },
+    {
+      "path": "packages/evals/src/runner.ts",
+      "sha256": "823a39aa3bf82a26bc94a7c0b6d9d8250ac0f12bb76bb7884be7180c7f008f02"
+    },
+    {
+      "path": "output/audits/2026-09-13-independent-completion-audit/FINAL_VERIFICATION_REPORT.md",
+      "sha256": "2aca751462258179493377d22f6470c6ce5abc661b06c0b72cac9bd87e421fbd"
+    },
+    {
+      "path": "output/audits/2026-09-13-independent-completion-audit/RAW_PROBES_EVIDENCE.json",
+      "sha256": "07725bfcf07396fd96f69d22512e47593f326b77e4e905326e825e9b08a0ad0b"
+    },
+    {
+      "path": "output/audits/2026-09-13-independent-completion-audit/LIVE_VERTICAL_SLICE_RECEIPTS.json",
+      "sha256": "e0dfabba9520a61fbf3bcb744438b161a8898a1bcf370701387fddc741caaf76"
+    }
+  ]
+}

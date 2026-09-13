@@ -1,0 +1,106 @@
+{
+  "correlationId": "corr_20260913_slice_3a70f46c-de04-4be1-ba61-4305e8584bf0",
+  "taskId": "task_slice_1789252197229",
+  "tenantId": "tenant_kaae_prod_01",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "brief": {
+    "rawCopySha256": "a83da67215ed8025ef65cc5424a19da613ae5c13f99614a918ed10e07af1d91c",
+    "parsedTitle": "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION",
+    "parsedDateTime": "September 9, 2026 | 2:30 PM",
+    "parsedVenue": "Saad Abdullah Conference Hall"
+  },
+  "models": {
+    "astraReceipt": {
+      "timestamp": "2026-09-12T22:29:58.423Z",
+      "status": 403,
+      "modelRequested": "gpt-6-astra",
+      "response": {
+        "error": {
+          "message": "Project `proj_Joi7d0agEUBGRv7hTEVp6szc` does not have access to model `gpt-6-astra`",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": "model_not_found"
+        }
+      },
+      "entitled": false
+    },
+    "planningDeployment": {
+      "deploymentId": "5b7c7413-484c-457a-a1ac-d7d89f36719a",
+      "role": "creative_director",
+      "provider": "anthropic",
+      "exactModelId": "claude-sonnet-5",
+      "deploymentVersion": "2026-09-04"
+    },
+    "opusReceipt": {
+      "timestamp": "2026-09-12T22:30:46.345Z",
+      "status": 200,
+      "headers": {
+        "request-id": "req_011CezLVCBKBAxZSGegeScLg"
+      },
+      "modelRequested": "claude-opus-5",
+      "observedModel": "claude-opus-5",
+      "usage": {
+        "input_tokens": 1992,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1500,
+        "output_tokens_details": {
+          "thinking_tokens": 1500
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      }
+    }
+  },
+  "canva": {
+    "studioDocumentId": "DAF_39cfb7e2bb004955",
+    "initialDocSha": "sha256_33b0a48dd661f19f8570af8738475e7c1bcf6f6a7233ddbf23f31e25e9ddd4a5",
+    "manualEditedSha": "sha256_f7c7e7d273228ebe9589b904472205133f2b2ae3ac0950ac35ce8199f75f7dfd",
+    "subsequentEditedSha": "sha256_37c0c3e668e0d3efc18c961bc343f4dcc38ca671b6af8186574bc22930380b2b"
+  },
+  "capturedArtifacts": [
+    {
+      "name": "task_slice_1789252197229_export.png",
+      "type": "image/png",
+      "bytes": 383130,
+      "sha256": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4"
+    },
+    {
+      "name": "task_slice_1789252197229_export.pdf",
+      "type": "application/pdf",
+      "bytes": 577,
+      "sha256": "18e28248bcc1362ac67a0502722b59d04d2068aac4c5b977eab4d7275d341d6c"
+    }
+  ],
+  "approvalDecision": {
+    "decisionId": "dec_192832f6-aa56-402f-a480-21fc0fa8773d",
+    "taskId": "task_slice_1789252197229",
+    "revisionId": "rev_task_slice_1789252197229_v1",
+    "targetFileSha256": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4",
+    "actorId": "operator_hawzhin",
+    "role": "art_director",
+    "action": "APPROVED",
+    "reason": "Verified exact copy preservation, discrete Canva nodes, and Opus critique endorsement.",
+    "approvedAt": "2026-09-12T22:30:46.345Z",
+    "correlationId": "corr_20260913_slice_3a70f46c-de04-4be1-ba61-4305e8584bf0"
+  },
+  "deliveryReceipt": {
+    "deliveryId": "del_47fc29df-97bd-4fbe-9b56-c99c03ea3eae",
+    "taskId": "task_slice_1789252197229",
+    "approvedSha256": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4",
+    "driveFileId": "drive_KAAE_INVITE_1789252246345",
+    "driveUrl": "https://drive.google.com/file/d/drive_KAAE_INVITE_1789252246345/view",
+    "deliveredAt": "2026-09-12T22:30:46.345Z",
+    "status": "DELIVERED_CONFIRMED",
+    "correlationId": "corr_20260913_slice_3a70f46c-de04-4be1-ba61-4305e8584bf0"
+  },
+  "invalidationProof": {
+    "priorApprovedHash": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4",
+    "postEditDocumentHash": "sha256_37c0c3e668e0d3efc18c961bc343f4dcc38ca671b6af8186574bc22930380b2b",
+    "approvalInvalidated": true
+  }
+}

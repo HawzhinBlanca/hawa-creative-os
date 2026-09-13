@@ -95,27 +95,24 @@ export class CanvaBindingRepository {
       throw new Error(`Task ${params.taskId} does not exist in tenant ${params.tenantId}`);
     }
 
-    if (task.client_id && task.client_id !== params.clientId) {
+    if (!task.client_id || task.client_id !== params.clientId) {
       throw new Error(
         `Server-derived ownership denial: task belongs to client ${task.client_id}, cannot bind for client ${params.clientId}`
       );
     }
 
-    // 2. Check for duplicate design assignment to a foreign client
-    const existingDesign = await client
-      .selectFrom('canva_bindings')
-      .select(['id', 'client_id', 'task_id'])
-      .where('tenant_id', '=', params.tenantId)
-      .where('canva_design_id', '=', params.canvaDesignId)
-      .executeTakeFirst();
-
-    if (existingDesign && existingDesign.client_id !== params.clientId) {
-      throw new Error(
-        `Foreign client denial: Canva design ${params.canvaDesignId} is already bound to client ${existingDesign.client_id}`
-      );
+    // A retry of the identical task binding is safe; changing its document is not.
+    const existing = await client.selectFrom('canva_bindings').selectAll()
+      .where('tenant_id', '=', params.tenantId).where('task_id', '=', params.taskId)
+      .where('direction_name', '=', params.directionName ?? 'primary').executeTakeFirst();
+    if (existing) {
+      if (existing.client_id !== params.clientId || existing.canva_design_id !== params.canvaDesignId ||
+          existing.edit_url !== params.editUrl || existing.status !== 'bound') throw new Error('Canva binding conflict');
+      return existing;
     }
-
-    return await client
+    // The global unique design index enforces ownership even across concurrent
+    // tenants hidden by RLS. Application-side checks alone cannot do that.
+    const inserted = await client
       .insertInto('canva_bindings')
       .values({
         tenant_id: params.tenantId,
@@ -130,81 +127,59 @@ export class CanvaBindingRepository {
         status: 'bound',
         version: 1,
       })
+      .onConflict(oc => oc.doNothing())
       .returningAll()
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
+    if (inserted) return inserted;
+    const replay = await client.selectFrom('canva_bindings').selectAll()
+      .where('tenant_id', '=', params.tenantId).where('task_id', '=', params.taskId)
+      .where('direction_name', '=', params.directionName ?? 'primary').executeTakeFirst();
+    if (replay && replay.client_id === params.clientId && replay.canva_design_id === params.canvaDesignId &&
+        replay.edit_url === params.editUrl && replay.status === 'bound') return replay;
+    throw new Error('Canva binding conflict');
   }
 
   async captureArtifactSet(params: CaptureArtifactSetParams) {
-    const binding = await this.findById(params.bindingId);
-    if (!binding) {
-      throw new Error(`Binding ${params.bindingId} not found`);
-    }
-
-    // Invariant 1: Server-derived ownership — URL alone cannot select a client
-    if (binding.client_id !== params.clientId) {
-      throw new Error(
-        `Foreign client denial: Request client ${params.clientId} does not match bound client ${binding.client_id}`
-      );
-    }
-
-    // Invariant 2: Reject foreign/unknown design ID
-    if (binding.canva_design_id !== params.canvaDesignId) {
-      throw new Error(
-        `Design mismatch denial: Request design ${params.canvaDesignId} does not match bound design ${binding.canva_design_id}`
-      );
-    }
-
-    // Invariant 3: Optimistic concurrency — reject stale requests
-    if (binding.version !== params.expectedVersion) {
-      throw new Error(
-        `Stale version conflict: Expected version ${params.expectedVersion} does not match current version ${binding.version}`
-      );
-    }
-
-    // Invariant 4: Snapshot incompleteness cannot be represented as fully observed source
-    if (!params.semanticCoverage.isComplete) {
-      throw new Error(
-        'Snapshot incompleteness denial: Incomplete capture cannot be represented as fully observed source'
-      );
-    }
-
-    // Invariant 5: Empty artifacts rejection
-    if (!params.artifacts || params.artifacts.length === 0) {
-      throw new Error('Capture artifact set must contain at least one valid export artifact');
-    }
-
-    const nextVersion = binding.version + 1;
-
-    // Atomically bump binding version and record capture set
-    const captureSet = await this.db
-      .insertInto('canva_capture_sets')
-      .values({
-        tenant_id: params.tenantId,
-        binding_id: params.bindingId,
-        task_id: params.taskId,
-        client_id: params.clientId,
-        parent_revision_id: params.parentRevisionId ?? null,
+    const capture = async (trx: Kysely<Database>) => {
+      const binding = await trx.selectFrom('canva_bindings').selectAll()
+        .where('id', '=', params.bindingId).where('tenant_id', '=', params.tenantId)
+        .forUpdate().executeTakeFirst();
+      if (!binding || binding.status !== 'bound' || binding.task_id !== params.taskId ||
+          binding.client_id !== params.clientId || binding.canva_design_id !== params.canvaDesignId) {
+        if (binding && binding.client_id !== params.clientId) {
+          throw new Error(`Foreign client denial: Capture binding scope mismatch for foreign client ${params.clientId}`);
+        }
+        throw new Error('Capture binding scope mismatch');
+      }
+      if (binding.version !== params.expectedVersion) throw new Error('Stale version conflict');
+      if (!params.semanticCoverage.isComplete || (params.semanticCoverage.unobservedLayersCount ?? 0) > 0) {
+        throw new Error('Snapshot incompleteness denial: Incomplete semantic capture (unobserved layers or incomplete coverage flag)');
+      }
+      if (!/^[a-f0-9]{64}$/.test(params.capturedArtifactSetHash) || !params.artifacts.length ||
+          params.artifacts.some(a => !/^[a-f0-9]{64}$/.test(a.sha256) || !Number.isSafeInteger(a.byteSize) || a.byteSize <= 0)) {
+        throw new Error('Capture requires valid artifact hashes and nonempty bytes');
+      }
+      if (params.parentRevisionId) {
+        const parent = await trx.selectFrom('design_revisions').select('id')
+          .where('id', '=', params.parentRevisionId).where('tenant_id', '=', params.tenantId)
+          .where('task_id', '=', params.taskId).executeTakeFirst();
+        if (!parent) throw new Error('Parent revision scope mismatch');
+      }
+      const version = binding.version + 1;
+      const row = await trx.insertInto('canva_capture_sets').values({
+        tenant_id: params.tenantId, binding_id: params.bindingId, task_id: params.taskId,
+        client_id: params.clientId, parent_revision_id: params.parentRevisionId ?? null,
         captured_artifact_set_hash: params.capturedArtifactSetHash,
-        artifacts: JSON.stringify(params.artifacts),
-        export_settings: params.exportSettings ?? {},
-        semantic_coverage: JSON.stringify(params.semanticCoverage),
-        effect_job_id: params.effectJobId ?? null,
-        auth_actor: JSON.stringify(params.authActor),
-        version: nextVersion,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    await this.db
-      .updateTable('canva_bindings')
-      .set({
-        version: nextVersion,
-        updated_at: new Date(),
-      })
-      .where('id', '=', params.bindingId)
-      .execute();
-
-    return captureSet;
+        artifacts: JSON.stringify(params.artifacts), export_settings: params.exportSettings ?? {},
+        semantic_coverage: JSON.stringify(params.semanticCoverage), effect_job_id: params.effectJobId ?? null,
+        auth_actor: JSON.stringify(params.authActor), version,
+      }).returningAll().executeTakeFirstOrThrow();
+      await trx.updateTable('canva_bindings').set({ version, updated_at: new Date() })
+        .where('id', '=', binding.id).where('tenant_id', '=', params.tenantId).execute();
+      return row;
+    };
+    // Keep the caller's RLS transaction if present; otherwise own the transaction.
+    return this.db.isTransaction ? capture(this.db) : this.db.transaction().execute(capture);
   }
 
   async listCaptureSetsForTask(tenantId: string, taskId: string) {

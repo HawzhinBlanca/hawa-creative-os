@@ -54,39 +54,8 @@ export class TaskWorkflowDispatcher {
       };
     }
 
-    // 2. Ambiguous-Success Reconciliation:
-    // Check if task already progressed beyond initial intake in DB.
-    const client = trx || this.options.db;
-    if (client) {
-      try {
-        const existingTask = await client
-          .selectFrom('tasks')
-          .select(['id', 'state'])
-          .where('id', '=', cmd.aggregate_id)
-          .executeTakeFirst();
-
-        if (
-          existingTask &&
-          existingTask.state !== 'received' &&
-          existingTask.state !== 'promotion_pending'
-        ) {
-          const reconciledReceipt: WorkflowSubmissionReceipt = {
-            workflowId,
-            aggregateId: cmd.aggregate_id,
-            status: 'submitted',
-            idempotencyKey,
-            submittedAt: new Date().toISOString(),
-            receiptId: `rcpt_reconciled_${crypto.randomUUID().slice(0, 8)}`,
-            reconciled: true,
-          };
-          this.inFlightSubmissions.set(idempotencyKey, reconciledReceipt);
-          return reconciledReceipt;
-        }
-      } catch {
-        // Table or connection query fallback
-      }
-    }
-
+    // Task state is not a Restate submission receipt. Reconcile using the stable
+    // workflow identity and the engine's real invocation ID below.
     // 3. Submission to Restate Ingress endpoint if configured
     if (this.options.restateIngressUrl) {
       const url = `${this.options.restateIngressUrl}/TaskWorkflow/${workflowId}/run/send`;
@@ -95,12 +64,14 @@ export class TaskWorkflowDispatcher {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'idempotency-key': idempotencyKey,
+            // Restate workflows are idempotent by their workflow key; this
+            // endpoint rejects an additional idempotency-key header.
           },
           body: JSON.stringify({
             taskId: cmd.aggregate_id,
             tenantId: cmd.tenant_id,
-            rawText: cmd.payload?.rawText || cmd.payload?.title || 'Creative Task',
+            rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
+            canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
             sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
             clientId: cmd.payload?.clientId,
             idempotencyKey,
@@ -111,13 +82,16 @@ export class TaskWorkflowDispatcher {
           throw new Error(`Restate ingress rejected submission: ${res.status} ${res.statusText}`);
         }
 
+        const accepted=await res.json().catch(()=>({})) as any;
+        const invocationId=accepted.invocationId||res.headers.get('x-restate-id');
+        if(!/^inv_[A-Za-z0-9_-]+$/.test(invocationId||''))throw new Error('Restate did not return an invocation receipt');
         const receipt: WorkflowSubmissionReceipt = {
           workflowId,
           aggregateId: cmd.aggregate_id,
           status: 'submitted',
           idempotencyKey,
           submittedAt: new Date().toISOString(),
-          receiptId: `rcpt_restate_${crypto.randomUUID().slice(0, 8)}`,
+          receiptId: invocationId,
         };
         this.inFlightSubmissions.set(idempotencyKey, receipt);
         return receipt;
@@ -134,7 +108,8 @@ export class TaskWorkflowDispatcher {
       taskId: cmd.aggregate_id,
       tenantId: cmd.tenant_id,
       clientId: cmd.payload?.clientId,
-      rawText: cmd.payload?.rawText || cmd.payload?.title || 'Creative Task',
+      rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
+            canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
       sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
       idempotencyKey,
     };

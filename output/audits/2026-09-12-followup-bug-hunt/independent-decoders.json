@@ -1,0 +1,10 @@
+{
+  "invalid-pixels-valid-crc.png": {
+    "accepted": false,
+    "error": "OSError: image file is truncated (0 bytes not processed)"
+  },
+  "invalid-structure-comments.pdf": {
+    "accepted": false,
+    "error": "PdfReadError: startxref not found"
+  }
+}

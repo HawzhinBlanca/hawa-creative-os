@@ -1,3 +1,5 @@
+> **Current studio decision (2026-09-13, ADR 025): Canva is the only active editor/export studio. Telegram is the user-facing request/result channel; Hawa retains operational records. All HyCanvas, Figma and Penpot selection/fallback passages below are historical and must not be re-enabled. Their original implementation is archived under `archive/retired-studios/2026-09-13/`.**
+
 # Hawa Creative OS
 
 **Private, office-owned AI creative operations system**  

@@ -188,9 +188,9 @@ const KAAE_FALLBACK_DNA: ClientDNA = {
     { assetId: 'kaae_symbol', name: 'KAAE Accreditation Symbol', role: 'logo_symbol', storageKey: '/assets/logos/kaae-symbol.svg', sha256: 'sha256_kaae_symbol_verified', mimeType: 'image/svg+xml' },
   ],
   guidelines: {
-    voiceAndTone: 'Official, prestigious, legalistic academic accreditation authority under Law No. 6 of 2022',
+    voiceAndTone: 'Official, prestigious, legalistic academic accreditation authority under national standards',
     prohibitedPhrases: ['unofficial', 'commercial discount', 'guaranteed pass', 'cheap degree'],
-    requiredDisclaimers: ['بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە پەرلەمانی کوردستان'],
+    requiredDisclaimers: ['بەپێی ستانداردە نیشتمانییەکانی دڵنیایی جۆری لە پەروەردە و خوێندنی باڵا'],
     layoutRules: ['Always preserve the 21-ray sun seal intact', 'All diplomas must use A4 landscape vector margins'],
   },
   destinations: {
@@ -1806,7 +1806,7 @@ export const DnaScreen: React.FC = () => {
           {/* Candidate Rules from Operator Feedback (Governed Learning) */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0 8px' }}>
             <h3 style={{ margin: 0, fontSize: 13 }}>Candidate Rules (Governed Learning)</h3>
-            <span className="pill blue" style={{ fontSize: 9 }}>Cursor / Figma Grade</span>
+            <span className="pill blue" style={{ fontSize: 9 }}>Client reference rules</span>
           </div>
 
           {candidateRules.filter((r) => r.status !== 'dismissed').length === 0 ? (

@@ -1,0 +1,12 @@
+{
+  "invalid-signature-only.png": {
+    "accepted": false,
+    "error": "UnidentifiedImageError",
+    "message": "cannot identify image file 'output/audits/2026-09-12-canva-reality-check/invalid-signature-only.png'"
+  },
+  "invalid-keyword-only.pdf": {
+    "accepted": false,
+    "error": "PdfStreamError",
+    "message": "Stream has ended unexpectedly"
+  }
+}

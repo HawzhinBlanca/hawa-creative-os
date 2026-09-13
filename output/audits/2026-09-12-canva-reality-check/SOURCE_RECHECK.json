@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-09-12T09:40:41.528889+00:00",
+  "changedSinceProbe": [],
+  "additionalInspectedSources": [
+    {
+      "path": "packages/creative/src/operations-to-svg.ts",
+      "sha256": "1a627bfa261d0c1ac646126eb56d022ef698112056982be95cd392c957b7529d"
+    },
+    {
+      "path": "apps/worker/src/outbox-consumer.ts",
+      "sha256": "f236b39aa6e6fdfaf4256d1fa73110b698afda4ef8d561aabd7a9a393a70a7a0"
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "sha256": "d10d9f44268c4d6bbec8c3ff041206ccb3a0a8383a0cd125dc2d57f272d607d5"
+    },
+    {
+      "path": "apps/desk/src/screens/SettingsScreen.tsx",
+      "sha256": "171dc468b1dc6e217183e5f0df67455daa7d39a5b5ec77f842a1072d5b4b411e"
+    },
+    {
+      "path": "scripts/render_presidential_kaae_invitation.ts",
+      "sha256": "82ac91c34b005b3f7171a2d3faea66827397f08d0ae2085e83b0c354681ecc8a"
+    },
+    {
+      "path": "exports/kaae_presidential_invitation_master.png",
+      "sha256": "e4c896206d738e1c10cb94e01a0851239fb901e4a29cd2873a5697a17ea4fe29"
+    }
+  ]
+}

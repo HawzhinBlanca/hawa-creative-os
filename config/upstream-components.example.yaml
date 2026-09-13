@@ -1,11 +1,9 @@
 version: 1.0.0
 components:
-- name: HyCanvas
-  source: https://github.com/hyscaler/HyCanvas
-  candidate: v0.3.9
-  pin: release checksum and source commit
-  updatePolicy: proof-suite-and-ADR
-  fallback: Penpot/focused editor/Chromium
+- name: Canva
+  source: https://www.canva.dev/docs/connect/
+  updatePolicy: native-import-export-and-recovery-tests
+  fallback: fail-closed-with-operator-review
 - name: Restate
   source: https://github.com/restatedev/restate
   candidate: 1.7.x

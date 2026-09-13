@@ -10,9 +10,9 @@ import type {
   SHA256,
 } from '@hawa/contracts';
 import { analyzeBidi } from './rtl-validator.js';
-import { validateExactCopy } from './copy-validator.js';
+import { validateExactCopy, detectUnsolicitedContent } from './copy-validator.js';
 import { evaluateContrastCompliance } from './contrast.js';
-import { checkSafeZoneViolations } from './layout-bounds.js';
+import { checkSafeZoneViolations, checkNodeCollisions } from './layout-bounds.js';
 
 export class DeterministicQAEngine implements QAEngine {
   async run(_ctx: RequestContext, request: QARequest): Promise<Result<QAReport, AppError>> {
@@ -34,7 +34,7 @@ export class DeterministicQAEngine implements QAEngine {
         evidence: { requiredVariants: briefVariants, pageCount: 0 },
       });
     }
-    if (briefVariants.length > 1 && request.manifest.pages.length > 1) {
+    if (briefVariants.length > 0) {
       for (const v of briefVariants) {
         const pageExists = request.manifest.pages.some((p) => p.width === v.width && p.height === v.height);
         if (!pageExists) {
@@ -119,7 +119,13 @@ export class DeterministicQAEngine implements QAEngine {
         return Boolean(n.text && n.text.trim().length > 0);
       })
       .map((n) => n.text!);
-    const copyFindings = validateExactCopy(approvedCopy, docTexts);
+    const allowedBrandPhrases = [
+      ...(((request.clientDna?.guidelines as any)?.requiredDisclaimers as string[]) || []),
+    ];
+    const copyFindings = [
+      ...validateExactCopy(approvedCopy, docTexts),
+      ...detectUnsolicitedContent(docTexts, approvedCopy, allowedBrandPhrases),
+    ];
     checks.push({
       id: 'check_exact_copy',
       kind: 'copy',
@@ -159,10 +165,28 @@ export class DeterministicQAEngine implements QAEngine {
     allFindings.push(...bidiFindings);
 
     // 4. Check official logo asset hashes (Invariant 27: official logos selected by immutable hash, never recreated by model)
+    const rawAssets = request.clientDna.assets;
+    const extractedAssets: Array<{ sha256: string; role: string }> = [];
+    if (Array.isArray(rawAssets)) {
+      extractedAssets.push(...rawAssets);
+    } else if (rawAssets && typeof rawAssets === 'object') {
+      if ((rawAssets as any).logos && typeof (rawAssets as any).logos === 'object') {
+        for (const [key, val] of Object.entries((rawAssets as any).logos)) {
+          if (val && typeof val === 'object' && (val as any).sha256) {
+            extractedAssets.push({ sha256: (val as any).sha256, role: (val as any).role || key });
+          }
+        }
+      }
+      for (const [key, val] of Object.entries(rawAssets)) {
+        if (key !== 'logos' && val && typeof val === 'object' && (val as any).sha256) {
+          extractedAssets.push({ sha256: (val as any).sha256, role: (val as any).role || key });
+        }
+      }
+    }
     const clientAssets: Array<{ sha256: string; role: string }> = [
-      ...((request.clientDna.assets as any[]) || []),
-      ...((request.clientDna as any).logoVariants || []),
-      ...((request.clientDna as any).logos || []),
+      ...extractedAssets,
+      ...(Array.isArray((request.clientDna as any).logoVariants) ? (request.clientDna as any).logoVariants : []),
+      ...(Array.isArray((request.clientDna as any).logos) ? (request.clientDna as any).logos : []),
     ];
     const manifestAssets = (request.manifest.assets as any[]) || [];
     const brandFindings: QAFinding[] = [];
@@ -171,7 +195,7 @@ export class DeterministicQAEngine implements QAEngine {
     for (const reqRole of requiredAssetRoles) {
       const dnaHasRole = clientAssets.some((a) => a.role === reqRole);
       const manifestHasRole = manifestAssets.some((a) => a.role === reqRole || a.sourceId === reqRole);
-      if (!dnaHasRole && !manifestHasRole) {
+      if (!dnaHasRole) {
         brandFindings.push({
           ruleId: 'REQUIRED_BRAND_ASSET_MISSING_IN_DNA',
           severity: 'critical',
@@ -186,7 +210,7 @@ export class DeterministicQAEngine implements QAEngine {
 
     const logoAssets = clientAssets.filter((a) => a.role === 'logo_primary');
     const manifestLogoAssets = manifestAssets.filter((a) => a.role === 'logo_primary' || a.sourceId === 'logo_primary');
-    const allPrimaryLogos = [...logoAssets, ...manifestLogoAssets];
+    const allPrimaryLogos = logoAssets;
 
     if (allPrimaryLogos.length > 0) {
       const approvedShas = new Set(allPrimaryLogos.map((a) => a.sha256));
@@ -197,7 +221,7 @@ export class DeterministicQAEngine implements QAEngine {
         return Boolean(nodeSha && approvedShas.has(nodeSha));
       });
       const hasManifestAsset = manifestLogoAssets.length > 0;
-      if (!hasVisibleLogoNode && !hasManifestAsset) {
+      if (!hasVisibleLogoNode) {
         brandFindings.push({
           ruleId: 'OFFICIAL_LOGO_MISSING_OR_MUTATED',
           severity: 'critical',
@@ -254,6 +278,43 @@ export class DeterministicQAEngine implements QAEngine {
       findings: safeZoneFindings,
     });
     allFindings.push(...safeZoneFindings);
+
+    // 5b. Check Node-to-Node Collisions (Deterministic AABB Overlap)
+    const collisionFindings: QAFinding[] = [];
+    if (primaryPage) {
+      const nodeRects = request.manifest.nodes
+        .filter((n) => n.box)
+        .map((n) => ({
+          id: n.id,
+          x: n.box!.x,
+          y: n.box!.y,
+          width: n.box!.width,
+          height: n.box!.height,
+          role: n.role,
+          text: n.text,
+        }));
+      const collisions = checkNodeCollisions(nodeRects);
+      for (const col of collisions) {
+        collisionFindings.push({
+          ruleId: 'LAYOUT_NODE_COLLISION',
+          severity: 'critical',
+          hardFailure: true,
+          category: 'layout',
+          message: `Foreground nodes "${col.nodeIdA}" (${col.roleA || 'content'}) and "${col.nodeIdB}" (${col.roleB || 'content'}) collide with ${col.intersectionAreaPx}px² overlap`,
+          nodeIds: [col.nodeIdA, col.nodeIdB],
+          evidence: { collision: col },
+        });
+      }
+    }
+    checks.push({
+      id: 'check_node_collisions',
+      kind: 'layout',
+      status: collisionFindings.length === 0 ? 'passed' : 'failed',
+      durationMs: 4,
+      evidence: { collisionsCount: collisionFindings.length },
+      findings: collisionFindings,
+    });
+    allFindings.push(...collisionFindings);
 
     // 6. Check WCAG contrast compliance
     const contrastFindings: QAFinding[] = [];

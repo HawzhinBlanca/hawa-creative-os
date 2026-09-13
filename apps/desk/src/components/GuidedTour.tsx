@@ -18,73 +18,18 @@ interface TourStep {
 }
 
 export const TOUR_STEPS: TourStep[] = [
-  {
-    title: 'Welcome to Hawa Creative OS',
-    badge: 'Overview',
-    icon: '🏛️',
-    description: 'A private, dependable creative production operating system built for high-stakes graphic design in Erbil without SaaS lock-in.',
-    bullets: [
-      'Engineered for agency operators, art directors, and client stakeholders.',
-      'Operates 100% offline or cloud-connected with strict multi-tenant isolation.',
-      'Native Kurdish Sorani (ckb, RTL) and English bilingual typography.',
-    ],
-  },
-  {
-    title: 'Canonical Office Inbox & Chat Ingress',
-    badge: 'Invariant #1',
-    targetScreen: 'inbox',
-    icon: '📥',
-    invariantNumber: 1,
-    invariantText: 'The office inbox is canonical. Chat products are adapters, never the database or state machine.',
-    description: 'All tasks from WhatsApp (WAHA), Telegram bots, and mobile staff arrive in one durable state machine.',
-    bullets: [
-      'Ingress webhook idempotency prevents duplicate task processing.',
-      'Durable Restate 1.7 workflows handle pauses, retries, and manual operator overrides.',
-      'Real-time SSE event streaming keeps all operator screens in sync.',
-    ],
-  },
-  {
-    title: 'Client Scope Lock & Brand DNA Governance',
-    badge: 'Invariant #5',
-    targetScreen: 'dna',
-    icon: '🧬',
-    invariantNumber: 5,
-    invariantText: 'Client scope is fixed before retrieval. Cross-client search followed by model filtering is prohibited.',
-    description: 'Client DNA defines immutable brand palettes, typography scales, prohibited lexicons, and Drive destinations.',
-    bullets: [
-      'Pre-retrieval scope locking guarantees zero cross-tenant contamination.',
-      'Auto-extract brand palettes from client logos with live WCAG AAA contrast scoring.',
-      'Cryptographic point-in-time snapshots with SHA-256 integrity audits.',
-    ],
-  },
-  {
-    title: 'Figma Agent Studio & Lossless Editable Vector Nodes',
-    badge: 'Invariant #2',
-    targetScreen: 'review',
-    icon: '🎨',
-    invariantNumber: 2,
-    invariantText: 'Every final design remains editable. Exact copy, logos, shapes, and layout are structured nodes—not flattened AI pixels.',
-    description: 'A professional design canvas supporting 1:1 Feed, 9:16 Story, 4:5 Meta, and 16:9 Display artboards.',
-    bullets: [
-      'Full layer manipulation: drag, rotate, z-index stack, group/ungroup, and color tokens.',
-      'Kurdish typography engine guarantees zero ascender/descender clipping on ڵ, ۆ, ێ, ڕ.',
-      'Figma-grade shortcuts: Space+Drag pan, Cmd +/- zoom, Cmd+Z tree history.',
-    ],
-  },
-  {
-    title: 'Hard Deterministic QA & One-Click Master Delivery',
-    badge: 'Invariant #4 & #7',
-    targetScreen: 'review',
-    icon: '🎁',
-    invariantNumber: 7,
-    invariantText: 'Hard rules outrank model judgment. The visual judge is advisory and cannot override exact-copy or RTL failures.',
-    description: 'Instant verification against social safe-zones and one-click packaging for immediate client delivery.',
-    bullets: [
-      'Social Native UI safe-zone collision engine flags Story/Reels icon rail overlaps.',
-      'One-Click Master Delivery Pack (.zip) bundles 2x Retina PNGs, SVGs, .hyc, and signed audit report.',
-      'Idempotent delivery mirror to isolated Google Shared Drive targets and Sheets ledger.',
-    ],
-  },
+  { title:'Your work queue', badge:'Requests', icon:'📥', targetScreen:'work',
+    description:'Send requests through your authorized Telegram account or create a task here.',
+    bullets:['Hawa stores the original request with the task.','Check the task for its current design and retrieved files.'] },
+  { title:'Client references', badge:'Brand', icon:'🧬', targetScreen:'clients',
+    description:'Keep each client’s references separate and review the exact copy before designing.',
+    bullets:['The selected client determines which references can be used.','Missing or conflicting brand rules need review.'] },
+  { title:'Edit in Canva', badge:'Design', icon:'🎨', targetScreen:'review',
+    description:'Canva is the only design editor. Open the linked task design to change text, images and layout.',
+    bullets:['Manual edits happen in Canva.','Retrieve a fresh preview after edits; old captures may be stale.'] },
+  { title:'Review the actual files', badge:'Review', icon:'📋', targetScreen:'review',
+    description:'Inspect the retrieved output and the checks shown on the task.',
+    bullets:['A successful export is not approval or delivery.','Unverified files stay pending review.'] },
 ];
 
 export const GuidedTour: React.FC<GuidedTourProps> = ({ isOpen, onClose, onNavigateScreen }) => {

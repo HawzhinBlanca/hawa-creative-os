@@ -88,7 +88,7 @@ export class RevisionRepository {
             tenant_id: params.tenantId,
             task_id: params.taskId,
             direction_name: 'primary',
-            studio: params.studio || 'hycanvas',
+            studio: params.studio || 'canva',
             studio_document_id: crypto.randomUUID(),
           })
           .returningAll()
@@ -127,7 +127,7 @@ export class RevisionRepository {
           task_id: params.taskId,
           design_document_id: doc.id,
           revision: nextRevisionNumber,
-          studio: params.studio || 'hycanvas',
+          studio: params.studio || 'canva',
           studio_version: params.studioVersion || '1.0.0',
           studio_schema_version: params.studioSchemaVersion || '1.0.0',
           source_storage_key: params.sourceStorageKey || `tasks/${params.taskId}/revisions/${nextRevisionNumber}.json`,

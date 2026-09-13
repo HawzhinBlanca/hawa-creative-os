@@ -574,4 +574,53 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(auditLog[0].entryHash).toMatch(/^[a-f0-9]{64}$/);
     expect(auditLog[1].entryHash).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it('10. H03: Maps UI action "approve" to "approved", rejects invalid actions with 400, and denies role spoofing', async () => {
+    const task = await createTestTask('H03 Test Client');
+    const revId = 'rev_h03_proof';
+
+    await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        revisionId: revId,
+        document: {
+          id: 'doc_h03',
+          pages: [{ id: 'p1', width: 1080, height: 1080, unit: 'px' }],
+          nodes: [{ id: 't1', type: 'text', text: 'H03 Verified Decision Text' }],
+        },
+      }),
+    });
+
+    // 10a. Invalid action returns HTTP 400
+    const badActionRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ action: 'unsupported_random_action' }),
+    });
+    expect(badActionRes.status).toBe(400);
+    const badActionJson = await badActionRes.json();
+    expect(badActionJson.title).toBe('Invalid Decision Action');
+
+    // 10b. UI action 'approve' cleanly maps to 'approved' (HTTP 201)
+    const uiApproveRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    expect(uiApproveRes.status).toBe(201);
+    const uiApproveJson = await uiApproveRes.json();
+    expect(uiApproveJson.decision).toBe('approved');
+    expect(uiApproveJson.actor.role).toBe('art_director');
+
+    // Verify task transitioned to APPROVED (not REVISION_REQUESTED)
+    const checkTask = await (await app.request(`/tasks/${task.id}`)).json();
+    expect(checkTask.status).toBe('APPROVED');
+  });
 });

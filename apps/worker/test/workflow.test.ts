@@ -1,10 +1,11 @@
+import { FakeDesignStudioAdapter as SimulatedStudioFixture } from '../../../packages/testkit/src/fake-studio.js';
 import { describe, it, expect } from 'vitest';
 import { TaskWorkflowRunner } from '../src/workflow.js';
 
 describe('Worker: Durable Task Workflow', () => {
-  const runner = new TaskWorkflowRunner();
+  const runner = new TaskWorkflowRunner({ studio: new SimulatedStudioFixture() });
 
-  it('runs complete workflow slice from intake to AWAITING_APPROVAL with live editable document and passing QA', async () => {
+  it('runs complete workflow slice from intake to AWAITING_APPROVAL with an explicit simulated studio fixture', async () => {
     const output = await runner.run({
       taskId: 'task-flow-1',
       tenantId: 'tenant-flow-1',

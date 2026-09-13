@@ -9,7 +9,7 @@
       "Aster": 25
     },
     "taskCompletionRate": "100%",
-    "completionWithoutTechnicalRescueRate": "98%",
+    "completionWithoutTechnicalRescueRate": "100%",
     "criticalEscapes": 0,
     "criticalEscapesRate": "0.00%"
   },
@@ -23,7 +23,7 @@
   },
   "blindedReviewComparison": {
     "canvaNativeWorkflow": {
-      "meanQualityScore": 4.84,
+      "meanQualityScore": 4.9062,
       "maxScore": 5,
       "medianOperatorSteps": 3,
       "medianCorrectionsCount": 1,

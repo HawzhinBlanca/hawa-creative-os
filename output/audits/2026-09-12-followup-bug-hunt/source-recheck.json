@@ -1,0 +1,22 @@
+{
+  "apps/desk/src/screens/WorkScreen.tsx": {
+    "before": "00f4fa5c29a3b10aa087aee33959d6ca603bb23cdba5943ffd239ec8f0dd0306",
+    "after": "00f4fa5c29a3b10aa087aee33959d6ca603bb23cdba5943ffd239ec8f0dd0306"
+  },
+  "apps/core/src/app.ts": {
+    "before": "a066aed9ff1076b1dc680b1ab15dcab6a6f2f8db5b620809d00e0aa3fb5f30c5",
+    "after": "a066aed9ff1076b1dc680b1ab15dcab6a6f2f8db5b620809d00e0aa3fb5f30c5"
+  },
+  "packages/integrations/src/model-gateway.ts": {
+    "before": "e31ec29786a21f981f3036490784b18b774badafcf2f9a5644450c3bf9746ceb",
+    "after": "e31ec29786a21f981f3036490784b18b774badafcf2f9a5644450c3bf9746ceb"
+  },
+  "packages/integrations/src/canva-design-studio-adapter.ts": {
+    "before": "ce35c4e5d92aa805bed6653f63915b1a2b77d73e25b5831d70f4fcfd11c58a4b",
+    "after": "ce35c4e5d92aa805bed6653f63915b1a2b77d73e25b5831d70f4fcfd11c58a4b"
+  },
+  "packages/integrations/src/canva-capture-pipeline.ts": {
+    "before": "3fb5bbb20ce4f354810b5c448eeb75c6cfeb1b35da037fa4746bce3547b390dc",
+    "after": "3fb5bbb20ce4f354810b5c448eeb75c6cfeb1b35da037fa4746bce3547b390dc"
+  }
+}

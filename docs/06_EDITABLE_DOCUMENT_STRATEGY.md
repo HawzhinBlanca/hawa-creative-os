@@ -1,3 +1,5 @@
+> Current studio decision: Canva only (ADR 025, 2026-09-13). HyCanvas passages below are historical and must not be implemented or re-enabled.
+
 # Editable Document Strategy
 
 ## 1. Non-negotiable requirement

@@ -37,13 +37,13 @@ export const ClientsScreen: React.FC<ClientsScreenProps> = ({ initialView = 'dna
             className={`btn btn-sm ${subView === 'library' ? 'primary' : ''}`}
             onClick={() => setSubView('library')}
           >
-            📁 Creative Asset Library & Fingerprints
+            📁 Canva Design Library
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--muted)' }}>
           {subView === 'dna'
-            ? '6 Active Client DNA Profiles · Brand Rules & Destination Folders'
-            : 'Verified Vector Assets · SHA-256 Immutability Records'}
+            ? 'Client brand rules and references'
+            : 'Templates, uploads and editing in Canva'}
         </div>
       </div>
 

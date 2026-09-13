@@ -1,0 +1,107 @@
+{
+  "createdAt": "2026-09-13T08:42:07.539020+00:00",
+  "scope": "Audit artifact integrity only; hashes do not certify application correctness",
+  "reportLinksChecked": true,
+  "files": [
+    {
+      "path": "01-signed-out.png",
+      "bytes": 50776,
+      "sha256": "2b2e53ac0715908c6ed52be54789fdc87b87766839c21e4d68cedeaf1b05f9f6"
+    },
+    {
+      "path": "02-test-sign-in-failed.png",
+      "bytes": 53327,
+      "sha256": "2cb4880e0be90da3021799734e7b9d0d6e92fbecff4c3a7a25266450e1909c51"
+    },
+    {
+      "path": "ADVERSARIAL.json",
+      "bytes": 6581,
+      "sha256": "8c91943bccd325cc52dbb8f65a4dc65de6dd1aa7ead4b06b8d787749bc0dcd7c"
+    },
+    {
+      "path": "ARTIFACTS.json",
+      "bytes": 1961,
+      "sha256": "e582808c4d4b272a9409ce616973de3ccde949886ef17e9ab906cf5dca6fa782"
+    },
+    {
+      "path": "ISOLATION.json",
+      "bytes": 2585,
+      "sha256": "1192e771a41a03fff045210c532b3974473db405b4a41ef6a8dd24353a309218"
+    },
+    {
+      "path": "RENDERER_PROBES.json",
+      "bytes": 327,
+      "sha256": "5f70799d60f1bb98db7ff741d9a6c26be1d529b2bfbfc9de666a23b4d59b1e5d"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 12356,
+      "sha256": "52f266dc8e84d70e7089afbf7677da83de479814fde555a49952158ddeac160f"
+    },
+    {
+      "path": "RUNTIME.json",
+      "bytes": 2180,
+      "sha256": "df177425f9d563232459a0e2d12ad157549efdafc2047bb824d85944ca61c0af"
+    },
+    {
+      "path": "adversarial-probes.ts",
+      "bytes": 7481,
+      "sha256": "32dbde025721ebeddc797defdf459eec5b1d20a299694d6d897a5155fc56a3fc"
+    },
+    {
+      "path": "adversarial.log",
+      "bytes": 4784,
+      "sha256": "828a48ce660c1237ea643a823c593f06fa97a02f1c3d684c60ba26650c5d78d2"
+    },
+    {
+      "path": "database-counts.json",
+      "bytes": 68,
+      "sha256": "f641bf7f14b39471811e25f5ae46cd81d1c6c62362aa8d4dcbebc40801e26cbc"
+    },
+    {
+      "path": "deployed-adapter.json",
+      "bytes": 208,
+      "sha256": "35a64b31e58011b46f630bf09fba4306f265bec0e505158fa35e9a6a9d20797f"
+    },
+    {
+      "path": "invalid-pixels-valid-crc.png",
+      "bytes": 66,
+      "sha256": "84971c135d1414e50e0cb1d1082d089a85c3dd982b2c3a8ef3f2ce9d4c89923e"
+    },
+    {
+      "path": "invalid-structure-comments.pdf",
+      "bytes": 238,
+      "sha256": "b3e8e34ee49a9c562aa3cadec4a0c6fb5e69e3ba48778e98407745f606632aef"
+    },
+    {
+      "path": "isolation-probe.ts",
+      "bytes": 2412,
+      "sha256": "960a886b60a8ad34d12d09d68554a60a8d1d3c9df0986ac4d8f109892f542814"
+    },
+    {
+      "path": "isolation.log",
+      "bytes": 790,
+      "sha256": "461b5e883842d7cf96b92b0e1cdc2c813dc88383b42cb009ccdb133b7fbb3b1d"
+    },
+    {
+      "path": "renderer-probes.ts",
+      "bytes": 1142,
+      "sha256": "4fb3cf7e15456e38854df4cc9ea133f8105f72a7b93208203951002ce4914e4c"
+    },
+    {
+      "path": "renderer.log",
+      "bytes": 316,
+      "sha256": "d8cc417484aeaa36afaf0e821156697e145789c8f9357e1338a2537abb6cb021"
+    },
+    {
+      "path": "runtime-capabilities.json",
+      "bytes": 149,
+      "sha256": "c9997d4018af9b7774234bd65721d966a37404e3d7d94e855fb5673c5bb0f560"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 362,
+      "sha256": "f72053951ea79db6682e5631d2c19f59307c43c096f1b14c9dc5fa2c1e4e0436"
+    }
+  ]
+}

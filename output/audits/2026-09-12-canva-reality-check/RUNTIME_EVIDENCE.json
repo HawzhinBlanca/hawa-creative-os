@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-09-12T09:37:01.905368+00:00",
+  "git": {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "d07f79a6831bb1bb87f074309534b731fea40273\n",
+    "stderr": ""
+  },
+  "workingTree": {
+    "command": [
+      "git",
+      "status",
+      "--short"
+    ],
+    "exitCode": 0,
+    "stdout": " M apps/core/src/app.ts\n M apps/core/tsconfig.tsbuildinfo\n M apps/worker/tsconfig.tsbuildinfo\n M infra/docker/Dockerfile.core\n M packages/creative/src/creative-director.ts\n M packages/creative/src/index.ts\n M packages/creative/src/templates/index.ts\n M packages/creative/test/kaae-creative-generation.test.ts\n M packages/creative/tsconfig.tsbuildinfo\n M packages/integrations/src/outbound-notifier.ts\n M packages/integrations/src/telegram-bridge.ts\n M packages/integrations/tsconfig.tsbuildinfo\n M packages/testkit/tsconfig.tsbuildinfo\n?? output/audits/2026-09-12-canva-reality-check/\n?? packages/creative/src/operations-to-svg.ts\n?? packages/creative/src/templates/kaae-invitation.template.ts\n?? scripts/dispatch_authentic_kaae_telegram.ts\n?? scripts/render_presidential_kaae_invitation.ts\n",
+    "stderr": ""
+  },
+  "database": {
+    "command": [
+      "docker",
+      "exec",
+      "hawa-production-postgres-1",
+      "psql",
+      "-U",
+      "hawa_owner",
+      "-d",
+      "hawa",
+      "-Atc",
+      "BEGIN READ ONLY; SELECT 'tasks',count(*) FROM hawa.tasks UNION ALL SELECT 'design_briefs',count(*) FROM hawa.design_briefs UNION ALL SELECT 'design_revisions',count(*) FROM hawa.design_revisions UNION ALL SELECT 'canva_bindings',count(*) FROM hawa.canva_bindings UNION ALL SELECT 'canva_capture_sets',count(*) FROM hawa.canva_capture_sets UNION ALL SELECT 'model_invocations',count(*) FROM hawa.model_invocations; SELECT studio,count(*) FROM hawa.design_revisions GROUP BY studio; COMMIT;"
+    ],
+    "exitCode": 0,
+    "stdout": "BEGIN\ntasks|1449\ndesign_briefs|0\ndesign_revisions|173\ncanva_bindings|0\ncanva_capture_sets|0\nmodel_invocations|0\nhycanvas|173\nCOMMIT\n",
+    "stderr": ""
+  },
+  "deployedCode": {
+    "command": [
+      "docker",
+      "exec",
+      "hawa-production-core-1",
+      "node",
+      "-e",
+      "const fs=require(\"fs\"),crypto=require(\"crypto\"); for(const p of [\"/app/packages/integrations/dist/canva-design-studio-adapter.js\",\"/app/packages/integrations/dist/model-gateway.js\",\"/app/apps/core/dist/app.js\"]) {const s=fs.readFileSync(p,\"utf8\"); console.log(JSON.stringify({path:p,sha256:crypto.createHash(\"sha256\").update(s).digest(\"hex\"),localCanvaIds:s.includes(\"DAF_\"),fakeRender:s.includes(\"sha256_canva_rendered_\"),astra:s.includes(\"gpt-6-astra\"),sol:s.includes(\"gpt-5.6-sol\"),simulatedTokens:s.includes(\"?? 520\"),renderOperations:s.includes(\"renderOperationsToPng\")}));}"
+    ],
+    "exitCode": 0,
+    "stdout": "{\"path\":\"/app/packages/integrations/dist/canva-design-studio-adapter.js\",\"sha256\":\"fb9a2c5cfb6f96edcf0936ef5d7b475e9c9f150d43f1443c528aedc6384b5f51\",\"localCanvaIds\":true,\"fakeRender\":true,\"astra\":false,\"sol\":false,\"simulatedTokens\":false,\"renderOperations\":false}\n{\"path\":\"/app/packages/integrations/dist/model-gateway.js\",\"sha256\":\"835f07c440068a3bbb63df564a583b2c23c8a7ef75a22650562daad12b808adc\",\"localCanvaIds\":false,\"fakeRender\":false,\"astra\":false,\"sol\":true,\"simulatedTokens\":true,\"renderOperations\":false}\n{\"path\":\"/app/apps/core/dist/app.js\",\"sha256\":\"eeab74bb71dd78732a2cdd03d522350ff4f8f266f695e3d382b2d53f9cd7768a\",\"localCanvaIds\":true,\"fakeRender\":false,\"astra\":false,\"sol\":false,\"simulatedTokens\":false,\"renderOperations\":true}\n",
+    "stderr": ""
+  }
+}

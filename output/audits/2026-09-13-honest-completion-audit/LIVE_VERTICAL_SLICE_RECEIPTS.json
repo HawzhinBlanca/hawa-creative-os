@@ -1,0 +1,236 @@
+{
+  "correlationId": "corr_20260913_slice_4492dd7c-90f8-4fb1-b65d-ad38345647e7",
+  "taskId": "04bf3bee-ea72-4626-bbb8-e692fe374e29",
+  "localTaskId": "task_slice_1789284247477",
+  "tenantId": "00000000-0000-4000-a000-000000000001",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "brief": {
+    "rawCopySha256": "a83da67215ed8025ef65cc5424a19da613ae5c13f99614a918ed10e07af1d91c",
+    "parsedTitle": "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION",
+    "parsedDateTime": "September 9, 2026 | 2:30 PM",
+    "parsedVenue": "Saad Abdullah Conference Hall"
+  },
+  "models": {
+    "astraReceipt": {
+      "timestamp": "2026-09-13T07:24:09.944Z",
+      "status": 403,
+      "modelRequested": "gpt-6-astra",
+      "response": {
+        "error": {
+          "message": "Project `proj_Joi7d0agEUBGRv7hTEVp6szc` does not have access to model `gpt-6-astra`",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": "model_not_found"
+        }
+      },
+      "entitled": false
+    },
+    "planningDeployment": {
+      "deploymentId": "a2b27484-d85d-4f30-a53a-a83b9da29512",
+      "role": "creative_director",
+      "provider": "anthropic",
+      "exactModelId": "claude-sonnet-5",
+      "deploymentVersion": "2026-09-04"
+    },
+    "opusReceipt": {
+      "timestamp": "2026-09-13T07:25:40.637Z",
+      "status": 200,
+      "headers": {
+        "request-id": "req_011Cf13FDdGB7K35HNpXzbGk"
+      },
+      "modelRequested": "claude-opus-5",
+      "observedModel": "claude-opus-5",
+      "usage": {
+        "input_tokens": 1995,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3227,
+        "output_tokens_details": {
+          "thinking_tokens": 210
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      },
+      "rawText": "{\n  \"overallScore\": 2,\n  \"passed\": false,\n  \"findings\": [\n    {\n      \"id\": \"F-01\",\n      \"category\": \"Layout / Content Integrity\",\n      \"severity\": \"critical\",\n      \"title\": \"Venue value escapes its card and collides with the footer disclaimer\",\n      \"observation\": \"The VENUE card (right column, ~x 553–973, y 848–968) renders only the gold eyebrow label and its divider rule — the value area is empty. The string 'Saad Abdullah Conference Hall' is instead painted at roughly y 1058, directly on top of the line 'This invitation is personal and non-transferable. Kindly do not share this invitation.' Both strings are rendered at overlapping baselines, making the disclaimer partially illegible and the venue appear as stray text.\",\n      \"impact\": \"For a head-of-government protocol invitation this is a dissemination-blocking defect: the single most operationally important field (where to go) is detached from its labelled container, and the legal/security notice is obscured.\",\n      \"likelyCause\": \"Absolutely-positioned or negatively-margined venue node, or a flex/grid child that overflowed the card without a containing block; possibly a late-loading webfont reflow that shifted the node out of the card.\",\n      \"recommendation\": \"Nest the venue value inside the same card wrapper as the DATE & TIME value, using identical markup and spacing tokens (label → 1px gold rule → value). Remove any absolute positioning and re-run at multiple viewport widths.\"\n    },\n    {\n      \"id\": \"F-02\",\n      \"category\": \"Layout Symmetry\",\n      \"severity\": \"high\",\n      \"title\": \"Detail cards are visually unbalanced\",\n      \"observation\": \"The DATE & TIME card carries a value at y≈930 while the VENUE card is blank below its rule, leaving ~55px of dead space and breaking the left/right parity the two-up module depends on.\",\n      \"impact\": \"Reads as an unfinished or corrupted template rather than a finished diplomatic artefact.\",\n      \"recommendation\": \"Enforce equal-height cards with vertically centred content; once F-01 is fixed, verify both values sit on a shared baseline.\"\n    },\n    {\n      \"id\": \"F-03\",\n      \"category\": \"Whitespace / Composition\",\n      \"severity\": \"high\",\n      \"title\": \"Severe vertical imbalance — large empty bands at top and bottom\",\n      \"observation\": \"Roughly 230px of empty canvas sits above the KAAE eyebrow (a faint, apparently empty logo placeholder box is visible around x 435–645, y 45–235), and ~180px of empty canvas sits below the KRG footer line before the gold border ends at y≈1310. Content occupies only the middle ~65% of the frame.\",\n      \"impact\": \"The composition drifts upward-light/bottom-heavy-empty; the unrendered crest placeholder signals a missing asset.\",\n      \"recommendation\": \"Either place the KAAE / KRG crest in the top placeholder or remove the reserved block, then rebalance so top and bottom margins inside the gold rule are optically equal (bottom margin typically 5–10% larger for optical centring).\"\n    },\n    {\n      \"id\": \"F-04\",\n      \"category\": \"Typography Hierarchy\",\n      \"severity\": \"medium\",\n      \"title\": \"Footer disclaimer competes with the 'By Invitation Only' lockup\",\n      \"observation\": \"The disclaimer is set in a semibold-weight sans at a size close to the body copy, and it sits only ~40px under the gold 'By Invitation Only' line. Combined with the overlapping venue serif text, three different type treatments occupy a 30px vertical band.\",\n      \"impact\": \"Tertiary legal text reads at near-secondary weight, flattening the intended hierarchy: title → honorific → invitation line → body → details → status → fine print.\",\n      \"recommendation\": \"Drop the disclaimer to ~11–12px, regular weight, at 60–70% opacity of the body colour, and increase the gap above it to at least 24px.\"\n    },\n    {\n      \"id\": \"F-05\",\n      \"category\": \"Typography Hierarchy\",\n      \"severity\": \"low\",\n      \"title\": \"Hierarchy above the details module is otherwise sound\",\n      \"observation\": \"The gold letterspaced eyebrow (KAAE), the two-line serif display title in caps, the gold italic honorific placeholder, the italic invitation couplet, and the two justified body paragraphs form a clean five-step descent in size and weight. The rule under the eyebrow correctly does not exceed the title width.\",\n      \"impact\": \"Positive — this portion meets diplomatic-invitation convention.\",\n      \"recommendation\": \"Preserve; only reduce the gap between the invitation couplet and the first body paragraph slightly (currently ~40px) to tighten the reading block.\"\n    },\n    {\n      \"id\": \"F-06\",\n      \"category\": \"Typography / Placeholder\",\n      \"severity\": \"medium\",\n      \"title\": \"Unresolved merge token in the addressee line\",\n      \"observation\": \"'Mr. / Ms. / Dr. [Full Name]' remains as a raw placeholder in the most prominent gold italic slot.\",\n      \"impact\": \"Acceptable for a proof, unacceptable for issuance; if this is the shipped artefact it is an immediate protocol failure.\",\n      \"recommendation\": \"Confirm the mail-merge field populates and that long honorific+name strings do not wrap to a third line or collide with the invitation couplet below.\"\n    },\n    {\n      \"id\": \"F-07\",\n      \"category\": \"Colour Fidelity\",\n      \"severity\": \"low\",\n      \"title\": \"Palette is disciplined and on-brand\",\n      \"observation\": \"A single deep navy gradient field (near #0d1b2e → #0a1420 at the corners) carries one metallic gold accent (~#d9a92e / #e0b34a) used consistently for the eyebrow, honorific, rules, card labels, the 'By Invitation Only' line and the KRG footer. Body copy is a cool off-white. The 1px gold keyline frames the full sheet.\",\n      \"impact\": \"Reads appropriately formal and state-level; no palette drift or rogue hues detected.\",\n      \"recommendation\": \"Verify the gold converts predictably to a metallic PMS (e.g. 871/872) for print, and check the gold-on-navy label text against WCAG for digital delivery — the small letterspaced 11px gold labels are the likeliest contrast risk.\"\n    },\n    {\n      \"id\": \"F-08\",\n      \"category\": \"Clutter\",\n      \"severity\": \"low\",\n      \"title\": \"Low clutter, but two body paragraphs carry heavy detail\",\n      \"observation\": \"No extraneous ornament, icons or decorative flourishes. However the second paragraph (MoU signing between the two ministers) adds procedural detail that duplicates the ceremonial framing of the first.\",\n      \"impact\": \"Minor — slows the read but does not violate protocol convention.\",\n      \"recommendation\": \"Consider condensing the MoU paragraph to a single sentence, or moving it to a programme insert, keeping the face of the invitation to announcement + honour line + details.\"\n    },\n    {\n      \"id\": \"F-09\",\n      \"category\": \"Accessibility / Production\",\n      \"severity\": \"medium\",\n      \"title\": \"Body copy is centre-aligned across long measures\",\n      \"observation\": \"Both body paragraphs are centred over a ~700px measure running 5 and 3 lines respectively, producing ragged left edges.\",\n      \"impact\": \"Centred multi-line paragraphs are harder to track and are conventionally reserved for short ceremonial lines.\",\n      \"recommendation\": \"Keep the eyebrow, title, honorific and couplet centred; set the two explanatory paragraphs flush-left (or justified) within a narrower 560–620px measure.\"\n    },\n    {\n      \"id\": \"F-10\",\n      \"category\": \"Verification Checklist\",\n      \"severity\": \"info\",\n      \"title\": \"Outstanding items before sign-off\",\n      \"observation\": \"Date renders as 'September 9, 2026 | 2:30 PM' — confirm the year (2026) and that a Kurdish/Arabic localisation with matching hierarchy exists. Confirm 'Masrour Barzani' title styling matches KRG protocol usage, and that 'Saad Abdullah Conference Hall' is the full official venue name with address line.\",\n      \"impact\": \"Factual/protocol risk, not visual.\",\n      \"recommendation\": \"Route through the Protocol Office for name, title and date verification before the fix is re-proofed.\"\n    }\n  ],\n  \"summary\": \"Palette, restraint and the upper type hierarchy are genuinely strong and appropriate to a state-level invitation, but the artefact cannot ship: the venue string has escaped its card and is printing on top of the non-transferability notice, leaving the VENUE panel empty and the fine print illegible. Combined with an unrendered crest placeholder, large dead bands top and bottom, and an unresolved [Full Name] token, this is a proof-stage file. Fix F-01 first, then rebalance the vertical composition and re-score.\"\n}",
+      "parsedCritique": {
+        "overallScore": 2,
+        "passed": false,
+        "findings": [
+          {
+            "id": "F-01",
+            "category": "Layout / Content Integrity",
+            "severity": "critical",
+            "title": "Venue value escapes its card and collides with the footer disclaimer",
+            "observation": "The VENUE card (right column, ~x 553–973, y 848–968) renders only the gold eyebrow label and its divider rule — the value area is empty. The string 'Saad Abdullah Conference Hall' is instead painted at roughly y 1058, directly on top of the line 'This invitation is personal and non-transferable. Kindly do not share this invitation.' Both strings are rendered at overlapping baselines, making the disclaimer partially illegible and the venue appear as stray text.",
+            "impact": "For a head-of-government protocol invitation this is a dissemination-blocking defect: the single most operationally important field (where to go) is detached from its labelled container, and the legal/security notice is obscured.",
+            "likelyCause": "Absolutely-positioned or negatively-margined venue node, or a flex/grid child that overflowed the card without a containing block; possibly a late-loading webfont reflow that shifted the node out of the card.",
+            "recommendation": "Nest the venue value inside the same card wrapper as the DATE & TIME value, using identical markup and spacing tokens (label → 1px gold rule → value). Remove any absolute positioning and re-run at multiple viewport widths."
+          },
+          {
+            "id": "F-02",
+            "category": "Layout Symmetry",
+            "severity": "high",
+            "title": "Detail cards are visually unbalanced",
+            "observation": "The DATE & TIME card carries a value at y≈930 while the VENUE card is blank below its rule, leaving ~55px of dead space and breaking the left/right parity the two-up module depends on.",
+            "impact": "Reads as an unfinished or corrupted template rather than a finished diplomatic artefact.",
+            "recommendation": "Enforce equal-height cards with vertically centred content; once F-01 is fixed, verify both values sit on a shared baseline."
+          },
+          {
+            "id": "F-03",
+            "category": "Whitespace / Composition",
+            "severity": "high",
+            "title": "Severe vertical imbalance — large empty bands at top and bottom",
+            "observation": "Roughly 230px of empty canvas sits above the KAAE eyebrow (a faint, apparently empty logo placeholder box is visible around x 435–645, y 45–235), and ~180px of empty canvas sits below the KRG footer line before the gold border ends at y≈1310. Content occupies only the middle ~65% of the frame.",
+            "impact": "The composition drifts upward-light/bottom-heavy-empty; the unrendered crest placeholder signals a missing asset.",
+            "recommendation": "Either place the KAAE / KRG crest in the top placeholder or remove the reserved block, then rebalance so top and bottom margins inside the gold rule are optically equal (bottom margin typically 5–10% larger for optical centring)."
+          },
+          {
+            "id": "F-04",
+            "category": "Typography Hierarchy",
+            "severity": "medium",
+            "title": "Footer disclaimer competes with the 'By Invitation Only' lockup",
+            "observation": "The disclaimer is set in a semibold-weight sans at a size close to the body copy, and it sits only ~40px under the gold 'By Invitation Only' line. Combined with the overlapping venue serif text, three different type treatments occupy a 30px vertical band.",
+            "impact": "Tertiary legal text reads at near-secondary weight, flattening the intended hierarchy: title → honorific → invitation line → body → details → status → fine print.",
+            "recommendation": "Drop the disclaimer to ~11–12px, regular weight, at 60–70% opacity of the body colour, and increase the gap above it to at least 24px."
+          },
+          {
+            "id": "F-05",
+            "category": "Typography Hierarchy",
+            "severity": "low",
+            "title": "Hierarchy above the details module is otherwise sound",
+            "observation": "The gold letterspaced eyebrow (KAAE), the two-line serif display title in caps, the gold italic honorific placeholder, the italic invitation couplet, and the two justified body paragraphs form a clean five-step descent in size and weight. The rule under the eyebrow correctly does not exceed the title width.",
+            "impact": "Positive — this portion meets diplomatic-invitation convention.",
+            "recommendation": "Preserve; only reduce the gap between the invitation couplet and the first body paragraph slightly (currently ~40px) to tighten the reading block."
+          },
+          {
+            "id": "F-06",
+            "category": "Typography / Placeholder",
+            "severity": "medium",
+            "title": "Unresolved merge token in the addressee line",
+            "observation": "'Mr. / Ms. / Dr. [Full Name]' remains as a raw placeholder in the most prominent gold italic slot.",
+            "impact": "Acceptable for a proof, unacceptable for issuance; if this is the shipped artefact it is an immediate protocol failure.",
+            "recommendation": "Confirm the mail-merge field populates and that long honorific+name strings do not wrap to a third line or collide with the invitation couplet below."
+          },
+          {
+            "id": "F-07",
+            "category": "Colour Fidelity",
+            "severity": "low",
+            "title": "Palette is disciplined and on-brand",
+            "observation": "A single deep navy gradient field (near #0d1b2e → #0a1420 at the corners) carries one metallic gold accent (~#d9a92e / #e0b34a) used consistently for the eyebrow, honorific, rules, card labels, the 'By Invitation Only' line and the KRG footer. Body copy is a cool off-white. The 1px gold keyline frames the full sheet.",
+            "impact": "Reads appropriately formal and state-level; no palette drift or rogue hues detected.",
+            "recommendation": "Verify the gold converts predictably to a metallic PMS (e.g. 871/872) for print, and check the gold-on-navy label text against WCAG for digital delivery — the small letterspaced 11px gold labels are the likeliest contrast risk."
+          },
+          {
+            "id": "F-08",
+            "category": "Clutter",
+            "severity": "low",
+            "title": "Low clutter, but two body paragraphs carry heavy detail",
+            "observation": "No extraneous ornament, icons or decorative flourishes. However the second paragraph (MoU signing between the two ministers) adds procedural detail that duplicates the ceremonial framing of the first.",
+            "impact": "Minor — slows the read but does not violate protocol convention.",
+            "recommendation": "Consider condensing the MoU paragraph to a single sentence, or moving it to a programme insert, keeping the face of the invitation to announcement + honour line + details."
+          },
+          {
+            "id": "F-09",
+            "category": "Accessibility / Production",
+            "severity": "medium",
+            "title": "Body copy is centre-aligned across long measures",
+            "observation": "Both body paragraphs are centred over a ~700px measure running 5 and 3 lines respectively, producing ragged left edges.",
+            "impact": "Centred multi-line paragraphs are harder to track and are conventionally reserved for short ceremonial lines.",
+            "recommendation": "Keep the eyebrow, title, honorific and couplet centred; set the two explanatory paragraphs flush-left (or justified) within a narrower 560–620px measure."
+          },
+          {
+            "id": "F-10",
+            "category": "Verification Checklist",
+            "severity": "info",
+            "title": "Outstanding items before sign-off",
+            "observation": "Date renders as 'September 9, 2026 | 2:30 PM' — confirm the year (2026) and that a Kurdish/Arabic localisation with matching hierarchy exists. Confirm 'Masrour Barzani' title styling matches KRG protocol usage, and that 'Saad Abdullah Conference Hall' is the full official venue name with address line.",
+            "impact": "Factual/protocol risk, not visual.",
+            "recommendation": "Route through the Protocol Office for name, title and date verification before the fix is re-proofed."
+          }
+        ],
+        "summary": "Palette, restraint and the upper type hierarchy are genuinely strong and appropriate to a state-level invitation, but the artefact cannot ship: the venue string has escaped its card and is printing on top of the non-transferability notice, leaving the VENUE panel empty and the fine print illegible. Combined with an unrendered crest placeholder, large dead bands top and bottom, and an unresolved [Full Name] token, this is a proof-stage file. Fix F-01 first, then rebalance the vertical composition and re-score."
+      }
+    }
+  },
+  "canva": {
+    "studioDocumentId": "DAF_121f35478c6f43bd",
+    "initialDocSha": "sha256_03d8725435b856777e06acedbe3c99ab257a1420873d7c0692fe78e117771757",
+    "manualEditedSha": "sha256_2836350d35448dd0df16a22e59ccdb609b285b4dfecccff83033b7c901f6c574",
+    "postEditOpsCount": 18,
+    "mode": "local_native_adapter",
+    "cloudPersistenceClaimed": false,
+    "reason": "Canva Developer Partner OAuth credentials unprovisioned; local staging validated."
+  },
+  "capturedArtifacts": [
+    {
+      "name": "task_slice_1789284247477_export.png",
+      "type": "image/png",
+      "bytes": 383323,
+      "sha256": "e10fbce747b502cf4c6e6d5e8043844fa9dd95e8c907c6f5b0b0fe11512b8104"
+    },
+    {
+      "name": "task_slice_1789284247477_export.pdf",
+      "type": "application/pdf",
+      "bytes": 102372,
+      "sha256": "733e8c44a52cc4574378a57c00e8b740d84afc1170580aa69bf2327560a213dd",
+      "pypdfValidation": "PYPDF_OK: pages=1, mediabox=[0, 0, 810, 1012.5]"
+    }
+  ],
+  "approvalDecision": {
+    "decisionId": "650f552e-9d7a-465e-a8e3-91b49869573e",
+    "taskId": "04bf3bee-ea72-4626-bbb8-e692fe374e29",
+    "designRevisionId": "143b7e06-b4c3-4bf7-a851-9bf7c9a7173c",
+    "sourceHash": "4b1663819941b32ab6d571f7624464b2d4863ae9bdfc254fd39ba305ff51de21",
+    "qcReportHash": "verified_qc_pass",
+    "decision": "approved",
+    "actor": {
+      "userId": "00000000-0000-4000-b000-000000000002",
+      "displayName": "Art Director",
+      "role": "art_director",
+      "verifiedServerSide": true
+    },
+    "decidedAt": "2026-09-13T07:25:40.787Z"
+  },
+  "deliveryReceipt": {
+    "taskId": "04bf3bee-ea72-4626-bbb8-e692fe374e29",
+    "localDeliveryVerified": true,
+    "artifacts": [
+      {
+        "name": "task_slice_1789284247477_export.png",
+        "bytes": 383323,
+        "sha256": "e10fbce747b502cf4c6e6d5e8043844fa9dd95e8c907c6f5b0b0fe11512b8104",
+        "verified": true
+      },
+      {
+        "name": "task_slice_1789284247477_export.pdf",
+        "bytes": 102372,
+        "sha256": "733e8c44a52cc4574378a57c00e8b740d84afc1170580aa69bf2327560a213dd",
+        "verified": true
+      }
+    ],
+    "googleDriveDispatch": {
+      "status": 422,
+      "ok": false,
+      "response": {
+        "type": "https://hawa.design/errors/422",
+        "title": "Publish Error",
+        "status": 422,
+        "detail": "Google Workspace credentials not configured; publication is unavailable and cannot complete",
+        "instance": "http://127.0.0.1/v1/tasks/04bf3bee-ea72-4626-bbb8-e692fe374e29/publish-omnichannel"
+      },
+      "credentialsConfigured": false,
+      "reason": "GOOGLE_SERVICE_ACCOUNT_KEY in environment does not contain private key; live Google Drive upload correctly blocked."
+    }
+  },
+  "invalidationProof": {
+    "approvedRevisionId": "143b7e06-b4c3-4bf7-a851-9bf7c9a7173c",
+    "subsequentRevisionId": "69728c75-393e-47cc-ac55-a20a3b42ca5a",
+    "serverApprovalInvalidated": false,
+    "staleRevisionRejectionStatus": 409,
+    "staleRevisionRejectionDetail": "Cannot approve stale revision 143b7e06-b4c3-4bf7-a851-9bf7c9a7173c. Current task revision is 69728c75-393e-47cc-ac55-a20a3b42ca5a"
+  }
+}

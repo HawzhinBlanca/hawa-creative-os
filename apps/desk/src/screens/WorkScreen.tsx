@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { eventStream } from '../services/eventStream.js';
+import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
+import { VectorInspector } from '../components/VectorInspector.js';
+import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
 
 export interface LiveTask {
   id: string;
@@ -9,6 +12,8 @@ export interface LiveTask {
   status: string;
   priority?: string;
   description?: string;
+  designInstructions?: string;
+  referenceAssets?: string;
   source?: { platform?: string; externalId?: string; channelId?: string };
   sourcePlatform?: string;
   createdAt?: string;
@@ -18,6 +23,7 @@ export interface LiveTask {
     id: string;
     version: number;
     previewUrl?: string;
+    svgContent?: string;
     sha256?: string;
     byteSize?: number;
     dimensions?: { width: number; height: number };
@@ -66,157 +72,25 @@ interface WorkScreenProps {
   initialTaskId?: string;
   onNavigateToClients?: (clientId?: string) => void;
   onNavigateToSettings?: () => void;
+  onNewTask?: () => void;
 }
-
-const SEED_TASKS: LiveTask[] = [
-  {
-    id: 'task-kaae-2026-001',
-    clientId: 'c1000000-0000-4000-8000-000000000002',
-    clientName: 'KAAE Accreditation',
-    title: '2026 Higher Education Institutional Quality Certification',
-    status: 'AWAITING_APPROVAL',
-    priority: 'high',
-    sourcePlatform: 'telegram',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 1800000).toISOString(),
-    latestRevisionId: 'rev_kaae_001_v2',
-    latestRevision: {
-      id: 'rev_kaae_001_v2',
-      version: 2,
-      previewUrl: '/assets/sample_kaae_preview.png',
-      sha256: 'a78f2d56c4e910b83215fe902bd3651faec45279b908c69134d1b827e8a94510',
-      byteSize: 1845200,
-      dimensions: { width: 1080, height: 1350 },
-      format: 'PNG (24-bit RGB) + PDF Print',
-      createdAt: new Date(Date.now() - 1800000).toISOString(),
-    },
-    canvaBinding: {
-      designId: 'DAF_kaae_cert_2026',
-      designUrl: 'https://www.canva.com/design/DAF_kaae_cert_2026/edit',
-      title: 'KAAE - 2026 Institutional Accreditation Diploma [Canonical]',
-      lastSyncedAt: new Date(Date.now() - 1900000).toISOString(),
-    },
-    headlineEn: 'Official 2026 Institutional Accreditation Diploma',
-    headlineCkb: 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا',
-    copyEn: 'Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Evaluation',
-    copyCkb: 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · متمانەی فەرمی دەبەخشرێت بە زانکۆی کوردستان',
-    qaReport: {
-      passed: true,
-      bidiIsolation: true,
-      safeMargins: true,
-      contrastCompliant: true,
-      fontCoverage: true,
-      errors: [],
-    },
-    history: [
-      { id: 'h1', type: 'intake', actor: 'Telegram Bot', summary: 'Ingested via @hawdesign_bot from KAAE Secretariat', timestamp: new Date(Date.now() - 7200000).toISOString() },
-      { id: 'h2', type: 'draft', actor: 'Canva Handoff', summary: 'Created native Canva document DAF_kaae_cert_2026', timestamp: new Date(Date.now() - 5400000).toISOString() },
-      { id: 'h3', type: 'capture', actor: 'Operator', summary: 'Captured immutable Revision v2 (SHA: a78f2d...)', timestamp: new Date(Date.now() - 1800000).toISOString() },
-      { id: 'h4', type: 'qa', actor: 'QA Engine', summary: 'Automated preflight checks passed (Contrast, Bidi, Safe Zones)', timestamp: new Date(Date.now() - 1750000).toISOString() },
-    ],
-  },
-  {
-    id: 'task-drustee-2026-002',
-    clientId: 'client-drustee',
-    clientName: 'Drustee Hospital',
-    title: 'Immune Support Clinical Dietary Supplement Feed',
-    status: 'IN_PROGRESS',
-    priority: 'medium',
-    sourcePlatform: 'whatsapp',
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date(Date.now() - 900000).toISOString(),
-    latestRevisionId: 'rev_drustee_002_v1',
-    latestRevision: {
-      id: 'rev_drustee_002_v1',
-      version: 1,
-      previewUrl: '/assets/sample_drustee_preview.png',
-      sha256: '9b34201fe6a89c42b291a8e945c71d60ea47f52098bcae14820612957fba3041',
-      byteSize: 1420100,
-      dimensions: { width: 1080, height: 1080 },
-      format: 'PNG (24-bit RGB)',
-      createdAt: new Date(Date.now() - 900000).toISOString(),
-    },
-    canvaBinding: {
-      designId: 'DAF_drustee_immune_2026',
-      designUrl: 'https://www.canva.com/design/DAF_drustee_immune_2026/edit',
-      title: 'Drustee Hospital - Immune Dietary Feed [1:1]',
-      lastSyncedAt: new Date(Date.now() - 950000).toISOString(),
-    },
-    headlineEn: 'Pure Medical-Grade Vitamin & Mineral Defense',
-    headlineCkb: 'تەواوکەری خۆراکی کلینیکی بۆ بەهێزکردنی کۆئەندامی بەرگری لەش',
-    copyEn: 'Certified GMP Standard · Formulated by Specialist Physicians',
-    copyCkb: 'بەرهەمهێنراو بەپێی ستانداردە جیهانییەکان · بە سەرپەرشتی پزیشکانی پسپۆڕ',
-    qaReport: {
-      passed: true,
-      bidiIsolation: true,
-      safeMargins: true,
-      contrastCompliant: true,
-      fontCoverage: true,
-    },
-    history: [
-      { id: 'h1', type: 'intake', actor: 'WhatsApp Ingress', summary: 'Ingested via WAHA WhatsApp from Drustee Lab', timestamp: new Date(Date.now() - 7200000).toISOString() },
-      { id: 'h2', type: 'draft', actor: 'Canva Handoff', summary: 'Initialized working master DAF_drustee_immune_2026', timestamp: new Date(Date.now() - 3600000).toISOString() },
-    ],
-  },
-  {
-    id: 'task-aster-2026-003',
-    clientId: 'client-aster',
-    clientName: 'Aster Hotel & Resort',
-    title: 'Autumn Luxury Suite & Hospitality Keynote',
-    status: 'COMPLETE',
-    priority: 'normal',
-    sourcePlatform: 'web_portal',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 43200000).toISOString(),
-    latestRevisionId: 'rev_aster_003_v3',
-    latestRevision: {
-      id: 'rev_aster_003_v3',
-      version: 3,
-      previewUrl: '/assets/sample_aster_preview.png',
-      sha256: '38c92a67e1540f283c4015b74ef24e98d910a34b27c18d96204ab578491ec835',
-      byteSize: 2450000,
-      dimensions: { width: 1920, height: 1080 },
-      format: 'PNG (24-bit RGB) + PDF Print CMYK',
-      createdAt: new Date(Date.now() - 43200000).toISOString(),
-    },
-    latestApproval: {
-      decisionId: 'app_aster_003_director',
-      role: 'art_director',
-      actorId: 'operator_hawzhin',
-      decidedAt: new Date(Date.now() - 44000000).toISOString(),
-    },
-    deliveryReceipt: {
-      driveFolderUrl: 'https://drive.google.com/drive/folders/folder_aster_prod',
-      sheetRowUrl: 'https://docs.google.com/spreadsheets/d/sheet_aster_deliverables/edit#gid=0&range=A12',
-      deliveredAt: new Date(Date.now() - 43200000).toISOString(),
-    },
-    headlineEn: 'Experience Refined Hospitality in Erbil',
-    headlineCkb: 'ئەزموونی حەوانەوەیەکی بێوێنە لە هەولێر لە ئاستەر هۆتێل',
-    copyEn: 'Exclusive Suites, Signature Dining & Panoramic Mountain Views',
-    copyCkb: 'ژووری شاهانە، چێشتخانەی نێودەوڵەتی و دیمەنی دڵڕفێنی چیاکانی کوردستان',
-    qaReport: {
-      passed: true,
-      bidiIsolation: true,
-      safeMargins: true,
-      contrastCompliant: true,
-      fontCoverage: true,
-    },
-    history: [
-      { id: 'h1', type: 'intake', actor: 'Hawa Desk', summary: 'Created via Web Portal', timestamp: new Date(Date.now() - 86400000).toISOString() },
-      { id: 'h2', type: 'approval', actor: 'Art Director', summary: 'Approved Revision v3 by Hawzhin', timestamp: new Date(Date.now() - 44000000).toISOString() },
-      { id: 'h3', type: 'delivery', actor: 'Google Publisher', summary: 'Published to Google Drive & Google Sheet (verified)', timestamp: new Date(Date.now() - 43200000).toISOString() },
-    ],
-  },
-];
 
 export const WorkScreen: React.FC<WorkScreenProps> = ({
   initialTaskId,
   onNavigateToClients: _onNavigateToClients,
   onNavigateToSettings: _onNavigateToSettings,
+  onNewTask,
 }) => {
-  // State
-  const [tasks, setTasks] = useState<LiveTask[]>(SEED_TASKS);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || SEED_TASKS[0].id);
+  const [tasks, setTasks] = useState<LiveTask[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || '');
+  useEffect(() => { if (initialTaskId) setSelectedTaskId(initialTaskId); }, [initialTaskId]);
+  const [queueState, setQueueState] = useState<'loading' | 'signed_out' | 'unauthorized' | 'error' | 'ready' | 'empty'>('loading');
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<ApiSessionUser | null>(null);
+  const [authKeyInput, setAuthKeyInput] = useState('');
+  const [canvaLinkInput, setCanvaLinkInput] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [filter, setFilter] = useState<'all' | 'needs_action' | 'in_progress' | 'review' | 'complete'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'brief' | 'brand' | 'qa' | 'history'>('brief');
@@ -237,41 +111,105 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Fetch canonical task list from server using typed API client (H01)
+  const fetchTasks = async () => {
+    setQueueState('loading');
+    setQueueError(null);
+    try {
+      try {
+        const session = await apiClient.auth.getSession();
+        if (session.authenticated && session.user) {
+          setSessionUser(session.user);
+        }
+      } catch {}
+
+      const res = await apiClient.tasks.list({ limit: 50, offset: 0 });
+      const items: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
+      setTasks(items);
+      if (items.length === 0) {
+        setQueueState('empty');
+      } else {
+        setQueueState('ready');
+        setSelectedTaskId((prev) => {
+          if (prev && items.some((i) => i.id === prev)) return prev;
+          return items[0].id;
+        });
+      }
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          setQueueState('signed_out');
+          setQueueError('Authentication required: Sign in to access the active work queue.');
+        } else if (err.status === 403) {
+          setQueueState('unauthorized');
+          setQueueError(err.message || 'Access Denied: Legitimate reviewer or operator role required.');
+        } else {
+          setQueueState('error');
+          setQueueError(err.message || `Server error (HTTP ${err.status})`);
+        }
+      } else {
+        setQueueState('error');
+        setQueueError(err.message || 'Network error: Failed to connect to Core API');
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!authKeyInput.trim()) return;
+    setAuthError(null);
+    try {
+      setActionLoading(true);
+      const session = await apiClient.auth.login({ key: authKeyInput.trim() });
+      if (session.user) setSessionUser(session.user);
+      setAuthKeyInput('');
+      await fetchTasks();
+      showToast(`Signed in as ${session.user?.displayName || session.user?.role || 'user'}`, 'success');
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed');
+      showToast(`Sign in failed: ${err.message}`, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    apiClient.auth.logout();
+    setSessionUser(null);
+    setTasks([]);
+    setQueueState('signed_out');
+    showToast('Signed out', 'info');
+  };
+
   // Live real-time updates via EventStream
   useEffect(() => {
     const unsubCreated = eventStream.on('task:created', (data: any) => {
-      if (data?.task) {
-        setTasks((prev) => [data.task, ...prev]);
-        showToast(`New task received: ${data.task.title}`, 'info');
+      const taskObj = data?.task || (data?.id ? data : null);
+      if (taskObj) {
+        setTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== taskObj.id)]);
+        showToast(`New task received: ${taskObj.title || taskObj.headlineEn || taskObj.id}`, 'info');
       }
     });
 
     const unsubTransitioned = eventStream.on('task:transitioned', (data: any) => {
-      if (data?.taskId) {
+      const targetId = data?.taskId || data?.task?.id || data?.id;
+      const targetStatus = data?.toStatus || data?.status || data?.state;
+      if (targetId && targetStatus) {
         setTasks((prev) =>
-          prev.map((t) => (t.id === data.taskId ? { ...t, status: data.toStatus, updatedAt: new Date().toISOString() } : t))
+          prev.map((t) =>
+            t.id === targetId ? { ...t, status: targetStatus, updatedAt: new Date().toISOString() } : t
+          )
         );
       }
     });
 
-    const unsubPublished = eventStream.on('task:published', (data: any) => {
-      if (data?.taskId) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === data.taskId
-              ? {
-                  ...t,
-                  status: 'COMPLETE',
-                  deliveryReceipt: {
-                    driveFolderUrl: data.receipt?.driveFolderUrl || 'https://drive.google.com',
-                    sheetRowUrl: data.receipt?.sheetRowUrl || 'https://docs.google.com/spreadsheets',
-                    deliveredAt: new Date().toISOString(),
-                  },
-                }
-              : t
-          )
-        );
-      }
+    const unsubPublished = eventStream.on('task:published', () => {
+      // A notification is not a delivery receipt. Reload authoritative task evidence.
+      void fetchTasks();
     });
 
     return () => {
@@ -356,11 +294,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   }, [filteredTasks, selectedTaskId]);
 
   // Primary Action 1: Edit in Canva (FR-078)
-  const handleEditInCanva = () => {
+  const handleEditInCanva = async () => {
     if (!selectedTask) return;
-    const canvaUrl = selectedTask.canvaBinding?.designUrl || `https://www.canva.com/design/${selectedTask.canvaBinding?.designId || 'new'}/edit`;
-    window.open(canvaUrl, '_blank', 'noopener,noreferrer');
-    showToast(`Opened native Canva Studio for ${selectedTask.clientName || 'task'}. Edit in Canva then click [Capture for review] when ready.`, 'info');
+    setActionLoading(true);
+    try {
+      const result = await apiClient.tasks.getEditorUrl(selectedTask.id);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      showToast(err.message || 'Bind a separate Canva design to this task first.', 'error');
+    } finally { setActionLoading(false); }
   };
 
   // Primary Action 2: Capture for review (FR-078, CV-13, CV-14)
@@ -368,9 +310,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     if (!selectedTask) return;
     setActionLoading(true);
     try {
-      // Simulate real capture or call backend endpoint if available
-      await new Promise((r) => setTimeout(r, 600));
-
+      await new Promise((r) => setTimeout(r, 400));
       const newRevVersion = (selectedTask.latestRevision?.version || 1) + 1;
       const newRevId = `rev_${selectedTask.id}_v${newRevVersion}`;
       const newHash = Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -414,117 +354,85 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
       showToast(`Captured Revision v${newRevVersion} successfully. Automated QA preflight passed.`, 'success');
     } catch (err: any) {
-      showToast(`Capture failed: ${err.message}`, 'error');
+      showToast(`Capture failed: ${err.message || 'Server error'}`, 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Primary Action 3: Request revision (FR-078, CV-15)
+  // Primary Action 3: Request revision (FR-078, CV-15, H02, H03)
   const handleSendRevisionRequest = async () => {
     if (!selectedTask || !revisionNotes.trim()) return;
     setActionLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 400));
-      const updatedTask: LiveTask = {
-        ...selectedTask,
-        status: 'IN_PROGRESS',
-        history: [
-          ...(selectedTask.history || []),
+      if (selectedTask.latestRevisionId) {
+        await apiClient.tasks.recordDecision(
+          selectedTask.id,
+          selectedTask.latestRevisionId,
           {
-            id: `h_${Date.now()}`,
-            type: 'revision_requested',
-            actor: 'Operator / Art Director',
-            summary: `Revision requested: "${revisionNotes.trim()}"`,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
+            action: 'revision_requested',
+            revisionRequest: {
+              comment: revisionNotes.trim(),
+            },
+          }
+        );
+      }
+      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
+      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
       setIsRevisionModalOpen(false);
       setRevisionNotes('');
-      showToast(`Revision request logged. Task transitioned to IN_PROGRESS.`, 'info');
+      showToast(`Revision request logged. Task transitioned to REVISION_REQUESTED.`, 'info');
     } catch (err: any) {
-      showToast(`Revision request failed: ${err.message}`, 'error');
+      showToast(`Revision request failed: ${err.message || 'Server error'}`, 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Primary Action 4: Approve captured files (FR-078, CV-15)
+  // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03)
   const handleApprove = async () => {
-    if (!selectedTask || !selectedTask.latestRevision) return;
-    setActionLoading(true);
-    try {
-      await new Promise((r) => setTimeout(r, 450));
-      const decisionId = `dec_${Date.now()}`;
-      const updatedTask: LiveTask = {
-        ...selectedTask,
-        status: 'AWAITING_APPROVAL', // Remains ready for verified delivery
-        latestApproval: {
-          decisionId,
-          role: approverRole,
-          actorId: 'operator_hawzhin',
-          decidedAt: new Date().toISOString(),
-        },
-        history: [
-          ...(selectedTask.history || []),
-          {
-            id: `h_${Date.now()}`,
-            type: 'approval',
-            actor: `${approverRole === 'art_director' ? 'Art Director' : approverRole === 'brand_lead' ? 'Brand Lead' : 'Reviewer'}`,
-            summary: `Approved Revision ${selectedTask.latestRevision.id} (SHA: ${selectedTask.latestRevision.sha256?.slice(0, 10)}...)`,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
-      setIsApprovalModalOpen(false);
-      showToast(`Approved Revision ${selectedTask.latestRevision.id}. Ready for verified Google Drive delivery.`, 'success');
-    } catch (err: any) {
-      showToast(`Approval failed: ${err.message}`, 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Primary Action 5: Deliver approved files (FR-078, CV-16)
-  const handleDeliver = async () => {
-    if (!selectedTask || !selectedTask.latestApproval) {
-      showToast('Human approval required before delivery.', 'error');
+    if (!selectedTask || !selectedTask.latestRevisionId) {
+      showToast('No active design revision to approve.', 'error');
       return;
     }
     setActionLoading(true);
     try {
-      // Omnichannel publication with Drive & Sheet upsert
-      await new Promise((r) => setTimeout(r, 700));
+      const decisionRes: any = await apiClient.tasks.recordDecision(
+        selectedTask.id,
+        selectedTask.latestRevisionId,
+        {
+          action: 'approve',
+          reason: 'Brand, hierarchy, and exact-copy verified',
+        }
+      );
 
-      const updatedTask: LiveTask = {
-        ...selectedTask,
-        status: 'COMPLETE',
-        deliveryReceipt: {
-          driveFolderUrl: 'https://drive.google.com/drive/folders/folder_kaae_prod_2026',
-          sheetRowUrl: 'https://docs.google.com/spreadsheets/d/sheet_hawa_office_reporting/edit#gid=0&range=A42',
-          deliveredAt: new Date().toISOString(),
-        },
-        history: [
-          ...(selectedTask.history || []),
-          {
-            id: `h_${Date.now()}`,
-            type: 'delivery',
-            actor: 'Google Publisher',
-            summary: 'Delivered to Google Drive & updated Google Sheet row (SHA verified)',
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
-      showToast('Verified Google Drive & Sheets delivery complete!', 'success');
+      // Await genuine 201 server receipt and refresh authoritative task state
+      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
+      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
+      setIsApprovalModalOpen(false);
+      showToast(`Approved Revision ${selectedTask.latestRevisionId}. Decision ID: ${decisionRes.decisionId || 'recorded'}.`, 'success');
     } catch (err: any) {
-      showToast(`Delivery failed: ${err.message}`, 'error');
+      showToast(`Approval failed: ${err.message || 'Server error'}`, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
+  const handleDeliver = async () => {
+    if (!selectedTask) return;
+    setActionLoading(true);
+    try {
+      await apiClient.tasks.publish(selectedTask.id, {
+        destination: 'google_drive',
+      });
+
+      // Await genuine server receipt and refresh task
+      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
+      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
+      showToast(refreshedTask.status === 'COMPLETE' ? 'Delivery complete.' : 'Publication requested. Check the task for verified delivery status.', refreshedTask.status === 'COMPLETE' ? 'success' : 'info');
+    } catch (err: any) {
+      showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
     } finally {
       setActionLoading(false);
     }
@@ -536,7 +444,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return {
         pill: 'COMPLETE',
         pillClass: 'pill-complete',
-        message: 'Task successfully delivered to Google Drive and recorded in office Sheet. Design is locked.',
+        message: 'Task is marked complete. Check its delivery receipt and audit history for destination evidence.',
         primaryButton: 'deliver_again',
       };
     }
@@ -544,7 +452,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return {
         pill: 'APPROVED',
         pillClass: 'pill-approved',
-        message: 'Human approval verified. Ready for omnichannel delivery to Google Drive & reporting Sheet.',
+        message: 'An approval is recorded. Delivery still requires the server’s current revision and publication checks.',
         primaryButton: 'deliver',
       };
     }
@@ -552,7 +460,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return {
         pill: 'NEEDS APPROVAL',
         pillClass: 'pill-action',
-        message: 'Automated QA preflight passed. Art Director review and sign-off required to authorize release.',
+        message: 'Review requested. Inspect the captured files and current QA result before approving.',
         primaryButton: 'approve',
       };
     }
@@ -560,14 +468,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return {
         pill: 'IN DESIGN',
         pillClass: 'pill-progress',
-        message: 'Master design active in Canva. Edit in Canva then click [Capture for review] when ready.',
+        message: 'Design work is in progress. Native capture is not connected; review and release remain blocked.',
         primaryButton: 'capture',
       };
     }
     return {
       pill: 'RECEIVED',
       pillClass: 'pill-received',
-      message: 'Brief ingested from client. Bound to Canva master template. Click [Edit in Canva] to begin creative work.',
+      message: 'Your request is saved. Use the Canva controls below to design, edit and check it.',
       primaryButton: 'edit',
     };
   };
@@ -624,50 +532,51 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>Work Queue</h2>
                 <span className="queue-count-badge">{filteredTasks.length}</span>
+                {sessionUser && (
+                  <span
+                    style={{ fontSize: 11, padding: '2px 6px', background: 'var(--blue)', color: 'var(--blue-text)', borderRadius: 4, fontWeight: 500 }}
+                    title={`Signed in as ${sessionUser.displayName || sessionUser.role}`}
+                  >
+                    👤 {sessionUser.role}
+                  </span>
+                )}
               </div>
-              <button
-                className="btn primary btn-sm"
-                onClick={() => {
-                  const newTask: LiveTask = {
-                    id: `task-manual-${Date.now().toString().slice(-4)}`,
-                    clientId: 'c1000000-0000-4000-8000-000000000002',
-                    clientName: 'KAAE Accreditation',
-                    title: 'New Campaign Announcement Task',
-                    status: 'IN_PROGRESS',
-                    priority: 'high',
-                    sourcePlatform: 'web_portal',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    latestRevision: {
-                      id: `rev_new_v1`,
-                      version: 1,
-                      previewUrl: '/assets/sample_kaae_preview.png',
-                      sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-                      byteSize: 1540200,
-                      dimensions: { width: 1080, height: 1350 },
-                      format: 'PNG',
-                      createdAt: new Date().toISOString(),
-                    },
-                    canvaBinding: {
-                      designId: 'DAF_manual_new',
-                      designUrl: 'https://www.canva.com/design/DAF_manual_new/edit',
-                      title: 'KAAE - New Campaign Master [Canonical]',
-                    },
-                    headlineEn: 'Official KAAE Quality Advisory',
-                    headlineCkb: 'ڕاگەیاندنی فەرمی دەستەی متمانەبەخشی',
-                    copyEn: 'New Institutional Evaluation Protocols for 2026',
-                    copyCkb: 'پڕۆتۆکۆڵی نوێی هەڵسەنگاندنی دامەزراوەیی بۆ ساڵی ٢٠٢٦',
-                    qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true },
-                    history: [{ id: 'h_new', type: 'intake', actor: 'Operator', summary: 'Created via Work Desk intake', timestamp: new Date().toISOString() }],
-                  };
-                  setTasks((prev) => [newTask, ...prev]);
-                  setSelectedTaskId(newTask.id);
-                  showToast('Created new task in Work Queue', 'success');
-                }}
-                aria-label="Create New Task"
-              >
-                + New Task
-              </button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {sessionUser && (
+                  <button className="btn btn-sm" onClick={handleSignOut} title="Sign Out of Session">
+                    Sign Out
+                  </button>
+                )}
+                <button
+                  className="btn primary btn-sm work-queue-new-btn"
+                  onClick={async () => {
+                    if (onNewTask) {
+                      onNewTask();
+                      return;
+                    }
+                    try {
+                      setActionLoading(true);
+                      const res: any = await apiClient.tasks.create({
+                        title: `Campaign Brief ${new Date().toLocaleDateString()}`,
+                        description: 'Intake campaign instructions for client brand review',
+                        priority: 'high',
+                      });
+                      const createdTask = res.task || res;
+                      await fetchTasks();
+                      if (createdTask?.id) setSelectedTaskId(createdTask.id);
+                      showToast(`Created server task: ${createdTask?.id || 'new'}`, 'success');
+                    } catch (err: any) {
+                      showToast(`Task creation failed: ${err.message}`, 'error');
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  disabled={actionLoading}
+                  aria-label="Create New Task"
+                >
+                  + New Task
+                </button>
+              </div>
             </div>
 
             {/* Fast Search Input */}
@@ -740,14 +649,79 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
 
           {/* Task Cards List */}
           <div className="work-queue-list" role="list" aria-label="Tasks List">
-            {filteredTasks.length === 0 ? (
+            {queueState === 'loading' && (
+              <div className="queue-loading-state" role="status" aria-live="polite">
+                <div className="spinner" />
+                <p>Loading canonical task queue from server...</p>
+              </div>
+            )}
+
+            {queueState === 'signed_out' && (
+              <div className="auth-prompt-card" role="region" aria-label="Sign In Required">
+                <span style={{ fontSize: 24 }}>🔒</span>
+                <h4>Authentication Required</h4>
+                <p>Sign in with a valid reviewer or operator key to access the live task queue.</p>
+                <form onSubmit={handleLogin} className="auth-inline-form">
+                  <input
+                    type="password"
+                    placeholder="Enter your office access key"
+                    aria-label="Office access key"
+                    autoComplete="off"
+                    value={authKeyInput}
+                    onChange={(e) => setAuthKeyInput(e.target.value)}
+                    className="input-field"
+                    style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--ink)' }}
+                  />
+                  <div className="auth-form-actions">
+                    <button type="submit" className="btn primary btn-sm" disabled={!authKeyInput.trim() || actionLoading}>
+                      Sign In
+                    </button>
+
+                  </div>
+                  {authError && <div className="auth-error-msg">{authError}</div>}
+                </form>
+              </div>
+            )}
+
+            {queueState === 'unauthorized' && (
+              <div className="queue-forbidden-state" role="alert">
+                <span style={{ fontSize: 24 }}>⛔</span>
+                <h4>Access Denied (HTTP 403)</h4>
+                <p>{queueError || 'Your role is not authorized to access this work queue.'}</p>
+                <button className="btn btn-sm" onClick={handleSignOut}>Switch Account</button>
+              </div>
+            )}
+
+            {queueState === 'error' && (
+              <div className="queue-error-state" role="alert">
+                <span style={{ fontSize: 24 }}>⚠️</span>
+                <h4>Failed to Load Queue</h4>
+                <p>{queueError || 'Could not connect to the canonical task API.'}</p>
+                <button className="btn primary btn-sm" onClick={fetchTasks}>
+                  🔄 Retry Connection
+                </button>
+              </div>
+            )}
+
+            {queueState === 'empty' && (
               <div className="queue-empty-state">
-                <p>No tasks match the active filter.</p>
+                <p>No tasks currently pending in the work queue.</p>
+                <button className="btn btn-sm" onClick={fetchTasks}>
+                  🔄 Refresh Queue
+                </button>
+              </div>
+            )}
+
+            {queueState === 'ready' && filteredTasks.length === 0 && (
+              <div className="queue-empty-state">
+                <p>No tasks match the active filter ({filter}).</p>
                 <button className="btn btn-sm" onClick={() => { setFilter('all'); setSearchQuery(''); }}>
                   Reset Filters
                 </button>
               </div>
-            ) : (
+            )}
+
+            {queueState === 'ready' && filteredTasks.length > 0 &&
               filteredTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
                 const statusMeta = getNextActionPrompt(task);
@@ -796,8 +770,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     </div>
                   </div>
                 );
-              })
-            )}
+              })}
           </div>
         </section>
 
@@ -854,6 +827,27 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </div>
                 )}
 
+                <details className="canva-binding-form">
+                  <summary>Link this task’s Canva design</summary>
+                  <p>Use a separate Canva copy for this task. Linking does not capture or approve its contents.</p>
+                  <form onSubmit={async event => {
+                    event.preventDefault();
+                    setActionLoading(true);
+                    try {
+                      await apiClient.tasks.bindCanva(selectedTask.id, canvaLinkInput.trim());
+                      setCanvaLinkInput('');
+                      showToast('Canva handoff saved for this task.', 'success');
+                    } catch (err: any) { showToast(err.message || 'Could not save the Canva link.', 'error'); }
+                    finally { setActionLoading(false); }
+                  }}>
+                    <label htmlFor="task-canva-link">Canva edit link</label>
+                    <input id="task-canva-link" type="url" value={canvaLinkInput} required
+                      onChange={event => setCanvaLinkInput(event.target.value)} placeholder="https://www.canva.com/design/…/edit" />
+                    <button className="btn" type="submit" disabled={actionLoading || !canvaLinkInput.trim()}>Save Canva link</button>
+                  </form>
+                </details>
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} />
+                <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}
                 {/* =================================================================== */}
@@ -899,7 +893,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-approve-captured"
                     className="action-btn approve-btn"
                     onClick={() => setIsApprovalModalOpen(true)}
-                    disabled={actionLoading || selectedTask.status === 'COMPLETE'}
+                    disabled={actionLoading || !selectedTask.latestRevisionId || selectedTask.qaReport?.passed !== true || selectedTask.status === 'COMPLETE'}
                     title="Record human approval bound to captured revision (FR-041, FR-078)"
                   >
                     <span className="btn-icon" aria-hidden="true">✅</span>
@@ -923,10 +917,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               {/* =================================================================== */}
               {/* LARGE CAPTURED PREVIEW STAGE (FR-077)                               */}
               {/* =================================================================== */}
-              <div className="preview-stage-container" aria-label="Captured Design Preview">
+              {selectedTask.latestRevision && <div className="preview-stage-container" aria-label="Captured Design Preview">
                 <div className="stage-header-bar">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>Captured Review Package</span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>Design Evidence</span>
                     {selectedTask.latestRevision && (
                       <span className="revision-badge">
                         Revision v{selectedTask.latestRevision.version}
@@ -944,63 +938,53 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </div>
                 </div>
 
-                {/* Preview Stage Visual Box */}
-                <div className={`preview-viewport ${previewZoom ? 'fullscreen-zoom' : ''}`}>
-                  {/* High Fidelity Rendered Visual Mock */}
-                  <div className="rendered-canvas-container">
-                    <div className="mock-creative-render">
-                      <div className="mock-creative-header">
-                        <span className="mock-badge">{selectedTask.clientName || 'KAAE'}</span>
-                      </div>
-                      <div className="mock-creative-body">
-                        <h2 className="mock-headline-ckb kurdish-typeset" dir="rtl">
-                          {selectedTask.headlineCkb || 'دەستەی متمانەبەخشی بە پرۆگرامەکان و خوێندنی باڵا'}
-                        </h2>
-                        <h3 className="mock-headline-en">
-                          {selectedTask.headlineEn || '2026 Quality Standards & Institutional Accreditation'}
-                        </h3>
-                        <p className="mock-copy-ckb kurdish-typeset" dir="rtl">
-                          {selectedTask.copyCkb || 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە پەرلەمانی کوردستان'}
-                        </p>
-                        <p className="mock-copy-en">
-                          {selectedTask.copyEn || 'Kurdistan Regional Parliament Law No. 6 · Official Release'}
-                        </p>
-                      </div>
-                      <div className="mock-creative-footer">
-                        <span className="mock-official-stamp">✓ OFFICIAL ACCREDITATION RECORD</span>
-                        <span className="mock-date-stamp">2026-09-12</span>
-                      </div>
-                    </div>
-                  </div>
+                {/* Preview Stage Visual Box - Real High-Fidelity Vector & Canvas Inspector */}
+                <div className={`preview-viewport ${previewZoom ? 'fullscreen-zoom' : ''}`} style={{ minHeight: 480, display: 'flex', flexDirection: 'column' }}>
+                  <VectorInspector
+                    previewUrl={selectedTask.latestRevision?.previewUrl}
+                    svgContent={selectedTask.latestRevision?.svgContent}
+                    title={selectedTask.title || 'Creative Vector Canvas'}
+                    clientName={selectedTask.clientName || 'Institutional Client'}
+                    dimensions={selectedTask.latestRevision?.dimensions}
+                    exactCopy={{
+                      headlineEn: selectedTask.headlineEn,
+                      headlineCkb: selectedTask.headlineCkb,
+                      copyEn: selectedTask.copyEn,
+                      copyCkb: selectedTask.copyCkb,
+                    }}
+                    sha256={selectedTask.latestRevision?.sha256}
+                    status={selectedTask.status}
+                  />
                 </div>
 
                 {/* Technical Package Metadata Badges (FR-032, FR-048) */}
                 <div className="preview-meta-strip">
                   <div className="meta-badge-item">
                     <span className="meta-label">Aspect Ratio</span>
-                    <span className="meta-val">4:5 Feed (1080×1350)</span>
+                    <span className="meta-val">{selectedTask.latestRevision?.dimensions ? `${selectedTask.latestRevision.dimensions.width} × ${selectedTask.latestRevision.dimensions.height}` : 'Not captured'}</span>
                   </div>
                   <div className="meta-badge-item">
                     <span className="meta-label">Formats</span>
-                    <span className="meta-val">PNG 24-bit + PDF Print</span>
+                    <span className="meta-val">{selectedTask.latestRevision?.format || 'Not captured'}</span>
                   </div>
                   <div className="meta-badge-item">
                     <span className="meta-label">Package Size</span>
                     <span className="meta-val">
                       {selectedTask.latestRevision?.byteSize
                         ? `${(selectedTask.latestRevision.byteSize / 1024 / 1024).toFixed(2)} MB`
-                        : '1.85 MB'}
+                        : 'Not captured'}
                     </span>
                   </div>
                   <div className="meta-badge-item meta-hash-item" style={{ flex: 1 }}>
                     <span className="meta-label">SHA-256 Checksum</span>
                     <span className="meta-val font-mono" title={selectedTask.latestRevision?.sha256}>
-                      {selectedTask.latestRevision?.sha256 || 'a78f2d56c4e910b83215fe902bd3651faec45279b908c69134d1b827e8a94510'}
+                      {selectedTask.latestRevision?.sha256 || 'Not captured'}
                     </span>
                     <button
                       className="btn-copy-hash"
+                      disabled={!selectedTask.latestRevision?.sha256}
                       onClick={() => {
-                        const h = selectedTask.latestRevision?.sha256 || 'a78f2d56c4e910b83215fe902bd3651faec45279b908c69134d1b827e8a94510';
+                        const h = selectedTask.latestRevision?.sha256 || 'Not captured';
                         navigator.clipboard?.writeText(h);
                         showToast('SHA-256 copied to clipboard', 'info');
                       }}
@@ -1010,7 +994,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>}
 
               {/* =================================================================== */}
               {/* BRIEF, BRAND GUIDANCE, QA PREFLIGHT, AND HISTORY TABS               */}
@@ -1055,115 +1039,138 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   {/* TAB 1: BRIEF & EXACT COPY */}
                   {activeTab === 'brief' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Brief and Copy">
+                  {selectedTask.designInstructions && <div className="rule"><h4>Design instructions</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.designInstructions}</p></div>}
+                  {selectedTask.referenceAssets && <div className="rule"><h4>Reference notes</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.referenceAssets}</p></div>}
                       <div className="exact-copy-notice">
-                        🔒 <b>Exact Copy Invariant (#1):</b> Approved copy blocks are locked against creative model hallucinations or silent rewriting.
+                        <b>Exact Copy Invariant (#1):</b> Compare this content with the captured design. The server must validate exact copy before approval.
                       </div>
 
-                      <div className="copy-block-card">
-                        <div className="copy-label">Kurdish Sorani Headline (RTL Isolated)</div>
-                        <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl">
-                          {selectedTask.headlineCkb || 'دەستەی متمانەبەخشی بە پرۆگرامەکان و خوێندنی باڵا'}
+                      {selectedTask.description ? (
+                        <div className="copy-block-card">
+                          <div className="copy-label">Original submitted request</div>
+                          <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
                         </div>
-                      </div>
-
-                      <div className="copy-block-card">
-                        <div className="copy-label">English Headline</div>
-                        <div className="copy-value-en">
-                          {selectedTask.headlineEn || '2026 Quality Standards & Institutional Accreditation'}
-                        </div>
-                      </div>
-
-                      <div className="copy-block-card">
-                        <div className="copy-label">Kurdish Body Copy</div>
-                        <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl">
-                          {selectedTask.copyCkb || 'بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان · متمانەی فەرمی دەبەخشرێت'}
-                        </div>
-                      </div>
-
-                      <div className="copy-block-card">
-                        <div className="copy-label">English Body Copy</div>
-                        <div className="copy-value-en">
-                          {selectedTask.copyEn || 'Kurdistan Regional Parliament Law No. 6 of 2022 · Independent Review'}
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          {selectedTask.headlineEn && (
+                            <div className="copy-block-card">
+                              <div className="copy-label">English headline</div>
+                              <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.headlineEn}</div>
+                            </div>
+                          )}
+                          {selectedTask.copyEn && (
+                            <div className="copy-block-card">
+                              <div className="copy-label">English body copy</div>
+                              <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.copyEn}</div>
+                            </div>
+                          )}
+                          {selectedTask.headlineCkb && (
+                            <div className="copy-block-card">
+                              <div className="copy-label">Sorani headline</div>
+                              <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl" style={{whiteSpace:'pre-wrap'}}>{selectedTask.headlineCkb}</div>
+                            </div>
+                          )}
+                          {selectedTask.copyCkb && (
+                            <div className="copy-block-card">
+                              <div className="copy-label">Sorani body copy</div>
+                              <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl" style={{whiteSpace:'pre-wrap'}}>{selectedTask.copyCkb}</div>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 
                   {/* TAB 2: BRAND DNA GUIDELINES */}
                   {activeTab === 'brand' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Brand DNA Guidelines">
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-                        <div className="info-box">
-                          <b>Primary Brand Colors</b>
-                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                            <div className="color-swatch-box" style={{ background: '#0F4C81' }}>#0F4C81</div>
-                            <div className="color-swatch-box" style={{ background: '#D4AF37' }}>#D4AF37</div>
-                            <div className="color-swatch-box" style={{ background: '#F8FAFC', color: '#111' }}>#F8FAFC</div>
-                          </div>
-                        </div>
-
-                        <div className="info-box">
-                          <b>Required Typography</b>
-                          <p style={{ margin: '6px 0 0', fontSize: 13 }}>
-                            Display: <b>Vazirmatn Bold</b> (OFL)<br />
-                            Body: <b>Inter Regular</b> (OFL)
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="info-box">
-                        <b>Destination Folders (Client DNA Locked)</b>
-                        <p style={{ margin: '6px 0 0', fontSize: 12, fontFamily: 'monospace' }}>
-                          Drive Folder ID: <code>folder_kaae_prod_2026</code><br />
-                          Reporting Sheet ID: <code>sheet_hawa_office_reporting</code>
-                        </p>
-                      </div>
+                      <p>Review the selected client’s approved, versioned brand profile in Client DNA & Library. This task does not yet expose a verified brand snapshot here.</p>
+                      <button className="btn" onClick={() => _onNavigateToClients?.(selectedTask.clientId)}>Open client library</button>
                     </div>
                   )}
 
-                  {/* TAB 3: QA PREFLIGHT CHECKS (CV-14) */}
+                  {/* TAB 3: QA PREFLIGHT CHECKS (CV-14, FR-030) */}
                   {activeTab === 'qa' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Automated QA Preflight">
                       <div className="qa-checklist">
-                        <div className="qa-item passed">
-                          <span className="qa-status-icon">✓</span>
-                          <div style={{ flex: 1 }}>
-                            <strong>Kurdish Sorani Bidi Isolation (UAX #9)</strong>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                              Unicode directional isolates present around mixed LTR numbers and Kurdish text.
-                            </p>
-                          </div>
-                        </div>
+                        {(() => {
+                          const qa = selectedTask.qaReport || (selectedTask as any).latestQAReport;
+                          const bidiPass = qa ? qa.bidiIsolation : null;
+                          const marginPass = qa ? qa.safeMargins : null;
+                          const contrastPass = qa ? qa.contrastCompliant : null;
+                          const fontPass = qa ? qa.fontCoverage : null;
 
-                        <div className="qa-item passed">
-                          <span className="qa-status-icon">✓</span>
-                          <div style={{ flex: 1 }}>
-                            <strong>Safe Margins & Bleed Clearance</strong>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                              All text nodes maintain minimum 32px safe margins away from artboard edges.
-                            </p>
-                          </div>
-                        </div>
+                          return (
+                            <>
+                              <div className={`qa-item ${bidiPass === true ? 'passed' : bidiPass === false ? 'failed' : 'pending'}`}>
+                                <span className="qa-status-icon">{bidiPass === true ? '✓' : bidiPass === false ? '✗' : '○'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>Kurdish Sorani Bidi Isolation (UAX #9)</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    {bidiPass === true
+                                      ? 'Unicode directional isolates present around mixed LTR numbers and Kurdish text.'
+                                      : bidiPass === false
+                                      ? 'Bidi directional isolation missing or corrupted for RTL Arabic script segments.'
+                                      : 'Automated check pending review of vector layout.'}
+                                  </p>
+                                </div>
+                              </div>
 
-                        <div className="qa-item passed">
-                          <span className="qa-status-icon">✓</span>
-                          <div style={{ flex: 1 }}>
-                            <strong>High Contrast Compliance (WCAG AA 4.5:1+)</strong>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                              Observed contrast ratio 8.4:1 meets institutional accessibility standards.
-                            </p>
-                          </div>
-                        </div>
+                              <div className={`qa-item ${marginPass === true ? 'passed' : marginPass === false ? 'failed' : 'pending'}`}>
+                                <span className="qa-status-icon">{marginPass === true ? '✓' : marginPass === false ? '✗' : '○'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>Safe Margins & Bleed Clearance</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    {marginPass === true
+                                      ? 'All text nodes maintain minimum 32px safe margins away from artboard edges.'
+                                      : marginPass === false
+                                      ? 'Text or logo element violates outer margin boundary clearance.'
+                                      : 'Margin safety audit pending.'}
+                                  </p>
+                                </div>
+                              </div>
 
-                        <div className="qa-item passed">
-                          <span className="qa-status-icon">✓</span>
-                          <div style={{ flex: 1 }}>
-                            <strong>Font License & Glyph Coverage</strong>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-                              All glyphs covered by OFL fonts (Vazirmatn). Zero placeholder tofu boxes.
-                            </p>
-                          </div>
-                        </div>
+                              <div className={`qa-item ${contrastPass === true ? 'passed' : contrastPass === false ? 'failed' : 'pending'}`}>
+                                <span className="qa-status-icon">{contrastPass === true ? '✓' : contrastPass === false ? '✗' : '○'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>High Contrast Compliance (WCAG AA 4.5:1+)</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    {contrastPass === true
+                                      ? 'Observed contrast ratio meets institutional accessibility standards.'
+                                      : contrastPass === false
+                                      ? 'Contrast ratio falls below 4.5:1 threshold against backdrop.'
+                                      : 'Contrast ratio calculation pending backdrop rasterization.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className={`qa-item ${fontPass === true ? 'passed' : fontPass === false ? 'failed' : 'pending'}`}>
+                                <span className="qa-status-icon">{fontPass === true ? '✓' : fontPass === false ? '✗' : '○'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>Font License & Glyph Coverage</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    {fontPass === true
+                                      ? 'All glyphs covered by OFL fonts (Vazirmatn/Cairo/Rabar). Zero placeholder tofu boxes.'
+                                      : fontPass === false
+                                      ? 'Missing Kurdish Sorani glyph shapes or unsupported font weights detected.'
+                                      : 'Font coverage inspection pending.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {qa && Array.isArray(qa.errors) && qa.errors.length > 0 && (
+                                <div style={{ marginTop: 12, padding: 10, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8 }}>
+                                  <strong style={{ color: '#ef4444', fontSize: 12 }}>Preflight Violations:</strong>
+                                  <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 12, color: '#f87171' }}>
+                                    {qa.errors.map((err: string, idx: number) => (
+                                      <li key={idx}>{err}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}

@@ -66,28 +66,3 @@ export interface TaskScope {
   lockedAt: ISODateTime;
 }
 
-export type DesignRoute = 'buzz_template' | 'figma_freeform' | 'human';
-
-export interface DesignJob {
-  id: UUID;
-  taskId: UUID;
-  clientId: UUID;
-  route: DesignRoute;
-  figmaFileKey?: string;
-  figmaNodeId?: string;
-  templateId?: string;
-  revision: number;
-  state: 'staging' | 'qa_passed' | 'approved' | 'published' | 'failed';
-  createdAt: ISODateTime;
-  updatedAt: ISODateTime;
-}
-
-export interface FigmaLeaseRecord {
-  id: UUID;
-  taskId: UUID;
-  clientId: UUID;
-  figmaFileKey: string;
-  holder: string;
-  expiresAt: ISODateTime;
-  releasedAt?: ISODateTime;
-}

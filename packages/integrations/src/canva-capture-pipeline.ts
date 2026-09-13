@@ -16,7 +16,238 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import type { Result, AppError, UUID, ISODateTime, SHA256, JsonObject } from '@hawa/contracts';
+
+// CRC32 Lookup Table for strict PNG chunk validation
+const crcTable: number[] = new Array(256);
+for (let n = 0; n < 256; n++) {
+  let c = n;
+  for (let k = 0; k < 8; k++) {
+    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+  }
+  crcTable[n] = c >>> 0;
+}
+function crc32(buf: Buffer): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xFF];
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function parseAndValidatePng(buffer: Buffer): { ok: true; width: number; height: number } | { ok: false; error: string } {
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (buffer.length < 33 || buffer.subarray(0, 8).compare(pngSignature) !== 0) {
+    return { ok: false, error: 'Invalid PNG signature or buffer too short' };
+  }
+
+  let offset = 8;
+  let hasIhdr = false;
+  let hasIend = false;
+  let hasIdat = false;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 8;
+  let colorType = 6;
+  const idatChunks: Buffer[] = [];
+
+  while (offset < buffer.length) {
+    if (offset + 8 > buffer.length) {
+      return { ok: false, error: 'Truncated PNG: chunk header exceeds buffer length' };
+    }
+    const chunkLength = buffer.readUInt32BE(offset);
+    const chunkType = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+    const totalChunkLen = 4 + 4 + chunkLength + 4; // length + type + data + crc
+
+    if (offset + totalChunkLen > buffer.length) {
+      return { ok: false, error: `Truncated PNG: chunk ${chunkType} exceeds buffer length` };
+    }
+
+    const chunkData = buffer.subarray(offset + 8, offset + 8 + chunkLength);
+    const expectedCrc = buffer.readUInt32BE(offset + 8 + chunkLength);
+
+    const typeAndData = buffer.subarray(offset + 4, offset + 8 + chunkLength);
+    const computedCrc = crc32(typeAndData);
+    if (computedCrc !== expectedCrc) {
+      return { ok: false, error: `CRC32 checksum mismatch in PNG chunk ${chunkType}` };
+    }
+
+    if (chunkType === 'IHDR') {
+      if (hasIhdr || chunkLength !== 13) {
+        return { ok: false, error: 'Invalid or duplicate IHDR chunk in PNG' };
+      }
+      hasIhdr = true;
+      width = chunkData.readUInt32BE(0);
+      height = chunkData.readUInt32BE(4);
+      bitDepth = chunkData.readUInt8(8);
+      colorType = chunkData.readUInt8(9);
+
+      if (width <= 0 || height <= 0) {
+        return { ok: false, error: 'Invalid dimensions in PNG IHDR' };
+      }
+      if (width > 16384 || height > 16384) {
+        return { ok: false, error: `Declared PNG dimensions (${width}x${height}) exceed maximum allowed dimension (16384)` };
+      }
+    } else if (chunkType === 'IDAT') {
+      if (!hasIhdr) return { ok: false, error: 'IDAT chunk encountered before IHDR' };
+      hasIdat = true;
+      idatChunks.push(chunkData);
+    } else if (chunkType === 'IEND') {
+      hasIend = true;
+      offset += totalChunkLen;
+      break;
+    }
+
+    offset += totalChunkLen;
+  }
+
+  if (!hasIhdr || !hasIdat || !hasIend) {
+    return { ok: false, error: 'Missing mandatory PNG chunks: must contain IHDR, IDAT, and IEND' };
+  }
+
+  // Determine bytes per pixel and scanline size based on PNG specification
+  let channels = 1;
+  if (colorType === 2) channels = 3; // RGB
+  else if (colorType === 3) channels = 1; // Indexed
+  else if (colorType === 4) channels = 2; // Grayscale + Alpha
+  else if (colorType === 6) channels = 4; // RGBA
+
+  const bytesPerScanline = 1 + Math.ceil((width * channels * bitDepth) / 8);
+  const expectedTotalBytes = height * bytesPerScanline;
+
+  if (expectedTotalBytes > 120 * 1024 * 1024) {
+    return { ok: false, error: `PNG image decompressed size (${expectedTotalBytes} bytes) exceeds safety limit` };
+  }
+
+  try {
+    const combinedIdat = Buffer.concat(idatChunks);
+    const decompressed = zlib.inflateSync(combinedIdat, { maxOutputLength: expectedTotalBytes + 1024 });
+    if (decompressed.length !== expectedTotalBytes) {
+      return {
+        ok: false,
+        error: `Corrupt PNG image data: decompressed scanline buffer length (${decompressed.length} bytes) does not match expected size (${expectedTotalBytes} bytes for ${width}x${height} format)`,
+      };
+    }
+    // Verify scanline filter types (must be 0..4)
+    for (let row = 0; row < height; row++) {
+      const filterByte = decompressed[row * bytesPerScanline];
+      if (filterByte > 4) {
+        return {
+          ok: false,
+          error: `Corrupt PNG scanline filter method ${filterByte} at row ${row} (valid filter types are 0..4)`,
+        };
+      }
+    }
+  } catch (zlibErr: any) {
+    return { ok: false, error: `Corrupt PNG compressed image data (IDAT stream invalid: ${zlibErr.message})` };
+  }
+
+  return { ok: true, width, height };
+}
+
+function parseAndValidatePdf(buffer: Buffer): {
+  ok: boolean;
+  error?: string;
+  isCmyk: boolean;
+  pageBoxes: { mediaBox?: number[]; trimBox?: number[]; bleedBox?: number[] };
+  embeddedFonts: string[];
+} {
+  if (buffer.length < 128) {
+    return {
+      ok: false,
+      error: 'PDF buffer size is too small to contain valid document structure',
+      isCmyk: false,
+      pageBoxes: {},
+      embeddedFonts: [],
+    };
+  }
+
+  const header = buffer.subarray(0, 8).toString('ascii');
+  if (!header.startsWith('%PDF-')) {
+    return {
+      ok: false,
+      error: "Missing '%PDF-' header signature",
+      isCmyk: false,
+      pageBoxes: {},
+      embeddedFonts: [],
+    };
+  }
+
+  const tail = buffer.subarray(Math.max(0, buffer.length - 1024)).toString('latin1');
+  if (!tail.includes('%%EOF')) {
+    return {
+      ok: false,
+      error: "Missing '%%EOF' end-of-file trailer marker",
+      isCmyk: false,
+      pageBoxes: {},
+      embeddedFonts: [],
+    };
+  }
+
+  const pdfText = buffer.toString('latin1');
+
+  // Strip comments before structural checks: in PDF, % introduces a single-line comment
+  // Preserve header line 1 (%PDF-) and %%EOF trailer marker
+  const strippedText = pdfText
+    .split(/\r?\n/)
+    .map((line, idx) => {
+      if (idx === 0 && line.startsWith('%PDF-')) return line;
+      if (line.trim().startsWith('%%EOF')) return line;
+      const commentIdx = line.indexOf('%');
+      return commentIdx !== -1 ? line.substring(0, commentIdx) : line;
+    })
+    .join('\n');
+
+  // Must contain xref table or xref stream in stripped text
+  const hasXref = /\bxref\b|\/Type\s*\/XRef\b/.test(strippedText);
+  // Must contain trailer or stream dictionary with /Root in stripped text
+  const hasRoot = /\/Root\s+\d+\s+\d+\s+R\b/.test(strippedText) || /\/Root\b/.test(strippedText);
+  // Must contain /Pages catalog and at least one /Page object in stripped text
+  const hasPages = /\/Type\s*\/Pages\b|\/Type\/Pages\b/.test(strippedText);
+  const hasPageObj = /\/Type\s*\/Page\b|\/Type\/Page\b/.test(strippedText);
+  const hasObjects = /\d+\s+\d+\s+obj\b/.test(strippedText);
+  const hasStartXref = /\bstartxref\s+\d+\b|\/Type\s*\/XRef\b/.test(strippedText);
+
+  if (!hasXref || !hasRoot || !hasPages || !hasPageObj || !hasObjects || !hasStartXref) {
+    return {
+      ok: false,
+      error: 'Malformed PDF document: missing required structural elements (xref, trailer, startxref, /Root, /Pages catalog, or /Page object)',
+      isCmyk: false,
+      pageBoxes: {},
+      embeddedFonts: [],
+    };
+  }
+
+  const mediaBoxMatch = strippedText.match(/\/MediaBox\s*\[(.*?)\]/);
+  const trimBoxMatch = strippedText.match(/\/TrimBox\s*\[(.*?)\]/);
+  const bleedBoxMatch = strippedText.match(/\/BleedBox\s*\[(.*?)\]/);
+
+  const pageBoxes = {
+    mediaBox: mediaBoxMatch ? mediaBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
+    trimBox: trimBoxMatch ? trimBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
+    bleedBox: bleedBoxMatch ? bleedBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
+  };
+
+  const embeddedFonts: string[] = [];
+  const fontMatches = strippedText.matchAll(/\/FontName\s*\/([A-Za-z0-9_-]+)/g);
+  for (const m of fontMatches) {
+    if (!embeddedFonts.includes(m[1])) embeddedFonts.push(m[1]);
+  }
+  const baseFontMatches = strippedText.matchAll(/\/BaseFont\s*\/([A-Za-z0-9_-]+)/g);
+  for (const m of baseFontMatches) {
+    if (!embeddedFonts.includes(m[1])) embeddedFonts.push(m[1]);
+  }
+
+  const isCmyk = strippedText.includes('/DeviceCMYK') || strippedText.includes('/CMYK') || strippedText.includes('FOGRA') || strippedText.includes('GRACoL');
+
+  return {
+    ok: true,
+    isCmyk,
+    pageBoxes,
+    embeddedFonts,
+  };
+}
 import {
   type CanvaStudioBinding,
   type CanvaCapturedArtifact,
@@ -138,25 +369,31 @@ export class CanvaCapturePipeline {
     // 2. Format-specific magic byte and structure inspection
     if (expectedFormat === 'png') {
       const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-      if (buffer.subarray(0, 8).compare(pngSignature) !== 0) {
+      if (buffer.length < 8 || buffer.subarray(0, 8).compare(pngSignature) !== 0) {
         return {
           ok: false,
           error: {
             code: 'WRONG_FORMAT_OUTPUT',
-            message: 'Wrong format output: Buffer does not start with valid PNG magic bytes (0x89PNG).',
+            message: 'Wrong format output: Buffer does not start with PNG magic bytes signature.',
             retryable: false,
-            safeAction: 'Ensure Canva export was requested with format=png',
-            detail: { headerAscii: buffer.subarray(0, 8).toString('latin1') },
+            safeAction: 'Ensure Canva export outputs valid PNG bytes',
+            detail: { byteLength: buffer.length },
           },
         };
       }
 
-      // Parse PNG IHDR (width, height at offset 16-24)
-      let width: number | undefined;
-      let height: number | undefined;
-      if (buffer.length >= 24) {
-        width = buffer.readUInt32BE(16);
-        height = buffer.readUInt32BE(20);
+      const parsed = parseAndValidatePng(buffer);
+      if (!parsed.ok) {
+        return {
+          ok: false,
+          error: {
+            code: 'CORRUPT_OR_EMPTY_ARTIFACT',
+            message: `Corrupt or invalid PNG artifact: ${parsed.error}`,
+            retryable: false,
+            safeAction: 'Re-export valid PNG from Canva studio and re-download full file',
+            detail: { byteLength: buffer.length },
+          },
+        };
       }
 
       return {
@@ -165,8 +402,8 @@ export class CanvaCapturePipeline {
           format: 'png',
           byteSize: buffer.length,
           sha256,
-          width,
-          height,
+          width: parsed.width,
+          height: parsed.height,
           dpi: 72,
           colorSpace: 'srgb',
         },
@@ -174,44 +411,21 @@ export class CanvaCapturePipeline {
     }
 
     if (expectedFormat === 'pdf_print' || expectedFormat === 'pdf_standard') {
-      const pdfHeader = buffer.subarray(0, 5).toString('ascii');
-      if (pdfHeader !== '%PDF-') {
+      const parsed = parseAndValidatePdf(buffer);
+      if (!parsed.ok) {
         return {
           ok: false,
           error: {
-            code: 'WRONG_FORMAT_OUTPUT',
-            message: `Wrong format output: Expected PDF magic header '%PDF-', got '${pdfHeader}'.`,
+            code: 'CORRUPT_OR_EMPTY_ARTIFACT',
+            message: `Corrupt or invalid PDF artifact: ${parsed.error}`,
             retryable: false,
-            safeAction: 'Ensure Canva export was requested with format=pdf',
+            safeAction: 'Re-export valid PDF from Canva studio and re-download full file',
+            detail: { byteLength: buffer.length },
           },
         };
       }
 
-      const pdfText = buffer.toString('latin1');
-
-      // Check page boxes: MediaBox, TrimBox, BleedBox
-      const mediaBoxMatch = pdfText.match(/\/MediaBox\s*\[(.*?)\]/);
-      const trimBoxMatch = pdfText.match(/\/TrimBox\s*\[(.*?)\]/);
-      const bleedBoxMatch = pdfText.match(/\/BleedBox\s*\[(.*?)\]/);
-
-      const pageBoxes = {
-        mediaBox: mediaBoxMatch ? mediaBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
-        trimBox: trimBoxMatch ? trimBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
-        bleedBox: bleedBoxMatch ? bleedBoxMatch[1].trim().split(/\s+/).map(Number) : undefined,
-      };
-
-      // Check embedded fonts
-      const embeddedFonts: string[] = [];
-      const fontMatches = pdfText.matchAll(/\/FontName\s*\/([A-Za-z0-9_-]+)/g);
-      for (const m of fontMatches) {
-        if (!embeddedFonts.includes(m[1])) embeddedFonts.push(m[1]);
-      }
-      const baseFontMatches = pdfText.matchAll(/\/BaseFont\s*\/([A-Za-z0-9_-]+)/g);
-      for (const m of baseFontMatches) {
-        if (!embeddedFonts.includes(m[1])) embeddedFonts.push(m[1]);
-      }
-
-      const isCmyk = pdfText.includes('/DeviceCMYK') || pdfText.includes('/CMYK') || pdfText.includes('FOGRA') || pdfText.includes('GRACoL');
+      const { isCmyk, pageBoxes, embeddedFonts } = parsed;
 
       if (expectedFormat === 'pdf_print') {
         // Enforce CMYK and print boxes for PDF Print
@@ -669,11 +883,16 @@ export class CanvaCapturePipeline {
 export function createSyntheticValidPng(width: number, height: number): Buffer {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-  // IHDR chunk: length (13), chunkType ('IHDR'), width (4 bytes), height (4 bytes), bitDepth (8), colorType (6), compression (0), filter (0), interlace (0)
-  const ihdrLength = Buffer.alloc(4);
-  ihdrLength.writeUInt32BE(13, 0);
+  function makeChunk(type: string, data: Buffer): Buffer {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length, 0);
+    const typeBuf = Buffer.from(type, 'ascii');
+    const typeAndData = Buffer.concat([typeBuf, data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typeAndData), 0);
+    return Buffer.concat([len, typeBuf, data, crc]);
+  }
 
-  const ihdrType = Buffer.from('IHDR', 'ascii');
   const ihdrData = Buffer.alloc(13);
   ihdrData.writeUInt32BE(width, 0);
   ihdrData.writeUInt32BE(height, 4);
@@ -682,26 +901,15 @@ export function createSyntheticValidPng(width: number, height: number): Buffer {
   ihdrData.writeUInt8(0, 10);
   ihdrData.writeUInt8(0, 11);
   ihdrData.writeUInt8(0, 12);
+  const ihdrChunk = makeChunk('IHDR', ihdrData);
 
-  const ihdrCrc = Buffer.alloc(4);
-  ihdrCrc.writeUInt32BE(0x12345678, 0);
+  // Minimal scanline data (height lines, each 1 filter byte + width*4 zero bytes)
+  const rawScanlines = Buffer.alloc(height * (1 + width * 4));
+  const compressed = zlib.deflateSync(rawScanlines);
+  const idatChunk = makeChunk('IDAT', compressed);
+  const iendChunk = makeChunk('IEND', Buffer.alloc(0));
 
-  // Minimal IEND chunk
-  const iendLength = Buffer.alloc(4);
-  const iendType = Buffer.from('IEND', 'ascii');
-  const iendCrc = Buffer.alloc(4);
-  iendCrc.writeUInt32BE(0xae426082, 0);
-
-  return Buffer.concat([
-    signature,
-    ihdrLength,
-    ihdrType,
-    ihdrData,
-    ihdrCrc,
-    iendLength,
-    iendType,
-    iendCrc,
-  ]);
+  return Buffer.concat([signature, ihdrChunk, idatChunk, iendChunk]);
 }
 
 /**

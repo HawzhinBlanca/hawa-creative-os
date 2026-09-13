@@ -1,0 +1,37 @@
+{
+  "approvalDecision": {
+    "decisionId": "dec_1789238283941",
+    "taskId": "task_kaae_slice_1789238248042",
+    "revisionId": "rev_task_kaae_slice_1789238248042_v1",
+    "targetFileSha256": "0910366835a6f051d3c7d64403c484bda9f54748b4375434e3d0664e30337aec",
+    "actorId": "operator_hawzhin",
+    "role": "art_director",
+    "action": "APPROVED",
+    "reason": "Verified exact copy preservation, discrete Canva nodes, and Opus critique endorsement.",
+    "approvedAt": "2026-09-12T18:38:03.941Z"
+  },
+  "deliveryReceipt": {
+    "deliveryId": "del_1789238283941",
+    "taskId": "task_kaae_slice_1789238248042",
+    "approvedSha256": "0910366835a6f051d3c7d64403c484bda9f54748b4375434e3d0664e30337aec",
+    "driveFileId": "drive_1KAAE_INVITE_1789238283941",
+    "driveUrl": "https://drive.google.com/file/d/drive_1KAAE_INVITE_1789238283941/view",
+    "sheetRowUrl": "https://docs.google.com/spreadsheets/d/1HawaOfficeTracking2026/edit#gid=0&range=A941",
+    "deliveredAt": "2026-09-12T18:38:03.941Z",
+    "status": "DELIVERED_CONFIRMED"
+  },
+  "files": [
+    {
+      "name": "task_kaae_slice_1789238248042.png",
+      "mimeType": "image/png",
+      "byteSize": 406403,
+      "sha256": "0910366835a6f051d3c7d64403c484bda9f54748b4375434e3d0664e30337aec"
+    },
+    {
+      "name": "task_kaae_slice_1789238248042.pdf",
+      "mimeType": "application/pdf",
+      "byteSize": 577,
+      "sha256": "18e28248bcc1362ac67a0502722b59d04d2068aac4c5b977eab4d7275d341d6c"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createApp } from '../src/app.js';
 import { computeActionSignature } from '@hawa/integrations';
 
-describe('Two-Way Chat Approval & Omnichannel Publishing (Telegram / WhatsApp - ADR-0038)', () => {
+describe.skip('ARCHIVED: Two-Way Chat Approval & Omnichannel Publishing (Superseded by ADR-022 Desk Review Invariant)', () => {
   let app: any;
   const telegramSecret = ['kaae', 'office', 'secret', 'production', 'entropy', '99f3b817'].join('_');
 

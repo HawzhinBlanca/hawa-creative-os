@@ -1,0 +1,123 @@
+{
+  "timestamp": "2026-09-12T21:32:45.795Z",
+  "scope": "In-process Core source, production auth mode, disposable memory store; NOT deployed PostgreSQL",
+  "task": {
+    "status": 201,
+    "body": {
+      "id": "0eb40325-d7ef-48c0-b9f6-32ce8065ce03",
+      "tenantId": "tenant-default",
+      "clientId": null,
+      "projectId": null,
+      "status": "RECEIVED",
+      "priority": "routine",
+      "title": "Disposable audit task",
+      "description": "Approved exact text",
+      "headlineEn": "Disposable audit task",
+      "headlineCkb": null,
+      "copyEn": "Approved exact text",
+      "copyCkb": null,
+      "sourcePlatform": "hawa_desk",
+      "sourceEventId": "0eb40325-d7ef-48c0-b9f6-32ce8065ce03",
+      "sourceChannelId": "hawa_desk",
+      "idempotencyKey": "key_1789248765792_dba0b8f0-200e-4157-9a0e-e0549638890f",
+      "clientScopeLocked": false,
+      "version": 1,
+      "repairCount": 0,
+      "createdAt": "2026-09-12T21:32:45.792Z",
+      "updatedAt": "2026-09-12T21:32:45.792Z"
+    }
+  },
+  "revision": {
+    "status": 201,
+    "body": {
+      "ok": true,
+      "status": "AWAITING_APPROVAL",
+      "revisionId": "96153dbd-925f-454c-814d-f28cd0e50306",
+      "revisionNumber": 1,
+      "sourceSha256": "6ef8f53327beafee46ce936a3c92d2d51f4c71ceed9c156358923abf9b7de7ea",
+      "approvalInvalidated": false,
+      "document": {
+        "id": "951648b6-9a92-41e6-8a64-9a50031031d0",
+        "title": "Disposable audit task Revision",
+        "pages": [
+          {
+            "id": "p1",
+            "name": "main",
+            "width": 1080,
+            "height": 1920,
+            "unit": "px",
+            "language": "ckb",
+            "direction": "rtl"
+          }
+        ],
+        "nodes": [
+          {
+            "id": "audit-text",
+            "type": "text",
+            "text": "Invented content without approved logo"
+          }
+        ],
+        "sourceSha256": "6ef8f53327beafee46ce936a3c92d2d51f4c71ceed9c156358923abf9b7de7ea",
+        "version": 2
+      },
+      "revision": {
+        "revisionId": "96153dbd-925f-454c-814d-f28cd0e50306",
+        "id": "96153dbd-925f-454c-814d-f28cd0e50306",
+        "taskId": "0eb40325-d7ef-48c0-b9f6-32ce8065ce03",
+        "document": {
+          "id": "951648b6-9a92-41e6-8a64-9a50031031d0",
+          "title": "Disposable audit task Revision",
+          "pages": [
+            {
+              "id": "p1",
+              "name": "main",
+              "width": 1080,
+              "height": 1920,
+              "unit": "px",
+              "language": "ckb",
+              "direction": "rtl"
+            }
+          ],
+          "nodes": [
+            {
+              "id": "audit-text",
+              "type": "text",
+              "text": "Invented content without approved logo"
+            }
+          ],
+          "sourceSha256": "6ef8f53327beafee46ce936a3c92d2d51f4c71ceed9c156358923abf9b7de7ea",
+          "version": 2
+        },
+        "plan": null,
+        "author": {
+          "userId": "00000000-0000-4000-b000-000000000001",
+          "role": "operator"
+        },
+        "createdAt": "2026-09-12T21:32:45.793Z",
+        "metadata": {}
+      },
+      "createdAt": "2026-09-12T21:32:45.793Z"
+    }
+  },
+  "decision": {
+    "status": 403,
+    "body": {
+      "type": "https://hawa.design/errors/403",
+      "title": "Forbidden",
+      "status": 403,
+      "detail": "Actor role 'operator' does not have authority to approve or reject designs. Legitimate reviewer role required.",
+      "instance": "http://localhost/tasks/0eb40325-d7ef-48c0-b9f6-32ce8065ce03/revisions/96153dbd-925f-454c-814d-f28cd0e50306/decisions"
+    }
+  },
+  "uiDecision": {
+    "status": 403,
+    "body": {
+      "type": "https://hawa.design/errors/403",
+      "title": "Forbidden",
+      "status": 403,
+      "detail": "Actor role 'operator' does not have authority to approve or reject designs. Legitimate reviewer role required.",
+      "instance": "http://localhost/tasks/a0526474-79fd-40c7-a4ab-a5a72a806de7/revisions/b412af5c-3d40-43fe-83d0-b1f62da9e344/decisions"
+    }
+  },
+  "blockedNetworkCalls": []
+}

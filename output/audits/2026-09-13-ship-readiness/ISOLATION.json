@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-09-13T08:38:17.560Z",
+  "scope": "Disposable source instances; no network or external writes",
+  "sameCloudDesignId": true,
+  "tenantADesignId": "DAHU6ovIEc4",
+  "tenantBDesignId": "DAHU6ovIEc4",
+  "manifestBefore": {
+    "ok": true,
+    "value": {
+      "pages": [
+        {
+          "id": "a",
+          "name": "Page 1",
+          "width": 1080,
+          "height": 1350,
+          "unit": "px",
+          "language": "ckb",
+          "direction": "rtl"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "el_bg_72a7c5cd_0",
+          "pageId": "a",
+          "type": "vector",
+          "role": "background",
+          "locked": true,
+          "zIndex": 0,
+          "font": "Vazirmatn",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 1080,
+            "height": 1350
+          }
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Vazirmatn",
+          "style": "Bold"
+        },
+        {
+          "family": "Noto Sans Arabic",
+          "style": "Regular"
+        },
+        {
+          "family": "Almarai",
+          "style": "Bold"
+        }
+      ],
+      "assets": [],
+      "warnings": []
+    }
+  },
+  "manifestAfterOtherTenantCreate": {
+    "ok": true,
+    "value": {
+      "pages": [
+        {
+          "id": "b",
+          "name": "Page 1",
+          "width": 800,
+          "height": 1350,
+          "unit": "px",
+          "language": "ckb",
+          "direction": "rtl"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "el_bg_e76aa1cf_0",
+          "pageId": "b",
+          "type": "vector",
+          "role": "background",
+          "locked": true,
+          "zIndex": 0,
+          "font": "Vazirmatn",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 800,
+            "height": 1350
+          }
+        }
+      ],
+      "fonts": [
+        {
+          "family": "Vazirmatn",
+          "style": "Bold"
+        },
+        {
+          "family": "Noto Sans Arabic",
+          "style": "Regular"
+        },
+        {
+          "family": "Almarai",
+          "style": "Bold"
+        }
+      ],
+      "assets": [],
+      "warnings": []
+    }
+  },
+  "freshInstanceManifest": {
+    "ok": false,
+    "error": {
+      "code": "DOCUMENT_NOT_FOUND",
+      "message": "Cannot get manifest for nonexistent document: 72a7c5cd-8673-42c7-8feb-8e6e8c5b3664",
+      "retryable": false,
+      "safeAction": "Verify document ID and recreate design if needed"
+    }
+  },
+  "cloudModeCreatedOffline": true,
+  "networkCalls": 0,
+  "unapprovedCopyFindings": []
+}

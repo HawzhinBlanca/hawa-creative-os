@@ -2,7 +2,8 @@ import type { RequestContext, UUID, NeutralManifest } from '@hawa/contracts';
 import { TaskStateMachine, extractProtectedTokens, type DesignBrief, type ClientDNA } from '@hawa/domain';
 import { BriefBuilder, CreativeDirectorRunner } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
-import { HyCanvasStudioAdapter, GooglePublisher, ResilientModelGateway } from '@hawa/integrations';
+import { GooglePublisher, ResilientModelGateway } from '@hawa/integrations';
+import { FakeDesignStudioAdapter } from './fake-studio.js';
 import { RetrievalService } from '@hawa/retrieval';
 
 export interface SloStageLatencies {
@@ -92,7 +93,7 @@ export class SyntheticTrafficDaemon {
   private readonly briefBuilder = new BriefBuilder();
   private readonly creativeDirector = new CreativeDirectorRunner();
   private readonly qaEngine = new DeterministicQAEngine();
-  private readonly studio = new HyCanvasStudioAdapter();
+  private readonly studio = new FakeDesignStudioAdapter();
   private readonly publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'slo_test_token' });
   private readonly retrieval = new RetrievalService();
   readonly modelGateway = new ResilientModelGateway();

@@ -16,6 +16,8 @@ function createMockDb() {
 
     const builder: any = {
       selectAll: () => builder,
+      onConflict: () => builder,
+      forUpdate: () => builder,
       returningAll: () => builder,
       returning: () => builder,
       select: (cols: string[]) => {
@@ -36,6 +38,12 @@ function createMockDb() {
       },
       orderBy: () => builder,
       executeTakeFirst: async () => {
+        if (valuesToInsert) {
+          if (table === 'canva_bindings' && store.canva_bindings.some(row => row.canva_design_id === valuesToInsert.canva_design_id)) return undefined;
+          const newRow = { id: crypto.randomUUID(), created_at: new Date(), ...valuesToInsert };
+          store[table].push(newRow);
+          return newRow;
+        }
         const list = store[table].filter((row) => {
           return whereClauses.every((w) => row[w.col] === w.val);
         });
@@ -72,6 +80,7 @@ function createMockDb() {
   };
 
   const db: any = {
+    isTransaction: true,
     selectFrom: (table: keyof typeof store) => createQueryBuilder(table),
     insertInto: (table: keyof typeof store) => createQueryBuilder(table),
     updateTable: (table: keyof typeof store) => createQueryBuilder(table),
@@ -161,7 +170,7 @@ describe('CanvaBindingRepository — Server-Derived Ownership & Invariants (CV-0
         canvaDesignId: designId,
         editUrl: `https://www.canva.com/design/${designId}/edit`,
       })
-    ).rejects.toThrow('Foreign client denial');
+    ).rejects.toThrow('binding conflict');
   });
 
   it('captureArtifactSet: enforces client match, design ID match, optimistic locking, and snapshot completeness', async () => {
@@ -211,7 +220,7 @@ describe('CanvaBindingRepository — Server-Derived Ownership & Invariants (CV-0
         ...baseCaptureParams,
         clientId: clientIdB, // Foreign client ID
       })
-    ).rejects.toThrow('Foreign client denial');
+    ).rejects.toThrow('scope mismatch');
 
     // 2. Design ID mismatch denial
     await expect(
@@ -219,7 +228,7 @@ describe('CanvaBindingRepository — Server-Derived Ownership & Invariants (CV-0
         ...baseCaptureParams,
         canvaDesignId: 'DAHX_DIFFERENT_DESIGN',
       })
-    ).rejects.toThrow('Design mismatch denial');
+    ).rejects.toThrow('scope mismatch');
 
     // 3. Stale version rejection
     await expect(
@@ -240,7 +249,7 @@ describe('CanvaBindingRepository — Server-Derived Ownership & Invariants (CV-0
           isComplete: false, // Incomplete snapshot
         },
       })
-    ).rejects.toThrow('Snapshot incompleteness denial');
+    ).rejects.toThrow('Incomplete semantic capture');
 
     // 5. Successful capture: bumps version to 2 and records artifact set
     const captureRecord = await repo.captureArtifactSet(baseCaptureParams);

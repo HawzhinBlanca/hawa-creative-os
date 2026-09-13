@@ -109,6 +109,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
         text: '/task KAAE Ministry Accreditation Announcement',
         rawPayload,
         verified: true,
+        explicitClientId: clientId,
       }),
     });
 

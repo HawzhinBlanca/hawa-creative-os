@@ -1,0 +1,66 @@
+{
+  "auditDate": "2026-09-13",
+  "auditDirectory": "output/audits/2026-09-13-independent-completion-audit",
+  "files": [
+    {
+      "path": "COMPLETION_MATRIX.csv",
+      "byteSize": 5520,
+      "sha256": "c17103b0f1d48cd3b65cf3980678461eb653b5f0b7a1b553b8f0957a91199baa"
+    },
+    {
+      "path": "FINAL_VERIFICATION_REPORT.md",
+      "byteSize": 22841,
+      "sha256": "2aca751462258179493377d22f6470c6ce5abc661b06c0b72cac9bd87e421fbd"
+    },
+    {
+      "path": "LIVE_VERTICAL_SLICE_RECEIPTS.json",
+      "byteSize": 4066,
+      "sha256": "e0dfabba9520a61fbf3bcb744438b161a8898a1bcf370701387fddc741caaf76"
+    },
+    {
+      "path": "RAW_PROBES_EVIDENCE.json",
+      "byteSize": 38740,
+      "sha256": "07725bfcf07396fd96f69d22512e47593f326b77e4e905326e825e9b08a0ad0b"
+    },
+    {
+      "path": "REPRODUCE.md",
+      "byteSize": 6395,
+      "sha256": "5afbdfe9f55f1c71e52b9f3627e52ab82ede660fab1c59e19a53b78e9c8138d3"
+    },
+    {
+      "path": "artifacts/task_slice_1789252197229_export.pdf",
+      "byteSize": 577,
+      "sha256": "18e28248bcc1362ac67a0502722b59d04d2068aac4c5b977eab4d7275d341d6c"
+    },
+    {
+      "path": "artifacts/task_slice_1789252197229_export.png",
+      "byteSize": 383130,
+      "sha256": "59248f487317b2f22127b1dff6c89c26594d3bf6346030723ce4a9d160eb09a4"
+    },
+    {
+      "path": "screenshots/desktop_workspace_queue_1789252132326.png",
+      "byteSize": 552053,
+      "sha256": "4c6f62720dc3861e7b830450baa2f1c6fb75c17fc22b929cd996f23b9000f9cc"
+    },
+    {
+      "path": "screenshots/initial_page_1789252126268.png",
+      "byteSize": 268811,
+      "sha256": "5e594eb5d14d4ea38f0eae0b0dafaa4b93b760dc7161ed8ef432cdf4977c47c0"
+    },
+    {
+      "path": "screenshots/mobile_queue_filter_pills_1789252142600.png",
+      "byteSize": 248192,
+      "sha256": "88889cf48802c1f1d210119a65d7533e0c84794fbf9a6d1015dace5a659a5907"
+    },
+    {
+      "path": "screenshots/mobile_viewport_layout_1789252138542.png",
+      "byteSize": 229345,
+      "sha256": "9afede8092cd3cf0702e41ec595b8a48aa99af8573a83e5c743e6590dd905865"
+    },
+    {
+      "path": "screenshots/task_detail_view_1789252165614.png",
+      "byteSize": 542474,
+      "sha256": "0ba9ccd8b3724202a8bd33315dec161ed64e39172881429c9c079c0408096597"
+    }
+  ]
+}

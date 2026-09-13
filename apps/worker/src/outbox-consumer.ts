@@ -106,21 +106,21 @@ export class OutboxConsumer {
     if (!this.handlers.has('publish.drive')) {
       this.handlers.set('publish.drive', async (cmd, db) => {
         // Effect transport: Drive publication
-        console.log(`[OutboxConsumer] Processing drive publication for task ${cmd.aggregate_id}`);
+        throw new Error('Drive publication transport is not registered; no delivery occurred');
       });
     }
 
     if (!this.handlers.has('notify.telegram')) {
       this.handlers.set('notify.telegram', async (cmd, db) => {
         // Effect transport: Outbound Telegram notification
-        console.log(`[OutboxConsumer] Outbound Telegram notification for task ${cmd.aggregate_id}`);
+        throw new Error('Telegram notification transport is not registered; no message was sent');
       });
     }
 
     if (!this.handlers.has('notify.whatsapp')) {
       this.handlers.set('notify.whatsapp', async (cmd, db) => {
         // Effect transport: Outbound WhatsApp interactive message
-        console.log(`[OutboxConsumer] Outbound WhatsApp interactive message for task ${cmd.aggregate_id}`);
+        throw new Error('WhatsApp notification transport is not registered; no message was sent');
       });
     }
   }

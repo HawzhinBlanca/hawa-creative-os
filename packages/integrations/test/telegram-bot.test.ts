@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+afterEach(()=>vi.restoreAllMocks());
 import { TelegramBridgeDaemon } from '../src/telegram-bridge.js';
 
 describe('Telegram Bot & Bidirectional Feedback Engine', () => {
@@ -64,7 +65,8 @@ describe('Telegram Bot & Bidirectional Feedback Engine', () => {
   });
 
   it('processes incoming Telegram message and auto-dispatches bot command reply', async () => {
-    const bridge = new TelegramBridgeDaemon();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ok:true,result:{message_id:800,chat:{id:9876}}})));
+    const bridge = new TelegramBridgeDaemon({botToken:'test'});
     bridge.clearSentMessages();
 
     const update = {

@@ -1,3 +1,4 @@
+import { CanvaConnectionPanel } from '../components/CanvaConnectionPanel.js';
 import React, { useState, useEffect } from 'react';
 
 export const SettingsScreen: React.FC = () => {
@@ -269,8 +270,8 @@ export const SettingsScreen: React.FC = () => {
               </tr>
               <tr>
                 <td><b>Canva Native Studio</b></td>
-                <td>admitted multi-page brand studio (ADR 020/021)</td>
-                <td><span className="pill ok">Production Active (CV-22)</span></td>
+                <td>Native editor; connection and exports checked separately</td>
+                <td><span className="pill">See connection below</span></td>
                 <td>
                   <button
                     className="btn"
@@ -279,14 +280,6 @@ export const SettingsScreen: React.FC = () => {
                   >
                     Studio status
                   </button>
-                </td>
-              </tr>
-              <tr>
-                <td><b>Legacy Figma Bridge</b></td>
-                <td>decommissioned under CV-23 (ADR 021)</td>
-                <td><span className="pill" style={{ background: '#fee2e2', color: '#991b1b' }}>Retired (410 GONE)</span></td>
-                <td>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Decommissioned</span>
                 </td>
               </tr>
             </tbody>
@@ -357,22 +350,7 @@ export const SettingsScreen: React.FC = () => {
             )}
           </div>
 
-          {/* Canva Native Studio (ADR 020 / CV-22 / CV-23) */}
-          <h3 style={{ marginTop: 24 }}>Canva Native Studio (Production Active)</h3>
-          <div className="rule" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <b>Multi-Page Brand Studio & Native Asset Ingress</b>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
-                  Active Engine: <code>CanvaDesignStudioAdapter</code> · Release: <b>v2.0.0-canva-cutover</b>
-                </p>
-              </div>
-              <span className="pill ok">Sole Active Studio</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(0,0,0,0.03)', padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}>
-              🎨 <b>Multi-Client Scope Admitted:</b> KAAE, Drustee, and Aster. Full multi-page support, bounding box clamping, Vazirmatn font glyph mapping, and revision locks. Legacy Figma &amp; Polotno runtimes decommissioned.
-            </div>
-          </div>
+          <CanvaConnectionPanel />
 
           <h3 style={{ marginTop: 24 }}>Network policy</h3>
           <div className="rule">
@@ -385,15 +363,15 @@ export const SettingsScreen: React.FC = () => {
           <h2>Model registry</h2>
           <div className="rule">
             <b>fast_router & brief_builder</b>
-            <p>Gemini 3.8 Flash · exact snapshot 2026-09-03 · 100% token preservation</p>
+            <p>Gemini 3.8 Flash (Primary) / Claude Sonnet 5 · exact snapshot 2026-09-03</p>
           </div>
           <div className="rule">
             <b>creative_director</b>
-            <p>GPT-5.6 Sol · creator/judge separation active · discrete editable nodes</p>
+            <p>GPT-5.6 Sol (Primary) / GPT-4.1 · creator/judge separation active · discrete editable nodes</p>
           </div>
           <div className="rule">
             <b>visual_judge (advisory)</b>
-            <p>Claude Opus 5 · independent model family · cannot waive hard QA</p>
+            <p>Claude Opus 5 (Advisory) / Gemini 3.8 Flash · independent model family · cannot waive hard QA</p>
           </div>
 
           <h3 style={{ marginTop: 24 }}>Upstream locks</h3>
@@ -481,21 +459,9 @@ export const SettingsScreen: React.FC = () => {
           }}
         >
           <div className="panel" style={{ width: 540, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ marginTop: 0 }}>Canva Native Studio v2.0 Status</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>ADR-020/021 Compliance · Release v2.0.0-canva-cutover · Active Design Studio</p>
-            <div className="finding" style={{ borderColor: '#1d733c', background: '#ecfdf5', marginBottom: 12 }}>
-              <b style={{ color: '#065f46' }}>✓ Canva Native Studio Active</b>
-              <p style={{ margin: '4px 0', fontSize: 12, color: '#047857' }}>
-                Canva REST v1 + Autofill API adapter operational. Native multi-page compositions, Brand Kit asset ingestion, and immutable source captures are certified.
-              </p>
-            </div>
-            <div className="finding" style={{ borderColor: '#2563eb', background: '#eff6ff' }}>
-              <b style={{ color: '#1d4ed8' }}>✓ Legacy Runtimes Decommissioned</b>
-              <p style={{ margin: '4px 0', fontSize: 12, color: '#1e40af' }}>
-                <b>Figma Bridge &amp; Leases Transport:</b> Retired under CV-23 with HTTP 410 GONE.<br/>
-                <b>Polotno &amp; Custom Editor:</b> Completely removed from production bundles.
-              </p>
-            </div>
+            <h2 style={{ marginTop: 0 }}>Canva integration</h2>
+            <p>Connect your own Canva account below. A selected editor does not prove native composition, semantic capture, print quality or delivery.</p>
+            <CanvaConnectionPanel />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn" onClick={() => setActiveModal(null)}>Close</button>
             </div>

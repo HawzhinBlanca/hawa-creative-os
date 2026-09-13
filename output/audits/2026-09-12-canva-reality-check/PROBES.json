@@ -1,0 +1,237 @@
+{
+  "timestamp": "2026-09-12T13:15:49.296Z",
+  "scope": "Fresh source objects; no live writes; fetch blocked",
+  "sources": [
+    {
+      "path": "packages/integrations/src/canva-design-studio-adapter.ts",
+      "sha256": "ce35c4e5d92aa805bed6653f63915b1a2b77d73e25b5831d70f4fcfd11c58a4b"
+    },
+    {
+      "path": "packages/integrations/src/canva-native-adapter.ts",
+      "sha256": "63f12dfd44de9ede175e0a0322b4abaec893cb312c1093b2003180d5a49c343a"
+    },
+    {
+      "path": "packages/integrations/src/canva-capture-pipeline.ts",
+      "sha256": "3fb5bbb20ce4f354810b5c448eeb75c6cfeb1b35da037fa4746bce3547b390dc"
+    },
+    {
+      "path": "packages/integrations/src/model-gateway.ts",
+      "sha256": "e31ec29786a21f981f3036490784b18b774badafcf2f9a5644450c3bf9746ceb"
+    },
+    {
+      "path": "packages/creative/src/templates/kaae-invitation.template.ts",
+      "sha256": "7022f6068e3eeab3f25e871a7d19fbce46f3f3cc686307b6702820f64b509b08"
+    },
+    {
+      "path": "packages/creative/src/creative-director.ts",
+      "sha256": "8409c72de51df8e99934ccad3200abb98c0b84066b0ffe8452873bf9821f9427"
+    },
+    {
+      "path": "apps/core/src/app.ts",
+      "sha256": "a617d5aec3be4ef7e7755328c77ed2b6a8f43a62bedb0106d4e9fa5c1c0ce455"
+    },
+    {
+      "path": "apps/desk/src/screens/WorkScreen.tsx",
+      "sha256": "fed9e03d4b3486dbfbc086924a9994dd85e6df7a3d47d4b4c9d823a9c2ab1f06"
+    }
+  ],
+  "created": {
+    "ok": true,
+    "value": {
+      "documentId": "1c0d4d2d-deea-4b16-b8b8-5c5a3116bbcb",
+      "studioDocumentId": "DAF_965649f71f104905",
+      "sourceRevision": 1,
+      "sourceSha256": "sha256_ba8e78b4394b28a33a635bb652ec0f425b39c1d0929463a52d1ea0fb79f98cfb",
+      "studio": "Canva",
+      "studioVersion": "2.0.0-canva-cutover",
+      "schemaVersion": "2.0.0"
+    }
+  },
+  "duplicateCreateId": "DAF_965649f71f104905",
+  "idempotencyPreserved": true,
+  "crossTenantWrite": {
+    "ok": false,
+    "error": {
+      "code": "UNAUTHORIZED_CROSS_TENANT",
+      "message": "Cross-tenant violation: Tenant audit-tenant-b cannot modify design belonging to tenant audit-tenant-a",
+      "retryable": false,
+      "safeAction": "Verify tenant context"
+    }
+  },
+  "renderNonexistentDocument": {
+    "ok": false,
+    "error": {
+      "code": "DOCUMENT_NOT_FOUND",
+      "message": "Cannot render nonexistent document: never-existed",
+      "retryable": false,
+      "safeAction": "Verify document ID and recreate design if needed"
+    }
+  },
+  "freshAdapterManifest": {
+    "ok": false,
+    "error": {
+      "code": "DOCUMENT_NOT_FOUND",
+      "message": "Cannot get manifest for nonexistent document: 1c0d4d2d-deea-4b16-b8b8-5c5a3116bbcb",
+      "retryable": false,
+      "safeAction": "Verify document ID and recreate design if needed"
+    }
+  },
+  "corruptPngAccepted": {
+    "ok": false,
+    "error": {
+      "code": "CORRUPT_OR_EMPTY_ARTIFACT",
+      "message": "Corrupt or invalid PNG artifact: CRC32 checksum mismatch in PNG chunk \u0000\u0000\u0000\u0000",
+      "retryable": false,
+      "safeAction": "Re-export valid PNG from Canva studio and re-download full file",
+      "detail": {
+        "byteLength": 40
+      }
+    }
+  },
+  "corruptPdfAccepted": {
+    "ok": false,
+    "error": {
+      "code": "CORRUPT_OR_EMPTY_ARTIFACT",
+      "message": "Corrupt or invalid PDF artifact: PDF buffer size is too small to contain valid document structure",
+      "retryable": false,
+      "safeAction": "Re-export valid PDF from Canva studio and re-download full file",
+      "detail": {
+        "byteLength": 78
+      }
+    }
+  },
+  "offlineModel": {
+    "ok": true,
+    "value": {
+      "deployment": {
+        "deploymentId": "cccf2151-1231-45fa-97a3-c894a972bf46",
+        "role": "creative_director",
+        "provider": "local",
+        "exactModelId": "layout-engine-v1",
+        "deploymentVersion": "2026-09-04"
+      },
+      "value": {
+        "layout": "single-page-invitation",
+        "composition": "centered-formal-restrained",
+        "palette": "navy-gold",
+        "typography": "serif-heading-sans-body",
+        "elements": [
+          {
+            "role": "header_emblem",
+            "position": "top-center"
+          },
+          {
+            "role": "primary_headline",
+            "position": "upper-third"
+          },
+          {
+            "role": "body_invitation",
+            "position": "middle"
+          },
+          {
+            "role": "event_details",
+            "position": "lower-third"
+          },
+          {
+            "role": "notice_footer",
+            "position": "bottom"
+          }
+        ],
+        "constraintToElementMap": {
+          "formal-tone": "navy-gold",
+          "verbatim-copy": "exact-nodes"
+        },
+        "provenance": "deterministic_fallback"
+      },
+      "responseHash": "resp_hash_1789218949293",
+      "invocationId": "a1492024-e7cc-4e7c-995a-7eb2664fb5e5",
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "estimatedCostUsd": 0
+      },
+      "latencyMs": 0,
+      "attempts": 1,
+      "completedAt": "2026-09-12T13:15:49.293Z",
+      "traceId": "audit-local-only"
+    }
+  },
+  "visualPolicyProbe": {
+    "ok": true,
+    "value": {
+      "deployment": {
+        "deploymentId": "463170ec-369d-4184-86b8-d46ce223bc86",
+        "role": "visual_judge",
+        "provider": "local",
+        "exactModelId": "heuristic-judge-v1",
+        "deploymentVersion": "2026-09-04"
+      },
+      "value": {
+        "passed": false,
+        "rubricScores": {
+          "hierarchy": 0,
+          "legibility": 0,
+          "balance": 0,
+          "artifacts": 10,
+          "brandResemblance": 0,
+          "culturalAppropriateness": 0
+        },
+        "findings": [
+          "Vision provider unavailable or no valid image input supplied; visual quality cannot be verified."
+        ],
+        "overallScore": 0,
+        "provenance": "deterministic_fallback"
+      },
+      "responseHash": "resp_hash_1789218949294",
+      "invocationId": "994f025a-21f6-4033-bdbf-04abc5565a20",
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "estimatedCostUsd": 0
+      },
+      "latencyMs": 0,
+      "attempts": 1,
+      "completedAt": "2026-09-12T13:15:49.294Z",
+      "traceId": "audit-local-only"
+    }
+  },
+  "interceptedRequests": [],
+  "invitation": {
+    "parsed": {
+      "title": "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION",
+      "salutation": "Mr. / Ms. / Dr. [Full Name]",
+      "hostProse": "The Kurdistan Accrediting Association for Education\ncordially requests the honor of your presence at this landmark occasion.",
+      "keynoteBody": "His Excellency Prime Minister Masrour Barzani will officially announce the National Standards for Quality Assurance in Education, marking a defining moment in the advancement of educational quality across the Kurdistan Region. The occasion will bring together government, educational institutions, and international partners around a shared national vision for excellence, accountability, and continuous improvement.",
+      "mouBody": "As part of the official launch, the Minister of Education and the Minister of Higher Education and Scientific Research will sign a Memorandum of Understanding (MoU), marking a significant commitment to cooperation and the advancement of quality assurance across the education sector.",
+      "dateTime": "September 9, 2026 | 2:30 PM",
+      "venue": "Saad Abdullah Conference Hall",
+      "accessBadge": "By Invitation Only",
+      "protocolNotice": "This invitation is personal and non-transferable. Kindly do not share this invitation."
+    },
+    "renderedTextNodes": [
+      "KURDISTAN ACCREDITING ASSOCIATION FOR EDUCATION",
+      "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION",
+      "Mr. / Ms. / Dr. [Full Name]",
+      "The Kurdistan Accrediting Association for Education\ncordially requests the honor of your presence at this landmark occasion.",
+      "His Excellency Prime Minister Masrour Barzani will officially announce the National Standards for Quality Assurance in Education, marking a defining moment in the advancement of educational quality across the Kurdistan Region. The occasion will bring together government, educational institutions, and international partners around a shared national vision for excellence, accountability, and continuous improvement.",
+      "As part of the official launch, the Minister of Education and the Minister of Higher Education and Scientific Research will sign a Memorandum of Understanding (MoU), marking a significant commitment to cooperation and the advancement of quality assurance across the education sector.",
+      "DATE & TIME",
+      "September 9, 2026 | 2:30 PM",
+      "VENUE",
+      "Saad Abdullah Conference Hall",
+      "By Invitation Only",
+      "This invitation is personal and non-transferable. Kindly do not share this invitation.",
+      "KURDISTAN REGIONAL GOVERNMENT • PROTOCOL OFFICE • ERBIL"
+    ],
+    "addedUnrequestedText": [],
+    "extraParagraphPreserved": true
+  },
+  "pilot": {
+    "claimedMean": 4.9062,
+    "recomputedMean": 4.906200000000002,
+    "rows": 100,
+    "claimedRescueFree": "100%",
+    "recomputedRescueFree": 100
+  },
+  "blockedNetworkCalls": []
+}

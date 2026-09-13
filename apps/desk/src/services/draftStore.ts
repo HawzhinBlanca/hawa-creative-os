@@ -14,6 +14,8 @@ export interface ActiveDraft {
   copy: string;
   copyCkb?: string;
   clientId?: string;
+  designInstructions?: string;
+  referenceAssets?: string;
   savedAt: string;
 }
 
@@ -22,13 +24,10 @@ const QUEUED_TASKS_KEY = 'hawa_desk_queued_tasks';
 
 class DraftStoreService {
   // Active in-memory draft
-  public saveActiveDraft(draft: { title: string; copy: string; copyCkb?: string; clientId?: string }): void {
+  public saveActiveDraft(draft: Omit<ActiveDraft, 'savedAt'>): void {
     if (typeof window === 'undefined') return;
     const payload: ActiveDraft = {
-      title: draft.title,
-      copy: draft.copy,
-      copyCkb: draft.copyCkb,
-      clientId: draft.clientId,
+      ...draft,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));

@@ -1,5 +1,4 @@
 import type { StudioOperation } from '@hawa/contracts';
-import type { BuzzFieldMapping } from '@hawa/contracts';
 import { KAAE_PRIMARY_LOGO_SHA256 } from './kaae-certificate.template.js';
 
 export interface KaaeAnnouncementParams {
@@ -14,6 +13,7 @@ export interface KaaeAnnouncementParams {
   heroImageSha256?: string;
   logoSha256?: string;
   dateStr?: string;
+  learnedRules?: string[];
 }
 
 export interface KaaeMandateParams {
@@ -24,6 +24,7 @@ export interface KaaeMandateParams {
   copyCkb?: string;
   badgeText?: string;
   logoSha256?: string;
+  learnedRules?: string[];
   stats?: Array<{
     value: string;
     labelEn: string;
@@ -40,6 +41,7 @@ export interface KaaeHigherEdStandardsParams {
   copyCkb?: string;
   categoryBadge?: string;
   logoSha256?: string;
+  learnedRules?: string[];
   standards?: Array<{
     number: string;
     titleEn: string;
@@ -58,6 +60,7 @@ export interface KaaeStrategicRoadmapParams {
   copyCkb?: string;
   badgeText?: string;
   logoSha256?: string;
+  learnedRules?: string[];
   milestones?: Array<{
     phase: string;
     year: string;
@@ -69,87 +72,6 @@ export interface KaaeStrategicRoadmapParams {
   }>;
 }
 
-// Canonical Figma Buzz Field Mappings for KAAE Templates
-export const KAAE_MANDATE_BUZZ_MAPPING: BuzzFieldMapping = {
-  templateId: 'kaae_mandate',
-  textFields: {
-    badge: 'KURDISTAN REGIONAL LAW NO. 6 OF 2022 · PARLIAMENT MANDATE',
-    headlineEn: 'Institutional Accreditation Mandate & Global Educational Standards',
-    headlineCkb: 'متمانەبەخشینی دامەزراوەیی و ستانداردە نێودەوڵەتییەکان',
-    copyEn: 'Authorized national framework for the comprehensive evaluation, quality assurance, and institutional licensing of higher education and general education institutions across the Kurdistan Region.',
-    copyCkb: 'چوارچێوەی باڵای نیشتمانی بۆ هەڵسەنگاندن، دەستەبەری کوالیتی و متمانەبەخشینی دامەزراوەیی بە زانکۆ و ناوەندەکانی خوێندن.',
-    stat1Val: '100%',
-    stat1Label: 'Statutory Compliance',
-    stat2Val: '12',
-    stat2Label: 'Core Quality Standards',
-    stat3Val: '2026',
-    stat3Label: 'Active Academic Cycle',
-    footer: 'www.kaae.org · info@kaae.krd · Erbil HQ',
-  },
-  mediaFields: {
-    logo: {
-      storageKey: `assets/logos/${KAAE_PRIMARY_LOGO_SHA256}.png`,
-      sha256: KAAE_PRIMARY_LOGO_SHA256,
-      fit: 'contain',
-    },
-  },
-  targetAspectRatios: ['1:1', '4:5'],
-};
-
-export const KAAE_STANDARDS_BUZZ_MAPPING: BuzzFieldMapping = {
-  templateId: 'kaae_standards',
-  textFields: {
-    badge: 'OFFICIAL ACCREDITATION CRITERIA · LAW NO. 6 OF 2022',
-    headlineEn: 'Standards of Higher Education Institutional Accreditation',
-    headlineCkb: 'ستانداردەکانی متمانەبەخشین بە دامەزراوەکانی خوێندنی باڵا',
-    copyEn: 'Pursuant to Kurdistan Regional Law No. 6 of 2022 — Mandatory compliance benchmarks for universities and institutes.',
-    std1Title: 'Mission, Governance & Academic Integrity',
-    std1Desc: 'Clear institutional vision, transparent governance structure, bylaws compliance, and published academic freedom policies.',
-    std1Evidence: '📋 Evidence: University Charter & Audited Governance Manual',
-    std2Title: 'Academic Programs, Faculty & Curriculum Quality',
-    std2Desc: 'Peer-reviewed curricula mapped to Bologna / International frameworks, verified faculty qualifications, and student-to-teacher ratios.',
-    std2Evidence: '🔬 Evidence: Course Catalogs & Faculty Accreditation Dossiers',
-    std3Title: 'Learning Resources, Research & Student Services',
-    std3Desc: 'State-of-the-art laboratory infrastructure, digital library access, research output metrics, and student support mechanisms.',
-    std3Evidence: '🏛️ Evidence: Campus Facility Audit & Research Output Index',
-    footer: 'Kurdistan Accrediting Association for Education · Erbil HQ · www.kaae.org',
-  },
-  mediaFields: {
-    logo: {
-      storageKey: `assets/logos/${KAAE_PRIMARY_LOGO_SHA256}.png`,
-      sha256: KAAE_PRIMARY_LOGO_SHA256,
-      fit: 'contain',
-    },
-  },
-  targetAspectRatios: ['4:5', '1:1', '9:16'],
-};
-
-export const KAAE_ROADMAP_BUZZ_MAPPING: BuzzFieldMapping = {
-  templateId: 'kaae_roadmap',
-  textFields: {
-    badge: '2026 – 2028 STRATEGIC ROADMAP',
-    headlineEn: 'Transforming Education: Three-Year Strategic Roadmap',
-    headlineCkb: 'نەخشەڕێگای ستراتیژی بۆ دەستەبەری کوالیتی و متمانەبەخشین',
-    copyEn: 'A phased national deployment toward internationally recognized qualifications and institutional excellence.',
-    phase1Title: 'Comprehensive Institutional Audits',
-    phase1Desc: 'Baseline evaluation of all public and private universities across Erbil, Sulaimani, Duhok, and Garmian.',
-    phase2Title: 'Program-Level Quality Accreditation',
-    phase2Desc: 'Specialized medical, engineering, and STEM curriculum evaluations aligned with international accreditation bodies.',
-    phase3Title: 'Regional Quality Assurance Accords',
-    phase3Desc: 'Cross-border credit recognition agreements and regional quality benchmark harmonization.',
-    phase4Title: 'Global Mutual Recognition',
-    phase4Desc: 'Full accession to international quality networks (INQAAHE / ENQA affiliates) for Kurdistan graduates.',
-    footer: 'Kurdistan Regional Parliament Law No. 6 of 2022 · www.kaae.org · info@kaae.krd',
-  },
-  mediaFields: {
-    logo: {
-      storageKey: `assets/logos/${KAAE_PRIMARY_LOGO_SHA256}.png`,
-      sha256: KAAE_PRIMARY_LOGO_SHA256,
-      fit: 'contain',
-    },
-  },
-  targetAspectRatios: ['1:1', '16:9'],
-};
 
 /**
  * Template 1: Ground-Truth Institutional Accreditation Mandate (Square 1:1, 1080 x 1080)
@@ -1201,6 +1123,34 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
   const width = params.width || 1080;
   const height = params.height || 1350;
 
+  // Dynamic Learned Rules Adaptation
+  let headlineEnFont = 'Minion Variable Concept, Georgia, serif';
+  let copyEnFont = 'Inter, sans-serif';
+  let badgeFont = 'Inter, sans-serif';
+  let accentColor = '#F7B500';
+
+  if (params.learnedRules && params.learnedRules.length > 0) {
+    for (const rule of params.learnedRules) {
+      const lr = rule.toLowerCase();
+      if (/cinzel/i.test(lr)) {
+        headlineEnFont = '"Cinzel", "Playfair Display", serif';
+        badgeFont = '"Cinzel", sans-serif';
+      } else if (/playfair/i.test(lr)) {
+        headlineEnFont = '"Playfair Display", Georgia, serif';
+      } else if (/cormorant/i.test(lr)) {
+        headlineEnFont = '"Cormorant Garamond", Georgia, serif';
+      }
+      if (/jakarta|plus jakarta/i.test(lr)) {
+        copyEnFont = '"Plus Jakarta Sans", sans-serif';
+      }
+      if (/#ffd15c/i.test(lr) || /sun gold/i.test(lr)) {
+        accentColor = '#FFD15C';
+      } else if (/#e8b85c/i.test(lr)) {
+        accentColor = '#E8B85C';
+      }
+    }
+  }
+
   // 1. Vector Deep Institutional Navy Foundation (#0A1628, #1E3A5F, #4770A3)
   ops.push({
     op: 'addVector',
@@ -1216,14 +1166,14 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
             <stop offset="100%" stop-color="#0A1628"/>
           </linearGradient>
           <pattern id="annTriangles" width="80" height="80" patternUnits="userSpaceOnUse">
-            <polygon points="40,10 70,70 10,70" fill="none" stroke="#F7B500" stroke-width="0.75" stroke-opacity="0.05"/>
+            <polygon points="40,10 70,70 10,70" fill="none" stroke="${accentColor}" stroke-width="0.75" stroke-opacity="0.05"/>
             <polygon points="40,70 70,10 10,10" fill="none" stroke="#4770A3" stroke-width="0.75" stroke-opacity="0.04"/>
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#kaaeMidnightGrad)"/>
         <rect width="100%" height="100%" fill="url(#annTriangles)"/>
         <!-- Soft Golden Ambient Aura at Top Corner -->
-        <circle cx="900" cy="150" r="300" fill="#F7B500" fill-opacity="0.08" filter="blur(60px)"/>
+        <circle cx="900" cy="150" r="300" fill="${accentColor}" fill-opacity="0.08" filter="blur(60px)"/>
       </svg>
     `.trim(),
     x: 0,
@@ -1240,7 +1190,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     pageId,
     source: `
       <svg width="${width - 120}" height="2" viewBox="0 0 ${width - 120} 2" xmlns="http://www.w3.org/2000/svg">
-        <line x1="0" y1="1" x2="${width - 120}" y2="1" stroke="#F7B500" stroke-width="2" stroke-opacity="0.8"/>
+        <line x1="0" y1="1" x2="${width - 120}" y2="1" stroke="${accentColor}" stroke-width="2" stroke-opacity="0.8"/>
       </svg>
     `.trim(),
     x: 60,
@@ -1261,7 +1211,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
       mimeType: 'image/png',
     },
     x: 60,
-    y: 60,
+    y: 70,
     width: 250,
     height: 110,
     fit: 'contain',
@@ -1283,9 +1233,9 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
     style: {
       fontSize: 16,
       fontWeight: 'bold',
-      fontFamily: 'Inter',
+      fontFamily: badgeFont,
       textAlign: 'right',
-      color: '#F7B500',
+      color: accentColor,
       letterSpacing: 1,
     },
     locked: true,
@@ -1347,7 +1297,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
         <svg width="${width - 120}" height="860" viewBox="0 0 ${width - 120} 860" xmlns="http://www.w3.org/2000/svg">
           <rect width="100%" height="100%" rx="16" fill="#0A1628" fill-opacity="0.6"/>
           <rect width="100%" height="100%" rx="16" fill="none" stroke="#4770A3" stroke-width="2" stroke-opacity="0.3"/>
-          <rect x="20" y="20" width="${width - 160}" height="820" rx="12" fill="none" stroke="#F7B500" stroke-width="1" stroke-opacity="0.15"/>
+          <rect x="20" y="20" width="${width - 160}" height="820" rx="12" fill="none" stroke="${accentColor}" stroke-width="1" stroke-opacity="0.15"/>
         </svg>
       `.trim(),
       x: 60,
@@ -1375,7 +1325,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
       style: {
         fontSize: 36,
         fontWeight: 'bold',
-        fontFamily: 'Minion Variable Concept, Georgia, serif',
+        fontFamily: headlineEnFont,
         textAlign: 'left',
         color: '#FFFFFF',
         lineHeight: 1.3,
@@ -1403,7 +1353,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
         fontFamily: 'Cairo',
         textAlign: 'right',
         direction: 'rtl',
-        color: '#F7B500',
+        color: accentColor,
         lineHeight: 1.35,
       },
       locked: false,
@@ -1444,7 +1394,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
       style: {
         fontSize: 22,
         fontWeight: 'normal',
-        fontFamily: 'Inter',
+        fontFamily: copyEnFont,
         textAlign: 'left',
         color: '#CBD5E1',
         lineHeight: 1.55,

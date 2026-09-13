@@ -1,0 +1,7 @@
+services:
+  core:
+    image: hawa-core:canva-only-20260913
+  desk:
+    image: hawa-desk:canva-only-20260913
+  worker:
+    image: hawa-worker:canva-only-20260913

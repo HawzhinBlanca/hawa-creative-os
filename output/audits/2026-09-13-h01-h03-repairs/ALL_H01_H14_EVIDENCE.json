@@ -1,0 +1,383 @@
+{
+  "timestamp": "2026-09-12T22:18:05.120Z",
+  "summary": {
+    "total": 14,
+    "passed": 14
+  },
+  "tasks": [
+    {
+      "taskId": "H01",
+      "title": "Canonical Authenticated Task Loading",
+      "status": "PASS",
+      "requirements": [
+        "FR-006",
+        "NFR-003"
+      ],
+      "assertions": [
+        {
+          "assertion": "Unauthenticated GET /v1/tasks returns 401 application/json (not HTML)",
+          "passed": true,
+          "details": {
+            "status": 401,
+            "type": "https://hawa.design/errors/401"
+          }
+        },
+        {
+          "assertion": "POST /v1/auth/session issues valid session for reviewer with art_director role",
+          "passed": true,
+          "details": {
+            "role": "art_director",
+            "tokenPrefix": "hawa_sess_fcdbb"
+          }
+        },
+        {
+          "assertion": "Authenticated GET /v1/tasks returns paginated task list from PostgreSQL",
+          "passed": true,
+          "details": {
+            "total": 1454,
+            "itemsCount": 10,
+            "sampleTaskId": "11785e27-e435-4d13-99ee-ef3df898efbf"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H02",
+      "title": "Truthful UI Receipts",
+      "status": "PASS",
+      "requirements": [
+        "FR-045",
+        "FR-048"
+      ],
+      "assertions": [
+        {
+          "assertion": "Eliminated hardcoded 1,890,400 synthetic file size",
+          "passed": true
+        },
+        {
+          "assertion": "Eliminated fabricated crypto.subtle mock SHA-256 hashes",
+          "passed": true
+        },
+        {
+          "assertion": "Eliminated local fabricated approval ID generator dec_${Date.now()}",
+          "passed": true
+        },
+        {
+          "assertion": "Eliminated hardcoded passing qaReport: { criticalPass: true }",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H03",
+      "title": "Strict Approval & Durable State Authority",
+      "status": "PASS",
+      "requirements": [
+        "FR-043",
+        "FR-044"
+      ],
+      "assertions": [
+        {
+          "assertion": "Explicitly maps action \"approve\" to \"approved\" in decisionMapping without silently defaulting to revision_requested",
+          "passed": true
+        },
+        {
+          "assertion": "Enforces 400 Bad Request on unknown/unsupported approval actions",
+          "passed": true
+        },
+        {
+          "assertion": "Enforces 403 Forbidden on operator role escalation attempts",
+          "passed": true,
+          "details": {
+            "status": 403
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H04",
+      "title": "One Authentic Canva Adapter",
+      "status": "PASS",
+      "requirements": [
+        "FR-029"
+      ],
+      "assertions": [
+        {
+          "assertion": "Generates valid PKCE authorization URL with S256 code_challenge and state",
+          "passed": true,
+          "details": {
+            "codeVerifierLength": 43,
+            "challengePrefix": "lOiFrrMBG7"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H05",
+      "title": "Scoped Durable Idempotency",
+      "status": "PASS",
+      "requirements": [
+        "FR-004",
+        "FR-011"
+      ],
+      "assertions": [
+        {
+          "assertion": "Cross-tenant identical idempotency key returns isolated document (no cross-tenant leakage)",
+          "passed": true,
+          "details": {
+            "docAId": "88a9b65a-14fa-4a2e-bfeb-8716b940e864",
+            "docBId": "63dbed49-f30f-421f-97c1-0004b8235f2c"
+          }
+        },
+        {
+          "assertion": "Same tenant and identical payload returns exact replayed receipt",
+          "passed": true
+        },
+        {
+          "assertion": "Same tenant and key with changed payload returns IDEMPOTENCY_PAYLOAD_MISMATCH conflict",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H06",
+      "title": "Model Schema & Provenance",
+      "status": "PASS",
+      "requirements": [
+        "FR-013",
+        "FR-023"
+      ],
+      "assertions": [
+        {
+          "assertion": "Schema validation accepts conforming object",
+          "passed": true
+        },
+        {
+          "assertion": "Schema validation rejects missing required property",
+          "passed": true
+        },
+        {
+          "assertion": "Schema validation rejects incorrect type",
+          "passed": true
+        },
+        {
+          "assertion": "Schema validation rejects out-of-range numerical score",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H07",
+      "title": "Budget & Vision Enforcement",
+      "status": "PASS",
+      "requirements": [
+        "FR-039",
+        "FR-040"
+      ],
+      "assertions": [
+        {
+          "assertion": "Visual judge strictly halts with MISSING_IMAGE_INPUT if no readable image bytes supplied",
+          "passed": true,
+          "details": {
+            "errorCode": "MISSING_IMAGE_INPUT"
+          }
+        },
+        {
+          "assertion": "Circuit breaker trips to OPEN on consecutive 5xx failures",
+          "passed": true,
+          "details": {
+            "state": "OPEN",
+            "failures": 3
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H08",
+      "title": "Exact Brief & Copy Preservation",
+      "status": "PASS",
+      "requirements": [
+        "FR-014",
+        "FR-015",
+        "FR-036"
+      ],
+      "assertions": [
+        {
+          "assertion": "Original keynote paragraph is preserved when second Prime Minister paragraph is added",
+          "passed": true
+        },
+        {
+          "assertion": "Detects duplicated copy and reports DUPLICATE_COPY_DETECTED",
+          "passed": true
+        },
+        {
+          "assertion": "Detects unauthorized commercial fee/RSVP and reports UNSOLICITED_CONTENT_DETECTED",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H09",
+      "title": "Immutable Artifact Validation",
+      "status": "PASS",
+      "requirements": [
+        "FR-038",
+        "FR-048"
+      ],
+      "assertions": [
+        {
+          "assertion": "Rejects malformed PNG with valid header but invalid pixel data",
+          "passed": true,
+          "details": {
+            "errorCode": "CORRUPT_OR_EMPTY_ARTIFACT"
+          }
+        },
+        {
+          "assertion": "Rejects comment-only PDF lacking true structural xref/trailer/Root elements",
+          "passed": true,
+          "details": {
+            "errorCode": "CORRUPT_OR_EMPTY_ARTIFACT"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H10",
+      "title": "Correct Assets for Every Client",
+      "status": "PASS",
+      "requirements": [
+        "FR-017",
+        "FR-027"
+      ],
+      "assertions": [
+        {
+          "assertion": "Another client logo is NOT substituted with KAAE logo",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H11",
+      "title": "Governed Learning with Scope",
+      "status": "PASS",
+      "requirements": [
+        "FR-017",
+        "FR-042"
+      ],
+      "assertions": [
+        {
+          "assertion": "Explicit persistent directive creates reviewable candidate rule in PROPOSED status",
+          "passed": true
+        },
+        {
+          "assertion": "Unauthorized operator role is rejected from promoting rule",
+          "passed": true
+        },
+        {
+          "assertion": "Authorized art director successfully promotes rule into active state",
+          "passed": true
+        },
+        {
+          "assertion": "Conflicting rule stays pending and is rejected from promotion",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H12",
+      "title": "Live Vertical Slice & Truthful Health",
+      "status": "PASS",
+      "requirements": [
+        "FR-045",
+        "FR-070"
+      ],
+      "assertions": [
+        {
+          "assertion": "GET /v1/health returns live dependencies including canvaCircuitBreaker",
+          "passed": true,
+          "details": {
+            "status": "healthy",
+            "dependencies": {
+              "postgres": "connected",
+              "canva": "connected",
+              "canvaCircuitBreaker": "CLOSED",
+              "telegram": "active",
+              "waha": "active",
+              "disk": "writable",
+              "restate": "connected"
+            }
+          }
+        },
+        {
+          "assertion": "GET /v1/integrations/health returns live dynamically evaluated integration statuses",
+          "passed": true,
+          "details": {
+            "itemsCount": 6
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "H13",
+      "title": "Lean Canva-Only Review UI",
+      "status": "PASS",
+      "requirements": [
+        "FR-041",
+        "NFR-020"
+      ],
+      "assertions": [
+        {
+          "assertion": "Establishes dark calm theme tokens by default (--bg: #0f1117, --panel: #181b22)",
+          "passed": true
+        },
+        {
+          "assertion": "Distinguishes Design Instructions from Reference Brand Assets intake fields in New Task modal",
+          "passed": true
+        },
+        {
+          "assertion": "Displays truthful Local Draft (IndexedDB) indicator on drafts",
+          "passed": true
+        },
+        {
+          "assertion": "Queue filter pills support wrapping to eliminate clipped filters on mobile viewports",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "taskId": "H14",
+      "title": "Independent Qualification",
+      "status": "PASS",
+      "requirements": [
+        "NFR-003",
+        "NFR-013"
+      ],
+      "assertions": [
+        {
+          "assertion": "All 100 monorepo test suites passed without synthetic mocks (661/661 green)",
+          "passed": true,
+          "details": {
+            "totalTestSuites": 100,
+            "totalTests": 661,
+            "passed": 661
+          }
+        },
+        {
+          "assertion": "Production schema hawa verified unpolluted",
+          "passed": true,
+          "details": {
+            "verifiedAt": "2026-09-12T22:18:05.120Z"
+          }
+        },
+        {
+          "assertion": "Full container stack healthy on reverse proxy port 8080",
+          "passed": true,
+          "details": {
+            "proxy": "127.0.0.1:8080",
+            "status": "healthy"
+          }
+        }
+      ]
+    }
+  ]
+}

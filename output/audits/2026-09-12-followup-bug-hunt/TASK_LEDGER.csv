@@ -1,0 +1,15 @@
+task_id,title,status,requirement_mapping,evidence,notes
+H01,Authenticated task loading,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H02,Truthful UI receipts,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H03,Approval and durable authority,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H04,Real Canva adapter,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H05,Scoped durable idempotency,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H06,Model schema and provenance,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H07,Budget and vision enforcement,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H08,Exact brief and copy preservation,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H09,Immutable artifact validation,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H10,Client asset isolation,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H11,Governed learning,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H12,Live vertical slice and truthful health,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H13,Lean Canva-only review UI,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
+H14,Independent qualification,NOT_STARTED,Map through plans/traceability.csv,,Audit completed; repairs not implemented by auditor
