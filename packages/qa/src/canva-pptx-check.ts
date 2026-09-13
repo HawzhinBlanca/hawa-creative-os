@@ -66,7 +66,8 @@ export function checkCanvaPptx(bytes:Uint8Array,expectedCopy:string[],requiredFo
   const copyPass=texts.length===expectedCopy.length&&texts.every((t,i)=>normalize(t)===normalize(expectedCopy[i]));
   const fontPass=!unresolvedFont&&fonts.length>0&&fonts.every((f,i)=>f===fontExpectations[i]||f.startsWith(fontExpectations[i]+' '));
   const rtlPass=arabicObjects===0||rtlObjects===arabicObjects;
-  return {checkVersion:2,source:'canva_exported_pptx',copyPass,fontPass,rtlPass,requiredFont,scriptFonts:options.scriptFonts||null,arabicTextObjectCount:arabicObjects,rtlTextObjectCount:rtlObjects,observedFonts:[...new Set(fonts)],textObjectCount:texts.length,
+  const rtlNote=arabicObjects>0&&rtlObjects===0?'Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.':null;
+  return {checkVersion:2,source:'canva_exported_pptx',copyPass,fontPass,rtlPass,rtlNote,requiredFont,scriptFonts:options.scriptFonts||null,arabicTextObjectCount:arabicObjects,rtlTextObjectCount:rtlObjects,observedFonts:[...new Set(fonts)],textObjectCount:texts.length,
     expectedTextObjectCount:expectedCopy.length,comparisonPolicy:'exact words and punctuation; layout whitespace folded',
     fullReleasePass:false,logoVerification:'not_qualified',layoutVerification:'visual_review_required',printQualified:false};
 }

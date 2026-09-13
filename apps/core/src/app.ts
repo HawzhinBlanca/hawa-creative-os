@@ -4347,10 +4347,21 @@ export function createApp(options?: CreateAppOptions) {
     const source = created?.data?.payload || created?.data || {};
     const sourceChannelId = source?.sourcePlatform === 'telegram' && source?.sourceChannelId ? String(source.sourceChannelId) : undefined;
 
+    // A Sorani draft is set in a provisional typeface (ADR-028); the requester is told so with the result.
+    const notes: string[] = [];
+    try {
+      const manifest = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+        (await sql<any>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
+          WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
+          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest);
+      if (manifest?.rtlFontProvisional && typeof manifest?.rtlFont === 'string') {
+        notes.push(`Kurdish text is set in a provisional typeface (${manifest.rtlFont}) until the brand's Kurdish font is confirmed by the art director.`);
+      }
+    } catch { /* the note is a courtesy; the status message must still go out */ }
     let notificationSent = false;
     let notificationError: string | undefined;
     if (sourceChannelId) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl });
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes });
       const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, message);
       notificationSent = dispatchRes.success;
       if (!dispatchRes.success) notificationError = dispatchRes.error;

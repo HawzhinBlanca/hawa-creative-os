@@ -27,3 +27,14 @@ describe('requester-facing Canva outcome messages', () => {
     expect(msg.text).not.toContain('<b>bold</b>');
   });
 });
+
+describe('draft caveats', () => {
+  it('appends escaped notes before the footer and never claims more than the status', () => {
+    const msg = composeCanvaStatusMessage({ taskId: '00000000-0000-4000-8000-000000000001', title: 'Sorani test', status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', canvaUrl: 'https://www.canva.com/design/DAHVHsEGaLc/edit',
+      notes: ["Kurdish text is set in a provisional typeface (Noto Sans Arabic) until the brand's Kurdish font is confirmed <by> the art director."] });
+    expect(msg.text).toContain('ℹ️ Kurdish text is set in a provisional typeface (Noto Sans Arabic)');
+    expect(msg.text).toContain('&lt;by&gt;');
+    expect(msg.text.indexOf('ℹ️')).toBeLessThan(msg.text.indexOf('Every design is reviewed'));
+    expect(composeCanvaStatusMessage({ taskId: '00000000-0000-4000-8000-000000000001', status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', notes: [] }).text).not.toContain('ℹ️');
+  });
+});

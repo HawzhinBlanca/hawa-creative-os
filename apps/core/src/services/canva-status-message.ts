@@ -8,6 +8,8 @@ export interface CanvaStatusMessageInput {
   /** Optional rejection code from Core, e.g. COPY_UNSUPPORTED or CLIENT_REFERENCE_REQUIRED. */
   code?: string;
   canvaUrl?: string;
+  /** Honest caveats about this particular draft, e.g. a provisional Kurdish typeface. Plain text; escaped here. */
+  notes?: string[];
 }
 
 export interface TelegramHtmlMessage {
@@ -66,5 +68,6 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
     title = '📥 <b>Request saved, manual design</b>';
     body = `${link}The automatic Canva draft could not be produced${code ? ` (${escapeTelegramHtml(code)})` : ''}. Your request is saved and the art director will design it in Canva.\n`;
   }
-  return { text: header(title) + body + footer, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
+  const notes = (input.notes || []).filter((n) => typeof n === 'string' && n.trim()).map((n) => `ℹ️ ${escapeTelegramHtml(n.trim())}\n`).join('');
+  return { text: header(title) + body + (notes ? notes + '\n' : '') + footer, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
 }
