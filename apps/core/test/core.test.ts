@@ -862,6 +862,49 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(pubData.sheetRowUrl).toContain('https://docs.google.com/spreadsheets/d/');
   });
 
+  it('never writes provider credentials to a configuration file', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
+    const candidates = ['infra/docker/.env.production', '.env.production', '.env.local', '../../infra/docker/.env.production'].map((p) => path.resolve(process.cwd(), p));
+    const before = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    const res = await app.request('/v1/system/providers', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ anthropicApiKey: 'mock-never-written-key-1234567890', wahaEndpoint: 'http://127.0.0.1:3000' }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.persisted).toBe(false);
+    expect(data.activated).toEqual(['ANTHROPIC_API_KEY', 'WAHA_ENDPOINT']);
+    const after = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    expect(after).toEqual(before);
+  });
+
+  it('rejects a key the provider refuses and changes nothing', async () => {
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
+    const savedVitest = process.env.VITEST;
+    const savedKey = process.env.ANTHROPIC_API_KEY;
+    const realFetch = globalThis.fetch;
+    delete process.env.VITEST; // leave the fixture path so the live verifier runs, against a stubbed provider
+    globalThis.fetch = (async () => new Response('{"error":"invalid"}', { status: 401 })) as any;
+    try {
+      const res = await app.request('/v1/system/providers', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ anthropicApiKey: 'rejected-key-0000000000000000' }),
+      });
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.title).toBe('PROVIDER_KEY_REJECTED');
+      expect(body.detail).not.toContain('rejected-key-0000000000000000');
+      expect(process.env.ANTHROPIC_API_KEY).toBe(savedKey);
+    } finally {
+      globalThis.fetch = realFetch;
+      process.env.VITEST = savedVitest;
+    }
+  });
+
   it('manages system provider credentials via /v1/system/providers', async () => {
     const adminHeaders = {
       'Content-Type': 'application/json',

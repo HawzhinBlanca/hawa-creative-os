@@ -1,8 +1,6 @@
 import type { RouteContext } from './types.js';
 import { withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
-import fs from 'node:fs';
-import path from 'node:path';
 
 export function registerSystemRoutes(ctx: RouteContext) {
   const {
@@ -484,7 +482,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
           status: wahaKey ? 'READY' : 'QUARANTINED',
         },
       },
-      envFile: '.env.local',
+      envFile: 'infra/docker/.env.production (deploy-time; runtime overrides last until restart)',
     });
   });
 
@@ -507,81 +505,67 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }
   });
 
+  // Provider credentials are deploy-time configuration. This route verifies a key against its
+  // provider and activates it in this process only; it never writes a file. Until 2026-09-14 it
+  // rewrote the mounted infra/docker/.env.production, which also let the test suite overwrite the
+  // production Anthropic key with a fixture (the root cause of the model-provider 401s).
   app.post('/v1/system/providers', async (c: any) => {
     const authHeader = c.req.header('Authorization');
     const auth = verifyRequestAuth(c);
     if (!authHeader || !auth.authenticated || auth.role !== 'administrator') {
       return problem(c, 401, 'Unauthorized', 'Administrator credentials required to update provider keys');
     }
-
     let body: any = {};
     try {
       body = await c.req.json();
     } catch {
       return problem(c, 400, 'Invalid JSON', 'Request body must be valid JSON');
     }
-
-    const { geminiApiKey, openaiApiKey, anthropicApiKey, telegramBotToken, wahaApiKey, wahaEndpoint } = body;
-
-    if (typeof geminiApiKey === 'string') {
-      process.env.GEMINI_API_KEY = geminiApiKey.trim();
-    }
-    if (typeof openaiApiKey === 'string') {
-      process.env.OPENAI_API_KEY = openaiApiKey.trim();
-    }
-    if (typeof anthropicApiKey === 'string') {
-      process.env.ANTHROPIC_API_KEY = anthropicApiKey.trim();
-    }
-    if (typeof telegramBotToken === 'string') {
-      process.env.TELEGRAM_BOT_TOKEN = telegramBotToken.trim();
-    }
-    if (typeof wahaApiKey === 'string') {
-      process.env.WAHA_API_KEY = wahaApiKey.trim();
-    }
-    if (typeof wahaEndpoint === 'string') {
-      process.env.WAHA_ENDPOINT = wahaEndpoint.trim();
-    }
-
-    try {
-      const candidatePaths = [
-        path.resolve('/app/infra/docker/.env.production'),
-        path.resolve(process.cwd(), 'infra/docker/.env.production'),
-        path.resolve(process.cwd(), '../../infra/docker/.env.production'),
-        path.resolve(process.cwd(), '.env.production'),
-        path.resolve(process.cwd(), '.env.local'),
-      ];
-      const envPath = candidatePaths.find((p) => fs.existsSync(p)) || candidatePaths[0];
-      try {
-        fs.mkdirSync(path.dirname(envPath), { recursive: true });
-      } catch {}
-      let currentContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-
-      const updateOrAppend = (key: string, val: string | undefined) => {
-        if (typeof val !== 'string' || !val) return;
-        const regex = new RegExp(`^${key}=.*$`, 'm');
-        if (regex.test(currentContent)) {
-          currentContent = currentContent.replace(regex, `${key}=${val}`);
-        } else {
-          currentContent += `\n${key}=${val}`;
+    const timeout = () => ({ signal: AbortSignal.timeout(10000) });
+    const fields: Array<{ body: string; env: string; live: boolean; verify: (v: string) => Promise<string | null> }> = [
+      { body: 'telegramBotToken', env: 'TELEGRAM_BOT_TOKEN', live: true, verify: async (v) => {
+        const r = await fetch(`https://api.telegram.org/bot${v}/getMe`, timeout()); const d: any = await r.json().catch(() => ({}));
+        return d?.ok ? null : `Telegram rejected the token (${d?.description || 'HTTP ' + r.status})`; } },
+      { body: 'anthropicApiKey', env: 'ANTHROPIC_API_KEY', live: true, verify: async (v) => {
+        const r = await fetch('https://api.anthropic.com/v1/models', { headers: { 'x-api-key': v, 'anthropic-version': '2023-06-01' }, ...timeout() });
+        return r.ok ? null : `Anthropic rejected the key (HTTP ${r.status})`; } },
+      { body: 'geminiApiKey', env: 'GEMINI_API_KEY', live: true, verify: async (v) => {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(v)}`, timeout());
+        return r.ok ? null : `Google rejected the key (HTTP ${r.status})`; } },
+      { body: 'openaiApiKey', env: 'OPENAI_API_KEY', live: true, verify: async (v) => {
+        const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${v}` }, ...timeout() });
+        return r.ok ? null : `OpenAI rejected the key (HTTP ${r.status})`; } },
+      { body: 'wahaApiKey', env: 'WAHA_API_KEY', live: false, verify: async (v) => (v.length >= 8 ? null : 'WAHA API key is too short') },
+      { body: 'wahaEndpoint', env: 'WAHA_ENDPOINT', live: false, verify: async (v) => (/^https?:\/\//.test(v) ? null : 'WAHA endpoint must be an http(s) URL') },
+    ];
+    // Fixture keys in the test suite cannot be verified against a provider; everything else is.
+    const underVitest = process.env.NODE_ENV === 'test' && Boolean(process.env.VITEST);
+    const staged: Array<{ env: string; value: string }> = [];
+    for (const f of fields) {
+      const raw = body[f.body];
+      if (typeof raw !== 'string') continue;
+      const value = raw.trim();
+      if (!value) continue;
+      if (!f.live || !underVitest) {
+        let reason: string | null;
+        try {
+          reason = await f.verify(value);
+        } catch (err: any) {
+          reason = `could not reach the provider to verify it (${err?.name === 'TimeoutError' ? 'timeout' : err?.message || 'network error'})`;
         }
-      };
-
-      updateOrAppend('GEMINI_API_KEY', geminiApiKey?.trim());
-      updateOrAppend('OPENAI_API_KEY', openaiApiKey?.trim());
-      updateOrAppend('ANTHROPIC_API_KEY', anthropicApiKey?.trim());
-      updateOrAppend('TELEGRAM_BOT_TOKEN', telegramBotToken?.trim());
-      updateOrAppend('WAHA_API_KEY', wahaApiKey?.trim());
-      updateOrAppend('WAHA_ENDPOINT', wahaEndpoint?.trim());
-
-      fs.writeFileSync(envPath, currentContent, 'utf8');
-    } catch {
-      // Best-effort file sync
+        if (reason) return problem(c, 422, 'PROVIDER_KEY_REJECTED', `${f.env}: ${reason}. Nothing was changed.`);
+      }
+      staged.push({ env: f.env, value });
     }
-
-    broadcastEvent('system:providers_updated', { timestamp: new Date().toISOString() });
+    for (const entry of staged) process.env[entry.env] = entry.value;
+    if (staged.length) broadcastEvent('system:providers_updated', { timestamp: new Date().toISOString(), keys: staged.map((e) => e.env) });
     return c.json({
       ok: true,
-      message: 'Provider credentials updated and activated immediately in memory and .env.local',
+      activated: staged.map((e) => e.env),
+      persisted: false,
+      message: staged.length
+        ? 'Verified and active in this process until the next restart. To keep it across restarts run: bash infra/docker/rotate_external_secrets.sh (writes infra/docker/.env.production and redeploys).'
+        : 'No provider values supplied; nothing changed.',
     });
   });
 }

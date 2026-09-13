@@ -75,11 +75,12 @@ export const SettingsScreen: React.FC = () => {
         body: JSON.stringify(keysForm),
       });
       if (res.ok) {
-        setSaveStatus('✓ Credentials saved and activated immediately in memory & .env.local!');
+        setSaveStatus('✓ Verified and active until the next restart. To keep it, run infra/docker/rotate_external_secrets.sh on the server.');
         await fetchProviderStatus();
-        setTimeout(() => setActiveModal(null), 1400);
+        setTimeout(() => setActiveModal(null), 2200);
       } else {
-        setSaveStatus('✗ Failed to save credentials. Check server connection.');
+        const detail = await res.json().then((p: any) => p?.detail).catch(() => null);
+        setSaveStatus(`✗ ${detail || 'Failed to save credentials. Check server connection.'}`);
       }
     } catch (err: any) {
       setSaveStatus(`✗ Error: ${err.message}`);
