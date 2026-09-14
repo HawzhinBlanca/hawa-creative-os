@@ -4,7 +4,7 @@ T01,Baseline gates and v1 comparison runs,COMPLETED,output/proofs/2026-09-14-des
 T02,Fonts (EB Garamond + Noto Sans Arabic + private dir + image fc-list),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T02_FONTS.md,,
 T03,Layout DSL v2 + validator + metrics,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T03_VALIDATOR.md,,
 T04,Local renderer (fontkit wrapping + RTL + goldens),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T04_RENDER.md,,
-T05,Composite p05 contrast,NOT_STARTED,,,
+T05,Composite p05 contrast,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T05_CONTRAST.md,,
 T06,Procedural motifs,NOT_STARTED,,,
 T07,Gemini image provider + live probe,NOT_STARTED,,,
 T08,Studio model client (structured outputs + caching + receipts + retry + breaker),NOT_STARTED,,,
