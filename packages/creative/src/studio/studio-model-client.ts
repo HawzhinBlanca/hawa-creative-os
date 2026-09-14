@@ -32,8 +32,11 @@ export interface StudioCallReceipt {
 export interface StructuredCallParams<T> {
   prompt: string;
   systemPrompt?: string;
-  outputSchema: Record<string, any>;
+  system?: string;
+  outputSchema?: Record<string, any>;
+  schema?: Record<string, any>;
   schemaName?: string;
+  images?: Array<Buffer | { mediaType: 'image/png' | 'image/jpeg'; data: string }>;
   model?: string;
   fallbackModel?: string;
   maxTokens?: number;
@@ -242,6 +245,12 @@ export class StudioModelClient {
     const fallbackModel = params.fallbackModel || this.fallbackModel;
     const timeoutMs = params.timeoutMs || this.defaultTimeoutMs;
     const schemaName = params.schemaName || 'structured_output';
+    const systemPrompt = params.systemPrompt || params.system;
+    const outputSchema = params.outputSchema || params.schema;
+
+    if (!outputSchema) {
+      throw new Error('outputSchema or schema parameter is required');
+    }
 
     let currentModel = selectedModel;
     let attempt = 0;
@@ -256,9 +265,10 @@ export class StudioModelClient {
         const result = await this.executeRawRequest<T>({
           model: currentModel,
           prompt: params.prompt,
-          systemPrompt: params.systemPrompt,
-          outputSchema: params.outputSchema,
+          systemPrompt,
+          outputSchema,
           schemaName,
+          images: params.images,
           maxTokens: params.maxTokens || 4096,
           temperature: params.temperature,
           enableCacheControl: params.enableCacheControl ?? true,
@@ -313,12 +323,17 @@ export class StudioModelClient {
     throw lastError || new StudioModelError('Failed all model call attempts', 'MAX_RETRIES_EXCEEDED');
   }
 
+  public async completeJson<T>(params: StructuredCallParams<T>): Promise<StructuredCallResult<T>> {
+    return this.callStructured<T>(params);
+  }
+
   private async executeRawRequest<T>(options: {
     model: string;
     prompt: string;
     systemPrompt?: string;
     outputSchema: Record<string, any>;
     schemaName: string;
+    images?: Array<Buffer | { mediaType: 'image/png' | 'image/jpeg'; data: string }>;
     maxTokens: number;
     temperature?: number;
     enableCacheControl: boolean;
@@ -354,6 +369,37 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
         systemBlocks[0].cache_control = { type: 'ephemeral' };
       }
 
+      let userContent: any = options.prompt;
+      if (options.images && options.images.length > 0) {
+        const contentBlocks: any[] = [];
+        for (const img of options.images) {
+          if (Buffer.isBuffer(img)) {
+            contentBlocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: img.toString('base64'),
+              },
+            });
+          } else {
+            contentBlocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: img.mediaType,
+                data: img.data,
+              },
+            });
+          }
+        }
+        contentBlocks.push({
+          type: 'text',
+          text: options.prompt,
+        });
+        userContent = contentBlocks;
+      }
+
       const requestBody: any = {
         model: options.model,
         max_tokens: options.maxTokens,
@@ -361,7 +407,7 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
         messages: [
           {
             role: 'user',
-            content: options.prompt,
+            content: userContent,
           },
         ],
       };

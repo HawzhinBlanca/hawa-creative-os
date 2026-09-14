@@ -1,0 +1,253 @@
+import { randomUUID } from 'node:crypto';
+import type { StageContext, CreativeBrief, Concept, CandidateState } from '../types.js';
+import type { StudioLayoutV2 } from '@hawa/creative';
+import { validateLayoutV2, type LayoutValidationContext } from '@hawa/creative';
+import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
+
+export const LAYOUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    layout: {
+      type: 'object',
+      properties: {
+        version: { type: 'integer', enum: [2] },
+        width: { type: 'integer' },
+        height: { type: 'integer' },
+        grid: {
+          type: 'object',
+          properties: {
+            margin: { type: 'number' },
+            columns: { type: 'integer', enum: [6, 12] },
+            gutter: { type: 'number' },
+            baseline: { type: 'number' },
+          },
+          required: ['margin', 'columns', 'gutter', 'baseline'],
+          additionalProperties: false,
+        },
+        background: {
+          type: 'object',
+          properties: {
+            color: { type: 'string' },
+          },
+          required: ['color'],
+          additionalProperties: false,
+        },
+        art: {
+          type: 'object',
+          properties: {
+            source: { type: 'string', enum: ['generated', 'procedural'] },
+            prompt: { type: 'string' },
+            motif: { type: 'string', enum: ['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash'] },
+            box: {
+              type: 'object',
+              properties: {
+                x: { type: 'number' },
+                y: { type: 'number' },
+                width: { type: 'number' },
+                height: { type: 'number' },
+              },
+              required: ['x', 'y', 'width', 'height'],
+              additionalProperties: false,
+            },
+            opacity: { type: 'number' },
+            scrim: {
+              type: 'object',
+              properties: {
+                color: { type: 'string' },
+                opacityStart: { type: 'number' },
+                opacityEnd: { type: 'number' },
+                direction: { type: 'string', enum: ['vertical', 'horizontal', 'radial'] },
+              },
+              required: ['color', 'opacityStart', 'opacityEnd', 'direction'],
+              additionalProperties: false,
+            },
+            calmRegion: {
+              type: 'object',
+              properties: {
+                x: { type: 'number' },
+                y: { type: 'number' },
+                width: { type: 'number' },
+                height: { type: 'number' },
+              },
+              required: ['x', 'y', 'width', 'height'],
+              additionalProperties: false,
+            },
+          },
+          required: ['source', 'box', 'opacity', 'calmRegion'],
+          additionalProperties: false,
+        },
+        shapes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' },
+              kind: { type: 'string', enum: ['rect', 'roundRect', 'ellipse', 'line'] },
+              color: { type: 'string' },
+              opacity: { type: 'number' },
+              radius: { type: 'number' },
+              rotation: { type: 'number' },
+              strokeWidth: { type: 'number' },
+              strokeColor: { type: 'string' },
+              role: { type: 'string', enum: ['rule', 'panel', 'accent', 'frame'] },
+            },
+            required: ['x', 'y', 'width', 'height', 'kind', 'color', 'role'],
+            additionalProperties: false,
+          },
+        },
+        text: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' },
+              copyIndex: { type: 'integer' },
+              role: {
+                type: 'string',
+                enum: ['eyebrow', 'title', 'subtitle', 'body', 'date', 'venue', 'cta', 'footer', 'other'],
+              },
+              fontSize: { type: 'number' },
+              lineHeight: { type: 'number' },
+              letterSpacing: { type: 'number' },
+              fontFamily: { type: 'string' },
+              color: { type: 'string' },
+              align: { type: 'string', enum: ['left', 'center', 'right'] },
+              bold: { type: 'boolean' },
+              italic: { type: 'boolean' },
+              opacity: { type: 'number' },
+            },
+            required: ['x', 'y', 'width', 'height', 'copyIndex', 'role', 'fontSize', 'lineHeight', 'fontFamily', 'color', 'align'],
+            additionalProperties: false,
+          },
+        },
+        logo: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+          required: ['x', 'y', 'width', 'height'],
+          additionalProperties: false,
+        },
+      },
+      required: ['version', 'width', 'height', 'grid', 'background', 'shapes', 'text', 'logo'],
+      additionalProperties: false,
+    },
+    notes: { type: 'string' },
+  },
+  required: ['layout'],
+  additionalProperties: false,
+};
+
+export async function runLayoutsStage(
+  ctx: StageContext,
+  brief: CreativeBrief,
+  concepts: Concept[]
+): Promise<CandidateState[]> {
+  const systemPrompt = buildP0SystemPrompt({
+    referencePackJson: JSON.stringify(ctx.referencePack),
+    promotedRules: ctx.promotedRules || 'None',
+  });
+
+  const shortEdge = Math.min(ctx.width, ctx.height);
+  const marginPx = Math.round(shortEdge * 0.06);
+  const bodyMinPx = Math.max(12, Math.round(ctx.width * 0.016));
+  const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
+  const logoAspect = 2.45; // Standard KAAE logo aspect ratio
+
+  const copyBlocksFormatted = ctx.copyBlocks
+    .map((b, i) => `[Index ${i} - ${b.script}]: "${b.text.replace(/"/g, '\\"')}"`)
+    .join('\n');
+
+  const candidates: CandidateState[] = [];
+
+  for (let ordinal = 0; ordinal < concepts.length; ordinal++) {
+    const concept = concepts[ordinal];
+    const userPrompt = buildP3Prompt({
+      conceptId: concept.id,
+      creativeBriefJson: JSON.stringify(brief),
+      conceptJson: JSON.stringify(concept),
+      width: ctx.width,
+      height: ctx.height,
+      marginPx,
+      bodyMinPx,
+      logoMinPx,
+      logoAspect,
+      palette: ctx.referencePack.palette.join(', '),
+      latinFont: ctx.latinFont,
+      arabicFont: ctx.arabicFont,
+      copyBlocks: copyBlocksFormatted,
+    });
+
+    let layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
+      system: systemPrompt,
+      prompt: userPrompt,
+      schema: LAYOUT_SCHEMA,
+      schemaName: 'StudioLayoutV2Output',
+    });
+
+    let layout = layoutResponse.data.layout;
+
+    const validationContext: LayoutValidationContext = {
+      expectedWidth: ctx.width,
+      expectedHeight: ctx.height,
+      copyCount: ctx.copyBlocks.length,
+      copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
+      reference: {
+        rules: {
+          fontFamily: ctx.latinFont,
+          palette: ctx.referencePack.palette,
+          scriptFonts: {
+            arabic: ctx.arabicFont,
+          },
+        },
+        logoAspect: 1.0,
+      },
+      draftFont: 'EB Garamond',
+    };
+
+    // Hard validate layout
+    let validation = validateLayoutV2(layout, validationContext);
+
+    // If validation fails, attempt 1 repair call
+    if (!validation.ok) {
+      const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nReturn a corrected StudioLayoutV2 adhering to all constraints.`;
+
+      layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
+        system: systemPrompt,
+        prompt: repairPrompt,
+        schema: LAYOUT_SCHEMA,
+        schemaName: 'StudioLayoutV2Output',
+      });
+
+      layout = layoutResponse.data.layout;
+      validation = validateLayoutV2(layout, validationContext);
+    }
+
+    if (validation.ok) {
+      candidates.push({
+        id: randomUUID(),
+        ordinal,
+        concept,
+        layouts: [layout],
+        currentLayout: layout,
+        critiques: [],
+        status: 'draft',
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    throw new Error('All proposed concept layouts failed validation');
+  }
+
+  return candidates;
+}

@@ -369,3 +369,23 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
     },
   };
 }
+
+export class GeminiImageProvider {
+  constructor(
+    private readonly geminiApiKey?: string,
+    private readonly anthropicApiKey?: string,
+    private readonly fetchFn?: typeof fetch
+  ) {}
+
+  public async generateArt(
+    options: Omit<GenerateArtOptions, 'geminiApiKey' | 'anthropicApiKey' | 'fetchFn'>
+  ): Promise<GenerateArtResult> {
+    return generateArtImage({
+      ...options,
+      geminiApiKey: this.geminiApiKey,
+      anthropicApiKey: this.anthropicApiKey,
+      fetchFn: this.fetchFn,
+    });
+  }
+}
+
