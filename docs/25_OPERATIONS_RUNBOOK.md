@@ -135,32 +135,62 @@ the provisional note automatically. QA evidence on the exported PPTX: `copyPass`
 paragraph direction flag; direction is checked visually). Any other script or emoji is refused before a
 paid call with `COPY_UNSUPPORTED` and saved for manual design.
 
-## Design Studio v2 — Fault Injection & Incident Procedures
+## Design Studio v2
 
-Design Studio v2 operates a multi-stage, durable pipeline (`see` → `judge` → `revise`) guarded by Restate, Core advisory locks, and append-only database journals.
+Design Studio v2 operates a multi-stage, durable pipeline (`see` → `judge` → `revise`) guarded by Restate, Core advisory locks, and append-only database journals (Migration 013).
 
-### 1. Worker crash or container restart during active run
+### 1. Operational Configuration & Feature Flags
+- `DESIGN_STUDIO_V2`: Defaults to `'off'`. When off, standard intake uses the legacy single-shot planner. When `'on'`, Telegram intake dispatches into the studio pipeline.
+- `DESIGN_STUDIO_TIER_DEFAULT`: Defaults to `'standard'` (3 candidates, 1 revision loop). May be set to `'premium'` for high-touch briefs.
+- `DESIGN_STUDIO_MAX_USD`: Hard budget ceiling per run (default `$6.00`). If accumulated costs in `hawa.design_studio_calls` reach this ceiling, the run transitions to `BUDGET_EXHAUSTED` and selects the best candidate evaluated so far.
+- Explicit Route: `POST /v1/tasks/:taskId/canva/studio` is available regardless of the feature flag for Desk testing and qualification evaluations.
+
+### 2. Operational Database Inspection Queries
+To verify run progression, cost accounting, and call receipts:
+```sql
+-- View recent Design Studio runs and statuses
+SELECT id, task_id, status, tier, total_stages, current_stage, budget_usd_cap, spent_usd, created_at
+FROM hawa.design_studio_runs
+ORDER BY created_at DESC LIMIT 10;
+
+-- Audit paid provider calls and verify receipt response_ids for a run
+SELECT id, stage, provider, model_id, response_id, prompt_tokens, completion_tokens, cached_tokens, usd_estimate, created_at
+FROM hawa.design_studio_calls
+WHERE run_id = '<run_id>'
+ORDER BY created_at ASC;
+
+-- Verify sum of call receipts strictly matches run spent_usd
+SELECT r.id, r.spent_usd, COALESCE(SUM(c.usd_estimate), 0) AS calculated_usd,
+       (r.spent_usd = COALESCE(SUM(c.usd_estimate), 0)) AS ledger_balanced
+FROM hawa.design_studio_runs r
+LEFT JOIN hawa.design_studio_calls c ON c.run_id = r.id
+GROUP BY r.id;
+```
+
+### 3. Fault Injection & Incident Procedures
+
+#### Scenario (a): Worker crash or container restart during active run
 - **Symptom**: `hawa-production-worker-1` restarts or exits during an in-flight stage (e.g., `critiquing`).
 - **Mechanism**: Restate retains the execution journal up to the last completed step. When the worker recovers, it queries Core with the same task ID and idempotency key.
 - **Invariants**: Stages prior to the interrupted step are not re-executed; calls already committed to `hawa.design_studio_calls` are preserved; ledger call count and USD spend remain unchanged (zero duplicate billing).
 - **Verification**: `docker restart hawa-production-worker-1; npx tsx scripts/studio_fault_injection.ts`.
 
-### 2. Provider outage & degraded art fallback
+#### Scenario (b): Provider outage & degraded art fallback
 - **Symptom**: Gemini API key is missing, invalid, or returns 429/5xx during art generation.
 - **Mitigation**: The art stage automatically triggers Degradation Ladder Rung 2 (`rung2_art_procedural_fallback`).
 - **Behavior**: The server generates a deterministic SVG procedural motif (`gradient-wash`, `thin-rules`, `sun-rays`, or `guilloche`) using brand palette colors. Diagnostic metadata records `artFallback: 'procedural'` and status note reflects the fallback honestly.
 
-### 3. Transient provider overloading (HTTP 529)
+#### Scenario (c): Transient provider overloading (HTTP 529)
 - **Symptom**: Anthropic API returns HTTP 529 (`overloaded_error`).
 - **Mitigation**: `StudioModelClient` executes exponential backoff with jitter across up to 3 retries (1s, 3s, 9s). If 5 consecutive failures occur, the provider circuit breaker trips to open state for 60 seconds.
 - **Receipts**: Call receipts record total attempt counts (`attempts: 4`) and exact token usage.
 
-### 4. Hard budget cap enforcement (`BUDGET_EXHAUSTED`)
+#### Scenario (d): Hard budget cap enforcement (`BUDGET_EXHAUSTED`)
 - **Symptom**: Run cost reaches or exceeds `DESIGN_STUDIO_MAX_USD` (default $6.00, or office override).
 - **Mitigation**: `DesignStudioService` stops current stage execution immediately and halts further paid calls.
 - **Behavior**: The run promotes the highest-scoring candidate evaluated so far (or metric-best if critique is incomplete), marks run status as `degraded`, and appends an honest budget exhaustion note to the delivery message.
 
-### 5. Canary failure & judge unreliability
+#### Scenario (e): Canary failure & judge unreliability
 - **Symptom**: Critic vision judge fails to prefer the winning design over deterministic degradations (e.g. 40% font size reduction, logo text collision) across both presentation orders.
 - **Mitigation**: `canary.stage` flags `judgeStatus: 'UNRELIABLE'`.
 - **Behavior**: The tournament verdict is overridden; the run promotes the candidate with the highest deterministic layout metrics, logs the canary failure, and appends a notice to the requester stating that the vision judge was unreliable and human review is required.

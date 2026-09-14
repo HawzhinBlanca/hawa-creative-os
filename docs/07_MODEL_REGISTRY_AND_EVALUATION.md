@@ -177,3 +177,22 @@ When a provider announces deprecation:
 - migrate before shutdown date;
 - retain old invocation/provenance records;
 - never silently map an old model name to a different behavior.
+
+## 12. Design Studio v2 Model Registry & Evaluation Addendum
+
+Design Studio v2 introduces specialized model assignments and benchmark protocols:
+
+### Admitted Deployments for Design Studio v2
+| Role | Primary Model | Fallback Deployment | Structured Output Mode |
+|---|---|---|---|
+| `studio_planner` | `claude-fable-5-1` | `claude-opus-5` | Strict JSON Schema (`DesignPlanV2`) with prompt cache prefix |
+| `studio_critic` | `claude-fable-5-1` | `claude-opus-5` | Multimodal Vision + JSON Schema (`CritiqueResult`) |
+| `studio_judge` | `claude-fable-5-1` | `claude-opus-5` | Multimodal Pairwise Tournament + JSON Schema |
+| `studio_art_generator` | `gemini-3-pro-image` (Nano Banana Pro) | Procedural SVG Motifs (`motifs.ts`) | Image generation endpoint; SynthID + $\Delta E2000$ validation |
+
+### Evaluation Protocol & Golden Harness
+- **Golden Brief Corpus**: 24 authentic KAAE institutional briefs (`packages/evals/src/design-studio/briefs/`) spanning 12 English, 8 Sorani Kurdish, and 4 mixed-language requirements across standard aspect ratios (`1080x1350`, `1080x1080`, `1080x1920`, `1240x1754`, `1920x1080`).
+- **Offline CI Runner**: Fast, deterministic mock evaluation suite (`offline-runner.ts`) integrated into standard `pnpm test` verifying D1–D8 evaluation pipeline invariants without external network dependencies.
+- **Statistical Confidence**: `ratings-intake.ts` computes 10,000-resample bootstrap 95% confidence intervals and Spearman rank correlation ($\rho$) for judge vs. human preference alignment.
+- **Position Bias Protection**: Tournament matches execute bidirectional presentation swaps (`Candidate A vs B` and `Candidate B vs A`). Asymmetric verdicts are logged as position-bias conflicts.
+

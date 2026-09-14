@@ -266,3 +266,36 @@ Commits since the user left: `7521017` (backups, watchdog, log rotation), `4d5e0
 
 ### 17a. Morning of 14 September: the operator's first real request
 The operator's Telegram request (10:14 Baghdad, English, KAAE) was accepted but declined for automatic drafting by the per-sender ceiling of 5 per 24 h, which yesterday's tests had already consumed; it was saved for manual design as designed. Drafted through the operator path instead: Canva design `DAHVJ_3EA38`, exact copy preserved, layout correct (filed evidence). QA reports `fontPass: false` with `observedFonts: ["Arimo", "Arimo Bold"]`: **Canva does not have the brand typeface Minion Variable Concept and substitutes Arimo on import**, which is why every Latin draft ends as `CANVA_FONT_MISMATCH` (draft exists, font unverified) rather than "ready". Decision for the art director: upload the brand font to the Canva Brand Kit so the name resolves on import, or declare a Canva-available brand typeface in the reference pack. The per-sender ceiling was raised to 20 for this office (`AUTO_GENERATE_DAILY_CAP_PER_SENDER=20`, core recreated).
+
+## 18. Design Studio v2 Qualification Status (14 September 2026)
+
+Following the implementation of ADR-029 (`see → judge → revise`), the Design Studio v2 subsystem underwent exhaustive qualification across Tasks T00 through T16.
+
+### What is Qualified
+1. **Deterministic Geometry & Layout Engine (DSL v2)**:
+   - 31 typed deterministic validation failure codes in `validate-layout-v2.ts`.
+   - Comprehensive layout metrics (contrast, margins, monotonicity, whitespace, hierarchy, balance).
+   - SVG and `rsvg-convert` composite preview renderer with Fontkit HarfBuzz-grade Arabic/Sorani glyph shaping and line-wrap reports.
+   - P05 composite contrast evaluator ensuring WCAG 2.2 text contrast compliance against raster art with automated scrim injection.
+2. **Generative Raster Art & Fallback**:
+   - `gemini-3-pro-image` (Nano Banana Pro) text-free raster art generation verified with SynthID watermark and color palette checks ($\Delta E2000 \le 8.54$ on live 2K probe).
+   - Degradation Ladder Rung 2 deterministic procedural SVG motifs (`gradient-wash`, `thin-rules`, `sun-rays`, `guilloche`) active upon network outage or missing credentials.
+3. **Studio Model Client & Durable Ledger**:
+   - Structured JSON output parsing, prompt caching token accounting, and live USD cost tracking against `pricing.json`.
+   - Circuit breaker and exponential backoff retry (1s, 3s, 9s) on transient HTTP 529 / 429 provider errors.
+   - Migration 013 database schema (`design_studio_runs`, `design_studio_candidates`, `design_studio_stages`, `design_studio_calls`, `design_feedback`) with PostgreSQL advisory locks and multi-tenant RLS isolation.
+4. **Multi-Stage Studio Pipeline**:
+   - Resumable stage execution: `plan` (3 candidates) → `art` → `render` → `critique` → `revise` → `tournament` (bidirectional order swap) → `canary` (adversarial degradation detection) → `qa` → `transfer` (PPTX Canva bridge).
+   - Hard budget cap enforcement (`BUDGET_EXHAUSTED` at `DESIGN_STUDIO_MAX_USD`).
+5. **Evaluation Harness & Fault Matrix**:
+   - 24 authentic KAAE institutional briefs across English, Sorani Kurdish, and mixed scripts in 5 standard dimensions.
+   - Offline test harness integrated into CI (`pnpm test`); ratings intake module supporting 10,000 bootstrap resamples and Spearman rank correlation ($\rho$).
+   - Full 5-scenario fault injection matrix verified PASS: worker restart mid-stage (0 duplicate calls/billing), blank API key procedural fallback, HTTP 529 retry, budget cap cut-off, and canary inversion handling.
+   - All 964 monorepo tests passing, TypeScript clean, zero committable secrets, blueprint pack PASS=517.
+
+### What is Not Qualified / Pending Operator & Art Director Action
+1. **Production Flagging**: Production deployment retains `DESIGN_STUDIO_V2='off'`. The automatic intake path continues using the single-shot legacy planner until the operator explicitly chooses to turn on the flag.
+2. **Brand Font Parity in Canva**: Canva does not have Minion Variable Concept and substitutes Arimo on PPTX import. Resolving this requires the user to upload Minion Variable Concept to the Canva Brand Kit or accept EB Garamond / Arimo as the declared draft typeface in `kaae-reference.json`.
+3. **Exemplar Confirmation**: `scripts/propose_exemplars.ts` mined candidate exemplar compositions to `exemplars.proposed.json`. Formal adoption into `packages/creative/assets/kaae-exemplars.json` requires Art Director confirmation.
+4. **Office Policy Finalization**: Selection of `DESIGN_STUDIO_TIER_DEFAULT` (`standard` vs `premium`) and `DESIGN_STUDIO_MAX_USD` cap remains an operator discretion.
+

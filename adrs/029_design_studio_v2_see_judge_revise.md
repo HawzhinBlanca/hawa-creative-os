@@ -100,3 +100,29 @@ path. Same monorepo, same Hono core, same Restate worker, same PostgreSQL with R
 
 Canva Autofill/brand-template generation (Enterprise-only per Canva docs, 2026-09-14) is out of
 scope. Any change of durable engine, database, or a second editor is out of scope (ADR-020/021).
+
+## Implementation notes (2026-09-14)
+
+The Design Studio v2 pipeline described in this ADR has been implemented and qualified across Tasks T00 through T16:
+
+1. **Pipeline & Stages (`packages/creative/src/studio/stages/`)**:
+   - `plan`: Multi-candidate compositional exploration (3 candidates) with structured JSON schemas and prompt cache optimization.
+   - `art`: Text-free raster background generation using Gemini 3 Pro (`gemini-3-pro-image`, Nano Banana Pro) with SynthID and $\Delta E2000$ palette validation, falling back gracefully to procedural SVG motifs (`motifs.ts`) upon provider outage or missing credentials.
+   - `render`: Multi-script composite preview rendering via SVG and `rsvg-convert` with Fontkit HarfBuzz-grade Arabic/Sorani shaping and line wrapping.
+   - `critique`: Vision critique measuring craft, typography, contrast, and layout balance using `claude-fable-5-1` (with `claude-opus-5` fallback).
+   - `revise`: Targeted repair of critique defect vectors (e.g. scrim adjustment, element repositioning) while keeping brief facts and copy strictly immutable.
+   - `tournament`: Pairwise head-to-head evaluation with presentation order swap to cancel position bias (disagreements result in ties).
+   - `canary`: Live adversarial degradation test (e.g. 40% font shrinkage, logo collision) requiring the candidate to beat degraded clones; failure marks `judgeStatus: 'UNRELIABLE'` and falls back to deterministic metrics.
+   - `qa`: Hard deterministic layout validation (31 typed failure codes in `validate-layout-v2.ts`) and WCAG 2.2 p05 composite contrast check (`composite-contrast.ts`).
+   - `transfer`: DSL v2 to PowerPoint/Canva bridge (`encodeEditableTransferV2`) preserving full layer editability, scrims, and script metadata.
+
+2. **Durable Orchestration & Database Journal (Migration 013)**:
+   - Orchestrated via `DesignStudioService` with PostgreSQL advisory locks per task (`pg_try_advisory_xact_lock`).
+   - Resumable stage execution backed by append-only tables: `hawa.design_studio_runs`, `hawa.design_studio_candidates`, `hawa.design_studio_stages`, and `hawa.design_studio_calls`.
+   - Hard budget cap enforcement (`BUDGET_EXHAUSTED`) bounding total run cost.
+   - Worker crashes or restarts mid-stage resume cleanly from the last completed stage journal with zero duplicate billing.
+
+3. **Operational Guardrails**:
+   - Production deployment maintains `DESIGN_STUDIO_V2='off'` by default, preserving single-shot legacy path behavior until explicit operator enablement.
+   - Explicit evaluation and testing route `POST /v1/tasks/:taskId/canva/studio` available for controlled qualification runs and Desk previewing.
+

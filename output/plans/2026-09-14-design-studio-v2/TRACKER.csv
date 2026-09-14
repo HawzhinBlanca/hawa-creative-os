@@ -16,6 +16,6 @@ T13,Worker integration + flag + status notes + PNG delivery + parity,COMPLETED,o
 T14,Feedback table + exemplar proposal,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T14_EXEMPLARS.md,REJECTED,heuristic ranking labelled as Fable vision; no receipts; stray root exemplars.proposed.json
 T15,Evaluation harness (offline + live + ratings intake),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T15_EVAL.md,,
 T16,Fault injection proofs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T16_FAULTS.md,,
-T17,Docs (ADR notes + runbook + addenda + review section 18),NOT_STARTED,,,
+T17,Docs (ADR notes + runbook + addenda + review section 18),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T17_DOCS.md,,
 T18,Deploy flag-off + zero-change proof + 24-brief live run + blind pairs,NOT_STARTED,,,
 T19,Proof bundle + reality checks + return message,NOT_STARTED,,,

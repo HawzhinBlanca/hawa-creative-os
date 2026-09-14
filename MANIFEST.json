@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-14T20:29:28Z",
+  "generatedAt": "2026-09-14T20:32:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -209,8 +209,8 @@
     },
     {
       "path": "adrs/029_design_studio_v2_see_judge_revise.md",
-      "sha256": "6b957db8d20aa5b5b408e7f8aae52e46bb1f2e6fe96e29e549f865b322a68296",
-      "bytes": 7471
+      "sha256": "b475d3a34c773a89fdf69ad445fa201b59940c827b945e24b96e648d0f2b6931",
+      "bytes": 10128
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -434,8 +434,8 @@
     },
     {
       "path": "docs/05_CREATIVE_ENGINE.md",
-      "sha256": "a6a72be9cf87127f25f62ca33d424bb955d201e41624f9e9786e4e58523cb306",
-      "bytes": 7057
+      "sha256": "ad629853b83ac2649712da57252a31ec87210feeb0b7591c60200b15204cf79f",
+      "bytes": 8948
     },
     {
       "path": "docs/06_EDITABLE_DOCUMENT_STRATEGY.md",
@@ -444,8 +444,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "69d13caccdb1b5ba387701f2f7a5a563e882f775f9cfbd4870cde159aab137d9",
-      "bytes": 5924
+      "sha256": "f3e49001518a6aabcdcf866a4d3bfd26da6854d4bddecba3602702dec47be743",
+      "bytes": 7643
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -499,8 +499,8 @@
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
-      "sha256": "d546f5afe42d462902271eb004a123eb61e680a8d13660366edb87d8473d2034",
-      "bytes": 3562
+      "sha256": "30afd10f6b7eafc35efed9e60c9d2a1de078ff1a4e5bc5bcd65e2c8a18bc8b02",
+      "bytes": 4966
     },
     {
       "path": "docs/19_OBSERVABILITY.md",
@@ -534,8 +534,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "a879e7d6cb4e337ace398bf314f5b098fefa7f0dee0ce13b04f99a44199348c8",
-      "bytes": 10827
+      "sha256": "d8f2ba435b6475ab9f410b6be915e9bd40661c6a49944096b9f05e50b07d7166",
+      "bytes": 12582
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",

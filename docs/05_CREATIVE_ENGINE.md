@@ -187,3 +187,27 @@ Replay is evidence and reproducibility—not a promise that stochastic model out
 ## 12. Quality principle
 
 The creative engine is permitted to be adventurous in composition and imagery. It is never permitted to be adventurous with facts, exact copy, client identity, logos, permissions, destinations, or approval state.
+
+## 13. Design Studio v2 Addendum: The `see → judge → revise` Loop
+
+Design Studio v2 (ADR-029) elevates the creative engine from a single-shot layout generator to a multi-stage iterative visual synthesis loop:
+
+```mermaid
+flowchart TD
+  Plan[1. Multi-Candidate Planning DSL v2] --> Art[2. Raster Art Generation & Motifs]
+  Art --> Render[3. Multi-Script Composite Rendering]
+  Render --> Critique[4. Multimodal Vision Critique]
+  Critique --> Revise[5. Targeted Element Revision]
+  Revise --> Tourn[6. Head-to-Head Tournament with Swap]
+  Tourn --> Canary[7. Adversarial Degradation Canary]
+  Canary --> QA[8. Hard Deterministic & WCAG QA]
+  QA --> Transfer[9. Canva Editable Transfer v2]
+```
+
+### Invariants Preserved
+1. **Fact & Copy Immutability**: Text copy is placed strictly by index from the locked brief. Models never rewrite, summarize, or translate factual copy during design synthesis.
+2. **Text-Free Raster Art**: Generative background art (`gemini-3-pro-image`, Nano Banana Pro) is strictly conditioned to contain no letters, numbers, emblems, flags, or human faces/persons. Synthetic imagery is validated for brand color alignment ($\Delta E2000 \le 12.0$) and watermarked with SynthID.
+3. **Contrast Scrims**: Backgrounds automatically receive dynamic scrims evaluated by `composite-contrast.ts` ensuring all text boxes meet WCAG 2.2 contrast requirements against the composite bitmap.
+4. **Position Bias Cancellation**: The vision judge evaluates candidates in pairwise matches where presentation order (Left vs Right) is systematically swapped; contradictory verdicts result in a tie rather than false confidence.
+5. **Adversarial Canary**: Every winning candidate must beat a deliberately degraded twin (40% font shrinkage or logo overlap). If the vision judge fails this check, `judgeStatus` becomes `UNRELIABLE` and selection falls back to objective layout metrics.
+

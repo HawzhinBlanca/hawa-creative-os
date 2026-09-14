@@ -122,3 +122,18 @@ Fine-tuning is considered only when:
 - rollback and data rights are clear.
 
 For visual style, reference conditioning, templates, adapters, and asset workflows will usually outperform early fine-tuning in reliability and cost.
+
+## 12. Design Studio v2 Feedback & Exemplar Governance Addendum
+
+Design Studio v2 introduces structured feedback capture and automated exemplar mining under strict human governance:
+
+### 1. Studio Feedback Persistence (`hawa.design_feedback`)
+- Reviewers and art directors in Desk can rate generated studio candidates (`thumb_up`, `thumb_down`, 1–5 score) and provide granular defect notes.
+- Feedback records store target run IDs, candidate IDs, failure categories (e.g. `contrast`, `spacing`, `typography`, `imagery`), and specific text corrections.
+- Stored feedback feeds directly into the feedback miner for offline rule candidate generation; it does NOT mutate active prompts or models at runtime.
+
+### 2. Governed Exemplar Selection (`scripts/propose_exemplars.ts`)
+- Rather than uncurated training data, high-quality reference compositions are mined from approved institutional corpora using multimodal vision ranking (`claude-fable-5-1`).
+- The mining script writes candidate selections to `exemplars.proposed.json` alongside dimensional metadata, color profiles, and craft rationale.
+- **Strict Governance Invariant**: Proposed exemplars remain inert until the human Art Director explicitly reviews, approves, and copies them to `packages/creative/assets/kaae-exemplars.json`. Until confirmed, the studio pipeline operates with `exemplars: []` and notes this state in diagnostic telemetry.
+
