@@ -150,4 +150,115 @@ describe('FeedbackMiner: Governed Learning & Continuous Feedback Loop (B-055, B-
     expect(dismissed).toBe(true);
     expect(candidate.status).toBe('DISMISSED');
   });
+
+  describe('Design Studio Feedback Table Reader (T14, ADR-029)', () => {
+    it('ingests approve verdict with notes into a PROPOSED candidate rule', () => {
+      const proposals = miner.ingestDesignFeedback({
+        id: 'fb-001',
+        taskId: 'task-studio-101',
+        clientId: 'client-kaae',
+        actorId: 'actor-director-1',
+        actorRole: 'art_director',
+        source: 'desk',
+        verdict: 'approve',
+        rating: 9,
+        notes: 'Ensure deep navy background with gold accents for presidential statements',
+      });
+
+      expect(proposals).toHaveLength(1);
+      const rule = proposals[0];
+      expect(rule.status).toBe('PROPOSED');
+      expect(rule.category).toBe('palette');
+      expect(rule.ruleText).toContain('deep navy background');
+      expect(rule.provenance.taskId).toBe('task-studio-101');
+      expect(rule.examples.positiveExampleTaskIds).toContain('task-studio-101');
+      expect(rule.examples.negativeExampleTaskIds).toHaveLength(0);
+    });
+
+    it('ingests reject verdict and ensures rejected design is never positive evidence', () => {
+      // First reject the task
+      miner.ingestDesignFeedback({
+        id: 'fb-002',
+        taskId: 'task-bad-001',
+        clientId: 'client-kaae',
+        actorId: 'actor-director-1',
+        source: 'desk',
+        verdict: 'reject',
+        rating: 3,
+        notes: 'Font size too small and unreadable on mobile screens',
+      });
+
+      expect(miner.isTaskRejected('task-bad-001')).toBe(true);
+
+      const rules = miner.getCandidateRules('client-kaae');
+      const typoRule = rules.find((r) => r.category === 'typography');
+      expect(typoRule).toBeDefined();
+      expect(typoRule?.examples.negativeExampleTaskIds).toContain('task-bad-001');
+      expect(typoRule?.examples.positiveExampleTaskIds).not.toContain('task-bad-001');
+
+      // Subsequent approve on same task must not mark it as positive
+      miner.ingestDesignFeedback({
+        id: 'fb-003',
+        taskId: 'task-bad-001',
+        clientId: 'client-kaae',
+        actorId: 'actor-director-1',
+        source: 'desk',
+        verdict: 'approve',
+        rating: 8,
+      });
+
+      expect(typoRule?.examples.positiveExampleTaskIds).not.toContain('task-bad-001');
+    });
+
+    it('ingests revise verdict notes and categorizes layout guidance', () => {
+      const proposals = miner.ingestDesignFeedback({
+        id: 'fb-004',
+        taskId: 'task-studio-102',
+        clientId: 'client-kaae',
+        actorId: 'actor-director-2',
+        source: 'desk',
+        verdict: 'revise',
+        notes: 'Maintain at least 48px margin clearance around the seal',
+      });
+
+      expect(proposals).toHaveLength(1);
+      expect(proposals[0].category).toBe('layout');
+      expect(proposals[0].status).toBe('PROPOSED');
+    });
+
+    it('detects conflicts when proposed rule contradicts existing promoted rules', () => {
+      // Establish existing rule
+      miner.proposeExplicitRule({
+        clientId: 'client-kaae',
+        taskId: 'task-prior-001',
+        title: 'Top Alignment Rule',
+        category: 'layout',
+        ruleText: 'Always align the title to the top right of the canvas',
+        rationale: 'KAAE institutional standard',
+        actor: { id: 'dir-1', role: 'creative_director' },
+      });
+      const firstRule = miner.getCandidateRules('client-kaae')[0];
+      miner.promoteRule(firstRule.id, 'creative_director');
+
+      // Ingest conflicting feedback
+      const proposals = miner.ingestDesignFeedback({
+        id: 'fb-005',
+        taskId: 'task-studio-103',
+        clientId: 'client-kaae',
+        actorId: 'actor-director-1',
+        source: 'desk',
+        verdict: 'revise',
+        notes: 'Always align the title to the bottom left',
+      });
+
+      expect(proposals).toHaveLength(1);
+      expect(proposals[0].conflicts.length).toBeGreaterThan(0);
+      expect(proposals[0].conflicts[0]).toContain('conflicts with existing rule');
+
+      // Conflicting rule cannot be promoted
+      const promoResult = miner.promoteRule(proposals[0].id, 'creative_director');
+      expect(promoResult.promoted).toBe(false);
+      expect(promoResult.reason).toBe('CONFLICTING_RULES_PENDING');
+    });
+  });
 });

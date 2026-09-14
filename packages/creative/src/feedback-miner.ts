@@ -52,6 +52,22 @@ export interface RuleExamples {
   negativeExampleTaskIds: string[];
 }
 
+export interface DesignFeedbackRecord {
+  id: string;
+  tenantId?: string;
+  taskId: string;
+  clientId?: string;
+  runId?: string | null;
+  candidateId?: string | null;
+  actorId: string;
+  actorRole?: 'art_director' | 'creative_director' | 'operator';
+  source?: 'desk' | 'telegram' | 'import';
+  verdict: 'approve' | 'reject' | 'revise' | 'rating';
+  rating?: number | null;
+  notes?: string | null;
+  createdAt?: string;
+}
+
 export interface CandidateRuleProposal {
   id: string;
   clientId: string;
@@ -86,6 +102,164 @@ export class FeedbackMiner {
     actor: { id: string; role?: string; name?: string };
     recordedAt: string;
   }> = [];
+
+  /**
+   * Ingests human design feedback from hawa.design_feedback
+   * (e.g. verdicts from Desk Studio panel: approve, reject, revise, rating).
+   * Mines candidate rule proposals (status: 'PROPOSED') and updates
+   * positive/negative evidence stores.
+   */
+  public ingestDesignFeedback(
+    feedback: DesignFeedbackRecord | DesignFeedbackRecord[],
+    context?: { clientId?: string }
+  ): CandidateRuleProposal[] {
+    const records = Array.isArray(feedback) ? feedback : [feedback];
+    const newlyProposed: CandidateRuleProposal[] = [];
+
+    for (const record of records) {
+      const clientId =
+        record.clientId ||
+        context?.clientId ||
+        'c1000000-0000-4000-8000-000000000002';
+
+      const actor = {
+        id: record.actorId,
+        role: record.actorRole || 'art_director',
+      };
+
+      const notes = (record.notes || '').trim();
+      const verdict = record.verdict;
+      const rating = record.rating !== undefined ? record.rating : null;
+
+      // 1. Negative feedback handling (reject verdict or low rating <= 4)
+      if (verdict === 'reject' || (verdict === 'rating' && rating !== null && rating <= 4)) {
+        this.recordNegativeFeedback(
+          record.taskId,
+          clientId,
+          notes || `Studio design candidate rejected (rating: ${rating ?? 'N/A'})`,
+          actor
+        );
+      }
+
+      // 2. Positive feedback handling (approve verdict or high rating >= 8)
+      if (verdict === 'approve' || (verdict === 'rating' && rating !== null && rating >= 8)) {
+        if (!this.rejectedTaskIds.has(record.taskId)) {
+          for (const rule of this.candidateRules.values()) {
+            if (rule.clientId === clientId && !rule.examples.positiveExampleTaskIds.includes(record.taskId)) {
+              rule.examples.positiveExampleTaskIds.push(record.taskId);
+            }
+          }
+        }
+      }
+
+      // 3. Rule proposal mining from human operator notes
+      if (notes.length > 5) {
+        const lower = notes.toLowerCase();
+        let category: 'typography' | 'palette' | 'copy_token' | 'layout' = 'layout';
+        let title = 'Studio Composition Guideline';
+
+        if (
+          lower.includes('color') ||
+          lower.includes('palette') ||
+          lower.includes('gold') ||
+          lower.includes('navy') ||
+          lower.includes('contrast') ||
+          lower.includes('shade') ||
+          lower.includes('dark') ||
+          lower.includes('apca')
+        ) {
+          category = 'palette';
+          title = 'Studio Palette & Contrast Standard';
+        } else if (
+          lower.includes('font') ||
+          lower.includes('typeface') ||
+          lower.includes('garamond') ||
+          lower.includes('cairo') ||
+          lower.includes('noto') ||
+          lower.includes('serif') ||
+          lower.includes('size') ||
+          lower.includes('line-height') ||
+          lower.includes('kerning') ||
+          lower.includes('diacritic')
+        ) {
+          category = 'typography';
+          title = 'Studio Typographic Hierarchy Standard';
+        } else if (
+          lower.includes('copy') ||
+          lower.includes('text') ||
+          lower.includes('headline') ||
+          lower.includes('slogan') ||
+          lower.includes('spelling') ||
+          lower.includes('phrase')
+        ) {
+          category = 'copy_token';
+          title = 'Studio Standardized Copy Phrase';
+        } else {
+          category = 'layout';
+          title = 'Studio Layout & Grid Standard';
+        }
+
+        const existingPromoted = this.getPromotedRules(clientId);
+        const conflicts = this.detectConflicts(notes, existingPromoted);
+
+        const id = `crule_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+        const sha256Digest = crypto
+          .createHash('sha256')
+          .update(`${clientId}:${record.id || record.taskId}:${notes}`)
+          .digest('hex');
+
+        const proposal: CandidateRuleProposal = {
+          id,
+          clientId,
+          title,
+          category,
+          ruleText: notes,
+          rationale: `Derived from human ${verdict} feedback in Design Studio (${record.source || 'desk'})`,
+          frequency: 1,
+          evidenceTaskIds: [record.taskId],
+          confidence: verdict === 'approve' ? 0.85 : 0.75,
+          status: 'PROPOSED',
+          scope: 'client_scoped',
+          explicitness: 'explicit_operator_instruction',
+          provenance: {
+            taskId: record.taskId,
+            clientId,
+            sourcePlatform: `studio_${record.source || 'desk'}`,
+            feedbackId: record.id,
+            actor,
+            recordedAt: record.createdAt || new Date().toISOString(),
+          },
+          examples: {
+            positiveExampleTaskIds:
+              verdict === 'approve' && !this.rejectedTaskIds.has(record.taskId) ? [record.taskId] : [],
+            negativeExampleTaskIds:
+              verdict === 'reject' || (rating !== null && rating <= 4) ? [record.taskId] : [],
+          },
+          conflicts,
+          sha256Digest,
+          dataLineage: 'client_owned',
+        };
+
+        const ruleKey = `${clientId}:feedback:${proposal.sha256Digest.substring(0, 16)}`;
+        if (!this.candidateRules.has(ruleKey)) {
+          this.candidateRules.set(ruleKey, proposal);
+          newlyProposed.push(proposal);
+        } else {
+          const existing = this.candidateRules.get(ruleKey)!;
+          existing.frequency += 1;
+          if (!existing.evidenceTaskIds.includes(record.taskId)) {
+            existing.evidenceTaskIds.push(record.taskId);
+          }
+        }
+      }
+    }
+
+    return newlyProposed;
+  }
+
+  public isTaskRejected(taskId: string): boolean {
+    return this.rejectedTaskIds.has(taskId);
+  }
 
   /**
    * Computes exact deltas between an initial model draft and final human approved artboard.

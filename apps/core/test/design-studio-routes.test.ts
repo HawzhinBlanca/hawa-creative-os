@@ -344,7 +344,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
           runId,
           verdict: 'approve',
           rating: 9,
-          notes: 'Excellent hierarchy and color harmony',
+          notes: 'Excellent hierarchy and color harmony with deep navy',
           source: 'desk',
         }),
       });
@@ -355,6 +355,21 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.status).toBe('recorded');
       expect(data.verdict).toBe('approve');
       expect(data.rating).toBe(9);
+      expect(data.rulesProposed).toBeGreaterThanOrEqual(1);
+    });
+
+    it('GET /v1/tasks/:taskId/design-feedback returns list of recorded feedback (200)', async () => {
+      const res = await app.request(`/v1/tasks/${taskId}/design-feedback`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.feedback).toBeInstanceOf(Array);
+      expect(data.count).toBeGreaterThanOrEqual(1);
+      expect(data.feedback[0].taskId).toBe(taskId);
+      expect(data.feedback[0].verdict).toBe('approve');
     });
 
     it('Candidate image streaming returns 404 if bytes not yet rendered', async () => {

@@ -423,4 +423,28 @@ export class DesignStudioRepository {
     }
     return await query.execute();
   }
+
+  async listFeedbackForRun(runId: string, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db)
+      .selectFrom('design_feedback')
+      .selectAll()
+      .where('run_id', '=', runId)
+      .orderBy('created_at', 'desc');
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.execute();
+  }
+
+  async listRecentFeedback(limit = 100, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db)
+      .selectFrom('design_feedback')
+      .selectAll()
+      .orderBy('created_at', 'desc')
+      .limit(limit);
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.execute();
+  }
 }

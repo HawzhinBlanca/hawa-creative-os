@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-14T09:40:48Z",
+  "generatedAt": "2026-09-14T11:09:54Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 182,
+  "fileCount": 184,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -593,6 +593,11 @@
       "bytes": 1708
     },
     {
+      "path": "exemplars.proposed.json",
+      "sha256": "98d73f83b936f119216f7c4902c0dd47ffa89caa50922b044c50f446e04ec5ba",
+      "bytes": 51153
+    },
+    {
       "path": "plans/RACI.csv",
       "sha256": "bb4f02116d660f5fc3258aad63b07dd2fcf6a095f33f04a946db8869e26aa3a1",
       "bytes": 2166
@@ -811,6 +816,11 @@
       "path": "scripts/process_kaae_logo.ts",
       "sha256": "f374adfbfed49387dea951637491de45f5f923a3cbb93695a0d6ce1de7c8e590",
       "bytes": 2964
+    },
+    {
+      "path": "scripts/propose_exemplars.ts",
+      "sha256": "86cec95dd17d2020dada0963f96fbec0f3dd8903ac11947ed7bcc97825514dfc",
+      "bytes": 16459
     },
     {
       "path": "scripts/publish_kaae_omnichannel.ts",

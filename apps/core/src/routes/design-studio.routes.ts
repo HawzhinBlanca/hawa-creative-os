@@ -6,6 +6,7 @@ import {
 } from '../services/design-studio/index.js';
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
 import { DesignStudioRepository } from '@hawa/db';
+import { globalFeedbackMiner } from '@hawa/creative';
 
 export function registerDesignStudioRoutes(
   ctx: RouteContext,
@@ -332,15 +333,56 @@ export function registerDesignStudioRoutes(
         notes: body.notes || null,
       });
 
+      // Feed verdict into globalFeedbackMiner (governed learning loop)
+      const proposedRules = globalFeedbackMiner.ingestDesignFeedback({
+        id: feedbackRow.id,
+        tenantId: feedbackRow.tenant_id,
+        taskId: feedbackRow.task_id,
+        runId: feedbackRow.run_id,
+        candidateId: feedbackRow.candidate_id,
+        actorId: feedbackRow.actor_id,
+        source: feedbackRow.source as any,
+        verdict: feedbackRow.verdict as any,
+        rating: feedbackRow.rating !== null ? Number(feedbackRow.rating) : null,
+        notes: feedbackRow.notes,
+        createdAt: feedbackRow.created_at ? new Date(feedbackRow.created_at).toISOString() : undefined,
+      });
+
       return c.json(
         {
           id: feedbackRow.id,
           status: 'recorded',
           verdict: feedbackRow.verdict,
-          rating: feedbackRow.rating,
+          rating: feedbackRow.rating !== null ? Number(feedbackRow.rating) : null,
+          rulesProposed: proposedRules.length,
         },
         201
       );
+    })
+  );
+
+  // 7b. GET /tasks/:taskId/design-feedback — list recorded human feedback for a task
+  ctx.registerRoute(
+    'get',
+    '/tasks/:taskId/design-feedback',
+    protect(async (c, s, _svc, r) => {
+      const taskId = c.req.param('taskId');
+      const rows = await r.listFeedbackForTask(taskId, s.tenantId);
+      return c.json({
+        feedback: rows.map((row) => ({
+          id: row.id,
+          taskId: row.task_id,
+          runId: row.run_id,
+          candidateId: row.candidate_id,
+          actorId: row.actor_id,
+          source: row.source,
+          verdict: row.verdict,
+          rating: row.rating ? parseFloat(row.rating.toString()) : null,
+          notes: row.notes,
+          createdAt: row.created_at,
+        })),
+        count: rows.length,
+      });
     })
   );
 
