@@ -103,6 +103,15 @@ export interface ParityResult {
   copyVisibleIdentical: boolean;
 }
 
+export type CopyBlock = { text: string; script: 'latin' | 'arabic' | 'mixed' };
+
+export interface ReferencePack {
+  palette: string[];
+  referenceFonts?: { latin?: string; arabic?: string };
+  exemplars?: Array<{ path: string; label: string; sha256?: string }>;
+  [key: string]: unknown;
+}
+
 export interface StageContext {
   runId: string;
   tenantId: string;
@@ -113,13 +122,8 @@ export interface StageContext {
   height: number;
   tier: 'standard' | 'premium';
   instructions: string;
-  copyBlocks: Array<{ text: string; script: 'latin' | 'arabic' | 'mixed' }>;
-  referencePack: {
-    palette: string[];
-    referenceFonts?: { latin?: string; arabic?: string };
-    exemplars?: Array<{ path: string; label: string; sha256?: string }>;
-    [key: string]: unknown;
-  };
+  copyBlocks: CopyBlock[];
+  referencePack: ReferencePack;
   promotedRules: string;
   latinFont: string;
   arabicFont: string;

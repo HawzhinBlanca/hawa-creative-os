@@ -151,7 +151,7 @@ export class DesignStudioRepository {
       planId?: string | null;
       diagnostic?: string | null;
       budget?: Record<string, unknown>;
-      stages?: Record<string, unknown>[];
+      stages?: Record<string, unknown> | Record<string, unknown>[];
     },
     trx?: Kysely<Database>
   ) {
