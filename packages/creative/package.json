@@ -19,7 +19,8 @@
     "@hawa/contracts": "workspace:*",
     "@hawa/domain": "workspace:*",
     "@hawa/integrations": "workspace:*",
-    "pptxgenjs": "4.0.1"
+    "pptxgenjs": "4.0.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "fflate": "0.8.3"

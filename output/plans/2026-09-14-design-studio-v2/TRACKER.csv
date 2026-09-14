@@ -2,7 +2,7 @@ task,title,status,proof_path,lead_verdict,lead_notes
 T00,Read and reconcile,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T00_READ_LOG.md,,
 T01,Baseline gates and v1 comparison runs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T01_BASELINE.md,,
 T02,Fonts (EB Garamond + Noto Sans Arabic + private dir + image fc-list),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T02_FONTS.md,,
-T03,Layout DSL v2 + validator + metrics,NOT_STARTED,,,
+T03,Layout DSL v2 + validator + metrics,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T03_VALIDATOR.md,,
 T04,Local renderer (fontkit wrapping + RTL + goldens),NOT_STARTED,,,
 T05,Composite p05 contrast,NOT_STARTED,,,
 T06,Procedural motifs,NOT_STARTED,,,
