@@ -28,3 +28,4 @@ exports/
 scratch/
 *staged-exports/
 infra/backup/snapshots/
+packages/creative/assets/fonts/private/

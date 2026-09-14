@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "families": {
+    "EB Garamond": {
+      "name": "EB Garamond",
+      "standInFor": "Minion Variable Concept",
+      "fidelity": "stand-in",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-EBGaramond.txt",
+      "files": {
+        "regular": "assets/fonts/EBGaramond-Regular.ttf",
+        "semiBold": "assets/fonts/EBGaramond-SemiBold.ttf",
+        "bold": "assets/fonts/EBGaramond-Bold.ttf",
+        "italic": "assets/fonts/EBGaramond-Italic.ttf"
+      }
+    },
+    "Minion Variable Concept": {
+      "name": "Minion Variable Concept",
+      "fidelity": "exact",
+      "private": true,
+      "files": {
+        "regular": "assets/fonts/private/MinionVariableConcept-Roman.otf"
+      }
+    },
+    "Noto Sans Arabic": {
+      "name": "Noto Sans Arabic",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-NotoSansArabic.txt",
+      "script": "arabic",
+      "files": {
+        "regular": "assets/fonts/NotoSansArabic-Regular.ttf",
+        "bold": "assets/fonts/NotoSansArabic-Bold.ttf"
+      }
+    }
+  }
+}
