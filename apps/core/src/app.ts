@@ -133,6 +133,8 @@ import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter
 import { EvaluationRunner } from '@hawa/evals';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
+import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
+import { type DesignStudioServiceOptions, DesignStudioService } from './services/design-studio/index.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
@@ -198,6 +200,8 @@ const channelKillSwitches = {
 export interface CreateAppOptions {
   canvaOptions?: CanvaServiceOptions;
   canvaConnectService?: CanvaConnectService;
+  designStudioOptions?: DesignStudioServiceOptions;
+  designStudioService?: DesignStudioService;
   db?: Kysely<Database>;
   publicationRepo?: PublicationRepository;
   telegramActionTokenService?: TelegramActionTokenService;
@@ -1343,6 +1347,7 @@ export function createApp(options?: CreateAppOptions) {
 
   registerSystemRoutes(routeContext);
   registerCanvaRoutes(routeContext, options?.canvaOptions);
+  registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
 
   // Authenticated Session Endpoints (H01, FR-076, FR-078)
   registerRoute('get', '/auth/session', async (c: any) => {

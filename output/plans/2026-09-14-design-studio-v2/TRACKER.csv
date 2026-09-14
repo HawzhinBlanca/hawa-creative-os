@@ -11,7 +11,7 @@ T08,Studio model client (structured outputs + caching + receipts + retry + break
 T09,Migration 013 + RLS + immutability + repositories,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T09_DB.md,,
 T10,Stages (brief..transfer v2),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T10_STAGES.md,,
 T11,Orchestrator (journal + resume + budget + ladder),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T11_ORCHESTRATOR.md,,
-T12,Routes + Desk Studio panel,NOT_STARTED,,,
+T12,Routes + Desk Studio panel,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T12_ROUTES.md,,
 T13,Worker integration + flag + status notes + PNG delivery + parity,NOT_STARTED,,,
 T14,Feedback table + exemplar proposal,NOT_STARTED,,,
 T15,Evaluation harness (offline + live + ratings intake),NOT_STARTED,,,

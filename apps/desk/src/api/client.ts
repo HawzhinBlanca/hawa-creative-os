@@ -179,6 +179,70 @@ class HawaApiClient {
     },
   };
 
+  public readonly studio = {
+    start: (
+      taskId: string,
+      input: {
+        width: number;
+        height: number;
+        tier?: string;
+        imagery?: string;
+        previews?: number;
+        holdForSelection?: boolean;
+      },
+      key: string
+    ) =>
+      this.request<{ runId: string; status: string; created: boolean }>(
+        `/tasks/${encodeURIComponent(taskId)}/canva/studio`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(input),
+        }
+      ),
+    resume: (taskId: string, runId: string) =>
+      this.request<any>(
+        `/tasks/${encodeURIComponent(taskId)}/canva/studio/${encodeURIComponent(runId)}/resume`,
+        {
+          method: 'POST',
+        }
+      ),
+    getRun: (taskId: string, runId: string) =>
+      this.request<any>(
+        `/tasks/${encodeURIComponent(taskId)}/canva/studio/${encodeURIComponent(runId)}`
+      ),
+    select: (taskId: string, runId: string, candidateId: string) =>
+      this.request<any>(
+        `/tasks/${encodeURIComponent(taskId)}/canva/studio/${encodeURIComponent(runId)}/select`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ candidateId }),
+        }
+      ),
+    abandon: (taskId: string, runId: string, reason?: string) =>
+      this.request<any>(
+        `/tasks/${encodeURIComponent(taskId)}/canva/studio/${encodeURIComponent(runId)}/abandon`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        }
+      ),
+    feedback: (
+      taskId: string,
+      payload: {
+        runId?: string;
+        candidateId?: string;
+        verdict: 'approve' | 'reject' | 'revise' | 'rating';
+        rating?: number;
+        notes?: string;
+      }
+    ) =>
+      this.request<any>(`/tasks/${encodeURIComponent(taskId)}/design-feedback`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+  };
+
   public readonly tasks = {
     getEditorUrl: (taskId: string) => this.request<{ url: string }>(`/tasks/${encodeURIComponent(taskId)}/canva/editor`),
     bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {

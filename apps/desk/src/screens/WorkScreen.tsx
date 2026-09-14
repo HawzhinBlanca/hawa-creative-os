@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { eventStream } from '../services/eventStream.js';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
+import { StudioPanel } from '../components/StudioPanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
 import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
 
@@ -846,6 +847,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     <button className="btn" type="submit" disabled={actionLoading || !canvaLinkInput.trim()}>Save Canva link</button>
                   </form>
                 </details>
+                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} />
                 <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} />
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
