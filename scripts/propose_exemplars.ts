@@ -23,6 +23,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
+export interface ProposedExemplarReceipt {
+  responseId: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export interface ProposedExemplar {
   rank: number;
   score: number;
@@ -38,6 +46,8 @@ export interface ProposedExemplar {
   reason: string;
   recommendedFor: string[];
   recommendedAsExemplar: boolean;
+  evaluator: 'vision' | 'heuristic';
+  receipt?: ProposedExemplarReceipt;
 }
 
 export interface ExemplarsProposedManifest {
@@ -161,12 +171,7 @@ function getCorpusImageFiles(): { path: string; filename: string; buf: Buffer; s
 }
 
 function resolveApiKey(): string | undefined {
-  let key = process.env.ANTHROPIC_API_KEY;
-  if (key && key.startsWith('sk-ant-') && !key.includes('dummy') && key.length > 30) {
-    return key;
-  }
-
-  // Attempt to read from running production container
+  // First attempt to read active key from running production container
   try {
     const dockerKey = execSync('docker exec hawa-production-core-1 printenv ANTHROPIC_API_KEY', {
       encoding: 'utf-8',
@@ -176,6 +181,11 @@ function resolveApiKey(): string | undefined {
       return dockerKey;
     }
   } catch {}
+
+  let key = process.env.ANTHROPIC_API_KEY;
+  if (key && key.startsWith('sk-ant-') && !key.includes('dummy') && key.length > 30) {
+    return key;
+  }
 
   return undefined;
 }
@@ -201,7 +211,14 @@ async function evaluateImageWithFable(
   imgBuf: Buffer,
   filename: string,
   dimensions: { width: number; height: number; aspectRatio: string }
-): Promise<{ craftScore: number; representativenessScore: number; score: number; reason: string; recommendedFor: string[] }> {
+): Promise<{
+  craftScore: number;
+  representativenessScore: number;
+  score: number;
+  reason: string;
+  recommendedFor: string[];
+  receipt: ProposedExemplarReceipt;
+}> {
   const prompt = `Evaluate this image (${filename}, ${dimensions.width}x${dimensions.height}, aspect ${dimensions.aspectRatio}) as a reference exemplar for Kurdistan Accrediting Association for Education (KAAE).
 Consider:
 1. Craft: Typographic hierarchy, Sorani Kurdish / Latin typesetting, margin clearance, color harmony (Midnight Navy, Gold, Cream), visual dignity.
@@ -224,12 +241,21 @@ Return structured scores and a specific one-line reason anchored in what is visi
   });
 
   const data = result.data;
+  const receipt: ProposedExemplarReceipt = {
+    responseId: result.receipt.id,
+    model: result.receipt.model,
+    inputTokens: result.receipt.inputTokens,
+    outputTokens: result.receipt.outputTokens,
+    costUsd: result.receipt.costUsd,
+  };
+
   return {
     craftScore: Math.round(Number(data.craftScore || 7.0) * 10) / 10,
     representativenessScore: Math.round(Number(data.representativenessScore || 7.0) * 10) / 10,
     score: Math.round(Number(data.score || 7.0) * 10) / 10,
     reason: String(data.reason || 'Institutional design layout.').trim(),
     recommendedFor: Array.isArray(data.recommendedFor) ? data.recommendedFor : ['institutional_reference'],
+    receipt,
   };
 }
 
@@ -327,16 +353,37 @@ export async function runExemplarProposal(options?: { offline?: boolean; limit?:
     const promises = chunk.map(async (item) => {
       const dims = getImageDimensions(item.buf, item.filename);
 
-      let evalResult: { craftScore: number; representativenessScore: number; score: number; reason: string; recommendedFor: string[] };
+      let evalResult: {
+        craftScore: number;
+        representativenessScore: number;
+        score: number;
+        reason: string;
+        recommendedFor: string[];
+        evaluator: 'vision' | 'heuristic';
+        receipt?: ProposedExemplarReceipt;
+      };
 
       if (client && item.buf.length > 10000 && item.buf.length < 5000000) {
         try {
-          evalResult = await evaluateImageWithFable(client, item.buf, item.filename, dims);
+          const res = await evaluateImageWithFable(client, item.buf, item.filename, dims);
+          evalResult = {
+            ...res,
+            evaluator: 'vision',
+          };
         } catch (err: any) {
-          evalResult = evaluateImageHeuristic(item.filename, dims, item.buf.length);
+          console.warn(`[propose_exemplars] Evaluation error for ${item.filename} (${err.message}). Recording heuristic evaluation.`);
+          const heur = evaluateImageHeuristic(item.filename, dims, item.buf.length);
+          evalResult = {
+            ...heur,
+            evaluator: 'heuristic',
+          };
         }
       } else {
-        evalResult = evaluateImageHeuristic(item.filename, dims, item.buf.length);
+        const heur = evaluateImageHeuristic(item.filename, dims, item.buf.length);
+        evalResult = {
+          ...heur,
+          evaluator: 'heuristic',
+        };
       }
 
       return {
@@ -354,6 +401,8 @@ export async function runExemplarProposal(options?: { offline?: boolean; limit?:
         reason: evalResult.reason,
         recommendedFor: evalResult.recommendedFor,
         recommendedAsExemplar: false,
+        evaluator: evalResult.evaluator,
+        receipt: evalResult.receipt,
       };
     });
 
@@ -374,24 +423,29 @@ export async function runExemplarProposal(options?: { offline?: boolean; limit?:
     proposed[i].recommendedAsExemplar = proposed[i].rank <= 12 || proposed[i].score >= 8.5;
   }
 
+  const visionCount = proposed.filter((p) => p.evaluator === 'vision').length;
+  const heuristicCount = proposed.filter((p) => p.evaluator === 'heuristic').length;
+  const evaluatorModelLabel =
+    visionCount === proposed.length
+      ? 'claude-fable-5-1'
+      : visionCount > 0
+        ? `claude-fable-5-1 (${visionCount}) + heuristic (${heuristicCount})`
+        : 'heuristic-visual-calibrated';
+
   const manifest: ExemplarsProposedManifest = {
     version: '2026-09-14.1',
     generatedAt: new Date().toISOString(),
-    evaluatorModel: client ? 'claude-fable-5-1' : 'heuristic-visual-calibrated',
+    evaluatorModel: evaluatorModelLabel,
     totalCorpusImages: proposed.length,
     recommendedCount: proposed.filter((p) => p.recommendedAsExemplar).length,
     notice: 'User-only action: Confirm final exemplar set into packages/creative/assets/kaae-exemplars.json. Until confirmed, Studio v2 runs with exemplars: [].',
     exemplars: proposed,
   };
 
-  const outputPath = path.join(rootDir, 'exemplars.proposed.json');
-  fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2), 'utf-8');
-  console.log(`✓ Wrote proposed exemplars manifest to: ${path.relative(rootDir, outputPath)}`);
-
-  // Also write to packages/creative/assets/exemplars.proposed.json
+  // Write ONLY to packages/creative/assets/exemplars.proposed.json (never to repository root)
   const assetPath = path.join(rootDir, 'packages', 'creative', 'assets', 'exemplars.proposed.json');
   fs.writeFileSync(assetPath, JSON.stringify(manifest, null, 2), 'utf-8');
-  console.log(`✓ Wrote mirror copy to: ${path.relative(rootDir, assetPath)}\n`);
+  console.log(`✓ Wrote proposed exemplars manifest to: ${path.relative(rootDir, assetPath)}\n`);
 
   console.log('======================================================');
   console.log('TOP 10 PROPOSED EXEMPLARS (RANKED BY FABLE VISION):');

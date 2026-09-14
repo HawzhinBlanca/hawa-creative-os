@@ -292,6 +292,53 @@ describe('native Canva workflow',()=>{
     expect(sentBody.designStudio).toBe(true);
     expect(sentBody.studioOptions).toEqual({ tier: 'quality', previews: 2 });
   });
+
+  it('throws BINDING_MISMATCH when studio result lacks designId or differs from binding', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const studioInput = { ...input, designStudio: true };
+    const replies = [
+      { tenantId: 'tenant', clientId: 'client' }, // verify scope
+      { runId: 'run-studio-bad', status: 'briefing' }, // canva-studio-start
+      { runId: 'run-studio-bad', status: 'transferred', planId: 'plan-bad' }, // canva-studio-resume-0 (MISSING designId)
+      { binding: { designId: 'DA_different', version: 1 } }, // canva-read-binding
+    ];
+    const remote = vi.fn(async () => Response.json(replies.shift()));
+    const ctx = new DurableStepJournal();
+
+    await expect(runCanvaDraft(studioInput, ctx, remote)).rejects.toThrow(
+      'Workflow binding differs from imported document'
+    );
+  });
+
+  it('passes parity: unavailable with parityError code to status notification when parity check fails', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const studioInput = { ...input, designStudio: true };
+    const replies = [
+      { tenantId: 'tenant', clientId: 'client' }, // verify scope
+      { runId: 'run-studio-parity', status: 'briefing' }, // canva-studio-start
+      { runId: 'run-studio-parity', status: 'transferred', planId: 'plan-1', designId: 'DA_parity' }, // canva-studio-resume-0
+      { binding: { designId: 'DA_parity', version: 1 } }, // canva-read-binding
+      { status: 'submitted', operationId: 'exp-1' }, // canva-submit-export
+      { status: 'retrieved', artifact: { id: 'art-1' } }, // canva-poll-export-0
+      { status: 'submitted', operationId: 'chk-1' }, // canva-submit-qc
+      { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } }, // canva-poll-qc-0
+      new Response(JSON.stringify({ error: 'PARITY_IMAGE_TOO_LARGE' }), { status: 500 }), // canva-parity-check fails
+      { ok: true }, // canva-notify-canva_draft_ready_for_visual_review
+    ];
+    const remote = vi.fn(async () => {
+      const rep = replies.shift();
+      return rep instanceof Response ? rep : Response.json(rep);
+    });
+    const ctx = new DurableStepJournal();
+    const result = await runCanvaDraft(studioInput, ctx, remote);
+
+    expect(result.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
+    const notifyCall = remote.mock.calls[remote.mock.calls.length - 1];
+    expect(String(notifyCall[0])).toContain('/notifications/canva-status');
+    const body = JSON.parse(notifyCall[1].body);
+    expect(body.parity).toBe('unavailable');
+    expect(body.parityError).toBe('PARITY_IMAGE_TOO_LARGE');
+  });
 });
 
 

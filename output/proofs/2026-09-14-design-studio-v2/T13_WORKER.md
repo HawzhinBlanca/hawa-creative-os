@@ -25,11 +25,15 @@ Task T13 completes the end-to-end integration connecting Hawa Core, the Durable 
      - `canva-studio-resume-n`: polls `POST /v1/tasks/:taskId/canva/studio/:runId/resume` (up to 150 polls with 5s sleep) until status reaches `transferred`, `degraded`, or `failed`.
      - On `failed` status: transitions directly to `finish('DESIGN_FAILED', undefined, code)`.
      - On `transferred` or `degraded`: continues the verified downstream pipeline:
+       - **Strict Binding Check**:
+         `if (!result.designId || state.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding differs from imported document', 'BINDING_MISMATCH');`
+         The result must carry a valid `designId` matching the durable Canva binding; missing or mismatched design IDs throw `BINDING_MISMATCH` immediately.
        - `canva-read-binding` verifies document binding against imported design;
        - `canva-export-preview` retrieves PNG export;
        - `canva-export-copy-font-check` retrieves PPTX and runs native copy & font inspection;
-       - `canva-parity-check`: invokes Core parity route (`POST /v1/tasks/:taskId/canva/parity-check`) executing Prompt P8;
-       - `finish('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId)`.
+       - **Parity Error Handling**:
+         The parity check (`canva-parity-check`) is no longer swallowed with an empty catch block. In the event of a parity evaluation error, the boundary/HTTP/error code is preserved and forwarded as `parity: 'unavailable'` and `parityError: code` to `finish()`.
+       - `finish('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', result.designId, parity === 'unavailable' ? parityError : undefined, parity)`.
    - Legacy path (`designStudio` false or off) executes `canva-create-draft` and `canva-resume-draft-n` with zero behavioral change.
 
 4. **Canva Parity Check (P8) (`apps/core/src/services/design-studio/stages/parity.stage.ts`):**
@@ -40,6 +44,7 @@ Task T13 completes the end-to-end integration connecting Hawa Core, the Durable 
 
 5. **Status Notes & Outbound Photo Delivery (`apps/core/src/app.ts`, `canvaStatusHandler`):**
    - Automatically detects completed Studio v2 runs for the task.
+   - When parity is `unavailable`, appends ` · parity: unavailable (${body.parityError})` to the notes and records an unavailable judgment into `hawa.design_studio_judgments`.
    - Appends informative studio metadata line to `notes`:
      `Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)` plus any ladder rung notes.
    - Text message composed with `composeCanvaStatusMessage` and dispatched via `telegramBridge.dispatchOutboundMessage`.
@@ -53,10 +58,11 @@ Task T13 completes the end-to-end integration connecting Hawa Core, the Durable 
 ## 2. Automated Test Evidence
 
 ### 2.1 Worker Studio & Legacy Pipeline Tests (`apps/worker/test/canva-draft-workflow.test.ts`)
-Command: `pnpm --filter @hawa/worker test test/canva-draft-workflow.test.ts`
+Command: `TEST_DATABASE_URL="..." pnpm --filter @hawa/worker test`
 
 ```text
- ✓ test/canva-draft-workflow.test.ts (20 tests) 18ms
+ ✓ test/workflow.test.ts (1 test) 4ms
+ ✓ test/canva-draft-workflow.test.ts (22 tests) 19ms
    ✓ native Canva workflow > resumes known operations and retrieves a real-shaped preview without approving
    ✓ native Canva workflow > recovers a stale preview with a fresh bounded export without another generation
    ✓ native Canva workflow > does not spend on the historical backlog without an explicit generation marker
@@ -77,9 +83,15 @@ Command: `pnpm --filter @hawa/worker test test/canva-draft-workflow.test.ts`
    ✓ native Canva workflow > reports DESIGN_FAILED when design studio returns failed status after ladder
    ✓ native Canva workflow > proves both studio path and legacy path reach CANVA_DRAFT_READY_FOR_VISUAL_REVIEW
    ✓ native Canva workflow > forwards designStudio and studioOptions through TaskWorkflowDispatcher
+   ✓ native Canva workflow > throws BINDING_MISMATCH when studio result lacks designId or differs from binding
+   ✓ native Canva workflow > passes parity: unavailable with parityError code to status notification when parity check fails
+ ✓ test/durable-workflow-recovery.test.ts (7 tests) 232ms
+ ✓ test/outbox-consumer.test.ts (4 tests) 253ms
 
- Test Files  1 passed (1)
-      Tests  20 passed (20)
+ Test Files  4 passed (4)
+      Tests  34 passed (34)
+   Start at  16:31:54
+   Duration  781ms
 ```
 
 ### 2.2 Status Message Notes & Snapshot Tests (`apps/core/test/canva-status-message.test.ts`)
@@ -93,25 +105,6 @@ Command: `pnpm --filter @hawa/core test test/canva-status-message.test.ts`
    ✓ draft caveats > appends escaped notes before the footer and never claims more than the status
    ✓ draft caveats > renders Studio v2 notes line and matches snapshot format
 
- Snapshots  1 written
  Test Files  1 passed (1)
       Tests  5 passed (5)
 ```
-
-### 2.3 Parity Check Route Tests (`apps/core/test/design-studio-routes.test.ts`)
-Command: `env $(grep -v '^#' .env.test | xargs) pnpm --filter @hawa/core test test/design-studio-routes.test.ts`
-
-```text
- ✓ test/design-studio-routes.test.ts (20 tests) 62ms
-   ✓ POST /v1/tasks/:taskId/canva/parity-check executes P8 comparison (200)
-   ✓ POST /v1/tasks/:taskId/canva/studio/:runId/parity executes P8 comparison (200)
-
- Test Files  1 passed (1)
-      Tests  20 passed (20)
-```
-
-### 2.4 Monorepo Full Regression & Typecheck Pass
-- `pnpm typecheck`: Passed cleanly with exit code 0 (`tsc -b`).
-- `pnpm security:scan`: Passed with 0 secrets in committable files.
-- `pnpm test`: 945 passed, 0 failed, 12 skipped across 128 test suites.
-- `pnpm --filter @hawa/desk build`: Passed cleanly with zero compilation errors.

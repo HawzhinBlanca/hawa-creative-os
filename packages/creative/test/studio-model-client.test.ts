@@ -17,11 +17,31 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
     required: ['title', 'score'],
   };
 
+  it('matches committed snapshot of official pricing table', () => {
+    const client = new StudioModelClient({ apiKey: 'mock-key' });
+    const pricing = (client as any).pricing;
+
+    expect(pricing.currency).toBe('USD');
+    expect(pricing.pricedAt).toBe('2026-09-14T00:00:00Z');
+    expect(pricing.models['claude-fable-5-1']).toEqual({
+      inputPerMillion: 10.0,
+      outputPerMillion: 50.0,
+      cacheReadPerMillion: 0.25,
+      cacheWritePerMillion: 12.50,
+    });
+    expect(pricing.models['claude-opus-5']).toEqual({
+      inputPerMillion: 5.0,
+      outputPerMillion: 25.0,
+      cacheReadPerMillion: 0.50,
+      cacheWritePerMillion: 6.25,
+    });
+  });
+
   it('computes exact USD cost from pricing.json including cache creation and read tokens', () => {
     const client = new StudioModelClient({ apiKey: 'mock-key' });
 
-    // For claude-fable-5-1:
-    // input: 3.0/M, output: 15.0/M, cacheRead: 0.30/M, cacheWrite: 3.75/M
+    // Official 2026-09-14 pricing for claude-fable-5-1:
+    // input: 10.0/M, output: 50.0/M, cacheRead: 0.25/M, cacheWrite: 12.50/M
     const cost = client.calculateCost('claude-fable-5-1', {
       input_tokens: 15_000, // 10k uncached + 5k cache read
       output_tokens: 1_000,
@@ -29,12 +49,12 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
       cache_creation_input_tokens: 2_000,
     });
 
-    // 10,000 * 3.0 / 1M = 0.030
-    // 1,000 * 15.0 / 1M = 0.015
-    // 5,000 * 0.30 / 1M = 0.0015
-    // 2,000 * 3.75 / 1M = 0.0075
-    // Total = 0.054
-    expect(cost).toBeCloseTo(0.054, 5);
+    // 10,000 * 10.0 / 1M = 0.1000
+    // 1,000 * 50.0 / 1M = 0.0500
+    // 5,000 * 0.25 / 1M = 0.00125
+    // 2,000 * 12.50 / 1M = 0.0250
+    // Total = 0.17625
+    expect(cost).toBeCloseTo(0.17625, 5);
   });
 
   it('handles 429 rate limit with retry, succeeding on attempt 2', async () => {
@@ -246,6 +266,57 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
     expect(result.receipt.inputTokens).toBe(2500);
     expect(result.receipt.outputTokens).toBe(350);
     expect(result.receipt.costUsd).toBeGreaterThan(0);
+  });
+
+  it('sends output_config format json_schema and omits anthropic-beta header', async () => {
+    let capturedBody: any = null;
+    let capturedHeaders: any = null;
+
+    const fakeFetch: typeof fetch = vi.fn(async (_url: any, options: any) => {
+      capturedBody = JSON.parse(options.body);
+      capturedHeaders = options.headers;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'msg_schema_enforced',
+          model: 'claude-fable-5-1',
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ title: 'Schema Enforced Concept', score: 9.8 }),
+            },
+          ],
+          usage: { input_tokens: 300, output_tokens: 50 },
+        }),
+      } as any;
+    });
+
+    const client = new StudioModelClient({
+      apiKey: 'mock-key',
+      fetchFn: fakeFetch,
+    });
+
+    const result = await client.callStructured<{ title: string; score: number }>({
+      prompt: 'Generate concept',
+      outputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', minLength: 5 },
+          score: { type: 'number', minimum: 0, maximum: 10 },
+        },
+        required: ['title', 'score'],
+      },
+    });
+
+    expect(result.data.title).toBe('Schema Enforced Concept');
+    expect(result.data.score).toBe(9.8);
+    expect(capturedBody.output_config).toBeDefined();
+    expect(capturedBody.output_config.format.type).toBe('json_schema');
+    expect(capturedBody.output_config.format.schema.additionalProperties).toBe(false);
+    expect(capturedBody.output_config.format.schema.properties.title.minLength).toBeUndefined();
+    expect(capturedBody.output_config.format.schema.properties.score.minimum).toBeUndefined();
+    expect(capturedHeaders['anthropic-beta']).toBeUndefined();
   });
 
   it('degrades to fallback model if primary model returns 503 service unavailable', async () => {

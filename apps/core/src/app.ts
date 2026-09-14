@@ -4407,7 +4407,18 @@ export function createApp(options?: CreateAppOptions) {
           rungNotes = ` · ${studioRun.diagnostic}`;
         }
 
-        const studioNote = `Studio v2 · ${conceptsCount} concepts · ${revisionRounds} revision rounds · judge ${judgeScore}/10 · imagery: ${imageryStr} · typeface: ${typefaceStr}${rungNotes}`;
+        let parityNote = '';
+        if (body.parity === 'unavailable') {
+          parityNote = ` · parity: unavailable (${body.parityError || 'error'})`;
+          try {
+            await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx => {
+              await sql`INSERT INTO hawa.design_studio_judgments (id, run_id, tenant_id, kind, candidate_a, candidate_b, order_swapped, verdict, created_at)
+                VALUES (${crypto.randomUUID()}::uuid, ${studioRun.id}::uuid, ${auth.tenantId}::uuid, 'parity', ${studioRun.winner_candidate_id || studioCandidates[0]?.id}::uuid, NULL, false, ${JSON.stringify({ parity: 'unavailable', errorCode: body.parityError || 'PARITY_ERROR' })}::jsonb, NOW())`.execute(trx);
+            });
+          } catch { /* courtesy record */ }
+        }
+
+        const studioNote = `Studio v2 · ${conceptsCount} concepts · ${revisionRounds} revision rounds · judge ${judgeScore}/10 · imagery: ${imageryStr} · typeface: ${typefaceStr}${rungNotes}${parityNote}`;
         notes.push(studioNote);
       }
     } catch { /* courtesy note; do not fail status */ }

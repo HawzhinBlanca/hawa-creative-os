@@ -3,7 +3,7 @@
 **Date:** 2026-09-14  
 **Branch:** `studio-v2`  
 **Task:** T07 (Art Provider — `gemini-image-provider.ts` & `color-science.ts`)  
-**Status:** COMPLETE (Passed quality gates, unit tests, and live probe)
+**Status:** **BLOCKED (Unit tests & procedural degradation ladder verified; live Gemini generation blocked by user-only billing credit replenishment)**
 
 ---
 
@@ -45,37 +45,8 @@ Per ADR 029 (Section 5.5) and `GEMINI_TASK_SHEET.md`, the Art Layer produces tex
 }
 ```
 
-- **Successful Response Shape (200 OK):**
-```json
-{
-  "candidates": [
-    {
-      "content": {
-        "parts": [
-          {
-            "inlineData": {
-              "mimeType": "image/jpeg",
-              "data": "<base64_encoded_image_bytes>"
-            }
-          }
-        ],
-        "role": "model"
-      },
-      "finishReason": "STOP",
-      "index": 0
-    }
-  ],
-  "usageMetadata": {
-    "promptTokenCount": 140,
-    "candidatesTokenCount": 1290,
-    "totalTokenCount": 1430
-  },
-  "modelVersion": "gemini-3-pro-image",
-  "responseId": "gemini-img-20260914-1249"
-}
-```
-
-- **Observed Live Quota Depletion Shape (HTTP 429 Triggering Degradation Ladder):**
+- **Observed Live Quota Depletion Response (HTTP 429 — See `BLOCKED.md`):**
+Both the agent probe and independent lead review probe from the production container returned:
 ```json
 {
   "error": {
@@ -85,6 +56,7 @@ Per ADR 029 (Section 5.5) and `GEMINI_TASK_SHEET.md`, the Art Layer produces tex
   }
 }
 ```
+As specified in ADR-029 Section 5.5, upon receiving repeated HTTP 429 errors across 2 attempts, the engine triggers the degradation ladder and executes procedural fallback `procedural-motif-gradient-wash`.
 
 ---
 

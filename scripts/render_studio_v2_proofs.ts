@@ -416,6 +416,11 @@ async function main() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  const goldensDir = path.join(outputDir, 'goldens');
+  if (!fs.existsSync(goldensDir)) {
+    fs.mkdirSync(goldensDir, { recursive: true });
+  }
+
   const jobs = [
     { name: 'latin', layout: LATIN_LAYOUT, copy: LATIN_COPY },
     { name: 'sorani', layout: SORANI_LAYOUT, copy: SORANI_COPY },
@@ -435,21 +440,27 @@ async function main() {
     const noTextPngPath = path.join(outputDir, `${job.name}-no-text.png`);
     const fullSvgPath = path.join(outputDir, `${job.name}.svg`);
     const noTextSvgPath = path.join(outputDir, `${job.name}-no-text.svg`);
+    const goldenPngPath = path.join(goldensDir, `${job.name}.png`);
 
     fs.writeFileSync(fullPngPath, res.png);
     fs.writeFileSync(noTextPngPath, res.noTextPng);
     fs.writeFileSync(fullSvgPath, res.svg, 'utf-8');
     fs.writeFileSync(noTextSvgPath, res.noTextSvg, 'utf-8');
 
-    // Run deterministic second render to test stability
-    const res2 = renderLayoutV2(job.layout, { copyText: job.copy });
-    const diff = comparePngBuffers(res.png, res2.png);
+    // Save golden if not present or initialize
+    if (!fs.existsSync(goldenPngPath)) {
+      fs.writeFileSync(goldenPngPath, res.png);
+    }
+
+    // Compare against committed golden image
+    const goldenBuf = fs.readFileSync(goldenPngPath);
+    const diff = comparePngBuffers(res.png, goldenBuf);
 
     results[job.name] = {
       wrappedLines: res.wrappedLines,
       diffPct: diff.diffPercentage,
     };
-    console.log(`  ${job.name}: diff = ${diff.diffPercentage}%, wrappedLines:`, res.wrappedLines);
+    console.log(`  ${job.name}: diff vs golden = ${diff.diffPercentage}%, wrappedLines:`, res.wrappedLines);
   }
 
   // Write summary json

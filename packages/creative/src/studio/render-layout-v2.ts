@@ -76,10 +76,45 @@ function resolveFontsDir(options?: RenderLayoutOptions): string {
 
 function resolveFontconfigFile(options?: RenderLayoutOptions): string {
   if (options?.fontconfigFile && fs.existsSync(options.fontconfigFile)) {
-    return options.fontconfigFile;
+    return path.resolve(options.fontconfigFile);
   }
   const fontsDir = resolveFontsDir(options);
-  return path.join(fontsDir, 'fonts.conf');
+  return path.resolve(fontsDir, 'fonts.conf');
+}
+
+/**
+ * Verifies font resolution via fc-match against the configured fonts.conf.
+ * Throws FONT_UNRESOLVED if the resolved font family differs from the requested family.
+ */
+export function assertFontResolves(fontFamily: string, fontconfigFile: string): void {
+  try {
+    const res = spawnSync('fc-match', ['-f', '%{family}', fontFamily], {
+      env: {
+        ...process.env,
+        FONTCONFIG_FILE: fontconfigFile,
+      },
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    if (res.status === 0 && res.stdout) {
+      const resolved = res.stdout.trim();
+      const cleanRequested = fontFamily.toLowerCase().trim();
+      const cleanResolved = resolved.toLowerCase().trim();
+      const matches = cleanResolved.includes(cleanRequested) || cleanRequested.includes(cleanResolved);
+      if (!matches) {
+        const err = new Error(
+          `FONT_UNRESOLVED: Font '${fontFamily}' resolved to fallback family '${resolved}' under fontconfig ${fontconfigFile}`
+        );
+        (err as any).code = 'FONT_UNRESOLVED';
+        throw err;
+      }
+    }
+  } catch (err: any) {
+    if (err?.code === 'FONT_UNRESOLVED' || err.message?.includes('FONT_UNRESOLVED')) {
+      throw err;
+    }
+    console.warn(`[render-layout-v2] Warning: fc-match check failed (${err.message}). Proceeding with fontkit loading.`);
+  }
 }
 
 function resolveRsvgConvert(options?: RenderLayoutOptions): string {
@@ -266,12 +301,27 @@ function renderTextElementToSvg(
   // Compute text anchor and X position
   let textX = t.x;
   let textAnchor = 'start';
-  if (t.align === 'center') {
-    textX = t.x + t.width / 2;
-    textAnchor = 'middle';
-  } else if (t.align === 'right') {
-    textX = t.x + t.width;
-    textAnchor = 'end';
+  if (t.rtl) {
+    if (t.align === 'left') {
+      textX = t.x;
+      textAnchor = 'end';
+    } else if (t.align === 'center') {
+      textX = t.x + t.width / 2;
+      textAnchor = 'middle';
+    } else {
+      // For RTL with right alignment, in SVG direction="rtl", 'start' anchors at the right edge
+      // and runs progress leftward into the designated box.
+      textX = t.x + t.width;
+      textAnchor = 'start';
+    }
+  } else {
+    if (t.align === 'center') {
+      textX = t.x + t.width / 2;
+      textAnchor = 'middle';
+    } else if (t.align === 'right') {
+      textX = t.x + t.width;
+      textAnchor = 'end';
+    }
   }
 
   const scale = t.fontSize / font.unitsPerEm;
@@ -288,7 +338,7 @@ function renderTextElementToSvg(
   const fontWeight = t.bold ? 'bold' : 'normal';
   const fontStyle = t.italic ? ' font-style="italic"' : '';
   const opacityAttr = t.opacity !== undefined ? ` opacity="${t.opacity}"` : '';
-  const bidiAttr = t.rtl ? ' direction="rtl" unicode-bidi="bidi-override"' : '';
+  const bidiAttr = t.rtl ? ' direction="rtl"' : '';
   const letterSpacingAttr = t.letterSpacing ? ` letter-spacing="${(t.letterSpacing * t.fontSize).toFixed(2)}px"` : '';
 
   const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(t.fontFamily)}" font-size="${t.fontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
@@ -311,7 +361,17 @@ export function renderLayoutV2ToSvg(
   fontFidelity: Record<string, 'exact' | 'stand-in'>;
 } {
   const fontsDir = resolveFontsDir(options);
+  const fontconfigFile = resolveFontconfigFile(options);
   const fontFidelity = getFontFidelityManifest(fontsDir);
+
+  // Assert font resolution for all text elements
+  const seenFamilies = new Set<string>();
+  for (const t of layout.text) {
+    if (t.fontFamily && !seenFamilies.has(t.fontFamily)) {
+      seenFamilies.add(t.fontFamily);
+      assertFontResolves(t.fontFamily, fontconfigFile);
+    }
+  }
 
   const defsParts: string[] = [];
   const bodyPartsNoText: string[] = [];

@@ -56,11 +56,11 @@ Every run completed the full vertical slice:
 - **Total Input Tokens**: 19,898 tokens
 - **Total Output Tokens**: 13,347 tokens
 - **Anthropic Model**: `claude-opus-5`
-- **Cost Calculation** (Opus 5 rates: $5.00 / MTok input, $15.00 / MTok output):
+- **Cost Calculation** (Official Opus 5 rates: $5.00 / MTok input, $25.00 / MTok output):
   $$\text{Input Spend} = \frac{19898}{1{,}000{,}000} \times \$5.00 = \$0.09949$$
-  $$\text{Output Spend} = \frac{13347}{1{,}000{,}000} \times \$15.00 = \$0.200205$$
-  $$\mathbf{\text{Total Spend}} = \mathbf{\$0.299695\text{ USD}} \approx \mathbf{\$0.30\text{ USD}}$$
-- **Average Cost per V1 Run**: **$0.030 USD** (~3.0 cents per design).
+  $$\text{Output Spend} = \frac{13347}{1{,}000{,}000} \times \$25.00 = \$0.333675$$
+  $$\mathbf{\text{Total Spend}} = \mathbf{\$0.433165\text{ USD}} \approx \mathbf{\$0.433\text{ USD}}$$
+- **Average Cost per V1 Run**: **$0.0433 USD** (~4.3 cents per design).
 
 ---
 

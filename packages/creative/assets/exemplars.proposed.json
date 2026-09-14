@@ -1,16 +1,16 @@
 {
   "version": "2026-09-14.1",
-  "generatedAt": "2026-09-14T11:07:55.668Z",
+  "generatedAt": "2026-09-14T13:34:37.863Z",
   "evaluatorModel": "claude-fable-5-1",
   "totalCorpusImages": 71,
-  "recommendedCount": 14,
+  "recommendedCount": 12,
   "notice": "User-only action: Confirm final exemplar set into packages/creative/assets/kaae-exemplars.json. Until confirmed, Studio v2 runs with exemplars: [].",
   "exemplars": [
     {
       "rank": 1,
-      "score": 9.4,
-      "craftScore": 9.2,
-      "representativenessScore": 9.5,
+      "score": 8.7,
+      "craftScore": 8.5,
+      "representativenessScore": 9,
       "sha256": "6d9f50c3bc9716788d31966ff58c9902bdf08d434d798e072ff89eb187d6fc00",
       "path": "data/kaae-graphics/references/KAAE_Commences_2026_Cycle_1080x1350.png",
       "filename": "KAAE_Commences_2026_Cycle_1080x1350.png",
@@ -21,65 +21,28 @@
       "aspectRatio": "4:5",
       "format": "4:5",
       "fileSizeBytes": 287086,
-      "reason": "Exemplary 4:5 vertical feed announcement with authoritative bilingual headline hierarchy, balanced navy canvas, and refined gold accent rules.",
+      "reason": "Midnight-navy grid canvas with gold-accented Sorani headline, tracked Latin subhead, centered emblem, and three symmetrical feature cards deliver strong hierarchy and generous margins, though the small-caps Latin subhead and card labels run slightly small and the KAAE logo box breaks the palette.",
       "recommendedFor": [
         "feed_announcement",
-        "higher_ed",
-        "bilingual_statement"
+        "accreditation_cycle",
+        "legal_decree",
+        "presentation"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R9Rx5ku4mia8hauPrA",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2145,
+        "outputTokens": 185,
+        "costUsd": 0.021613
+      }
     },
     {
       "rank": 2,
-      "score": 9.4,
-      "craftScore": 9.2,
-      "representativenessScore": 9.5,
-      "sha256": "bd72c0a0b2a35b3fff33282dbb99d90018123822fdeaae64dfa35c1344d5514a",
-      "path": "data/kaae-graphics/references/KAAE_Standards_Higher_Ed_1080x1350.png",
-      "filename": "KAAE_Standards_Higher_Ed_1080x1350.png",
-      "dimensions": {
-        "width": 2160,
-        "height": 2700
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 694625,
-      "reason": "Exemplary 4:5 vertical feed announcement with authoritative bilingual headline hierarchy, balanced navy canvas, and refined gold accent rules.",
-      "recommendedFor": [
-        "feed_announcement",
-        "higher_ed",
-        "bilingual_statement"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 3,
-      "score": 9.4,
-      "craftScore": 9.2,
-      "representativenessScore": 9.5,
-      "sha256": "cfd7f5bf4ddccbcc292e257c98ad5897f5634da325cfc6dc72db1676740b0954",
-      "path": "data/kaae-graphics/references/post2_standards_higher_ed.png",
-      "filename": "post2_standards_higher_ed.png",
-      "dimensions": {
-        "width": 1080,
-        "height": 1350
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 227771,
-      "reason": "Exemplary 4:5 vertical feed announcement with authoritative bilingual headline hierarchy, balanced navy canvas, and refined gold accent rules.",
-      "recommendedFor": [
-        "feed_announcement",
-        "higher_ed",
-        "bilingual_statement"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 4,
-      "score": 8.9,
-      "craftScore": 8.8,
-      "representativenessScore": 9,
+      "score": 8.6,
+      "craftScore": 8.5,
+      "representativenessScore": 8.7,
       "sha256": "764d0017d1ca86431e4dc842e59bf749aa52656e1d8ccd5c1c036a3aa9810848",
       "path": "data/kaae-graphics/references/post1_accreditation_mandate.png",
       "filename": "post1_accreditation_mandate.png",
@@ -90,62 +53,91 @@
       "aspectRatio": "1:1",
       "format": "1:1",
       "fileSizeBytes": 168645,
-      "reason": "Balanced square layout with clean Kurd-Latin typographic rhythm and prominent seal grounding Law No. 6 of 2022.",
+      "reason": "Navy serif headline 'Advancing Academic Rigor & Institutional Excellence' with gold accent rule, gold-bordered Law No. 6 of 2022 callout, and three navy/gold stat cards (02, MSCHE, 100%) on cream form a disciplined, dignified hierarchy, though the mid-section whitespace gap and stat-card top gradient slightly weaken flow.",
       "recommendedFor": [
-        "square_post",
-        "legal_mandate"
+        "feed_announcement",
+        "standards",
+        "presentation"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RARt9NFN8DCPrAMAcy",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1744,
+        "outputTokens": 194,
+        "costUsd": 0.018053
+      }
+    },
+    {
+      "rank": 3,
+      "score": 8.5,
+      "craftScore": 8.4,
+      "representativenessScore": 8.7,
+      "sha256": "cfd7f5bf4ddccbcc292e257c98ad5897f5634da325cfc6dc72db1676740b0954",
+      "path": "data/kaae-graphics/references/post2_standards_higher_ed.png",
+      "filename": "post2_standards_higher_ed.png",
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 227771,
+      "reason": "Navy serif headline with gold eyebrow and rule, numbered standard cards with gold left accents and 'Required Evidence' chips on a cream dotted field form a disciplined, dignified hierarchy, though only Latin typesetting is shown and the logo lockup reads slightly small against the generous top margin.",
+      "recommendedFor": [
+        "standards",
+        "feed_announcement",
+        "presentation",
+        "policy_brief"
+      ],
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RAS34uxEFtV8g3xSNu",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2134,
+        "outputTokens": 169,
+        "costUsd": 0.020703
+      }
+    },
+    {
+      "rank": 4,
+      "score": 8.5,
+      "craftScore": 8,
+      "representativenessScore": 9,
+      "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5 kurdi.jpg.jpeg",
+      "filename": "kaae 5 kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 1284432,
+      "reason": "Full-bleed institutional photo with a navy gradient scrim carrying two-line white Sorani Kurdish headline over a gold rule and top-left KAAE seal creates clear hierarchy in the brand's navy-gold-cream palette, though the caption crowds the subjects' hands and the small logo lacks a contrast plate.",
+      "recommendedFor": [
+        "feed_announcement",
+        "press_release",
+        "official_visit_coverage",
+        "website_news_banner"
+      ],
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5FVvjbHPrRphZ97S3",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5001,
+        "outputTokens": 180,
+        "costUsd": 0.049923
+      }
     },
     {
       "rank": 5,
-      "score": 8.9,
-      "craftScore": 8.7,
-      "representativenessScore": 9.1,
-      "sha256": "5d9f6346039d91f9bda5494129f7dcf0cdec7d33ee8126e0f7497ca48bb1370e",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/INQAAHE_KRD.jpg.jpeg",
-      "filename": "INQAAHE_KRD.jpg.jpeg",
-      "dimensions": {
-        "width": 5122,
-        "height": 6400
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 3746483,
-      "reason": "High-resolution diplomatic membership graphic featuring INQAAHE affiliation and crisp bilingual typography.",
-      "recommendedFor": [
-        "international_membership",
-        "high_resolution_print"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 6,
-      "score": 8.9,
-      "craftScore": 8.7,
-      "representativenessScore": 9.1,
-      "sha256": "e62f1e37536fa1716f0290dd0a675ae00a20698e3292d53765def84c66dbda9a",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/INQAAHE.jpg.jpeg",
-      "filename": "INQAAHE.jpg.jpeg",
-      "dimensions": {
-        "width": 5122,
-        "height": 6400
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2414244,
-      "reason": "High-resolution diplomatic membership graphic featuring INQAAHE affiliation and crisp bilingual typography.",
-      "recommendedFor": [
-        "international_membership",
-        "high_resolution_print"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 7,
-      "score": 8.7,
-      "craftScore": 8.6,
-      "representativenessScore": 8.8,
+      "score": 8.3,
+      "craftScore": 8.2,
+      "representativenessScore": 8.5,
       "sha256": "90c332045431c0297aa4f6c1217cd44c60c987ed351790e3c8fe9dd62d897bfd",
       "path": "data/kaae-graphics/references/post3_strategic_roadmap.png",
       "filename": "post3_strategic_roadmap.png",
@@ -156,18 +148,28 @@
       "aspectRatio": "1:1",
       "format": "1:1",
       "fileSizeBytes": 508717,
-      "reason": "Multi-tier strategic roadmap composition with structured card containers and clear proportional margins.",
+      "reason": "Serif white headline with gold italic subtitle over Midnight Navy, four evenly spaced glass cards with gold icon tiles and a statutory footer citing Law No. 6 of 2022 deliver a dignified, on-brand institutional roadmap, though the large empty band between header and cards and emoji-style icons slightly weaken polish.",
       "recommendedFor": [
-        "square_post",
-        "strategic_framework"
+        "feed_announcement",
+        "presentation",
+        "standards",
+        "strategic_report"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RB3YkqJVo8p2bP7HrJ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1744,
+        "outputTokens": 180,
+        "costUsd": 0.017353
+      }
     },
     {
-      "rank": 8,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
+      "rank": 6,
+      "score": 8.2,
+      "craftScore": 7.5,
+      "representativenessScore": 9,
       "sha256": "d57da0edd4be9cab5faa0407d1c99fb5c81c35a1983fd08162d768e4aa623b05",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/AUK002 kurdi.jpg.jpeg",
       "filename": "AUK002 kurdi.jpg.jpeg",
@@ -178,40 +180,60 @@
       "aspectRatio": "4:5",
       "format": "4:5",
       "fileSizeBytes": 1020930,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
+      "reason": "Clean Sorani Kurdish typesetting with a bold navy headline, gold subhead, and an angled midnight-navy banner pairing the AUK crest, though the wide empty gap between the body text and footer line weakens vertical balance.",
       "recommendedFor": [
         "feed_announcement",
-        "partnership_announcement"
+        "accreditation_milestone",
+        "partner_recognition",
+        "presentation"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QzQPa6h9GkJCar4rVi",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5000,
+        "outputTokens": 151,
+        "costUsd": 0.048463
+      }
     },
     {
-      "rank": 9,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
-      "sha256": "26efd152a1a9e77851088bd7fb312deb4b47158372fdb691db5d44a44f936e56",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/AUK002.jpg.jpeg",
-      "filename": "AUK002.jpg.jpeg",
+      "rank": 7,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for kurdi.jpg.jpeg",
+      "filename": "call for kurdi.jpg.jpeg",
       "dimensions": {
-        "width": 2250,
-        "height": 2812
+        "width": 128,
+        "height": 160
       },
       "aspectRatio": "4:5",
       "format": "4:5",
-      "fileSizeBytes": 1119082,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
+      "fileSizeBytes": 2675014,
+      "reason": "Strong Sorani typographic hierarchy with a gold-on-navy 'بانگەواز بۆ' header block, oversized navy headline, and icon-led benefit panel on a cream grid background, though the faded photo bottom-left slightly competes with the layout.",
       "recommendedFor": [
         "feed_announcement",
-        "partnership_announcement"
+        "recruitment",
+        "call_for_participation",
+        "social_post"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R413jZicV7zxouR2FW",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 156,
+        "costUsd": 0.048683
+      }
     },
     {
-      "rank": 10,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
+      "rank": 8,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
       "sha256": "5a4b9c1e18d6d3741bc780a68029f4a954569f8f6bd4051d9a79b4b0a220504a",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CC002 kurdi.jpg.jpeg",
       "filename": "CC002 kurdi.jpg.jpeg",
@@ -222,84 +244,28 @@
       "aspectRatio": "4:5",
       "format": "4:5",
       "fileSizeBytes": 766425,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
+      "reason": "Clean midnight-navy card with gold Sorani headline, white CHEA/CIQG logo panel and overlapping navy 'CHEA CIQG' tab shows strong hierarchy and brand palette, though the KAAE logo floats loosely top-left and the large empty lower band slightly weakens balance.",
       "recommendedFor": [
         "feed_announcement",
-        "partnership_announcement"
+        "partnership_announcement",
+        "membership_milestone",
+        "presentation"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QzxKwdcf94u3rmULZU",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4999,
+        "outputTokens": 174,
+        "costUsd": 0.049603
+      }
     },
     {
-      "rank": 11,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
-      "sha256": "fc08f8aee024753db75b27166a8d31a333ed570b36ec766273ba5cbf7739c830",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CC002.jpg.jpeg",
-      "filename": "CC002.jpg.jpeg",
-      "dimensions": {
-        "width": 2250,
-        "height": 2811
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 809216,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
-      "recommendedFor": [
-        "feed_announcement",
-        "partnership_announcement"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 12,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
-      "sha256": "0661308204bbacf9e56d588380afbf6022e77b47a970d97cd21e55b3e687a2a3",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE001.jpg.jpeg",
-      "filename": "CUE001.jpg.jpeg",
-      "dimensions": {
-        "width": 2250,
-        "height": 2811
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 984501,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
-      "recommendedFor": [
-        "feed_announcement",
-        "partnership_announcement"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 13,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
-      "sha256": "ffe07d4003958ae55d403ab38a53a47d9a1a436bf3bb539f749d6389511e33d6",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE002 3.jpg.jpeg",
-      "filename": "CUE002 3.jpg.jpeg",
-      "dimensions": {
-        "width": 2250,
-        "height": 2812
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1120111,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
-      "recommendedFor": [
-        "feed_announcement",
-        "partnership_announcement"
-      ],
-      "recommendedAsExemplar": true
-    },
-    {
-      "rank": 14,
-      "score": 8.7,
-      "craftScore": 8.4,
-      "representativenessScore": 8.9,
+      "rank": 9,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
       "sha256": "cb9e9fc7c61b3b369527d86ed00309e2f4b7bf4ea990bcd6888fe84d19423dad",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE002 kurdi.jpg.jpeg",
       "filename": "CUE002 kurdi.jpg.jpeg",
@@ -310,39 +276,26 @@
       "aspectRatio": "4:5",
       "format": "4:5",
       "fileSizeBytes": 1040629,
-      "reason": "Formal university partnership announcement with high contrast seal plinth and dual executive signatures.",
+      "reason": "Clean Sorani/Latin hierarchy in navy headline with gold subtitle and a navy chevron banner framing the CUE logo on cream grid background, though body text is slightly heavy and lower whitespace feels unbalanced.",
       "recommendedFor": [
         "feed_announcement",
-        "partnership_announcement"
+        "accreditation_milestone",
+        "partner_recognition"
       ],
-      "recommendedAsExemplar": true
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R1s9vh98NGn1hXaheR",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5000,
+        "outputTokens": 146,
+        "costUsd": 0.048213
+      }
     },
     {
-      "rank": 15,
-      "score": 8.4,
-      "craftScore": 8.2,
-      "representativenessScore": 8.5,
-      "sha256": "0f9e6c83ef1b3b3f68d80a61a7b7245609a1fa6a1f941f912fca1b117130b9dc",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image15.png",
-      "filename": "image15.png",
-      "dimensions": {
-        "width": 1920,
-        "height": 1080
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 438622,
-      "reason": "Widescreen 16:9 keynote slide layout showcasing clean multi-column data visualization and institutional navy surface.",
-      "recommendedFor": [
-        "presentation_keynote",
-        "widescreen_slide"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 16,
-      "score": 8.4,
-      "craftScore": 8.2,
+      "rank": 10,
+      "score": 8,
+      "craftScore": 7.5,
       "representativenessScore": 8.5,
       "sha256": "9465963ad7bcc54bd4837e327b27e081dd99b897f8aacd05feb1d72a5df0ddf3",
       "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image16.png",
@@ -354,17 +307,595 @@
       "aspectRatio": "16:9",
       "format": "16:9",
       "fileSizeBytes": 772348,
-      "reason": "Widescreen 16:9 keynote slide layout showcasing clean multi-column data visualization and institutional navy surface.",
+      "reason": "Clean navy-on-cream impact slide with a gold 'IMPACT' eyebrow, bold navy headline, four large numeric stats with small-caps labels, and a navy-framed photo strip of KAAE events anchored by the centered seal and footer, though the stats row and photo strip leave slightly loose vertical spacing.",
       "recommendedFor": [
-        "presentation_keynote",
-        "widescreen_slide"
+        "presentation",
+        "annual_report",
+        "feed_announcement",
+        "impact_summary"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RCB1V8zFvRwwbaW6Qs",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 176,
+        "costUsd": 0.032933
+      }
+    },
+    {
+      "rank": 11,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image17.png",
+      "filename": "image17.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 359881,
+      "reason": "Split-panel composition pairs a cream left card of four numbered navy pillars with a Midnight Navy right panel of EXCEL/TRUST/LEAD in bold white caps and gold GP labels, anchored by a 51/9/3 stat row and Knowledge Nation + ELEVATE lockups, though the header lockups and stat row feel loosely aligned to the card grid.",
+      "recommendedFor": [
+        "presentation",
+        "standards",
+        "strategic_plan_summary",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RCpTkLs42iyJLaiChQ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 196,
+        "costUsd": 0.033933
+      }
+    },
+    {
+      "rank": 12,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image19.png",
+      "filename": "image19.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 363526,
+      "reason": "Three navy-gradient header cards with gold 'GP I–III' titles and clean Verdana-style body text form a disciplined grid, though the hyphenated 'Profession-alization' line break, empty navy goal bullets, and unused whitespace beneath the shorter columns slightly weaken polish.",
+      "recommendedFor": [
+        "presentation",
+        "standards",
+        "strategic_plan",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": true,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RCpcvVSGmcMmhLs4Cu",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 165,
+        "costUsd": 0.032383
+      }
+    },
+    {
+      "rank": 13,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "3ed8e573f56b49c443a4e2220cc162499e0928dcf2910ba14b1b362cac70d957",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image4.png",
+      "filename": "image4.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 285208,
+      "reason": "Clean four-step process row with navy/gold Step chips and a bold navy 'First Pathway' headline over a faint grid establishes clear hierarchy, though the small AUK/CUE logos and empty upper-right quadrant leave the composition slightly unbalanced.",
+      "recommendedFor": [
+        "presentation",
+        "accreditation_cycle_update",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RE1FfjqUHHMfJvnSZu",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 156,
+        "costUsd": 0.031933
+      }
+    },
+    {
+      "rank": 14,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "344ff907834634c03457b3d55784d5dd6ce64dda8d142fbafaae3c991aa8f7d9",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5.jpg.jpeg",
+      "filename": "kaae 5.jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 1285875,
+      "reason": "Bold white sans-serif headline with lighter subhead sits on a navy gradient overlay above a gold rule, echoing the gilded columns and KAAE logo palette, though the bottom text block feels dense and the subhead runs close to the right edge.",
+      "recommendedFor": [
+        "feed_announcement",
+        "press_release",
+        "event_recap",
+        "official_meeting"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5Ljw2EkFbhv1mXQtt",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4996,
+        "outputTokens": 149,
+        "costUsd": 0.048323
+      }
+    },
+    {
+      "rank": 15,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "215bcc0eee126059a72765a17a03b0f0230b4ca9d19b5af7b04bc7740a977320",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic dr lina kurdi.jpg-2.jpeg",
+      "filename": "kaae graphic dr lina kurdi.jpg-2.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 2850738,
+      "reason": "Clean Sorani Kurdish hierarchy with gold eyebrow line over bold navy title, a navy rounded panel housing the QR code and gold registration tab, and a cutout speaker portrait against a soft grey radial motif; minor issues include a small logo, tight bottom edge on the portrait, and dense body-text line lengths.",
+      "recommendedFor": [
+        "feed_announcement",
+        "webinar",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5yoswRe3uzA8yaGJ6",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5007,
+        "outputTokens": 172,
+        "costUsd": 0.049583
+      }
+    },
+    {
+      "rank": 16,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "d8e7a4ec9c69605f12a697ebac9fbfab1f0fe452a166fdcb8c34733efc2619e1",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae raphic kurdi 10.jpg.jpeg",
+      "filename": "kaae raphic kurdi 10.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1132910,
+      "reason": "Gold thin frame border, navy gradient overlay with two-tone white/gold Sorani headline and gold pill 'kaae.org' CTA establish clear hierarchy and on-brand palette, though the double photo composite (library plus blurred crowd) creates a slightly muddled mid-section and the logo sits tight against the frame.",
+      "recommendedFor": [
+        "feed_announcement",
+        "field_visit_report",
+        "school_visit",
+        "news_update"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R9c7GsstTdZ5Z6QAfh",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5003,
+        "outputTokens": 178,
+        "costUsd": 0.049843
+      }
     },
     {
       "rank": 17,
-      "score": 8.4,
-      "craftScore": 8.2,
+      "score": 7.8,
+      "craftScore": 7.2,
+      "representativenessScore": 8.4,
+      "sha256": "b74866d7835fd9003e956b7edc17fc67fced1bd456c64f5fce6869ac8e7c6221",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for.jpg.jpeg",
+      "filename": "call for.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 2712068,
+      "reason": "Strong navy/gold/cream hierarchy with oversized 'PEER EVALUATORS' headline and a clear icon-led benefits card, though the navy bar bleeding off the left edge and the faded stock photo overlapping the grid slightly weaken margin discipline.",
+      "recommendedFor": [
+        "feed_announcement",
+        "recruitment_call",
+        "accreditation_cycle",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R3y4B8iELDQn5MbsGi",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4993,
+        "outputTokens": 165,
+        "costUsd": 0.049093
+      }
+    },
+    {
+      "rank": 18,
+      "score": 7.8,
+      "craftScore": 7.2,
+      "representativenessScore": 8.4,
+      "sha256": "20e75b574afef39332bc949caa464f5f829b97290a6d36966ce35e12b7a87c10",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image10.png",
+      "filename": "image10.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 309769,
+      "reason": "Strong navy-gradient stat card with bold white percentages and a gold 'VOCATIONAL REFORM' kicker over a huge navy 'TVET' title reads as authentic KAAE policy communication, but the generic Verdana-style typeface, uneven vertical rhythm (large empty gap between title and intro paragraph, cramped left-aligned content against a mostly empty lower half) and the small, blurry legacy logo weaken polish.",
+      "recommendedFor": [
+        "presentation",
+        "feed_announcement",
+        "standards",
+        "infographic"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RB1H5HFQ7yyTvcfKxi",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 213,
+        "costUsd": 0.034783
+      }
+    },
+    {
+      "rank": 19,
+      "score": 7.8,
+      "craftScore": 7,
+      "representativenessScore": 8.5,
+      "sha256": "d48c06007d9ea366e0c8c58ee142147d9edd29835b320279a1bdfe1b6b4dbc53",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image20.png",
+      "filename": "image20.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 279820,
+      "reason": "Clean 'FOUNDATION / KAAE / Who We Are' navy-and-gold header with navy MISSION/VISION tab labels and dashed accent rules reads institutionally, though the Verdana-like body copy with awkward hyphenation ('accredita-tion', 'excel-lence') and the left-skewed composition leaving the right half empty weaken the craft.",
+      "recommendedFor": [
+        "presentation",
+        "about_us",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RDR5rTyhLLfDaeMETs",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 185,
+        "costUsd": 0.033383
+      }
+    },
+    {
+      "rank": 20,
+      "score": 7.7,
+      "craftScore": 7.5,
+      "representativenessScore": 8,
+      "sha256": "3a6bb4d62bbbd5c0d6ccb5fe9a98820528d29dd00d0af3da5b76bd1e2f1b2f7a",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae raphic 10.jpg.jpeg",
+      "filename": "kaae raphic 10.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1144984,
+      "reason": "Bold white-and-gold uppercase headline over a navy-gradient photo blend with a thin gold border frame and gold kaae.org pill delivers clear hierarchy and on-brand palette, though the double-photo composite and library-to-crowd transition feels slightly busy behind the body text.",
+      "recommendedFor": [
+        "feed_announcement",
+        "report_launch",
+        "field_visit_update",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R9c71wgx5hamTeZQxH",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4999,
+        "outputTokens": 164,
+        "costUsd": 0.049103
+      }
+    },
+    {
+      "rank": 21,
+      "score": 7.5,
+      "craftScore": 7.5,
+      "representativenessScore": 8,
+      "sha256": "c87f6691cf76f198286437ad308ea5f00620a6a9e34e55230b493b4ab4451e4c",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image1.png",
+      "filename": "image1.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1153
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 201107,
+      "reason": "Clean two-column agenda with bold Midnight Navy numbered badges, a clear bold/regular title-subtitle hierarchy, and a faint grid texture on cream-white, anchored by the KAAE seal and footer; the DejaVu-style sans and large empty gap between title and list slightly weaken visual dignity, and no Sorani Kurdish is present.",
+      "recommendedFor": [
+        "presentation",
+        "agenda",
+        "report"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RAyd7G4RqQHt2sdyNt",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 176,
+        "costUsd": 0.032933
+      }
+    },
+    {
+      "rank": 22,
+      "score": 7.5,
+      "craftScore": 7.5,
+      "representativenessScore": 8,
+      "sha256": "e2cafd2a4106d87b78a8ab9980d9636a00d79c2d8eb85f74d80acec2486b48a4",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-5.jpeg",
+      "filename": "kaae graphic new.jpg-5.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 160
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 1912290,
+      "reason": "Strong three-tier hierarchy pairing a gold thin-weight 'MEET KAAE AT THE' with heavy white Verdana-style 'KURDISTAN EDUCATIONAL FORUM' on a midnight navy grid with sunburst motif echoing the KAAE seal, though the cut-out portrait edge and generic system font slightly reduce polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_promotion",
+        "speaker_spotlight",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R7PLmCVsDtaL7V9LaX",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4987,
+        "outputTokens": 195,
+        "costUsd": 0.050533
+      }
+    },
+    {
+      "rank": 23,
+      "score": 7.5,
+      "craftScore": 7,
+      "representativenessScore": 8,
+      "sha256": "6008d60a3e73901817ecaefbda562575b402c264bd88e971d96fddd12d035112",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image2.png",
+      "filename": "image2.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 334811,
+      "reason": "Clean org-chart composition with gold 'STRUCTURE' eyebrow over bold Midnight Navy 'KAAE Team' headline, navy portrait cards on cream grid with dashed connectors, though role captions are undersized and the lower-tier cards feel cramped against the footer logo.",
+      "recommendedFor": [
+        "presentation",
+        "org_chart",
+        "about_page",
+        "annual_report"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RDUYDDzmaHR9XDWHiy",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 160,
+        "costUsd": 0.032133
+      }
+    },
+    {
+      "rank": 24,
+      "score": 7.5,
+      "craftScore": 7,
+      "representativenessScore": 8,
+      "sha256": "b2ea9c032912620e9447241dde24cda95f0cbbaf57f81d1a13453a662284c527",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image21.png",
+      "filename": "image21.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 906664,
+      "reason": "Strong navy/gold hierarchy with 'IMPACT' gold eyebrow, bold K-12 display type and clean stat callouts (12 / 3), though the photo collage on a navy panel sits somewhat heavy and the default sans body text and centered logo/footer leave the lower half slightly unbalanced with excess white space.",
+      "recommendedFor": [
+        "presentation",
+        "impact_report",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RDURmfJeCZCTu4WAps",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 169,
+        "costUsd": 0.032583
+      }
+    },
+    {
+      "rank": 25,
+      "score": 7.5,
+      "craftScore": 7,
+      "representativenessScore": 8.5,
+      "sha256": "b00250c9305b1f96a08af9bcda3f101dfaf079c5e440297a503b0ae4c36faffa",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image9.jpg",
+      "filename": "image9.jpg",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 151201,
+      "reason": "Centered KAAE seal over a navy gradient with subtle corner grids, bold white 'Thank You' and gold Verdana-style institutional line create a clean closing-slide hierarchy, though the generic system typeface and slightly loose vertical spacing between the seal and headline limit typographic refinement.",
+      "recommendedFor": [
+        "presentation",
+        "presentation_closing_slide",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RFBhzx2K5DM5GJUeZJ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3324,
+        "outputTokens": 166,
+        "costUsd": 0.032453
+      }
+    },
+    {
+      "rank": 26,
+      "score": 7.5,
+      "craftScore": 6.5,
+      "representativenessScore": 8.5,
+      "sha256": "3eae01b3369715494d33f6c37d7431b568e30a0397a578701aa6d9ff6774130a",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility .jpg-2.jpeg",
+      "filename": "Eligibility .jpg-2.jpeg",
+      "dimensions": {
+        "width": 159,
+        "height": 109
+      },
+      "aspectRatio": "A4_landscape",
+      "format": "A4_landscape",
+      "fileSizeBytes": 616689,
+      "reason": "Bold navy uppercase headline flanked by thin gold rule-and-dot accents over a subtle cream pinstripe background delivers a dignified, brand-consistent announcement, though the large empty gap between title and KAAE seal and the mismatched partner-logo scales weaken hierarchy and balance.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_status",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R2fJJkjuUoNbW5ZGqk",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3926,
+        "outputTokens": 166,
+        "costUsd": 0.038473
+      }
+    },
+    {
+      "rank": 27,
+      "score": 7.5,
+      "craftScore": 6.5,
+      "representativenessScore": 8.5,
+      "sha256": "391b3d8c5d2a7e4944be9f06c78a6fadca67fc5523f8bc180a0aeb91c6c919ef",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility .jpg.jpeg",
+      "filename": "Eligibility .jpg.jpeg",
+      "dimensions": {
+        "width": 159,
+        "height": 109
+      },
+      "aspectRatio": "A4_landscape",
+      "format": "A4_landscape",
+      "fileSizeBytes": 930901,
+      "reason": "Centered bold navy sans-serif headline with gold rule accents and sweeping navy-gold wave footer establishes clear hierarchy, though the headline's oversized weight and tight logo cluster with a stray divider bar feel slightly generic and template-like.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_status",
+        "partner_recognition",
+        "social_post"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R2gGbn8miH6R1aNCaz",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3924,
+        "outputTokens": 157,
+        "costUsd": 0.038003
+      }
+    },
+    {
+      "rank": 28,
+      "score": 7.5,
+      "craftScore": 6.5,
+      "representativenessScore": 8.5,
+      "sha256": "27c23245ad36ae535ddf229a499afab2283c2cd1cbbf41dd000170aa4061f1d7",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility 2.jpg.jpeg",
+      "filename": "Eligibility 2.jpg.jpeg",
+      "dimensions": {
+        "width": 159,
+        "height": 109
+      },
+      "aspectRatio": "A4_landscape",
+      "format": "A4_landscape",
+      "fileSizeBytes": 649055,
+      "reason": "Centered bold navy sans-serif headline with gold rule-and-dot flourishes and KAAE sunburst emblem on a subtle striped cream field reads as an authentic accreditation announcement, though the generic Verdana-like typeface, uneven vertical spacing, and awkward two-line title break with asymmetric gold rules weaken the typographic craft.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_status",
+        "partner_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R3K6f4zPb79diDhYff",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3926,
+        "outputTokens": 187,
+        "costUsd": 0.039523
+      }
+    },
+    {
+      "rank": 29,
+      "score": 7.5,
+      "craftScore": 6.5,
       "representativenessScore": 8.5,
       "sha256": "4e3591f3cdf7f7bc1bee21a9b4fd5304f8f0eb3f6a2e131d20af98e38c255075",
       "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image18.png",
@@ -376,375 +907,27 @@
       "aspectRatio": "16:9",
       "format": "16:9",
       "fileSizeBytes": 701824,
-      "reason": "Widescreen 16:9 keynote slide layout showcasing clean multi-column data visualization and institutional navy surface.",
+      "reason": "Bold white Verdana-style 'Advisory Board & Commissioners' on a navy gradient banner with a gold 'GOVERNANCE' kicker, KAAE seal, and tri-column headshot grid reads as authentic institutional governance material, but the tiny illegible title text under names and the cramped, uneven photo-card spacing weaken hierarchy and margin clearance.",
       "recommendedFor": [
-        "presentation_keynote",
-        "widescreen_slide"
+        "presentation",
+        "governance",
+        "annual_report"
       ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 18,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "e877bc12b151661d7097a12d582d9fbdf395ee1b39dffe4a0f0254f7df9438d3",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/IAE002.jpg.jpeg",
-      "filename": "IAE002.jpg.jpeg",
-      "dimensions": {
-        "width": 2250,
-        "height": 2811
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 780545,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 19,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "c87f6691cf76f198286437ad308ea5f00620a6a9e34e55230b493b4ab4451e4c",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image1.png",
-      "filename": "image1.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1153
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 201107,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 20,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "20e75b574afef39332bc949caa464f5f829b97290a6d36966ce35e12b7a87c10",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image10.png",
-      "filename": "image10.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 309769,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 21,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "41c6101c69ea40f73c88c88513d913f8c8ac23a1b2122e40564d24ea73f4de15",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image11.png",
-      "filename": "image11.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 301601,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 22,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "767bc712f5c41fa9d5957db6da99089c30deb9c39383f84682ffcdd7d28eebbc",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image12.png",
-      "filename": "image12.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 419436,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 23,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "8af6cac42d967e923cea481ec42f96ec06311cca31dbfcac2bc8a65b820ff4b1",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image13.png",
-      "filename": "image13.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 477799,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 24,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "15432f6604c7d99a24428bb3c927e401202b33f9a42f015a3fd28215900fd134",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image14.png",
-      "filename": "image14.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 705429,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 25,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image17.png",
-      "filename": "image17.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 359881,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 26,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image19.png",
-      "filename": "image19.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 363526,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 27,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "6008d60a3e73901817ecaefbda562575b402c264bd88e971d96fddd12d035112",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image2.png",
-      "filename": "image2.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 334811,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 28,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "d48c06007d9ea366e0c8c58ee142147d9edd29835b320279a1bdfe1b6b4dbc53",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image20.png",
-      "filename": "image20.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 279820,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 29,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "b2ea9c032912620e9447241dde24cda95f0cbbaf57f81d1a13453a662284c527",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image21.png",
-      "filename": "image21.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 906664,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RCsChq3H8FN9UsS55c",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 186,
+        "costUsd": 0.033433
+      }
     },
     {
       "rank": 30,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "bd07fdc1cbebb9be3bc927423d88118a058f9ed81870417af474569ab2fbb7a7",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image22.jpg",
-      "filename": "image22.jpg",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 534118,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 31,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "e5dd9da18061d22dadea9b269effd21dd1d3204e08995406bc8b945f502b0783",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image3.png",
-      "filename": "image3.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 242528,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 32,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "3ed8e573f56b49c443a4e2220cc162499e0928dcf2910ba14b1b362cac70d957",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image4.png",
-      "filename": "image4.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 285208,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 33,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "4b84dc52b78719647867cfd07062bb39710209faf4b50a3b6d934ff0b9a5b368",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image5.png",
-      "filename": "image5.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 274780,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 34,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "50a3f653d408d2f3e2dda1d74b15b56c8e7a82853edbed98704f9633c6e6e468",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image6.png",
-      "filename": "image6.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 297434,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
-      "recommendedFor": [
-        "general_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 35,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
+      "score": 7.2,
+      "craftScore": 7,
+      "representativenessScore": 7.5,
       "sha256": "76a102ae6380a0680500a52e232675d333610090ad6df547c8dba50d9cf75a12",
       "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image7.png",
       "filename": "image7.png",
@@ -755,17 +938,432 @@
       "aspectRatio": "16:9",
       "format": "16:9",
       "fileSizeBytes": 429214,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
+      "reason": "Clean two-column navy card system with status pills (Approved/Submitted/Planned) and partner logos reads as a credible institutional overview, though the Verdana-style typeface, absent Gold/Cream accents, unequal pill widths, and slightly inconsistent body line-heights soften the visual dignity.",
       "recommendedFor": [
-        "general_reference"
+        "presentation",
+        "feed_announcement",
+        "annual_report"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3REfHATM9B1yKsWkWU3",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 162,
+        "costUsd": 0.032233
+      }
+    },
+    {
+      "rank": 31,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "26efd152a1a9e77851088bd7fb312deb4b47158372fdb691db5d44a44f936e56",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/AUK002.jpg.jpeg",
+      "filename": "AUK002.jpg.jpeg",
+      "dimensions": {
+        "width": 2250,
+        "height": 2812
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1119082,
+      "reason": "Navy Verdana-style bold headline with gold subhead and a full-bleed navy chevron banner cleanly frame the AUK seal, but the banner breaks the left margin, the top-right grid texture is unevenly cropped, and the large empty band above the grey tagline weakens vertical balance.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_milestone",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QzweWPZ14EpmGovWiD",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 161,
+        "costUsd": 0.048933
+      }
+    },
+    {
+      "rank": 32,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "fc08f8aee024753db75b27166a8d31a333ed570b36ec766273ba5cbf7739c830",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CC002.jpg.jpeg",
+      "filename": "CC002.jpg.jpeg",
+      "dimensions": {
+        "width": 2250,
+        "height": 2811
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 809216,
+      "reason": "Navy gradient card with gold Verdana-style uppercase headline and white CHEA CIQG logo panel reads as credible KAAE partnership news, but the tag pill overlapping the card edge, uneven bottom whitespace, and generic sans typography dilute institutional polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "partnership_news",
+        "milestone_post"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R11jacoK49uu8xHMsa",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4996,
+        "outputTokens": 157,
+        "costUsd": 0.048723
+      }
+    },
+    {
+      "rank": 33,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "0661308204bbacf9e56d588380afbf6022e77b47a970d97cd21e55b3e687a2a3",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE001.jpg.jpeg",
+      "filename": "CUE001.jpg.jpeg",
+      "dimensions": {
+        "width": 2250,
+        "height": 2811
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 984501,
+      "reason": "Clean navy/gold Verdana-style hierarchy on a pale cream ground with a rounded white card reads institutionally dignified, but the low-resolution KAAE and CUE logos, generic system typeface, and uneven vertical spacing between header, headline, and card limit polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_milestone",
+        "partner_recognition"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R1w1M3Sid5RG3DrUk3",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 159,
+        "costUsd": 0.048833
+      }
+    },
+    {
+      "rank": 34,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "ffe07d4003958ae55d403ab38a53a47d9a1a436bf3bb539f749d6389511e33d6",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE002 3.jpg.jpeg",
+      "filename": "CUE002 3.jpg.jpeg",
+      "dimensions": {
+        "width": 2250,
+        "height": 2812
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1120111,
+      "reason": "Strong navy/gold palette and a bold Verdana-style headline with a clear arrow banner announcing 'ELIGIBILITY GRANTED', but the pentagon banner bleeds off the left margin, the gold subtitle is thin against the cream grid, and the large empty lower half weakens the composition.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_milestone",
+        "partner_recognition"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R1wXrMzjXW6hHDhUdX",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4999,
+        "outputTokens": 168,
+        "costUsd": 0.049303
+      }
+    },
+    {
+      "rank": 35,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "1d2df28f0ae85aabdce829b8bd28b2e3f0dea5e867b3eebff4088b48096067f5",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility 2.jpg-2.jpeg",
+      "filename": "Eligibility 2.jpg-2.jpeg",
+      "dimensions": {
+        "width": 159,
+        "height": 109
+      },
+      "aspectRatio": "A4_landscape",
+      "format": "A4_landscape",
+      "fileSizeBytes": 697899,
+      "reason": "Bold navy uppercase headline with gold rule accents and centered partner logos on a subtle striped cream-white ground reads clearly, though the wide letter-heavy title crowds the gold rules and the KAAE seal sits small at the bottom with uneven vertical spacing.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_status",
+        "partnership_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R2gqb6kCWVi7YNXnL6",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3928,
+        "outputTokens": 156,
+        "costUsd": 0.037993
+      }
     },
     {
       "rank": 36,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "e877bc12b151661d7097a12d582d9fbdf395ee1b39dffe4a0f0254f7df9438d3",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/IAE002.jpg.jpeg",
+      "filename": "IAE002.jpg.jpeg",
+      "dimensions": {
+        "width": 2250,
+        "height": 2811
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 780545,
+      "reason": "Gold Verdana-style uppercase headline over a midnight navy rounded card with a white INQAAHE logo panel delivers a clear hierarchy and on-palette contrast, but the low-res KAAE logo, off-card pill tab overlap, and generic system typeface with uneven vertical spacing weaken polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "partnership_announcement",
+        "membership_milestone"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R3EGT6ihRboDqZ6fLL",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 173,
+        "costUsd": 0.049533
+      }
+    },
+    {
+      "rank": 37,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "41c6101c69ea40f73c88c88513d913f8c8ac23a1b2122e40564d24ea73f4de15",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image11.png",
+      "filename": "image11.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 301601,
+      "reason": "Clean two-column numbered findings in Midnight Navy with a gold IMPACT eyebrow on cream-grid ground reads institutional, but uneven vertical rhythm (item 2 body collides with item 3), generic Verdana-style sans, and the small centered logo weaken polish.",
+      "recommendedFor": [
+        "presentation",
+        "standards",
+        "report_summary"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RBWYThg7iF3S4Ko7xd",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 153,
+        "costUsd": 0.031783
+      }
+    },
+    {
+      "rank": 38,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "767bc712f5c41fa9d5957db6da99089c30deb9c39383f84682ffcdd7d28eebbc",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image12.png",
+      "filename": "image12.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 419436,
+      "reason": "Navy gradient header banner and dark community panel carry KAAE's institutional palette with a clear two-column hierarchy, but the Verdana-style body type, uneven left-column spacing, awkward rounded IEDS callout with clipped corner, and faint grid background dilute the polish.",
+      "recommendedFor": [
+        "presentation",
+        "progress_report",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RBYuqyLNw9gU3u5tne",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 155,
+        "costUsd": 0.031883
+      }
+    },
+    {
+      "rank": 39,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "8af6cac42d967e923cea481ec42f96ec06311cca31dbfcac2bc8a65b820ff4b1",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image13.png",
+      "filename": "image13.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 477799,
+      "reason": "Clean org-chart hierarchy with a large bold navy 'High Council' heading, navy portrait cards and consistent name/role labels, but the default-looking bold sans (Verdana-like) typeface, faint grid background, wasted vertical space beneath the row of members, and absence of gold/cream accents beyond the small logo make it competent yet generic rather than distinctively dignified.",
+      "recommendedFor": [
+        "presentation",
+        "leadership_profile",
+        "about_page",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RBZ8zGw32VPVaTZphP",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 193,
+        "costUsd": 0.033783
+      }
+    },
+    {
+      "rank": 40,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "15432f6604c7d99a24428bb3c927e401202b33f9a42f015a3fd28215900fd134",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image14.png",
+      "filename": "image14.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 705429,
+      "reason": "Bold navy Verdana-style title and a clean 5×2 grid of navy-backed portraits with white name plates and the KAAE sunburst seal read as institutional, but the caption plates overhang the photo frames unevenly, the large empty band between title and grid weakens vertical balance, and cream/gold accents beyond the logo are absent.",
+      "recommendedFor": [
+        "presentation",
+        "board_roster",
+        "about_page",
+        "annual_report"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RC5aKT5h6EZbS9ZzeR",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 175,
+        "costUsd": 0.032883
+      }
+    },
+    {
+      "rank": 41,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "0f9e6c83ef1b3b3f68d80a61a7b7245609a1fa6a1f941f912fca1b117130b9dc",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image15.png",
+      "filename": "image15.png",
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 438622,
+      "reason": "Navy S-curve portrait mask and Kurdistan map with embedded gold KAAE seal establish a dignified Midnight Navy/Gold/Cream palette, but the dashed quote container and quote marks feel slightly generic and the body text uses a default sans (Verdana-like) with modest hierarchy.",
+      "recommendedFor": [
+        "feed_announcement",
+        "presentation",
+        "leadership_quote",
+        "social_post"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RC9D6C8TSSg54M6rgC",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2905,
+        "outputTokens": 169,
+        "costUsd": 0.028413
+      }
+    },
+    {
+      "rank": 42,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "e5dd9da18061d22dadea9b269effd21dd1d3204e08995406bc8b945f502b0783",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image3.png",
+      "filename": "image3.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 242528,
+      "reason": "Clean navy/gold Verdana-style hierarchy with numbered badges and a seven-point findings grid reads institutional, but the orphaned centered item 7 and generous empty right/top whitespace weaken compositional balance.",
+      "recommendedFor": [
+        "presentation",
+        "feed_announcement",
+        "standards"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RDysZorfY3EPGtTEQW",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 134,
+        "costUsd": 0.030833
+      }
+    },
+    {
+      "rank": 43,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "4b84dc52b78719647867cfd07062bb39710209faf4b50a3b6d934ff0b9a5b368",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image5.png",
+      "filename": "image5.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 274780,
+      "reason": "Clean navy/gold presentation slide with a strong 'LOOKING AHEAD / The KAAE / ACADEMY' title stack and two-column iconed feature list, but generic Verdana-style body type, a double space in the paragraph, an orphaned 'East.' line, uneven vertical spacing with a large empty gap before the footer logo, and no Sorani Kurdish typesetting limit its craft.",
+      "recommendedFor": [
+        "presentation",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3REVtrAX9LDKds5q8RJ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 192,
+        "costUsd": 0.033733
+      }
+    },
+    {
+      "rank": 44,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
       "sha256": "c38369a3338709d445209777127f1beb1754d0d197521f9f5e7485b788665fb8",
       "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image8.png",
       "filename": "image8.png",
@@ -776,80 +1374,613 @@
       "aspectRatio": "16:9",
       "format": "16:9",
       "fileSizeBytes": 226712,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
+      "reason": "Navy/gold palette with bold KAAE wordmark, interlocking core-values rings, and paired commission cards read as institutional, but a generic sans (Verdana-like) headline, cramped 'Continuous Improvement' label, and a small low-resolution seal at the footer weaken the hierarchy and polish.",
       "recommendedFor": [
-        "general_reference"
+        "presentation",
+        "about_us",
+        "feed_announcement"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RF7u3v3v6Wdbxvg2YX",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 164,
+        "costUsd": 0.032333
+      }
     },
     {
-      "rank": 37,
-      "score": 7.7,
-      "craftScore": 7.5,
-      "representativenessScore": 7.8,
-      "sha256": "b00250c9305b1f96a08af9bcda3f101dfaf079c5e440297a503b0ae4c36faffa",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image9.jpg",
-      "filename": "image9.jpg",
+      "rank": 45,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "5d9f6346039d91f9bda5494129f7dcf0cdec7d33ee8126e0f7497ca48bb1370e",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/INQAAHE_KRD.jpg.jpeg",
+      "filename": "INQAAHE_KRD.jpg.jpeg",
+      "dimensions": {
+        "width": 5122,
+        "height": 6400
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 3746483,
+      "reason": "Navy gradient card with gold Sorani headline, white INQAAHE partner panel and cream background reads institutionally correct, but ghosted English text bleeding through behind the Kurdish headline and body, plus a stray artifact in the white panel, undercut the polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "partnership_announcement",
+        "accreditation_milestone"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R3zMZwWAuBprmsksN2",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5003,
+        "outputTokens": 155,
+        "costUsd": 0.048693
+      }
+    },
+    {
+      "rank": 46,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "e62f1e37536fa1716f0290dd0a675ae00a20698e3292d53765def84c66dbda9a",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/INQAAHE.jpg.jpeg",
+      "filename": "INQAAHE.jpg.jpeg",
+      "dimensions": {
+        "width": 5122,
+        "height": 6400
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 2414244,
+      "reason": "Navy gradient card with gold uppercase Verdana-style headline and white INQAAHE logo panel delivers a dignified milestone announcement, though the tab label cutting past the card edge and the generic system font weaken typographic refinement.",
+      "recommendedFor": [
+        "feed_announcement",
+        "milestone",
+        "partnership_announcement",
+        "membership"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R3PTqjRHfKLAsp1CK6",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4999,
+        "outputTokens": 143,
+        "costUsd": 0.048053
+      }
+    },
+    {
+      "rank": 47,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 8,
+      "sha256": "2aa8bbd07ea143cea01727036da5bc00fafb14fefe60ad883a1760a88d0112ef",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic dr lina.jpg-3.jpeg",
+      "filename": "kaae graphic dr lina.jpg-3.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 2921475,
+      "reason": "Clean navy/gold palette with a gold-accented title over a bold navy headline and a rounded navy panel housing QR and event details, though the vertical 'Register Now' label and the tight fit of the long subtitle against the decorative gray sun/clock motif weaken hierarchy and margin clearance.",
+      "recommendedFor": [
+        "feed_announcement",
+        "webinar_promo",
+        "event_flyer"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5y5Uqqd2gUpNUDiBJ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5003,
+        "outputTokens": 162,
+        "costUsd": 0.049043
+      }
+    },
+    {
+      "rank": 48,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "61fddfc58dedd5c54ef7de433a522e97475b757da45bfe3ee3a95662669c8ee9",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-3.jpeg",
+      "filename": "kaae graphic new.jpg-3.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 160
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 1930219,
+      "reason": "Clear three-tier hierarchy with gold-cream Verdana-style kicker over bold white 'KURDISTAN EDUCATIONAL FORUM' on midnight navy grid, though the generic system typeface, cut-off portrait bleeding into the date band, and faint clock-face motif weaken polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_promo",
+        "presentation"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R7TvLjFH4pWV8Didpb",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4987,
+        "outputTokens": 165,
+        "costUsd": 0.049033
+      }
+    },
+    {
+      "rank": 49,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "2f6e06c8bba65b82ed2bf3341e40df4bfdefa2ea6e1fdd4d2e9483e76dc81a01",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg.jpeg",
+      "filename": "kaae graphic new.jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 160
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 2415690,
+      "reason": "Navy gradient with grid texture, gold uppercase kicker over white Verdana-style headline and a decorative sun-ray arc deliver a clear event-announcement hierarchy, but the generic system typeface, cramped right margin on 'EDUCATIONAL FORUM', and small low-contrast KAAE logo placement weaken polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_promotion",
+        "speaker_spotlight"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R82UBFdokhNjF71T5v",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4985,
+        "outputTokens": 181,
+        "costUsd": 0.049813
+      }
+    },
+    {
+      "rank": 50,
+      "score": 7,
+      "craftScore": 6.5,
+      "representativenessScore": 7.5,
+      "sha256": "829496250e21bbeaff1f5466221c68ad5126989b2107b32bce62cec5bfb59ecd",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae join.jpg.jpeg",
+      "filename": "kaae join.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 3620157,
+      "reason": "Laptop mockup shows KAAE's navy/gold palette with bold 'Join Our Community' headline and kaae.org pill CTA, but the stock desk-and-plant scene, Verdana-style body text, and loosely placed corner logo dilute institutional gravitas and lack any Sorani Kurdish typesetting.",
+      "recommendedFor": [
+        "feed_announcement",
+        "social_media",
+        "website_promotion"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R8gvDQ56mAoe5uX827",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4995,
+        "outputTokens": 171,
+        "costUsd": 0.049413
+      }
+    },
+    {
+      "rank": 51,
+      "score": 6.8,
+      "craftScore": 6.5,
+      "representativenessScore": 7,
+      "sha256": "50a3f653d408d2f3e2dda1d74b15b56c8e7a82853edbed98704f9633c6e6e468",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image6.png",
+      "filename": "image6.png",
       "dimensions": {
         "width": 2048,
         "height": 1152
       },
       "aspectRatio": "16:9",
       "format": "16:9",
-      "fileSizeBytes": 151201,
-      "reason": "Institutional graphic with authentic KAAE color tokens and standard Kurdish display typography.",
+      "fileSizeBytes": 297434,
+      "reason": "Clean six-column operations grid with navy gradient banner and consistent icon-led subheads reads as a credible KAAE report slide, but generic Verdana-style type, a visible gold/orange logo clashing with the cool blue palette, and large empty vertical gaps undercut the polish.",
       "recommendedFor": [
-        "general_reference"
+        "presentation",
+        "annual_report",
+        "operations_overview"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3REY7Yk9nUG7en6cWcW",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 154,
+        "costUsd": 0.031833
+      }
     },
     {
-      "rank": 38,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "645a857d3897a2d3d6fffee44e7792a0472f15733712b1f89e5f79599fc5aeee",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11..jpg-2.jpeg",
-      "filename": "11..jpg-2.jpeg",
+      "rank": 52,
+      "score": 6.8,
+      "craftScore": 6.5,
+      "representativenessScore": 7,
+      "sha256": "a0ceaa64ce9d475ad4a9e05ecb84d8959b42c34cbb3de40f29eccd513a5f231c",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-4.jpeg",
+      "filename": "kaae graphic new.jpg-4.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 160
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 1902057,
+      "reason": "Midnight navy gradient with subtle grid, gold Verdana-style eyebrow 'MEET KAAE AT THE' and bold white stacked headline build clear hierarchy, but the generic system-font typography, cramped portrait cutout touching the left/bottom edges, and low-res logo placement reduce polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_promotion",
+        "speaker_spotlight"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R7TXH1cfSnVkW5qds9",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4987,
+        "outputTokens": 173,
+        "costUsd": 0.049433
+      }
+    },
+    {
+      "rank": 53,
+      "score": 6.5,
+      "craftScore": 6.5,
+      "representativenessScore": 7,
+      "sha256": "83b541868a65f00d7291314637f49e33ecd16d8d157c516b78aa7f974e2ad767",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-2.jpeg",
+      "filename": "kaae graphic new.jpg-2.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 160
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 1931470,
+      "reason": "Navy gradient with gold 'MEET KAAE AT THE' eyebrow and bold white all-caps headline on a subtle grid delivers clear hierarchy and on-brand palette, but the mismatched blue date band, default-looking sans (Verdana-like) and low-res logo weaken polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_promo",
+        "speaker_card"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5zdzTJ8iGFZKQm5HP",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4987,
+        "outputTokens": 164,
+        "costUsd": 0.048983
+      }
+    },
+    {
+      "rank": 54,
+      "score": 6.5,
+      "craftScore": 6.5,
+      "representativenessScore": 7,
+      "sha256": "ef054dc2fd19043c272c570f227c9f94e62129f5d8ee790e61d85b395820aba9",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae join 2.jpg.jpeg",
+      "filename": "kaae join 2.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 3038166,
+      "reason": "Laptop mockup with navy/gold Verdana-style headline 'Join Our Community' and a kaae.org pill reads as a competent social promo, but the generic starburst background, stock-photo staging, and default web font limit typographic dignity relative to formal KAAE standards material.",
+      "recommendedFor": [
+        "feed_announcement",
+        "social_promo",
+        "website_launch"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R8kXW7sEUFKKWhm8JM",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 154,
+        "costUsd": 0.048583
+      }
+    },
+    {
+      "rank": 55,
+      "score": 6.5,
+      "craftScore": 6,
+      "representativenessScore": 7.5,
+      "sha256": "bd07fdc1cbebb9be3bc927423d88118a058f9ed81870417af474569ab2fbb7a7",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image22.jpg",
+      "filename": "image22.jpg",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 534118,
+      "reason": "Full-bleed Kurdistan mountain photo with the official gold-and-navy KAAE seal centered above bold white Verdana-style title and 'May 2026' subline reads as an authentic title slide, but the white text sits directly over busy mountain texture with no scrim, the logo's translucent halo clashes with the landscape, and a faint grid overlay at top-left adds visual noise.",
+      "recommendedFor": [
+        "presentation",
+        "title_slide",
+        "feed_announcement"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RDzn8xurx8XXpiRz98",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3324,
+        "outputTokens": 189,
+        "costUsd": 0.033603
+      }
+    },
+    {
+      "rank": 56,
+      "score": 6.5,
+      "craftScore": 5.5,
+      "representativenessScore": 7.5,
+      "sha256": "d74f139f739fc6c86193f391fd268a9f4e44c8f80f53f8d901a4d77f696671b4",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi..jpg.jpeg",
+      "filename": "11kurdi..jpg.jpeg",
       "dimensions": {
         "width": 160,
         "height": 128
       },
       "aspectRatio": "160:128",
       "format": "160:128",
-      "fileSizeBytes": 874927,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "fileSizeBytes": 928845,
+      "reason": "Navy header band with clean white Sorani title over a Zoom participant grid and KAAE logo bottom-right delivers institutional legibility, but the raw screenshot tiles, uneven grid gaps, and absent gold/cream accents limit typographic and compositional polish.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap",
+        "webinar_coverage"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QyssXCK77hcCzPt1fC",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2642,
+        "outputTokens": 157,
+        "costUsd": 0.025183
+      }
     },
     {
-      "rank": 39,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "7da2f645233d4fee9f04543fcb4862714a3d2f66dd7c707eb10608eb7060875e",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11..jpg.jpeg",
-      "filename": "11..jpg.jpeg",
+      "rank": 57,
+      "score": 6.5,
+      "craftScore": 5.5,
+      "representativenessScore": 7.5,
+      "sha256": "7ea91ce8e8c9e7c6f5ffb48b59b5edda3f50c896ce061d905d11643129d606cc",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi.jpg.jpeg",
+      "filename": "11kurdi.jpg.jpeg",
       "dimensions": {
         "width": 160,
         "height": 128
       },
       "aspectRatio": "160:128",
       "format": "160:128",
-      "fileSizeBytes": 891390,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "fileSizeBytes": 857236,
+      "reason": "Navy header band with centered white Sorani title and KAAE seal anchoring the lower-right frame the Zoom grid credibly, but the composition is a raw screenshot collage with uneven tile gaps, missing gold/cream accents, and a cramped logo placement that undercuts typographic and layout polish.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap",
+        "webinar_report"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QynNdfuLjeBWAYxgXW",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2642,
+        "outputTokens": 166,
+        "costUsd": 0.025633
+      }
     },
     {
-      "rank": 40,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
+      "rank": 58,
+      "score": 6,
+      "craftScore": 7.5,
+      "representativenessScore": 5,
+      "sha256": "15a9e20e0304367359d1ddf2c9e07ea9bb7124db8019c5c374abb61bfc13bb25",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eid 2.jpg.jpeg",
+      "filename": "eid 2.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1451361,
+      "reason": "Bilingual Sorani/Latin greeting in dark brown sans sits cleanly over a pale sky with a thin blue-grey frame and centered KAAE seal, but the pastoral photo and absent navy/gold palette make it a seasonal greeting rather than institutional standards material.",
+      "recommendedFor": [
+        "feed_announcement",
+        "holiday_greeting"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R4d2TL3Uz1pzyTiYTm",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4995,
+        "outputTokens": 153,
+        "costUsd": 0.048513
+      }
+    },
+    {
+      "rank": 59,
+      "score": 6,
+      "craftScore": 5.5,
+      "representativenessScore": 7,
+      "sha256": "34edf3417d3fce2990fdb19ef89a27ee0eebebca4c3fe7cc08925d4947f65f0a",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi 2.jpg.jpeg",
+      "filename": "11kurdi 2.jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 862501,
+      "reason": "Navy header band with clean white Sorani title and a screenshot grid of Zoom participants plus the KAAE emblem bottom-right reads as an authentic event recap, but the grid gaps are uneven, the raw meeting captures lack cropping polish, and gold is only present in the small logo.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_recap",
+        "webinar_report"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QyDkaMxTKoTa17puoo",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2644,
+        "outputTokens": 157,
+        "costUsd": 0.025203
+      }
+    },
+    {
+      "rank": 60,
+      "score": 6,
+      "craftScore": 5.5,
+      "representativenessScore": 7,
+      "sha256": "e2c5af4e9271d6ebda16342953f6621b5de22c86d94aeddcf1a220445373cbc3",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi..jpg-2.jpeg",
+      "filename": "11kurdi..jpg-2.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 912740,
+      "reason": "Navy header band with white Sorani Kurdish bold title and a gold-ringed KAAE logo in the lower right reads institutionally, but the 4x5 grid of raw Zoom screenshots with default name badges, uneven spacing, and an empty bottom-row cell weakens typographic hierarchy and margin discipline.",
+      "recommendedFor": [
+        "feed_announcement",
+        "event_recap"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QyDtXCzMmsjBZ5XX2D",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2644,
+        "outputTokens": 163,
+        "costUsd": 0.025503
+      }
+    },
+    {
+      "rank": 61,
+      "score": 6,
+      "craftScore": 5.5,
+      "representativenessScore": 7,
+      "sha256": "22041f5cb6fd4f30998cbcef0b7cc95010d991244c871183592caf635ed14c9c",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5..jpg.jpeg",
+      "filename": "kaae 5..jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 1447664,
+      "reason": "A formal group photograph of four officials before a gilded column with the KAAE sun-and-book logo watermarked top-left; the composition carries institutional dignity and navy/gold/cream harmony but contains no typographic hierarchy, headline, or Sorani/Latin typesetting to serve as a design template.",
+      "recommendedFor": [
+        "feed_announcement",
+        "press_release",
+        "photo_reference"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R5KmPimV6r2b2SPhMi",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4996,
+        "outputTokens": 160,
+        "costUsd": 0.048873
+      }
+    },
+    {
+      "rank": 62,
+      "score": 5.5,
+      "craftScore": 6.5,
+      "representativenessScore": 5,
+      "sha256": "5c3476fbc42a57972e82ede86fef50813ef7ca7ac805723a38e7c8230914cb91",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eid 3.jpg.jpeg",
+      "filename": "eid 3.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1759633,
+      "reason": "Bold Sorani Kurdish headline and spaced Latin 'HAPPY EID AL-ADHA' sit cleanly over a bright cloud field with a navy frame, but the dark-brown text lacks Gold/Cream palette alignment and the KAAE logo is small and buried in the busy flower foreground with weak contrast.",
+      "recommendedFor": [
+        "feed_announcement",
+        "holiday_greeting"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R4gb1XDbqBTvvJfisz",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4995,
+        "outputTokens": 172,
+        "costUsd": 0.049463
+      }
+    },
+    {
+      "rank": 63,
+      "score": 5.5,
+      "craftScore": 6.5,
+      "representativenessScore": 5,
+      "sha256": "e5236330039a5a24fe172004b16f3e55e9b1bc502f6be9d94a1afaaca8d57d52",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eidd.jpg.jpeg",
+      "filename": "eidd.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1930337,
+      "reason": "Bold Sorani Kurdish headline paired with clean Latin sans 'HAPPY EID AL-ADHA' sits legibly on the bright sky of a Kurdish mountain-and-minaret photo, but the dark-brown type and photographic palette bypass KAAE's Midnight Navy/Gold/Cream system and the small centered logo lacks institutional framing.",
+      "recommendedFor": [
+        "feed_announcement",
+        "holiday_greeting"
+      ],
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3R4izNQyHf9aDYj31Sk",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4994,
+        "outputTokens": 186,
+        "costUsd": 0.050153
+      }
+    },
+    {
+      "rank": 64,
+      "score": 5.5,
+      "craftScore": 4.5,
+      "representativenessScore": 7,
       "sha256": "4f70165b476ed093508199ac936f709f7da1f35060dd88ea4a0b4f4154562ca1",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11.jpg.jpeg",
       "filename": "11.jpg.jpeg",
@@ -860,16 +1991,25 @@
       "aspectRatio": "160:128",
       "format": "160:128",
       "fileSizeBytes": 838563,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "reason": "Bold white Verdana-style headline on a Midnight Navy band with a KAAE gold-compass logo in the corner is on-brand, but the raw Zoom grid screenshot with uneven gaps, inconsistent participant-name tags, and a stray fifth-row empty cell weakens layout craft and visual dignity.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QxcTJeyE8LXQ2MoQwm",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2638,
+        "outputTokens": 164,
+        "costUsd": 0.04623
+      }
     },
     {
-      "rank": 41,
-      "score": 6.4,
-      "craftScore": 6.2,
+      "rank": 65,
+      "score": 5.2,
+      "craftScore": 4.5,
       "representativenessScore": 6.5,
       "sha256": "5a3fe12250198f941845cc1e0aaa43c1c34fc9d3db31a71df3878b2437b0e3ea",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/1111.jpg.jpeg",
@@ -881,143 +2021,56 @@
       "aspectRatio": "160:128",
       "format": "160:128",
       "fileSizeBytes": 436721,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "reason": "Bold white Verdana-style headline on a Midnight Navy band over a raw Zoom-style participant grid with a small KAAE logo tucked bottom-right reads as an authentic event recap but lacks typographic refinement, Gold/Cream palette accents, and considered margin treatment.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QyDMXEciYYwPLEPCTR",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2639,
+        "outputTokens": 155,
+        "costUsd": 0.025053
+      }
     },
     {
-      "rank": 42,
-      "score": 6.4,
-      "craftScore": 6.2,
+      "rank": 66,
+      "score": 5,
+      "craftScore": 4.5,
       "representativenessScore": 6.5,
-      "sha256": "34edf3417d3fce2990fdb19ef89a27ee0eebebca4c3fe7cc08925d4947f65f0a",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi 2.jpg.jpeg",
-      "filename": "11kurdi 2.jpg.jpeg",
+      "sha256": "7da2f645233d4fee9f04543fcb4862714a3d2f66dd7c707eb10608eb7060875e",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11..jpg.jpeg",
+      "filename": "11..jpg.jpeg",
       "dimensions": {
         "width": 160,
         "height": 128
       },
       "aspectRatio": "160:128",
       "format": "160:128",
-      "fileSizeBytes": 862501,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "fileSizeBytes": 891390,
+      "reason": "Bold white sans-serif title on a Midnight Navy banner gives clear hierarchy, but the raw Zoom grid screenshot with participant name tags and inconsistent tile sizes lacks polish, margin discipline, and any Gold/Cream accents or Sorani Kurdish typesetting.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QxcMrQ1SvWhQUNVQJ6",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2638,
+        "outputTokens": 158,
+        "costUsd": 0.04593
+      }
     },
     {
-      "rank": 43,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "e2c5af4e9271d6ebda16342953f6621b5de22c86d94aeddcf1a220445373cbc3",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi..jpg-2.jpeg",
-      "filename": "11kurdi..jpg-2.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 912740,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 44,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "d74f139f739fc6c86193f391fd268a9f4e44c8f80f53f8d901a4d77f696671b4",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi..jpg.jpeg",
-      "filename": "11kurdi..jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 928845,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 45,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "7ea91ce8e8c9e7c6f5ffb48b59b5edda3f50c896ce061d905d11643129d606cc",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11kurdi.jpg.jpeg",
-      "filename": "11kurdi.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 857236,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 46,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "317b38f1594c58ecf1f343ee2b1017860e29e0ad462c0e388a6e8428948d2cf3",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/13..jpg.jpeg",
-      "filename": "13..jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 92
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 722222,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 47,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "484a474292e2a6c5723fa8e8a802f8da2e62e16d00d9891b318109c0148fe3c7",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/13.jpg.jpeg",
-      "filename": "13.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 92
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 739954,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 48,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
+      "rank": 67,
+      "score": 5,
+      "craftScore": 4.5,
+      "representativenessScore": 6,
       "sha256": "7e0f2c89598bfa40fc57409bd60fffee7705936c6c30a9126d2470637a62f13c",
       "path": "data/kaae-graphics/references/KAAE Archives /Graphics/14.jpg.jpeg",
       "filename": "14.jpg.jpeg",
@@ -1028,494 +2081,140 @@
       "aspectRatio": "160:128",
       "format": "160:128",
       "fileSizeBytes": 891118,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "reason": "Bold white Verdana-style headline on a striped Midnight Navy band sits above a raw Zoom gallery screenshot with a small gold KAAE logo bottom-right, giving clear title hierarchy but low compositional craft and no Cream/Gold palette integration.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap"
       ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 49,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for kurdi.jpg.jpeg",
-      "filename": "call for kurdi.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2675014,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 50,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "b74866d7835fd9003e956b7edc17fc67fced1bd456c64f5fce6869ac8e7c6221",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for.jpg.jpeg",
-      "filename": "call for.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2712068,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 51,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "15a9e20e0304367359d1ddf2c9e07ea9bb7124db8019c5c374abb61bfc13bb25",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eid 2.jpg.jpeg",
-      "filename": "eid 2.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1451361,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 52,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "5c3476fbc42a57972e82ede86fef50813ef7ca7ac805723a38e7c8230914cb91",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eid 3.jpg.jpeg",
-      "filename": "eid 3.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1759633,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 53,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "e5236330039a5a24fe172004b16f3e55e9b1bc502f6be9d94a1afaaca8d57d52",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/eidd.jpg.jpeg",
-      "filename": "eidd.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1930337,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 54,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "3eae01b3369715494d33f6c37d7431b568e30a0397a578701aa6d9ff6774130a",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility .jpg-2.jpeg",
-      "filename": "Eligibility .jpg-2.jpeg",
-      "dimensions": {
-        "width": 159,
-        "height": 109
-      },
-      "aspectRatio": "A4_landscape",
-      "format": "A4_landscape",
-      "fileSizeBytes": 616689,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 55,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "391b3d8c5d2a7e4944be9f06c78a6fadca67fc5523f8bc180a0aeb91c6c919ef",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility .jpg.jpeg",
-      "filename": "Eligibility .jpg.jpeg",
-      "dimensions": {
-        "width": 159,
-        "height": 109
-      },
-      "aspectRatio": "A4_landscape",
-      "format": "A4_landscape",
-      "fileSizeBytes": 930901,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 56,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "1d2df28f0ae85aabdce829b8bd28b2e3f0dea5e867b3eebff4088b48096067f5",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility 2.jpg-2.jpeg",
-      "filename": "Eligibility 2.jpg-2.jpeg",
-      "dimensions": {
-        "width": 159,
-        "height": 109
-      },
-      "aspectRatio": "A4_landscape",
-      "format": "A4_landscape",
-      "fileSizeBytes": 697899,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 57,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "27c23245ad36ae535ddf229a499afab2283c2cd1cbbf41dd000170aa4061f1d7",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/Eligibility 2.jpg.jpeg",
-      "filename": "Eligibility 2.jpg.jpeg",
-      "dimensions": {
-        "width": 159,
-        "height": 109
-      },
-      "aspectRatio": "A4_landscape",
-      "format": "A4_landscape",
-      "fileSizeBytes": 649055,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 58,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5 kurdi.jpg.jpeg",
-      "filename": "kaae 5 kurdi.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 1284432,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 59,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "22041f5cb6fd4f30998cbcef0b7cc95010d991244c871183592caf635ed14c9c",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5..jpg.jpeg",
-      "filename": "kaae 5..jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 1447664,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 60,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "344ff907834634c03457b3d55784d5dd6ce64dda8d142fbafaae3c991aa8f7d9",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5.jpg.jpeg",
-      "filename": "kaae 5.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 1285875,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 61,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "215bcc0eee126059a72765a17a03b0f0230b4ca9d19b5af7b04bc7740a977320",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic dr lina kurdi.jpg-2.jpeg",
-      "filename": "kaae graphic dr lina kurdi.jpg-2.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2850738,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 62,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "2aa8bbd07ea143cea01727036da5bc00fafb14fefe60ad883a1760a88d0112ef",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic dr lina.jpg-3.jpeg",
-      "filename": "kaae graphic dr lina.jpg-3.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2921475,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 63,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "83b541868a65f00d7291314637f49e33ecd16d8d157c516b78aa7f974e2ad767",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-2.jpeg",
-      "filename": "kaae graphic new.jpg-2.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 160
-      },
-      "aspectRatio": "1:1",
-      "format": "1:1",
-      "fileSizeBytes": 1931470,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 64,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "61fddfc58dedd5c54ef7de433a522e97475b757da45bfe3ee3a95662669c8ee9",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-3.jpeg",
-      "filename": "kaae graphic new.jpg-3.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 160
-      },
-      "aspectRatio": "1:1",
-      "format": "1:1",
-      "fileSizeBytes": 1930219,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 65,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "a0ceaa64ce9d475ad4a9e05ecb84d8959b42c34cbb3de40f29eccd513a5f231c",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-4.jpeg",
-      "filename": "kaae graphic new.jpg-4.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 160
-      },
-      "aspectRatio": "1:1",
-      "format": "1:1",
-      "fileSizeBytes": 1902057,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 66,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "e2cafd2a4106d87b78a8ab9980d9636a00d79c2d8eb85f74d80acec2486b48a4",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg-5.jpeg",
-      "filename": "kaae graphic new.jpg-5.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 160
-      },
-      "aspectRatio": "1:1",
-      "format": "1:1",
-      "fileSizeBytes": 1912290,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
-    },
-    {
-      "rank": 67,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "2f6e06c8bba65b82ed2bf3341e40df4bfdefa2ea6e1fdd4d2e9483e76dc81a01",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae graphic new.jpg.jpeg",
-      "filename": "kaae graphic new.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 160
-      },
-      "aspectRatio": "1:1",
-      "format": "1:1",
-      "fileSizeBytes": 2415690,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
-      "recommendedFor": [
-        "legacy_thumbnail_reference"
-      ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QzNvWjNdb6crK2TZC8",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2638,
+        "outputTokens": 145,
+        "costUsd": 0.024543
+      }
     },
     {
       "rank": 68,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "ef054dc2fd19043c272c570f227c9f94e62129f5d8ee790e61d85b395820aba9",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae join 2.jpg.jpeg",
-      "filename": "kaae join 2.jpg.jpeg",
+      "score": 4.5,
+      "craftScore": 4,
+      "representativenessScore": 6,
+      "sha256": "645a857d3897a2d3d6fffee44e7792a0472f15733712b1f89e5f79599fc5aeee",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/11..jpg-2.jpeg",
+      "filename": "11..jpg-2.jpeg",
       "dimensions": {
-        "width": 128,
-        "height": 160
+        "width": 160,
+        "height": 128
       },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 3038166,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 874927,
+      "reason": "A navy pinstripe banner with bold white Verdana-style title sits atop an unedited Teams/Zoom screenshot grid of 19 participants with raw name labels and mute icons, offering little typographic hierarchy, no Kurdish typesetting, and no gold/cream palette despite the authentic KAAE-branded virtual backgrounds visible in the first two tiles.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QxcLc41M6NmJiaAFLw",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2640,
+        "outputTokens": 180,
+        "costUsd": 0.04705
+      }
     },
     {
       "rank": 69,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "829496250e21bbeaff1f5466221c68ad5126989b2107b32bce62cec5bfb59ecd",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae join.jpg.jpeg",
-      "filename": "kaae join.jpg.jpeg",
+      "score": 4,
+      "craftScore": 3.5,
+      "representativenessScore": 6,
+      "sha256": "bd72c0a0b2a35b3fff33282dbb99d90018123822fdeaae64dfa35c1344d5514a",
+      "path": "data/kaae-graphics/references/KAAE_Standards_Higher_Ed_1080x1350.png",
+      "filename": "KAAE_Standards_Higher_Ed_1080x1350.png",
       "dimensions": {
-        "width": 128,
-        "height": 160
+        "width": 2160,
+        "height": 2700
       },
       "aspectRatio": "4:5",
       "format": "4:5",
-      "fileSizeBytes": 3620157,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "fileSizeBytes": 694625,
+      "reason": "The dark header panel overlaps and obscures the first line of the 'Standards of Higher Education Institutional Accreditation' headline and washes out the KAAE logo and top-right tagline, while broken emoji glyphs before each gold 'Required Evidence' line and unbalanced left-indented section blocks undercut an otherwise on-brand navy/gold palette with correct Sorani Kurdish subtitle and Law No. 6 of 2022 footer.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "standards"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3RA7ZKt7FbyhfEHtHWm",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5008,
+        "outputTokens": 197,
+        "costUsd": 0.050843
+      }
     },
     {
       "rank": 70,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "3a6bb4d62bbbd5c0d6ccb5fe9a98820528d29dd00d0af3da5b76bd1e2f1b2f7a",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae raphic 10.jpg.jpeg",
-      "filename": "kaae raphic 10.jpg.jpeg",
+      "score": 4,
+      "craftScore": 3,
+      "representativenessScore": 6,
+      "sha256": "484a474292e2a6c5723fa8e8a802f8da2e62e16d00d9891b318109c0148fe3c7",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/13.jpg.jpeg",
+      "filename": "13.jpg.jpeg",
       "dimensions": {
-        "width": 128,
-        "height": 160
+        "width": 160,
+        "height": 92
       },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1144984,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 739954,
+      "reason": "A raw Teams/Zoom gallery screenshot with default UI name labels and uneven video tiles, only lightly branded by a bottom-right KAAE seal and two navy KAAE virtual backgrounds—no designed typography, palette control, or margin system.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_recap",
+        "social_media_post"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QzNB83dGqo2WMu7At6",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1978,
+        "outputTokens": 145,
+        "costUsd": 0.017943
+      }
     },
     {
       "rank": 71,
-      "score": 6.4,
-      "craftScore": 6.2,
-      "representativenessScore": 6.5,
-      "sha256": "d8e7a4ec9c69605f12a697ebac9fbfab1f0fe452a166fdcb8c34733efc2619e1",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae raphic kurdi 10.jpg.jpeg",
-      "filename": "kaae raphic kurdi 10.jpg.jpeg",
+      "score": 3,
+      "craftScore": 2.5,
+      "representativenessScore": 4,
+      "sha256": "317b38f1594c58ecf1f343ee2b1017860e29e0ad462c0e388a6e8428948d2cf3",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/13..jpg.jpeg",
+      "filename": "13..jpg.jpeg",
       "dimensions": {
-        "width": 128,
-        "height": 160
+        "width": 160,
+        "height": 92
       },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 1132910,
-      "reason": "Low-resolution legacy archive thumbnail; useful for compositional silhouette reference only.",
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 722222,
+      "reason": "This is a raw Zoom gallery screenshot with default UI name labels, no typographic hierarchy, and no KAAE navy/gold/cream palette—only two participants show a KAAE-branded virtual background—so it documents an accreditation meeting but offers no design craft to emulate.",
       "recommendedFor": [
-        "legacy_thumbnail_reference"
+        "feed_announcement",
+        "event_documentation"
       ],
-      "recommendedAsExemplar": false
+      "recommendedAsExemplar": false,
+      "evaluator": "vision",
+      "receipt": {
+        "responseId": "msg_011Cf3QysUDW7kLyGmR2f3em",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1978,
+        "outputTokens": 150,
+        "costUsd": 0.018193
+      }
     }
   ]
 }

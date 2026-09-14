@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   renderLayoutV2,
   comparePngBuffers,
+  assertFontResolves,
 } from '../src/studio/render-layout-v2.js';
+import path from 'node:path';
 import {
   LATIN_LAYOUT,
   LATIN_COPY,
@@ -34,7 +36,8 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
     expect(res1.fontFidelity['Noto Sans Arabic']).toBe('exact');
-    expect(res1.svg).toContain('direction="rtl" unicode-bidi="bidi-override"');
+    expect(res1.svg).toContain('direction="rtl"');
+    expect(res1.svg).toContain('text-anchor="start"');
     expect(res1.svg).toContain('Noto Sans Arabic');
 
     const res2 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY });
@@ -72,5 +75,12 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);
+  });
+
+  it('throws FONT_UNRESOLVED when requested font family resolves to a fallback family', () => {
+    const fontsConf = path.resolve(process.cwd(), 'packages/creative/assets/fonts/fonts.conf');
+    expect(() => {
+      assertFontResolves('UnknownNonExistentFamily', fontsConf);
+    }).toThrow(/FONT_UNRESOLVED/);
   });
 });

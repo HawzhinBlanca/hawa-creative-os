@@ -11,9 +11,9 @@
 
 `StudioModelClient` provides raw-fetch integration with Anthropic's Messages API specifically engineered for Design Studio v2:
 1. **Zero-SDK Raw Fetch:** Implemented with native `fetch` and explicit HTTP error management, eliminating unneeded abstraction layers.
-2. **Deterministic Structured Outputs:** Instructs the model to output strict JSON according to a caller-supplied JSON schema without conversational preamble or markdown code blocks, with resilient fallback substring parsing.
-3. **Anthropic Prompt Caching:** Attaches `cache_control: { type: 'ephemeral' }` to static system prefixes ($\ge 1024$ tokens) with header `anthropic-beta: prompt-caching-2024-07-31`. On subsequent calls, Anthropic reuses the cached prefix, reducing prompt latency and cost by up to 90%.
-4. **Transparent Audit Receipts:** Computes exact USD costs using prices committed in `pricing.json` (`claude-fable-5-1`: \$3.00/M input, \$15.00/M output, \$0.30/M cache read, \$3.75/M cache write; `claude-opus-5`: \$15.00/M input, \$75.00/M output, \$1.50/M cache read, \$18.75/M cache write).
+2. **Deterministic Structured Outputs:** Enforced natively via Anthropic's `output_config: { format: { type: 'json_schema', schema } }` with deep schema sanitization (`additionalProperties: false`, removal of unsupported validation keywords).
+3. **Anthropic Prompt Caching:** Attaches `cache_control: { type: 'ephemeral' }` to static system prefixes ($\ge 1024$ tokens) without obsolete beta headers. On subsequent calls, Anthropic reuses the cached prefix, reducing prompt latency and cost by up to 90%.
+4. **Transparent Audit Receipts:** Computes exact USD costs using official prices committed in `pricing.json` (`claude-fable-5-1`: \$10.00/M input, \$50.00/M output, \$0.25/M cache read, \$12.50/M cache write; `claude-opus-5`: \$5.00/M input, \$25.00/M output, \$0.50/M cache read, \$6.25/M cache write).
 5. **Deterministic Retry & Degradation Ladder:** Retries only on HTTP 408/429/5xx and network errors up to 3 times with exponential backoff and jitter (1s, 3s, 9s). Never retries on 4xx client errors (400, 401, 403, 404, 422).
 6. **Circuit Breaker:** Opens after 5 consecutive failures, fast-failing requests immediately until a 60-second reset window expires, entering half-open for a single probe before closing or re-opening.
 7. **Timeout Protection & Uncertain Journaling:** Aborts after 120s (or configured timeout) and raises `StudioModelTimeoutError` with code `UNCERTAIN_TIMEOUT`, preventing duplicate blind side-effects.
@@ -22,42 +22,42 @@
 
 ## 2. Live Probe Execution & Proof Receipts
 
-The live probe was executed against Anthropic's production API using the Prompt P1 (Creative Brief) contract on the 2026-09-14 executive bilingual invitation request.
+The live probe was executed against Anthropic's production API using the Prompt P1 (Creative Brief) contract on the 2026-09-14 executive bilingual invitation request with native `output_config: { format: { type: 'json_schema', schema } }`.
 
 ### 2.1 Call 1: Primary Model (`claude-fable-5-1`)
-- **Response ID:** `msg_011Cf3973bW88buXHD27LY7V`
+- **Response ID:** `msg_011Cf3QGikhxi6kqNxVKbLGd`
 - **Model:** `claude-fable-5-1`
-- **Duration:** 42,504 ms
+- **Duration:** 28,357 ms
 - **Input Tokens (uncached):** 577
-- **Output Tokens:** 2,946
-- **Cache Creation Tokens:** 0
-- **Cache Read Tokens:** 3,400
-- **Cost (USD):** $0.045210
+- **Output Tokens:** 1,594
+- **Cache Creation Tokens:** 4,209
+- **Cache Read Tokens:** 0
+- **Cost (USD):** $0.138082
 - **Attempts:** 1
 
 ### 2.2 Call 1: Degradation / Baseline Cache Creation (`claude-opus-5`)
-- **Response ID:** `msg_011Cf39A8FP4wrDu2GpQrv33`
+- **Response ID:** `msg_011Cf3QJkLWHfsCA3BiLnCHW`
 - **Model:** `claude-opus-5`
-- **Duration:** 32,058 ms
+- **Duration:** 21,533 ms
 - **Input Tokens (uncached):** 575
-- **Output Tokens:** 2,229
-- **Cache Creation Tokens:** 3,400
+- **Output Tokens:** 1,451
+- **Cache Creation Tokens:** 4,209
 - **Cache Read Tokens:** 0
-- **Cost (USD):** $0.239550
+- **Cost (USD):** $0.065456
 - **Attempts:** 1
 
 ### 2.3 Call 2: Degradation / Cache Read Verification (`claude-opus-5`)
-- **Response ID:** `msg_011Cf39CcADKz9aNnx4AbE1L`
+- **Response ID:** `msg_011Cf3QLSXztz4oc7MmsARnc`
 - **Model:** `claude-opus-5`
-- **Duration:** 30,758 ms
+- **Duration:** 21,315 ms
 - **Input Tokens (uncached):** 575
-- **Output Tokens:** 2,191
+- **Output Tokens:** 1,381
 - **Cache Creation Tokens:** 0
-- **Cache Read Tokens:** 3,400 (`> 0` verified)
-- **Cost (USD):** $0.169425
+- **Cache Read Tokens:** 4,209 (`> 0` verified)
+- **Cost (USD):** $0.039505
 - **Attempts:** 1
 
-**Cache Read Verification Verdict:** **PASSED** (`cache_read_input_tokens: 3400 > 0`).
+**Cache Read Verification Verdict:** **PASSED** (`cache_read_input_tokens: 4209 > 0`).
 
 ---
 

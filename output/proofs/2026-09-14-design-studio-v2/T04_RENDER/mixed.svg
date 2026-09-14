@@ -10,14 +10,14 @@
   <text id="text-copy-1" fill="#F7B500" font-family="EB Garamond" font-size="46px" font-weight="bold" text-anchor="start">
     <tspan x="86" y="406.3">National Quality Framework 2026</tspan>
   </text>
-  <text id="text-copy-2" fill="#FFFFFF" font-family="Noto Sans Arabic" font-size="24px" font-weight="normal" text-anchor="end" direction="rtl" unicode-bidi="bidi-override">
+  <text id="text-copy-2" fill="#FFFFFF" font-family="Noto Sans Arabic" font-size="24px" font-weight="normal" text-anchor="start" direction="rtl">
     <tspan x="994" y="513.0">پێوەرە نیشتمانییەکانی دڵنیایی جۆری لە پەروەردە و فێرکردن</tspan>
   </text>
   <text id="text-copy-3" fill="#FDF8F3" font-family="EB Garamond" font-size="20px" font-weight="normal" text-anchor="start">
     <tspan x="86" y="570.1">Establishing standardized evaluation protocols for academic excellence across higher education institutions in</tspan>
     <tspan x="86" y="598.1">Kurdistan.</tspan>
   </text>
-  <text id="text-copy-4" fill="#D4E2F0" font-family="Noto Sans Arabic" font-size="22px" font-weight="normal" text-anchor="end" direction="rtl" unicode-bidi="bidi-override">
+  <text id="text-copy-4" fill="#D4E2F0" font-family="Noto Sans Arabic" font-size="22px" font-weight="normal" text-anchor="start" direction="rtl">
     <tspan x="994" y="700.2">هۆڵی کۆنفرانسەکانی سەعد عەبدوڵڵا - هەولێر</tspan>
   </text>
 </svg>

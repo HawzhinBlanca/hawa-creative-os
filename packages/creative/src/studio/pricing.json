@@ -3,16 +3,16 @@
   "currency": "USD",
   "models": {
     "claude-fable-5-1": {
-      "inputPerMillion": 3.00,
-      "outputPerMillion": 15.00,
-      "cacheReadPerMillion": 0.30,
-      "cacheWritePerMillion": 3.75
+      "inputPerMillion": 10.00,
+      "outputPerMillion": 50.00,
+      "cacheReadPerMillion": 0.25,
+      "cacheWritePerMillion": 12.50
     },
     "claude-opus-5": {
-      "inputPerMillion": 15.00,
-      "outputPerMillion": 75.00,
-      "cacheReadPerMillion": 1.50,
-      "cacheWritePerMillion": 18.75
+      "inputPerMillion": 5.00,
+      "outputPerMillion": 25.00,
+      "cacheReadPerMillion": 0.50,
+      "cacheWritePerMillion": 6.25
     },
     "gemini-3-pro-image": {
       "image2k": 0.134,

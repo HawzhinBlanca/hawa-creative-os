@@ -57,9 +57,15 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   let result: any;
   // Every terminal outcome is reported to the requester through Core. A failed chat message
   // must never fail (or retry) the workflow, so the notification swallows its own errors.
-  const finish = async (status: string, designId?: string, code?: string) => {
+  const finish = async (status: string, designId?: string, code?: string, parity?: string) => {
     await ctx.run('canva-notify-' + status.toLowerCase(), () =>
-      call('/notifications/canva-status', { status, designId, code, runId: result?.runId }).catch(() => ({}))
+      call('/notifications/canva-status', {
+        status,
+        designId,
+        code,
+        runId: result?.runId,
+        ...(parity ? { parity, parityError: code } : {}),
+      }).catch(() => ({}))
     );
     return output(status, designId);
   };
@@ -131,7 +137,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     if (boundary?.terminal) return finish('DESIGN_REJECTED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
     throw error;
   }
-  if (result.designId && state.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding differs from imported document', 'BINDING_MISMATCH');
+  if (!result.designId || state.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding differs from imported document', 'BINDING_MISMATCH');
   let currentBindingVersion = state.binding?.version;
   let capture: any;
   try {
@@ -188,16 +194,27 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   if (!check.artifact.content_check.copyPass) return finish('CANVA_COPY_MISMATCH', result.designId);
   if (!check.artifact.content_check.fontPass) return finish('CANVA_FONT_MISMATCH', result.designId);
 
+  let parity = 'unknown';
+  let parityError: string | undefined;
+
   if (input.designStudio) {
     try {
-      await ctx.run('canva-parity-check', () =>
+      const pRes = await ctx.run('canva-parity-check', () =>
         call('/canva/parity-check', { runId: result?.runId })
       );
-    } catch {
-      // Parity check divergence or error is recorded; does not abort delivery
+      parity = pRes?.parity || 'match';
+    } catch (err: any) {
+      const boundary = boundaryOf(err);
+      parity = 'unavailable';
+      parityError = boundary?.code || err?.code || (boundary?.httpStatus ? `HTTP_${boundary.httpStatus}` : 'PARITY_ERROR');
     }
   }
 
-  return finish('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', result.designId || state.binding?.designId);
+  return finish(
+    'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+    result.designId,
+    parity === 'unavailable' ? parityError : undefined,
+    parity
+  );
 }
 

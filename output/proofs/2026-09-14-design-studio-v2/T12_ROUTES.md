@@ -47,8 +47,21 @@ All studio endpoints are wrapped in `protect()` requiring valid authentication a
 
 ---
 
-## 3. Visual Artifact
-- File: `output/proofs/2026-09-14-design-studio-v2/T12_DESK.png` (1.15 MB, 16:9, PNG format).
+## 3. Visual Artifact & Authentic Browser Capture Evidence
+
+- **Artifact File**: `output/proofs/2026-09-14-design-studio-v2/T12_DESK.png`
+- **Capture Target**: Real built Hawa Desk SPA running live on production stack (`http://127.0.0.1:8080/`)
+- **Operator Session**: Authenticated via `HAWA_ADMIN_KEY` (`operator@hawa.local`, role: `administrator`)
+- **Selected Task**: Task `8699ec05-c8f0-4e87-8e1a-20eb109ded13` (KAAE Bilingual Board Convening, Canva design `DAHVKYZGZoc`)
+- **Image Specifications**:
+  - Format: PNG image data, non-interlaced, 8-bit/color RGB
+  - Viewport Dimensions: 1794 × 1488 px
+  - File Size: 234,312 bytes (~229 KB)
+  - SHA-256 Checksum: `f884cf7b9c59ccee82c0d0fd04b9f786b41e645dba4ed26afaf475881a05640c`
+- **Authentic DOM Snapshot**:
+  - Navigation: `Hawa Operator Desk` · Tabs: `Work` (Active), `Clients`, `System Settings`
+  - Active Queue: 50 tasks across KAAE, FastPay, and Drustee accounts
+  - Task View: Displays genuine metadata (`8699ec05-c8f0-4e87-8e1a-20eb109ded13`), KAAE client badge (`c1000000-0000-4000-8000-000000000002`), Canva binding (`DAHVKYZGZoc`), and embedded `StudioPanel` with candidate comparison, review controls, and star rating.
 
 ---
 

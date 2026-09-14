@@ -51,6 +51,51 @@ export interface StructuredCallResult<T> {
   receipt: StudioCallReceipt;
 }
 
+/**
+ * Deeply sanitizes JSON Schema for Anthropic structured outputs format.
+ * Sets additionalProperties: false on all object definitions and strips unsupported keywords
+ * (minimum, maximum, minLength, maxLength, pattern, format, minItems, maxItems, uniqueItems, multipleOf).
+ */
+export function sanitizeSchemaForAnthropic(schema: any): any {
+  if (!schema || typeof schema !== 'object') {
+    return schema;
+  }
+  if (Array.isArray(schema)) {
+    return schema.map(sanitizeSchemaForAnthropic);
+  }
+
+  const disallowedKeywords = new Set([
+    'minimum',
+    'maximum',
+    'exclusiveMinimum',
+    'exclusiveMaximum',
+    'minLength',
+    'maxLength',
+    'pattern',
+    'format',
+    'minItems',
+    'maxItems',
+    'uniqueItems',
+    'multipleOf',
+    '$schema',
+  ]);
+
+  const sanitized: Record<string, any> = {};
+  for (const [key, val] of Object.entries(schema)) {
+    if (disallowedKeywords.has(key)) {
+      continue;
+    }
+    sanitized[key] = sanitizeSchemaForAnthropic(val);
+  }
+
+  if (sanitized.type === 'object' || sanitized.properties) {
+    sanitized.type = 'object';
+    sanitized.additionalProperties = false;
+  }
+
+  return sanitized;
+}
+
 export class StudioModelError extends Error {
   constructor(message: string, public code: string) {
     super(message);
@@ -149,16 +194,16 @@ function loadPricingConfig(): PricingConfig {
     currency: 'USD',
     models: {
       'claude-fable-5-1': {
-        inputPerMillion: 3.0,
-        outputPerMillion: 15.0,
-        cacheReadPerMillion: 0.3,
-        cacheWritePerMillion: 3.75,
+        inputPerMillion: 10.0,
+        outputPerMillion: 50.0,
+        cacheReadPerMillion: 0.25,
+        cacheWritePerMillion: 12.50,
       },
       'claude-opus-5': {
-        inputPerMillion: 15.0,
-        outputPerMillion: 75.0,
-        cacheReadPerMillion: 1.5,
-        cacheWritePerMillion: 18.75,
+        inputPerMillion: 5.0,
+        outputPerMillion: 25.0,
+        cacheReadPerMillion: 0.50,
+        cacheWritePerMillion: 6.25,
       },
     },
   };
@@ -212,10 +257,10 @@ export class StudioModelClient {
     }
   ): number {
     const modelPrice = this.pricing.models[model] || this.pricing.models[this.primaryModel] || {
-      inputPerMillion: 3.0,
-      outputPerMillion: 15.0,
-      cacheReadPerMillion: 0.3,
-      cacheWritePerMillion: 3.75,
+      inputPerMillion: 10.0,
+      outputPerMillion: 50.0,
+      cacheReadPerMillion: 0.25,
+      cacheWritePerMillion: 12.50,
     };
 
     const cacheReadTokens = usage.cache_read_input_tokens || 0;
@@ -374,11 +419,17 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
         const contentBlocks: any[] = [];
         for (const img of options.images) {
           if (Buffer.isBuffer(img)) {
+            let mediaType: 'image/png' | 'image/jpeg' | 'image/webp' = 'image/png';
+            if (img.length > 2 && img[0] === 0xff && img[1] === 0xd8) {
+              mediaType = 'image/jpeg';
+            } else if (img.length > 12 && img.toString('ascii', 8, 12) === 'WEBP') {
+              mediaType = 'image/webp';
+            }
             contentBlocks.push({
               type: 'image',
               source: {
                 type: 'base64',
-                media_type: 'image/png',
+                media_type: mediaType,
                 data: img.toString('base64'),
               },
             });
@@ -400,6 +451,8 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
         userContent = contentBlocks;
       }
 
+      const sanitizedSchema = sanitizeSchemaForAnthropic(options.outputSchema);
+
       const requestBody: any = {
         model: options.model,
         max_tokens: options.maxTokens,
@@ -410,6 +463,12 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
             content: userContent,
           },
         ],
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: sanitizedSchema,
+          },
+        },
       };
 
       if (!options.model.includes('fable') && !options.model.includes('opus') && options.temperature !== undefined) {
@@ -420,7 +479,6 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
       };
 
       const res = await this.fetchFn('https://api.anthropic.com/v1/messages', {
