@@ -1,16 +1,6 @@
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, TextElement } from './layout-v2.js';
-
-export function hexToRgb(hex: string): [number, number, number] {
-  let clean = hex.trim().toLowerCase().replace('#', '');
-  if (clean.length === 3) {
-    clean = `${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`;
-  }
-  const r = parseInt(clean.slice(0, 2), 16) || 0;
-  const g = parseInt(clean.slice(2, 4), 16) || 0;
-  const b = parseInt(clean.slice(4, 6), 16) || 0;
-  return [r, g, b];
-}
+import { hexToRgb } from './color-science.js';
 
 export function channelToLinear(c: number): number {
   const s = c / 255;

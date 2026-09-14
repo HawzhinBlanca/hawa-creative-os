@@ -1,0 +1,181 @@
+{
+  "timestamp": "2026-09-14T09:54:57.770Z",
+  "conceptPrompt": "Abstract minimalist Kurdish mountain horizon at dawn, layered architectural geometry and subtle atmospheric mist in deep navy and sky ice blue with delicate gold morning illumination",
+  "composedPrompt": "Abstract minimalist Kurdish mountain horizon at dawn, layered architectural geometry and subtle atmospheric mist in deep navy and sky ice blue with delicate gold morning illumination\n\nPhotographic or painterly still image, no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500, #FDF8F3, #FFFFFF with soft neutrals. Keep the region lower half and center calm, dark and low-detail so text placed there stays legible. Aspect 4:5. Fine grain, no watermark-like marks, no borders.",
+  "durationMs": 2254,
+  "receipt": {
+    "provider": "procedural",
+    "model": "procedural-motif-gradient-wash",
+    "bytes": 9512,
+    "sha256": "89e9005b20ec82cfd3c49e2008aa0e1c5499007b1d20e0c77173a2dbf5522731",
+    "mimeType": "image/png",
+    "synthId": false,
+    "costUsd": 0,
+    "attempts": 2,
+    "artFallback": "procedural",
+    "verificationReport": {
+      "dominantColorsPassed": true,
+      "dominantColors": [
+        {
+          "hex": "#1A3253",
+          "rgb": [
+            26,
+            50,
+            83
+          ],
+          "frequency": 0.0688,
+          "chroma": 23.04,
+          "isNeutral": false,
+          "nearestPaletteColor": "#1E3A5F",
+          "minDeltaE": 2.8,
+          "passed": true
+        },
+        {
+          "hex": "#11233C",
+          "rgb": [
+            17,
+            35,
+            60
+          ],
+          "frequency": 0.0625,
+          "chroma": 18.42,
+          "isNeutral": false,
+          "nearestPaletteColor": "#0A1628",
+          "minDeltaE": 4.77,
+          "passed": true
+        },
+        {
+          "hex": "#26446C",
+          "rgb": [
+            38,
+            68,
+            108
+          ],
+          "frequency": 0.0563,
+          "chroma": 26.72,
+          "isNeutral": false,
+          "nearestPaletteColor": "#1E3A5F",
+          "minDeltaE": 3.34,
+          "passed": true
+        },
+        {
+          "hex": "#3D6393",
+          "rgb": [
+            61,
+            99,
+            147
+          ],
+          "frequency": 0.0563,
+          "chroma": 30.46,
+          "isNeutral": false,
+          "nearestPaletteColor": "#4770A3",
+          "minDeltaE": 4.88,
+          "passed": true
+        },
+        {
+          "hex": "#335682",
+          "rgb": [
+            51,
+            86,
+            130
+          ],
+          "frequency": 0.0437,
+          "chroma": 28.56,
+          "isNeutral": false,
+          "nearestPaletteColor": "#1E3A5F",
+          "minDeltaE": 9.48,
+          "passed": true
+        }
+      ],
+      "paletteSummary": "All 5 dominant colors satisfy palette ΔE2000 ≤ 25 or neutral chroma < 8",
+      "visionCheckPassed": true,
+      "visionDetails": {
+        "containsForbidden": false,
+        "what": "procedural motif SVG"
+      },
+      "passed": true
+    }
+  },
+  "probeSha256": "89e9005b20ec82cfd3c49e2008aa0e1c5499007b1d20e0c77173a2dbf5522731",
+  "probePngBytes": 9512,
+  "dominantColors": [
+    {
+      "hex": "#1A3253",
+      "rgb": [
+        26,
+        50,
+        83
+      ],
+      "frequency": 0.0688,
+      "chroma": 23.04,
+      "isNeutral": false,
+      "nearestPaletteColor": "#1E3A5F",
+      "minDeltaE": 2.8,
+      "passed": true
+    },
+    {
+      "hex": "#11233C",
+      "rgb": [
+        17,
+        35,
+        60
+      ],
+      "frequency": 0.0625,
+      "chroma": 18.42,
+      "isNeutral": false,
+      "nearestPaletteColor": "#0A1628",
+      "minDeltaE": 4.77,
+      "passed": true
+    },
+    {
+      "hex": "#26446C",
+      "rgb": [
+        38,
+        68,
+        108
+      ],
+      "frequency": 0.0563,
+      "chroma": 26.72,
+      "isNeutral": false,
+      "nearestPaletteColor": "#1E3A5F",
+      "minDeltaE": 3.34,
+      "passed": true
+    },
+    {
+      "hex": "#3D6393",
+      "rgb": [
+        61,
+        99,
+        147
+      ],
+      "frequency": 0.0563,
+      "chroma": 30.46,
+      "isNeutral": false,
+      "nearestPaletteColor": "#4770A3",
+      "minDeltaE": 4.88,
+      "passed": true
+    },
+    {
+      "hex": "#335682",
+      "rgb": [
+        51,
+        86,
+        130
+      ],
+      "frequency": 0.0437,
+      "chroma": 28.56,
+      "isNeutral": false,
+      "nearestPaletteColor": "#1E3A5F",
+      "minDeltaE": 9.48,
+      "passed": true
+    }
+  ],
+  "palettePassed": true,
+  "liveVisionCheck": {
+    "model": "claude-fable-5-1",
+    "timestamp": "2026-09-14T09:55:50.390Z",
+    "passed": true,
+    "containsForbidden": false,
+    "what": "The image is a plain vertical gradient from dark navy blue at the top to a lighter steel blue at the bottom, with no letters, digits, logos, flags, emblems, faces, or people."
+  }
+}

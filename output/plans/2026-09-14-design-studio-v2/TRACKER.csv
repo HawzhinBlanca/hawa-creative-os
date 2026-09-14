@@ -6,7 +6,7 @@ T03,Layout DSL v2 + validator + metrics,COMPLETED,output/proofs/2026-09-14-desig
 T04,Local renderer (fontkit wrapping + RTL + goldens),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T04_RENDER.md,,
 T05,Composite p05 contrast,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T05_CONTRAST.md,,
 T06,Procedural motifs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T06_MOTIFS.md,,
-T07,Gemini image provider + live probe,NOT_STARTED,,,
+T07,Gemini image provider + live probe,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T07_ART.md,,
 T08,Studio model client (structured outputs + caching + receipts + retry + breaker),NOT_STARTED,,,
 T09,Migration 013 + RLS + immutability + repositories,NOT_STARTED,,,
 T10,Stages (brief..transfer v2),NOT_STARTED,,,

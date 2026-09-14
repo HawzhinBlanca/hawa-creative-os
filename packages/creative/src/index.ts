@@ -21,3 +21,5 @@ export * from './studio/layout-metrics.js';
 export * from './studio/render-layout-v2.js';
 export * from './studio/composite-contrast.js';
 export * from './studio/motifs.js';
+export * from './studio/color-science.js';
+export * from './studio/gemini-image-provider.js';
