@@ -1044,9 +1044,15 @@ export function createApp(options?: CreateAppOptions) {
 
   function verifyRequestAuth(c: any): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
     let authHeader = c.req.header('Authorization');
-    // EventSource cannot set headers: the live event stream alone may carry the session token as
-    // an `access_token` query parameter (served on loopback; the token is the same Desk session).
-    if (!authHeader && String(c.req.path || '').endsWith('/events/stream')) {
+    // EventSource and browser <img> elements cannot set request headers:
+    // the live event stream and media/preview endpoints may carry the session token as
+    // an `access_token` query parameter (served on loopback; validated against issued sessions).
+    if (
+      !authHeader &&
+      (String(c.req.path || '').endsWith('/events/stream') ||
+        String(c.req.path || '').includes('/studio/') ||
+        String(c.req.path || '').match(/\.(png|jpg|jpeg|webp|svg|pdf)$/i))
+    ) {
       const queryToken = c.req.query('access_token');
       if (queryToken) authHeader = `Bearer ${queryToken}`;
     }

@@ -634,6 +634,38 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(failQA.defectCodes).toContain('DIMENSIONS_CHANGED');
   });
 
+  it('10b. QA stage defaults logoAspect to 1.0 (official KAAE emblem) when unspecified in context', async () => {
+    const ctx = createMockContext(vi.fn());
+    delete (ctx as any).logoAspect;
+
+    const winner: CandidateState = {
+      id: 'w_default_logo',
+      ordinal: 0,
+      concept: {} as any,
+      layouts: [],
+      currentLayout: createMockLayout(1080, 1350),
+      metrics: {
+        alignmentScore: 0.90,
+        whitespaceRatio: 0.50,
+        balanceOffset: 2.0,
+        hierarchyRatio: 2.2,
+        bodyCharsPerLine: 45,
+        lines: { 0: 1, 1: 1, 2: 1, 3: 2 },
+        contrastP05: { 0: 10.5, 1: 14.0, 2: 10.5, 3: 12.0 },
+        marginMin: 86,
+        overlapCount: 0,
+        logoWidthPct: 8.5,
+      },
+      critiques: [],
+      status: 'winner',
+    };
+
+    const qaResult = await runQAStage(ctx, winner);
+    expect(qaResult.passed).toBe(true);
+    expect(qaResult.defectCodes).not.toContain('LOGO_ASPECT_CHANGED');
+    expect(qaResult.defectCodes).not.toContain('LOGO_SHAPE_CHANGED');
+  });
+
   it('11. transfer stage: encodes StudioLayoutV2 into valid PPTX buffer with manifest', async () => {
     const ctx = createMockContext(vi.fn());
     const winner: CandidateState = {

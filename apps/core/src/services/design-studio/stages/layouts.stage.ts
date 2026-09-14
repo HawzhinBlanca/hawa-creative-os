@@ -162,7 +162,7 @@ export async function runLayoutsStage(
   const marginPx = Math.round(shortEdge * 0.06);
   const bodyMinPx = Math.max(12, Math.round(ctx.width * 0.016));
   const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
-  const logoAspect = ctx.logoAspect || 2.45; // Standard KAAE logo aspect ratio
+  const logoAspect = ctx.logoAspect || 1.0; // Official KAAE emblem aspect ratio (2687x2687 = 1.000)
 
   const copyBlocksFormatted = ctx.copyBlocks
     .map((b, i) => `[Index ${i} - ${b.script}]: "${b.text.replace(/"/g, '\\"')}"`)

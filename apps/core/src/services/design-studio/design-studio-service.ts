@@ -429,20 +429,20 @@ export class DesignStudioService {
           runId: run.id,
           tenantId: s.tenantId,
           stage: 'art',
-          provider: 'google',
-          model: 'imagen-3.0-generate-002',
-          requestedModel: 'imagen-3.0-generate-002',
+          provider: 'gemini',
+          model: 'gemini-3-pro-image',
+          requestedModel: 'gemini-3-pro-image',
         });
         currentBudget.calls++;
 
         try {
           const result = await baseArtProvider.generateArt(params);
-          const cost = result.receipt.costUsd || 0.04;
+          const cost = result.receipt?.costUsd !== undefined ? result.receipt.costUsd : 0.134;
 
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
-            responseId: 'imagen_art',
+            responseId: result.receipt?.responseId || 'gemini_art',
             inputTokens: 0,
             outputTokens: 0,
             images: 1,
@@ -498,7 +498,7 @@ export class DesignStudioService {
       promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',
       latinFont: 'EB Garamond',
       arabicFont: 'Noto Sans Arabic',
-      logoAspect: request.logoAspect || 2.45,
+      logoAspect: request.logoAspect || 1.0,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
     };

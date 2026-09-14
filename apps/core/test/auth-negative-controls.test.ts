@@ -202,5 +202,20 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
       });
       expect(res.status).toBe(401);
     });
+
+    it('accepts access_token query parameter on studio media endpoints with valid token', async () => {
+      const res = await app.request(
+        `/v1/tasks/00000000-0000-0000-0000-000000000001/canva/studio/00000000-0000-0000-0000-000000000002/candidates/00000000-0000-0000-0000-000000000003/preview.png?access_token=${testOperatorToken}`
+      );
+      // Fails authorization check if 401; passes auth if not 401 (e.g. 503/404)
+      expect(res.status).not.toBe(401);
+    });
+
+    it('rejects access_token query parameter on sensitive non-media routes', async () => {
+      const res = await app.request(`/v1/adapters/telegram/poll-now?access_token=${testOperatorToken}`, {
+        method: 'POST',
+      });
+      expect(res.status).toBe(401);
+    });
   });
 });

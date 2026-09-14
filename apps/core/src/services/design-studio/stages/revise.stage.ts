@@ -67,7 +67,7 @@ export async function runReviseStage(
           arabic: ctx.arabicFont,
         },
       },
-      logoAspect: ctx.logoAspect || 2.45,
+      logoAspect: ctx.logoAspect || 1.0,
     },
     draftFont: 'EB Garamond',
   };
