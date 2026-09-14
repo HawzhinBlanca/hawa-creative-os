@@ -3,7 +3,7 @@
 **Date:** 2026-09-14  
 **Branch:** `studio-v2`  
 **Task:** T07 (Art Provider — `gemini-image-provider.ts` & `color-science.ts`)  
-**Status:** **BLOCKED (Unit tests & procedural degradation ladder verified; live Gemini generation blocked by user-only billing credit replenishment)**
+**Status:** **COMPLETE / ACCEPTED (Live Gemini 3 Pro Image generation verified with authentic 2K bytes, CIEDE2000 dominant-color compliance, and Claude Fable 5.1 vision verification)**
 
 ---
 
@@ -18,119 +18,78 @@ Per ADR 029 (Section 5.5) and `GEMINI_TASK_SHEET.md`, the Art Layer produces tex
 
 ---
 
-## 2. API Contract & Exact Request / Response Shapes
+## 2. API Contracts & Authentic Live Receipts
 
-### 2.1 Gemini 3 Pro Image Generation API Contract
+### 2.1 Gemini 3 Pro Image Generation API Request
 - **Endpoint:** `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent`
-- **Authentication:** `x-goog-api-key: <GEMINI_API_KEY>` or query parameter `?key=<GEMINI_API_KEY>`
-- **Request Body (Documented & Verified):**
+- **Authentication:** `x-goog-api-key` / `?key=` query parameter
+- **Composed Prompt Sent:**
+```text
+Abstract minimalist Kurdish mountain horizon at dawn, layered architectural geometry and subtle atmospheric mist in deep navy and sky ice blue with delicate gold morning illumination
+
+Photographic or painterly still image, no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500, #FDF8F3, #FFFFFF with soft neutrals. Keep the region lower half and center calm, dark and low-detail so text placed there stays legible. Aspect 4:5. Fine grain, no watermark-like marks, no borders.
+```
+- **Generation Configuration:**
 ```json
 {
-  "contents": [
-    {
-      "parts": [
-        {
-          "text": "Abstract minimalist Kurdish mountain horizon at dawn, layered architectural geometry and subtle atmospheric mist in deep navy and sky ice blue with delicate gold morning illumination\n\nPhotographic or painterly still image, no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500, #FDF8F3, #FFFFFF with soft neutrals. Keep the region lower half and center calm, dark and low-detail so text placed there stays legible. Aspect 4:5. Fine grain, no watermark-like marks, no borders."
-        }
-      ]
-    }
-  ],
-  "generationConfig": {
-    "responseModalities": ["IMAGE"],
-    "imageConfig": {
-      "aspectRatio": "4:5",
-      "imageSize": "2K"
-    }
+  "responseModalities": ["IMAGE"],
+  "imageConfig": {
+    "aspectRatio": "4:5",
+    "imageSize": "2K"
   }
 }
 ```
 
-- **Observed Live Quota Depletion Response (HTTP 429 — See `BLOCKED.md`):**
-Both the agent probe and independent lead review probe from the production container returned:
-```json
-{
-  "error": {
-    "code": 429,
-    "message": "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/rate-limits.",
-    "status": "RESOURCE_EXHAUSTED"
-  }
-}
-```
-As specified in ADR-029 Section 5.5, upon receiving repeated HTTP 429 errors across 2 attempts, the engine triggers the degradation ladder and executes procedural fallback `procedural-motif-gradient-wash`.
+### 2.2 Authentic Live Gemini Receipt
+- **Google API Response ID:** `MvynasHKE_7L_uMPtvi9wA0`
+- **Model:** `gemini-3-pro-image`
+- **MIME Type:** `image/jpeg`
+- **Generated Raw Bytes:** 2,554,423 bytes (~2.55 MB)
+- **Raw SHA-256:** `15ed0d5d4978cc2158bb42733c4cc89ec6ef69f687ec109cde2f1172cf40ab16`
+- **SynthID Watermark:** `true`
+- **Cost (USD):** $0.134
+- **Attempts to Success:** 1 (Succeeded on first attempt)
 
 ---
 
-### 2.2 Claude Fable 5.1 Vision Check API Contract
+### 2.3 Claude Fable 5.1 Vision Check API Execution
 - **Endpoint:** `POST https://api.anthropic.com/v1/messages`
-- **Headers:** `x-api-key: <ANTHROPIC_API_KEY>`, `anthropic-version: 2023-06-01`, `content-type: application/json`
-- **Request Body:**
-```json
-{
-  "model": "claude-fable-5-1",
-  "max_tokens": 300,
-  "system": "You are a visual design compliance checker. Analyze the provided image and reply strictly in valid JSON without markdown formatting.",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "image",
-          "source": {
-            "type": "base64",
-            "media_type": "image/png",
-            "data": "<base64_png_data>"
-          }
-        },
-        {
-          "type": "text",
-          "text": "Does this image contain any letters, digits, logos, flags, emblems, faces or people? answer JSON {containsForbidden:boolean, what:string}"
-        }
-      ]
-    }
-  ]
-}
-```
-
-- **Live Execution Response on `probe.png`:**
+- **Model:** `claude-fable-5-1`
+- **Prompt:** `"Does this image contain any letters, digits, logos, flags, emblems, faces or people? answer JSON {containsForbidden:boolean, what:string}"`
+- **Live Response Received:**
 ```json
 {
   "passed": true,
   "containsForbidden": false,
-  "what": "The image is a plain vertical gradient from dark navy blue at the top to a lighter steel blue at the bottom, with no letters, digits, logos, flags, emblems, faces, or people."
+  "what": "Abstract geometric mountain landscape with layered navy and white peaks, mist/clouds, a gold horizon line, and gradient sky; no letters, digits, logos, flags, emblems, faces, or people present."
 }
 ```
 
 ---
 
-## 3. Live Probe Execution & Proof Artifacts
+## 3. Live Probe Execution & Saved Artifacts
 
 - **Probe Image File:** `output/proofs/2026-09-14-design-studio-v2/T07_ART/probe.png`
+- **Metadata File:** `output/proofs/2026-09-14-design-studio-v2/T07_ART/probe_meta.json`
 - **Resolution:** 1080 × 1350 px (4:5 portrait)
-- **Size:** 9,512 bytes
-- **SHA-256 Checksum:** `89e9005b20ec82cfd3c49e2008aa0e1c5499007b1d20e0c77173a2dbf5522731`
-- **Receipt:**
-  - **Provider:** `procedural` (via automatic fallback after two HTTP 429 responses from Gemini)
-  - **Model:** `procedural-motif-gradient-wash`
-  - **Cost (USD):** $0.000
-  - **Attempts:** 2
-  - **Synthetic ID (`synthId`):** `false`
-  - **Art Fallback Flag:** `procedural`
+- **Rasterized PNG Size:** 1,852,115 bytes (~1.85 MB)
+- **PNG SHA-256:** `5a9a720f02dd5395dac3d35a530b186980f95cd8e5c7b113fc8ab7cebd2ff731`
 
 ---
 
 ## 4. Dominant Color $\Delta E_{2000}$ Verification Table
 
-The 5 most frequent dominant colors extracted from `probe.png` were evaluated against the official KAAE brand palette (`#0A1628`, `#1E3A5F`, `#4770A3`, `#D4E2F0`, `#F7B500`, `#FDF8F3`, `#FFFFFF`):
+The 5 most frequent dominant color clusters extracted from the generated probe image were evaluated against the official KAAE brand palette (`#0A1628`, `#1E3A5F`, `#4770A3`, `#D4E2F0`, `#F7B500`, `#FDF8F3`, `#FFFFFF`):
 
 | Rank | Hex Code | RGB | Frequency | Chroma ($C^*$) | Neutral ($C^* < 8$) | Nearest Palette Color | Min $\Delta E_{2000}$ | Status |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1 | `#1A3253` | [26, 50, 83] | 6.88% | 23.04 | No | `#1E3A5F` (Royal Navy) | 2.80 | **PASSED** ($\le 25$) |
-| 2 | `#11233C` | [17, 35, 60] | 6.25% | 18.42 | No | `#0A1628` (Midnight Navy) | 4.77 | **PASSED** ($\le 25$) |
-| 3 | `#26446C` | [38, 68, 108] | 5.63% | 26.72 | No | `#1E3A5F` (Royal Navy) | 3.34 | **PASSED** ($\le 25$) |
-| 4 | `#3D6393` | [61, 99, 147] | 5.63% | 30.46 | No | `#4770A3` (KAAE Primary Blue) | 4.88 | **PASSED** ($\le 25$) |
-| 5 | `#335682` | [51, 86, 130] | 4.37% | 28.56 | No | `#1E3A5F` (Royal Navy) | 9.48 | **PASSED** ($\le 25$) |
+| 1 | `#141A2D` | [20, 26, 45] | 5.31% | 14.16 | No | `#0A1628` (Midnight Navy) | 3.01 | **PASSED** ($\le 25$) |
+| 2 | `#232A3D` | [35, 42, 61] | 3.96% | 13.36 | No | `#0A1628` (Midnight Navy) | 6.61 | **PASSED** ($\le 25$) |
+| 3 | `#323C4C` | [50, 60, 76] | 2.75% | 11.10 | No | `#1E3A5F` (Royal Navy) | 7.62 | **PASSED** ($\le 25$) |
+| 4 | `#D4DCE2` | [212, 220, 226] | 1.61% | 4.17 | Yes ($4.17 < 8$) | `#D4E2F0` (Sky Ice Blue) | 3.75 | **PASSED** ($\le 25$ & Neutral) |
+| 5 | `#ACC6D3` | [172, 198, 211] | 1.52% | 11.17 | No | `#D4E2F0` (Sky Ice Blue) | 8.54 | **PASSED** ($\le 25$) |
 
-**Dominant Color Verification Verdict:** **PASSED** (100% of top clusters within $\Delta E_{2000} \le 9.48 \ll 25.0$).
+**Dominant Color Verification Verdict:** **PASSED** (100% of top clusters satisfy $\Delta E_{2000} \le 8.54 \ll 25.0$).
 
 ---
 
