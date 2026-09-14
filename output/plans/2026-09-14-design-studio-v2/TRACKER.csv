@@ -1,5 +1,5 @@
 task,title,status,proof_path,lead_verdict,lead_notes
-T00,Read and reconcile,NOT_STARTED,,,
+T00,Read and reconcile,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T00_READ_LOG.md,,
 T01,Baseline gates and v1 comparison runs,NOT_STARTED,,,
 T02,Fonts (EB Garamond + Noto Sans Arabic + private dir + image fc-list),NOT_STARTED,,,
 T03,Layout DSL v2 + validator + metrics,NOT_STARTED,,,
