@@ -1,0 +1,26 @@
+{
+  "pricedAt": "2026-09-14T00:00:00Z",
+  "currency": "USD",
+  "models": {
+    "claude-fable-5-1": {
+      "inputPerMillion": 3.00,
+      "outputPerMillion": 15.00,
+      "cacheReadPerMillion": 0.30,
+      "cacheWritePerMillion": 3.75
+    },
+    "claude-opus-5": {
+      "inputPerMillion": 15.00,
+      "outputPerMillion": 75.00,
+      "cacheReadPerMillion": 1.50,
+      "cacheWritePerMillion": 18.75
+    },
+    "gemini-3-pro-image": {
+      "image2k": 0.134,
+      "image4k": 0.24
+    },
+    "nano-banana-pro-preview": {
+      "image2k": 0.134,
+      "image4k": 0.24
+    }
+  }
+}

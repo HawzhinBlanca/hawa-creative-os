@@ -23,3 +23,4 @@ export * from './studio/composite-contrast.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';
 export * from './studio/gemini-image-provider.js';
+export * from './studio/studio-model-client.js';
