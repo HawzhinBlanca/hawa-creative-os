@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1350" viewBox="0 0 1080 1350" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wash-grad-38017" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0A1628" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#1E3A5F" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#4770A3" stop-opacity="0.70"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#wash-grad-38017)"/>
+</svg>

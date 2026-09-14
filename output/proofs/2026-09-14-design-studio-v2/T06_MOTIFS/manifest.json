@@ -1,0 +1,18 @@
+{
+  "guilloche": {
+    "svgBytes": 34101,
+    "pngBytes": 589448
+  },
+  "sun-rays": {
+    "svgBytes": 3105,
+    "pngBytes": 178328
+  },
+  "thin-rules": {
+    "svgBytes": 1193,
+    "pngBytes": 11049
+  },
+  "gradient-wash": {
+    "svgBytes": 518,
+    "pngBytes": 9512
+  }
+}

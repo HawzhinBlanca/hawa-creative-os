@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-14T09:36:26Z",
+  "generatedAt": "2026-09-14T09:40:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 181,
+  "fileCount": 182,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -791,6 +791,11 @@
       "path": "scripts/export_kaae_deliverables.ts",
       "sha256": "4c5c40bb5c8e77e2297028203ffc9521312fbbb7de9232d2a9c6e89e167d01d6",
       "bytes": 24113
+    },
+    {
+      "path": "scripts/generate_t06_motifs.ts",
+      "sha256": "24fe320707b0e8f004a783f83ec9e54b42ca35d925740d16612157ee6b0f10ad",
+      "bytes": 1934
     },
     {
       "path": "scripts/ingest_kaae_graphics.ts",
