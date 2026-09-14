@@ -6,7 +6,7 @@ import pg from 'pg';
 import { resolveWorkspaceFile } from './migrate.js';
 
 // An explicit ordered list excludes rollback scripts and does not replay schema.sql.
-const upgrades = ['001_canva_bindings.sql', '002_canva_binding_isolation.sql', '003_canva_connect.sql', '004_canva_task_scope_lock.sql', '005_canva_runtime_permissions.sql', '006_canva_editable_sources.sql', '007_canva_design_plans.sql', '008_canva_roundtrip_checks.sql', '009_correct_kaae_identity.sql', '010_canva_plan_abandon.sql', '011_desk_sessions.sql', '012_service_identities.sql'] as const;
+const upgrades = ['001_canva_bindings.sql', '002_canva_binding_isolation.sql', '003_canva_connect.sql', '004_canva_task_scope_lock.sql', '005_canva_runtime_permissions.sql', '006_canva_editable_sources.sql', '007_canva_design_plans.sql', '008_canva_roundtrip_checks.sql', '009_correct_kaae_identity.sql', '010_canva_plan_abandon.sql', '011_desk_sessions.sql', '012_service_identities.sql', '013_design_studio.sql'] as const;
 
 export async function upgradeCanvaSchema(connectionString: string): Promise<{ applied: string[]; verified: string[] }> {
   if (!connectionString) throw new Error('DATABASE_URL is required; no implicit target or successful dry run');

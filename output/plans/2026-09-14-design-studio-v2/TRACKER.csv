@@ -8,7 +8,7 @@ T05,Composite p05 contrast,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T
 T06,Procedural motifs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T06_MOTIFS.md,,
 T07,Gemini image provider + live probe,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T07_ART.md,,
 T08,Studio model client (structured outputs + caching + receipts + retry + breaker),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T08_CLIENT.md,,
-T09,Migration 013 + RLS + immutability + repositories,NOT_STARTED,,,
+T09,Migration 013 + RLS + immutability + repositories,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T09_DB.md,,
 T10,Stages (brief..transfer v2),NOT_STARTED,,,
 T11,Orchestrator (journal + resume + budget + ladder),NOT_STARTED,,,
 T12,Routes + Desk Studio panel,NOT_STARTED,,,

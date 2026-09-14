@@ -486,6 +486,125 @@ export interface CanvaCaptureSetsTable {
   created_at: Generated<Date>;
 }
 
+export type DesignStudioTier = 'standard' | 'premium';
+
+export type DesignStudioStatus =
+  | 'briefing'
+  | 'conceiving'
+  | 'laying_out'
+  | 'rendering'
+  | 'critiquing'
+  | 'revising'
+  | 'judging'
+  | 'qa'
+  | 'awaiting_selection'
+  | 'transferring'
+  | 'transferred'
+  | 'degraded'
+  | 'failed'
+  | 'abandoned';
+
+export type DesignStudioJudgeStatus = 'PENDING' | 'RELIABLE' | 'UNRELIABLE' | 'SKIPPED';
+
+export interface DesignStudioRunsTable {
+  id: string;
+  tenant_id: string;
+  task_id: string;
+  client_id: string;
+  actor_id: string;
+  request_key: string;
+  request_hash: string;
+  request: unknown;
+  tier: DesignStudioTier;
+  status: DesignStudioStatus;
+  judge_status: DesignStudioJudgeStatus | null;
+  budget: Generated<unknown>;
+  stages: Generated<unknown>;
+  winner_candidate_id: string | null;
+  plan_id: string | null;
+  diagnostic: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type DesignStudioCandidateStatus = 'draft' | 'active' | 'eliminated' | 'winner' | 'runner_up';
+
+export interface DesignStudioCandidatesTable {
+  id: string;
+  run_id: string;
+  tenant_id: string;
+  ordinal: number;
+  concept: unknown;
+  layouts: Generated<unknown[]>;
+  metrics: unknown | null;
+  critiques: Generated<unknown[]>;
+  score: number | null;
+  rank: number | null;
+  status: DesignStudioCandidateStatus;
+  preview_png: Buffer | null;
+  preview_sha256: string | null;
+  composite_png: Buffer | null;
+  art_png: Buffer | null;
+  art_sha256: string | null;
+  art_provenance: unknown | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export type DesignStudioJudgmentKind = 'critique' | 'pairwise' | 'canary' | 'parity' | 'art_check';
+
+export interface DesignStudioJudgmentsTable {
+  id: string;
+  run_id: string;
+  tenant_id: string;
+  kind: DesignStudioJudgmentKind;
+  candidate_a: string | null;
+  candidate_b: string | null;
+  order_swapped: Generated<boolean>;
+  verdict: unknown;
+  call_id: string | null;
+  created_at: Generated<Date>;
+}
+
+export type DesignStudioCallStatus = 'ok' | 'error' | 'uncertain';
+
+export interface DesignStudioCallsTable {
+  id: string;
+  run_id: string;
+  tenant_id: string;
+  stage: string;
+  provider: string;
+  model: string;
+  requested_model: string;
+  response_id: string | null;
+  input_tokens: Generated<number>;
+  cached_input_tokens: Generated<number>;
+  output_tokens: Generated<number>;
+  images: Generated<number>;
+  usd_estimate: Generated<number | string>;
+  status: DesignStudioCallStatus;
+  error_code: string | null;
+  started_at: Generated<Date>;
+  finished_at: Date | null;
+}
+
+export type DesignFeedbackSource = 'desk' | 'telegram' | 'import';
+export type DesignFeedbackVerdict = 'approve' | 'reject' | 'revise' | 'rating';
+
+export interface DesignFeedbackTable {
+  id: string;
+  tenant_id: string;
+  task_id: string;
+  run_id: string | null;
+  candidate_id: string | null;
+  actor_id: string;
+  source: DesignFeedbackSource;
+  verdict: DesignFeedbackVerdict;
+  rating: number | null;
+  notes: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   tenants: TenantsTable;
   users: UsersTable;
@@ -518,5 +637,11 @@ export interface Database {
   approvals: ApprovalsTable;
   canva_bindings: CanvaBindingsTable;
   canva_capture_sets: CanvaCaptureSetsTable;
+  design_studio_runs: DesignStudioRunsTable;
+  design_studio_candidates: DesignStudioCandidatesTable;
+  design_studio_judgments: DesignStudioJudgmentsTable;
+  design_studio_calls: DesignStudioCallsTable;
+  design_feedback: DesignFeedbackTable;
 }
+
 
