@@ -16,14 +16,18 @@ describe('Observability: Redaction, Tracing & Phoenix Exporter', () => {
     const handle = tracer.startSpan('TaskIntake', undefined, {
       taskId: 'task-100',
       token: dummySecret,
+      nested: { apiKey: dummySecret },
     });
-    handle.addEvent('validated');
-    const span = handle.end({ outcome: 'success' });
+    handle.addEvent('validated', { note: `Bearer ${dummySecret}` });
+    const span = handle.end({ outcome: 'success', finalSecret: dummySecret });
 
     expect(span.name).toBe('TaskIntake');
     expect(span.attributes.taskId).toBe('task-100');
     expect(span.attributes.token).toBe('[REDACTED_SECRET]');
+    expect((span.attributes.nested as any).apiKey).toBe('[REDACTED_SECRET]');
+    expect(span.attributes.finalSecret).toBe('[REDACTED_SECRET]');
     expect(span.events.length).toBe(1);
+    expect((span.events[0].attributes as any)?.note).toContain('[REDACTED_SECRET]');
   });
 
   it('PhoenixClient: records evaluation runs and exports telemetry spans', async () => {
