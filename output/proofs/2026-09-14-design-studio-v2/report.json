@@ -1,0 +1,1031 @@
+{
+  "timestamp": "2026-09-14T21:47:55.394Z",
+  "mode": "offline",
+  "totalBriefs": 24,
+  "completedBriefs": 24,
+  "degradedBriefs": 0,
+  "failedBriefs": 0,
+  "canaryPassRate": 1,
+  "tournamentSwapConsistencyRate": 1,
+  "meanWinnerScore": 8.8,
+  "minWinnerScore": 8.8,
+  "hardQaEscapeCount": 0,
+  "totalSpentUsd": 32.16,
+  "meanSpentUsd": 1.34,
+  "meanDurationSeconds": 0,
+  "parityVerdicts": {
+    "match": 24,
+    "minor": 0,
+    "major": 0
+  },
+  "results": [
+    {
+      "briefId": "golden-01",
+      "briefName": "KAAE Annual Accreditation Symposium 2026",
+      "language": "en",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 14,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "1f1b73d813fb00c2fc38b12a96a16347a95415cd1e13d1a916c0386b2da5c4ec",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-02",
+      "briefName": "Institutional Accreditation Standard 2026",
+      "language": "en",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 5,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "2dec12d7925646835c78341b2bb6d02f98fb21ef4c7d6cb90b98cf5811874f62",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-03",
+      "briefName": "Higher Education Leadership Forum",
+      "language": "en",
+      "dimensions": "1080x1920",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "64dafb1f85107702ebb2f75c82c9b3b06652a60c17e3a4d43d2db3662ab2f37a",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-04",
+      "briefName": "National Accreditation Council Session",
+      "language": "en",
+      "dimensions": "1240x1754",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "72af8467c6ba65def68ea891e91b00d9105cf01a17f54b796facd2f8187bbcb4",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-05",
+      "briefName": "Global Education Quality Summit Screen",
+      "language": "en",
+      "dimensions": "1920x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "d562edab76647b4da261d2f4416621ab79ad8ddc56d8cf0d74f53934ecde69f6",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-06",
+      "briefName": "Kurdish Academic Conference Invitation",
+      "language": "ckb",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "75ebd8e4e69481a7184a9af242ff6f3c6bf639b7ea641d5250c19377651d54c7",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-07",
+      "briefName": "Kurdish Accreditation Announcement",
+      "language": "ckb",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "52e936c15f0f4294804fdc00c5962bada1d575760ba96df85c8237ce29e66865",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-08",
+      "briefName": "Kurdish Quality Assurance Workshop Story",
+      "language": "ckb",
+      "dimensions": "1080x1920",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "d3955cc822b6664d8a13460e028aeaacd94ea525a0bd0d31ca642c76dfa27e6d",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-09",
+      "briefName": "Bilingual Academic Symposium Invitation",
+      "language": "mixed",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 5,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "36d0673b7a4e104f04f542f9a495c6cf88cd1c5000c0bfc8c0251d908d017490",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-10",
+      "briefName": "Bilingual Accreditation Board Convening",
+      "language": "mixed",
+      "dimensions": "1240x1754",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "571f7b5b661feff435d001c635fca3b00e9f0f171702b679b32cdcb9fc47865c",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-11",
+      "briefName": "KAAE Quality Assurance Executive Briefing",
+      "language": "en",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "6718865879d5c5d7369a14c4cf05d6bf75f3e304888814a493e114234188f15f",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-12",
+      "briefName": "KAAE Institutional Review Board Forum",
+      "language": "en",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "250251ee83de67abbbbc3ab063c19f92226eaa1e3a7a7ce32fd061cadec429bc",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-13",
+      "briefName": "Higher Education Fellowship Announcement",
+      "language": "en",
+      "dimensions": "1080x1920",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "73d813f161a479f667cb4f5b7f2f5c3bdcfe65b623d42afc3c7ab1c868c823ed",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-14",
+      "briefName": "KAAE Strategic Curriculum Framework Release",
+      "language": "en",
+      "dimensions": "1240x1754",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "1bf7608d3c4fd8440fceed38e866e980c9e52ed52b6345204de4e3553ec7d3f3",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-15",
+      "briefName": "Academic Leadership Masterclass Keynote",
+      "language": "en",
+      "dimensions": "1920x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "d63fd448b09dc3455e400b83c031f6817f9d89a361ff32eb991213a4151ee2d5",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-16",
+      "briefName": "University Governance Summit 2026",
+      "language": "en",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "f81e1ba44fbf17c1f4c9c4670690294a87d7751d72599af5517217226b926ed2",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-17",
+      "briefName": "KAAE Doctoral Program Standards Announcement",
+      "language": "en",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "10d8ada4698064fae332ce75d207363bd3a01e7c4d7cf188fdf812c6a42a89ba",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-18",
+      "briefName": "Kurdish Accreditation Standards Manual Notice",
+      "language": "ckb",
+      "dimensions": "1240x1754",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "0f3ddb56ff9f2318e92a8353b9434c2fc1dbebb956c63f3ac875ea802e9699a8",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-19",
+      "briefName": "Kurdish Higher Education Plenary Presentation",
+      "language": "ckb",
+      "dimensions": "1920x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "a5c07864c51c039863175fcadbf4fa74a4eb35d6b4f4bc53f4519c7f48749247",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-20",
+      "briefName": "Kurdish Institutional Evaluation Workshop",
+      "language": "ckb",
+      "dimensions": "1080x1350",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "e7c508bd76a7ebaf74e9c4664521d2accfd56a249d68ed7423340e2e23e401eb",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-21",
+      "briefName": "Kurdish Academic Excellence Forum",
+      "language": "ckb",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "0b6ff7861d299dd2a323d3f97f1c544152d000bbe4c68af07b2000a5d7ff8c93",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-22",
+      "briefName": "Kurdish University Quality Delegate Briefing",
+      "language": "ckb",
+      "dimensions": "1080x1920",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 4,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "f9728246b84b0e067ab0d8403a33ab002e5e183d611c9ee2b67047f4ae1b5db6",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-23",
+      "briefName": "Bilingual Quality Benchmark Round Table",
+      "language": "mixed",
+      "dimensions": "1080x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "bc5752f8088461c5294ec703cb05dce4b066715299a55d375f55bb6202c0f586",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    },
+    {
+      "briefId": "golden-24",
+      "briefName": "Bilingual International Academic Exchange Screen",
+      "language": "mixed",
+      "dimensions": "1920x1080",
+      "status": "transferred",
+      "ladderRung": 0,
+      "rungsTriggered": [],
+      "callsCount": 19,
+      "spentUsd": 1.34,
+      "durationMs": 3,
+      "winnerScore": 8.8,
+      "canary": {
+        "winnerId": "concept-1",
+        "passed": true,
+        "scoreAgainstDegraded1Normal": 9.2,
+        "scoreAgainstDegraded1Swapped": 9.2,
+        "scoreAgainstDegraded2Normal": 9.5,
+        "scoreAgainstDegraded2Swapped": 9.5,
+        "verdict": "RELIABLE"
+      },
+      "tournament": {
+        "winnerId": "concept-1",
+        "candidateScores": {
+          "concept-1": 8.8,
+          "concept-2": 8.3,
+          "concept-3": 8
+        },
+        "swapConsistencyRate": 1,
+        "pairwiseRounds": 4
+      },
+      "hardQaEscapes": 0,
+      "previewSha256": "ace0965f81ba5825af365877a4988b77e4564855dce437c8b68513582161bf38",
+      "parity": {
+        "parity": "match",
+        "divergences": [],
+        "fontSubstituted": false,
+        "textReflowed": false,
+        "copyVisibleIdentical": true
+      },
+      "fontFidelity": "stand-in"
+    }
+  ]
+}

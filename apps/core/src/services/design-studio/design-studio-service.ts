@@ -84,6 +84,7 @@ export interface StudioResumeResult {
 
 export class DesignStudioService {
   private repo: DesignStudioRepository;
+  private inFlightResumes = new Map<string, Promise<StudioResumeResult>>();
 
   constructor(
     private db: Kysely<Database>,
@@ -220,6 +221,7 @@ export class DesignStudioService {
       clientId: taskCtx.task.client_id,
       referenceHash: hash(JSON.stringify(taskCtx.reference)),
       logoSha256: hash(taskCtx.logo),
+      logoAspect: taskCtx.logoAspect,
     };
 
     const requestHash = hash(JSON.stringify(requestPayload));
@@ -496,6 +498,7 @@ export class DesignStudioService {
       promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',
       latinFont: 'EB Garamond',
       arabicFont: 'Noto Sans Arabic',
+      logoAspect: request.logoAspect || 2.45,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
     };
@@ -504,8 +507,24 @@ export class DesignStudioService {
   /**
    * Advances a design studio run by exactly one stage.
    * Interrupted runs resume from the current stage without duplicating prior stage calls.
+   * Concurrent requests for the same run share the in-flight promise to prevent race conditions.
    */
   public async resume(s: Scope, taskId: string, runId: string): Promise<StudioResumeResult> {
+    const lockKey = `${s.tenantId}:${runId}`;
+    const existing = this.inFlightResumes.get(lockKey);
+    if (existing) {
+      return await existing;
+    }
+    const execPromise = this.doResume(s, taskId, runId);
+    this.inFlightResumes.set(lockKey, execPromise);
+    try {
+      return await execPromise;
+    } finally {
+      this.inFlightResumes.delete(lockKey);
+    }
+  }
+
+  private async doResume(s: Scope, taskId: string, runId: string): Promise<StudioResumeResult> {
     const run = await this.repo.getRunById(runId, s.tenantId);
     if (!run) {
       throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
@@ -577,19 +596,27 @@ export class DesignStudioService {
           const concepts: Concept[] = stages.concepts;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
 
-          const candidateStates = await runLayoutsStage(ctx, brief, concepts);
+          const candidateStates = await runLayoutsStage(
+            ctx,
+            brief,
+            concepts,
+            candidateRows.map((r) => ({ id: r.id, ordinal: r.ordinal }))
+          );
           const artCandidates = await runArtStage(ctx, candidateStates);
 
-          for (let i = 0; i < artCandidates.length; i++) {
-            const cand = artCandidates[i];
-            const row = candidateRows[i];
-            if (row) {
+          for (const row of candidateRows) {
+            const cand = artCandidates.find((c) => c.ordinal === row.ordinal);
+            if (cand) {
               await this.repo.updateCandidate(row.id, s.tenantId, {
                 layouts: [cand.currentLayout] as any,
                 status: 'draft',
                 artPng: cand.artPng,
                 artSha256: cand.artSha256,
                 artProvenance: cand.artProvenance as any,
+              });
+            } else {
+              await this.repo.updateCandidate(row.id, s.tenantId, {
+                status: 'eliminated',
               });
             }
           }
@@ -601,7 +628,14 @@ export class DesignStudioService {
 
         case 'rendering': {
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const candidateStates: CandidateState[] = candidateRows.map((row) => {
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          if (activeRows.length === 0) {
+            return this.executeRung4Fallback(s, run, 'No valid candidates with layouts for rendering');
+          }
+
+          const candidateStates: CandidateState[] = activeRows.map((row) => {
             const layouts = (row.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
             return {
               id: row.id,
@@ -634,7 +668,14 @@ export class DesignStudioService {
         case 'critiquing': {
           const brief: CreativeBrief = stages.brief;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const candidateStates: CandidateState[] = candidateRows.map((row) => {
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          if (activeRows.length === 0) {
+            return this.executeRung4Fallback(s, run, 'No valid candidates for critiquing');
+          }
+
+          const candidateStates: CandidateState[] = activeRows.map((row) => {
             const layouts = (row.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
             return {
               id: row.id,
@@ -687,7 +728,14 @@ export class DesignStudioService {
 
         case 'revising': {
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const candidateStates: CandidateState[] = candidateRows.map((row) => {
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          if (activeRows.length === 0) {
+            return this.executeRung4Fallback(s, run, 'No valid candidates for revising');
+          }
+
+          const candidateStates: CandidateState[] = activeRows.map((row) => {
             const layouts = (row.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
             const critiques = (row.critiques as any[] || []).map((c) => (typeof c === 'string' ? JSON.parse(c) : c));
             return {
@@ -708,7 +756,7 @@ export class DesignStudioService {
           const revisedCandidates = await runReviseStage(ctx, candidateStates, 1);
           for (let i = 0; i < revisedCandidates.length; i++) {
             const cand = revisedCandidates[i];
-            const originalRow = candidateRows[i];
+            const originalRow = activeRows.find((r) => r.id === cand.id);
             if (originalRow && cand.layouts.length > (originalRow.layouts as any[]).length) {
               await this.repo.updateCandidate(cand.id, s.tenantId, {
                 layouts: cand.layouts as any,
@@ -728,7 +776,14 @@ export class DesignStudioService {
         case 'judging': {
           const brief: CreativeBrief = stages.brief;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const candidateStates: CandidateState[] = candidateRows.map((row) => {
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          if (activeRows.length === 0) {
+            return this.executeRung4Fallback(s, run, 'No valid candidates for judging');
+          }
+
+          const candidateStates: CandidateState[] = activeRows.map((row) => {
             const layouts = (row.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
             const critiques = (row.critiques as any[] || []).map((c) => (typeof c === 'string' ? JSON.parse(c) : c));
             return {
@@ -829,7 +884,13 @@ export class DesignStudioService {
 
         case 'qa': {
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const winnerRow = candidateRows.find((r) => r.id === run.winner_candidate_id) || candidateRows[0];
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          const winnerRow = activeRows.find((r) => r.id === run.winner_candidate_id) || activeRows[0];
+          if (!winnerRow) {
+            return this.executeRung4Fallback(s, run, 'No valid candidate found for QA stage');
+          }
           const layouts = (winnerRow.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
 
           const winnerState: CandidateState = {
@@ -850,9 +911,10 @@ export class DesignStudioService {
 
           if (!qaResult.passed) {
             // Attempt to find any other candidate that passes QA
-            for (const otherRow of candidateRows) {
+            for (const otherRow of activeRows) {
               if (otherRow.id === winnerRow.id) continue;
               const otherLayouts = (otherRow.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
+              if (otherLayouts.length === 0) continue;
               const otherState: CandidateState = {
                 id: otherRow.id,
                 ordinal: otherRow.ordinal,
@@ -890,7 +952,13 @@ export class DesignStudioService {
 
         case 'transferring': {
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const winnerRow = candidateRows.find((r) => r.id === run.winner_candidate_id) || candidateRows[0];
+          const activeRows = candidateRows.filter(
+            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          );
+          const winnerRow = activeRows.find((r) => r.id === run.winner_candidate_id) || activeRows[0];
+          if (!winnerRow) {
+            return this.executeRung4Fallback(s, run, 'No valid candidate found for transfer stage');
+          }
           const layouts = (winnerRow.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
 
           const winnerState: CandidateState = {

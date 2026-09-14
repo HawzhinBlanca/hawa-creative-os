@@ -314,7 +314,7 @@ export class StudioModelClient {
           outputSchema,
           schemaName,
           images: params.images,
-          maxTokens: params.maxTokens || 4096,
+          maxTokens: params.maxTokens || 8192,
           temperature: params.temperature,
           enableCacheControl: params.enableCacheControl ?? true,
           timeoutMs,
@@ -529,8 +529,11 @@ ${JSON.stringify(options.outputSchema, null, 2)}`;
       }
 
       if (!data) {
+        console.warn(
+          `[StudioModelClient] Structured output missing for ${options.schemaName}: stop_reason=${json.stop_reason}, rawLength=${rawText.length}, contentTypes=${json.content?.map((c: any) => c.type).join(',')}. Head: ${rawText.substring(0, 150)} ... Tail: ${rawText.substring(Math.max(0, rawText.length - 150))}`
+        );
         throw new StudioModelError(
-          `Anthropic did not return structured tool output for schema ${options.schemaName}`,
+          `Anthropic did not return structured tool output for schema ${options.schemaName} (stop_reason: ${json.stop_reason})`,
           'STRUCTURED_OUTPUT_MISSING'
         );
       }

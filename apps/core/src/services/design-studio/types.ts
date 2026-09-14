@@ -127,6 +127,7 @@ export interface StageContext {
   promotedRules: string;
   latinFont: string;
   arabicFont: string;
+  logoAspect?: number;
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
   client: StudioModelClient;
   artProvider?: GeminiImageProvider;

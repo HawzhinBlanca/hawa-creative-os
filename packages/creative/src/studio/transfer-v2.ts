@@ -23,7 +23,9 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       height: s.height,
       color: s.color,
     })),
-    text: layout.text.map((t) => ({
+    text: [...layout.text]
+      .sort((a, b) => a.copyIndex - b.copyIndex)
+      .map((t) => ({
       copyIndex: t.copyIndex,
       x: t.x,
       y: t.y,
@@ -161,8 +163,9 @@ export async function encodeStudioTransferV2(
     });
   }
 
-  // 3. Text
-  for (const t of layout.text) {
+  // 3. Text (sorted canonically by copyIndex so PPTX shape tree order matches expected copy order)
+  const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
+  for (const t of sortedText) {
     const isArabic = t.fontFamily === 'Noto Sans Arabic' || t.fontFamily === 'Vazirmatn' || t.align === 'right';
     slide.addText(copy[t.copyIndex], {
       x: t.x / 96,

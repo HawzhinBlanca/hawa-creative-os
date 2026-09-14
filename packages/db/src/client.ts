@@ -34,7 +34,7 @@ export async function withRlsContext<T>(
   ctx: RlsContext,
   callback: (trx: Kysely<Database>) => Promise<T>
 ): Promise<T> {
-  return await db.transaction().execute(async (trx) => {
+  const runner = async (trx: Kysely<Database>) => {
     await sql`SELECT set_config('app.tenant_id', ${ctx.tenantId}, true)`.execute(trx);
     await sql`SELECT set_config('hawa.current_tenant_id', ${ctx.tenantId}, true)`.execute(trx);
     if (ctx.clientId) {
@@ -50,5 +50,11 @@ export async function withRlsContext<T>(
       await sql`SELECT set_config('hawa.current_role', ${ctx.role}, true)`.execute(trx);
     }
     return await callback(trx);
-  });
+  };
+
+  if ((db as any).isTransaction) {
+    return await runner(db);
+  }
+  return await db.transaction().execute(runner);
 }
+

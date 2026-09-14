@@ -153,6 +153,7 @@ function createMockContext(fetchFn: typeof fetch): StageContext {
     promotedRules: 'Keep title clear and centered. Do not crowd logo.',
     latinFont: 'EB Garamond',
     arabicFont: 'Noto Sans Arabic',
+    logoAspect: 1.0,
     client,
     artProvider,
   };

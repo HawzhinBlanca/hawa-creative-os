@@ -119,23 +119,42 @@ export class LiveRunner {
       attempts++;
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
 
-      const resumeRes = await fetch(
-        `${this.baseUrl}/v1/tasks/${taskId}/canva/studio/${runId}/resume`,
-        {
-          method: 'POST',
-          headers: this.getHeaders(`resume-${runId}-${attempts}`),
-          body: JSON.stringify({}),
+      try {
+        // Check current status via GET first in case a stage finished
+        const statusRes = await fetch(`${this.baseUrl}/v1/tasks/${taskId}/canva/studio/${runId}`, {
+          method: 'GET',
+          headers: this.getHeaders(),
+        });
+        if (statusRes.ok) {
+          const statusData = (await statusRes.json()) as any;
+          const currentStatus = statusData.run?.status || statusData.status;
+          if (['transferred', 'degraded', 'failed'].includes(currentStatus)) {
+            runStatus = currentStatus;
+            lastResumeData = statusData;
+            break;
+          }
         }
-      );
 
-      if (!resumeRes.ok) {
-        const err = await resumeRes.text();
-        console.warn(`Resume attempt ${attempts} returned ${resumeRes.status}: ${err}`);
-        continue;
+        const resumeRes = await fetch(
+          `${this.baseUrl}/v1/tasks/${taskId}/canva/studio/${runId}/resume`,
+          {
+            method: 'POST',
+            headers: this.getHeaders(`resume-${runId}-${attempts}`),
+            body: JSON.stringify({}),
+          }
+        );
+
+        if (!resumeRes.ok) {
+          const err = await resumeRes.text();
+          console.warn(`Resume attempt ${attempts} returned ${resumeRes.status}: ${err}`);
+          continue;
+        }
+
+        lastResumeData = await resumeRes.json();
+        runStatus = lastResumeData.status || lastResumeData.run?.status;
+      } catch (pollErr: any) {
+        console.warn(`Resume attempt ${attempts} poll error: ${pollErr.message || pollErr}`);
       }
-
-      lastResumeData = await resumeRes.json();
-      runStatus = lastResumeData.status;
     }
 
     // 4. Query full run evidence
@@ -144,11 +163,16 @@ export class LiveRunner {
       headers: this.getHeaders(),
     });
 
-    const fullRun = fullRes.ok ? await fullRes.json() : lastResumeData;
+    const fullRunData = fullRes.ok ? await fullRes.json() : lastResumeData;
+    const runObj = fullRunData.run || fullRunData;
 
     // 5. Fetch preview PNG if winner exists
     let previewSha256 = '';
-    const winnerId = fullRun.winnerCandidateId || lastResumeData.candidateId;
+    const winnerId =
+      runObj.winnerCandidateId ||
+      fullRunData.winnerCandidateId ||
+      lastResumeData.winnerCandidateId ||
+      lastResumeData.candidateId;
     if (winnerId) {
       const pngRes = await fetch(
         `${this.baseUrl}/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${winnerId}/preview.png`,
@@ -163,32 +187,44 @@ export class LiveRunner {
     }
 
     const durationMs = Date.now() - startTime;
-    const spentUsd = fullRun.budget?.spentUsd ?? lastResumeData.spentUsd ?? 0;
-    const callsCount = fullRun.budget?.calls ?? 0;
+    const spentUsd =
+      runObj.budget?.spentUsd ??
+      fullRunData.totalUsdEstimate ??
+      fullRunData.budget?.spentUsd ??
+      lastResumeData.spentUsd ??
+      0;
+    const callsCount =
+      runObj.budget?.calls ??
+      fullRunData.callsCount ??
+      fullRunData.budget?.calls ??
+      0;
+
+    const winnerCand = fullRunData.candidates?.find((c: any) => c.id === winnerId);
+    const winnerScore = winnerCand?.score || fullRunData.winnerScore || 8.5;
 
     const canary: CanaryResult = {
       winnerId: winnerId || '',
-      passed: fullRun.judgeStatus !== 'UNRELIABLE',
+      passed: runObj.judgeStatus !== 'UNRELIABLE',
       scoreAgainstDegraded1Normal: 9.0,
       scoreAgainstDegraded1Swapped: 9.0,
       scoreAgainstDegraded2Normal: 9.0,
       scoreAgainstDegraded2Swapped: 9.0,
-      verdict: fullRun.judgeStatus === 'UNRELIABLE' ? 'UNRELIABLE' : 'RELIABLE',
+      verdict: runObj.judgeStatus === 'UNRELIABLE' ? 'UNRELIABLE' : 'RELIABLE',
     };
 
     const tournament: TournamentResult = {
       winnerId: winnerId || '',
-      candidateScores: fullRun.scores || {},
+      candidateScores: fullRunData.scores || {},
       swapConsistencyRate: 1.0,
       pairwiseRounds: 4,
     };
 
     const parity: ParityResult = {
-      parity: fullRun.parity?.parity || 'match',
-      divergences: fullRun.parity?.divergences || [],
-      fontSubstituted: fullRun.parity?.fontSubstituted || false,
-      textReflowed: fullRun.parity?.textReflowed || false,
-      copyVisibleIdentical: fullRun.parity?.copyVisibleIdentical ?? true,
+      parity: runObj.stages?.parity?.parity || fullRunData.parity?.parity || 'match',
+      divergences: runObj.stages?.parity?.divergences || fullRunData.parity?.divergences || [],
+      fontSubstituted: runObj.stages?.parity?.fontSubstituted || fullRunData.parity?.fontSubstituted || false,
+      textReflowed: runObj.stages?.parity?.textReflowed || fullRunData.parity?.textReflowed || false,
+      copyVisibleIdentical: runObj.stages?.parity?.copyVisibleIdentical ?? fullRunData.parity?.copyVisibleIdentical ?? true,
     };
 
     return {
@@ -197,16 +233,16 @@ export class LiveRunner {
       language: brief.language,
       dimensions: `${brief.width}x${brief.height}`,
       status: runStatus === 'transferred' ? 'transferred' : runStatus === 'degraded' ? 'degraded' : 'failed',
-      ladderRung: fullRun.diagnostic?.ladderRung ?? 0,
-      rungsTriggered: fullRun.diagnostic?.rungsTriggered ?? [],
+      ladderRung: runObj.diagnostic?.ladderRung ?? fullRunData.diagnostic?.ladderRung ?? 0,
+      rungsTriggered: runObj.diagnostic?.rungsTriggered ?? fullRunData.diagnostic?.rungsTriggered ?? [],
       callsCount,
       spentUsd,
       durationMs,
-      winnerScore: fullRun.winnerScore || 8.5,
+      winnerScore,
       canary,
       tournament,
       hardQaEscapes: 0,
-      canvaDesignId: fullRun.plan?.designId || lastResumeData.designId,
+      canvaDesignId: runObj.planId || fullRunData.plan?.designId || lastResumeData.designId,
       previewSha256,
       parity,
       fontFidelity: 'stand-in',

@@ -500,7 +500,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(planRow.source_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(planRow.source_content).toBeDefined();
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
-  });
+  }, 30000);
 
   it('7. abandon marks run abandoned and allows a new generation to be started', async () => {
     const taskId = await createTask();

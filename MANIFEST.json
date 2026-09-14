@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-14T20:32:36Z",
+  "generatedAt": "2026-09-14T21:51:30Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 184,
+  "fileCount": 187,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -763,6 +763,11 @@
       "bytes": 2729
     },
     {
+      "path": "scripts/build_proof_manifest.ts",
+      "sha256": "026f563439a271ad370cab8fb3371e0d187df8dce10570c4c3bf71307e9caf91",
+      "bytes": 4150
+    },
+    {
       "path": "scripts/deep_learn_kaae_graphics.swift",
       "sha256": "39ef8c066cebda1d501181005e75df441548dfe01518062b45985c8592dea7f7",
       "bytes": 4120
@@ -868,6 +873,11 @@
       "bytes": 75127
     },
     {
+      "path": "scripts/run_studio_qualification.ts",
+      "sha256": "c1b9c01992532d7a6cf8dfdc7908d77a4f1e19375999d5777619b34c6260d588",
+      "bytes": 7880
+    },
+    {
       "path": "scripts/run_v1_baseline.ts",
       "sha256": "982b4a029b011b95c49fa090694204f4ce8d1c00f3376cc114dac2e29833448b",
       "bytes": 11617
@@ -891,6 +901,11 @@
       "path": "scripts/test_gateway_models.ts",
       "sha256": "a274670bdeff4f5030b295971f4f6c2a461f60df9bb61326114f88e85bf97104",
       "bytes": 3029
+    },
+    {
+      "path": "scripts/test_live_probe.ts",
+      "sha256": "c5c08b451926efb099c6c163b8e679ca84e283dccff13ea08976a0fc948b4757",
+      "bytes": 979
     },
     {
       "path": "scripts/test_opus5_critique.py",

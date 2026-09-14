@@ -150,7 +150,8 @@ export const LAYOUT_SCHEMA = {
 export async function runLayoutsStage(
   ctx: StageContext,
   brief: CreativeBrief,
-  concepts: Concept[]
+  concepts: Concept[],
+  existingCandidates?: Array<{ id: string; ordinal: number }>
 ): Promise<CandidateState[]> {
   const systemPrompt = buildP0SystemPrompt({
     referencePackJson: JSON.stringify(ctx.referencePack),
@@ -161,7 +162,7 @@ export async function runLayoutsStage(
   const marginPx = Math.round(shortEdge * 0.06);
   const bodyMinPx = Math.max(12, Math.round(ctx.width * 0.016));
   const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
-  const logoAspect = 2.45; // Standard KAAE logo aspect ratio
+  const logoAspect = ctx.logoAspect || 2.45; // Standard KAAE logo aspect ratio
 
   const copyBlocksFormatted = ctx.copyBlocks
     .map((b, i) => `[Index ${i} - ${b.script}]: "${b.text.replace(/"/g, '\\"')}"`)
@@ -209,7 +210,7 @@ export async function runLayoutsStage(
             arabic: ctx.arabicFont,
           },
         },
-        logoAspect: 1.0,
+        logoAspect,
       },
       draftFont: 'EB Garamond',
     };
@@ -219,6 +220,7 @@ export async function runLayoutsStage(
 
     // If validation fails, attempt 1 repair call
     if (!validation.ok) {
+      console.warn(`[LayoutsStage] Candidate ${ordinal} failed initial validation: [${validation.code}] ${validation.message}`);
       const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nReturn a corrected StudioLayoutV2 adhering to all constraints.`;
 
       layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
@@ -230,11 +232,15 @@ export async function runLayoutsStage(
 
       layout = layoutResponse.data.layout;
       validation = validateLayoutV2(layout, validationContext);
+      if (!validation.ok) {
+        console.warn(`[LayoutsStage] Candidate ${ordinal} failed repair validation: [${validation.code}] ${validation.message}`);
+      }
     }
 
     if (validation.ok) {
+      const existing = existingCandidates?.find((c) => c.ordinal === ordinal);
       candidates.push({
-        id: randomUUID(),
+        id: existing?.id || randomUUID(),
         ordinal,
         concept,
         layouts: [layout],
