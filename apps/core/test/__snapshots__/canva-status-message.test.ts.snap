@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`draft caveats > renders Studio v2 notes line and matches snapshot format 1`] = `
+"🎨 <b>Your Canva draft is ready</b>
+
+📌 <b>Task ID:</b> <code>00000000-0000-4000-8000-000000000001</code>
+📜 <b>Title:</b> Studio Gala Invitation
+
+✏️ <b>Open in Canva:</b> https://www.canva.com/design/DA_studio_winner/edit
+
+Review the layout, font and exact copy in Canva. Automatic copy and font checks passed.
+ℹ️ Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)
+
+<i>Every design is reviewed by the art director in Hawa Desk before release.</i>"
+`;

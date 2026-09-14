@@ -343,4 +343,46 @@ export function registerDesignStudioRoutes(
       );
     })
   );
+
+  // 8. Canva Parity Check (P8)
+  const handleParityCheck = async (
+    c: any,
+    s: { tenantId: string; actorId: string },
+    svc: DesignStudioService,
+    r: DesignStudioRepository
+  ) => {
+    const taskId = c.req.param('taskId');
+    let runId = c.req.param('runId');
+    if (!runId) {
+      const body = await c.req.json().catch(() => ({}));
+      runId = body?.runId;
+    }
+    if (!runId) {
+      const latest = await r.getLatestRunForTask(taskId, s.tenantId);
+      if (!latest) {
+        return ctx.problem(c, 404, 'Run Not Found', 'No studio run found for this task');
+      }
+      runId = latest.id;
+    }
+
+    try {
+      const verdict = await svc.runParityCheck(s, runId);
+      return c.json({
+        ok: true,
+        taskId,
+        runId,
+        parity: verdict.parity,
+        verdict,
+      });
+    } catch (err: any) {
+      if (err instanceof CanvaFlowError) {
+        return ctx.problem(c, err.status, err.code, err.message);
+      }
+      throw err;
+    }
+  };
+
+  ctx.registerRoute('post', '/tasks/:taskId/canva/parity-check', protect(handleParityCheck));
+  ctx.registerRoute('post', '/tasks/:taskId/canva/studio/:runId/parity', protect(handleParityCheck));
 }
+

@@ -37,4 +37,19 @@ describe('draft caveats', () => {
     expect(msg.text.indexOf('ℹ️')).toBeLessThan(msg.text.indexOf('Every design is reviewed'));
     expect(composeCanvaStatusMessage({ taskId: '00000000-0000-4000-8000-000000000001', status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', notes: [] }).text).not.toContain('ℹ️');
   });
+
+  it('renders Studio v2 notes line and matches snapshot format', () => {
+    const studioNote = 'Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)';
+    const msg = composeCanvaStatusMessage({
+      taskId: '00000000-0000-4000-8000-000000000001',
+      title: 'Studio Gala Invitation',
+      status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+      canvaUrl: 'https://www.canva.com/design/DA_studio_winner/edit',
+      notes: [studioNote],
+    });
+
+    expect(msg.text).toContain('ℹ️ Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)');
+    expect(msg.text).toMatchSnapshot();
+  });
 });
+

@@ -141,6 +141,18 @@ export class DesignStudioRepository {
     return await query.executeTakeFirst();
   }
 
+  async getLatestRunForTask(taskId: string, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db)
+      .selectFrom('design_studio_runs')
+      .selectAll()
+      .where('task_id', '=', taskId)
+      .orderBy('created_at', 'desc');
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.executeTakeFirst();
+  }
+
   async updateRunStatus(
     id: string,
     tenantId: string,
@@ -212,6 +224,17 @@ export class DesignStudioRepository {
       query = query.where('tenant_id', '=', tenantId);
     }
     return await query.execute();
+  }
+
+  async getCandidateById(id: string, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db)
+      .selectFrom('design_studio_candidates')
+      .selectAll()
+      .where('id', '=', id);
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.executeTakeFirst();
   }
 
   async updateCandidate(

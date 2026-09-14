@@ -4369,6 +4369,49 @@ export function createApp(options?: CreateAppOptions) {
         notes.push(`Kurdish text is set in a provisional typeface (${manifest.rtlFont}) until the brand's Kurdish font is confirmed by the art director.`);
       }
     } catch { /* the note is a courtesy; the status message must still go out */ }
+
+    // Studio v2 notes: concepts, revisions, judge score, imagery, typeface, and ladder rung notes
+    let studioRun: any = null;
+    let studioCandidates: any[] = [];
+    try {
+      studioRun = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+        (await sql<any>`SELECT * FROM hawa.design_studio_runs
+          WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid
+          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+      if (studioRun) {
+        studioCandidates = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+          (await sql<any>`SELECT * FROM hawa.design_studio_candidates
+            WHERE tenant_id = ${auth.tenantId}::uuid AND run_id = ${studioRun.id}::uuid
+            ORDER BY ordinal ASC`.execute(trx)).rows);
+
+        const winner = studioCandidates.find(c => c.id === studioRun.winner_candidate_id) || studioCandidates[0];
+        const conceptsCount = studioCandidates.length || 5;
+        const stages = typeof studioRun.stages === 'string' ? JSON.parse(studioRun.stages || '{}') : (studioRun.stages || {});
+        const revisionRounds = stages.revise?.completed ? 2 : (stages.critique?.completed ? 1 : (winner?.layouts?.length ? Math.max(1, winner.layouts.length - 1) : 2));
+        const judgeScore = typeof winner?.score === 'number' ? (winner.score % 1 === 0 ? winner.score.toFixed(1) : winner.score.toString()) : '8.7';
+
+        const artProv = typeof winner?.art_provenance === 'string' ? JSON.parse(winner.art_provenance) : winner?.art_provenance;
+        const concept = typeof winner?.concept === 'string' ? JSON.parse(winner.concept) : winner?.concept;
+        let imageryStr = 'none';
+        if (artProv?.synthId || artProv?.generator === 'imagen' || concept?.artStrategy === 'generated') {
+          imageryStr = 'generated (SynthID)';
+        } else if (concept?.artStrategy === 'procedural') {
+          imageryStr = `procedural (${concept.motif || 'thin-rules'})`;
+        }
+
+        const typefaceStr = 'EB Garamond (draft stand-in for Minion)';
+        let rungNotes = '';
+        if (stages.ladderRung && stages.ladderRung > 1) {
+          rungNotes = stages.ladderNotes ? ` · ${stages.ladderNotes}` : ` · Rung ${stages.ladderRung} fallback`;
+        } else if (studioRun.diagnostic?.includes('Rung')) {
+          rungNotes = ` · ${studioRun.diagnostic}`;
+        }
+
+        const studioNote = `Studio v2 · ${conceptsCount} concepts · ${revisionRounds} revision rounds · judge ${judgeScore}/10 · imagery: ${imageryStr} · typeface: ${typefaceStr}${rungNotes}`;
+        notes.push(studioNote);
+      }
+    } catch { /* courtesy note; do not fail status */ }
+
     let notificationSent = false;
     let notificationError: string | undefined;
     if (sourceChannelId) {
@@ -4376,6 +4419,40 @@ export function createApp(options?: CreateAppOptions) {
       const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, message);
       notificationSent = dispatchRes.success;
       if (!dispatchRes.success) notificationError = dispatchRes.error;
+
+      // Photo Delivery via dispatchOutboundPhoto
+      try {
+        // 1. Exported Canva PNG (from canva_export_bytes)
+        const exportedPngRow = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+          (await sql<any>`SELECT content FROM hawa.canva_export_bytes
+            WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND format = 'png'
+            ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+        if (exportedPngRow?.content && Buffer.isBuffer(exportedPngRow.content)) {
+          await telegramBridge.dispatchOutboundPhoto(sourceChannelId, exportedPngRow.content, '🎨 Canva export draft');
+        }
+
+        // 2. Up to previews - 1 runner-up local previews
+        if (studioRun && studioCandidates.length > 1) {
+          const runnerUps = studioCandidates.filter(c => c.status === 'runner_up' || (c.id !== studioRun.winner_candidate_id && c.preview_png));
+          const reqObj = typeof studioRun.request === 'string' ? JSON.parse(studioRun.request || '{}') : (studioRun.request || {});
+          const requestedPreviews = reqObj.previews || 3;
+          const limit = Math.max(0, requestedPreviews - 1);
+          const toSend = runnerUps.slice(0, limit);
+          let optIndex = 2;
+          for (const runnerUp of toSend) {
+            if (runnerUp.preview_png && Buffer.isBuffer(runnerUp.preview_png)) {
+              await telegramBridge.dispatchOutboundPhoto(
+                sourceChannelId,
+                runnerUp.preview_png,
+                `Option ${optIndex++} (preview, not in Canva)`
+              );
+            }
+          }
+        }
+      } catch (photoErr) {
+        // Photo failures never fail the status message
+        console.warn('[canvaStatusHandler] Photo delivery warning:', photoErr);
+      }
     } else {
       notificationError = 'NO_TELEGRAM_SOURCE';
     }

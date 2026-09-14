@@ -21,7 +21,7 @@ import {
 import { checkCanvaPptx } from '@hawa/qa';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
-import type { StageContext, CandidateState, CreativeBrief, Concept, ReferencePack, CopyBlock } from './types.js';
+import type { StageContext, CandidateState, CreativeBrief, Concept, ReferencePack, CopyBlock, ParityResult } from './types.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -34,6 +34,7 @@ import {
   runCanaryStage,
   runQAStage,
   runTransferStage,
+  runParityStage,
 } from './stages/index.js';
 
 export type Scope = { tenantId: string; actorId: string };
@@ -1144,4 +1145,58 @@ export class DesignStudioService {
       };
     });
   }
+
+  /**
+   * P8 — Canva parity check on the exported Canva PNG.
+   * Compares the winner preview PNG with the exported Canva PNG.
+   */
+  public async runParityCheck(s: Scope, runId: string): Promise<ParityResult> {
+    const run = await this.repo.getRunById(runId, s.tenantId);
+    if (!run) throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
+    if (!run.winner_candidate_id) {
+      throw new CanvaFlowError(422, 'NO_WINNER_CANDIDATE', 'Studio run has no selected winner candidate.');
+    }
+
+    const candidate = await this.repo.getCandidateById(run.winner_candidate_id, s.tenantId);
+    if (!candidate?.preview_png) {
+      throw new CanvaFlowError(404, 'PREVIEW_NOT_FOUND', 'Winner candidate has no rendered preview image.');
+    }
+
+    const canvaExportRow = await this.tx(s, async (db) =>
+      (await sql<any>`SELECT content FROM hawa.canva_export_bytes
+        WHERE task_id = ${run.task_id}::uuid AND tenant_id = ${s.tenantId}::uuid AND format = 'png'
+        ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0]
+    );
+    if (!canvaExportRow?.content) {
+      throw new CanvaFlowError(404, 'CANVA_PNG_NOT_FOUND', 'Exported Canva PNG not found for task.');
+    }
+
+    const budget = typeof run.budget === 'string' ? JSON.parse(run.budget) : (run.budget || { maxUsd: 5.0, maxCalls: 30, spentUsd: 0, calls: 0 });
+    const stageCtx = this.createStageContext(s, run, 'parity', budget, async (cost) => {
+      budget.spentUsd += cost;
+      budget.calls += 1;
+    });
+    const parityResult = await runParityStage(stageCtx, candidate.preview_png, canvaExportRow.content);
+
+    // Record judgment in append-only table
+    await this.repo.insertJudgment({
+      id: randomUUID(),
+      runId: run.id,
+      tenantId: s.tenantId,
+      kind: 'parity',
+      candidateA: run.winner_candidate_id,
+      candidateB: null,
+      orderSwapped: false,
+      verdict: parityResult as any,
+    });
+
+    if (!['transferred', 'degraded', 'failed', 'abandoned'].includes(run.status)) {
+      const stages = typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages || {};
+      stages.parity = parityResult;
+      await this.repo.updateRunStatus(runId, s.tenantId, run.status, { stages });
+    }
+
+    return parityResult;
+  }
 }
+

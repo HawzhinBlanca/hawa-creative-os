@@ -156,5 +156,142 @@ describe('native Canva workflow',()=>{
     expect(result.status).toBe('DESIGN_REJECTED');
     expect(remote.mock.calls.some((c) => String(c[0]).includes('/notifications/canva-status'))).toBe(true);
   });
+
+  it('executes Design Studio v2 workflow: studio-start -> studio-resume -> binding -> exports -> parity -> ready', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const studioInput = {
+      ...input,
+      designStudio: true,
+      studioOptions: { tier: 'quality' as const, previews: 3 },
+    };
+    const replies = [
+      { tenantId: 'tenant', clientId: 'client' }, // verify scope
+      { runId: 'run-studio-123', status: 'briefing' }, // canva-studio-start
+      { runId: 'run-studio-123', status: 'transferred', planId: 'plan-studio-1', designId: 'DA_studio_winner' }, // canva-studio-resume-0
+      { binding: { designId: 'DA_studio_winner', version: 1 } }, // canva-read-binding
+      { status: 'submitted', operationId: 'export_preview' }, // canva-export-preview
+      { status: 'retrieved', artifact: { id: 'artifact_preview' } }, // canva-resume-preview
+      { status: 'submitted', operationId: 'check_pptx' }, // canva-export-copy-font-check
+      { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } }, // canva-resume-check
+      { ok: true, parity: 'match' }, // canva-parity-check
+      { ok: true }, // canva-notify-canva_draft_ready_for_visual_review
+    ];
+    const remote = vi.fn(async () => Response.json(replies.shift()));
+    const ctx = new DurableStepJournal();
+    const result = await runCanvaDraft(studioInput, ctx, remote);
+
+    expect(result.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
+    expect(result.documentId).toBe('DA_studio_winner');
+
+    // 1. studio start verification
+    const startCall = remote.mock.calls[1];
+    expect(String(startCall[0])).toContain('/canva/studio');
+    expect(startCall[1].headers['Idempotency-Key']).toBe('workflow-studio-' + studioInput.taskId);
+    expect(JSON.parse(startCall[1].body)).toMatchObject({
+      width: 1200,
+      height: 1697,
+      tier: 'quality',
+      previews: 3,
+    });
+
+    // 2. studio resume verification
+    const resumeCall = remote.mock.calls[2];
+    expect(String(resumeCall[0])).toContain('/canva/studio/run-studio-123/resume');
+
+    // 3. parity check verification
+    const parityCall = remote.mock.calls.find((c) => String(c[0]).includes('/canva/parity-check'));
+    expect(parityCall).toBeDefined();
+    expect(JSON.parse(parityCall![1].body)).toMatchObject({ runId: 'run-studio-123' });
+
+    // 4. status notification verification
+    const notifyCall = remote.mock.calls[remote.mock.calls.length - 1];
+    expect(String(notifyCall[0])).toContain('/notifications/canva-status');
+    expect(JSON.parse(notifyCall[1].body)).toMatchObject({
+      status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+      designId: 'DA_studio_winner',
+      runId: 'run-studio-123',
+    });
+  });
+
+  it('reports DESIGN_FAILED when design studio returns failed status after ladder', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const studioInput = { ...input, designStudio: true };
+    const replies = [
+      { tenantId: 'tenant', clientId: 'client' }, // verify scope
+      { runId: 'run-studio-fail', status: 'briefing' }, // canva-studio-start
+      { runId: 'run-studio-fail', status: 'failed', diagnostic: 'RUNG_4_FALLBACK_FAILED', code: 'BUDGET_EXHAUSTED' }, // canva-studio-resume-0
+      { ok: true }, // canva-notify-design_failed
+    ];
+    const remote = vi.fn(async () => Response.json(replies.shift()));
+    const ctx = new DurableStepJournal();
+    const result = await runCanvaDraft(studioInput, ctx, remote);
+
+    expect(result.status).toBe('DESIGN_FAILED');
+    const notifyCall = remote.mock.calls[remote.mock.calls.length - 1];
+    expect(String(notifyCall[0])).toContain('/notifications/canva-status');
+    expect(JSON.parse(notifyCall[1].body)).toMatchObject({
+      status: 'DESIGN_FAILED',
+      code: 'BUDGET_EXHAUSTED',
+      runId: 'run-studio-fail',
+    });
+  });
+
+  it('proves both studio path and legacy path reach CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+
+    // Legacy path
+    const legacyReplies = [
+      { tenantId: 'tenant', clientId: 'client' },
+      { status: 'retrieved', planId: 'plan-legacy', designId: 'DA_legacy' },
+      { binding: { designId: 'DA_legacy', version: 1 } },
+      { status: 'retrieved', artifact: { id: 'art1' } },
+      { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } },
+      { ok: true },
+    ];
+    const legacyRemote = vi.fn(async () => Response.json(legacyReplies.shift()));
+    const legacyResult = await runCanvaDraft(input, new DurableStepJournal(), legacyRemote);
+    expect(legacyResult.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
+    expect(legacyRemote.mock.calls.some((c) => String(c[0]).includes('/canva/generate'))).toBe(true);
+    expect(legacyRemote.mock.calls.some((c) => String(c[0]).includes('/canva/studio'))).toBe(false);
+
+    // Studio v2 path
+    const studioReplies = [
+      { tenantId: 'tenant', clientId: 'client' },
+      { runId: 'run-s1', status: 'transferred', planId: 'plan-s1', designId: 'DA_studio' },
+      { binding: { designId: 'DA_studio', version: 1 } },
+      { status: 'retrieved', artifact: { id: 'art2' } },
+      { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } },
+      { ok: true, parity: 'match' },
+      { ok: true },
+    ];
+    const studioRemote = vi.fn(async () => Response.json(studioReplies.shift()));
+    const studioResult = await runCanvaDraft({ ...input, designStudio: true }, new DurableStepJournal(), studioRemote);
+    expect(studioResult.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
+    expect(studioRemote.mock.calls.some((c) => String(c[0]).includes('/canva/studio'))).toBe(true);
+    expect(studioRemote.mock.calls.some((c) => String(c[0]).includes('/canva/generate'))).toBe(false);
+  });
+
+  it('forwards designStudio and studioOptions through TaskWorkflowDispatcher', async () => {
+    const remote = vi.fn(async () => Response.json({ invocationId: 'inv_studio_test', status: 'Accepted' }));
+    vi.stubGlobal('fetch', remote);
+    const dispatcher = new TaskWorkflowDispatcher({ restateIngressUrl: 'http://restate.test' });
+    const receipt = await dispatcher.dispatch({
+      aggregate_id: input.taskId,
+      tenant_id: 'tenant',
+      idempotency_key: 'studio-key',
+      payload: {
+        workflow: 'canva',
+        autoGenerate: true,
+        designStudio: true,
+        studioOptions: { tier: 'quality', previews: 2 },
+      },
+    } as any);
+
+    expect(receipt.receiptId).toBe('inv_studio_test');
+    const sentBody = JSON.parse(remote.mock.calls[0][1].body);
+    expect(sentBody.designStudio).toBe(true);
+    expect(sentBody.studioOptions).toEqual({ tier: 'quality', previews: 2 });
+  });
 });
+
 

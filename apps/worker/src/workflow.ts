@@ -29,6 +29,15 @@ export interface WorkflowInput {
   canvaAutoGenerate?: boolean;
   /** Requested artboard size recorded at intake; absent for historical tasks. */
   canvaVariant?: { width: number; height: number };
+  /** Studio v2 execution flag */
+  designStudio?: boolean;
+  /** Studio v2 execution options */
+  studioOptions?: {
+    tier?: 'fast' | 'quality';
+    imagery?: 'none' | 'abstract' | 'photographic';
+    previews?: number;
+    holdForSelection?: boolean;
+  };
 }
 
 export interface WorkflowOutput {

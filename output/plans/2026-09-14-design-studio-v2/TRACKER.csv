@@ -12,7 +12,7 @@ T09,Migration 013 + RLS + immutability + repositories,COMPLETED,output/proofs/20
 T10,Stages (brief..transfer v2),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T10_STAGES.md,,
 T11,Orchestrator (journal + resume + budget + ladder),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T11_ORCHESTRATOR.md,,
 T12,Routes + Desk Studio panel,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T12_ROUTES.md,,
-T13,Worker integration + flag + status notes + PNG delivery + parity,NOT_STARTED,,,
+T13,Worker integration + flag + status notes + PNG delivery + parity,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T13_WORKER.md,,
 T14,Feedback table + exemplar proposal,NOT_STARTED,,,
 T15,Evaluation harness (offline + live + ratings intake),NOT_STARTED,,,
 T16,Fault injection proofs,NOT_STARTED,,,

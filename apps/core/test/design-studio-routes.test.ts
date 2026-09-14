@@ -92,6 +92,15 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
         }
         return { runId, status: 'abandoned', message: 'Studio run abandoned' };
       }),
+      runParityCheck: vi.fn(async (_scope, _rId) => {
+        return {
+          parity: 'match' as const,
+          divergences: [],
+          fontSubstituted: false,
+          textReflowed: false,
+          copyVisibleIdentical: true,
+        };
+      }),
     } as unknown as DesignStudioService;
 
     app = createApp({
@@ -369,5 +378,34 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       const bytes = Buffer.from(await res.arrayBuffer());
       expect(bytes.equals(fakePng)).toBe(true);
     });
+
+    it('POST /v1/tasks/:taskId/canva/parity-check executes P8 comparison (200)', async () => {
+      const res = await app.request(`/v1/tasks/${taskId}/canva/parity-check`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ runId }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.ok).toBe(true);
+      expect(data.taskId).toBe(taskId);
+      expect(data.runId).toBe(runId);
+      expect(data.parity).toBe('match');
+      expect(data.verdict.copyVisibleIdentical).toBe(true);
+    });
+
+    it('POST /v1/tasks/:taskId/canva/studio/:runId/parity executes P8 comparison (200)', async () => {
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}/parity`, {
+        method: 'POST',
+        headers,
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.ok).toBe(true);
+      expect(data.parity).toBe('match');
+    });
   });
 });
+
