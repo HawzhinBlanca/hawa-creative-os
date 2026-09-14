@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-13T22:24:57Z",
+  "generatedAt": "2026-09-14T08:24:20Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 178,
+  "fileCount": 179,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -206,6 +206,11 @@
       "path": "adrs/028_bounded_sorani_copy_in_canva_drafts.md",
       "sha256": "514d04daa4c1ee0a18f6d3943d132a26d907b0a2587ded5a3dd251273a0d26ca",
       "bytes": 3205
+    },
+    {
+      "path": "adrs/029_design_studio_v2_see_judge_revise.md",
+      "sha256": "6b957db8d20aa5b5b408e7f8aae52e46bb1f2e6fe96e29e549f865b322a68296",
+      "bytes": 7471
     },
     {
       "path": "api/canva-connect.openapi.json",
