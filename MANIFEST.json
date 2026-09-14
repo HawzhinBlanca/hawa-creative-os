@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-14T13:54:59Z",
+  "generatedAt": "2026-09-14T20:29:28Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 183,
+  "fileCount": 184,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -534,8 +534,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "1e55359c069c6ec3610bab69559c23c332b0d2410e6a23cd8b995d4acb59ab9d",
-      "bytes": 7909
+      "sha256": "a879e7d6cb4e337ace398bf314f5b098fefa7f0dee0ce13b04f99a44199348c8",
+      "bytes": 10827
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -881,6 +881,11 @@
       "path": "scripts/smoke_test_10_of_10.ts",
       "sha256": "3bdb63505c15318436fad21103437cba1d1ce8deed4a29a297982382b872111c",
       "bytes": 13785
+    },
+    {
+      "path": "scripts/studio_fault_injection.ts",
+      "sha256": "626319ccbf906253d0985d4a910540567676ff31cc25c43b73516f541f34ccf1",
+      "bytes": 9474
     },
     {
       "path": "scripts/test_gateway_models.ts",
