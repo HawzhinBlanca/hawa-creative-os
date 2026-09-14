@@ -1,0 +1,19 @@
+{
+  "id": "compare-10",
+  "name": "Bilingual Accreditation Board Convening",
+  "language": "mixed",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1240,
+  "height": 1754,
+  "aspectLabel": "A4 Portrait",
+  "instructions": "Bilingual A4 formal convening notice. Official institutional layout, clear bilingual headings and venue details.",
+  "rawRequestText": "Bilingual A4 formal convening notice. Official institutional layout, clear bilingual headings and venue details.\n---\nKAAE Board of Commissioners\n\nکۆبوونەوەی ساڵانەی دەستەی متمانەبەخشین\n\nAnnual Review of Higher Education Standards\n\nOfficial convening of academic leadership, international accreditors, and university chancellors.\n\nCouncil Grand Hall, Erbil • هۆڵی گەورەی ئەنجومەن، هەولێر\n\nDecember 10, 2026 • ١٠ی کانوونی یەکەم",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "KAAE Board of Commissioners", "role": "eyebrow", "script": "latin" },
+    { "copyIndex": 1, "text": "کۆبوونەوەی ساڵانەی دەستەی متمانەبەخشین", "role": "title", "script": "arabic" },
+    { "copyIndex": 2, "text": "Annual Review of Higher Education Standards", "role": "subtitle", "script": "latin" },
+    { "copyIndex": 3, "text": "Official convening of academic leadership, international accreditors, and university chancellors.", "role": "body", "script": "latin" },
+    { "copyIndex": 4, "text": "Council Grand Hall, Erbil • هۆڵی گەورەی ئەنجومەن، هەولێر", "role": "venue", "script": "latin" },
+    { "copyIndex": 5, "text": "December 10, 2026 • ١٠ی کانوونی یەکەم", "role": "date", "script": "latin" }
+  ]
+}

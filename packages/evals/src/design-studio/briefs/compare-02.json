@@ -1,0 +1,17 @@
+{
+  "id": "compare-02",
+  "name": "Institutional Accreditation Standard 2026",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Square institutional announcement post with restrained official styling and prominent typography.",
+  "rawRequestText": "Square institutional announcement post with restrained official styling and prominent typography.\n---\nKAAE Quality Assurance Council\n\nInstitutional Accreditation Standard 2026\n\nOfficial accreditation criteria and institutional benchmarks now released for all universities in the Kurdistan Region.\n\nwww.kaae.gov.krd",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "KAAE Quality Assurance Council", "role": "eyebrow", "script": "latin" },
+    { "copyIndex": 1, "text": "Institutional Accreditation Standard 2026", "role": "title", "script": "latin" },
+    { "copyIndex": 2, "text": "Official accreditation criteria and institutional benchmarks now released for all universities in the Kurdistan Region.", "role": "body", "script": "latin" },
+    { "copyIndex": 3, "text": "www.kaae.gov.krd", "role": "footer", "script": "latin" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "compare-07",
+  "name": "Kurdish Accreditation Announcement",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Square official Kurdish announcement post. Clean RTL alignment, authoritative typography, restrained branding.",
+  "rawRequestText": "Square official Kurdish announcement post. Clean RTL alignment, authoritative typography, restrained branding.\n---\nدەستەی متمانەبەخشیی پەروەردەیی (KAAE)\n\nڕاگەیاندنی پێوەرە نوێیەکانی متمانەبەخشین\n\nدەستەی متمانەبەخشین نوێترین ڕێنمایی و پێوەرەکانی پەسەندکردنی پرۆگرامە ئەکادیمییەکان بۆ ساڵی ٢٠٢٦ بڵاودەکاتەوە.\n\nبۆ زانیاری زیاتر سەردانی ماڵپەڕی فەرمی بکەن",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "دەستەی متمانەبەخشیی پەروەردەیی (KAAE)", "role": "eyebrow", "script": "arabic" },
+    { "copyIndex": 1, "text": "ڕاگەیاندنی پێوەرە نوێیەکانی متمانەبەخشین", "role": "title", "script": "arabic" },
+    { "copyIndex": 2, "text": "دەستەی متمانەبەخشین نوێترین ڕێنمایی و پێوەرەکانی پەسەندکردنی پرۆگرامە ئەکادیمییەکان بۆ ساڵی ٢٠٢٦ بڵاودەکاتەوە.", "role": "body", "script": "arabic" },
+    { "copyIndex": 3, "text": "بۆ زانیاری زیاتر سەردانی ماڵپەڕی فەرمی بکەن", "role": "footer", "script": "arabic" }
+  ]
+}

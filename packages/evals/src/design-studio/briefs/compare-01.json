@@ -1,0 +1,19 @@
+{
+  "id": "compare-01",
+  "name": "KAAE Annual Accreditation Symposium 2026",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1350,
+  "aspectLabel": "4:5 Portrait",
+  "instructions": "Formal editorial academic symposium invitation for institutional leadership. Dark navy background, gold accents, clear hierarchy.",
+  "rawRequestText": "Formal editorial academic symposium invitation for institutional leadership. Dark navy background, gold accents, clear hierarchy.\n---\nKurdistan Accreditation Agency for Education\n\nAnnual Accreditation Symposium 2026\n\nAdvancing Academic Standards Across Kurdistan\n\nJoin university chancellors and accreditation delegates for keynote sessions and national curriculum framework reviews.\n\nErbil International Conference Center\n\nOctober 24, 2026 • 09:30 AM",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "Kurdistan Accreditation Agency for Education", "role": "eyebrow", "script": "latin" },
+    { "copyIndex": 1, "text": "Annual Accreditation Symposium 2026", "role": "title", "script": "latin" },
+    { "copyIndex": 2, "text": "Advancing Academic Standards Across Kurdistan", "role": "subtitle", "script": "latin" },
+    { "copyIndex": 3, "text": "Join university chancellors and accreditation delegates for keynote sessions and national curriculum framework reviews.", "role": "body", "script": "latin" },
+    { "copyIndex": 4, "text": "Erbil International Conference Center", "role": "venue", "script": "latin" },
+    { "copyIndex": 5, "text": "October 24, 2026 • 09:30 AM", "role": "date", "script": "latin" }
+  ]
+}

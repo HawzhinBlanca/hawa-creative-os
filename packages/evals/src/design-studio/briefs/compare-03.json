@@ -1,0 +1,19 @@
+{
+  "id": "compare-03",
+  "name": "Higher Education Leadership Forum",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1920,
+  "aspectLabel": "9:16 Story",
+  "instructions": "Vertical mobile editorial briefing story. Generous margins, strong vertical balance, restrained gold rule accents.",
+  "rawRequestText": "Vertical mobile editorial briefing story. Generous margins, strong vertical balance, restrained gold rule accents.\n---\nKAAE Executive Briefing\n\nHigher Education Leadership Forum\n\nInstitutional Autonomy & Global Standards\n\nRotana Hotel Grand Ballroom, Erbil\n\nNovember 12, 2026\n\nAccredited Institutions Only",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "KAAE Executive Briefing", "role": "eyebrow", "script": "latin" },
+    { "copyIndex": 1, "text": "Higher Education Leadership Forum", "role": "title", "script": "latin" },
+    { "copyIndex": 2, "text": "Institutional Autonomy & Global Standards", "role": "subtitle", "script": "latin" },
+    { "copyIndex": 3, "text": "Rotana Hotel Grand Ballroom, Erbil", "role": "venue", "script": "latin" },
+    { "copyIndex": 4, "text": "November 12, 2026", "role": "date", "script": "latin" },
+    { "copyIndex": 5, "text": "Accredited Institutions Only", "role": "footer", "script": "latin" }
+  ]
+}

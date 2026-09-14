@@ -1,0 +1,17 @@
+{
+  "briefId": "compare-02",
+  "taskId": "41ad5a19-aa77-459f-a919-fe101f12ca0b",
+  "canvaDesignId": "DAHVKZagLXI",
+  "bindingVersion": 1,
+  "artifactSha256": "e3390f713d445468fe5a8fdcbbbcb7713a1de49a2eb58c7a4da0409beeedf75c",
+  "elapsedSeconds": "23.3",
+  "receipt": {
+    "provider": "anthropic",
+    "responseId": "msg_011Cf35ezn23dWm58ziL1Ays",
+    "completedAt": "2026-09-14T09:17:44.889Z",
+    "inputTokens": 1897,
+    "outputTokens": 448,
+    "returnedModel": "claude-opus-5",
+    "requestedModel": "claude-opus-5"
+  }
+}

@@ -332,7 +332,7 @@ export class ResilientModelGateway implements ModelGateway {
       // Check egress policy and budget constraints before attempting any external network call
       const isLocal = candidate.provider === 'local';
       const egressLocalOnly = request.egressPolicy?.mode === 'local_only';
-      const providerAllowed = !request.egressPolicy?.allowedProviders ||
+      const providerAllowed = isLocal || !request.egressPolicy?.allowedProviders ||
         request.egressPolicy.allowedProviders.length === 0 ||
         request.egressPolicy.allowedProviders.includes(candidate.provider);
       const budgetZeroAttempts = request.budget?.maxAttempts === 0;

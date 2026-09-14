@@ -1,0 +1,18 @@
+{
+  "id": "compare-08",
+  "name": "Kurdish Quality Assurance Workshop Story",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1920,
+  "aspectLabel": "9:16 Story",
+  "instructions": "Vertical mobile Kurdish story format. RTL alignment throughout, clear hierarchy, official navy and cream palette.",
+  "rawRequestText": "Vertical mobile Kurdish story format. RTL alignment throughout, clear hierarchy, official navy and cream palette.\n---\nخولی ڕاهێنانی ئەکادیمی\n\nوۆرکشۆپی بەڕێوەبردنی دڵنیایی جۆری\n\nپەرەپێدانی توانای بەڕێوەبەرانی دڵنیایی جۆری لە زانکۆکان\n\nهەولێر • باڵەخانەی دەستەی متمانەبەخشین\n\n١٥ی تشرینی دووەمی ٢٠٢٦",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "خولی ڕاهێنانی ئەکادیمی", "role": "eyebrow", "script": "arabic" },
+    { "copyIndex": 1, "text": "وۆرکشۆپی بەڕێوەبردنی دڵنیایی جۆری", "role": "title", "script": "arabic" },
+    { "copyIndex": 2, "text": "پەرەپێدانی توانای بەڕێوەبەرانی دڵنیایی جۆری لە زانکۆکان", "role": "subtitle", "script": "arabic" },
+    { "copyIndex": 3, "text": "هەولێر • باڵەخانەی دەستەی متمانەبەخشین", "role": "venue", "script": "arabic" },
+    { "copyIndex": 4, "text": "١٥ی تشرینی دووەمی ٢٠٢٦", "role": "date", "script": "arabic" }
+  ]
+}

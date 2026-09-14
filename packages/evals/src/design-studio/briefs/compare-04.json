@@ -1,0 +1,20 @@
+{
+  "id": "compare-04",
+  "name": "National Accreditation Council Session",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1240,
+  "height": 1754,
+  "aspectLabel": "A4 Portrait",
+  "instructions": "Formal institutional council convocation document. Symmetrical grid, official tone, refined hierarchy.",
+  "rawRequestText": "Formal institutional council convocation document. Symmetrical grid, official tone, refined hierarchy.\n---\nOfficial Notice of Assembly\n\nNational Accreditation Council Session\n\nEvaluation of Regional Academic Programs\n\nThe Board of Commissioners convenes for the final review and accreditation determination of professional programs for the academic year 2026–2027.\n\nCouncil Chambers, KAAE Headquarters, Erbil\n\nWednesday, December 2, 2026\n\nCouncil Resolution 44/2026",
+  "copyBlocks": [
+    { "copyIndex": 0, "text": "Official Notice of Assembly", "role": "eyebrow", "script": "latin" },
+    { "copyIndex": 1, "text": "National Accreditation Council Session", "role": "title", "script": "latin" },
+    { "copyIndex": 2, "text": "Evaluation of Regional Academic Programs", "role": "subtitle", "script": "latin" },
+    { "copyIndex": 3, "text": "The Board of Commissioners convenes for the final review and accreditation determination of professional programs for the academic year 2026–2027.", "role": "body", "script": "latin" },
+    { "copyIndex": 4, "text": "Council Chambers, KAAE Headquarters, Erbil", "role": "venue", "script": "latin" },
+    { "copyIndex": 5, "text": "Wednesday, December 2, 2026", "role": "date", "script": "latin" },
+    { "copyIndex": 6, "text": "Council Resolution 44/2026", "role": "footer", "script": "latin" }
+  ]
+}
