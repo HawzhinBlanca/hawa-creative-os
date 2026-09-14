@@ -1,0 +1,52 @@
+{
+  "fontFidelity": {
+    "EB Garamond": "stand-in",
+    "Minion Variable Concept": "stand-in",
+    "Noto Sans Arabic": "exact"
+  },
+  "results": {
+    "latin": {
+      "wrappedLines": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 1
+      },
+      "diffPct": 0
+    },
+    "sorani": {
+      "wrappedLines": {
+        "0": 1,
+        "1": 2,
+        "2": 1,
+        "3": 2,
+        "4": 1
+      },
+      "diffPct": 0
+    },
+    "mixed": {
+      "wrappedLines": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 1
+      },
+      "diffPct": 0
+    },
+    "morning-request": {
+      "wrappedLines": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 4,
+        "5": 3,
+        "6": 2,
+        "7": 1
+      },
+      "diffPct": 0
+    }
+  }
+}
