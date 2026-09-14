@@ -1,0 +1,49 @@
+{
+  "id": "golden-19",
+  "name": "Kurdish Higher Education Plenary Presentation",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1920,
+  "height": 1080,
+  "aspectLabel": "16:9 Screen",
+  "instructions": "Wide screen keynote presentation slide in Sorani Kurdish on higher education modernization and institutional accreditation.",
+  "rawRequestText": "Wide screen keynote presentation slide in Sorani Kurdish on higher education modernization and institutional accreditation.\n---\nدیداری ساڵانەی سەرکردایەتی ئەکادیمی\n\nستراتیژی نوێکردنەوەی خوێندنی باڵا لە کوردستان\n\nهاوئاهەنگی نێوان دەستەی متمانەبەخشین و زانکۆ حکومی و تایبەتەکان\n\nگفتوگۆی فراوان لەسەر باشترکردنی شێوازی فێرکردن و بەرزکردنەوەی پلەی زانستی زانکۆکان لەسەر ئاستی نێودەوڵەتی.\n\nهۆڵی کۆنفرانسە نێودەوڵەتییەکان، هەولێر\n\n٢٠ی تشرینی دووەمی ٢٠٢٦",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "دیداری ساڵانەی سەرکردایەتی ئەکادیمی",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "ستراتیژی نوێکردنەوەی خوێندنی باڵا لە کوردستان",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "هاوئاهەنگی نێوان دەستەی متمانەبەخشین و زانکۆ حکومی و تایبەتەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "گفتوگۆی فراوان لەسەر باشترکردنی شێوازی فێرکردن و بەرزکردنەوەی پلەی زانستی زانکۆکان لەسەر ئاستی نێودەوڵەتی.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "هۆڵی کۆنفرانسە نێودەوڵەتییەکان، هەولێر",
+      "role": "venue",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 5,
+      "text": "٢٠ی تشرینی دووەمی ٢٠٢٦",
+      "role": "date",
+      "script": "arabic"
+    }
+  ]
+}

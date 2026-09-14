@@ -1,0 +1,38 @@
+{
+  "id": "golden-05",
+  "name": "Global Education Quality Summit Screen",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1920,
+  "height": 1080,
+  "aspectLabel": "16:9 Landscape",
+  "instructions": "Wide digital screen display card for keynote podium and digital signage. Generous horizontal whitespace, balanced official seal and typography.",
+  "rawRequestText": "Wide digital screen display card for keynote podium and digital signage. Generous horizontal whitespace, balanced official seal and typography.\n---\nKurdistan Accreditation Agency for Education\n\nGlobal Education Quality Summit\n\nFostering Excellence in Kurdish Higher Education\n\nErbil • December 2026",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accreditation Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Global Education Quality Summit",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Fostering Excellence in Kurdish Higher Education",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Erbil • December 2026",
+      "role": "date",
+      "script": "latin"
+    }
+  ],
+  "compareId": "compare-05"
+}

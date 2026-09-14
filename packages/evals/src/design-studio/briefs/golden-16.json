@@ -1,0 +1,49 @@
+{
+  "id": "golden-16",
+  "name": "University Governance Summit 2026",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1350,
+  "aspectLabel": "4:5 Portrait",
+  "instructions": "Editorial poster invitation for council members and university boards of trustees on institutional accountability.",
+  "rawRequestText": "Editorial poster invitation for council members and university boards of trustees on institutional accountability.\n---\nKAAE Institutional Leadership Series\n\nUniversity Governance Summit 2026\n\nTransparency, Accountability, and Institutional Independence\n\nDeliberating board oversight frameworks and sustainable funding models for public and private institutions.\n\nDivan Erbil Ballroom\n\nDecember 14, 2026 • 09:00 AM",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "KAAE Institutional Leadership Series",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "University Governance Summit 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Transparency, Accountability, and Institutional Independence",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Deliberating board oversight frameworks and sustainable funding models for public and private institutions.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Divan Erbil Ballroom",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "December 14, 2026 • 09:00 AM",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

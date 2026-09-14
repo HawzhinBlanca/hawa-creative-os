@@ -1,0 +1,49 @@
+{
+  "id": "golden-20",
+  "name": "Kurdish Institutional Evaluation Workshop",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1350,
+  "aspectLabel": "4:5 Portrait",
+  "instructions": "Sorani Kurdish portrait poster for a specialised training workshop for university internal audit committees.",
+  "rawRequestText": "Sorani Kurdish portrait poster for a specialised training workshop for university internal audit committees.\n---\nبەرنامەی پێگەیاندنی پسپۆڕانی دڵنیایی جۆری\n\nۆرکشۆپی شێوازەکانی وردبینی ناوخۆیی زانکۆ\n\nپەرەپێدانی توانای ستافی ئەکادیمی لە هەڵسەنگاندنی پرۆگرامەکان\n\nڕاهێنانی پراکتیکی لەسەر جێبەجێکردنی ستانداردە نیشتمانییەکان بۆ دڵنیابوونەوە لە کوالێتی وانەوتنەوە و تاقیکردنەوەکان.\n\nزانکۆی سەلاحەدین، هۆڵی کۆبوونەوەکان\n\n٥ی کانوونی یەکەمی ٢٠٢٦",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "بەرنامەی پێگەیاندنی پسپۆڕانی دڵنیایی جۆری",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "ۆرکشۆپی شێوازەکانی وردبینی ناوخۆیی زانکۆ",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پەرەپێدانی توانای ستافی ئەکادیمی لە هەڵسەنگاندنی پرۆگرامەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "ڕاهێنانی پراکتیکی لەسەر جێبەجێکردنی ستانداردە نیشتمانییەکان بۆ دڵنیابوونەوە لە کوالێتی وانەوتنەوە و تاقیکردنەوەکان.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "زانکۆی سەلاحەدین، هۆڵی کۆبوونەوەکان",
+      "role": "venue",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 5,
+      "text": "٥ی کانوونی یەکەمی ٢٠٢٦",
+      "role": "date",
+      "script": "arabic"
+    }
+  ]
+}

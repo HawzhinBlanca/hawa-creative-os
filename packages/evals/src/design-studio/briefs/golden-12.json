@@ -1,0 +1,49 @@
+{
+  "id": "golden-12",
+  "name": "KAAE Institutional Review Board Forum",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Academic announcement square poster for national research governance and ethics board standards.",
+  "rawRequestText": "Academic announcement square poster for national research governance and ethics board standards.\n---\nNational Research Governance\n\nInstitutional Review Board Forum 2026\n\nEthical Rigour and Data Integrity in Kurdish Higher Education\n\nConvening ethics committee chairs to establish unified human-subject research protocols across Kurdistan.\n\nErbil Rotana Conference Center\n\nDecember 3, 2026",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "National Research Governance",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Institutional Review Board Forum 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Ethical Rigour and Data Integrity in Kurdish Higher Education",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Convening ethics committee chairs to establish unified human-subject research protocols across Kurdistan.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil Rotana Conference Center",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "December 3, 2026",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

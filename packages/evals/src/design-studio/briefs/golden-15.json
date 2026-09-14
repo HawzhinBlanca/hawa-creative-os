@@ -1,0 +1,49 @@
+{
+  "id": "golden-15",
+  "name": "Academic Leadership Masterclass Keynote",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1920,
+  "height": 1080,
+  "aspectLabel": "16:9 Screen",
+  "instructions": "Wide screen keynote slide for international delegation on modern university governance and metric-driven accreditation.",
+  "rawRequestText": "Wide screen keynote slide for international delegation on modern university governance and metric-driven accreditation.\n---\nInternational Accreditation Plenary\n\nGoverning for Quality in Modern Universities\n\nGlobal Metrics and Regional Realities in Kurdish Higher Education\n\nKeynote addresses by European QA directors and regional academic rectors on building resilient higher education ecosystems.\n\nErbil International Auditorium\n\nNovember 18, 2026",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "International Accreditation Plenary",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Governing for Quality in Modern Universities",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Global Metrics and Regional Realities in Kurdish Higher Education",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Keynote addresses by European QA directors and regional academic rectors on building resilient higher education ecosystems.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil International Auditorium",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "November 18, 2026",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

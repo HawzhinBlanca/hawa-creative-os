@@ -1,0 +1,49 @@
+{
+  "id": "golden-17",
+  "name": "KAAE Doctoral Program Standards Announcement",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Square social and institutional announcement card regarding national doctoral dissertation supervision standards.",
+  "rawRequestText": "Square social and institutional announcement card regarding national doctoral dissertation supervision standards.\n---\nGraduate Studies Accreditation\n\nNational Doctoral Standards 2027\n\nElevating Rigour in Post-Graduate Supervision and Defence\n\nNew statutory criteria for doctoral advisor qualification, external examination, and peer-reviewed publication benchmarks.\n\nEffective Academic Year 2027-2028\n\nKAAE Quality Directorate",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Graduate Studies Accreditation",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "National Doctoral Standards 2027",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Elevating Rigour in Post-Graduate Supervision and Defence",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "New statutory criteria for doctoral advisor qualification, external examination, and peer-reviewed publication benchmarks.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Effective Academic Year 2027-2028",
+      "role": "date",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "KAAE Quality Directorate",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

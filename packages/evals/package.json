@@ -21,6 +21,7 @@
     "@hawa/qa": "workspace:*",
     "@hawa/retrieval": "workspace:*",
     "@hawa/integrations": "workspace:*",
+    "@hawa/creative": "workspace:*",
     "@hawa/testkit": "workspace:*"
   }
 }

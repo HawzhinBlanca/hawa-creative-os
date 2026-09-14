@@ -1,0 +1,49 @@
+{
+  "id": "golden-13",
+  "name": "Higher Education Fellowship Announcement",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1920,
+  "aspectLabel": "9:16 Story",
+  "instructions": "Vertical mobile story graphic announcing the 2027 senior academic fellowship program for post-doctoral researchers.",
+  "rawRequestText": "Vertical mobile story graphic announcing the 2027 senior academic fellowship program for post-doctoral researchers.\n---\nAcademic Excellence Initiative\n\nSenior Research Fellowship 2027\n\nEmpowering Scholarly Discovery in Kurdistan\n\nApplications open for fully funded research tenures focused on regional curriculum and institutional innovation.\n\nApplication Deadline: January 15, 2027\n\nApply via kaae.gov.krd",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Academic Excellence Initiative",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Senior Research Fellowship 2027",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Empowering Scholarly Discovery in Kurdistan",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Applications open for fully funded research tenures focused on regional curriculum and institutional innovation.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Application Deadline: January 15, 2027",
+      "role": "date",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "Apply via kaae.gov.krd",
+      "role": "cta",
+      "script": "latin"
+    }
+  ]
+}

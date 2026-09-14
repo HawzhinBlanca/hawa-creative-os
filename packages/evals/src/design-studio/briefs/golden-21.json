@@ -1,0 +1,49 @@
+{
+  "id": "golden-21",
+  "name": "Kurdish Academic Excellence Forum",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Square institutional card celebrating outstanding accredited academic programs in the Kurdistan Region.",
+  "rawRequestText": "Square institutional card celebrating outstanding accredited academic programs in the Kurdistan Region.\n---\nدەستەی متمانەبەخشین\n\nکۆڕبەندی نایابی ئەکادیمی ٢٠٢٦\n\nڕێزلێنان لە پرۆگرامە زانستییە باوەڕپێکراوەکان\n\nمەراسیمی فەرمی بەخشینی بڕوانامەی متمانەپێدان بەو کۆلێژانەی پێوەرە نێودەوڵەتییەکانیان بەسەرکەوتوویی تەواو کردووە.\n\nشاری سلێمانی، هۆڵی تەلاری هونەر\n\n١٢ی کانوونی یەکەمی ٢٠٢٦",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "دەستەی متمانەبەخشین",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "کۆڕبەندی نایابی ئەکادیمی ٢٠٢٦",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "ڕێزلێنان لە پرۆگرامە زانستییە باوەڕپێکراوەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "مەراسیمی فەرمی بەخشینی بڕوانامەی متمانەپێدان بەو کۆلێژانەی پێوەرە نێودەوڵەتییەکانیان بەسەرکەوتوویی تەواو کردووە.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "شاری سلێمانی، هۆڵی تەلاری هونەر",
+      "role": "venue",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 5,
+      "text": "١٢ی کانوونی یەکەمی ٢٠٢٦",
+      "role": "date",
+      "script": "arabic"
+    }
+  ]
+}

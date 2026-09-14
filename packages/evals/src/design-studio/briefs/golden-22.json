@@ -1,0 +1,49 @@
+{
+  "id": "golden-22",
+  "name": "Kurdish University Quality Delegate Briefing",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1920,
+  "aspectLabel": "9:16 Story",
+  "instructions": "Vertical Sorani Kurdish mobile announcement for university quality assurance delegates across Kurdistan.",
+  "rawRequestText": "Vertical Sorani Kurdish mobile announcement for university quality assurance delegates across Kurdistan.\n---\nئاگاداری فەرمی بۆ زانکۆکان\n\nکۆبوونەوەی ساڵانەی نوێنەرانی دڵنیایی جۆری\n\nپلانی نیشتمانی بۆ هەڵسەنگاندنی دامەزراوەیی ٢٠٢٧\n\nئامادەکاری پێویست بۆ دەستپێکردنی خولی نوێی متمانەبەخشین لە سەرجەم فاکەڵتی و پەیمانگەکاندا.\n\nکۆتا وادەی تۆمارکردن: ١ی کانوونی دووەمی ٢٠٢٧\n\nپەیوەندی بکەن بە بەڕێوەبەرایەتی هەڵسەنگاندن",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "ئاگاداری فەرمی بۆ زانکۆکان",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "کۆبوونەوەی ساڵانەی نوێنەرانی دڵنیایی جۆری",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پلانی نیشتمانی بۆ هەڵسەنگاندنی دامەزراوەیی ٢٠٢٧",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "ئامادەکاری پێویست بۆ دەستپێکردنی خولی نوێی متمانەبەخشین لە سەرجەم فاکەڵتی و پەیمانگەکاندا.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "کۆتا وادەی تۆمارکردن: ١ی کانوونی دووەمی ٢٠٢٧",
+      "role": "date",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 5,
+      "text": "پەیوەندی بکەن بە بەڕێوەبەرایەتی هەڵسەنگاندن",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

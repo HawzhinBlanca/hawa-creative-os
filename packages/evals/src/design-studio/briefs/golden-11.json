@@ -1,0 +1,49 @@
+{
+  "id": "golden-11",
+  "name": "KAAE Quality Assurance Executive Briefing",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1350,
+  "aspectLabel": "4:5 Portrait",
+  "instructions": "Executive briefing invitation for university deans on institutional audit methodologies. Dignified navy background, gold and white hierarchy.",
+  "rawRequestText": "Executive briefing invitation for university deans on institutional audit methodologies. Dignified navy background, gold and white hierarchy.\n---\nKurdistan Accreditation Agency for Education\n\nExecutive Briefing on Institutional Audits\n\nOperational Protocols for Academic Deans and Quality Directors\n\nA closed session presenting the 2026-2027 university audit guidelines and institutional assessment milestones.\n\nKAAE Headquarters, Erbil\n\nNovember 12, 2026 • 10:00 AM",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accreditation Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Executive Briefing on Institutional Audits",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Operational Protocols for Academic Deans and Quality Directors",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "A closed session presenting the 2026-2027 university audit guidelines and institutional assessment milestones.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "KAAE Headquarters, Erbil",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "November 12, 2026 • 10:00 AM",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

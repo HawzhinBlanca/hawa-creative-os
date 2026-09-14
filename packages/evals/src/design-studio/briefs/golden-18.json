@@ -1,0 +1,49 @@
+{
+  "id": "golden-18",
+  "name": "Kurdish Accreditation Standards Manual Notice",
+  "language": "ckb",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1240,
+  "height": 1754,
+  "aspectLabel": "A4 Portrait",
+  "instructions": "Official Kurdish institutional bulletin announcing the comprehensive guide to university quality and accreditation criteria.",
+  "rawRequestText": "Official Kurdish institutional bulletin announcing the comprehensive guide to university quality and accreditation criteria.\n---\nدەستەی متمانەبەخشین بە دامەزراوەکانی پەروەردە و خوێندنی باڵا\n\nڕێبەری نیشتمانیی پێوەرەکانی متمانەبەخشین ٢٠٢٦\n\nبنەما فەرمییەکانی هەڵسەنگاندنی زانکۆ و پەیمانگەکان لە هەرێمی کوردستان\n\nئەم ڕێبەرە شێوازی هەڵسەنگاندنی ئاستی فێرکردن و ژێرخانی زانستی لە تەواوی بەشە ئەکادیمییەکان دیاری دەکات.\n\nوەزارەتی خوێندنی باڵا و توێژینەوەی زانستی، هەولێر\n\nبڵاوکردنەوەی فەرمی: ١٥ی کانوونی یەکەمی ٢٠٢٦",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "دەستەی متمانەبەخشین بە دامەزراوەکانی پەروەردە و خوێندنی باڵا",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "ڕێبەری نیشتمانیی پێوەرەکانی متمانەبەخشین ٢٠٢٦",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "بنەما فەرمییەکانی هەڵسەنگاندنی زانکۆ و پەیمانگەکان لە هەرێمی کوردستان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "ئەم ڕێبەرە شێوازی هەڵسەنگاندنی ئاستی فێرکردن و ژێرخانی زانستی لە تەواوی بەشە ئەکادیمییەکان دیاری دەکات.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "وەزارەتی خوێندنی باڵا و توێژینەوەی زانستی، هەولێر",
+      "role": "venue",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 5,
+      "text": "بڵاوکردنەوەی فەرمی: ١٥ی کانوونی یەکەمی ٢٠٢٦",
+      "role": "date",
+      "script": "arabic"
+    }
+  ]
+}

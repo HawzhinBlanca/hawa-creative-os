@@ -190,6 +190,9 @@ importers:
       '@hawa/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@hawa/creative':
+        specifier: workspace:*
+        version: link:../creative
       '@hawa/domain':
         specifier: workspace:*
         version: link:../domain

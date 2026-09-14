@@ -1,0 +1,49 @@
+{
+  "id": "golden-14",
+  "name": "KAAE Strategic Curriculum Framework Release",
+  "language": "en",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1240,
+  "height": 1754,
+  "aspectLabel": "A4 Portrait",
+  "instructions": "Formal academic bulletin for the official national release of the modernised engineering and medical curriculum standards.",
+  "rawRequestText": "Formal academic bulletin for the official national release of the modernised engineering and medical curriculum standards.\n---\nKurdistan Accreditation Agency for Education\n\nStrategic Curriculum Framework 2026-2030\n\nBenchmarking Engineering and Health Sciences Education\n\nThis framework mandates comprehensive competence-based learning outcomes and international laboratory safety criteria for all licensed faculties.\n\nMinistry of Higher Education Auditorium, Erbil\n\nOfficial Promulgation: December 10, 2026",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accreditation Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Strategic Curriculum Framework 2026-2030",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Benchmarking Engineering and Health Sciences Education",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "This framework mandates comprehensive competence-based learning outcomes and international laboratory safety criteria for all licensed faculties.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Ministry of Higher Education Auditorium, Erbil",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "Official Promulgation: December 10, 2026",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

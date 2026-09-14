@@ -14,7 +14,7 @@ T11,Orchestrator (journal + resume + budget + ladder),COMPLETED,output/proofs/20
 T12,Routes + Desk Studio panel,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T12_ROUTES.md,REJECTED,"T12_DESK.png is a generated picture, not a Desk screenshot; real capture required"
 T13,Worker integration + flag + status notes + PNG delivery + parity,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T13_WORKER.md,REJECTED,binding check weakened (result.designId &&); parity errors swallowed by empty catch
 T14,Feedback table + exemplar proposal,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T14_EXEMPLARS.md,REJECTED,heuristic ranking labelled as Fable vision; no receipts; stray root exemplars.proposed.json
-T15,Evaluation harness (offline + live + ratings intake),NOT_STARTED,,,
+T15,Evaluation harness (offline + live + ratings intake),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T15_EVAL.md,,
 T16,Fault injection proofs,NOT_STARTED,,,
 T17,Docs (ADR notes + runbook + addenda + review section 18),NOT_STARTED,,,
 T18,Deploy flag-off + zero-change proof + 24-brief live run + blind pairs,NOT_STARTED,,,

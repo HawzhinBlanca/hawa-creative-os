@@ -1,0 +1,49 @@
+{
+  "id": "golden-23",
+  "name": "Bilingual Quality Benchmark Round Table",
+  "language": "mixed",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1080,
+  "aspectLabel": "1:1 Square",
+  "instructions": "Bilingual English-Kurdish square invitation for a joint university accreditation roundtable.",
+  "rawRequestText": "Bilingual English-Kurdish square invitation for a joint university accreditation roundtable.\n---\nKAAE Institutional Governance • دەستەی متمانەبەخشین\n\nQuality Assurance Round Table 2026\n\nمێزگردی هاوبەشی پێوەرە ئەکادیمییەکان\n\nA collaborative forum addressing curriculum accreditation and institutional performance standards.\n\nErbil International Hotel • هەولێر\n\nNovember 30, 2026 • ٣٠ی تشرینی دووەم",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "KAAE Institutional Governance • دەستەی متمانەبەخشین",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Quality Assurance Round Table 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "مێزگردی هاوبەشی پێوەرە ئەکادیمییەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "A collaborative forum addressing curriculum accreditation and institutional performance standards.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil International Hotel • هەولێر",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "November 30, 2026 • ٣٠ی تشرینی دووەم",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "golden-24",
+  "name": "Bilingual International Academic Exchange Screen",
+  "language": "mixed",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1920,
+  "height": 1080,
+  "aspectLabel": "16:9 Screen",
+  "instructions": "Bilingual 16:9 widescreen presentation title slide for the international higher education accreditation summit.",
+  "rawRequestText": "Bilingual 16:9 widescreen presentation title slide for the international higher education accreditation summit.\n---\nGlobal Partnerships Directorate • بەڕێوەبەرایەتی پەیوەندییە نێودەوڵەتییەکان\n\nInternational Academic Accreditation Summit\n\nدیداری نێودەوڵەتی بۆ متمانەپێدانی زانکۆکان\n\nUniting regional rectors and international evaluators to harmonize academic degrees and mutual recognition.\n\nSaad Abdullah Palace Conference Hall • هەولێر\n\nDecember 18, 2026 • ١٨ی کانوونی یەکەم",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Global Partnerships Directorate • بەڕێوەبەرایەتی پەیوەندییە نێودەوڵەتییەکان",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "International Academic Accreditation Summit",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "دیداری نێودەوڵەتی بۆ متمانەپێدانی زانکۆکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Uniting regional rectors and international evaluators to harmonize academic degrees and mutual recognition.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Saad Abdullah Palace Conference Hall • هەولێر",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "December 18, 2026 • ١٨ی کانوونی یەکەم",
+      "role": "date",
+      "script": "latin"
+    }
+  ]
+}

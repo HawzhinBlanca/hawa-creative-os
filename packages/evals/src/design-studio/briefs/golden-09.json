@@ -1,0 +1,50 @@
+{
+  "id": "golden-09",
+  "name": "Bilingual Academic Symposium Invitation",
+  "language": "mixed",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "width": 1080,
+  "height": 1350,
+  "aspectLabel": "4:5 Portrait",
+  "instructions": "Bilingual Kurdish-English academic symposium invitation. Strict script separation, Kurdish blocks right-aligned with Noto Sans Arabic, English blocks in brand font.",
+  "rawRequestText": "Bilingual Kurdish-English academic symposium invitation. Strict script separation, Kurdish blocks right-aligned with Noto Sans Arabic, English blocks in brand font.\n---\nKurdistan Accreditation Agency for Education\n\nکۆنفرانسی هاوبەشی ئەکادیمی ٢٠٢٦\n\nInternational Educational Standards in Kurdistan\n\nدیدارێکی فەرمی نێوان زانکۆ ناوخۆیی و نێودەوڵەتییەکان بۆ تاوتوێکردنی سیستەمی متمانەبەخشین.\n\nErbil International Conference Center • هەولێر\n\nNovember 25, 2026 • ٢٥ی تشرینی دووەم",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accreditation Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "کۆنفرانسی هاوبەشی ئەکادیمی ٢٠٢٦",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "International Educational Standards in Kurdistan",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "دیدارێکی فەرمی نێوان زانکۆ ناوخۆیی و نێودەوڵەتییەکان بۆ تاوتوێکردنی سیستەمی متمانەبەخشین.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil International Conference Center • هەولێر",
+      "role": "venue",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 5,
+      "text": "November 25, 2026 • ٢٥ی تشرینی دووەم",
+      "role": "date",
+      "script": "latin"
+    }
+  ],
+  "compareId": "compare-09"
+}
