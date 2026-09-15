@@ -3,19 +3,19 @@ T00,Read and reconcile,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T00_R
 T01,Baseline gates and v1 comparison runs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T01_BASELINE.md,ACCEPTED_WITH_CORRECTION,"bindings verified via API; Opus 5 output price is $25/MTok, recompute cost"
 T02,Fonts (EB Garamond + Noto Sans Arabic + private dir + image fc-list),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T02_FONTS.md,ACCEPTED,"image built 12:25, fc-list consistent; make font copy a hard build check in T18"
 T03,Layout DSL v2 + validator + metrics,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T03_VALIDATOR.md,ACCEPTED,13 codes implemented and tested
-T04,Local renderer (fontkit wrapping + RTL + goldens),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T04_RENDER.md,REJECTED,"fallback font + Latin overflow + RTL lines off-canvas; self-compare goldens; re-render in the core image, fc-match guard, fix rtl anchor"
+T04,Local renderer (fontkit wrapping + RTL + goldens),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T04_RENDER.md,ACCEPTED_REPROOF,"2026-09-15: re-rendered in the core image, fonts resolve, RTL inside canvas, goldens inspected"
 T05,Composite p05 contrast,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T05_CONTRAST.md,ACCEPTED,
 T06,Procedural motifs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T06_MOTIFS.md,ACCEPTED,
-T07,Gemini image provider + live probe,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T07_ART.md,REJECTED,no Gemini image: procedural fallback presented as live probe; Gemini project has no prepaid credits (429) — user action; report as BLOCKED
-T08,Studio model client (structured outputs + caching + receipts + retry + breaker),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T08_CLIENT.md,REJECTED,"pricing.json wrong (Fable $10/$50/$0.25, Opus 5 $5/$25/$0.50); structured outputs not API-enforced (no output_config); drop obsolete beta header"
+T07,Gemini image provider + live probe,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T07_ART.md,ACCEPTED_REPROOF,2026-09-15: real Gemini 2K image and receipt after user funded the account
+T08,Studio model client (structured outputs + caching + receipts + retry + breaker),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T08_CLIENT.md,ACCEPTED_REPROOF,"2026-09-15: output_config json_schema, prices match official table"
 T09,Migration 013 + RLS + immutability + repositories,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T09_DB.md,ACCEPTED_WITH_DEVIATION,"migration 013 applied to production at 10:07Z before T18 and not reported; additive, stands"
-T10,Stages (brief..transfer v2),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T10_STAGES.md,ACCEPTED_PROVISIONAL,final after live run journal (T18)
-T11,Orchestrator (journal + resume + budget + ladder),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T11_ORCHESTRATOR.md,ACCEPTED_PROVISIONAL,final after fault injection (T16)
-T12,Routes + Desk Studio panel,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T12_ROUTES.md,REJECTED,"T12_DESK.png is a generated picture, not a Desk screenshot; real capture required"
-T13,Worker integration + flag + status notes + PNG delivery + parity,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T13_WORKER.md,REJECTED,binding check weakened (result.designId &&); parity errors swallowed by empty catch
-T14,Feedback table + exemplar proposal,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T14_EXEMPLARS.md,REJECTED,heuristic ranking labelled as Fable vision; no receipts; stray root exemplars.proposed.json
-T15,Evaluation harness (offline + live + ratings intake),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T15_EVAL.md,,
-T16,Fault injection proofs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T16_FAULTS.md,,
-T17,Docs (ADR notes + runbook + addenda + review section 18),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T17_DOCS.md,,
-T18,Deploy flag-off + zero-change proof + 24-brief live run + blind pairs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T18_LIVE.md,,
-T19,Proof bundle + reality checks + return message,COMPLETED,output/proofs/2026-09-14-design-studio-v2/PROOF_MANIFEST.json,,
+T10,Stages (brief..transfer v2),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T10_STAGES.md,REJECTED,"2026-09-15 audit: B1 no logo in transfer, B2 contrast dead, B4 empty catch in revise, H8 transfer fidelity"
+T11,Orchestrator (journal + resume + budget + ladder),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T11_ORCHESTRATOR.md,REJECTED,"2026-09-15 audit: B5 rung-4 result crashes worker, H2 ledger accuracy, H5 resume not crash-safe"
+T12,Routes + Desk Studio panel,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T12_ROUTES.md,PARTIAL,2026-09-15: real Desk screenshot but sign-in screen only; Studio panel never shown on a real run
+T13,Worker integration + flag + status notes + PNG delivery + parity,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T13_WORKER.md,ACCEPTED_REPROOF,"2026-09-15: strict binding check, parity recorded; B5 still makes degraded runs trip it"
+T14,Feedback table + exemplar proposal,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T14_EXEMPLARS.md,ACCEPTED_REPROOF,2026-09-15: 71 receipts; exemplars still unconfirmed and never loaded (H1c)
+T15,Evaluation harness (offline + live + ratings intake),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T15_EVAL.md,REJECTED,"live-runner fabricates winner score 8.5, canary 9.0, swap 1.0, parity match, escapes 0"
+T16,Fault injection proofs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T16_FAULTS.md,REJECTED,fault (a) not a real interruption; (c) broken call; scenarios ran against production and left fixture rows
+T17,Docs (ADR notes + runbook + addenda + review section 18),COMPLETED,output/proofs/2026-09-14-design-studio-v2/T17_DOCS.md,REJECTED,"ADR implementation notes false: stage paths, 31 codes, pg_try lock, design_studio_stages table, ""T00-T16 qualified"""
+T18,Deploy flag-off + zero-change proof + 24-brief live run + blind pairs,COMPLETED,output/proofs/2026-09-14-design-studio-v2/T18_LIVE.md,REJECTED,"24-brief ""qualification"" is the offline runner presented as D2-D6 PASS; blind pairs are v1 Canva vs synthetic previews; ledger and Telegram proof true"
+T19,Proof bundle + reality checks + return message,COMPLETED,output/proofs/2026-09-14-design-studio-v2/PROOF_MANIFEST.json,REJECTED,manifest fabricates exitCode 0 and durationMs 1000; REALITY_CHECKS built on offline results
