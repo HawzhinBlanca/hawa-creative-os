@@ -1,0 +1,368 @@
+{
+  "version": "2026-09-15.1",
+  "confirmedAt": "2026-09-15T07:37:49.451Z",
+  "status": "CONFIRMED",
+  "curator": "Art Director (User Confirmed)",
+  "totalExemplars": 12,
+  "notice": "Confirmed KAAE institutional exemplars for Studio v2 multi-concept reference conditioning.",
+  "exemplars": [
+    {
+      "rank": 1,
+      "score": 8.7,
+      "craftScore": 8.5,
+      "representativenessScore": 9,
+      "sha256": "6d9f50c3bc9716788d31966ff58c9902bdf08d434d798e072ff89eb187d6fc00",
+      "path": "data/kaae-graphics/references/KAAE_Commences_2026_Cycle_1080x1350.png",
+      "filename": "KAAE_Commences_2026_Cycle_1080x1350.png",
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 287086,
+      "reason": "Midnight-navy grid canvas with gold-accented Sorani headline, tracked Latin subhead, centered emblem, and three symmetrical feature cards deliver strong hierarchy and generous margins, though the small-caps Latin subhead and card labels run slightly small and the KAAE logo box breaks the palette.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_cycle",
+        "legal_decree",
+        "presentation"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3R9Rx5ku4mia8hauPrA",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2145,
+        "outputTokens": 185,
+        "costUsd": 0.021613
+      }
+    },
+    {
+      "rank": 2,
+      "score": 8.6,
+      "craftScore": 8.5,
+      "representativenessScore": 8.7,
+      "sha256": "764d0017d1ca86431e4dc842e59bf749aa52656e1d8ccd5c1c036a3aa9810848",
+      "path": "data/kaae-graphics/references/post1_accreditation_mandate.png",
+      "filename": "post1_accreditation_mandate.png",
+      "dimensions": {
+        "width": 1080,
+        "height": 1080
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 168645,
+      "reason": "Navy serif headline 'Advancing Academic Rigor & Institutional Excellence' with gold accent rule, gold-bordered Law No. 6 of 2022 callout, and three navy/gold stat cards (02, MSCHE, 100%) on cream form a disciplined, dignified hierarchy, though the mid-section whitespace gap and stat-card top gradient slightly weaken flow.",
+      "recommendedFor": [
+        "feed_announcement",
+        "standards",
+        "presentation"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RARt9NFN8DCPrAMAcy",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1744,
+        "outputTokens": 194,
+        "costUsd": 0.018053
+      }
+    },
+    {
+      "rank": 3,
+      "score": 8.5,
+      "craftScore": 8.4,
+      "representativenessScore": 8.7,
+      "sha256": "cfd7f5bf4ddccbcc292e257c98ad5897f5634da325cfc6dc72db1676740b0954",
+      "path": "data/kaae-graphics/references/post2_standards_higher_ed.png",
+      "filename": "post2_standards_higher_ed.png",
+      "dimensions": {
+        "width": 1080,
+        "height": 1350
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 227771,
+      "reason": "Navy serif headline with gold eyebrow and rule, numbered standard cards with gold left accents and 'Required Evidence' chips on a cream dotted field form a disciplined, dignified hierarchy, though only Latin typesetting is shown and the logo lockup reads slightly small against the generous top margin.",
+      "recommendedFor": [
+        "standards",
+        "feed_announcement",
+        "presentation",
+        "policy_brief"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RAS34uxEFtV8g3xSNu",
+        "model": "claude-fable-5-1",
+        "inputTokens": 2134,
+        "outputTokens": 169,
+        "costUsd": 0.020703
+      }
+    },
+    {
+      "rank": 4,
+      "score": 8.5,
+      "craftScore": 8,
+      "representativenessScore": 9,
+      "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5 kurdi.jpg.jpeg",
+      "filename": "kaae 5 kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 160,
+        "height": 128
+      },
+      "aspectRatio": "160:128",
+      "format": "160:128",
+      "fileSizeBytes": 1284432,
+      "reason": "Full-bleed institutional photo with a navy gradient scrim carrying two-line white Sorani Kurdish headline over a gold rule and top-left KAAE seal creates clear hierarchy in the brand's navy-gold-cream palette, though the caption crowds the subjects' hands and the small logo lacks a contrast plate.",
+      "recommendedFor": [
+        "feed_announcement",
+        "press_release",
+        "official_visit_coverage",
+        "website_news_banner"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3R5FVvjbHPrRphZ97S3",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5001,
+        "outputTokens": 180,
+        "costUsd": 0.049923
+      }
+    },
+    {
+      "rank": 5,
+      "score": 8.3,
+      "craftScore": 8.2,
+      "representativenessScore": 8.5,
+      "sha256": "90c332045431c0297aa4f6c1217cd44c60c987ed351790e3c8fe9dd62d897bfd",
+      "path": "data/kaae-graphics/references/post3_strategic_roadmap.png",
+      "filename": "post3_strategic_roadmap.png",
+      "dimensions": {
+        "width": 1080,
+        "height": 1080
+      },
+      "aspectRatio": "1:1",
+      "format": "1:1",
+      "fileSizeBytes": 508717,
+      "reason": "Serif white headline with gold italic subtitle over Midnight Navy, four evenly spaced glass cards with gold icon tiles and a statutory footer citing Law No. 6 of 2022 deliver a dignified, on-brand institutional roadmap, though the large empty band between header and cards and emoji-style icons slightly weaken polish.",
+      "recommendedFor": [
+        "feed_announcement",
+        "presentation",
+        "standards",
+        "strategic_report"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RB3YkqJVo8p2bP7HrJ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 1744,
+        "outputTokens": 180,
+        "costUsd": 0.017353
+      }
+    },
+    {
+      "rank": 6,
+      "score": 8.2,
+      "craftScore": 7.5,
+      "representativenessScore": 9,
+      "sha256": "d57da0edd4be9cab5faa0407d1c99fb5c81c35a1983fd08162d768e4aa623b05",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/AUK002 kurdi.jpg.jpeg",
+      "filename": "AUK002 kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1020930,
+      "reason": "Clean Sorani Kurdish typesetting with a bold navy headline, gold subhead, and an angled midnight-navy banner pairing the AUK crest, though the wide empty gap between the body text and footer line weakens vertical balance.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_milestone",
+        "partner_recognition",
+        "presentation"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3QzQPa6h9GkJCar4rVi",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5000,
+        "outputTokens": 151,
+        "costUsd": 0.048463
+      }
+    },
+    {
+      "rank": 7,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for kurdi.jpg.jpeg",
+      "filename": "call for kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 2675014,
+      "reason": "Strong Sorani typographic hierarchy with a gold-on-navy 'بانگەواز بۆ' header block, oversized navy headline, and icon-led benefit panel on a cream grid background, though the faded photo bottom-left slightly competes with the layout.",
+      "recommendedFor": [
+        "feed_announcement",
+        "recruitment",
+        "call_for_participation",
+        "social_post"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3R413jZicV7zxouR2FW",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4997,
+        "outputTokens": 156,
+        "costUsd": 0.048683
+      }
+    },
+    {
+      "rank": 8,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "5a4b9c1e18d6d3741bc780a68029f4a954569f8f6bd4051d9a79b4b0a220504a",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CC002 kurdi.jpg.jpeg",
+      "filename": "CC002 kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 766425,
+      "reason": "Clean midnight-navy card with gold Sorani headline, white CHEA/CIQG logo panel and overlapping navy 'CHEA CIQG' tab shows strong hierarchy and brand palette, though the KAAE logo floats loosely top-left and the large empty lower band slightly weakens balance.",
+      "recommendedFor": [
+        "feed_announcement",
+        "partnership_announcement",
+        "membership_milestone",
+        "presentation"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3QzxKwdcf94u3rmULZU",
+        "model": "claude-fable-5-1",
+        "inputTokens": 4999,
+        "outputTokens": 174,
+        "costUsd": 0.049603
+      }
+    },
+    {
+      "rank": 9,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "cb9e9fc7c61b3b369527d86ed00309e2f4b7bf4ea990bcd6888fe84d19423dad",
+      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/CUE002 kurdi.jpg.jpeg",
+      "filename": "CUE002 kurdi.jpg.jpeg",
+      "dimensions": {
+        "width": 128,
+        "height": 160
+      },
+      "aspectRatio": "4:5",
+      "format": "4:5",
+      "fileSizeBytes": 1040629,
+      "reason": "Clean Sorani/Latin hierarchy in navy headline with gold subtitle and a navy chevron banner framing the CUE logo on cream grid background, though body text is slightly heavy and lower whitespace feels unbalanced.",
+      "recommendedFor": [
+        "feed_announcement",
+        "accreditation_milestone",
+        "partner_recognition"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3R1s9vh98NGn1hXaheR",
+        "model": "claude-fable-5-1",
+        "inputTokens": 5000,
+        "outputTokens": 146,
+        "costUsd": 0.048213
+      }
+    },
+    {
+      "rank": 10,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "9465963ad7bcc54bd4837e327b27e081dd99b897f8aacd05feb1d72a5df0ddf3",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image16.png",
+      "filename": "image16.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 772348,
+      "reason": "Clean navy-on-cream impact slide with a gold 'IMPACT' eyebrow, bold navy headline, four large numeric stats with small-caps labels, and a navy-framed photo strip of KAAE events anchored by the centered seal and footer, though the stats row and photo strip leave slightly loose vertical spacing.",
+      "recommendedFor": [
+        "presentation",
+        "annual_report",
+        "feed_announcement",
+        "impact_summary"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RCB1V8zFvRwwbaW6Qs",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 176,
+        "costUsd": 0.032933
+      }
+    },
+    {
+      "rank": 11,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image17.png",
+      "filename": "image17.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 359881,
+      "reason": "Split-panel composition pairs a cream left card of four numbered navy pillars with a Midnight Navy right panel of EXCEL/TRUST/LEAD in bold white caps and gold GP labels, anchored by a 51/9/3 stat row and Knowledge Nation + ELEVATE lockups, though the header lockups and stat row feel loosely aligned to the card grid.",
+      "recommendedFor": [
+        "presentation",
+        "standards",
+        "strategic_plan_summary",
+        "feed_announcement"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RCpTkLs42iyJLaiChQ",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 196,
+        "costUsd": 0.033933
+      }
+    },
+    {
+      "rank": 12,
+      "score": 8,
+      "craftScore": 7.5,
+      "representativenessScore": 8.5,
+      "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92",
+      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image19.png",
+      "filename": "image19.png",
+      "dimensions": {
+        "width": 2048,
+        "height": 1152
+      },
+      "aspectRatio": "16:9",
+      "format": "16:9",
+      "fileSizeBytes": 363526,
+      "reason": "Three navy-gradient header cards with gold 'GP I–III' titles and clean Verdana-style body text form a disciplined grid, though the hyphenated 'Profession-alization' line break, empty navy goal bullets, and unused whitespace beneath the shorter columns slightly weaken polish.",
+      "recommendedFor": [
+        "presentation",
+        "standards",
+        "strategic_plan",
+        "feed_announcement"
+      ],
+      "receipt": {
+        "responseId": "msg_011Cf3RCpcvVSGmcMmhLs4Cu",
+        "model": "claude-fable-5-1",
+        "inputTokens": 3322,
+        "outputTokens": 165,
+        "costUsd": 0.032383
+      }
+    }
+  ]
+}
