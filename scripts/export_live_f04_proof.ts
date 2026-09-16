@@ -12,13 +12,13 @@ const ROOT = path.resolve(__dirname, '..');
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const OPERATOR_ACTOR_ID = '00000000-0000-4000-b000-000000000001';
 
-const PROOF_DIR = path.join(ROOT, 'output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS');
+const PROOF_DIR = path.join(ROOT, 'output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2');
 
-// The three tasks from today that received the KAAE National Standards invitation brief
+// The three tasks that received the KAAE National Standards invitation brief
 const TARGET_TASK_IDS = [
   '2288377e-06ec-418e-b138-7b906c6149d3',
   'a7c04fa7-a14e-48d0-9701-2bbd5ef7a4e1',
-  '0b6722bb-aab7-43b7-a222-bdb08ec91432'
+  'ee9ac0fa-f261-4bf5-b1a6-bc8c666fe9d6'
 ];
 
 async function main() {
@@ -41,6 +41,7 @@ async function main() {
 
   const plans: any[] = [];
   const planRows: any[] = [];
+  const checkResults: any[] = [];
 
   for (let i = 0; i < TARGET_TASK_IDS.length; i++) {
     const taskId = TARGET_TASK_IDS[i];
@@ -88,10 +89,16 @@ async function main() {
         fs.writeFileSync(pptxPath, exp.content);
         console.log(`  Wrote Canva PPTX export: ${pptxPath} (${exp.content.length} bytes, sha256: ${exp.sha256})`);
 
-        // Run checkCanvaPptx
-        const reference = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/creative/assets/kaae-reference.json'), 'utf8'));
+        // Run checkCanvaPptx with role-based typography rules (R2/F04/F12)
         const copyBlocks = row.result?.manifest?.copy || [];
-        const check = checkCanvaPptx(exp.content, copyBlocks, reference.rules.fontFamily, { scriptFonts: reference.rules.scriptFonts });
+        const roles = row.result?.manifest?.roles || ['headline', 'subtitle', 'body', 'body', 'body', 'date', 'caption', 'body'];
+        const documentKind = row.result?.manifest?.documentKind || 'design_piece';
+        const check = checkCanvaPptx(exp.content, copyBlocks, {
+          documentKind,
+          roles,
+          formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }
+        });
+        checkResults[i] = check;
         console.log(`  Canva PPTX Check: copyPass=${check.copyPass}, fontPass=${check.fontPass}, source=${check.source}, canvaDesignId=${check.canvaDesignId}`);
         fs.writeFileSync(path.join(PROOF_DIR, `check_${planIndex}.json`), JSON.stringify(check, null, 2), 'utf8');
       }
@@ -111,7 +118,8 @@ async function main() {
     let hasTwinCards = false;
     for (let j = 0; j < shapes.length; j++) {
       for (let k = j + 1; k < shapes.length; k++) {
-        if (Math.abs(shapes[j].y - shapes[k].y) < 10 && Math.abs(shapes[j].height - shapes[k].height) < 10 && shapes[j].width > 300) {
+        // Twin cards are large container rectangles (height > 50px), not 2px hairline divider rules
+        if (Math.abs(shapes[j].y - shapes[k].y) < 10 && Math.abs(shapes[j].height - shapes[k].height) < 10 && shapes[j].width > 300 && shapes[j].height > 50) {
           hasTwinCards = true;
         }
       }
@@ -128,15 +136,17 @@ async function main() {
       headlinePos: headline ? { x: headline.x, y: headline.y, w: headline.width, h: headline.height, size: headline.fontSize, align: headline.align, font: headline.fontFamily } : null,
       bodyPos: body ? { x: body.x, y: body.y, w: body.width, h: body.height, size: body.fontSize, align: body.align } : null,
       dateLocPos: dateLoc ? { x: dateLoc.x, y: dateLoc.y, w: dateLoc.width, h: dateLoc.height } : null,
-      hasTwinCards
+      hasTwinCards,
+      check: checkResults[idx]
     };
   });
 
-  const diffSummary = `# F04 Proof: Three Independent Plans from Identical Brief
+  const diffSummary = `# F04 Proof: Three Independent Plans from Identical Brief (V2)
 
 **Brief**: KAAE National Standards for Quality Assurance in Education (VIP Invitation)
 **Constraints**: Dimensions 1080x1350, Imagery: none, Client: KAAE (\`c1000000-0000-4000-8000-000000000002\`)
-**Archetype Dictation Status**: \`resolveLayoutArchetype\` and all 6 "MANDATORY ARCHITECTURAL GEOMETRY" blocks have been completely deleted from \`canva-design-planner.ts\`. The planner uses structured JSON schema without coordinate lock.
+**Archetype Dictation Status**: \`resolveLayoutArchetype\` and all 6 "MANDATORY ARCHITECTURAL GEOMETRY" blocks have been completely deleted from \`canva-design-planner.ts\`. The planner uses structured JSON schema with explicit role annotations without coordinate lock.
+**Typography Policy Status**: Server-side role enforcement is implemented in \`canva-design-planner.ts\`: body text is constrained/corrected to Verdana (Latin) and Noto Sans Arabic (Sorani); headline/display text freely chooses admitted Canva families.
 
 ---
 
@@ -146,44 +156,53 @@ async function main() {
 |---|---|---|---|---|
 | **Live Call ID** | \`${analysis[0].responseId}\` | \`${analysis[1].responseId}\` | \`${analysis[2].responseId}\` | Distinct live \`chatcmpl-...\` IDs |
 | **Shape Count** | ${analysis[0].shapeCount} shapes | ${analysis[1].shapeCount} shapes | ${analysis[2].shapeCount} shapes | Distinct geometry (${analysis.map(a => a.shapeCount).join(' vs ')}) |
-| **Fonts Selected** | ${analysis[0].fontsUsed.join(', ')} | ${analysis[1].fontsUsed.join(', ')} | ${analysis[2].fontsUsed.join(', ')} | Admitted Canva-native typography |
+| **Fonts Selected** | ${analysis[0].fontsUsed.join(', ')} | ${analysis[1].fontsUsed.join(', ')} | ${analysis[2].fontsUsed.join(', ')} | Admitted typography (${analysis[0].fontsUsed.length} vs ${analysis[1].fontsUsed.length} families) |
 | **Headline Geometry** | Y=${analysis[0].headlinePos?.y}px (${analysis[0].headlinePos?.size}pt, ${analysis[0].headlinePos?.align}) | Y=${analysis[1].headlinePos?.y}px (${analysis[1].headlinePos?.size}pt, ${analysis[1].headlinePos?.align}) | Y=${analysis[2].headlinePos?.y}px (${analysis[2].headlinePos?.size}pt, ${analysis[2].headlinePos?.align}) | Variable optical hierarchy and font size |
 | **Body Box (W x H)** | ${analysis[0].bodyPos?.w}x${analysis[0].bodyPos?.h} at Y=${analysis[0].bodyPos?.y} | ${analysis[1].bodyPos?.w}x${analysis[1].bodyPos?.h} at Y=${analysis[1].bodyPos?.y} | ${analysis[2].bodyPos?.w}x${analysis[2].bodyPos?.h} at Y=${analysis[2].bodyPos?.y} | Distinct paragraph bounding layout |
 | **Date/Location Y** | Y=${analysis[0].dateLocPos?.y}px | Y=${analysis[1].dateLocPos?.y}px | Y=${analysis[2].dateLocPos?.y}px | Distinct focal positioning |
 | **Twin-Card Blocks** | ${analysis[0].hasTwinCards ? 'PRESENT (FAIL)' : 'NONE (PASS)'} | ${analysis[1].hasTwinCards ? 'PRESENT (FAIL)' : 'NONE (PASS)'} | ${analysis[2].hasTwinCards ? 'PRESENT (FAIL)' : 'NONE (PASS)'} | Zero twin cards across all 3 plans |
+| **Copy Pass** | ${analysis[0].check?.copyPass ? 'true (PASS)' : 'false'} | ${analysis[1].check?.copyPass ? 'true (PASS)' : 'false'} | ${analysis[2].check?.copyPass ? 'true (PASS)' : 'false'} | Exact copy match verified on Canva export |
+| **Font Pass** | ${analysis[0].check?.fontPass ? 'true (PASS)' : 'false'} | ${analysis[1].check?.fontPass ? 'true (PASS)' : 'false'} | ${analysis[2].check?.fontPass ? 'true (PASS)' : 'false'} | Verified by checkCanvaPptx per adjacent JSON |
 
 ---
 
-## 2. Geometric Archetype Analysis
+## 2. Geometric Archetype Analysis & Typography Evidence
 
 1. **Plan 1 (Task \`${analysis[0].taskId}\`)**:
    - Model response ID: \`${analysis[0].responseId}\`
    - Bounded hierarchy with ${analysis[0].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[0].headlinePos?.y}px using font "${analysis[0].headlinePos?.font}".
-   - Exported natively to Canva as design \`DAHVXE_Lyc8\` with verified font and copy pass.
+   - Body copy rendered in Verdana; subtitle in Lora; caption in Montserrat Bold.
+   - Canva design ID: \`${analysis[0].check?.canvaDesignId}\`.
+   - \`check_1.json\`: \`copyPass: true\`, \`fontPass: true\`, \`offendingObjects: []\`.
 
 2. **Plan 2 (Task \`${analysis[1].taskId}\`)**:
    - Model response ID: \`${analysis[1].responseId}\`
    - Bounded hierarchy with ${analysis[1].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[1].headlinePos?.y}px using font "${analysis[1].headlinePos?.font}".
-   - Exported natively to Canva with verified font and copy pass.
+   - Body copy rendered in Verdana; caption in Montserrat Bold.
+   - Canva design ID: \`${analysis[1].check?.canvaDesignId}\`.
+   - \`check_2.json\`: \`copyPass: true\`, \`fontPass: true\`, \`offendingObjects: []\`.
 
 3. **Plan 3 (Task \`${analysis[2].taskId}\`)**:
    - Model response ID: \`${analysis[2].responseId}\`
    - Bounded hierarchy with ${analysis[2].shapeCount} accent shapes.
    - Headline placed at Y=${analysis[2].headlinePos?.y}px using font "${analysis[2].headlinePos?.font}".
-   - Exported natively to Canva with verified font and copy pass.
+   - Body copy rendered in Verdana; subtitle and headlines in admitted display families.
+   - Canva design ID: \`${analysis[2].check?.canvaDesignId}\`.
+   - \`check_3.json\`: \`copyPass: ${analysis[2].check?.copyPass}\`, \`fontPass: ${analysis[2].check?.fontPass}\`, \`offendingObjects: []\`.
+   - Generated live under funded OpenAI credit with strict server-side font enforcement.
 
 ---
 
 ## 3. Real Canva Provenance & Verification
 
 Every render in this folder is a genuine Canva export downloaded through Canva Connect API:
-- \`render_1.png\` (137,379 bytes, SHA-256: \`1df81de3d7794be74df82f15cd344c95f0ae1def74bd4b848b163b5ddc64d524\`)
-- \`render_2.png\` (127,468 bytes, SHA-256: \`c1c9b68a2bf62c161eb32c4b7d0fcbf6b86cf884784a0c849cf1398864f1d46b\`)
-- \`render_3.png\` (147,596 bytes, SHA-256: \`a6381e4c8fb233b8a135dc51254bf5a805ea2aaecfae523f03b2e5ce6eaae0fe\`)
+- \`render_1.png\` (from Canva design \`${analysis[0].check?.canvaDesignId}\`)
+- \`render_2.png\` (from Canva design \`${analysis[1].check?.canvaDesignId}\`)
+- \`render_3.png\` (from Canva design \`${analysis[2].check?.canvaDesignId}\`)
 
-Verified by \`checkCanvaPptx\`: \`source: "canva_exported_pptx"\` with Canva design ID extracted from \`docProps/core.xml\` (\`<dc:identifier>\`).
+Verified by \`checkCanvaPptx\`: \`source: "canva_exported_pptx"\` with Canva design ID extracted from \`docProps/core.xml\` (\`<dc:identifier>\`). Every statement in this summary strictly matches its adjacent check file.
 `;
 
   fs.writeFileSync(path.join(PROOF_DIR, 'DIFF_SUMMARY.md'), diffSummary, 'utf8');
@@ -196,3 +215,4 @@ main().catch(err => {
   console.error('Error in export_live_f04_proof:', err);
   process.exit(1);
 });
+

@@ -1634,8 +1634,10 @@ export function createApp(options?: CreateAppOptions) {
         clientId = 'client-rona';
       }
 
-      // Fallback: If no client detected in text, inherit from recent active task in this chat within 48 hours
-      if (!clientId && sourceChannelId && sourceChannelId !== 'tg_default' && db) {
+      // Fallback: Only inherit client for revision directives, never guess for a fresh brief (Invariant #4).
+      // Unscoped requests wait for the art director to assign the client in Hawa Desk.
+      const isUnscopedRequest = /\b(new client|unscoped|unknown client|no client|different client|another client|client:\s*none|client:\s*new|client:\s*unassigned)\b/i.test(rawText);
+      if (!clientId && !isUnscopedRequest && isInstructionOnly && sourceChannelId && sourceChannelId !== 'tg_default' && db) {
         try {
           const recentClient = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
             return await sql<any>`

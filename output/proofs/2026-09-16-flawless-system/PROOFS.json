@@ -1,6 +1,6 @@
 {
   "round": "2026-09-16-flawless-system",
-  "generatedAt": "2026-09-16T14:13:05.954Z",
+  "generatedAt": "2026-09-16T19:00:02.474Z",
   "commit": "HEAD",
   "proofs": [
     {
@@ -172,6 +172,134 @@
       "commit": "HEAD"
     },
     {
+      "task": "F04",
+      "name": "DIFF_SUMMARY.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/DIFF_SUMMARY.md",
+      "sha256": "85ecbc991752f7188cd10d225efbd37164f1e237635e2ac7a5583e3f23df837c",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_1.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/canva_export_1.pptx",
+      "sha256": "31478ca2182600b5b4bbe42ab72013235e1a1b1cfec7288830aa05f236dfd21b",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_2.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/canva_export_2.pptx",
+      "sha256": "576511a2ef8a7ade2742e631df0d9afc6d861e3d8488c78f407d5e8c70597930",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_3.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/canva_export_3.pptx",
+      "sha256": "c7a1bc95c9f1c7395f9a3d2388a6a625856f76b87580e783c1ebd23267848f69",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_1.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/check_1.json",
+      "sha256": "c93af4c70c8dde5e7757de530b43c363619950d2854fb7d1199fd830227ddab9",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_2.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/check_2.json",
+      "sha256": "e439fbdee909127d0b6d675074481353bee3e4bd2beacddadb05e73c613380da",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_3.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/check_3.json",
+      "sha256": "a4e12354517022cc729b0f26d34784a1e8a3d9ec925e69f3947828fc47e8a0a1",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_1.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/plan_1.json",
+      "sha256": "d5ac376c9f352b4ea413ef1738c844cd9620a852511d7a63c1064a57fa8bfe36",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_2.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/plan_2.json",
+      "sha256": "6935fb863fde1afecca41cb0dfd332399dc50475e1202d68b0ed06c28e2f9823",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_3.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/plan_3.json",
+      "sha256": "72cc148695963198f2806898cf437a1933c8928cffde690692ea61dd8c1a26e5",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_1.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/render_1.png",
+      "sha256": "1df81de3d7794be74df82f15cd344c95f0ae1def74bd4b848b163b5ddc64d524",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_2.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/render_2.png",
+      "sha256": "fe1356e95aa2408c9b8e04f6d87671d04b62e7f98cc8183e96063d7810446a2a",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_3.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/render_3.png",
+      "sha256": "df1fdff4919560e4c9084b80fc041bb5d6d83113d3bc8edb2e26ce78b73ab95a",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_1.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/transfer_1.pptx",
+      "sha256": "5a15d1ed6ca98459b62802488180f8709a6ed6a5317305a1ef8b7c95f26d0499",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_2.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/transfer_2.pptx",
+      "sha256": "faee55c338abccc1020c3e0ea7d73bd447049f5fa588eb678204ed1b54064c12",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_3.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS_V2/transfer_3.pptx",
+      "sha256": "c693c54ff48560ee934140f9222143f7dd08aca1c1e082707da2118dd6943b95",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
       "task": "F05",
       "name": "F05_REVISIONS.md",
       "path": "output/proofs/2026-09-16-flawless-system/F05_REVISIONS/F05_REVISIONS.md",
@@ -228,6 +356,22 @@
       "commit": "HEAD"
     },
     {
+      "task": "F08",
+      "name": "F08_SWEEP_FILTER.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F08_SWEEP_FILTER.json",
+      "sha256": "11d1b058fd02ad6564b414c182a54351a26920751f5680fea7b8d5489e7dcf75",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F09",
+      "name": "F09_LIVE.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F09_LIVE.md",
+      "sha256": "02e04b3f672958dd0381e59a35c75efe0c13fa386c1c433aed415b0988a36ddf",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
       "task": "F09",
       "name": "F09_TERMINAL.md",
       "path": "output/proofs/2026-09-16-flawless-system/F09_TERMINAL.md",
@@ -240,6 +384,14 @@
       "name": "F10_HEALTH.json",
       "path": "output/proofs/2026-09-16-flawless-system/F10_HEALTH.json",
       "sha256": "fbf58d5fd0f081cc1f7acdfd03cb7ec9776d620d7e350bc0133fc89dbbd14cb6",
+      "producingCommand": "npx tsx scripts/generate_f10_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F10",
+      "name": "F10_LIVE.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F10_LIVE.json",
+      "sha256": "4e22e39f58d059fce7cbcd1233e5becb3a867ca1b81563d176125bd312945a58",
       "producingCommand": "npx tsx scripts/generate_f10_proof.ts",
       "commit": "HEAD"
     },
@@ -273,6 +425,14 @@
       "path": "output/proofs/2026-09-16-flawless-system/LEDGER.csv",
       "sha256": "59d3a70966c2ab050aad4460f9fcd74714513608955fdb43653f780e0d2786aa",
       "producingCommand": "npx tsx scripts/populate_ledger.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "GENERAL",
+      "name": "ROUND3_REPORT.md",
+      "path": "output/proofs/2026-09-16-flawless-system/ROUND3_REPORT.md",
+      "sha256": "4ef344d402d694b3738796dbe188cb9ba01e3946e476770c741875d1dce4dd7a",
+      "producingCommand": "manual audit",
       "commit": "HEAD"
     },
     {

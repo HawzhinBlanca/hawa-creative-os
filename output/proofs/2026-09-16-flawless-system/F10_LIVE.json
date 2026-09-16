@@ -1,0 +1,98 @@
+{
+  "testName": "F10 — Proactive Scheduled Billing Probe & Operator Alerting",
+  "executedAt": "2026-09-16T15:41:37.089Z",
+  "verificationMode": "LIVE_PRODUCTION_SCHEDULED_PROBE",
+  "mechanism": {
+    "intervalMinutes": 3,
+    "probeType": "minimal_paid_completion",
+    "model": "gpt-4o-mini",
+    "maxTokens": 1,
+    "triggerCodes": ["credit_balance_exhausted", "insufficient_quota", "401", "403"],
+    "healthField": "lastPaidProbe",
+    "alertTarget": "7191500129",
+    "alertCooldownMinutes": 15
+  },
+  "snapshots": {
+    "liveExhaustedState": {
+      "capturedAt": "2026-09-16T15:41:37.089Z",
+      "endpoint": "http://127.0.0.1:8080/v1/health",
+      "httpStatus": 200,
+      "payload": {
+        "status": "degraded",
+        "timestamp": "2026-09-16T15:41:37.089Z",
+        "lastVerifiedProgressAt": "2026-09-16T15:41:00.152Z",
+        "lastPaidProbe": {
+          "at": "2026-09-16T15:41:00.152Z",
+          "status": "billing_exhausted",
+          "detail": {
+            "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+            "type": "insufficient_quota",
+            "param": null,
+            "code": "credit_balance_exhausted"
+          },
+          "lastAlertMessageId": "179"
+        },
+        "dependencies": {
+          "postgres": "connected",
+          "canva": "connected",
+          "canvaCircuitBreaker": "CLOSED",
+          "telegram": "active",
+          "waha": "unconfigured",
+          "disk": "writable",
+          "restate": "connected",
+          "modelProvider": "billing_exhausted",
+          "telegramApi": "connected"
+        }
+      }
+    },
+    "watchdogVerification": {
+      "command": "bash infra/ops/watchdog.sh --status",
+      "exitCode": 1,
+      "stdout": "PROBLEM: core degraded {\"modelProvider\": \"billing_exhausted\"}; \n"
+    },
+    "liveRecoveredState": {
+      "capturedAt": "2026-09-16T17:56:47.412Z",
+      "endpoint": "http://127.0.0.1:8080/v1/health",
+      "httpStatus": 200,
+      "payload": {
+        "status": "healthy",
+        "timestamp": "2026-09-16T17:56:47.412Z",
+        "lastVerifiedProgressAt": "2026-09-16T17:55:23.983Z",
+        "lastPaidProbe": {
+          "at": "2026-09-16T17:55:23.983Z",
+          "status": "connected",
+          "detail": null,
+          "lastAlertMessageId": "212"
+        },
+        "dependencies": {
+          "postgres": "connected",
+          "canva": "connected",
+          "canvaCircuitBreaker": "CLOSED",
+          "telegram": "active",
+          "waha": "unconfigured",
+          "disk": "writable",
+          "restate": "connected",
+          "modelProvider": "connected",
+          "telegramApi": "connected"
+        }
+      },
+      "watchdogVerification": {
+        "command": "bash infra/ops/watchdog.sh --status",
+        "exitCode": 0,
+        "stdout": "healthy\n"
+      },
+      "recoveryAlertReceipt": {
+        "targetChat": "7191500129",
+        "telegramMessageId": "212",
+        "deliveredAt": "2026-09-16T17:55:23.983Z"
+      }
+    }
+  },
+  "alertReceipt": {
+    "targetChat": "7191500129",
+    "telegramMessageId": "179",
+    "deliveredText": "⚠️ *Hawa Watchdog Alert*: OpenAI credit balance exhausted (429 insufficient_quota).\nOperator action required: Add credits at https://platform.openai.com/settings/organization/billing/",
+    "deliveredAt": "2026-09-16T15:41:00.152Z"
+  },
+  "verdict": "PASS — Proactive scheduled probe autonomously detects OpenAI billing exhaustion within 3 minutes without requiring any incoming user request; degrades health status truthfully and dispatches Telegram watchdog alert to operator."
+}

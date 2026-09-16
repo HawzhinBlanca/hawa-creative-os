@@ -1,0 +1,40 @@
+{
+  "checkVersion": 3,
+  "source": "canva_exported_pptx",
+  "canvaDesignId": "DAHVYtuLZEY",
+  "documentKind": "design_piece",
+  "copyPass": true,
+  "fontPass": true,
+  "rtlPass": true,
+  "rtlNote": null,
+  "requiredFont": "Verdana",
+  "scriptFonts": null,
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 0,
+  "rtlTextObjectCount": 0,
+  "observedFonts": [
+    "Cinzel Bold",
+    "Verdana Bold",
+    "Verdana"
+  ],
+  "textObjectCount": 8,
+  "expectedTextObjectCount": 8,
+  "offendingObjects": [],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

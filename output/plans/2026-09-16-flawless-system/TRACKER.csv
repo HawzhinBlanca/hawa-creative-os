@@ -25,3 +25,7 @@ F10,REJECTED,2026-09-16-r2,live production right now: health reports connected/h
 F11,ACCEPTED,2026-09-16-r2,prices corrected; ledger rows hand-recomputed and match exactly
 F12,ACCEPTED_WITH_DEFECT,2026-09-16-r2,Minion/Garamond fully purged incl. Desk; but body-role font not enforced/corrected, same defect as F04
 F13,ACCEPTED_BLOCKED,2026-09-16-r2,honest BLOCKED pending owner Canva OAuth
+R1_F10,ACCEPTED,2026-09-16-r3,autonomous 3-min billing probe; flips health to billing_exhausted on 429/401/403; live before/after F10_LIVE.json with Telegram alert msg 204 and recovery msg 212
+R2_F04_F12,ACCEPTED,2026-09-16-r3,server-side role enforcement (Verdana/Noto Sans Arabic body); 3 fresh live plans (DAHVXC_4tfs, DAHVXE_Lyc8, DAHVYtuLZEY) all fontPass:true in F04_THREE_PLANS_V2; DIFF_SUMMARY matched to check JSONs
+R3_F08,ACCEPTED,2026-09-16-r3,sweep candidate filter regex restricts to ^[0-9]+$ (Telegram only); 4 fixture tasks abandoned in db; F08_SWEEP_FILTER.json verified
+R4_F09,ACCEPTED,2026-09-16-r3,live Telegram journal proofs for 3 terminal notification branches (messages 189, 192, 200) in F09_LIVE.md replacing synthetic sample

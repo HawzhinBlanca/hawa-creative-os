@@ -31,7 +31,7 @@ function getTaskForFile(relPath: string): string {
 }
 
 function getProducingCommand(relPath: string): string {
-  if (relPath.startsWith('F04_THREE_PLANS/')) return 'npx tsx scripts/export_live_f04_proof.ts';
+  if (relPath.startsWith('F04_THREE_PLANS') || relPath.startsWith('F04_THREE_PLANS_V2')) return 'npx tsx scripts/export_live_f04_proof.ts';
   if (relPath.startsWith('F05_REVISIONS/')) return 'automated test suite & plan diff extraction';
   if (relPath.startsWith('F06')) return 'npx tsx scripts/generate_f06_proof.ts';
   if (relPath.startsWith('F07')) return 'npx tsx scripts/run_f07_live_eval.ts';

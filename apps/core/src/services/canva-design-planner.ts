@@ -355,7 +355,7 @@ export class CanvaDesignPlanner {
                         align: { type: 'string', enum: ['left', 'center', 'right'] },
                         bold: { type: 'boolean' }
                       },
-                      required: ['copyIndex', 'x', 'y', 'width', 'height', 'fontSize', 'fontFamily', 'color', 'align'],
+                      required: ['copyIndex', 'role', 'x', 'y', 'width', 'height', 'fontSize', 'fontFamily', 'color', 'align', 'bold'],
                       additionalProperties: false
                     }
                   },
