@@ -161,3 +161,91 @@ bias 2604.22891 · LLM cascade escalation 2605.06350 · Sketch-to-Layout 2510.27
 for compositional image generation · choice-overload meta-analysis (Chernev et al.) · OpenAI prompt
 caching and vision pricing documentation · LAION aesthetic predictor · W3C Arabic and Persian layout
 requirements · Canva Magic Design documentation.
+
+---
+
+# Second pass, same day: four more papers, three changes
+
+## 11. Can a flat image be decomposed into editable layers? Verified: not usefully
+
+I said I would check this, because if raster-to-layers decomposition were reliable, the flat-first plan
+would be partly rescued. **LaDe** (2603.17965) does exactly that task: text-to-layers, text-to-image,
+and image-to-layers decomposition in one diffusion framework, producing 3–8 semantically meaningful
+RGBA layers. Its own numbers close the question: reconstruction quality falls as layer count rises
+(PSNR 32.65 at two layers to 28.42 at five), content duplicates across layers when layers are not
+properly linked to their descriptions, VRAM grows with layer count, and decisively, **it treats text as
+raster content, not native editable text** — decomposition captions the text with a VLM and renders it
+back as pixels. For our requirement, native editable text in Canva with character-exact copy, that is
+unusable. The flat-first path stays closed, now for a measured reason.
+
+## 12. PosterMELD: the closest published system to ours, and the right headline metric
+
+**PosterMELD** (2608.02218) is a template-conditioned multi-agent pipeline that exports **editable PPTX
+plus PNG**, which is precisely our transfer path. Two things to adopt:
+
+- **Capacity-aware slots guide writing before rendering.** Slots carry a capacity constraint, so copy is
+  fitted before anything is rendered rather than overflowing and being caught afterwards. We can compute
+  each slot's character capacity from box geometry and font metrics and pass it into the layout call,
+  which makes overflow structurally unlikely instead of a downstream failure.
+- **Print-Ready Rate.** The fraction of requests passing four deterministic checks: geometric,
+  readability, asset-integrity, and obvious-factual-error. Editability is reported separately. This is a
+  far better qualification headline than a judge's mean score, because it is deterministic and auditable.
+
+Its reported figures give us a benchmark to be measured against rather than a claim to match:
+
+| | |
+|---|---|
+| PosterMELD Print-Ready Rate | 81.3%, reported as 3.4× the next system |
+| PosterMELD cost per request | USD 0.38 |
+
+It also confirms the shape we chose independently: deterministic gates, then vision-language review,
+then routing failures to repair.
+
+## 13. LaySPA: how to weight the composite score
+
+**LaySPA** (2509.16891) trains layout spatial reasoning with a hybrid reward whose weighting is directly
+transferable to our composite metric even though we cannot train: layout quality carries 0.8, format
+compliance 0.1, and similarity to a human layout only 0.1. Its quality terms are collision, alignment,
+distribution, spacing and underlay-text constraints. Measured gains on CGL: alignment +63%, spacing
++73%, collision −36%, format +14%.
+
+The transferable lesson is the weighting, and specifically that **matching an exemplar's geometry
+deserves a small weight**. Retrieved exemplars should inform style and standard, not be copied.
+
+## 14. Saliency, and two hazards of strict schemas
+
+Content-aware layout work since CGL-GAN uses an **occlusion** metric that penalises elements overlapping
+salient regions of the background, computed from a binarised saliency mask and its minimum bounding
+rectangle. Pure saliency has a known weakness: it cannot prioritise within a large salient region, so
+newer methods add a VLM to recognise what is actually in the background. Our design sidesteps most of
+this because the layout *declares* its calm region before the art exists, but the art must still be
+measured against that region after generation.
+
+Two hazards of structured outputs worth guarding, from 2026 practice: strict mode uses constrained
+decoding, so it **guarantees the schema and not the quality** — models collapse to safe default values
+to keep the grammar satisfied, and one documented case mislabelled about 11% of items that way. And
+`$defs` in a schema correlates with non-compliance. Practical consequences: enable strict mode, keep
+`$defs` out of our schemas, and add a degeneracy check that flags candidates whose values have collapsed
+to defaults or are near-identical to each other.
+
+## 15. Type scale and metric validity
+
+Type scale is a solved formula: size at step n = base × ratio^n, with ratios near 1.1 reading quiet and
+sophisticated and ratios near 1.618 reading striking and poster-like. Requiring a layout to declare a
+base and a ratio, and verifying every size lies on that scale, produces professional hierarchy by
+construction and is trivial to check in code.
+
+On whether our free metrics are trustworthy enough to gate on: computational aesthetic measures
+correlate with human judgement at about ρ = 0.68 overall, rising to ρ = 0.74 for structured compositions
+and falling to ρ = 0.53 for abstract work, which the authors note is comparable to inter-rater
+reliability between humans. Institutional invitations are structured compositions, the favourable case.
+So gating on them is justified, and they remain a filter rather than a verdict: the owner's blind
+preference stays the final arbiter.
+
+## Additional sources
+
+LaDe 2603.17965 · PosterMELD 2608.02218 · LaySPA 2509.16891 · PosterGen 2508.17188 · iPoster 2603.29469 ·
+PosterO 2505.07843 · VASCAR 2412.04237 (noted, not read: fetch exceeded size) · CGL-GAN occlusion metric
+lineage · computational aesthetics validity studies · OpenAI structured-outputs strict-mode documentation
+and 2026 practitioner reports · modular type-scale literature · perceptually-minimal WCAG colour
+optimisation 2512.05067.

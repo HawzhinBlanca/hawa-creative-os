@@ -39,12 +39,29 @@ thresholds **calibrated on the twelve confirmed exemplars**, not the paper's def
 targets short-text posters, our institutional briefs carry long body paragraphs. Record the calibration
 run. Keep the existing hard-QA checks (contrast, margins, overlap, palette, copy, RTL) as they are; this
 module sits in front of them.
+Add three more checks beyond the paper's ten:
+- **Occlusion** (CGL-GAN lineage): penalise any element overlapping a salient region of the art layer,
+  computed from a binarised saliency mask and its minimum bounding rectangle. Zero cost when there is
+  no art layer.
+- **Type-scale conformance**: the layout declares a base size and a ratio; every text size must lie on
+  `base × ratio^n` within ±1 px. Ratios near 1.1 read quiet, near 1.618 read poster-like; the brief's
+  formality picks the band.
+- **Degeneracy**: flag a candidate whose values have collapsed to schema defaults, and flag a candidate
+  set whose three members are near-identical. Strict-mode constrained decoding guarantees the schema and
+  not the quality, and models are documented to collapse to safe defaults to satisfy the grammar.
+
+Composite weighting follows LaySPA's measured reward split: layout quality about 0.8, format compliance
+about 0.1, similarity to a retrieved exemplar about **0.1 only** — exemplars set the standard, they are
+not to be copied.
 **Accept when:** the twelve exemplars all score in the top band; three known-bad layouts from the
 09-15/16 audits (the boxy bilateral grid, a low-contrast candidate, an off-grid layout) each fail the
-specific metric they should fail, named in the output; total runtime under 50 ms per layout; zero model
-calls.
-**Proof:** `P01_METRICS.md` — the calibration table (twelve exemplars, ten metrics), the three
-known-bad results, timings.
+specific metric they should fail, named in the output; a hand-built degenerate set of three near-identical
+layouts is flagged; total runtime under 50 ms per layout; zero model calls.
+**Validity, to state plainly in the proof:** computational aesthetic measures correlate with human
+judgement at about ρ = 0.68, rising to ρ = 0.74 on structured compositions, which is our case. That is
+enough to gate on and not enough to decide by; the owner's blind preference in P10 remains the arbiter.
+**Proof:** `P01_METRICS.md` — the calibration table (twelve exemplars, thirteen metrics), the three
+known-bad results, the degeneracy case, timings.
 
 ### P02 — Exemplar retrieval
 **Do:** embed the twelve exemplars once and cache the vectors on disk; at request time retrieve the
@@ -62,8 +79,13 @@ the code; state in `DEVIATIONS.md` that retrieval quality is unverified until th
 
 ### P03 — Layout-first candidate generation
 **Do:** one `gpt-6-astra` call returning **three deliberately distinct layouts** as
-`StudioLayoutV2` JSON, with `response_format` json_schema and `max_completion_tokens`. Normalise
-coordinates 0–1 in the schema (PosterLLaVa, 2406.02884) and scale server-side. The prompt states
+`StudioLayoutV2` JSON, with `response_format` json_schema in **strict mode**, `max_completion_tokens`,
+and **no `$defs` in the schema** (it correlates with non-compliance). Normalise coordinates 0–1 in the
+schema (PosterLLaVa, 2406.02884) and scale server-side, so retargeting to our five sizes is a reflow
+rather than a stretch. Pass **capacity-aware slots**: for each copy block, compute the character
+capacity implied by the candidate box geometry and font metrics and give it to the model, so copy is
+fitted before anything is rendered instead of overflowing and being repaired later (PosterMELD,
+2608.02218). Each layout declares its type-scale base and ratio. The prompt states
 constraints and the standard — palette, copy indices, logo, margins, typography policy (F12 roles),
 RTL rules, the retrieved exemplars — and **never coordinates, card geometry or content-specific
 blocks**. Each layout declares whether it wants an art layer and, if so, its calm region.
@@ -80,8 +102,9 @@ emblems, seals, flags, faces). `quality: 'medium'`, `size` from the layout. Stor
 `usage.output_tokens_details.image_tokens`; cost from the token price. Composite behind the text in the
 renderer, with the existing scrim, and re-run the composite contrast check from F03 on the result.
 **Accept when:** for a layout with a declared calm region, the generated art measured over that region
-is darker and lower-variance than over the rest of the canvas; composite contrast passes; an art
-failure degrades to a procedural motif with the status saying so.
+is darker and lower-variance than over the rest of the canvas; the P01 occlusion metric passes against
+the generated art's saliency mask; composite contrast passes; an art failure degrades to a procedural
+motif with the status saying so.
 **Proof:** `P04_ART/` — two art layers, their layouts, the region measurements, composite contrast
 results, receipts.
 
@@ -157,10 +180,14 @@ per-brief cap test degrades truthfully.
 
 ### P10 — Qualification
 **Do:** 20 held-out briefs (10 English, 10 Sorani, five sizes) through the pipeline with the flag on for
-a test chat. Report: zero hard-QA escapes, canary won by the good candidate in at least 19 of 20, order-
-swap consistency at or above 80%, composite metric mean above the calibrated band, Canva copy and font
-checks passing in at least 18 of 20, median cost and wall-clock per brief, and the count of briefs where
-no two consecutive drafts shared a skeleton. Then the owner rates blind pairs, new pipeline against the
+a test chat. The **headline metric is Print-Ready Rate** (PosterMELD, 2608.02218): the fraction of
+requests passing four deterministic checks — geometric, readability, asset-integrity, and
+obvious-factual-error — with editability reported separately. Report PRR honestly whatever it is; the
+published comparison point is 81.3% at USD 0.38 per request, and our cost target is lower. Also report:
+zero hard-QA escapes, canary won by the good candidate in at least 19 of 20, order-swap consistency at or
+above 80%, composite metric mean above the calibrated band, Canva copy and font checks passing in at
+least 18 of 20, median cost and wall-clock per brief, and the count of briefs where no two consecutive
+drafts shared a skeleton. Then the owner rates blind pairs, new pipeline against the
 current planner.
 **Accept when:** the table exists with real numbers per brief and the lead reproduces three rows at
 random from the journals.
@@ -171,7 +198,11 @@ random from the journals.
 Flat concept boards as a separate throwaway stage; any text inside generated images; Sorani in images;
 approval on anything but the editable Canva draft; changes to the Canva import, export or QA path; the
 Canva MCP lane (F13, still owner-blocked); adding agent roles beyond the ones above — the five-role
-pipeline lost to two calls in 2607.26922, so do not add a sixth.
+pipeline lost to two calls in 2607.26922, so do not add a sixth. Note the apparent tension with
+PosterGen and PosterMELD, which are multi-agent: the resolution is that their agents mostly perform
+deterministic gating and repair routing, which we do in code. Keep model calls few and gates many.
+Raster-to-layer decomposition is also out of scope: LaDe (2603.17965) can decompose an image into RGBA
+layers but renders text as pixels rather than native type, so it cannot serve editable copy.
 
 ## 3. Honest limits to state in DEVIATIONS.md
 
