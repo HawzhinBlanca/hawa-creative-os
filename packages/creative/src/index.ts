@@ -28,3 +28,4 @@ export * from './studio/openai-studio-client.js';
 export * from './studio/transfer-v2.js';
 export * from './studio/design-metrics.js';
 export * from './studio/exemplar-retrieval.js';
+export * from './studio/layout-generator-v3.js';

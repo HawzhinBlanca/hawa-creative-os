@@ -200,6 +200,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
+    reasoningEffort?: 'low' | 'medium' | 'high';
   }): Promise<OpenAiStructuredResponse<T>> {
     const model = options.model || 'gpt-6-astra';
     assertModelAllowed(model);
@@ -226,6 +227,12 @@ export class OpenAiStudioClient {
       },
       max_completion_tokens: options.maxTokens || 4000,
     };
+
+    if (options.reasoningEffort) {
+      payload.reasoning_effort = options.reasoningEffort;
+    } else if (model === 'gpt-6-astra') {
+      payload.reasoning_effort = 'low';
+    }
 
     if (options.temperature !== undefined && model !== 'gpt-6-astra') {
       payload.temperature = options.temperature;
@@ -346,6 +353,8 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw err;
         }
+        const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
 

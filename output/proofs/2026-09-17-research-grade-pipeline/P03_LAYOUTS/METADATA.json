@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-09-16T23:15:01.097Z",
+  "brief": "Advancing Academic Rigor & Institutional Quality: KAAE sets mandatory accreditation benchmarks and institutional quality standards under Law No. 6 of 2022 for universities across the Kurdistan Region.",
+  "retrievedExemplars": [
+    "post1_accreditation_mandate",
+    "post2_standards_higher_ed",
+    "post3_strategic_roadmap"
+  ],
+  "runs": [
+    {
+      "round": 1,
+      "responseId": "chatcmpl-EOt5TiDppLlpBN1mUNdBTLjH2RNqr",
+      "xRequestId": "req_d31afb8637804603901f6f29365fd5a5",
+      "inputTokens": 2847,
+      "outputTokens": 3122,
+      "cachedTokens": 2844,
+      "costUsd": 0.158974,
+      "latencyMs": 54200,
+      "rawCandidates": [
+        {
+          "id": "kaae_01",
+          "conceptTitle": "Central Statutory Spine",
+          "compositionArchetype": "monolith_centered",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae_02",
+          "conceptTitle": "Editorial Mandate",
+          "compositionArchetype": "asymmetric_editorial",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae_03",
+          "conceptTitle": "Statement Above the Statute",
+          "compositionArchetype": "hero_statement_grid",
+          "typeScale": {
+            "base": 16,
+            "ratio": 1.25
+          }
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "responseId": "chatcmpl-EOt6KyMs1omAWQmeDkmDrM0mz1w3O",
+      "xRequestId": "req_159a8422d38c4db08dac5c684a7f3ea8",
+      "inputTokens": 2847,
+      "outputTokens": 3292,
+      "cachedTokens": 2844,
+      "costUsd": 0.167474,
+      "latencyMs": 55655,
+      "rawCandidates": [
+        {
+          "id": "kaae-01",
+          "conceptTitle": "The Institutional Spine",
+          "compositionArchetype": "monolith_centered",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae-02",
+          "conceptTitle": "The Editorial Mandate",
+          "compositionArchetype": "asymmetric_editorial",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae-03",
+          "conceptTitle": "The Grounded Charter",
+          "compositionArchetype": "hero_statement_grid",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "responseId": "chatcmpl-EOt7Dt2NAmPGRfrySTKyUPLKAeyTq",
+      "xRequestId": "req_ced03accda5d43328c0e529c3ac9d25f",
+      "inputTokens": 2847,
+      "outputTokens": 3320,
+      "cachedTokens": 2844,
+      "costUsd": 0.168874,
+      "latencyMs": 57678,
+      "rawCandidates": [
+        {
+          "id": "kaae-01",
+          "conceptTitle": "Central Statutory Authority",
+          "compositionArchetype": "monolith_centered",
+          "typeScale": {
+            "base": 14,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae-02",
+          "conceptTitle": "Editorial Mandate",
+          "compositionArchetype": "asymmetric_editorial",
+          "typeScale": {
+            "base": 16,
+            "ratio": 1.25
+          }
+        },
+        {
+          "id": "kaae-03",
+          "conceptTitle": "The Standards Platform",
+          "compositionArchetype": "hero_statement_grid",
+          "typeScale": {
+            "base": 18,
+            "ratio": 1.5
+          }
+        }
+      ]
+    }
+  ],
+  "totalInputTokens": 8541,
+  "totalOutputTokens": 9734,
+  "totalCachedTokens": 8532,
+  "totalCostUsd": 0.495322,
+  "minPairwiseGeometricDistancePx": 17.294230652356152,
+  "layouts": [
+    {
+      "index": 1,
+      "file": "layout_01.json",
+      "compositeScore": 0.955,
+      "passed": true,
+      "failingMetrics": [],
+      "shapesCount": 3,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 2,
+      "file": "layout_02.json",
+      "compositeScore": 0.84,
+      "passed": false,
+      "failingMetrics": [
+        "textLegibility",
+        "gridAppropriateness"
+      ],
+      "shapesCount": 4,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 3,
+      "file": "layout_03.json",
+      "compositeScore": 0.903,
+      "passed": false,
+      "failingMetrics": [
+        "textLegibility"
+      ],
+      "shapesCount": 4,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 16,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 4,
+      "file": "layout_04.json",
+      "compositeScore": 0.956,
+      "passed": true,
+      "failingMetrics": [],
+      "shapesCount": 3,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 5,
+      "file": "layout_05.json",
+      "compositeScore": 0.834,
+      "passed": false,
+      "failingMetrics": [
+        "gridAppropriateness"
+      ],
+      "shapesCount": 3,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 6,
+      "file": "layout_06.json",
+      "compositeScore": 0.906,
+      "passed": false,
+      "failingMetrics": [
+        "textLegibility"
+      ],
+      "shapesCount": 4,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 7,
+      "file": "layout_07.json",
+      "compositeScore": 0.965,
+      "passed": true,
+      "failingMetrics": [],
+      "shapesCount": 3,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 14,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 8,
+      "file": "layout_08.json",
+      "compositeScore": 0.944,
+      "passed": true,
+      "failingMetrics": [],
+      "shapesCount": 3,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 16,
+        "ratio": 1.25
+      }
+    },
+    {
+      "index": 9,
+      "file": "layout_09.json",
+      "compositeScore": 0.844,
+      "passed": false,
+      "failingMetrics": [
+        "textLegibility",
+        "gridAppropriateness"
+      ],
+      "shapesCount": 4,
+      "textCount": 4,
+      "hasArt": false,
+      "typeScale": {
+        "base": 18,
+        "ratio": 1.5
+      }
+    }
+  ]
+}
