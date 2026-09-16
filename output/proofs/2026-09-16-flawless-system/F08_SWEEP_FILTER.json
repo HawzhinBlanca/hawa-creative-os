@@ -1,0 +1,107 @@
+{
+  "testName": "F08 — Re-drive Sweep Channel Exclusion & Fixture Cleanup",
+  "executedAt": "2026-09-16T14:35:00Z",
+  "rule": "Only re-drive tasks whose source channel is a genuine Telegram (numeric chat ID) or WhatsApp ID. Strictly exclude synthetic fixtures, isolated test IDs, and tasks without real requester context.",
+  "filterCriteria": {
+    "channelPattern": "^[0-9]+$ or WhatsApp JID",
+    "excludedPatterns": [
+      "isolated-test-*",
+      "tg_default",
+      "null",
+      "[TEST]*"
+    ]
+  },
+  "fixturePlansAbandoned": [
+    {
+      "taskId": "0653aeec-6052-43b5-872a-9ab1850bb172",
+      "title": "KAAE Annual Accreditation Symposium 2026",
+      "priorStatus": "planned (from 09-14 fixture)",
+      "newStatus": "abandoned",
+      "diagnostic": "Synthetic fixture excluded from production re-drive sweep (F08 R3 policy)"
+    },
+    {
+      "taskId": "23b71a0c-06fe-4758-aa64-c1ac65a17e6d",
+      "title": "KAAE Annual Accreditation Symposium 2026",
+      "priorStatus": "planned (from 09-14 fixture)",
+      "newStatus": "abandoned",
+      "diagnostic": "Synthetic fixture excluded from production re-drive sweep (F08 R3 policy)"
+    },
+    {
+      "taskId": "dc6eb019-eec3-4f7a-abc1-9b77985f1d0c",
+      "title": "KAAE Annual Accreditation Symposium 2026",
+      "priorStatus": "planned (from 09-14 fixture)",
+      "newStatus": "abandoned",
+      "diagnostic": "Synthetic fixture excluded from production re-drive sweep (F08 R3 policy)"
+    },
+    {
+      "taskId": "59751c4b-eb8f-498c-b6ab-74ea96036ba7",
+      "title": "[TEST] Studio Task",
+      "priorStatus": "planned (from 09-14 fixture)",
+      "newStatus": "abandoned",
+      "diagnostic": "Synthetic fixture excluded from production re-drive sweep (F08 R3 policy)"
+    }
+  ],
+  "candidateListComparison": {
+    "beforeFilter": [
+      {
+        "taskId": "0653aeec-6052-43b5-872a-9ab1850bb172",
+        "sourceChannelId": null,
+        "eligible": true,
+        "note": "Fixture erroneously swept in round 1 & 2"
+      },
+      {
+        "taskId": "23b71a0c-06fe-4758-aa64-c1ac65a17e6d",
+        "sourceChannelId": null,
+        "eligible": true,
+        "note": "Fixture erroneously swept in round 1 & 2"
+      },
+      {
+        "taskId": "dc6eb019-eec3-4f7a-abc1-9b77985f1d0c",
+        "sourceChannelId": null,
+        "eligible": true,
+        "note": "Fixture erroneously swept in round 1 & 2"
+      },
+      {
+        "taskId": "59751c4b-eb8f-498c-b6ab-74ea96036ba7",
+        "sourceChannelId": "isolated-test-913e724c",
+        "eligible": true,
+        "note": "Fixture erroneously swept in round 1 & 2"
+      },
+      {
+        "taskId": "411cf462-fb8a-406d-9297-87d70f164a2a",
+        "sourceChannelId": "tg_lead_eval_f04",
+        "eligible": true,
+        "note": "Synthetic audit task"
+      },
+      {
+        "taskId": "bef5776c-1a98-4d0b-a2e6-08ad2ad72508",
+        "sourceChannelId": "7191500129",
+        "eligible": true,
+        "note": "Genuine user request"
+      },
+      {
+        "taskId": "cadcaea3-1b35-4d7e-ad17-6e8d131c0bcc",
+        "sourceChannelId": "7191500129",
+        "eligible": true,
+        "note": "Genuine user request"
+      }
+    ],
+    "afterFilter": [
+      {
+        "taskId": "bef5776c-1a98-4d0b-a2e6-08ad2ad72508",
+        "sourceChannelId": "7191500129",
+        "eligible": true,
+        "admitted": true,
+        "note": "Genuine requester task (Telegram chat 7191500129)"
+      },
+      {
+        "taskId": "cadcaea3-1b35-4d7e-ad17-6e8d131c0bcc",
+        "sourceChannelId": "7191500129",
+        "eligible": true,
+        "admitted": true,
+        "note": "Genuine requester task (Telegram chat 7191500129)"
+      }
+    ]
+  },
+  "verdict": "PASS — All synthetic fixtures permanently closed as abandoned; sweep strictly constrained to real requester channel IDs."
+}

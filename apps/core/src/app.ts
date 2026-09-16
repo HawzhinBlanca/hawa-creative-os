@@ -1128,68 +1128,149 @@ export function createApp(options?: CreateAppOptions) {
     return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
   }
 
-  // Honest Health & Readiness Probes (CV-20, FR-064, FR-073) - Zero hardcoded health!
+  // Honest Health & Readiness Probes (CV-20, FR-064, FR-073, R1/F10) - Zero hardcoded health!
   let lastVerifiedProgressAt = new Date().toISOString();
 
-  // The model credential is probed with a token-free request (GET /v1/models) at most every five
-  // minutes. Real paid call billing failures (e.g. MODEL_HTTP_400 credit exhausted) are cached and degrade health.
-  let modelProviderProbe: { at: number; status: string } = { at: 0, status: 'unverified' };
-  let lastPaidModelError: { at: number; status: string } | null = null;
-  const recordPaidModelBillingError = (status: string = 'billing_exhausted') => {
-    lastPaidModelError = { at: Date.now(), status };
-    modelProviderProbe = { at: Date.now(), status };
+  // Active, scheduled paid billing probe (R1/F10)
+  // Executes a minimal paid completion call (gpt-4o-mini, max_tokens: 1) every 3 minutes.
+  // Real billing exhaustion (429 credit_balance_exhausted / insufficient_quota) and auth errors (401/403)
+  // flip health to billing_exhausted / unauthorized and trigger operator alerts.
+  interface PaidProbeState {
+    at: number;
+    status: string;
+    detail?: any;
+    lastAlertSentAt?: number;
+    lastAlertMessageId?: string;
+  }
+  let lastPaidProbe: PaidProbeState = { at: 0, status: 'unverified' };
+
+  const recordPaidModelBillingError = (status: string = 'billing_exhausted', detail?: any) => {
+    lastPaidProbe = {
+      at: Date.now(),
+      status,
+      detail: detail || { message: 'Paid call failed' },
+      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
+      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
+    };
+    lastVerifiedProgressAt = new Date().toISOString();
+  };
+
+  const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) return { status: 'unconfigured' };
+    if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+      return { status: lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected' };
+    }
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'p' }],
+          max_tokens: 1,
+        }),
+        signal: AbortSignal.timeout(7000),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        const errJson: any = await res.json().catch(() => ({}));
+        return { status: 'unauthorized', detail: errJson?.error || { message: `HTTP ${res.status}` } };
+      } else if (res.status === 429) {
+        const errJson: any = await res.json().catch(() => ({}));
+        const code = errJson?.error?.code;
+        const type = errJson?.error?.type;
+        const isBilling = code === 'credit_balance_exhausted' || type === 'insufficient_quota';
+        return {
+          status: isBilling ? 'billing_exhausted' : 'rate_limited',
+          detail: errJson?.error || { message: 'Rate limit or billing exhaustion' },
+        };
+      } else if (res.ok) {
+        return { status: 'connected' };
+      } else {
+        const errJson: any = await res.json().catch(() => ({}));
+        return { status: `http_${res.status}`, detail: errJson?.error || { message: `HTTP ${res.status}` } };
+      }
+    } catch (err: any) {
+      return { status: 'unreachable', detail: { message: err?.message || 'Network error' } };
+    }
+  };
+
+  const checkAndAlertBilling = async (probeResult: { status: string; detail?: any }) => {
+    lastPaidProbe = {
+      at: Date.now(),
+      status: probeResult.status,
+      detail: probeResult.detail,
+      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
+      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
+    };
+    lastVerifiedProgressAt = new Date().toISOString();
+
+    if (probeResult.status === 'billing_exhausted' || probeResult.status === 'unauthorized') {
+      const now = Date.now();
+      const cooldownMs = 15 * 60 * 1000;
+      if (!lastPaidProbe.lastAlertSentAt || now - lastPaidProbe.lastAlertSentAt > cooldownMs) {
+        lastPaidProbe.lastAlertSentAt = now;
+        const targetChat = telegramAllowedUsers[0];
+        if (targetChat && telegramBridge) {
+          const alertText = probeResult.status === 'billing_exhausted'
+            ? `⚠️ *Hawa Watchdog Alert*: OpenAI credit balance exhausted (429 insufficient_quota).\nOperator action required: Add credits at https://platform.openai.com/settings/organization/billing/`
+            : `⚠️ *Hawa Watchdog Alert*: OpenAI API key unauthorized (HTTP ${probeResult.status}).\nOperator action required: Verify API credentials.`;
+          try {
+            const outRes: any = await telegramBridge.dispatchOutboundMessage(targetChat, {
+              text: alertText,
+              parse_mode: 'Markdown',
+            });
+            lastPaidProbe.lastAlertMessageId = outRes?.message_id ? String(outRes.message_id) : `alert_${now}`;
+          } catch (err) {
+            console.error('[HealthProbe] Watchdog alert delivery failed:', err);
+          }
+        }
+      }
+    }
   };
 
   const probeModelProvider = async (): Promise<string> => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return 'unconfigured';
-    if (process.env.VITEST || process.env.NODE_ENV === 'test') return 'unverified';
-
-    if (lastPaidModelError && Date.now() - lastPaidModelError.at < 900000) {
-      return lastPaidModelError.status;
+    if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+      return lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected';
     }
 
-    if (db) {
-      try {
-        const recentBillingFailure = await withRlsContext(db, { tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          return await sql<any>`
-            SELECT diagnostic FROM hawa.canva_design_plans
-            WHERE created_at > now() - interval '15 minutes' AND status = 'failed'
-              AND (diagnostic LIKE '%MODEL_HTTP_400%' OR diagnostic LIKE '%MODEL_HTTP_429%' OR diagnostic LIKE '%insufficient_quota%' OR diagnostic LIKE '%credit%')
-            ORDER BY created_at DESC LIMIT 1`.execute(trx);
-        });
-        if (recentBillingFailure.rows[0]) {
-          const status = 'billing_exhausted';
-          lastPaidModelError = { at: Date.now(), status };
-          modelProviderProbe = { at: Date.now(), status };
-          return status;
-        }
-      } catch { /* DB check ignored on error */ }
+    // If probe is fresh (< 3 minutes), return cached status
+    if (lastPaidProbe.at > 0 && Date.now() - lastPaidProbe.at < 180000) {
+      return lastPaidProbe.status;
     }
 
-    if (Date.now() - modelProviderProbe.at < 300000) return modelProviderProbe.status;
-    let status = 'unreachable';
-    try {
-      const res = await fetch('https://api.openai.com/v1/models', {
-        headers: { Authorization: `Bearer ${key}` },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.status === 401 || res.status === 403) {
-        status = 'unauthorized';
-      } else if (res.status === 429) {
-        const errJson = await res.json().catch(() => ({}));
-        status = (errJson?.error?.code === 'credit_balance_exhausted' || errJson?.error?.type === 'insufficient_quota')
-          ? 'billing_exhausted'
-          : 'rate_limited';
-      } else if (res.ok) {
-        status = 'connected';
-      } else {
-        status = `http_${res.status}`;
-      }
-    } catch { status = 'unreachable'; }
-    modelProviderProbe = { at: Date.now(), status };
-    return status;
+    // Otherwise run real probe inline
+    const res = await executePaidModelProbe();
+    await checkAndAlertBilling(res);
+    return res.status;
   };
+
+  // Start background scheduled probe loop in non-test runtime
+  if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
+    setTimeout(async () => {
+      try {
+        const res = await executePaidModelProbe();
+        await checkAndAlertBilling(res);
+      } catch (err) {
+        console.error('[HealthProbe] Initial probe failed:', err);
+      }
+    }, 2000);
+    setInterval(async () => {
+      try {
+        const res = await executePaidModelProbe();
+        await checkAndAlertBilling(res);
+      } catch (err) {
+        console.error('[HealthProbe] Scheduled probe failed:', err);
+      }
+    }, 180000);
+  }
 
   // The bot credential is probed with getMe at most every five minutes: a revoked or stale token
   // must show in /health, not as a silent poll loop that never receives updates again.
@@ -1257,6 +1338,12 @@ export function createApp(options?: CreateAppOptions) {
       status,
       timestamp: new Date().toISOString(),
       lastVerifiedProgressAt,
+      lastPaidProbe: {
+        at: lastPaidProbe.at ? new Date(lastPaidProbe.at).toISOString() : null,
+        status: lastPaidProbe.status,
+        detail: lastPaidProbe.detail || null,
+        lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
+      },
       dependencies: {
         postgres: dbStatus,
         canva: canvaStatus,
@@ -1916,7 +2003,23 @@ export function createApp(options?: CreateAppOptions) {
       return { ok: false, code: 'CLIENT_REQUIRED', message: 'Task has no client assigned' };
     }
 
-    const channelId = sourceChannelId || taskData.payload?.sourceChannelId || 'tg_default';
+    const rawChannelId = sourceChannelId || taskData.payload?.sourceChannelId;
+    const isChannelNumericOrAllowed = Boolean(
+      rawChannelId &&
+      rawChannelId !== 'tg_default' &&
+      !rawChannelId.startsWith('isolated-test-') &&
+      !taskData.title?.startsWith('[TEST]') &&
+      (/^[0-9]+$/.test(rawChannelId) || /@(s\.whatsapp\.net|c\.us)$/.test(rawChannelId) || telegramAllowedUsers.includes(rawChannelId))
+    );
+
+    if (!isChannelNumericOrAllowed) {
+      return {
+        ok: false,
+        code: 'NON_REDRIVABLE_SOURCE',
+        message: `Task ${taskId} has no valid external intake channel (channel=${rawChannelId}) and is excluded from re-drive`,
+      };
+    }
+    const channelId = rawChannelId!;
     const variant = taskData.payload?.variant || { width: 1080, height: 1350 };
     const width = variant.width || 1080;
     const height = variant.height || 1350;
@@ -2029,7 +2132,8 @@ export function createApp(options?: CreateAppOptions) {
 
     const failedRows = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
       return (await sql<any>`
-        SELECT DISTINCT ON (p.task_id) p.task_id, p.status, p.diagnostic, p.created_at
+        SELECT DISTINCT ON (p.task_id) p.task_id, p.status, p.diagnostic, p.created_at,
+               (SELECT o.payload->>'sourceChannelId' FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'task.created' ORDER BY o.created_at DESC LIMIT 1) as source_channel
         FROM hawa.canva_design_plans p
         JOIN hawa.tasks t ON t.id = p.task_id
         LEFT JOIN hawa.canva_bindings b ON b.task_id = p.task_id AND b.status = 'bound'
@@ -2037,6 +2141,13 @@ export function createApp(options?: CreateAppOptions) {
           AND p.status IN ('failed', 'uncertain')
           AND b.id IS NULL
           AND t.client_id IS NOT NULL
+          AND t.title NOT LIKE '[TEST]%'
+          AND (
+            SELECT o.payload->>'sourceChannelId'
+            FROM hawa.outbox_commands o
+            WHERE o.aggregate_id = t.id AND o.command_type = 'task.created'
+            ORDER BY o.created_at DESC LIMIT 1
+          ) ~ '^[0-9]+$'
         ORDER BY p.task_id, p.created_at DESC`.execute(trx)).rows;
     });
 

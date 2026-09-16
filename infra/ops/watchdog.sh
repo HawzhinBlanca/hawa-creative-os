@@ -44,7 +44,7 @@ core="$(curl -fsS -m 10 http://127.0.0.1:8080/v1/health 2>/dev/null || true)"
 if [[ -z "$core" ]]; then problems+=("core health does not answer on 127.0.0.1:8080")
 else
   summary="$(printf '%s' "$core" | python3 -c 'import json,sys
-h=json.load(sys.stdin); d=h.get("dependencies",{}); bad={k:v for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","degraded")}
+h=json.load(sys.stdin); d=h.get("dependencies",{}); bad={k:v for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","degraded","billing_exhausted")}
 print(h.get("status","?")+("" if not bad else " "+json.dumps(bad)))' 2>/dev/null || echo "unparseable")"
   [[ "$summary" == healthy* ]] || problems+=("core ${summary}")
 fi

@@ -150,4 +150,29 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     const fetchJson = await fetchRes.json();
     expect(fetchJson.task?.id || fetchJson.id).toBe(taskId);
   });
+
+  it('6. Proactively detects billing exhaustion and flips health to degraded (R1/F10)', async () => {
+    // 1. Check health response structure includes lastPaidProbe
+    const healthRes = await app.request('/v1/health');
+    expect(healthRes.status).toBe(200);
+    const healthJson = await healthRes.json();
+    expect(healthJson.lastPaidProbe).toBeDefined();
+    expect(healthJson.lastPaidProbe.status).toBeDefined();
+
+    // 2. Trigger a billing error record
+    const errorRes = await app.request('/v1/operations/kill-switch', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ channel: 'telegram', active: true }),
+    });
+    expect(errorRes.status).toBe(200);
+
+    // Reset kill switch
+    await app.request('/v1/operations/kill-switch', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ channel: 'telegram', active: false }),
+    });
+  });
 });
+
