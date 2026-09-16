@@ -1,0 +1,860 @@
+import type { StudioLayoutV2, Box, TextElement, ShapeElement } from './layout-v2.js';
+import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+
+export interface MetricResult {
+  score: number; // 0..1
+  passed: boolean;
+  metric: string;
+  details?: Record<string, unknown>;
+}
+
+export interface DesignMetricsReport {
+  compositeScore: number; // 0..1
+  passed: boolean;
+  qualityScore: number;
+  complianceScore: number;
+  exemplarSimilarityScore: number;
+  metrics: {
+    textLegibility: MetricResult;
+    gridAppropriateness: MetricResult;
+    alignment: MetricResult;
+    balance: MetricResult;
+    justification: MetricResult;
+    regularity: MetricResult;
+    typefacePairing: MetricResult;
+    negativeSpace: MetricResult;
+    semanticLayout: MetricResult;
+    semanticTypography: MetricResult;
+    occlusion: MetricResult;
+    typeScale: MetricResult;
+    degeneracy: MetricResult;
+  };
+  failingMetrics: string[];
+  executionTimeMs: number;
+}
+
+export interface CandidateSetDegeneracyResult {
+  isDegenerate: boolean;
+  reason?: string;
+  pairwiseDistances: number[];
+}
+
+const ADMITTED_DISPLAY_FONTS = new Set([
+  'Cinzel',
+  'Montserrat',
+  'Lora',
+  'Cairo',
+  'Playfair Display',
+  'Plus Jakarta Sans',
+  'Vazirmatn',
+  'Inter',
+  'Libre Baskerville',
+  'Cormorant Garamond',
+  'Prata',
+  'Bodoni Moda',
+  'Merriweather',
+  'PT Serif',
+  'Oswald',
+  'Raleway',
+]);
+
+const ADMITTED_TYPE_SCALE_RATIOS = [1.125, 1.200, 1.250, 1.333, 1.414, 1.500, 1.618];
+
+// 1. Text Legibility
+export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
+  if (!layout.text || layout.text.length === 0) {
+    return { score: 0, passed: false, metric: 'textLegibility', details: { reason: 'NO_TEXT' } };
+  }
+
+  let totalPenalty = 0;
+  const failingIssues: string[] = [];
+  const bgColor = layout.background?.color || '#FFFFFF';
+  const bgLum = hexToLuminance(bgColor);
+
+  for (let i = 0; i < layout.text.length; i++) {
+    const el = layout.text[i];
+
+    // Minimum font size by role
+    let minSize = 12;
+    if (el.role === 'title') minSize = 22;
+    else if (el.role === 'subtitle') minSize = 16;
+    else if (el.role === 'body') minSize = 13;
+    else if (el.role === 'cta') minSize = 14;
+    else if (el.role === 'footer') minSize = 10;
+
+    if (el.fontSize < minSize) {
+      totalPenalty += 0.2;
+      failingIssues.push(`Text ${i} (${el.role}) fontSize ${el.fontSize} < ${minSize}`);
+    }
+
+    // Line height check
+    if (el.lineHeight < 1.1 || el.lineHeight > 1.9) {
+      totalPenalty += 0.1;
+      failingIssues.push(`Text ${i} lineHeight ${el.lineHeight} out of range [1.1, 1.9]`);
+    }
+
+    // Contrast check
+    const textLum = hexToLuminance(el.color);
+    const contrast = calculateLuminanceContrastRatio(textLum, bgLum);
+    const requiredContrast = el.fontSize >= 20 || (el.fontSize >= 16 && el.bold) ? 3.0 : 4.5;
+    if (contrast < requiredContrast) {
+      const deficit = (requiredContrast - contrast) / requiredContrast;
+      totalPenalty += Math.min(0.8, deficit * 1.0);
+      failingIssues.push(`Text ${i} (${el.role}) contrast ${contrast.toFixed(2)}:1 < ${requiredContrast}:1`);
+    }
+  }
+
+  const score = Math.max(0, Math.min(1, 1.0 - totalPenalty / layout.text.length));
+  const passed = score >= 0.70 && !failingIssues.some(msg => msg.includes('contrast'));
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'textLegibility',
+    details: { failingIssues, count: layout.text.length }
+  };
+}
+
+// 2. Grid Appropriateness
+export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult {
+  const width = layout.width;
+  const height = layout.height;
+  const margin = layout.grid?.margin || 70;
+  const columns = layout.grid?.columns || 12;
+  const gutter = layout.grid?.gutter || 20;
+
+  // 16:9 PowerPoint presentation slides fail grid appropriateness for wrong canvas genre
+  // (institutional social announcements, invitations, and posters are 1:1, 4:5, 9:16)
+  if (width / height >= 1.6) {
+    return {
+      score: 0.30,
+      passed: false,
+      metric: 'gridAppropriateness',
+      details: {
+        reason: 'WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)',
+        aspectRatio: `${width}:${height}`
+      }
+    };
+  }
+
+  const usableWidth = width - 2 * margin;
+
+  // Generate grid boundary lines for declared columns and standard institutional sub-divisions (2, 3, 4, 6, 12)
+  const colLefts = new Set<number>([margin]);
+  const colRights = new Set<number>([width - margin]);
+  const centerLines = new Set<number>([Math.round(width / 2)]);
+
+  const divisions = Array.from(new Set([columns, 2, 3, 4, 6, 12]));
+  for (const div of divisions) {
+    const colW = (usableWidth - (div - 1) * gutter) / div;
+    for (let c = 0; c < div; c++) {
+      const left = margin + c * (colW + gutter);
+      const right = left + colW;
+      colLefts.add(Math.round(left));
+      colRights.add(Math.round(right));
+      centerLines.add(Math.round(left + colW / 2));
+    }
+  }
+
+  const allBoxes: Box[] = [
+    ...layout.text,
+    ...layout.shapes.filter(s => s.role !== 'panel' || (s.width < width * 0.9 && s.height < layout.height * 0.9)),
+    layout.logo
+  ].filter(Boolean);
+
+  if (allBoxes.length === 0) {
+    return { score: 1.0, passed: true, metric: 'gridAppropriateness' };
+  }
+
+  let alignedElements = 0;
+  const tolerance = Math.max(8, width * 0.008); // ~8px tolerance
+
+  const leftArr = Array.from(colLefts);
+  const rightArr = Array.from(colRights);
+  const centerArr = Array.from(centerLines);
+
+  for (const b of allBoxes) {
+    const left = b.x;
+    const right = b.x + b.width;
+    const center = Math.round(b.x + b.width / 2);
+
+    const leftOnCol = leftArr.some(cl => Math.abs(left - cl) <= tolerance);
+    const rightOnCol = rightArr.some(cr => Math.abs(right - cr) <= tolerance);
+    const isCentered = centerArr.some(cc => Math.abs(center - cc) <= tolerance);
+
+    // Conforms if:
+    // (1) Left and right edges align to grid column lines, OR
+    // (2) Centered on a column / canvas axis within margins, OR
+    // (3) Left edge aligns to a column start and width spans within margin
+    if ((leftOnCol && rightOnCol) || (isCentered && left >= margin - tolerance && right <= width - margin + tolerance) || (leftOnCol && isCentered)) {
+      alignedElements++;
+    }
+  }
+
+  const score = alignedElements / allBoxes.length;
+  const passed = score >= 0.70;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'gridAppropriateness',
+    details: { alignedElements, totalElements: allBoxes.length }
+  };
+}
+
+// 3. Alignment (arXiv 2402.06945: A / (A + d), A = 10)
+export function computeAlignment(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  if (textElements.length <= 1) {
+    return { score: 1.0, passed: true, metric: 'alignment' };
+  }
+
+  // Width variance
+  const widths = textElements.map(t => t.width);
+  const meanWidth = widths.reduce((sum, w) => sum + w, 0) / widths.length;
+  const widthVariance = widths.reduce((sum, w) => sum + Math.pow((w - meanWidth) / meanWidth, 2), 0) / widths.length;
+
+  // Line uniformity deviation: deviation from common alignment axes
+  const lefts = textElements.map(t => t.x);
+  const centers = textElements.map(t => t.x + t.width / 2);
+  const rights = textElements.map(t => t.x + t.width);
+
+  function minClusterDistance(coords: number[]): number {
+    if (coords.length <= 1) return 0;
+    const sorted = [...coords].sort((a, b) => a - b);
+    let minDiffSum = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      minDiffSum += Math.min(Math.abs(sorted[i] - sorted[i - 1]), 100);
+    }
+    return minDiffSum / (sorted.length - 1);
+  }
+
+  const leftDev = minClusterDistance(lefts) / 20;
+  const centerDev = minClusterDistance(centers) / 20;
+  const rightDev = minClusterDistance(rights) / 20;
+  const lineUniformityDev = Math.min(leftDev, centerDev, rightDev);
+
+  const d = 0.80 * widthVariance * 10 + 0.20 * lineUniformityDev;
+  const score = 10 / (10 + d);
+  const passed = score >= 0.70;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'alignment',
+    details: { widthVariance: parseFloat(widthVariance.toFixed(3)), lineUniformityDev: parseFloat(lineUniformityDev.toFixed(3)), d: parseFloat(d.toFixed(3)) }
+  };
+}
+
+// 4. Balance (arXiv 2402.06945: B = 1 - [((wx - cx)/w)^2 + ((wy - cy)/h)^2 / 2]^0.5)
+export function computeBalance(layout: StudioLayoutV2): MetricResult {
+  const w = layout.width;
+  const h = layout.height;
+  const cx = w / 2;
+  const cy = h / 2;
+
+  let totalWeight = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+
+  for (const t of layout.text || []) {
+    const area = t.width * t.height;
+    const weight = area * (t.fontSize / 20) * (t.bold ? 1.3 : 1.0);
+    weightedX += (t.x + t.width / 2) * weight;
+    weightedY += (t.y + t.height / 2) * weight;
+    totalWeight += weight;
+  }
+
+  for (const s of layout.shapes || []) {
+    if (s.role === 'frame' || (s.width >= w * 0.95 && s.height >= h * 0.95)) continue;
+    const area = s.width * s.height;
+    const weight = area * (s.opacity || 0.8) * (s.role === 'panel' ? 0.3 : 0.8);
+    weightedX += (s.x + s.width / 2) * weight;
+    weightedY += (s.y + s.height / 2) * weight;
+    totalWeight += weight;
+  }
+
+  if (layout.logo) {
+    const logoArea = layout.logo.width * layout.logo.height;
+    const weight = logoArea * 1.2;
+    weightedX += (layout.logo.x + layout.logo.width / 2) * weight;
+    weightedY += (layout.logo.y + layout.logo.height / 2) * weight;
+    totalWeight += weight;
+  }
+
+  if (totalWeight === 0) {
+    return { score: 1.0, passed: true, metric: 'balance' };
+  }
+
+  const wx = weightedX / totalWeight;
+  const wy = weightedY / totalWeight;
+
+  const dx = (wx - cx) / w;
+  const dy = (wy - cy) / h;
+  const offset = Math.sqrt((dx * dx + dy * dy) / 2);
+  const score = Math.max(0, Math.min(1, 1 - offset));
+  const passed = score >= 0.80;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'balance',
+    details: { wx: Math.round(wx), wy: Math.round(wy), offset: parseFloat(offset.toFixed(4)) }
+  };
+}
+
+// 5. Justification
+export function computeJustification(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  if (textElements.length <= 1) {
+    return { score: 1.0, passed: true, metric: 'justification' };
+  }
+
+  const counts: Record<string, number> = { left: 0, center: 0, right: 0 };
+  for (const t of textElements) {
+    counts[t.align] = (counts[t.align] || 0) + 1;
+  }
+
+  const dominant = Math.max(counts.left, counts.center, counts.right);
+  const dominanceRatio = dominant / textElements.length;
+
+  let score = dominanceRatio;
+  // If dominant alignment is >= 75%, very clean
+  if (dominanceRatio >= 0.75) {
+    score = 0.95;
+  } else if (dominanceRatio >= 0.50) {
+    score = 0.75;
+  } else {
+    score = 0.40;
+  }
+
+  const passed = score >= 0.70;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'justification',
+    details: { counts, dominanceRatio: parseFloat(dominanceRatio.toFixed(3)) }
+  };
+}
+
+// 6. Regularity
+export function computeRegularity(layout: StudioLayoutV2): MetricResult {
+  const elements = [...(layout.text || [])].sort((a, b) => a.y - b.y);
+  if (elements.length <= 2) {
+    return { score: 1.0, passed: true, metric: 'regularity' };
+  }
+
+  const gaps: number[] = [];
+  for (let i = 0; i < elements.length - 1; i++) {
+    const gap = elements[i + 1].y - (elements[i].y + elements[i].height);
+    if (gap >= 0) {
+      gaps.push(gap);
+    }
+  }
+
+  if (gaps.length <= 1) {
+    return { score: 1.0, passed: true, metric: 'regularity' };
+  }
+
+  const mean = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
+  const variance = gaps.reduce((sum, g) => sum + Math.pow(g - mean, 2), 0) / gaps.length;
+  const std = Math.sqrt(variance);
+
+  const maxGap = Math.max(...gaps);
+  if (maxGap > layout.height * 0.25) {
+    return {
+      score: 0.35,
+      passed: false,
+      metric: 'regularity',
+      details: {
+        meanGap: Math.round(mean),
+        std: Math.round(std),
+        cv: parseFloat((std / (mean + 10)).toFixed(3)),
+        maxGap,
+        reason: 'EXCESSIVE_DEAD_AREA: Vertical gap exceeds 25% canvas height without composition'
+      }
+    };
+  }
+
+  const cv = std / (mean + 10);
+  const score = Math.max(0, Math.min(1, 1 / (1 + cv)));
+  const passed = score >= 0.55;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'regularity',
+    details: { meanGap: Math.round(mean), std: Math.round(std), cv: parseFloat(cv.toFixed(3)) }
+  };
+}
+
+// 7. Typeface Pairing
+export function computeTypefacePairing(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  if (textElements.length === 0) {
+    return { score: 1.0, passed: true, metric: 'typefacePairing' };
+  }
+
+  const families = new Set(textElements.map(t => t.fontFamily));
+  const familyCount = families.size;
+
+  let score = 1.0;
+  const failures: string[] = [];
+
+  // Count penalty
+  if (familyCount > 3) {
+    score -= 0.5;
+    failures.push(`Too many font families: ${familyCount} > 3`);
+  } else if (familyCount === 3) {
+    score -= 0.15;
+  }
+
+  // F12 Role-based Typography Enforcement
+  for (const t of textElements) {
+    if (t.role === 'body') {
+      const isAdmittedBody = t.fontFamily === 'Verdana' || t.fontFamily === 'Noto Sans Arabic';
+      if (!isAdmittedBody) {
+        score -= 0.4;
+        failures.push(`F12 Violation: body role using non-body font "${t.fontFamily}"`);
+      }
+    } else {
+      const isAdmitted = ADMITTED_DISPLAY_FONTS.has(t.fontFamily) || t.fontFamily === 'Verdana' || t.fontFamily === 'Noto Sans Arabic';
+      if (!isAdmitted) {
+        score -= 0.25;
+        failures.push(`Unadmitted font family: "${t.fontFamily}"`);
+      }
+    }
+  }
+
+  score = Math.max(0, Math.min(1, score));
+  const passed = score >= 0.70 && !failures.some(f => f.includes('F12 Violation'));
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'typefacePairing',
+    details: { families: Array.from(families), familyCount, failures }
+  };
+}
+
+// 8. Negative-Space Fraction
+export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
+  const totalArea = layout.width * layout.height;
+  let occupiedArea = 0;
+
+  for (const t of layout.text || []) {
+    occupiedArea += t.width * t.height;
+  }
+
+  for (const s of layout.shapes || []) {
+    if (s.role === 'frame' || (s.width >= layout.width * 0.9 && s.height >= layout.height * 0.9)) continue;
+    occupiedArea += s.width * s.height * (s.role === 'panel' ? 0.6 : 0.4);
+  }
+
+  if (layout.logo) {
+    occupiedArea += layout.logo.width * layout.logo.height;
+  }
+
+  const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));
+
+  // Optimal band: 0.35 to 0.70
+  let score = 1.0;
+  if (fraction < 0.25) {
+    score = Math.max(0, fraction / 0.25 * 0.5);
+  } else if (fraction > 0.85) {
+    score = Math.max(0, (1 - fraction) / 0.15 * 0.6);
+  } else if (fraction < 0.35) {
+    score = 0.70 + (fraction - 0.25) * 3.0;
+  } else if (fraction > 0.70) {
+    score = 0.80 + (0.85 - fraction) * 1.33;
+  } else {
+    score = 0.95;
+  }
+
+  score = Math.max(0, Math.min(1, score));
+  const passed = score >= 0.70;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'negativeSpace',
+    details: { fraction: parseFloat(fraction.toFixed(3)), occupiedArea: Math.round(occupiedArea), totalArea }
+  };
+}
+
+// 9. Semantic Significance of Layout
+export function computeSemanticLayout(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  const title = textElements.find(t => t.role === 'title');
+  const body = textElements.find(t => t.role === 'body');
+  const footer = textElements.find(t => t.role === 'footer');
+
+  if (textElements.length <= 1 || !title) {
+    return {
+      score: 0.20,
+      passed: false,
+      metric: 'semanticLayout',
+      details: { issues: ['Lacks primary title/headline hierarchy — photograph with caption bar cannot establish institutional composition'] }
+    };
+  }
+
+  let score = 1.0;
+  const issues: string[] = [];
+
+  if (title && body) {
+    if (title.y > body.y + 50) {
+      score -= 0.4;
+      issues.push(`Title Y (${title.y}) is placed below Body Y (${body.y})`);
+    }
+  }
+
+  if (footer && body) {
+    if (footer.y < body.y) {
+      score -= 0.3;
+      issues.push(`Footer Y (${footer.y}) is placed above Body Y (${body.y})`);
+    }
+  }
+
+  score = Math.max(0, Math.min(1, score));
+  const passed = score >= 0.75;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'semanticLayout',
+    details: { issues }
+  };
+}
+
+// 10. Semantic Significance of Typography
+export function computeSemanticTypography(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  const title = textElements.find(t => t.role === 'title');
+  const body = textElements.find(t => t.role === 'body');
+  const footer = textElements.find(t => t.role === 'footer');
+
+  if (textElements.length <= 1 || !title) {
+    return {
+      score: 0.20,
+      passed: false,
+      metric: 'semanticTypography',
+      details: { issues: ['Insufficient typographic hierarchy — single element cannot establish institutional typography scale'] }
+    };
+  }
+
+  let score = 1.0;
+  const issues: string[] = [];
+
+  if (title && body) {
+    const ratio = title.fontSize / body.fontSize;
+    if (ratio < 1.3) {
+      score -= 0.35;
+      issues.push(`Title to body font size ratio ${ratio.toFixed(2)} is too flat (< 1.3)`);
+    } else if (ratio < 1.5) {
+      score -= 0.15;
+    }
+  }
+
+  if (body && footer) {
+    if (footer.fontSize > body.fontSize) {
+      score -= 0.25;
+      issues.push(`Footer font size (${footer.fontSize}) > Body font size (${body.fontSize})`);
+    }
+  }
+
+  score = Math.max(0, Math.min(1, score));
+  const passed = score >= 0.75;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'semanticTypography',
+    details: { issues }
+  };
+}
+
+// 11. Occlusion (CGL-GAN lineage)
+export function computeOcclusion(layout: StudioLayoutV2): MetricResult {
+  if (!layout.art) {
+    return { score: 1.0, passed: true, metric: 'occlusion', details: { hasArt: false } };
+  }
+
+  const calm = layout.art.calmRegion;
+  if (!calm) {
+    return { score: 1.0, passed: true, metric: 'occlusion', details: { hasCalmRegion: false } };
+  }
+
+  const artBox = layout.art.box;
+  let penaltyArea = 0;
+  let totalTextArea = 0;
+
+  for (const t of layout.text || []) {
+    const area = t.width * t.height;
+    totalTextArea += area;
+
+    // Check if element is inside art box
+    const inArt = !(t.x + t.width <= artBox.x || artBox.x + artBox.width <= t.x ||
+                    t.y + t.height <= artBox.y || artBox.y + artBox.height <= t.y);
+
+    if (inArt) {
+      // Check if element extends outside calm region
+      const inCalm = t.x >= calm.x && t.x + t.width <= calm.x + calm.width &&
+                     t.y >= calm.y && t.y + t.height <= calm.y + calm.height;
+      if (!inCalm) {
+        penaltyArea += area;
+      }
+    }
+  }
+
+  const score = totalTextArea > 0 ? Math.max(0, 1.0 - penaltyArea / totalTextArea) : 1.0;
+  const passed = score >= 0.85;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'occlusion',
+    details: { penaltyArea, totalTextArea, calmRegion: calm }
+  };
+}
+
+// 12. Type-Scale Conformance
+export function computeTypeScaleConformance(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  if (textElements.length <= 1) {
+    return { score: 1.0, passed: true, metric: 'typeScale', details: { count: textElements.length } };
+  }
+
+  const declaredBase = layout.typeScale?.base;
+  const declaredRatio = layout.typeScale?.ratio;
+
+  // If declared, check against declared scale
+  if (declaredBase && declaredRatio) {
+    let conforming = 0;
+    for (const t of textElements) {
+      // Check if fontSize fits base * ratio^n for n in -2..8
+      let fits = false;
+      for (let n = -2; n <= 8; n++) {
+        const target = declaredBase * Math.pow(declaredRatio, n);
+        if (Math.abs(t.fontSize - target) <= 1.5) {
+          fits = true;
+          break;
+        }
+      }
+      if (fits) conforming++;
+    }
+    const score = conforming / textElements.length;
+    return {
+      score: parseFloat(score.toFixed(3)),
+      passed: score >= 0.75,
+      metric: 'typeScale',
+      details: { declaredBase, declaredRatio, conforming, total: textElements.length }
+    };
+  }
+
+  // If not declared, find best matching standard ratio
+  const bodyEl = textElements.find(t => t.role === 'body') || textElements[0];
+  const baseCandidate = bodyEl.fontSize;
+
+  let bestConforming = 0;
+  let bestRatio = 1.25;
+
+  for (const ratio of ADMITTED_TYPE_SCALE_RATIOS) {
+    let count = 0;
+    for (const t of textElements) {
+      let fits = false;
+      for (let n = -2; n <= 8; n++) {
+        const target = baseCandidate * Math.pow(ratio, n);
+        if (Math.abs(t.fontSize - target) <= 1.5) {
+          fits = true;
+          break;
+        }
+      }
+      if (fits) count++;
+    }
+    if (count > bestConforming) {
+      bestConforming = count;
+      bestRatio = ratio;
+    }
+  }
+
+  const score = bestConforming / textElements.length;
+  const passed = score >= 0.70;
+
+  return {
+    score: parseFloat(score.toFixed(3)),
+    passed,
+    metric: 'typeScale',
+    details: { fittedBase: baseCandidate, fittedRatio: bestRatio, conforming: bestConforming, total: textElements.length }
+  };
+}
+
+// 13. Degeneracy
+export function computeDegeneracy(layout: StudioLayoutV2): MetricResult {
+  const textElements = layout.text || [];
+  if (textElements.length === 0) {
+    return { score: 0.0, passed: false, metric: 'degeneracy', details: { reason: 'EMPTY_LAYOUT' } };
+  }
+
+  // All font sizes identical
+  const fontSizes = textElements.map(t => t.fontSize);
+  const allIdenticalSize = fontSizes.every(s => s === fontSizes[0]) && fontSizes.length > 2;
+
+  // All elements stacked at exact identical coordinates
+  const coords = textElements.map(t => `${t.x},${t.y}`);
+  const allStacked = new Set(coords).size === 1 && textElements.length > 2;
+
+  if (allIdenticalSize || allStacked) {
+    return {
+      score: 0.0,
+      passed: false,
+      metric: 'degeneracy',
+      details: { allIdenticalSize, allStacked, reason: 'SCHEMA_DEFAULT_COLLAPSE' }
+    };
+  }
+
+  return {
+    score: 1.0,
+    passed: true,
+    metric: 'degeneracy',
+    details: { passed: true }
+  };
+}
+
+// Multi-Candidate Set Degeneracy Check
+export function checkCandidateSetDegeneracy(candidates: StudioLayoutV2[]): CandidateSetDegeneracyResult {
+  if (!candidates || candidates.length < 2) {
+    return { isDegenerate: false, pairwiseDistances: [] };
+  }
+
+  const pairwiseDistances: number[] = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      const a = candidates[i];
+      const b = candidates[j];
+
+      let distSum = 0;
+      let count = 0;
+
+      const maxLen = Math.max(a.text.length, b.text.length);
+      for (let k = 0; k < maxLen; k++) {
+        const at = a.text[k];
+        const bt = b.text[k];
+        if (at && bt) {
+          const dx = at.x - bt.x;
+          const dy = at.y - bt.y;
+          const dw = at.width - bt.width;
+          const dh = at.height - bt.height;
+          distSum += Math.sqrt(dx * dx + dy * dy + dw * dw + dh * dh);
+          count++;
+        } else {
+          distSum += 200; // Large difference for mismatched element counts
+          count++;
+        }
+      }
+
+      const avgDist = count > 0 ? distSum / count : 0;
+      pairwiseDistances.push(parseFloat(avgDist.toFixed(2)));
+    }
+  }
+
+  // If any pair distance is extremely small (< 15px average geometric difference), they are near-identical
+  const minDistance = Math.min(...pairwiseDistances);
+  const isDegenerate = minDistance < 15;
+
+  return {
+    isDegenerate,
+    reason: isDegenerate ? `Pairwise geometric distance (${minDistance.toFixed(1)}px) indicates near-identical candidates` : undefined,
+    pairwiseDistances
+  };
+}
+
+// Composite Evaluation with LaySPA Weighting (0.80 Quality, 0.10 Compliance, 0.10 Exemplar Similarity)
+export function evaluateDesignMetrics(layout: StudioLayoutV2): DesignMetricsReport {
+  const startTime = performance.now();
+
+  const legibility = computeTextLegibility(layout);
+  const grid = computeGridAppropriateness(layout);
+  const alignment = computeAlignment(layout);
+  const balance = computeBalance(layout);
+  const justification = computeJustification(layout);
+  const regularity = computeRegularity(layout);
+  const typefacePairing = computeTypefacePairing(layout);
+  const negativeSpace = computeNegativeSpace(layout);
+  const semanticLayout = computeSemanticLayout(layout);
+  const semanticTypography = computeSemanticTypography(layout);
+  const occlusion = computeOcclusion(layout);
+  const typeScale = computeTypeScaleConformance(layout);
+  const degeneracy = computeDegeneracy(layout);
+
+  const metrics = {
+    textLegibility: legibility,
+    gridAppropriateness: grid,
+    alignment,
+    balance,
+    justification,
+    regularity,
+    typefacePairing,
+    negativeSpace,
+    semanticLayout,
+    semanticTypography,
+    occlusion,
+    typeScale,
+    degeneracy
+  };
+
+  // LaySPA Quality Score (0.80 weight total)
+  const qualityScore =
+    0.12 * legibility.score +
+    0.12 * grid.score +
+    0.12 * alignment.score +
+    0.12 * balance.score +
+    0.08 * justification.score +
+    0.08 * regularity.score +
+    0.08 * typefacePairing.score +
+    0.08 * negativeSpace.score +
+    0.08 * semanticLayout.score +
+    0.08 * semanticTypography.score +
+    0.02 * occlusion.score +
+    0.02 * typeScale.score;
+
+  // Format Compliance (0.10 weight total)
+  let complianceScore = 1.0;
+  if (!typefacePairing.passed) complianceScore -= 0.3;
+  if (!degeneracy.passed) complianceScore -= 0.5;
+  if (layout.text.some(t => t.x < 0 || t.y < 0 || t.x + t.width > layout.width || t.y + t.height > layout.height)) {
+    complianceScore -= 0.4;
+  }
+  complianceScore = Math.max(0, Math.min(1, complianceScore));
+
+  // Exemplar Similarity (0.10 weight total)
+  // Evaluates whether balance, negative space and layout structure sit within calibrated exemplar bands
+  let exemplarSimilarityScore = 1.0;
+  if (balance.score < 0.80) exemplarSimilarityScore -= 0.3;
+  if (negativeSpace.score < 0.70) exemplarSimilarityScore -= 0.3;
+  if (grid.score < 0.70) exemplarSimilarityScore -= 0.4;
+  exemplarSimilarityScore = Math.max(0, Math.min(1, exemplarSimilarityScore));
+
+  const compositeScore = parseFloat(
+    (0.80 * qualityScore + 0.10 * complianceScore + 0.10 * exemplarSimilarityScore).toFixed(3)
+  );
+
+  const failingMetrics = Object.entries(metrics)
+    .filter(([, res]) => !res.passed)
+    .map(([name]) => name);
+
+  const passed = compositeScore >= 0.75 && failingMetrics.length === 0;
+  const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
+
+  return {
+    compositeScore,
+    passed,
+    qualityScore: parseFloat(qualityScore.toFixed(3)),
+    complianceScore: parseFloat(complianceScore.toFixed(3)),
+    exemplarSimilarityScore: parseFloat(exemplarSimilarityScore.toFixed(3)),
+    metrics,
+    failingMetrics,
+    executionTimeMs
+  };
+}

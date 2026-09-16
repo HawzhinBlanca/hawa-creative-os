@@ -26,4 +26,4 @@ export * from './studio/gemini-image-provider.js';
 export * from './studio/studio-model-client.js';
 export * from './studio/openai-studio-client.js';
 export * from './studio/transfer-v2.js';
-
+export * from './studio/design-metrics.js';

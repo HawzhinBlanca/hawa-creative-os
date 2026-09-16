@@ -57,6 +57,11 @@ export interface TextElement extends Box {
   rtl?: boolean;
 }
 
+export interface TypeScaleConfig {
+  base: number;
+  ratio: number;
+}
+
 export interface StudioLayoutV2 {
   version: 2;
   width: number;
@@ -67,7 +72,13 @@ export interface StudioLayoutV2 {
   shapes: ShapeElement[];
   text: TextElement[];
   logo: Box;
+  typeScale?: TypeScaleConfig;
 }
+
+export const typeScaleSchema = z.object({
+  base: z.number().positive(),
+  ratio: z.number().positive(),
+}).strict();
 
 export const hexSchema = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Invalid hex color');
 
@@ -138,4 +149,5 @@ export const studioLayoutV2Schema = z.object({
   shapes: z.array(shapeElementSchema).max(40),
   text: z.array(textElementSchema).min(1).max(40),
   logo: boxSchema,
+  typeScale: typeScaleSchema.optional(),
 }).strict();
