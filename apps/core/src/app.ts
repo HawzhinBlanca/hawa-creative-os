@@ -2498,7 +2498,7 @@ export function createApp(options?: CreateAppOptions) {
       }
 
       let targetTaskId: string;
-      let targetAction: 'approve' | 'revision';
+      let targetAction: 'approve' | 'revision' | 'pick_layout';
 
       if (cbData.startsWith('act:')) {
         const verifyRes = telegramActionTokenService.verifyAndConsumeToken(cbData, {
@@ -2570,6 +2570,9 @@ export function createApp(options?: CreateAppOptions) {
         }
 
         return c.json({ ok: true, action: 'approve', taskId: targetTaskId, status: 'COMPLETE', publishRes });
+      } else if (targetAction === 'pick_layout') {
+        await telegramBridge.answerCallbackQuery(cb.id, '🎯 Layout Pick Processed');
+        return c.json({ ok: true, action: 'pick_layout', taskId: targetTaskId, status: task.status });
       } else {
         await telegramBridge.answerCallbackQuery(cb.id, '✏️ Revision Requested');
         task.status = 'IN_PROGRESS';
