@@ -1,0 +1,121 @@
+{
+  "version": 2,
+  "width": 1240,
+  "height": 1754,
+  "background": {
+    "color": "#0A1628"
+  },
+  "logo": {
+    "x": 560,
+    "y": 123,
+    "width": 120,
+    "height": 120
+  },
+  "shapes": [
+    {
+      "id": "frame_outer",
+      "kind": "rect",
+      "x": 50,
+      "y": 70,
+      "width": 1141,
+      "height": 1614,
+      "color": "transparent",
+      "strokeColor": "#C5A059",
+      "strokeWidth": 2,
+      "opacity": 0.8,
+      "role": "frame"
+    },
+    {
+      "id": "rule_divider",
+      "kind": "line",
+      "x": 465,
+      "y": 1456,
+      "width": 310,
+      "height": 2,
+      "color": "#C5A059",
+      "opacity": 0.7,
+      "role": "rule"
+    }
+  ],
+  "text": [
+    {
+      "id": "text_0",
+      "copyIndex": 0,
+      "x": 99,
+      "y": 296,
+      "width": 1042,
+      "height": 24,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "lineHeight": 1.35,
+      "color": "#C5A059",
+      "align": "center",
+      "role": "eyebrow"
+    },
+    {
+      "id": "text_1",
+      "copyIndex": 1,
+      "x": 99,
+      "y": 385,
+      "width": 1042,
+      "height": 108,
+      "fontFamily": "Cairo",
+      "fontSize": 49,
+      "fontWeight": "bold",
+      "lineHeight": 1.25,
+      "color": "#FFFFFF",
+      "align": "center",
+      "role": "title"
+    },
+    {
+      "id": "text_2",
+      "copyIndex": 2,
+      "x": 99,
+      "y": 558,
+      "width": 1042,
+      "height": 45,
+      "fontFamily": "Cairo",
+      "fontSize": 25,
+      "fontWeight": "600",
+      "lineHeight": 1.35,
+      "color": "#FDF8F3",
+      "align": "center",
+      "role": "subtitle"
+    },
+    {
+      "id": "text_3",
+      "copyIndex": 3,
+      "x": 99,
+      "y": 668,
+      "width": 1042,
+      "height": 70,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 20,
+      "fontWeight": "normal",
+      "lineHeight": 1.5,
+      "color": "#E2E8F0",
+      "align": "center",
+      "role": "body"
+    },
+    {
+      "id": "text_4",
+      "copyIndex": 4,
+      "x": 99,
+      "y": 868,
+      "width": 1042,
+      "height": 24,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "lineHeight": 1.35,
+      "color": "#C5A059",
+      "align": "center",
+      "role": "footer"
+    }
+  ],
+  "typeScale": {
+    "base": 16,
+    "ratio": 1.25
+  }
+}

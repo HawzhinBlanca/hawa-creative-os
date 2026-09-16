@@ -1,0 +1,17 @@
+{
+  "briefId": "brief_13_en_a4doc",
+  "size": "1240x1754",
+  "language": "en",
+  "prrPass": true,
+  "geometricPass": true,
+  "readabilityPass": true,
+  "assetIntegrityPass": true,
+  "copyExactPass": true,
+  "editabilityPass": true,
+  "canaryWon": true,
+  "orderSwapConsistent": true,
+  "compositeScore": 0.908,
+  "costUsd": 0.092874,
+  "wallClockMs": 193,
+  "timestamp": "2026-09-16T23:47:28.508Z"
+}

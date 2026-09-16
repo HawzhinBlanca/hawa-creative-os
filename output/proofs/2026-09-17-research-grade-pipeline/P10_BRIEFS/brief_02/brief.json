@@ -1,0 +1,40 @@
+{
+  "id": "brief_02_en_square",
+  "name": "Curriculum Framework Certification Notice",
+  "language": "en",
+  "width": 1080,
+  "height": 1080,
+  "sizeName": "Square",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Board of Educational Quality",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Curriculum Accreditation Protocol",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "National Academic Program Certification",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Faculty program chairs must attend mandatory alignment workshops next month.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Kurdistan Regional Government • KAAE",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

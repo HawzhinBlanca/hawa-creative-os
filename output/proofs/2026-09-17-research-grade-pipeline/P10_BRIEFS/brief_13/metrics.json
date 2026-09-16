@@ -1,0 +1,140 @@
+{
+  "compositeScore": 0.908,
+  "passed": false,
+  "qualityScore": 0.923,
+  "complianceScore": 1,
+  "exemplarSimilarityScore": 0.7,
+  "metrics": {
+    "textLegibility": {
+      "score": 1,
+      "passed": true,
+      "metric": "textLegibility",
+      "details": {
+        "failingIssues": [],
+        "count": 5
+      }
+    },
+    "gridAppropriateness": {
+      "score": 1,
+      "passed": true,
+      "metric": "gridAppropriateness",
+      "details": {
+        "alignedElements": 7,
+        "totalElements": 7
+      }
+    },
+    "alignment": {
+      "score": 1,
+      "passed": true,
+      "metric": "alignment",
+      "details": {
+        "widthVariance": 0,
+        "lineUniformityDev": 0,
+        "d": 0
+      }
+    },
+    "balance": {
+      "score": 0.849,
+      "passed": true,
+      "metric": "balance",
+      "details": {
+        "wx": 620,
+        "wy": 503,
+        "offset": 0.1508
+      }
+    },
+    "justification": {
+      "score": 0.95,
+      "passed": true,
+      "metric": "justification",
+      "details": {
+        "counts": {
+          "left": 0,
+          "center": 5,
+          "right": 0
+        },
+        "dominanceRatio": 1
+      }
+    },
+    "regularity": {
+      "score": 0.764,
+      "passed": true,
+      "metric": "regularity",
+      "details": {
+        "meanGap": 81,
+        "std": 28,
+        "cv": 0.308
+      }
+    },
+    "typefacePairing": {
+      "score": 1,
+      "passed": true,
+      "metric": "typefacePairing",
+      "details": {
+        "families": [
+          "Verdana",
+          "Playfair Display"
+        ],
+        "familyCount": 2,
+        "failures": []
+      }
+    },
+    "negativeSpace": {
+      "score": 0.546,
+      "passed": false,
+      "metric": "negativeSpace",
+      "details": {
+        "fraction": 0.863,
+        "occupiedArea": 297030,
+        "totalArea": 2174960
+      }
+    },
+    "semanticLayout": {
+      "score": 1,
+      "passed": true,
+      "metric": "semanticLayout",
+      "details": {
+        "issues": []
+      }
+    },
+    "semanticTypography": {
+      "score": 1,
+      "passed": true,
+      "metric": "semanticTypography",
+      "details": {
+        "issues": []
+      }
+    },
+    "occlusion": {
+      "score": 1,
+      "passed": true,
+      "metric": "occlusion",
+      "details": {
+        "hasArt": false
+      }
+    },
+    "typeScale": {
+      "score": 1,
+      "passed": true,
+      "metric": "typeScale",
+      "details": {
+        "declaredBase": 16,
+        "declaredRatio": 1.25,
+        "conforming": 5,
+        "total": 5
+      }
+    },
+    "degeneracy": {
+      "score": 1,
+      "passed": true,
+      "metric": "degeneracy",
+      "details": {
+        "passed": true
+      }
+    }
+  },
+  "failingMetrics": [
+    "negativeSpace"
+  ],
+  "executionTimeMs": 0.07
+}

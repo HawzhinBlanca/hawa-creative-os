@@ -1,0 +1,40 @@
+{
+  "id": "brief_06_en_portrait45",
+  "name": "University Rector Statutory Assembly",
+  "language": "en",
+  "width": 1080,
+  "height": 1350,
+  "sizeName": "Portrait 4:5",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Office of the High Commissioner for Quality",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Statutory Assembly of University Rectors",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Deliberation on National Quality Benchmarks",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Formal assembly to ratify the five-year strategic roadmap for regional higher education recognition.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Rotana Grand Ballroom, Erbil • November 12, 2026",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

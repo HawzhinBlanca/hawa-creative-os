@@ -1,0 +1,40 @@
+{
+  "id": "brief_12_ckb_story916",
+  "name": "خەڵاتی ساڵانەی توێژینەوەی ئەکادیمی",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1920,
+  "sizeName": "Story 9:16",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "بەشی داهێنان و پێشخستنی زانستی",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "خەڵاتی ساڵانەی سەرۆکایەتی KAAE",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "بۆ باشترین توێژینەوەی ئاستبەرز",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "پاداشتکردنی مامۆستایان و توێژەرانی نموونەیی لە بوارە زانستی و مرۆییەکاندا.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "تۆمارکردن لە ڕێگەی ماڵپەڕی فەرمییەوە بەردەستە",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

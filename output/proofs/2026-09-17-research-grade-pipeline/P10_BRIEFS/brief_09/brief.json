@@ -1,0 +1,40 @@
+{
+  "id": "brief_09_en_story916",
+  "name": "Institutional Quality Deadline Alert",
+  "language": "en",
+  "width": 1080,
+  "height": 1920,
+  "sizeName": "Story 9:16",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Regulatory Notice",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Annual Audit Submission Deadline",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Statutory Compliance Protocol",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "All recognized public and private universities must upload verified documentation to the central portal.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Final Cutoff: December 15, 2026 • portal.kaae.gov.krd",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "brief_01_en_square",
+  "name": "KAAE Quality Standards Benchmark Announcement",
+  "language": "en",
+  "width": 1080,
+  "height": 1080,
+  "sizeName": "Square",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accrediting Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Mandatory Quality Standards 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Institutional Excellence Under Law No. 6",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "All universities must publish audited accreditation reports by the end of Q3.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil • September 2026 • kaae.gov.krd",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

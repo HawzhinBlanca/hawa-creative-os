@@ -1,0 +1,40 @@
+{
+  "id": "brief_17_en_landscape169",
+  "name": "KAAE Chancellor Summit Main Screen",
+  "language": "en",
+  "width": 1920,
+  "height": 1080,
+  "sizeName": "Landscape 16:9",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Executive Directorate for Higher Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Kurdistan Chancellor Summit 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Strategic Convergence on Global Academic Recognition",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Uniting leadership to pioneer internationally recognized degree validation and regional research clusters.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "KAAE Plenary Hall • October 2026 • Live Broadcast kaae.gov.krd",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

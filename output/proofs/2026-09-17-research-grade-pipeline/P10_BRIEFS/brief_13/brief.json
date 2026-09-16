@@ -1,0 +1,40 @@
+{
+  "id": "brief_13_en_a4doc",
+  "name": "Institutional Accreditation Directive No. 4",
+  "language": "en",
+  "width": 1240,
+  "height": 1754,
+  "sizeName": "A4 Document",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Regional Government • KAAE High Council",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Statutory Accreditation Order No. 4",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Mandatory Governance Criteria for Higher Education Institutions",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Pursuant to powers vested under Law No. 6 of 2022, all degree-granting bodies must comply with institutional auditing standards.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Published in the Official Gazette • Erbil, Kurdistan Region • 2026",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

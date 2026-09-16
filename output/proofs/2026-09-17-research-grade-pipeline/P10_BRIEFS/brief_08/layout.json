@@ -1,0 +1,108 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "background": {
+    "color": "#0A1628"
+  },
+  "logo": {
+    "x": 480,
+    "y": 95,
+    "width": 120,
+    "height": 120
+  },
+  "shapes": [
+    {
+      "id": "rule_divider",
+      "kind": "line",
+      "x": 405,
+      "y": 1121,
+      "width": 270,
+      "height": 2,
+      "color": "#C5A059",
+      "opacity": 0.7,
+      "role": "rule"
+    }
+  ],
+  "text": [
+    {
+      "id": "text_0",
+      "copyIndex": 0,
+      "x": 87,
+      "y": 256,
+      "width": 907,
+      "height": 24,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "lineHeight": 1.35,
+      "color": "#C5A059",
+      "align": "center",
+      "role": "eyebrow"
+    },
+    {
+      "id": "text_1",
+      "copyIndex": 1,
+      "x": 87,
+      "y": 334,
+      "width": 907,
+      "height": 108,
+      "fontFamily": "Cairo",
+      "fontSize": 49,
+      "fontWeight": "bold",
+      "lineHeight": 1.25,
+      "color": "#FFFFFF",
+      "align": "center",
+      "role": "title"
+    },
+    {
+      "id": "text_2",
+      "copyIndex": 2,
+      "x": 87,
+      "y": 496,
+      "width": 907,
+      "height": 45,
+      "fontFamily": "Cairo",
+      "fontSize": 25,
+      "fontWeight": "600",
+      "lineHeight": 1.35,
+      "color": "#FDF8F3",
+      "align": "center",
+      "role": "subtitle"
+    },
+    {
+      "id": "text_3",
+      "copyIndex": 3,
+      "x": 87,
+      "y": 595,
+      "width": 907,
+      "height": 70,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 20,
+      "fontWeight": "normal",
+      "lineHeight": 1.5,
+      "color": "#E2E8F0",
+      "align": "center",
+      "role": "body"
+    },
+    {
+      "id": "text_4",
+      "copyIndex": 4,
+      "x": 87,
+      "y": 773,
+      "width": 907,
+      "height": 24,
+      "fontFamily": "Noto Sans Arabic",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "lineHeight": 1.35,
+      "color": "#C5A059",
+      "align": "center",
+      "role": "footer"
+    }
+  ],
+  "typeScale": {
+    "base": 16,
+    "ratio": 1.25
+  }
+}

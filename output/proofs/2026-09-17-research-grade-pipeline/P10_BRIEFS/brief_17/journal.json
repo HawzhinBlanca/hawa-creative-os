@@ -1,0 +1,17 @@
+{
+  "briefId": "brief_17_en_landscape169",
+  "size": "1920x1080",
+  "language": "en",
+  "prrPass": true,
+  "geometricPass": true,
+  "readabilityPass": true,
+  "assetIntegrityPass": true,
+  "copyExactPass": true,
+  "editabilityPass": true,
+  "canaryWon": true,
+  "orderSwapConsistent": true,
+  "compositeScore": 0.863,
+  "costUsd": 0.092874,
+  "wallClockMs": 128,
+  "timestamp": "2026-09-16T23:47:30.039Z"
+}

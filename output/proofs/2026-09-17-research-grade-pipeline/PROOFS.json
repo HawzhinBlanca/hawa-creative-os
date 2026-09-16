@@ -1,0 +1,77 @@
+{
+  "pipelineVersion": "research-grade-v3",
+  "generatedAt": "2026-09-17T02:47:35.000Z",
+  "specification": "output/plans/2026-09-17-research-grade-pipeline/GEMINI_TASK_SHEET.md",
+  "researchBrief": "output/research/2026-09-17-pipeline-research/RESEARCH_BRIEF.md",
+  "adr": "adrs/031_role_based_typography_and_template_free_planner.md",
+  "deviations": "output/proofs/2026-09-17-research-grade-pipeline/DEVIATIONS.md",
+  "flag": "DESIGN_PIPELINE_V3=off",
+  "tasks": {
+    "P01": {
+      "name": "Deterministic design metrics gate",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P01_METRICS.md",
+      "summary": "12 fixtures evaluated (6 positive pass, 6 negative fail). Metrics: overlap rate (arXiv:2402.06945), LaySPA alignment, balance, regularity, modular type-scale, WCAG contrast."
+    },
+    "P02": {
+      "name": "Exemplar retrieval index (RALF)",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P02_RETRIEVAL.json",
+      "summary": "Owner-confirmed exemplar retrieval via multimodal similarity vectors without LLM re-ranking."
+    },
+    "P03": {
+      "name": "Layout-first generator (PosterLLaVa & PosterMELD)",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P03_PROOF.md",
+      "artifactsDir": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS",
+      "summary": "Normalized coordinates in [0.0, 1.0], capacity-aware slot guidance, strict JSON schema output via gpt-6-astra."
+    },
+    "P04": {
+      "name": "Layout-conditioned art generator (CreatiPoster)",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P04_PROOF.md",
+      "artifactsDir": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART",
+      "summary": "Masked text bounding boxes, generated via gpt-image-2.5-sunburst with calm region verification and composite contrast validation."
+    },
+    "P05": {
+      "name": "Box-grounded critique (Set-of-Mark)",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P05_PROOF.md",
+      "artifactsDir": "output/proofs/2026-09-17-research-grade-pipeline/P05_CRITIQUE",
+      "summary": "Set-of-Mark visual annotation at detail: low (85 image tokens), strictly scoped to geometry and typography hierarchy."
+    },
+    "P06": {
+      "name": "Gated refinement engine with plateau stop",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P06_REFINE.json",
+      "summary": "Three candidates verified: passing candidate skipped with 0 calls, failing candidate repaired across rounds, plateauing candidate halted before cap with delta < 0.02."
+    },
+    "P07": {
+      "name": "Pairwise dimension-wise judge & order-swapping",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P07_JUDGE.json",
+      "proofDoc": "output/proofs/2026-09-17-research-grade-pipeline/P07_PROOF.md",
+      "summary": "5 independent dimensions (hierarchy, composition, typographic_craft, brand_fit, legibility), order-swapped (AB and BA) presentation, degraded-copy canary defeat."
+    },
+    "P08": {
+      "name": "Telegram approve, edit, reject flow",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P08_PICK.md",
+      "summary": "Real layout renders media group, one-tap quick fixes from critique, free text via F07 classifier, signed one-time tokens, non-blocking timeout auto-advance."
+    },
+    "P09": {
+      "name": "Cost architecture & token discipline",
+      "status": "COMPLETED",
+      "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P09_COST.md",
+      "summary": "Byte-stable cached prefix (4,565 chars / 1,142 tokens), detail: low, cheap path < $0.25 ($0.158), per-brief $1.00 cap graceful degradation."
+    },
+    "P10": {
+      "name": "Qualification across 20 held-out briefs",
+      "status": "COMPLETED",
+      "proofCsv": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.csv",
+      "proofDoc": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.md",
+      "briefsDir": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS",
+      "summary": "100.0% Print-Ready Rate (PRR), $0.092874 median cost (< $0.38 benchmark), 100% canary win rate, 100% order-swap consistency, 0 QA escapes."
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "brief_18_en_landscape169",
+  "name": "International Quality Accreditation Forum",
+  "language": "en",
+  "width": 1920,
+  "height": 1080,
+  "sizeName": "Landscape 16:9",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Global Educational Standards Partnership",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "International Accreditation Forum",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Cross-Border Recognition & Institutional Integrity",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Convening international peer evaluators from Europe and the Middle East to advance curriculum mobility.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Conference Center • Erbil • November 2026",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

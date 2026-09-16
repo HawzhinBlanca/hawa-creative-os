@@ -1,0 +1,40 @@
+{
+  "id": "brief_11_ckb_story916",
+  "name": "ئاگاداری کۆتایی هاتنی وادەی متمانەبەخشین",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1920,
+  "sizeName": "Story 9:16",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "ئاگاداری فەرمی لە دەستەی KAAE",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "دوایین وادەی ناردنی ڕاپۆرتی ساڵانە",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "متمانەپێدانی زانکۆ و پەیمانگەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "سەرجەم دەزگا پەروەردەییەکان ئاگادار دەکرێنەوە کە دوایین مۆڵەت بۆ تۆمارکردن لە پۆڕتاڵ نزیک بووەتەوە.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "ڕێکەوتی کۆتایی: ١٥ی کانوونی یەکەم • portal.kaae.gov.krd",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

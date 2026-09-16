@@ -1,0 +1,40 @@
+{
+  "id": "brief_16_ckb_a4doc",
+  "name": "پەیماننامەی نیشتمانیی دڵنیایی جۆری",
+  "language": "ckb",
+  "width": 1240,
+  "height": 1754,
+  "sizeName": "A4 Document",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "پەیماننامەی سەروەریی ئەکادیمی",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "بەڵگەنامەی نیشتمانیی دڵنیایی جۆری",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "بنەما سەرەکییەکانی پەروەردە و فێرکردن",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "زانکۆ واژۆکارەکان پابەند دەبن بە ڕەچاوکردنی شەفافیەت، سەربەخۆیی زانستی، و پاراستنی مافی خوێندکاران.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "دەستەی باڵای متمانەبەخشین • شاری هەولێر • ٢٠٢٦",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "briefId": "brief_06_en_portrait45",
+  "size": "1080x1350",
+  "language": "en",
+  "prrPass": true,
+  "geometricPass": true,
+  "readabilityPass": true,
+  "assetIntegrityPass": true,
+  "copyExactPass": true,
+  "editabilityPass": true,
+  "canaryWon": true,
+  "orderSwapConsistent": true,
+  "compositeScore": 0.851,
+  "costUsd": 0.092874,
+  "wallClockMs": 115,
+  "timestamp": "2026-09-16T23:47:25.889Z"
+}

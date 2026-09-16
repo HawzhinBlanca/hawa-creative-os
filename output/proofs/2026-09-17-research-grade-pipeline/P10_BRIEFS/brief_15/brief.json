@@ -1,0 +1,40 @@
+{
+  "id": "brief_15_ckb_a4doc",
+  "name": "فەرمانی دەستەی متمانەبەخشین ژمارە ٤",
+  "language": "ckb",
+  "width": 1240,
+  "height": 1754,
+  "sizeName": "A4 Document",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "حکومەتی هەرێمی کوردستان • ئەنجومەنی باڵای KAAE",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "بڕیاری فەرمی دەستەی متمانەبەخشین",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پێوەرە دەستوورییەکانی بەڕێوەبردنی زانکۆکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "پاڵپشت بە یاسای ژمارە ٦ی ساڵی ٢٠٢٢، فەرمان دەکرێت بە پابەندبوونی تەواوی زانکۆکان بە پێوەرە نیشتمانییەکان.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "لە ڕۆژنامەی فەرمی وەقایعی کوردستان بڵاوکراوەتەوە • هەولێر • ٢٠٢٦",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

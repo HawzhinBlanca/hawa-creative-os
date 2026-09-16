@@ -53,13 +53,25 @@ Production audits on 2026-09-15 and 2026-09-16 identified six critical structura
 - Health monitors detect HTTP 429 `credit_balance_exhausted` / `insufficient_quota` and report `modelProviderStatus: 'billing_exhausted'`.
 - All paid calls are ledgered in `hawa.model_calls` and recorded in `LEDGER.csv`.
 
+### 2.6 Research-Grade Design Pipeline Refinement (P01–P10)
+Refines Design Studio v2 (ADR-029) by replacing holistic generation and scoring with research-backed component gates:
+1. **P01 Deterministic Metrics Gate**: Free pre-filtering gate combining arXiv:2402.06945 overlap penalty with LaySPA alignment, center-of-mass balance, regularity, modular type-scale compliance, and WCAG contrast.
+2. **P02 Exemplar Retrieval Index**: Multimodal similarity index (RALF) retrieving top-k owner-confirmed references without LLM scoring.
+3. **P03 Layout-First Generator**: Emits normalized coordinates in [0.0, 1.0] (PosterLLaVa, arXiv:2406.02884) with capacity-aware slot guidance (PosterMELD, arXiv:2608.02218).
+4. **P04 Layout-Conditioned Art**: Masks text bounding boxes into calm background regions, generating textures via `gpt-image-2.5-sunburst` (CreatiPoster, arXiv:2506.10890) and verifying composite contrast.
+5. **P05 Box-Grounded Critique**: Set-of-Mark visual annotation (`detail: "low"`, 85 tokens) ground-truth review restricted to geometry and typographic hierarchy.
+6. **P06 Gated Refinement Engine**: Refines only failing candidates with plateau stopping rule (delta < 0.02) and change attribution (arXiv:2607.26922).
+7. **P07 Pairwise Dimension-Wise Judge**: Evaluates 5 named dimensions independently with order-swapping (AB and BA) to eliminate position bias (arXiv:2604.22891), with degraded-copy canary checks.
+8. **P08 Telegram Pick Flow**: Interactive 3-draft media group delivery with one-tap fixes, signed one-time tokens, and non-blocking timeout auto-advance.
+9. **P09 Cost Architecture**: Stable cached prefix (>= 1,024 tokens), `detail: "low"`, $1.00/brief cap, and $30/day office limit.
+10. **P10 Qualification**: Evaluates 20 held-out briefs (10 English, 10 Sorani across 5 sizes) on Print-Ready Rate (PRR).
+
 ---
 
 ## 3. Consequences & Verification
 
-- **Positive**: Complete freedom from rigid template rotations; zero font substitutions in Canva; reliable bilingual intake classification; truthful billing visibility.
+- **Positive**: Complete freedom from rigid template rotations; zero font substitutions in Canva; reliable bilingual intake classification; truthful billing visibility; empirical metric gating; order-consistent judging.
 - **Evidence**:
-  - `F07_CLASSIFIER.csv` (10/10 tournament score with live IDs).
-  - `F04_THREE_PLANS/` (three structurally distinct plans and Canva exports for an identical brief).
-  - `F11_PRICES.md` & `LEDGER.csv` (exact microdollar calculations matching hand recomputations).
-  - Clean git tree, `validate_pack.py` PASS=539, 1000 unit tests green.
+  - `output/proofs/2026-09-17-research-grade-pipeline/` (P01 through P10 proofs).
+  - `P10_QUALIFICATION.csv` (20-brief qualification table with Print-Ready Rate).
+  - Clean git tree, `validate_pack.py` passing, all unit tests green.

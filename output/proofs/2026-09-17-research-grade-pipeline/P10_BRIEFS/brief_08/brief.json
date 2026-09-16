@@ -1,0 +1,40 @@
+{
+  "id": "brief_08_ckb_portrait45",
+  "name": "کۆبوونەوەی شاندە ئەکادیمییە نێودەوڵەتییەکان",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1350,
+  "sizeName": "Portrait 4:5",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "فەرمانگەی دڵنیایی جۆری و متمانەبەخشین",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "کۆبوونەوەی باڵای سەرۆک زانکۆکان",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پەسەندکردنی ڕێسای نوێی خوێندنی ئەکادیمی",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "گفتوگۆ لەسەر شێوازی تاقیکردنەوەکان، نوێکردنەوەی پڕۆگرامەکان و پەسەندکردنی بڕوانامە نێودەوڵەتییەکان.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "شاری سلێمانی • هۆڵی کۆنگرێس • کانوونی دووەمی ٢٠٢٦",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

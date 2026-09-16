@@ -1,0 +1,17 @@
+{
+  "briefId": "brief_03_ckb_square",
+  "size": "1080x1080",
+  "language": "ckb",
+  "prrPass": true,
+  "geometricPass": true,
+  "readabilityPass": true,
+  "assetIntegrityPass": true,
+  "copyExactPass": true,
+  "editabilityPass": true,
+  "canaryWon": true,
+  "orderSwapConsistent": true,
+  "compositeScore": 0.967,
+  "costUsd": 0.092874,
+  "wallClockMs": 178,
+  "timestamp": "2026-09-16T23:47:24.803Z"
+}
