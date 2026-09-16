@@ -72,6 +72,13 @@
       "proofDoc": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.md",
       "briefsDir": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS",
       "summary": "100.0% Print-Ready Rate (PRR), $0.092874 median cost (< $0.38 benchmark), 100% canary win rate, 100% order-swap consistency, 0 QA escapes."
+    },
+    "P11": {
+      "name": "Growable reference library & circular output guard",
+      "status": "COMPLETED",
+      "proofDoc": "output/proofs/2026-09-17-research-grade-pipeline/P11_ADD_REFERENCE.md",
+      "cliScript": "scripts/add_exemplar.ts",
+      "summary": "Three entry points (folder drop, Telegram, Desk), hard guard against circular outputs under output/, and owner confirmation gate preserving dropped history."
     }
   }
 }

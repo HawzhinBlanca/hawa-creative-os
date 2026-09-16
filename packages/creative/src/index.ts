@@ -34,3 +34,4 @@ export * from './studio/box-critique-v3.js';
 export * from './studio/refinement-engine-v3.js';
 export * from './studio/pairwise-judge-v3.js';
 export * from './studio/cost-architecture-v3.js';
+export * from './studio/reference-manager.js';
