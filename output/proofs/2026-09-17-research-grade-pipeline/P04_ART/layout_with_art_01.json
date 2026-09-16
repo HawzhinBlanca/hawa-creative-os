@@ -1,0 +1,179 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1080,
+  "grid": {
+    "margin": 80,
+    "columns": 12,
+    "gutter": 20,
+    "baseline": 8
+  },
+  "background": {
+    "color": "#0C2340"
+  },
+  "logo": {
+    "x": 80,
+    "y": 80,
+    "width": 180,
+    "height": 90
+  },
+  "shapes": [
+    {
+      "x": 80,
+      "y": 320,
+      "width": 920,
+      "height": 2,
+      "color": "#C5A059",
+      "kind": "line",
+      "role": "rule"
+    },
+    {
+      "x": 80,
+      "y": 640,
+      "width": 280,
+      "height": 220,
+      "color": "#1B365D",
+      "kind": "roundRect",
+      "role": "panel"
+    },
+    {
+      "x": 400,
+      "y": 640,
+      "width": 280,
+      "height": 220,
+      "color": "#1B365D",
+      "kind": "roundRect",
+      "role": "panel"
+    },
+    {
+      "x": 720,
+      "y": 640,
+      "width": 280,
+      "height": 220,
+      "color": "#1B365D",
+      "kind": "roundRect",
+      "role": "panel"
+    }
+  ],
+  "text": [
+    {
+      "copyIndex": 0,
+      "role": "title",
+      "x": 80,
+      "y": 200,
+      "width": 920,
+      "height": 100,
+      "fontSize": 38,
+      "lineHeight": 1.3,
+      "fontFamily": "Cinzel",
+      "color": "#C5A059",
+      "align": "left",
+      "bold": true
+    },
+    {
+      "copyIndex": 1,
+      "role": "body",
+      "x": 80,
+      "y": 360,
+      "width": 920,
+      "height": 120,
+      "fontSize": 18,
+      "lineHeight": 1.5,
+      "fontFamily": "Verdana",
+      "color": "#FFFFFF",
+      "align": "left"
+    },
+    {
+      "copyIndex": 2,
+      "role": "body",
+      "x": 80,
+      "y": 510,
+      "width": 920,
+      "height": 80,
+      "fontSize": 16,
+      "lineHeight": 1.4,
+      "fontFamily": "Verdana",
+      "color": "#FFFFFF",
+      "align": "left"
+    },
+    {
+      "copyIndex": 3,
+      "role": "body",
+      "x": 100,
+      "y": 670,
+      "width": 240,
+      "height": 160,
+      "fontSize": 15,
+      "lineHeight": 1.4,
+      "fontFamily": "Verdana",
+      "color": "#FFFFFF",
+      "align": "center"
+    },
+    {
+      "copyIndex": 4,
+      "role": "body",
+      "x": 420,
+      "y": 670,
+      "width": 240,
+      "height": 160,
+      "fontSize": 15,
+      "lineHeight": 1.4,
+      "fontFamily": "Verdana",
+      "color": "#FFFFFF",
+      "align": "center"
+    },
+    {
+      "copyIndex": 5,
+      "role": "body",
+      "x": 740,
+      "y": 670,
+      "width": 240,
+      "height": 160,
+      "fontSize": 15,
+      "lineHeight": 1.4,
+      "fontFamily": "Verdana",
+      "color": "#FFFFFF",
+      "align": "center"
+    },
+    {
+      "copyIndex": 6,
+      "role": "footer",
+      "x": 80,
+      "y": 980,
+      "width": 920,
+      "height": 40,
+      "fontSize": 12,
+      "lineHeight": 1.4,
+      "fontFamily": "Verdana",
+      "color": "#C5A059",
+      "align": "left"
+    }
+  ],
+  "typeScale": {
+    "base": 15,
+    "ratio": 1.25
+  },
+  "art": {
+    "source": "generated",
+    "prompt": "Abstract architectural institutional line geometry and subtle dark navy gradient texture",
+    "box": {
+      "x": 0,
+      "y": 0,
+      "width": 1080,
+      "height": 1080
+    },
+    "opacity": 0.35,
+    "scrim": {
+      "color": "#0A1628",
+      "opacityStart": 0.65,
+      "opacityEnd": 0.85,
+      "direction": "vertical"
+    },
+    "calmRegion": {
+      "x": 80,
+      "y": 180,
+      "width": 920,
+      "height": 820
+    }
+  }
+}

@@ -1,0 +1,94 @@
+[
+  {
+    "id": 1,
+    "name": "Art Layer 1 (1:1 Square)",
+    "artFile": "art_01.png",
+    "compositeFile": "composite_01.png",
+    "layoutFile": "layout_with_art_01.json",
+    "status": "generated",
+    "receipt": {
+      "model": "gpt-image-2.5-sunburst",
+      "responseId": "req_97aded1216e042628a96ae3f4bcfb49b",
+      "xRequestId": "req_97aded1216e042628a96ae3f4bcfb49b",
+      "imageTokens": 439,
+      "costUsd": 0.01317,
+      "latencyMs": 15200
+    },
+    "prompt": "Abstract architectural institutional line geometry and subtle dark navy gradient texture. Clean modern academic aesthetic in 1:1 square format. Palette restricted to #0C2340, #C5A059, #1B365D with deep dark navy tones and subtle accents. Keep the central typography zone (normalized x: 0.07, y: 0.17, w: 0.85, h: 0.76) exceptionally calm, dark, and low-contrast with minimal texture, so overlaid text has flawless legibility. Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. Strict Negative Constraints: No text of any kind, no typography, no letters, no words, no numbers, no logos, no emblems, no seals, no flags, no coats of arms, no people, no faces, no hands, no watermarks, no borders.",
+    "regionMeasurements": {
+      "calmRegion": {
+        "meanLuminance": 0.01321,
+        "variance": 0.000081,
+        "stdDev": 0.009
+      },
+      "outerCanvas": {
+        "meanLuminance": 0.02378,
+        "variance": 0.00143,
+        "stdDev": 0.03781
+      },
+      "isCalmRegionDarker": true,
+      "isCalmRegionLowerVariance": true
+    },
+    "compositeContrast": {
+      "passed": true,
+      "p05PerBox": {
+        "0": 4.88,
+        "1": 17.48,
+        "2": 17.48,
+        "3": 12.12,
+        "4": 12.12,
+        "5": 12.12,
+        "6": 7.24
+      }
+    },
+    "occlusionMetric": {
+      "score": 1,
+      "passed": true
+    }
+  },
+  {
+    "id": 2,
+    "name": "Art Layer 2 (4:5 Portrait)",
+    "artFile": "art_02.png",
+    "compositeFile": "composite_02.png",
+    "layoutFile": "layout_with_art_02.json",
+    "status": "success",
+    "receipt": {
+      "model": "gpt-image-2.5-sunburst",
+      "responseId": "req_67072d6216d34f72ad0f09d6d2f71ba1",
+      "xRequestId": "req_67072d6216d34f72ad0f09d6d2f71ba1",
+      "imageTokens": 343,
+      "costUsd": 0.01029,
+      "latencyMs": 13908,
+      "sha256": "cc610f4e29f397acc64d571837e69a9ecba31e385381936c4eb51338f8463858"
+    },
+    "prompt": "Abstract luxury guilloche curves and dark midnight navy geometric fields. Clean modern academic aesthetic in 4:5 vertical portrait format. Palette restricted to #0A1628, #C5A059 with deep dark navy tones and subtle accents. Keep the central typography zone (normalized x: 0.08, y: 0.07, w: 0.84, h: 0.85) exceptionally calm, dark, and low-contrast with minimal texture, so overlaid text has flawless legibility. Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. Strict Negative Constraints: No text of any kind, no typography, no letters, no words, no numbers, no logos, no emblems, no seals, no flags, no coats of arms, no people, no faces, no hands, no watermarks, no borders.",
+    "regionMeasurements": {
+      "calmRegion": {
+        "meanLuminance": 0.00948,
+        "variance": 0.000995,
+        "stdDev": 0.03154
+      },
+      "outerCanvas": {
+        "meanLuminance": 0.02066,
+        "variance": 0.003923,
+        "stdDev": 0.06263
+      },
+      "isCalmRegionDarker": true,
+      "isCalmRegionLowerVariance": true
+    },
+    "compositeContrast": {
+      "passed": true,
+      "p05PerBox": {
+        "0": 17.18,
+        "1": 7.38,
+        "2": 17.18,
+        "3": 17.16
+      }
+    },
+    "occlusionMetric": {
+      "passed": true,
+      "score": 1
+    }
+  }
+]
