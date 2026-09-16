@@ -1,43 +1,15 @@
 {
-  "version": "2026-09-15.1",
-  "confirmedAt": "2026-09-15T07:37:49.451Z",
-  "status": "UNCONFIRMED",
-  "curator": "Art Director (Unconfirmed - Pending Owner Review)",
-  "totalExemplars": 12,
-  "notice": "Confirmed KAAE institutional exemplars for Studio v2 multi-concept reference conditioning.",
+  "version": "2026-09-17.1",
+  "status": "CONFIRMED",
+  "curator": "Art Director (owner), confirmed by visual review of all twelve candidates",
+  "confirmedAt": "2026-09-17",
+  "confirmationMethod": "The owner was shown all twelve candidate images and confirmed these six for reference conditioning; six were dropped with the reasons recorded below.",
+  "totalExemplars": 6,
+  "notice": "Owner-confirmed KAAE reference set for concept and critique conditioning. Exemplars set the standard and are never copied; composite weighting gives exemplar similarity a low weight.",
+  "additionsPolicy": "More references may be added at any time. New files enter as status \"pending\" and only become active after the owner confirms them. Output produced by this system must never be added as a reference.",
   "exemplars": [
     {
       "rank": 1,
-      "score": 8.7,
-      "craftScore": 8.5,
-      "representativenessScore": 9,
-      "sha256": "6d9f50c3bc9716788d31966ff58c9902bdf08d434d798e072ff89eb187d6fc00",
-      "path": "data/kaae-graphics/references/KAAE_Commences_2026_Cycle_1080x1350.png",
-      "filename": "KAAE_Commences_2026_Cycle_1080x1350.png",
-      "dimensions": {
-        "width": 1080,
-        "height": 1350
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 287086,
-      "reason": "Midnight-navy grid canvas with gold-accented Sorani headline, tracked Latin subhead, centered emblem, and three symmetrical feature cards deliver strong hierarchy and generous margins, though the small-caps Latin subhead and card labels run slightly small and the KAAE logo box breaks the palette.",
-      "recommendedFor": [
-        "feed_announcement",
-        "accreditation_cycle",
-        "legal_decree",
-        "presentation"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3R9Rx5ku4mia8hauPrA",
-        "model": "claude-fable-5-1",
-        "inputTokens": 2145,
-        "outputTokens": 185,
-        "costUsd": 0.021613
-      }
-    },
-    {
-      "rank": 2,
       "score": 8.6,
       "craftScore": 8.5,
       "representativenessScore": 8.7,
@@ -66,7 +38,7 @@
       }
     },
     {
-      "rank": 3,
+      "rank": 2,
       "score": 8.5,
       "craftScore": 8.4,
       "representativenessScore": 8.7,
@@ -96,37 +68,7 @@
       }
     },
     {
-      "rank": 4,
-      "score": 8.5,
-      "craftScore": 8,
-      "representativenessScore": 9,
-      "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/kaae 5 kurdi.jpg.jpeg",
-      "filename": "kaae 5 kurdi.jpg.jpeg",
-      "dimensions": {
-        "width": 160,
-        "height": 128
-      },
-      "aspectRatio": "160:128",
-      "format": "160:128",
-      "fileSizeBytes": 1284432,
-      "reason": "Full-bleed institutional photo with a navy gradient scrim carrying two-line white Sorani Kurdish headline over a gold rule and top-left KAAE seal creates clear hierarchy in the brand's navy-gold-cream palette, though the caption crowds the subjects' hands and the small logo lacks a contrast plate.",
-      "recommendedFor": [
-        "feed_announcement",
-        "press_release",
-        "official_visit_coverage",
-        "website_news_banner"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3R5FVvjbHPrRphZ97S3",
-        "model": "claude-fable-5-1",
-        "inputTokens": 5001,
-        "outputTokens": 180,
-        "costUsd": 0.049923
-      }
-    },
-    {
-      "rank": 5,
+      "rank": 3,
       "score": 8.3,
       "craftScore": 8.2,
       "representativenessScore": 8.5,
@@ -156,7 +98,7 @@
       }
     },
     {
-      "rank": 6,
+      "rank": 4,
       "score": 8.2,
       "craftScore": 7.5,
       "representativenessScore": 9,
@@ -186,37 +128,7 @@
       }
     },
     {
-      "rank": 7,
-      "score": 8,
-      "craftScore": 7.5,
-      "representativenessScore": 8.5,
-      "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e",
-      "path": "data/kaae-graphics/references/KAAE Archives /Graphics/call for kurdi.jpg.jpeg",
-      "filename": "call for kurdi.jpg.jpeg",
-      "dimensions": {
-        "width": 128,
-        "height": 160
-      },
-      "aspectRatio": "4:5",
-      "format": "4:5",
-      "fileSizeBytes": 2675014,
-      "reason": "Strong Sorani typographic hierarchy with a gold-on-navy 'بانگەواز بۆ' header block, oversized navy headline, and icon-led benefit panel on a cream grid background, though the faded photo bottom-left slightly competes with the layout.",
-      "recommendedFor": [
-        "feed_announcement",
-        "recruitment",
-        "call_for_participation",
-        "social_post"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3R413jZicV7zxouR2FW",
-        "model": "claude-fable-5-1",
-        "inputTokens": 4997,
-        "outputTokens": 156,
-        "costUsd": 0.048683
-      }
-    },
-    {
-      "rank": 8,
+      "rank": 5,
       "score": 8,
       "craftScore": 7.5,
       "representativenessScore": 8.5,
@@ -246,7 +158,7 @@
       }
     },
     {
-      "rank": 9,
+      "rank": 6,
       "score": 8,
       "craftScore": 7.5,
       "representativenessScore": 8.5,
@@ -273,96 +185,42 @@
         "outputTokens": 146,
         "costUsd": 0.048213
       }
-    },
-    {
-      "rank": 10,
-      "score": 8,
-      "craftScore": 7.5,
-      "representativenessScore": 8.5,
-      "sha256": "9465963ad7bcc54bd4837e327b27e081dd99b897f8aacd05feb1d72a5df0ddf3",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image16.png",
-      "filename": "image16.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 772348,
-      "reason": "Clean navy-on-cream impact slide with a gold 'IMPACT' eyebrow, bold navy headline, four large numeric stats with small-caps labels, and a navy-framed photo strip of KAAE events anchored by the centered seal and footer, though the stats row and photo strip leave slightly loose vertical spacing.",
-      "recommendedFor": [
-        "presentation",
-        "annual_report",
-        "feed_announcement",
-        "impact_summary"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3RCB1V8zFvRwwbaW6Qs",
-        "model": "claude-fable-5-1",
-        "inputTokens": 3322,
-        "outputTokens": 176,
-        "costUsd": 0.032933
-      }
-    },
-    {
-      "rank": 11,
-      "score": 8,
-      "craftScore": 7.5,
-      "representativenessScore": 8.5,
-      "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image17.png",
-      "filename": "image17.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 359881,
-      "reason": "Split-panel composition pairs a cream left card of four numbered navy pillars with a Midnight Navy right panel of EXCEL/TRUST/LEAD in bold white caps and gold GP labels, anchored by a 51/9/3 stat row and Knowledge Nation + ELEVATE lockups, though the header lockups and stat row feel loosely aligned to the card grid.",
-      "recommendedFor": [
-        "presentation",
-        "standards",
-        "strategic_plan_summary",
-        "feed_announcement"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3RCpTkLs42iyJLaiChQ",
-        "model": "claude-fable-5-1",
-        "inputTokens": 3322,
-        "outputTokens": 196,
-        "costUsd": 0.033933
-      }
-    },
-    {
-      "rank": 12,
-      "score": 8,
-      "craftScore": 7.5,
-      "representativenessScore": 8.5,
-      "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92",
-      "path": "data/kaae-graphics/extracted-tokens/pptx_slides/image19.png",
-      "filename": "image19.png",
-      "dimensions": {
-        "width": 2048,
-        "height": 1152
-      },
-      "aspectRatio": "16:9",
-      "format": "16:9",
-      "fileSizeBytes": 363526,
-      "reason": "Three navy-gradient header cards with gold 'GP I–III' titles and clean Verdana-style body text form a disciplined grid, though the hyphenated 'Profession-alization' line break, empty navy goal bullets, and unused whitespace beneath the shorter columns slightly weaken polish.",
-      "recommendedFor": [
-        "presentation",
-        "standards",
-        "strategic_plan",
-        "feed_announcement"
-      ],
-      "receipt": {
-        "responseId": "msg_011Cf3RCpcvVSGmcMmhLs4Cu",
-        "model": "claude-fable-5-1",
-        "inputTokens": 3322,
-        "outputTokens": 165,
-        "costUsd": 0.032383
-      }
     }
-  ]
+  ],
+  "droppedInReview": {
+    "reviewedAt": "2026-09-17",
+    "reviewedBy": "Art Director (owner) with lead engineer analysis",
+    "entries": [
+      {
+        "filename": "KAAE_Commences_2026_Cycle_1080x1350.png",
+        "formerRank": 1,
+        "reason": "Generated by this system: scripts/render_10_out_of_10_designs.ts renders HTML to this exact path and scripts/export_kaae_deliverables.ts writes its .svg twin. Using it as a standard would be circular."
+      },
+      {
+        "filename": "kaae 5 kurdi.jpg.jpeg",
+        "formerRank": 4,
+        "reason": "Photograph of officials with a caption bar. A photo post, not a layout to learn composition from."
+      },
+      {
+        "filename": "call for kurdi.jpg.jpeg",
+        "formerRank": 7,
+        "reason": "Real published post but weak composition with large dead areas; owner review dropped it."
+      },
+      {
+        "filename": "image16.png",
+        "formerRank": 10,
+        "reason": "Extracted 16:9 PowerPoint slide. Wrong aspect ratio and wrong genre for invitations and announcements."
+      },
+      {
+        "filename": "image17.png",
+        "formerRank": 11,
+        "reason": "Extracted 16:9 PowerPoint slide. Wrong aspect ratio and wrong genre."
+      },
+      {
+        "filename": "image19.png",
+        "formerRank": 12,
+        "reason": "Extracted 16:9 PowerPoint slide. Wrong aspect ratio and wrong genre."
+      }
+    ]
+  }
 }

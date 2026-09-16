@@ -35,7 +35,7 @@ arXiv 2402.06945 over a `StudioLayoutV2`: text legibility, grid appropriateness,
 variance + 20% line uniformity, A/(A+d), A=10), balance (B = 1 − [((wx−cx/w)² + (wy−cy/h)²)/2]^0.5),
 justification, regularity, typeface pairing, negative-space fraction, semantic significance of layout,
 semantic significance of typography. Add a composite score and a per-metric pass/fail against
-thresholds **calibrated on the twelve confirmed exemplars**, not the paper's defaults — the paper
+thresholds **calibrated on the six owner-confirmed exemplars**, not the paper's defaults — the paper
 targets short-text posters, our institutional briefs carry long body paragraphs. Record the calibration
 run. Keep the existing hard-QA checks (contrast, margins, overlap, palette, copy, RTL) as they are; this
 module sits in front of them.
@@ -53,29 +53,42 @@ Add three more checks beyond the paper's ten:
 Composite weighting follows LaySPA's measured reward split: layout quality about 0.8, format compliance
 about 0.1, similarity to a retrieved exemplar about **0.1 only** — exemplars set the standard, they are
 not to be copied.
-**Accept when:** the twelve exemplars all score in the top band; three known-bad layouts from the
+**Accept when:** the six confirmed exemplars all score in the top band; three known-bad layouts from the
 09-15/16 audits (the boxy bilateral grid, a low-contrast candidate, an off-grid layout) each fail the
 specific metric they should fail, named in the output; a hand-built degenerate set of three near-identical
 layouts is flagged; total runtime under 50 ms per layout; zero model calls.
+**Fixture split (added 2026-09-17, after the owner's review — read this before calibrating):** the
+positive fixtures are the **six owner-confirmed** exemplars only. The six dropped entries are
+**negative** fixtures and must FAIL: the three extracted 16:9 PowerPoint slides (`image16`, `image17`,
+`image19`) must fail grid appropriateness for wrong canvas genre, the officials photograph
+(`kaae 5 kurdi`) must not be a positive case, and `KAAE_Commences_2026_Cycle_1080x1350.png` must never
+be a positive case because **this system generated it** and calibrating on it is circular. Do not assert
+a fixture count of twelve, and do not describe the set as "twelve confirmed exemplars".
+
 **Validity, to state plainly in the proof:** computational aesthetic measures correlate with human
 judgement at about ρ = 0.68, rising to ρ = 0.74 on structured compositions, which is our case. That is
 enough to gate on and not enough to decide by; the owner's blind preference in P10 remains the arbiter.
-**Proof:** `P01_METRICS.md` — the calibration table (twelve exemplars, thirteen metrics), the three
+**Proof:** `P01_METRICS.md` — the calibration table (six exemplars, thirteen metrics), the three
 known-bad results, the degeneracy case, timings.
 
 ### P02 — Exemplar retrieval
-**Do:** embed the twelve exemplars once and cache the vectors on disk; at request time retrieve the
+**Do:** embed the six confirmed exemplars once and cache the vectors on disk; at request time retrieve the
 top-3 by similarity to the brief's intent (a text-embedding of the brief against exemplar descriptors is
 acceptable; prefer an image-similarity embedding if one is already vendored — RALF found DreamSim best,
 CLIP acceptable). Pass the three as `image_url` at `detail: "low"` plus their one-line descriptors.
 Record which exemplar ids were sent, per call, in the run journal.
 **Why top-3:** RALF (2311.13602) shows retrieval helps significantly even at K=1 and improves
-moderately with K; twelve exemplars is our ceiling.
-**Accept when:** two different briefs retrieve different exemplar sets; the ids sent are journaled; the
-retrieval adds under 100 ms and no API cost.
+moderately with K; six confirmed exemplars is our current pool, so retrieve the best three of six.
+**Accept when:** two different briefs retrieve different exemplar sets drawn from all six confirmed
+entries (prove the first-three truncation is gone); the ids sent are journaled; the retrieval adds under
+100 ms and no API cost; a `pending` entry is never retrieved.
 **Proof:** `P02_RETRIEVAL.json` — two briefs, their retrieved ids and scores, timings.
-**Blocked on the owner:** the exemplar file is still marked "Unconfirmed — Pending Owner Review". Ship
-the code; state in `DEVIATIONS.md` that retrieval quality is unverified until the owner confirms them.
+**Owner confirmation is done (2026-09-17).** `packages/creative/assets/kaae-exemplars.json` now holds
+**six** owner-confirmed references, with the six rejected ones and the reason for each recorded in
+`droppedInReview`. One rejected entry was output from this system's own render script, so **never treat
+anything this system produced as a reference**. Use every confirmed entry, not the first three: the
+existing `.slice(0, 3)` in `design-studio-service.ts` must be replaced by similarity retrieval over the
+full confirmed set.
 
 ### P03 — Layout-first candidate generation
 **Do:** one `gpt-6-astra` call returning **three deliberately distinct layouts** as
@@ -193,6 +206,27 @@ current planner.
 random from the journals.
 **Proof:** `P10_QUALIFICATION.csv` plus per-brief folders.
 
+### P11 — Adding more references over time (owner requirement, 2026-09-17)
+**Do:** make the reference set growable without an engineer. Three entry points, one confirmation gate:
+- **Folder drop**: a new file in `data/kaae-graphics/references/` picked up by a script
+  (`scripts/add_exemplar.ts`, or extend the existing `ingest_kaae_graphics.ts`) that computes sha256,
+  dimensions and aspect ratio, and appends the entry with `status: "pending"`.
+- **Telegram**: the art director sends an image with a caption such as "add reference"; the F07
+  classifier routes it, and it lands as `status: "pending"` with the sender recorded.
+- **Desk**: an upload control that does the same.
+
+Nothing becomes active until the owner confirms it, at which point `status` becomes `"confirmed"` with
+the date. Retrieval (P02) reads confirmed entries only. **Hard guard:** refuse to add any file that this
+system produced. Check the candidate's sha256 against everything under `output/` and against the known
+render and export script destinations, and refuse with an explanation rather than adding it. One of the
+original twelve was our own script's output scored as the top reference, which is the failure this guard
+exists to prevent. Re-ranking on addition is by the owner's order, not by a model score.
+**Accept when:** the lead drops a file into the folder and it appears as `pending` and is not retrieved;
+the owner confirms it and it becomes retrievable; an attempt to add a file copied from `output/` is
+refused naming the match; the manifest keeps its `droppedInReview` history intact across additions.
+**Proof:** `P11_ADD_REFERENCE.md` — the three entry points exercised, the refusal case, and the manifest
+before and after.
+
 ## 2. What is explicitly out of scope
 
 Flat concept boards as a separate throwaway stage; any text inside generated images; Sorani in images;
@@ -206,7 +240,7 @@ layers but renders text as pixels rather than native type, so it cannot serve ed
 
 ## 3. Honest limits to state in DEVIATIONS.md
 
-The metric thresholds are calibrated on twelve exemplars the owner has not yet confirmed. The
+The metric thresholds are calibrated on the six owner-confirmed exemplars (confirmed 2026-09-17). Six is a small calibration set, so treat the thresholds as provisional and recalibrate as the owner adds references through P11. The
 self-preference mitigation reduces judge bias by about a third and does not remove it; a second-family
 judge remains preferable once credit exists. Aesthetic predictors, if used as a tie-breaker, generalise
 poorly across domains and must never be a gate. The JSON-format warning in 2607.26922 was measured on
