@@ -4,7 +4,7 @@ export interface TelegramActionTokenPayload {
   tokenId: string;
   taskId: string;
   revisionId: string;
-  action: 'approve' | 'revision';
+  action: 'approve' | 'revision' | 'pick_layout';
   actorId: string; // The authorized Telegram user ID or external account ID
   createdAt: number;
   expiresAt: number;
@@ -86,7 +86,7 @@ export class TelegramActionTokenService {
   createToken(params: {
     taskId: string;
     revisionId: string;
-    action: 'approve' | 'revision';
+    action: 'approve' | 'revision' | 'pick_layout';
     actorId: string;
     expiresInMs?: number;
     secretKey?: string;

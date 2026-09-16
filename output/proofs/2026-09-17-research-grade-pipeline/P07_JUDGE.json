@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-09-16T23:36:33.509Z",
+  "specification": "arXiv:2604.22891 (Dimension-Wise Pairwise Judge & Position Bias Order-Swapping)",
+  "model": "gpt-6-astra",
+  "singleSurvivorBypass": {
+    "candidateCount": 1,
+    "skippedDueToSingleSurvivor": true,
+    "callsMade": 0,
+    "totalCostUsd": 0
+  },
+  "liveTournament": {
+    "candidateCount": 2,
+    "survivingCandidates": [
+      {
+        "id": "candidate_layout_01",
+        "score": 0.955
+      },
+      {
+        "id": "candidate_layout_04",
+        "score": 0.956
+      }
+    ],
+    "callsMade": 4,
+    "totalCostUsd": 0.1384,
+    "winnerId": "candidate_layout_04",
+    "matches": [
+      {
+        "candidate1Id": "candidate_layout_01",
+        "candidate2Id": "candidate_layout_04",
+        "isConsistent": true,
+        "disagreementRecorded": false,
+        "winnerId": "candidate_layout_04",
+        "reason": "Order-consistent majority verdict: candidate candidate_layout_04 won in both presentation orders (2-3 in AB, 3-2 in BA).",
+        "totalCostUsd": 0.0667,
+        "orderAB": {
+          "order": "AB",
+          "candidateAId": "candidate_layout_01",
+          "candidateBId": "candidate_layout_04",
+          "votes": {
+            "hierarchy": "B",
+            "composition": "A",
+            "typographic_craft": "B",
+            "brand_fit": "B",
+            "legibility": "A"
+          },
+          "rationales": {
+            "hierarchy": "B's restrained outlined panel keeps the title as the strongest content anchor, whereas A's large filled panel competes for attention. Both retain a clear title-to-subtitle-to-body sequence and achieve perfect type-scale scores.",
+            "composition": "A's filled panel provides a stronger visual counterweight to the upper logo and title, while its longer lower rule anchors the footer. This supports its higher measured balance score, 0.973 versus 0.960, with alignment effectively identical at 0.999.",
+            "typographic_craft": "The font treatment and size hierarchy are nearly identical, consistent with both type-scale scores of 1.000. B narrowly wins through more regular vertical pacing, including a closer relationship between the lower rule and footer; its higher regularity score, 0.629 versus 0.589, supports this distinction.",
+            "brand_fit": "B's fine gold-toned frame and uninterrupted navy field feel more restrained and ceremonial, complementing the crest and suggesting institutional prestige. A's broad blue fill is more utilitarian and less elegant.",
+            "legibility": "Both score 1.000 for text legibility and avoid crowding, though their secondary text appears small at this preview size. A narrowly wins because its filled panel makes the body-content region immediately identifiable, improving scanning without introducing a border around the reading area."
+          },
+          "majorityWinner": "B",
+          "winnerCandidateId": "candidate_layout_04",
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtSBAQCpbOx9Rzbo8qTeSLGl5jQk",
+            "xRequestId": "req_4fee6335aeed4f85ace3cd6948270f09",
+            "inputTokens": 1170,
+            "outputTokens": 436,
+            "costUsd": 0.0335,
+            "latencyMs": 11972
+          }
+        },
+        "orderBA": {
+          "order": "BA",
+          "candidateAId": "candidate_layout_04",
+          "candidateBId": "candidate_layout_01",
+          "votes": {
+            "hierarchy": "A",
+            "composition": "B",
+            "typographic_craft": "A",
+            "brand_fit": "A",
+            "legibility": "B"
+          },
+          "rationales": {
+            "hierarchy": "A keeps the bold white title as the dominant text element and uses a quiet outlined body panel. B's large filled blue panel competes more strongly for attention. Both have perfect measured type-scale scores, but A's visual emphasis better supports the title-first reading order.",
+            "composition": "B's filled panel provides a stronger central anchor, and its longer lower rule balances that mass. This agrees with B's higher balance score of 0.973 versus 0.960; alignment is effectively identical at 0.999.",
+            "typographic_craft": "Both use essentially the same restrained centered typography, with equal measured type-scale scores. A has a slightly more orderly cadence between the title, subtitle, panel text, and footer, consistent with its higher regularity score of 0.629 versus 0.589.",
+            "brand_fit": "A's fine gold outline, navy field, and restrained gold rules feel more elegant and institutionally formal. B retains the academic palette and crest, but its broad blue rectangle gives the layout a more generic presentation-slide character.",
+            "legibility": "Both achieve a measured text-legibility score of 1.000 and avoid crowding, although their secondary text appears very small at this preview size. B gives the body copy a distinct filled reading zone, making that content region easier to locate immediately."
+          },
+          "majorityWinner": "A",
+          "winnerCandidateId": "candidate_layout_04",
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtSNhRRlEhyxuVeWckEQDi5Cazaw",
+            "xRequestId": "req_bfb56b6dae1048aa9364ce045b565d1f",
+            "inputTokens": 1170,
+            "outputTokens": 430,
+            "costUsd": 0.0332,
+            "latencyMs": 11186
+          }
+        }
+      }
+    ],
+    "canaryCheck": {
+      "canaryCandidateId": "candidate_layout_04_canary_degraded",
+      "canaryLost": true,
+      "canaryPassed": true,
+      "match": {
+        "candidate1Id": "candidate_layout_04",
+        "candidate2Id": "candidate_layout_04_canary_degraded",
+        "isConsistent": true,
+        "disagreementRecorded": false,
+        "winnerId": "candidate_layout_04",
+        "reason": "Order-consistent majority verdict: candidate candidate_layout_04 won in both presentation orders (5-0 in AB, 0-5 in BA).",
+        "totalCostUsd": 0.0717,
+        "orderAB": {
+          "votes": {
+            "hierarchy": "A",
+            "composition": "A",
+            "typographic_craft": "A",
+            "brand_fit": "A",
+            "legibility": "A"
+          },
+          "rationales": {
+            "hierarchy": "A gives the title a distinct, prominent position below the crest, followed by the gold subtitle and framed body. B places its title beside and partly behind the crest, undermining title dominance and the reading order despite both candidates' perfect type-scale scores.",
+            "composition": "A maintains a coherent central axis and separates the crest, title, and content with deliberate negative space. B's displaced title creates congestion at the top and an excessive gap below. A's higher alignment (0.999 versus 0.968) and balance (0.960 versus 0.881) support this advantage, although B scores higher in regularity.",
+            "typographic_craft": "A's larger, unobstructed title and more discernible framed text establish a better-resolved typographic relationship. B's higher regularity score (0.811 versus 0.629) is a strength, but its title placement and extremely small body text weaken the execution; equal type-scale scores do not resolve those issues.",
+            "brand_fit": "Both use a restrained navy-and-gold palette, crest, and fine rules suited to institutional communication. A's orderly separation of the crest and title conveys greater formality and care, whereas B's overlapping header compromises the intended academic prestige.",
+            "legibility": "A's title is immediately readable without interference, and its framed body text is more visible at the supplied resolution. B's crest obstructs the title and its body appears markedly smaller. This agrees with the supplied text-legibility scores of 1.000 for A and 0.925 for B, though both retain very small supporting text."
+          },
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtSY0AnIUwkdqQ5OUUlapdLUBhFb",
+            "xRequestId": "req_5da5be7b05c347249e30ff4ebc4e6be6",
+            "inputTokens": 1170,
+            "outputTokens": 488,
+            "costUsd": 0.0361,
+            "latencyMs": 12632
+          }
+        },
+        "orderBA": {
+          "votes": {
+            "hierarchy": "B",
+            "composition": "B",
+            "typographic_craft": "B",
+            "brand_fit": "B",
+            "legibility": "B"
+          },
+          "rationales": {
+            "hierarchy": "B places a clearly dominant title beneath the crest and divider, establishing a coherent crest–title–subtitle–body sequence. A places its title beside and partly behind the crest, weakening the opening hierarchy despite both candidates' perfect type-scale scores.",
+            "composition": "B organizes the crest and title on a shared central axis with distinct vertical separation. A's crowded, offset header disrupts an otherwise centered layout. B's higher alignment (0.999 versus 0.968) and balance (0.960 versus 0.881) support this advantage, although A has stronger regularity.",
+            "typographic_craft": "B's larger, unobstructed title and more substantial body text produce a better-resolved scale relationship at the displayed size. Both receive 1.000 for type scale, and A leads in regularity (0.811 versus 0.629), but B handles the actual title setting and separation from the crest more successfully.",
+            "brand_fit": "Both use restrained navy, gold rules, and a crest to suggest institutional prestige. B gives the crest its own space and follows it with a composed, centered title; A's title–crest collision undermines the formal polish expected of an academic institution.",
+            "legibility": "B's title is immediately readable, and its framed body label is visibly clearer. A's title is obstructed by the crest and its body label is exceptionally small. This matches B's higher text-legibility score of 1.000 versus A's 0.925; both still leave supporting text quite small."
+          },
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtSm4QeqLqUvs4dmP3DDcgBPVy9l",
+            "xRequestId": "req_070fbf48fcb149a781d59f89dd68c943",
+            "inputTokens": 1170,
+            "outputTokens": 478,
+            "costUsd": 0.0356,
+            "latencyMs": 13743
+          }
+        }
+      }
+    }
+  }
+}
