@@ -1,6 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertModelAllowed } from '@hawa/domain';
+import { OpenAiStudioClient } from './openai-studio-client.js';
+import {
+  StudioModelError,
+  StudioModelHttpError,
+  StudioModelTimeoutError,
+  StudioCircuitBreakerOpenError,
+} from './studio-errors.js';
+
+export {
+  StudioModelError,
+  StudioModelHttpError,
+  StudioModelTimeoutError,
+  StudioCircuitBreakerOpenError,
+};
 
 export interface ModelPricing {
   inputPerMillion: number;
@@ -95,35 +110,7 @@ export function sanitizeSchemaForAnthropic(schema: any): any {
 
   return sanitized;
 }
-
-export class StudioModelError extends Error {
-  constructor(message: string, public code: string) {
-    super(message);
-    this.name = 'StudioModelError';
-  }
-}
-
-export class StudioModelHttpError extends StudioModelError {
-  constructor(public status: number, public responseBody: string) {
-    super(`Anthropic API returned HTTP ${status}: ${responseBody.substring(0, 200)}`, `HTTP_${status}`);
-    this.name = 'StudioModelHttpError';
-  }
-}
-
-export class StudioModelTimeoutError extends StudioModelError {
-  public isUncertain = true;
-  constructor(message = 'Model call timed out') {
-    super(message, 'UNCERTAIN_TIMEOUT');
-    this.name = 'StudioModelTimeoutError';
-  }
-}
-
-export class StudioCircuitBreakerOpenError extends StudioModelError {
-  constructor(provider = 'anthropic') {
-    super(`Circuit breaker for ${provider} is OPEN after consecutive failures`, 'CIRCUIT_BREAKER_OPEN');
-    this.name = 'StudioCircuitBreakerOpenError';
-  }
-}
+export * from './studio-errors.js';
 
 export interface CircuitBreakerOptions {
   failureThreshold?: number; // default 5
@@ -217,8 +204,8 @@ export interface StudioModelClientOptions {
   maxRetries?: number; // default 3
   retryDelaysMs?: number[]; // default [1000, 3000, 9000]
   defaultTimeoutMs?: number; // default 120000 (120s)
-  primaryModel?: string; // default 'claude-fable-5-1'
-  fallbackModel?: string; // default 'claude-opus-5'
+  primaryModel?: string; // default 'gpt-6-astra'
+  fallbackModel?: string; // default 'gpt-6-astra'
 }
 
 export class StudioModelClient {
@@ -233,15 +220,15 @@ export class StudioModelClient {
   public fallbackModel: string;
 
   constructor(options?: StudioModelClientOptions) {
-    this.apiKey = options?.apiKey || process.env.ANTHROPIC_API_KEY || '';
+    this.apiKey = options?.apiKey || process.env.OPENAI_API_KEY || '';
     this.fetchFn = options?.fetchFn || fetch;
     this.pricing = options?.pricingConfig || loadPricingConfig();
     this.circuitBreaker = options?.circuitBreaker || new CircuitBreaker();
     this.maxRetries = options?.maxRetries ?? 3;
     this.retryDelaysMs = options?.retryDelaysMs ?? [1000, 3000, 9000];
     this.defaultTimeoutMs = options?.defaultTimeoutMs ?? 120000;
-    this.primaryModel = options?.primaryModel || 'claude-fable-5-1';
-    this.fallbackModel = options?.fallbackModel || 'claude-opus-5';
+    this.primaryModel = options?.primaryModel || 'gpt-6-astra';
+    this.fallbackModel = options?.fallbackModel || 'gpt-6-astra';
   }
 
   /**
@@ -281,12 +268,55 @@ export class StudioModelClient {
    * Invokes Anthropic API to generate structured JSON output matching outputSchema.
    */
   public async callStructured<T>(params: StructuredCallParams<T>): Promise<StructuredCallResult<T>> {
+    const selectedModel = params.model || this.primaryModel;
+    assertModelAllowed(selectedModel);
+
     const breakerState = this.circuitBreaker.getState();
     if (breakerState === 'open') {
-      throw new StudioCircuitBreakerOpenError('anthropic');
+      throw new StudioCircuitBreakerOpenError('openai');
     }
 
-    const selectedModel = params.model || this.primaryModel;
+    if (selectedModel === 'gpt-6-astra' || selectedModel.startsWith('gpt-')) {
+      const openAiClient = new OpenAiStudioClient({
+        apiKey: process.env.OPENAI_API_KEY || this.apiKey,
+        fetcher: this.fetchFn,
+        timeoutMs: params.timeoutMs || this.defaultTimeoutMs,
+        circuitBreaker: this.circuitBreaker,
+      });
+
+      const res = await openAiClient.completeJson<T>({
+        system: params.systemPrompt || params.system,
+        prompt: params.prompt,
+        schema: params.outputSchema || params.schema,
+        schemaName: params.schemaName || 'structured_output',
+        model: selectedModel,
+        images: params.images,
+        timeoutMs: params.timeoutMs || this.defaultTimeoutMs,
+        temperature: params.temperature,
+      });
+
+      this.circuitBreaker.recordSuccess();
+
+      return {
+        data: res.data,
+        rawText: res.rawText,
+        receipt: {
+          id: res.receipt.responseId,
+          provider: 'openai' as any,
+          model: res.receipt.model,
+          inputTokens: res.receipt.inputTokens,
+          outputTokens: res.receipt.outputTokens,
+          cacheCreationTokens: res.receipt.cacheCreationTokens || 0,
+          cacheReadTokens: res.receipt.cacheReadTokens || 0,
+          costUsd: res.receipt.costUsd,
+          durationMs: res.receipt.latencyMs,
+          attempts: res.receipt.attempts || 1,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    }
+
+
     const fallbackModel = params.fallbackModel || this.fallbackModel;
     const timeoutMs = params.timeoutMs || this.defaultTimeoutMs;
     const schemaName = params.schemaName || 'structured_output';

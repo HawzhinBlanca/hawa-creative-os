@@ -1,0 +1,24 @@
+requirement_id,requirement_name,current_implementation,current_evidence,disposition,action_plan
+FR-001,Canonical task creation,apps/core/src/services/chat-intake.ts,packages/testkit/test/e2e-office-lifecycle.test.ts,RETAIN,Preserve task creation and event logging
+FR-002,Raw event retention,apps/core/src/app.ts + hawa.task_events,apps/core/test/core.test.ts,RETAIN,Keep normalized source event storage
+FR-003,Webhook verification,apps/core/src/app.ts verifyRequestAuth,apps/core/test/auth-negative-controls.test.ts,RETAIN,Preserve strict HMAC and bearer token gates
+FR-004,Event idempotency,packages/integrations/src/reconciliation.ts,packages/integrations/test/reconciliation.test.ts,RETAIN,Preserve outbox deduplication
+FR-005,Task promotion,apps/core/src/services/chat-intake.ts,packages/integrations/test/telegram-bot.test.ts,RETAIN,Preserve Telegram command and mention filters
+FR-006,Manual intake,apps/desk/src/services/manualTaskIntake.ts,apps/desk/test/manualTaskIntake.test.ts,RETAIN,Keep Desk manual intake interface
+FR-007,Client channel mapping,packages/domain/src/channel-mapping.ts,packages/domain/test/domain.test.ts,RETAIN,Preserve client routing from chat IDs
+FR-008,Deterministic routing first,packages/domain/src/routing.ts,packages/domain/test/domain.test.ts,RETAIN,Preserve deterministic routing before AI
+FR-011,Scope lock,packages/retrieval/src/client-knowledge.ts,apps/core/test/client-knowledge-assets.test.ts,RETAIN,Preserve immutable tenant/client context
+FR-013,Design brief schema,apps/core/src/services/design-studio/types.ts,packages/creative/test/studio-validator.test.ts,RETAIN,Keep typed brief structure
+FR-014,No invented facts,packages/domain/src/orthography.ts,packages/domain/test/orthography.test.ts,RETAIN,Keep factual protection and normalization
+FR-015,Exact-copy lock,packages/qa/src/exact-copy.ts,packages/qa/test/ship-copy-regressions.test.ts,RETAIN,Preserve exact copy verification against Canva export
+FR-016,Task route selection,apps/worker/src/canva-draft-workflow.ts,apps/worker/test/canva-draft-workflow.test.ts,FIX,Switch workflow to single lean OpenAI Astra path
+FR-017,Client DNA,packages/creative/src/kaae-client-dna.ts,packages/creative/test/kaae-creative-generation.test.ts,RETAIN,Preserve KAAE colors typography and logos
+FR-020,Hybrid retrieval,packages/retrieval/src/retrieval-service.ts,packages/retrieval/test/retrieval.test.ts,RETAIN,Preserve structured reference retrieval
+FR-024,Private composition reference,packages/creative/src/studio/motifs.ts,packages/creative/test/studio-validator.test.ts,RETAIN,Preserve procedural SVG motifs and texture generation
+FR-026,Layout generation,apps/core/src/services/canva-design-planner.ts,packages/creative/test/studio-renderer.test.ts,FIX,Replace Claude Opus/Fable with Astra and deterministic auto-stack flow
+FR-027,Multi-concept exploration,apps/core/src/services/design-studio/stages/concepts.stage.ts,apps/core/test/design-studio-orchestrator.test.ts,ARCHIVE,Replace 5-concept loop with lean 1-candidate primary plus optional alternative
+FR-028,Multi-round tournament,apps/core/src/services/design-studio/stages/tournament.stage.ts,packages/evals/test/adversarial-chaos.test.ts,ARCHIVE,Remove 20-call tournament and perturbation loops
+FR-029,Canva editable transfer,packages/creative/src/editable-transfer.ts,apps/core/test/canva-connect-live-boundary.test.ts,FIX,Fix logo byte passing and shape kind support in PPTX
+FR-030,Canva export retrieval,packages/integrations/src/canva-connect-client.ts,packages/integrations/test/canva-connect-client.test.ts,RETAIN,Preserve export polling and SHA-256 retrieval
+FR-032,Telegram delivery,packages/integrations/src/telegram-bot.ts,packages/integrations/test/telegram-live-ingress.test.ts,FIX,Ensure preview image and Canva link delivered to chat on completion
+FR-043,Human review integrity,apps/core/src/services/gate-f-review-invalidation.ts,apps/core/test/gate-f-review-invalidation.test.ts,RETAIN,Preserve post-approval invalidation and review checks

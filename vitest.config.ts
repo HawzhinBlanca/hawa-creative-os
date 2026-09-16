@@ -12,7 +12,7 @@ import { resolve } from 'node:path';
 const TEST_ENV_KEYS = ['TEST_DATABASE_URL', 'TEST_DATABASE_OWNER_URL', 'HAWA_ISOLATED_TEST_DB', 'HAWA_ISOLATED_RUNTIME_DB'] as const;
 
 function loadTestEnvFile(): Record<string, string> {
-  const file = resolve(process.cwd(), '.env.test');
+  const file = resolve(import.meta.dirname, '.env.test');
   if (!existsSync(file)) return {};
   const out: Record<string, string> = {};
   for (const line of readFileSync(file, 'utf8').split('\n')) {

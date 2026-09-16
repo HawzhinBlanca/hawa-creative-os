@@ -163,18 +163,24 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(mapDimensionsToAspect(1080, 1920)).toBe('9:16');
   });
 
-  it('runs Claude Fable 5.1 vision check and detects forbidden content', async () => {
+  it('runs gpt-6-astra vision check and detects forbidden content', async () => {
     const fakeFetcher: typeof fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({
-        content: [{ text: '{"containsForbidden": true, "what": "Found English lettering in top right"}' }],
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ containsForbidden: true, what: 'Found English lettering in top right' }),
+            },
+          },
+        ],
       }),
     } as any);
 
     const dummyPng = createSolidPng(32, 32, [10, 22, 40]);
     const result = await runVisionCheck(dummyPng, 'image/png', {
-      anthropicApiKey: 'mock-key',
+      openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
     });
 
@@ -183,41 +189,43 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(result.what).toContain('English lettering');
   });
 
-  it('successfully generates art with Gemini and passes both checks on attempt 1', async () => {
+  it('rejects disallowed models or legacy keys for vision check', async () => {
+    const dummyPng = createSolidPng(32, 32, [10, 22, 40]);
+    await expect(
+      runVisionCheck(dummyPng, 'image/png', {
+        anthropicApiKey: 'mock-key',
+      })
+    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
+  });
+
+  it('successfully generates art with OpenAI gpt-image-2.5-sunburst and passes both checks on attempt 1', async () => {
     const validPng = createSolidPng(64, 64, [30, 58, 95]); // Royal Navy #1E3A5F
     const validBase64 = validPng.toString('base64');
 
     const fakeFetcher: typeof fetch = vi.fn(async (url: any) => {
       const urlStr = String(url);
-      if (urlStr.includes('generativelanguage.googleapis.com')) {
+      if (urlStr.includes('api.openai.com/v1/images/generations')) {
         return {
           ok: true,
           status: 200,
           json: async () => ({
-            responseId: 'gemini-img-test-123',
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: 'image/png',
-                        data: validBase64,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
+            created: 123456789,
+            data: [{ b64_json: validBase64 }],
           }),
         } as any;
       }
-      if (urlStr.includes('api.anthropic.com')) {
+      if (urlStr.includes('api.openai.com/v1/chat/completions')) {
         return {
           ok: true,
           status: 200,
           json: async () => ({
-            content: [{ text: '{"containsForbidden": false, "what": "clean landscape"}' }],
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ containsForbidden: false, what: 'clean landscape' }),
+                },
+              },
+            ],
           }),
         } as any;
       }
@@ -227,52 +235,70 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     const result = await generateArtImage({
       artPrompt: 'Minimalist navy gradient textured backdrop',
       palette: PALETTE,
-      geminiApiKey: 'mock-key',
-      anthropicApiKey: 'mock-key',
+      openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
     });
 
-    expect(result.receipt.provider).toBe('gemini');
+    expect(result.receipt.provider).toBe('openai');
+    expect(result.receipt.model).toBe('gpt-image-2.5-sunburst');
     expect(result.receipt.synthId).toBe(true);
-    expect(result.receipt.costUsd).toBe(0.134);
+    expect(result.receipt.costUsd).toBe(0.04);
     expect(result.receipt.attempts).toBe(1);
     expect(result.receipt.verificationReport?.passed).toBe(true);
     expect(result.receipt.verificationReport?.visionCheckPassed).toBe(true);
     expect(result.receipt.verificationReport?.dominantColorsPassed).toBe(true);
   });
 
+  it('rejects disallowed models or legacy keys for art generation', async () => {
+    await expect(
+      generateArtImage({
+        artPrompt: 'Minimalist backdrop',
+        palette: PALETTE,
+        geminiApiKey: 'mock-key',
+      })
+    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
+
+    await expect(
+      generateArtImage({
+        artPrompt: 'Minimalist backdrop',
+        palette: PALETTE,
+        anthropicApiKey: 'mock-key',
+      })
+    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
+  });
+
   it('retries when attempt 1 fails vision check, succeeding on attempt 2', async () => {
     const validPng = createSolidPng(64, 64, [30, 58, 95]);
     const validBase64 = validPng.toString('base64');
 
-    let anthropicCalls = 0;
+    let chatCalls = 0;
     const fakeFetcher: typeof fetch = vi.fn(async (url: any) => {
       const urlStr = String(url);
-      if (urlStr.includes('generativelanguage.googleapis.com')) {
+      if (urlStr.includes('api.openai.com/v1/images/generations')) {
         return {
           ok: true,
           status: 200,
           json: async () => ({
-            responseId: 'gemini-img-retry-test',
-            candidates: [
-              {
-                content: {
-                  parts: [{ inlineData: { mimeType: 'image/png', data: validBase64 } }],
-                },
-              },
-            ],
+            created: 123456789,
+            data: [{ b64_json: validBase64 }],
           }),
         } as any;
       }
-      if (urlStr.includes('api.anthropic.com')) {
-        anthropicCalls++;
-        if (anthropicCalls === 1) {
+      if (urlStr.includes('api.openai.com/v1/chat/completions')) {
+        chatCalls++;
+        if (chatCalls === 1) {
           // Attempt 1 fails vision
           return {
             ok: true,
             status: 200,
             json: async () => ({
-              content: [{ text: '{"containsForbidden": true, "what": "lettering watermark"}' }],
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({ containsForbidden: true, what: 'lettering watermark' }),
+                  },
+                },
+              ],
             }),
           } as any;
         }
@@ -281,7 +307,13 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
           ok: true,
           status: 200,
           json: async () => ({
-            content: [{ text: '{"containsForbidden": false, "what": "clean"}' }],
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ containsForbidden: false, what: 'clean' }),
+                },
+              },
+            ],
           }),
         } as any;
       }
@@ -291,12 +323,11 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     const result = await generateArtImage({
       artPrompt: 'Minimalist navy gradient textured backdrop',
       palette: PALETTE,
-      geminiApiKey: 'mock-key',
-      anthropicApiKey: 'mock-key',
+      openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
     });
 
-    expect(result.receipt.provider).toBe('gemini');
+    expect(result.receipt.provider).toBe('openai');
     expect(result.receipt.attempts).toBe(2);
     expect(result.receipt.verificationReport?.passed).toBe(true);
   });
@@ -313,8 +344,7 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
       palette: PALETTE,
       width: 1080,
       height: 1350,
-      geminiApiKey: 'mock-key',
-      anthropicApiKey: 'mock-key',
+      openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
       motifFallbackType: 'guilloche',
     });

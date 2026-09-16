@@ -9,4 +9,5 @@ export * from './feedback.js';
 export * from './orthography.js';
 export * from './sanitizer.js';
 export * from './workflow-controller.js';
+export * from './provider-policy.js';
 export * from './fixtures/index.js';

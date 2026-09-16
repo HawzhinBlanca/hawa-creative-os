@@ -1,8 +1,16 @@
 import type { StudioLayoutV2 } from '@hawa/creative';
 import type { LayoutMetrics } from '@hawa/creative';
 import type { StudioModelClient } from '@hawa/creative';
-import type { GeminiImageProvider } from '@hawa/creative';
+import type { GeminiImageProvider, OpenAiImageProvider } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
+
+export class StudioBudgetExhaustedError extends Error {
+  readonly code = 'BUDGET_EXHAUSTED';
+  constructor(message = 'BUDGET_EXHAUSTED') {
+    super(message);
+    this.name = 'StudioBudgetExhaustedError';
+  }
+}
 
 export interface CreativeBriefRole {
   copyIndex: number;
@@ -129,8 +137,9 @@ export interface StageContext {
   arabicFont: string;
   logoAspect?: number;
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
+  exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
   client: StudioModelClient;
-  artProvider?: GeminiImageProvider;
+  artProvider?: OpenAiImageProvider | GeminiImageProvider;
   ledger?: DesignStudioRepository;
 }
 
@@ -161,4 +170,6 @@ export interface CandidateState {
   score?: number | null;
   rank?: number | null;
   status: 'draft' | 'active' | 'eliminated' | 'winner' | 'runner_up';
+  diagnostics?: string[];
+  validation?: any;
 }

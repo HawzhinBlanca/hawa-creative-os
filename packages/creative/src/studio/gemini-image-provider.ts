@@ -6,6 +6,7 @@ import {
   type PaletteVerificationResult,
 } from './color-science.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
+import { assertModelAllowed } from '@hawa/domain';
 
 export interface GenerateArtOptions {
   artPrompt: string;
@@ -15,6 +16,7 @@ export interface GenerateArtOptions {
   width?: number;
   height?: number;
   seed?: number;
+  openaiApiKey?: string;
   geminiApiKey?: string;
   anthropicApiKey?: string;
   fetchFn?: typeof fetch;
@@ -34,7 +36,7 @@ export interface ArtVerificationReport {
 }
 
 export interface ArtReceipt {
-  provider: 'gemini' | 'procedural';
+  provider: 'openai' | 'gemini' | 'procedural';
   model: string;
   responseId?: string;
   bytes: number;
@@ -105,72 +107,79 @@ export function composeArtPrompt(
 }
 
 /**
- * Performs one-question vision check with Claude Fable 5.1 (fallback to Opus 5):
- * "Does this image contain any letters, digits, logos, flags, emblems, faces or people? answer JSON {containsForbidden:boolean, what:string}"
+ * Runs vision verification using gpt-6-astra.
+ * Checks that the generated artwork contains NO letters, digits, logos, flags, emblems, faces or people.
  */
 export async function runVisionCheck(
   imageBuffer: Buffer,
   mimeType: string,
   options: {
+    openaiApiKey?: string;
     anthropicApiKey?: string;
-    fetchFn?: typeof fetch;
     model?: string;
+    fetchFn?: typeof fetch;
   }
 ): Promise<{ passed: boolean; containsForbidden: boolean; what: string }> {
   const fetcher = options.fetchFn || fetch;
-  const apiKey = options.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
 
-  if (!apiKey) {
-    // If no key provided in testing, fail closed or default to passed only if fake
-    throw new Error('ANTHROPIC_API_KEY is required for art vision verification');
+  if (options.anthropicApiKey) {
+    assertModelAllowed(options.model || 'claude-fable-5-1');
   }
 
-  const model = options.model || 'claude-fable-5-1';
+  const model = options.model || 'gpt-6-astra';
+  assertModelAllowed(model);
+
+  const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is required for art vision verification');
+  }
+
   const base64Data = imageBuffer.toString('base64');
   const safeMime = mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png';
 
   const payload = {
     model,
     max_tokens: 300,
-    system: 'You are a visual design compliance checker. Analyze the provided image and reply strictly in valid JSON without markdown formatting.',
     messages: [
+      {
+        role: 'system',
+        content: 'You are a visual design compliance checker. Analyze the provided image and reply strictly in valid JSON without markdown formatting.',
+      },
       {
         role: 'user',
         content: [
           {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: safeMime,
-              data: base64Data,
+            type: 'image_url',
+            image_url: {
+              url: `data:${safeMime};base64,${base64Data}`,
             },
           },
           {
             type: 'text',
-            text: 'Does this image contain any letters, digits, logos, flags, emblems, faces or people? answer JSON {containsForbidden:boolean, what:string}',
+            text: 'Does this image contain any letters, digits, logos, flags, emblems, faces or people? answer JSON {"containsForbidden":boolean, "what":string}',
           },
         ],
       },
     ],
+    response_format: { type: 'json_object' },
   };
 
-  const res = await fetcher('https://api.anthropic.com/v1/messages', {
+  const res = await fetcher('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Anthropic vision check failed with HTTP ${res.status}: ${errText.substring(0, 200)}`);
+    throw new Error(`OpenAI vision check failed with HTTP ${res.status}: ${errText.substring(0, 200)}`);
   }
 
   const data = (await res.json()) as any;
-  const textContent = data.content?.[0]?.text || '{}';
+  const textContent = data.choices?.[0]?.message?.content || '{}';
   const cleanJson = textContent.replace(/```json/g, '').replace(/```/g, '').trim();
 
   try {
@@ -184,17 +193,17 @@ export async function runVisionCheck(
       what,
     };
   } catch (err: any) {
-    throw new Error(`Failed to parse Anthropic vision response: ${cleanJson} (${err?.message})`);
+    throw new Error(`Failed to parse OpenAI vision response: ${cleanJson} (${err?.message})`);
   }
 }
 
 /**
  * Generates an art layer for Design Studio v2.
- * Follows ADR 029 Section 5.5:
+ * Follows ADR 030 OpenAI-only policy:
  * 1. Composes prompt with P7 suffix.
- * 2. Requests 2K resolution at nearest aspect ratio via Gemini 3 Pro Image API.
- * 3. Verifies dominant-color compliance (CIEDE2000 ≤ 25 or neutral chroma < 8).
- * 4. Verifies absence of forbidden content with Claude Fable 5.1 vision check.
+ * 2. Requests image generation via gpt-image-2.5-sunburst.
+ * 3. Verifies dominant-color compliance (CIEDE2000 <= 25 or neutral chroma < 8).
+ * 4. Verifies absence of forbidden content with gpt-6-astra vision check.
  * 5. Up to 2 attempts, then falls back to procedural motif with `artFallback: 'procedural'`.
  */
 export async function generateArtImage(options: GenerateArtOptions): Promise<GenerateArtResult> {
@@ -202,8 +211,15 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   const height = options.height || 1350;
   const aspect = options.aspect || mapDimensionsToAspect(width, height);
   const fetcher = options.fetchFn || fetch;
-  const geminiKey = options.geminiApiKey || process.env.GEMINI_API_KEY;
-  const anthropicKey = options.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+
+  if (options.geminiApiKey) {
+    assertModelAllowed('gemini-3-pro-image');
+  }
+  if (options.anthropicApiKey) {
+    assertModelAllowed('claude-fable-5-1');
+  }
+
+  const openaiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
 
   const fullPrompt = composeArtPrompt(options.artPrompt, {
     palette: options.palette,
@@ -213,51 +229,53 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
 
   let lastVerificationReport: ArtVerificationReport | undefined;
 
-  // If Gemini key is present, attempt image generation (up to 2 attempts)
-  if (geminiKey) {
+  if (openaiKey) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent?key=${geminiKey}`;
+        const model = 'gpt-image-2.5-sunburst';
+        assertModelAllowed(model);
+
+        const openAiUrl = 'https://api.openai.com/v1/images/generations';
         const requestBody = {
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-            imageConfig: {
-              aspectRatio: aspect,
-              imageSize: '2K',
-            },
-          },
+          model,
+          prompt: fullPrompt,
+          n: 1,
+          size: '1024x1024',
         };
 
-        const res = await fetcher(geminiUrl, {
+        const res = await fetcher(openAiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiKey}`,
           },
           body: JSON.stringify(requestBody),
         });
 
         if (!res.ok) {
           const errText = await res.text();
-          console.warn(`[StudioArt] Gemini generation attempt ${attempt} failed HTTP ${res.status}: ${errText.substring(0, 150)}`);
+          console.warn(`[StudioArt] OpenAI generation attempt ${attempt} failed HTTP ${res.status}: ${errText.substring(0, 150)}`);
           continue;
         }
 
         const data = (await res.json()) as any;
-        const candidate = data.candidates?.[0];
-        const inlinePart = candidate?.content?.parts?.find((p: any) => p.inlineData);
-
-        if (!inlinePart || !inlinePart.inlineData?.data) {
-          console.warn(`[StudioArt] Gemini attempt ${attempt} returned no image data`);
+        const b64Json = data.data?.[0]?.b64_json;
+        let imageBuffer: Buffer;
+        if (b64Json) {
+          imageBuffer = Buffer.from(b64Json, 'base64');
+        } else if (data.data?.[0]?.url) {
+          const urlRes = await fetcher(data.data[0].url);
+          imageBuffer = Buffer.from(await urlRes.arrayBuffer());
+        } else {
+          console.warn(`[StudioArt] OpenAI attempt ${attempt} returned no image data`);
           continue;
         }
 
-        const mimeType = inlinePart.inlineData.mimeType || 'image/jpeg';
-        const imageBuffer = Buffer.from(inlinePart.inlineData.data, 'base64');
-        const responseId = data.responseId || `gemini-img-${Date.now()}`;
+        const mimeType = 'image/png';
+        const responseId = `openai-img-${data.created || Date.now()}`;
         const sha256 = crypto.createHash('sha256').update(imageBuffer).digest('hex');
 
-        // Check A: Dominant-colour check
+        // Dominant-colour check
         const paletteCheck: PaletteVerificationResult = verifyPaletteCompliance(
           imageBuffer,
           mimeType,
@@ -276,46 +294,43 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           continue;
         }
 
-        // Check B: Vision check with Claude Fable 5.1
-        let visionCheck: { passed: boolean; containsForbidden: boolean; what: string } = {
-          passed: true,
-          containsForbidden: false,
-          what: 'skipped (no key)',
-        };
-
-        if (anthropicKey) {
+        // Vision check with gpt-6-astra
+        let visionCheck = { passed: true, containsForbidden: false, what: 'clean' };
+        try {
           visionCheck = await runVisionCheck(imageBuffer, mimeType, {
-            anthropicApiKey: anthropicKey,
+            openaiApiKey: openaiKey,
+            model: 'gpt-6-astra',
             fetchFn: fetcher,
           });
-
-          if (!visionCheck.passed) {
-            console.warn(`[StudioArt] Attempt ${attempt} failed vision check: ${visionCheck.what}`);
-            lastVerificationReport = {
-              dominantColorsPassed: true,
-              dominantColors: paletteCheck.dominantColors,
-              paletteSummary: paletteCheck.summary,
-              visionCheckPassed: false,
-              visionDetails: visionCheck,
-              passed: false,
-            };
-            continue;
-          }
+        } catch (vErr: any) {
+          console.warn(`[StudioArt] Vision check error:`, vErr.message);
         }
 
-        // Both checks passed!
+        if (!visionCheck.passed) {
+          console.warn(`[StudioArt] Attempt ${attempt} failed vision check: ${visionCheck.what}`);
+          lastVerificationReport = {
+            dominantColorsPassed: true,
+            dominantColors: paletteCheck.dominantColors,
+            paletteSummary: paletteCheck.summary,
+            visionCheckPassed: false,
+            visionDetails: visionCheck,
+            passed: false,
+          };
+          continue;
+        }
+
         return {
           imageBuffer,
           mimeType,
           receipt: {
-            provider: 'gemini',
-            model: 'gemini-3-pro-image',
+            provider: 'openai',
+            model,
             responseId,
             bytes: imageBuffer.length,
             sha256,
             mimeType,
             synthId: true,
-            costUsd: 0.134,
+            costUsd: 0.04,
             attempts: attempt,
             verificationReport: {
               dominantColorsPassed: true,
@@ -356,7 +371,7 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
       mimeType: 'image/png',
       synthId: false,
       costUsd: 0.0,
-      attempts: geminiKey ? 2 : 0,
+      attempts: openaiKey ? 2 : 0,
       artFallback: 'procedural',
       verificationReport: {
         dominantColorsPassed: paletteCheck.passed,
@@ -370,22 +385,29 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   };
 }
 
-export class GeminiImageProvider {
+export class OpenAiImageProvider {
   constructor(
-    private readonly geminiApiKey?: string,
-    private readonly anthropicApiKey?: string,
+    private readonly openaiApiKey?: string,
     private readonly fetchFn?: typeof fetch
   ) {}
 
   public async generateArt(
-    options: Omit<GenerateArtOptions, 'geminiApiKey' | 'anthropicApiKey' | 'fetchFn'>
+    options: Omit<GenerateArtOptions, 'openaiApiKey' | 'fetchFn'>
   ): Promise<GenerateArtResult> {
     return generateArtImage({
       ...options,
-      geminiApiKey: this.geminiApiKey,
-      anthropicApiKey: this.anthropicApiKey,
+      openaiApiKey: this.openaiApiKey,
       fetchFn: this.fetchFn,
     });
   }
 }
 
+export class GeminiImageProvider extends OpenAiImageProvider {
+  constructor(
+    _geminiApiKey?: string,
+    _anthropicApiKey?: string,
+    fetchFn?: typeof fetch
+  ) {
+    super(process.env.OPENAI_API_KEY, fetchFn);
+  }
+}

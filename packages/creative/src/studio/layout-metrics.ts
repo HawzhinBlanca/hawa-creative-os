@@ -1,4 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
+import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 
 export interface LayoutMetrics {
   alignmentScore: number; // 0..1 (fraction of edges aligned to grid or other elements)
@@ -201,9 +202,11 @@ export function computeLayoutMetrics(
   // 8. Contrast P05
   const contrastP05: Record<number, number> = options.contrastValues || {};
   if (!options.contrastValues) {
-    // Default estimated contrast against background
+    const bgColor = typeof layout.background === 'object' && layout.background ? layout.background.color : String(layout.background);
+    const bgLum = hexToLuminance(bgColor);
     for (const t of layout.text) {
-      contrastP05[t.copyIndex] = 7.0; // placeholder neutral high contrast
+      const textLum = hexToLuminance(t.color);
+      contrastP05[t.copyIndex] = parseFloat(calculateLuminanceContrastRatio(textLum, bgLum).toFixed(2));
     }
   }
 

@@ -35,7 +35,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Minion Variable Concept',color:'#fff2db',align:'left'}]};
   const intake=async()=> (await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Plan',rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',designInstructions:'Use navy.',exactCopy:[]})).task.id;
   const make=(fetcher:any)=>{const api={importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService;return {api,planner:new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher})};};
-  const response=(model='claude-opus-5',value:any=plan)=>Response.json({id:'msg-real-shaped-test',model,stop_reason:'end_turn',usage:{input_tokens:123,output_tokens:456},content:[{type:'text',text:JSON.stringify(value)}]});
+  const response=(model='gpt-6-astra',value:any=plan)=>Response.json({id:'chatcmpl-real-shaped-test',model,choices:[{message:{content:typeof value==='string'?value:JSON.stringify(value)}}],usage:{prompt_tokens:123,completion_tokens:456}});
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
@@ -45,7 +45,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(remote).toHaveBeenCalledTimes(1);
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('planned');expect(saved.result.manifest.copy).toEqual(['EXACT TITLE','Exact body. Never rewrite it.']);
-    expect(saved.result.receipt.returnedModel).toBe('claude-opus-5');
+    expect(saved.result.receipt.returnedModel).toBe('gpt-6-astra');
     await new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher:remote}).resume(scope,id,saved.id);
     expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).toHaveBeenCalledWith(scope,id,'plan-'+saved.id,expect.objectContaining({sha256:saved.source_sha256}));
     await expect(sql`UPDATE hawa.canva_design_plans SET request='{}'::jsonb WHERE id=${saved.id}::uuid`.execute(db)).rejects.toThrow('immutable');
@@ -56,15 +56,15 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',
       rawText:'Use navy.\n---\nEXACT TITLE\n\nوۆرکشۆپی دڵنیایی جۆری بۆ بەرپرسانی زانکۆکان، ٢٨ی ئەیلوول ٢٠٢٦',designInstructions:'Use navy.',exactCopy:[]})).task.id;
     const modelPlan=structuredClone(plan) as any;modelPlan.text[1].fontFamily='Noto Sans Arabic'; // the model may name the script typeface on the Sorani block; the server decides direction either way
-    const remote=vi.fn(async()=>response('claude-opus-5',modelPlan));
+    const remote=vi.fn(async()=>response('gpt-6-astra',modelPlan));
     const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'sorani-key-01',1200,1697);
     expect(result.status).toBe('submitted');expect(remote).toHaveBeenCalledTimes(1);
-    const sent=JSON.parse(remote.mock.calls[0][1].body);expect(sent.system).toContain('Sorani Kurdish');
-    expect(JSON.parse(sent.messages[0].content).copyScripts).toEqual(['latin','arabic']);
+    const sent=JSON.parse(remote.mock.calls[0][1].body);expect(sent.messages[0].content).toContain('Sorani Kurdish');
+    expect(JSON.parse(sent.messages[1].content).copyScripts).toEqual(['latin','arabic']);
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('planned');
-    expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1,rtlBlocks:1});
+    expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1});
     expect(saved.result.manifest.plan.text[1]).toMatchObject({rtl:true,align:'right',fontFamily:'Noto Sans Arabic'});
     expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Minion Variable Concept'});
     const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Minion Variable Concept',{scriptFonts:{arabic:'Noto Sans Arabic'}});
@@ -82,7 +82,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     if(mode==='rewritten-copy')bad.text[0].text='forged copy';
     if(mode==='overlap')bad.text[1].y=bad.text[0].y;
     if(mode==='missing-block')bad.text.pop();
-    const {api,planner}=make(vi.fn(async()=>response(mode==='wrong-model'?'another-model':'claude-opus-5',bad)));
+    const {api,planner}=make(vi.fn(async()=>response(mode==='wrong-model'?'another-model':'gpt-6-astra',bad)));
     const result=await planner.generate(scope,id,'reject-key-01',1200,1697);expect(result.status).toBe('failed');expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it('does not repeat an uncertain model charge after a lost response',async()=>{
@@ -108,15 +108,155 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const id=await intake();
     const conversationalText = `Here is the academic invitation design layout you requested:\n\n\`\`\`json\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n\nI have followed all brand rules carefully.`;
     const remote = vi.fn(async() => Response.json({
-      id:'msg-conversational-test',
-      model:'claude-opus-5',
-      stop_reason:'end_turn',
-      usage:{input_tokens:120,output_tokens:450},
-      content:[{type:'text',text:conversationalText}]
+      id:'chatcmpl-conversational-test',
+      model:'gpt-6-astra',
+      usage:{prompt_tokens:120,completion_tokens:450},
+      choices:[{message:{content:conversationalText}}]
     }));
     const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'conv-key-001',1200,1697);
     expect(result.status).toBe('submitted');
     expect(api.importEditableDesign).toHaveBeenCalled();
   });
+  it('threads prior layout and revision directive into a 4-turn conversational session for revisions',async()=>{
+    // 1. First draft creates an initial plan
+    const initialTaskId=await intake();
+    const remoteInitial=vi.fn(async()=>response('gpt-6-astra',plan));
+    const {planner:planner1}=make(remoteInitial);
+    const initialResult=await planner1.generate(scope,initialTaskId,'plan-init-001',1200,1697);
+    expect(initialResult.status).toBe('submitted');
+    expect(remoteInitial).toHaveBeenCalledTimes(1);
+    const initialSent=JSON.parse(remoteInitial.mock.calls[0][1].body);
+    expect(initialSent.messages).toHaveLength(2);
+    expect(initialSent.messages[0].role).toBe('system');
+    expect(initialSent.messages[1].role).toBe('user');
+
+    const initialSaved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${initialTaskId}::uuid`.execute(db)).rows[0];
+    expect(initialSaved.status).toBe('planned');
+    expect(initialSaved.result.manifest.conversationalRevision).toBe(false);
+    expect(initialSaved.result.manifest.turns).toBe(2);
+
+    // 2. Revision task created with parentTaskId and revision directive
+    const revisionDirective='swap the keynote and mou columns and make the gold bar 300px wide';
+    const revisionTaskId=(await persistChatIntake(db,{
+      platform:'telegram',
+      sourceEventId:randomUUID(),
+      sourceChannelId:'isolated-planner',
+      clientId,
+      title:'[TEST] Plan (Revision)',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',
+      designInstructions:`Use navy.\nOperator Revision Directive: ${revisionDirective}`,
+      exactCopy:[],
+      studioOptions:{
+        parentTaskId:initialTaskId,
+        revisionRound:1,
+      },
+    })).task.id;
+
+    // Model returns updated plan
+    const updatedPlan=structuredClone(plan);
+    updatedPlan.shapes.push({x:400,y:350,width:300,height:4,color:'#F7B500'});
+    const remoteRevision=vi.fn(async()=>response('gpt-6-astra',updatedPlan));
+    const {planner:planner2}=make(remoteRevision);
+
+    const revisionResult=await planner2.generate(scope,revisionTaskId,'plan-rev-001',1200,1697);
+    expect(revisionResult.status).toBe('submitted');
+    expect(remoteRevision).toHaveBeenCalledTimes(1);
+
+    const revisionSent=JSON.parse(remoteRevision.mock.calls[0][1].body);
+    expect(revisionSent.messages).toHaveLength(4);
+
+    // Turn 0: System with interactive session guidelines
+    expect(revisionSent.messages[0].role).toBe('system');
+    expect(revisionSent.messages[0].content).toContain('INTERACTIVE EDITORIAL REVISION SESSION');
+
+    // Turn 1: User base request (without directive)
+    expect(revisionSent.messages[1].role).toBe('user');
+    const baseReq=JSON.parse(revisionSent.messages[1].content);
+    expect(baseReq.instructions).toBe('Use navy.');
+    expect(baseReq.instructions).not.toContain('Operator Revision Directive');
+
+    // Turn 2: Assistant prior layout JSON
+    expect(revisionSent.messages[2].role).toBe('assistant');
+    const priorLayoutJson=JSON.parse(revisionSent.messages[2].content);
+    expect(priorLayoutJson.width).toBe(1200);
+    expect(priorLayoutJson.height).toBe(1697);
+    expect(priorLayoutJson.text).toHaveLength(2);
+
+    // Turn 3: User operator conversational directive
+    expect(revisionSent.messages[3].role).toBe('user');
+    expect(revisionSent.messages[3].content).toContain(`Operator Conversational Directive: ${revisionDirective}`);
+
+    // Verify DB manifest records multi-turn evidence
+    const revisionSaved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${revisionTaskId}::uuid`.execute(db)).rows[0];
+    expect(revisionSaved.status).toBe('planned');
+    expect(revisionSaved.result.manifest.conversationalRevision).toBe(true);
+    expect(revisionSaved.result.manifest.priorPlanId).toBe(initialSaved.id);
+    expect(revisionSaved.result.manifest.turns).toBe(4);
+  });
+
+  it('breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign', async () => {
+    // 1. Initial plan
+    const initialTaskId = await intake();
+    const remoteInitial = vi.fn(async () => response('gpt-6-astra', plan));
+    const { planner: planner1 } = make(remoteInitial);
+    await planner1.generate(scope, initialTaskId, 'plan-init-rd-001', 1200, 1697);
+
+    // 2. Redesign directive matching user's exact complaint
+    const redesignDirective = 'thats designs are bullshot i keep sending feedback but gives me similar design, here its stuck with a design';
+    const fakeBase64 = 'data:image/jpeg;base64,VGhpcyBpcyBhIGZha2UgaW1hZ2U=';
+    const redesignTaskId = (await persistChatIntake(db, {
+      platform: 'telegram',
+      sourceEventId: randomUUID(),
+      sourceChannelId: 'isolated-planner',
+      clientId,
+      title: '[TEST] Plan (Redesign)',
+      rawText: 'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',
+      designInstructions: `Use navy.\nOperator Revision Directive: ${redesignDirective}`,
+      exactCopy: [],
+      studioOptions: {
+        parentTaskId: initialTaskId,
+        revisionRound: 1,
+        referenceImageBase64: fakeBase64,
+      },
+    })).task.id;
+
+    const freshPlan = structuredClone(plan);
+    freshPlan.background = '#0A1628';
+    const remoteRedesign = vi.fn(async () => response('gpt-6-astra', freshPlan));
+    const { planner: planner2 } = make(remoteRedesign);
+
+    const result = await planner2.generate(scope, redesignTaskId, 'plan-redesign-001', 1200, 1697);
+    expect(result.status).toBe('submitted');
+    expect(remoteRedesign).toHaveBeenCalledTimes(1);
+
+    const sent = JSON.parse(remoteRedesign.mock.calls[0][1].body);
+    expect(sent.messages).toHaveLength(2);
+    // Turn 0: System prompt has redesign directive and vision note
+    expect(sent.messages[0].role).toBe('system');
+    expect(sent.messages[0].content).toContain('CREATIVE REDESIGN DIRECTIVE');
+    expect(sent.messages[0].content).toContain('COMPLETELY BREAK FREE');
+    expect(sent.messages[0].content).toContain('REFERENCE IMAGE ATTACHED');
+
+    // Turn 1: User content is multimodal with image_url and critique
+    expect(sent.messages[1].role).toBe('user');
+    expect(Array.isArray(sent.messages[1].content)).toBe(true);
+    expect(sent.messages[1].content[0].type).toBe('text');
+    expect(sent.messages[1].content[0].text).toContain(redesignDirective);
+    expect(sent.messages[1].content[1].type).toBe('image_url');
+    expect(sent.messages[1].content[1].image_url.url).toBe(fakeBase64);
+
+    // Prior layout was NOT forced as an assistant turn constraint
+    expect(sent.messages.some((m: any) => m.role === 'assistant')).toBe(false);
+
+    // Verify DB manifest records redesign & reference image
+    const redesignSaved = (await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${redesignTaskId}::uuid`.execute(db)).rows[0];
+    expect(redesignSaved.status).toBe('planned');
+    expect(redesignSaved.result.manifest.isRedesign).toBe(true);
+    expect(redesignSaved.result.manifest.conversationalRevision).toBe(false);
+    expect(redesignSaved.result.manifest.hasReferenceImage).toBe(true);
+    expect(redesignSaved.result.manifest.turns).toBe(2);
+  });
 });
+
+

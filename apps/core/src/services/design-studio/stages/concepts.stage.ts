@@ -141,10 +141,14 @@ export async function runConceptsStage(
     creativeBriefJson: JSON.stringify(brief),
   });
 
+  const exemplarImages = (ctx.exemplars || []).slice(0, 2).map((e) => e.bytes).filter(Boolean) as Buffer[];
+  const images = exemplarImages.length > 0 ? exemplarImages : undefined;
+
   // Attempt 1
   let response = await ctx.client.completeJson<{ concepts: Concept[] }>({
     system: systemPrompt,
     prompt: userPrompt,
+    images,
     schema: CONCEPTS_SCHEMA,
     schemaName: 'ConceptBoard',
   });
@@ -159,6 +163,7 @@ export async function runConceptsStage(
     response = await ctx.client.completeJson<{ concepts: Concept[] }>({
       system: systemPrompt,
       prompt: retryPrompt,
+      images,
       schema: CONCEPTS_SCHEMA,
       schemaName: 'ConceptBoard',
     });

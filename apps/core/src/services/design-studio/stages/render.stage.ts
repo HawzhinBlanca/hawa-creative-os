@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { StageContext, CandidateState } from '../types.js';
-import { renderLayoutV2, computeLayoutMetrics } from '@hawa/creative';
+import { renderLayoutV2, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 
 export async function runRenderStage(
   ctx: StageContext,
@@ -30,10 +30,21 @@ export async function runRenderStage(
     cand.previewSha256 = createHash('sha256').update(renderResult.png).digest('hex');
     cand.compositePng = renderResult.noTextPng;
 
-    // Compute deterministic layout metrics
+    let contrastValues: Record<number, number> | undefined;
+    if (renderResult.noTextPng) {
+      try {
+        const contrastResult = evaluateCompositeContrast(renderResult.noTextPng, cand.currentLayout);
+        contrastValues = contrastResult.p05PerBox;
+      } catch {
+        // Fallback to direct background calculation in computeLayoutMetrics
+      }
+    }
+
+    // Compute deterministic layout metrics with real measured contrast
     cand.metrics = computeLayoutMetrics(cand.currentLayout, {
       copyText: copyMap,
       measuredLines: renderResult.wrappedLines,
+      contrastValues,
     });
   }
 

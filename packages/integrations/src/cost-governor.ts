@@ -65,6 +65,8 @@ export class CostGovernor {
   private reservations = new Map<string, BudgetReservation>();
 
   public readonly pricingRates: Record<string, { inputPer1M: number; outputPer1M: number; gpuPerSec?: number }> = {
+    'openai:gpt-6-astra': { inputPer1M: 2.5, outputPer1M: 10.0 },
+    'openai:gpt-image-2.5-sunburst': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.04 },
     'google:gemini-1.5-pro': { inputPer1M: 1.25, outputPer1M: 5.0 },
     'google:gemini-1.5-flash': { inputPer1M: 0.075, outputPer1M: 0.3 },
     'anthropic:claude-3-5-sonnet': { inputPer1M: 3.0, outputPer1M: 15.0 },
@@ -263,8 +265,8 @@ export class CostGovernor {
   public checkPreFlight(
     clientId: string,
     tokensOrCost: number | { input: number; output: number },
-    model = 'gemini-1.5-pro',
-    provider = 'google'
+    model = 'gpt-6-astra',
+    provider = 'openai'
   ): BudgetCheckResult {
     let estimatedCost: number;
     if (typeof tokensOrCost === 'number') {

@@ -102,6 +102,8 @@ export async function runCritiqueStage(
     promotedRules: ctx.promotedRules || 'None',
   });
 
+  const exemplarImages = (ctx.exemplars || []).slice(0, 2).map((e) => e.bytes).filter(Boolean) as Buffer[];
+
   for (const cand of candidates) {
     if (!cand.previewPng) continue;
 
@@ -111,12 +113,14 @@ export async function runCritiqueStage(
       creativeBriefJson: JSON.stringify(brief),
     });
 
+    const critiqueImages = [...exemplarImages, cand.previewPng];
+
     const response = await ctx.client.completeJson<Critique>({
       system: systemPrompt,
       prompt: userPrompt,
       schema: CRITIQUE_SCHEMA,
       schemaName: 'CandidateCritique',
-      images: [cand.previewPng],
+      images: critiqueImages,
     });
 
     const critique = response.data;

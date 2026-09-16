@@ -137,6 +137,9 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     if (boundary?.terminal) return finish('DESIGN_REJECTED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
     throw error;
   }
+  if (result.status === 'degraded' && !result.designId && state.binding?.designId) {
+    result.designId = state.binding.designId;
+  }
   if (!result.designId || state.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding differs from imported document', 'BINDING_MISMATCH');
   let currentBindingVersion = state.binding?.version;
   let capture: any;

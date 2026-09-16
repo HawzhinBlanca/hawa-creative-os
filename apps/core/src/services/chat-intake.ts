@@ -29,6 +29,9 @@ export interface ChatIntake {
     imagery?: 'none' | 'abstract' | 'photographic';
     previews?: number;
     holdForSelection?: boolean;
+    parentTaskId?: string;
+    revisionRound?: number;
+    referenceImageBase64?: string;
   };
 }
 

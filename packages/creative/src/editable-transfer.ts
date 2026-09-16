@@ -10,6 +10,7 @@ export interface EditableTransferPlan {
     rtl?: boolean }>;
   shapes: Array<{ x: number; y: number; width: number; height: number; color: string }>;
   logo?: { x: number; y: number; width: number; height: number };
+  backgroundImage?: { bytes: Buffer; mimeType: 'image/png'|'image/jpeg' };
 }
 export interface TransferLogo { bytes: Buffer; sha256: string; mimeType: 'image/png'|'image/jpeg' }
 
@@ -49,6 +50,9 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   const pptx=new PptxGenJS();pptx.defineLayout({name:'HAWA',width:plan.width/96,height:plan.height/96});pptx.layout='HAWA';
   pptx.author='Hawa';pptx.subject='Editable Canva transfer; source copy is immutable';
   const slide=pptx.addSlide();slide.background={color:hex(plan.background)};
+  if(plan.backgroundImage){
+    slide.addImage({data:`${plan.backgroundImage.mimeType};base64,${plan.backgroundImage.bytes.toString('base64')}`,x:0,y:0,w:plan.width/96,h:plan.height/96});
+  }
   for(const shape of plan.shapes)slide.addShape(pptx.ShapeType.rect,{x:shape.x/96,y:shape.y/96,w:shape.width/96,h:shape.height/96,
     fill:{color:hex(shape.color)},line:{color:hex(shape.color),transparency:100}});
   for(const t of plan.text)slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,

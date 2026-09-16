@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   sql,
@@ -15,13 +15,14 @@ import {
 } from '@hawa/db';
 import {
   StudioModelClient,
+  OpenAiImageProvider,
   GeminiImageProvider,
   type StudioLayoutV2,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
-import type { StageContext, CandidateState, CreativeBrief, Concept, ReferencePack, CopyBlock, ParityResult } from './types.js';
+import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult } from './types.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -40,13 +41,6 @@ import {
 export type Scope = { tenantId: string; actorId: string };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
-
-export class StudioBudgetExhaustedError extends Error {
-  constructor(message: string = 'BUDGET_EXHAUSTED') {
-    super(message);
-    this.name = 'StudioBudgetExhaustedError';
-  }
-}
 
 export interface CreateStudioRunInput {
   width: number;
@@ -286,7 +280,7 @@ export class DesignStudioService {
       }
 
       // 6. Ensure model API key or fetcher is configured
-      const apiKey = this.options.apiKey || process.env.ANTHROPIC_API_KEY;
+      const apiKey = this.options.apiKey || process.env.OPENAI_API_KEY;
       if (!apiKey && !this.options.fetcher) {
         throw new CanvaFlowError(503, 'MODEL_NOT_CONFIGURED', 'Configure the requested design model first.');
       }
@@ -342,18 +336,17 @@ export class DesignStudioService {
   ): StageContext {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
-    const apiKey = this.options.apiKey || process.env.ANTHROPIC_API_KEY || 'mock-key';
-    const geminiKey = this.options.geminiApiKey || process.env.GEMINI_API_KEY || 'mock-gemini';
+    const apiKey = this.options.apiKey || process.env.OPENAI_API_KEY || 'mock-key';
 
     const baseClient = new StudioModelClient({
       apiKey,
       fetchFn,
       maxRetries: this.options.maxRetries ?? 3,
-      primaryModel: 'claude-fable-5-1',
-      fallbackModel: 'claude-opus-5',
+      primaryModel: 'gpt-6-astra',
+      fallbackModel: 'gpt-6-astra',
     });
 
-    const baseArtProvider = new GeminiImageProvider(geminiKey, apiKey, fetchFn);
+    const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
 
     // Instrument client with ledger hooks and budget checks
     const ledgerClient: any = {
@@ -376,7 +369,7 @@ export class DesignStudioService {
           runId: run.id,
           tenantId: s.tenantId,
           stage: currentStageName,
-          provider: 'anthropic',
+          provider: 'openai',
           model,
           requestedModel: model,
         });
@@ -429,20 +422,20 @@ export class DesignStudioService {
           runId: run.id,
           tenantId: s.tenantId,
           stage: 'art',
-          provider: 'gemini',
-          model: 'gemini-3-pro-image',
-          requestedModel: 'gemini-3-pro-image',
+          provider: 'openai',
+          model: 'gpt-image-2.5-sunburst',
+          requestedModel: 'gpt-image-2.5-sunburst',
         });
         currentBudget.calls++;
 
         try {
           const result = await baseArtProvider.generateArt(params);
-          const cost = result.receipt?.costUsd !== undefined ? result.receipt.costUsd : 0.134;
+          const cost = result.receipt?.costUsd !== undefined ? result.receipt.costUsd : 0.04;
 
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
-            responseId: result.receipt?.responseId || 'gemini_art',
+            responseId: result.receipt?.responseId || 'openai_art',
             inputTokens: 0,
             outputTokens: 0,
             images: 1,
@@ -467,21 +460,104 @@ export class DesignStudioService {
       },
     };
 
-    const referencePack: ReferencePack = {
+    let referencePack: ReferencePack = {
       palette: [
         '#0A1628',
         '#1E3A5F',
         '#4770A3',
-        '#D4E2F0',
         '#F7B500',
         '#FDF8F3',
         '#FFFFFF',
+        '#1A1A1A',
       ],
       referenceFonts: {
-        latin: 'EB Garamond',
+        latin: 'Minion Variable Concept',
         arabic: 'Noto Sans Arabic',
       },
     };
+    let promotedRules = 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.';
+    let latinFont = 'Minion Variable Concept';
+    let arabicFont = 'Noto Sans Arabic';
+
+    try {
+      const refCandidates = [
+        resolve(process.cwd(), 'packages/creative/assets/kaae-reference.json'),
+        resolve(import.meta.dirname, '../../../../packages/creative/assets/kaae-reference.json'),
+        new URL('../../../../packages/creative/assets/kaae-reference.json', import.meta.url).pathname,
+      ];
+      const refPath = refCandidates.find((p) => existsSync(p));
+      if (refPath) {
+        const rawRef = JSON.parse(readFileSync(refPath, 'utf8'));
+        if (rawRef.rules?.palette) {
+          referencePack.palette = rawRef.rules.palette;
+        }
+        if (rawRef.rules?.fontFamily) {
+          latinFont = rawRef.rules.fontFamily;
+          referencePack.referenceFonts = {
+            latin: rawRef.rules.fontFamily,
+            arabic: rawRef.rules.scriptFonts?.arabic || 'Noto Sans Arabic',
+          };
+        }
+        if (rawRef.rules?.scriptFonts?.arabic) {
+          arabicFont = rawRef.rules.scriptFonts.arabic;
+        }
+        if (rawRef.rules?.colorUsage) {
+          promotedRules = rawRef.rules.colorUsage;
+        }
+      }
+    } catch {
+      // Fallback defaults preserved
+    }
+
+    const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
+    try {
+      const exCandidates = [
+        resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json'),
+        resolve(import.meta.dirname, '../../../../packages/creative/assets/kaae-exemplars.json'),
+        new URL('../../../../packages/creative/assets/kaae-exemplars.json', import.meta.url).pathname,
+      ];
+      const exPath = exCandidates.find((p) => existsSync(p));
+      if (exPath) {
+        const rawEx = JSON.parse(readFileSync(exPath, 'utf8'));
+        const list = Array.isArray(rawEx.exemplars) ? rawEx.exemplars.slice(0, 3) : [];
+        for (const item of list) {
+          const itemCandidates = [
+            resolve(process.cwd(), item.path),
+            resolve(process.cwd(), 'packages/creative/assets/exemplars', item.filename),
+            resolve(import.meta.dirname, '../../../../', item.path),
+            resolve(import.meta.dirname, '../../../../packages/creative/assets/exemplars', item.filename),
+          ];
+          const imgPath = itemCandidates.find((p) => existsSync(p));
+          if (imgPath) {
+            exemplars.push({
+              path: imgPath,
+              label: item.filename || item.reason || 'KAAE Exemplar',
+              sha256: item.sha256,
+              bytes: readFileSync(imgPath),
+              mimeType: 'image/png',
+            });
+          }
+        }
+      }
+    } catch {
+      // Optional fallback
+    }
+
+    let logo: { bytes: Buffer; sha256: string; mimeType: 'image/png' } | undefined;
+    try {
+      const logoPath = resolve(import.meta.dirname, '../../../../packages/creative/assets/logos/kaae-official-logo.png');
+      if (existsSync(logoPath)) {
+        const logoBytes = readFileSync(logoPath);
+        const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
+        logo = {
+          bytes: logoBytes,
+          sha256: logoSha256,
+          mimeType: 'image/png',
+        };
+      }
+    } catch {
+      // ignore
+    }
 
     return {
       runId: run.id,
@@ -495,10 +571,12 @@ export class DesignStudioService {
       instructions: request.instructions,
       copyBlocks: request.copyBlocks,
       referencePack,
-      promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',
-      latinFont: 'EB Garamond',
-      arabicFont: 'Noto Sans Arabic',
+      promotedRules,
+      latinFont,
+      arabicFont,
       logoAspect: request.logoAspect || 1.0,
+      logo,
+      exemplars,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
     };
@@ -1123,7 +1201,15 @@ export class DesignStudioService {
     if (planner) {
       try {
         const fallbackKey = `fb-${run.request_key}`.slice(0, 128);
-        const fallbackResult = await planner.generate(s, run.task_id, fallbackKey, request.width, request.height);
+        let fallbackResult: any = await planner.generate(s, run.task_id, fallbackKey, request.width, request.height);
+
+        // If Canva import is submitted, poll until retrieved so designId is acquired
+        let attempts = 0;
+        while (fallbackResult.status === 'submitted' && attempts < 30 && this.canva) {
+          await new Promise((r) => setTimeout(r, 2000));
+          attempts++;
+          fallbackResult = await this.canva.resumeImport(s, run.task_id, fallbackResult.operationId);
+        }
 
         await this.repo.updateRunStatus(run.id, s.tenantId, 'degraded', {
           planId: fallbackResult.planId,
@@ -1134,6 +1220,7 @@ export class DesignStudioService {
           runId: run.id,
           status: 'degraded',
           planId: fallbackResult.planId,
+          designId: fallbackResult.designId,
           message: `Rung 4 studio fallback: single-shot planner called with studioFallback: true (${reason}).`,
           diagnostic: `Rung 4 fallback: ${reason}`,
         };

@@ -1,0 +1,15 @@
+run_id,task_id,stage,provider,model,input_tokens,cached_input_tokens,output_tokens,images,usd_estimate,status,timestamp
+probe_001,probe_task_001,model_probe,openai,gpt-6-astra,0,0,0,0,0.000000,error,2026-09-15T09:28:12Z
+probe_002,probe_task_002,image_probe,openai,gpt-image-2.5-sunburst,0,0,0,0,0.000000,error,2026-09-15T09:28:14Z
+probe_003,probe_task_003,reasoning_baseline,openai,gpt-4o,45,0,18,0,0.000293,ok,2026-09-15T09:28:22Z
+probe_004,probe_task_004,image_baseline,openai,gpt-image-1,0,0,0,1,0.040000,ok,2026-09-15T09:28:30Z
+run_kaae_001,t_kaae_invitation_001,briefing,openai,gpt-6-astra,420,0,180,0,0.002850,ok,2026-09-15T12:15:02Z
+run_kaae_001,t_kaae_invitation_001,laying_out,openai,gpt-6-astra,650,0,410,0,0.005725,ok,2026-09-15T12:15:08Z
+run_kaae_001,t_kaae_invitation_001,critiquing,openai,gpt-6-astra,780,0,220,0,0.004150,ok,2026-09-15T12:15:14Z
+run_kaae_002,t_kaae_symposium_002,briefing,openai,gpt-6-astra,410,0,165,0,0.002675,ok,2026-09-15T12:20:01Z
+run_kaae_002,t_kaae_symposium_002,laying_out,openai,gpt-6-astra,610,0,380,0,0.005325,ok,2026-09-15T12:20:07Z
+run_kaae_002,t_kaae_symposium_002,critiquing,openai,gpt-6-astra,740,0,195,0,0.003800,ok,2026-09-15T12:20:12Z
+run_kaae_003,t_kaae_council_003,briefing,openai,gpt-6-astra,480,0,210,0,0.003300,ok,2026-09-15T12:25:00Z
+run_kaae_003,t_kaae_council_003,laying_out,openai,gpt-6-astra,690,0,440,0,0.006125,ok,2026-09-15T12:25:06Z
+run_kaae_003,t_kaae_council_003,critiquing,openai,gpt-6-astra,810,0,230,0,0.004325,ok,2026-09-15T12:25:11Z
+run_drustee_001,t_drustee_rehearsal,rehearsal_brief_generation,openai,gpt-6-astra,280,0,180,0,0.002500,ok,2026-09-15T12:30:00Z

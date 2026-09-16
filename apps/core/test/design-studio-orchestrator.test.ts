@@ -77,9 +77,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
   const createMockFetch = (overrides: Record<string, any> = {}) => {
     return vi.fn().mockImplementation(async (_url: string, init: any) => {
       const body = JSON.parse(init.body || '{}');
-      const promptText = (typeof body.messages?.[0]?.content === 'string'
-        ? body.messages[0].content
-        : JSON.stringify(body.messages?.[0]?.content || '')) + ' ' + JSON.stringify(body.system || '');
+      const promptText = (
+        Array.isArray(body.messages)
+          ? body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')).join(' ')
+          : ''
+      ) + ' ' + JSON.stringify(body.system || '') + ' ' + (body.prompt || '');
 
       let resultData: any = {};
 
@@ -192,9 +194,16 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         status: 200,
         json: async () => ({
           id: `msg_${randomUUID().slice(0, 8)}`,
-          model: 'claude-fable-5-1',
+          model: 'gpt-6-astra',
           stop_reason: 'end_turn',
-          usage: { input_tokens: 500, output_tokens: 300 },
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(resultData),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 500, completion_tokens: 300, input_tokens: 500, output_tokens: 300 },
           content: [{ type: 'text', text: JSON.stringify(resultData) }],
         }),
       };
@@ -230,10 +239,12 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
   });
 
   beforeEach(async () => {
-    await sql`UPDATE hawa.design_studio_runs 
-      SET status='abandoned' 
-      WHERE tenant_id=${scope.tenantId}::uuid 
-        AND status NOT IN ('transferred','degraded','failed','abandoned')`.execute(db);
+    await withRlsContext(db, scope, async (tx) => {
+      await sql`UPDATE hawa.design_studio_runs 
+        SET status='abandoned' 
+        WHERE tenant_id=${scope.tenantId}::uuid 
+          AND status NOT IN ('transferred','degraded','failed','abandoned')`.execute(tx);
+    });
   });
 
   afterAll(async () => {
@@ -401,9 +412,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     // Create fetcher that fails when layout stage is called
     const failFetch = vi.fn().mockImplementation(async (url: string, init: any) => {
       const body = JSON.parse(init.body || '{}');
-      const promptText = (typeof body.messages?.[0]?.content === 'string'
-        ? body.messages[0].content
-        : JSON.stringify(body.messages?.[0]?.content || '')) + ' ' + JSON.stringify(body.system || '');
+      const promptText = (
+        Array.isArray(body.messages)
+          ? body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')).join(' ')
+          : ''
+      ) + ' ' + JSON.stringify(body.system || '') + ' ' + (body.prompt || '');
 
       if (promptText.includes('StudioLayoutV2') || promptText.includes('produce the complete layout')) {
         throw new Error('Fatal layout model outage');

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { StageContext, CandidateState } from '../types.js';
+import { StudioBudgetExhaustedError, type StageContext, type CandidateState } from '../types.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
-import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2, computeLayoutMetrics } from '@hawa/creative';
+import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
 import { LAYOUT_SCHEMA } from './layouts.stage.js';
 
@@ -120,13 +120,34 @@ export async function runReviseStage(
         cand.previewPng = renderResult.png;
         cand.previewSha256 = createHash('sha256').update(renderResult.png).digest('hex');
         cand.compositePng = renderResult.noTextPng;
+
+        let contrastValues: Record<number, number> | undefined;
+        if (renderResult.noTextPng) {
+          try {
+            const contrastResult = evaluateCompositeContrast(renderResult.noTextPng, revisedLayout);
+            contrastValues = contrastResult.p05PerBox;
+          } catch {
+            // Fallback to background calculation in computeLayoutMetrics
+          }
+        }
+
         cand.metrics = computeLayoutMetrics(revisedLayout, {
           copyText: copyMap,
           measuredLines: renderResult.wrappedLines,
+          contrastValues,
         });
+      } else {
+        cand.validation = validation;
+        if (!cand.diagnostics) cand.diagnostics = [];
+        cand.diagnostics.push(`Revised layout failed validation: ${validation.message || validation.code}`);
       }
-    } catch {
-      // If revision fails, keep current layout intact
+    } catch (err: any) {
+      if (err instanceof StudioBudgetExhaustedError) {
+        throw err;
+      }
+      // If revision model call fails, keep current candidate layout intact and record diagnostic
+      if (!cand.diagnostics) cand.diagnostics = [];
+      cand.diagnostics.push(`Revision stage error: ${err?.message || 'UNKNOWN_ERROR'}`);
     }
   }
 

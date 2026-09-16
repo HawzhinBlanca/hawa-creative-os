@@ -28,12 +28,25 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
       outputPerMillion: 50.0,
       cacheReadPerMillion: 0.25,
       cacheWritePerMillion: 12.50,
+      status: 'disabled',
     });
     expect(pricing.models['claude-opus-5']).toEqual({
       inputPerMillion: 5.0,
       outputPerMillion: 25.0,
       cacheReadPerMillion: 0.50,
       cacheWritePerMillion: 6.25,
+      status: 'disabled',
+    });
+    expect(pricing.models['gpt-6-astra']).toEqual({
+      inputPerMillion: 2.50,
+      outputPerMillion: 10.00,
+      cacheReadPerMillion: 0.25,
+      cacheWritePerMillion: 2.50,
+    });
+    expect(pricing.models['gpt-image-2.5-sunburst']).toEqual({
+      image1k: 0.04,
+      image2k: 0.08,
+      image4k: 0.16,
     });
   });
 
@@ -232,17 +245,17 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
       status: 200,
       json: async () => ({
         id: 'msg_cached_123',
-        model: 'claude-fable-5-1',
-        content: [
+        model: 'gpt-6-astra',
+        choices: [
           {
-            type: 'tool_use',
-            name: 'structured_output',
-            input: { title: 'Cached Concept', score: 8.8 },
+            message: {
+              content: JSON.stringify({ title: 'Cached Concept', score: 8.8 }),
+            },
           },
         ],
         usage: {
-          input_tokens: 2500,
-          output_tokens: 350,
+          prompt_tokens: 2500,
+          completion_tokens: 350,
           cache_creation_input_tokens: 1200,
           cache_read_input_tokens: 1050,
         },
@@ -268,7 +281,7 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
     expect(result.receipt.costUsd).toBeGreaterThan(0);
   });
 
-  it('sends output_config format json_schema and omits anthropic-beta header', async () => {
+  it('sends response_format format json_schema and omits anthropic-beta header', async () => {
     let capturedBody: any = null;
     let capturedHeaders: any = null;
 
@@ -279,15 +292,16 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
         ok: true,
         status: 200,
         json: async () => ({
-          id: 'msg_schema_enforced',
-          model: 'claude-fable-5-1',
-          content: [
+          id: 'chatcmpl_schema_enforced',
+          model: 'gpt-6-astra',
+          choices: [
             {
-              type: 'text',
-              text: JSON.stringify({ title: 'Schema Enforced Concept', score: 9.8 }),
+              message: {
+                content: JSON.stringify({ title: 'Schema Enforced Concept', score: 9.8 }),
+              },
             },
           ],
-          usage: { input_tokens: 300, output_tokens: 50 },
+          usage: { prompt_tokens: 300, completion_tokens: 50 },
         }),
       } as any;
     });
@@ -311,40 +325,63 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
 
     expect(result.data.title).toBe('Schema Enforced Concept');
     expect(result.data.score).toBe(9.8);
-    expect(capturedBody.output_config).toBeDefined();
-    expect(capturedBody.output_config.format.type).toBe('json_schema');
-    expect(capturedBody.output_config.format.schema.additionalProperties).toBe(false);
-    expect(capturedBody.output_config.format.schema.properties.title.minLength).toBeUndefined();
-    expect(capturedBody.output_config.format.schema.properties.score.minimum).toBeUndefined();
+    expect(capturedBody.response_format).toBeDefined();
+    expect(capturedBody.response_format.type).toBe('json_schema');
     expect(capturedHeaders['anthropic-beta']).toBeUndefined();
+    expect(capturedHeaders['x-api-key']).toBeUndefined();
   });
 
-  it('degrades to fallback model if primary model returns 503 service unavailable', async () => {
-    let attemptedModel = '';
-    const fakeFetch: typeof fetch = vi.fn(async (_url: any, options: any) => {
-      const body = JSON.parse(options.body);
-      attemptedModel = body.model;
-      if (body.model === 'claude-fable-5-1') {
+  it('rejects disallowed models (claude, gemini) with DisallowedProviderError before network call', async () => {
+    const fakeFetch = vi.fn();
+    const client = new StudioModelClient({
+      apiKey: 'mock-key',
+      fetchFn: fakeFetch,
+    });
+
+    await expect(
+      client.callStructured({
+        model: 'claude-fable-5-1',
+        prompt: 'Execute design review',
+        outputSchema: TEST_SCHEMA,
+      })
+    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
+
+    await expect(
+      client.callStructured({
+        model: 'gemini-3-pro-image',
+        prompt: 'Generate art',
+        outputSchema: TEST_SCHEMA,
+      })
+    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
+
+    expect(fakeFetch).not.toHaveBeenCalled();
+  });
+
+  it('retries when gpt-6-astra returns 503 service unavailable, succeeding on attempt 2', async () => {
+    let callCount = 0;
+    const fakeFetch: typeof fetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
         return {
           ok: false,
           status: 503,
-          text: async () => 'Fable 5.1 capacity exhausted',
+          text: async () => 'OpenAI 503 service unavailable',
         } as any;
       }
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          id: 'msg_fallback_ok',
-          model: 'claude-opus-5',
-          content: [
+          id: 'chatcmpl_retry_ok',
+          model: 'gpt-6-astra',
+          choices: [
             {
-              type: 'tool_use',
-              name: 'structured_output',
-              input: { title: 'Opus 5 Fallback Title', score: 7.5 },
+              message: {
+                content: JSON.stringify({ title: 'Recovered Title', score: 8.5 }),
+              },
             },
           ],
-          usage: { input_tokens: 800, output_tokens: 150 },
+          usage: { prompt_tokens: 500, completion_tokens: 100 },
         }),
       } as any;
     });
@@ -352,8 +389,6 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
     const client = new StudioModelClient({
       apiKey: 'mock-key',
       fetchFn: fakeFetch,
-      primaryModel: 'claude-fable-5-1',
-      fallbackModel: 'claude-opus-5',
       retryDelaysMs: [10, 20],
     });
 
@@ -362,8 +397,8 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
       outputSchema: TEST_SCHEMA,
     });
 
-    expect(result.data.title).toBe('Opus 5 Fallback Title');
-    expect(result.receipt.model).toBe('claude-opus-5');
-    expect(attemptedModel).toBe('claude-opus-5');
+    expect(callCount).toBe(2);
+    expect(result.data.title).toBe('Recovered Title');
+    expect(result.receipt.model).toBe('gpt-6-astra');
   });
 });

@@ -1,14 +1,14 @@
 {
   "drillName": "Milestone 8: Three-Client Production Qualification Pilot",
-  "executionTimestamp": "2026-09-13T12:37:26.085Z",
+  "executionTimestamp": "2026-09-16T08:36:11.238Z",
   "status": "QUALIFIED_SUCCESS",
   "totalTasksSimulated": 100,
   "completedTasks": 100,
   "completionRate": "100%",
   "flattenedRasterLayers": 0,
   "crossTenantContamination": 0,
-  "totalDurationMs": 154,
-  "averageLatencyMs": 136.16,
+  "totalDurationMs": 142,
+  "averageLatencyMs": 124.85,
   "clientsTested": [
     {
       "id": "c1000000-0000-4000-8000-000000000002",
