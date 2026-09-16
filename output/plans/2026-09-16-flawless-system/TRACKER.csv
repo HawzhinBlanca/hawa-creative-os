@@ -1,0 +1,14 @@
+task,lead_verdict,date,evidence
+F01,ACCEPTED_PARTIAL,2026-09-16,tree clean; HAWA_BUILD_COMMIT=HEAD 79b9923; gates green; no F01_DEPLOY.txt; PROOFS.json cites missing commit 67c7097
+F02,REJECTED,2026-09-16,design-studio-service.ts:341 still StudioModelClient (Anthropic host); design_studio_calls unchanged at 99
+F03,NO_PROOF,2026-09-16,no F03_BLOCKERS.md
+F04,REJECTED,2026-09-16,resolveLayoutArchetype rotation pool[priorPlanCount%6]; six archetype prompts; 12:01Z plan bilateral_grid
+F05,NO_PROOF,2026-09-16,no before/after exports
+F06,PARTIAL,2026-09-16,exemplars in studio stages only; v1 planner none
+F07,REJECTED,2026-09-16,live 12:01Z brief classified as revision of feedback task; json_object; no image; heuristic fallback
+F08,ACCEPTED_PARTIAL,2026-09-16,Sewa re-driven to DAHVWVDUOuA (Minion->Arimo); sweep re-drove 4 fixture tasks into real Canva designs; no F08_REDRIVE.json
+F09,PARTIAL,2026-09-16,finish() on MANUAL_DESIGN_REQUIRED; no live proof
+F10,PARTIAL,2026-09-16,billing status from cached diagnostics; no alert proof
+F11,REJECTED,2026-09-16,pricing.json 2.5/10 and flat images; cost-governor 2.5/10; LEDGER.csv empty
+F12,ACCEPTED_PARTIAL,2026-09-16,code and assets done; proofs are local PPTX labelled canva_exported_pptx; DnaScreen.tsx Minion; no fresh Telegram export
+F13,NOT_STARTED,2026-09-16,connector unauthorised
