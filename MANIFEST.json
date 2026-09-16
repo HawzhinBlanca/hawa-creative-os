@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-16T13:24:28Z",
+  "generatedAt": "2026-09-16T14:12:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 195,
+  "fileCount": 196,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -216,6 +216,11 @@
       "path": "adrs/030_openai_only_canva_telegram_system.md",
       "sha256": "ed80eb42a8da83848583eda05b196ef3e9c2a8aab174e1dfd64fd7f18c10b481",
       "bytes": 4728
+    },
+    {
+      "path": "adrs/031_role_based_typography_and_template_free_planner.md",
+      "sha256": "9c023a85517d6be70722005156d5be98d32645b8d007cec4bc23431b71111e95",
+      "bytes": 5504
     },
     {
       "path": "api/canva-connect.openapi.json",
