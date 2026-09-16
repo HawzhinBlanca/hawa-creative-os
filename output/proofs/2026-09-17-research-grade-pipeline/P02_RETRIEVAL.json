@@ -1,0 +1,110 @@
+{
+  "version": "2026-09-17",
+  "task": "P02",
+  "name": "Exemplar Retrieval (arXiv:2311.13602 RALF)",
+  "pool": {
+    "totalConfirmed": 6,
+    "confirmedExemplarIds": [
+      "post1_accreditation_mandate",
+      "post2_standards_higher_ed",
+      "post3_strategic_roadmap",
+      "AUK002_kurdi_jpg",
+      "CC002_kurdi_jpg",
+      "CUE002_kurdi_jpg"
+    ],
+    "pendingExcluded": true,
+    "droppedExcluded": true
+  },
+  "invariants": {
+    "retrievalK": 3,
+    "apiCostUsd": 0,
+    "hardLatencyLimitMs": 100,
+    "firstThreeTruncationEliminated": true
+  },
+  "briefs": [
+    {
+      "briefId": "brief_standards_academic",
+      "intent": "Official institutional announcement of academic accreditation standards and higher education quality assurance mandate under Law No. 6 of 2022",
+      "format": "1:1",
+      "category": "standards",
+      "retrievedIds": [
+        "post1_accreditation_mandate",
+        "post3_strategic_roadmap",
+        "post2_standards_higher_ed"
+      ],
+      "executionTimeMs": 0.23,
+      "apiCostUsd": 0,
+      "topK": [
+        {
+          "id": "post1_accreditation_mandate",
+          "rank": 1,
+          "filename": "post1_accreditation_mandate.png",
+          "score": 0.6069,
+          "format": "1:1",
+          "descriptor": "Navy serif headline 'Advancing Academic Rigor & Institutional Excellence' with gold accent rule, gold-bordered Law No. 6 of 2022 callout, and three navy/gold stat cards (02, MSCHE, 100%) on cream form a disciplined, dignified hierarchy, though the mid-section whitespace gap and stat-card top gradient slightly weaken flow."
+        },
+        {
+          "id": "post3_strategic_roadmap",
+          "rank": 3,
+          "filename": "post3_strategic_roadmap.png",
+          "score": 0.5392,
+          "format": "1:1",
+          "descriptor": "Serif white headline with gold italic subtitle over Midnight Navy, four evenly spaced glass cards with gold icon tiles and a statutory footer citing Law No. 6 of 2022 deliver a dignified, on-brand institutional roadmap, though the large empty band between header and cards and emoji-style icons slightly weaken polish."
+        },
+        {
+          "id": "post2_standards_higher_ed",
+          "rank": 2,
+          "filename": "post2_standards_higher_ed.png",
+          "score": 0.1716,
+          "format": "4:5",
+          "descriptor": "Navy serif headline with gold eyebrow and rule, numbered standard cards with gold left accents and 'Required Evidence' chips on a cream dotted field form a disciplined, dignified hierarchy, though only Latin typesetting is shown and the logo lockup reads slightly small against the generous top margin."
+        }
+      ]
+    },
+    {
+      "briefId": "brief_kurdish_bilateral_partnership",
+      "intent": "Bilateral partnership and institutional recognition milestone between KAAE and American University of Kurdistan (AUK) and Catholic University in Erbil (CUE)",
+      "format": "4:5",
+      "category": "partnership_announcement",
+      "retrievedIds": [
+        "AUK002_kurdi_jpg",
+        "CUE002_kurdi_jpg",
+        "post2_standards_higher_ed"
+      ],
+      "executionTimeMs": 0.05,
+      "apiCostUsd": 0,
+      "topK": [
+        {
+          "id": "AUK002_kurdi_jpg",
+          "rank": 4,
+          "filename": "AUK002 kurdi.jpg.jpeg",
+          "score": 0.3336,
+          "format": "4:5",
+          "descriptor": "Clean Sorani Kurdish typesetting with a bold navy headline, gold subhead, and an angled midnight-navy banner pairing the AUK crest, though the wide empty gap between the body text and footer line weakens vertical balance."
+        },
+        {
+          "id": "CUE002_kurdi_jpg",
+          "rank": 6,
+          "filename": "CUE002 kurdi.jpg.jpeg",
+          "score": 0.3185,
+          "format": "4:5",
+          "descriptor": "Clean Sorani/Latin hierarchy in navy headline with gold subtitle and a navy chevron banner framing the CUE logo on cream grid background, though body text is slightly heavy and lower whitespace feels unbalanced."
+        },
+        {
+          "id": "post2_standards_higher_ed",
+          "rank": 2,
+          "filename": "post2_standards_higher_ed.png",
+          "score": 0.2424,
+          "format": "4:5",
+          "descriptor": "Navy serif headline with gold eyebrow and rule, numbered standard cards with gold left accents and 'Required Evidence' chips on a cream dotted field form a disciplined, dignified hierarchy, though only Latin typesetting is shown and the logo lockup reads slightly small against the generous top margin."
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "distinctSetsRetrieved": true,
+    "bothUnderSla": true,
+    "zeroCost": true,
+    "journalingReady": true
+  }
+}

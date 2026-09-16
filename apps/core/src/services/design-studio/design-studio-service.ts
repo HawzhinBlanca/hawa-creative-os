@@ -18,6 +18,7 @@ import {
   OpenAiImageProvider,
   GeminiImageProvider,
   type StudioLayoutV2,
+  ExemplarRetrievalIndex,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
@@ -509,32 +510,28 @@ export class DesignStudioService {
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
     try {
-      const exCandidates = [
-        resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json'),
-        resolve(import.meta.dirname, '../../../../packages/creative/assets/kaae-exemplars.json'),
-        new URL('../../../../packages/creative/assets/kaae-exemplars.json', import.meta.url).pathname,
-      ];
-      const exPath = exCandidates.find((p) => existsSync(p));
-      if (exPath) {
-        const rawEx = JSON.parse(readFileSync(exPath, 'utf8'));
-        const list = Array.isArray(rawEx.exemplars) ? rawEx.exemplars.slice(0, 3) : [];
-        for (const item of list) {
-          const itemCandidates = [
-            resolve(process.cwd(), item.path),
-            resolve(process.cwd(), 'packages/creative/assets/exemplars', item.filename),
-            resolve(import.meta.dirname, '../../../../', item.path),
-            resolve(import.meta.dirname, '../../../../packages/creative/assets/exemplars', item.filename),
-          ];
-          const imgPath = itemCandidates.find((p) => existsSync(p));
-          if (imgPath) {
-            exemplars.push({
-              path: imgPath,
-              label: item.filename || item.reason || 'KAAE Exemplar',
-              sha256: item.sha256,
-              bytes: readFileSync(imgPath),
-              mimeType: 'image/png',
-            });
-          }
+      const retrievalIndex = new ExemplarRetrievalIndex();
+      const briefQuery = {
+        text: (s as any).instructions || (s as any).title || (run as any).title || '',
+        format: (s as any).format,
+        category: (s as any).topic,
+      };
+      const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3);
+      for (const item of retrieval.retrievedExemplars) {
+        const itemCandidates = [
+          resolve(process.cwd(), item.path),
+          resolve(process.cwd(), 'packages/creative/assets/exemplars', item.filename),
+          resolve(import.meta.dirname, '../../../../', item.path),
+          resolve(import.meta.dirname, '../../../../packages/creative/assets/exemplars', item.filename),
+        ];
+        const imgPath = itemCandidates.find((p) => existsSync(p));
+        if (imgPath) {
+          exemplars.push({
+            path: imgPath,
+            label: item.filename || item.descriptor || 'KAAE Exemplar',
+            bytes: readFileSync(imgPath),
+            mimeType: 'image/png',
+          });
         }
       }
     } catch {
