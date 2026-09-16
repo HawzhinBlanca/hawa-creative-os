@@ -1,3 +1,9 @@
+> **WITHDRAWN 2026-09-17 — DO NOT IMPLEMENT.** This sheet had the stage order wrong: it generated a
+> flat image first and rebuilt it as layers afterwards. The state of the art (CreatiPoster, arXiv
+> 2506.10890) generates the editable layout first and paints the art afterwards, conditioned on it.
+> Replaced by `output/plans/2026-09-17-research-grade-pipeline/GEMINI_TASK_SHEET.md` (P01–P10).
+> Reasoning: `output/research/2026-09-17-pipeline-research/RESEARCH_BRIEF.md`.
+
 # Concept-First Design Flow — task sheet for the implementing agent (2026-09-16)
 
 **Branch:** `studio-v2`. **Rules:** every rule in `output/plans/2026-09-16-flawless-system/GEMINI_PROMPT.md`
