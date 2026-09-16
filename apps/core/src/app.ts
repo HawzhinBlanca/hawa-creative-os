@@ -1225,7 +1225,7 @@ export function createApp(options?: CreateAppOptions) {
               text: alertText,
               parse_mode: 'Markdown',
             });
-            lastPaidProbe.lastAlertMessageId = outRes?.message_id ? String(outRes.message_id) : `alert_${now}`;
+            lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : `alert_${now}`);
           } catch (err) {
             console.error('[HealthProbe] Watchdog alert delivery failed:', err);
           }
