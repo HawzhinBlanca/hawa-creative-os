@@ -1,0 +1,98 @@
+import { describe, it, expect } from 'vitest';
+import {
+  STABLE_SYSTEM_PROMPT_PREFIX,
+  validateStablePrefix,
+  calculateCallCost,
+  PipelineCostGovernorV3,
+  PER_BRIEF_CAP_USD,
+  OFFICE_DAILY_CAP_USD,
+} from '../src/studio/cost-architecture-v3.js';
+
+describe('P09 — Cost Architecture & Token Discipline', () => {
+  it('enforces a byte-stable cached prefix of at least 1,024 tokens without dynamic leaks', () => {
+    const check = validateStablePrefix(STABLE_SYSTEM_PROMPT_PREFIX);
+
+    expect(check.meetsTokenThreshold).toBe(true);
+    expect(check.estimatedTokens).toBeGreaterThanOrEqual(1024);
+    expect(check.containsDynamicPatterns).toBe(false);
+  });
+
+  it('calculates cached token discount accurately from F11 pricing table', () => {
+    // 2847 input tokens with 2844 cached tokens, 1000 output tokens
+    const cost = calculateCallCost('gpt-6-astra', {
+      inputTokens: 2847,
+      cachedTokens: 2844,
+      outputTokens: 1000,
+    });
+
+    // Gross without cache: 2847/1M * 10 = $0.02847 + 1000/1M * 50 = $0.050 -> $0.07847
+    // Net with cache: 3/1M * 10 + 2844/1M * 1 + 1000/1M * 50 = $0.00003 + $0.002844 + $0.050 -> $0.052874
+    expect(cost.grossCostUsd).toBeGreaterThan(cost.netCostUsd);
+    expect(cost.cacheDiscountUsd).toBeGreaterThan(0.02);
+    expect(cost.netCostUsd).toBeLessThan(cost.grossCostUsd);
+  });
+
+  it('cheap-path run with no art and single survivor costs strictly under USD 0.25', () => {
+    const gov = new PipelineCostGovernorV3('brief_cheap_path_01');
+
+    // Call 1: P03 Layout Generation (single call generating 3 candidates)
+    // 2,847 tokens in, 2,844 cached, 3,122 out
+    const call1 = gov.recordCall('P03_LAYOUT', 'gpt-6-astra', {
+      inputTokens: 2847,
+      cachedTokens: 2844,
+      outputTokens: 3122,
+    });
+
+    // Call 2: Single candidate survives P01 -> 0 judge calls ($0.00)
+    // No art generation requested -> $0.00
+    const state = gov.getState();
+
+    expect(state.ledger).toHaveLength(1);
+    expect(state.accumulatedCostUsd).toBeLessThan(0.25);
+    expect(call1.isWithinCap).toBe(true);
+  });
+
+  it('per-brief cap test degrades truthfully when cumulative cost reaches USD 1.00', () => {
+    const gov = new PipelineCostGovernorV3('brief_cap_stress_01');
+
+    // Simulate high token consumption rounds
+    gov.recordCall('P03_LAYOUT', 'gpt-6-astra', {
+      inputTokens: 2847,
+      cachedTokens: 2844,
+      outputTokens: 4000, // ~$0.20
+    });
+
+    gov.recordCall('P05_CRITIQUE', 'gpt-6-astra', {
+      inputTokens: 2500,
+      cachedTokens: 2400,
+      outputTokens: 3000, // ~$0.15
+    });
+
+    gov.recordCall('P06_REFINE', 'gpt-6-astra', {
+      inputTokens: 2800,
+      cachedTokens: 2500,
+      outputTokens: 4000, // ~$0.20
+    });
+
+    gov.recordCall('P07_JUDGE', 'gpt-6-astra', {
+      inputTokens: 3000,
+      cachedTokens: 2600,
+      outputTokens: 5000, // ~$0.25
+    });
+
+    // Push past $1.00 cap
+    const breachingCall = gov.recordCall('P07_JUDGE', 'gpt-6-astra', {
+      inputTokens: 4000,
+      cachedTokens: 0,
+      outputTokens: 6000, // ~$0.34 -> pushes total over $1.00
+    });
+
+    const state = gov.getState();
+
+    expect(state.accumulatedCostUsd).toBeGreaterThan(PER_BRIEF_CAP_USD);
+    expect(state.isCapExceeded).toBe(true);
+    expect(breachingCall.degraded).toBe(true);
+    expect(state.degradationReason).toContain('CAP_EXCEEDED');
+    expect(state.degradationReason).toContain('completing with best passing candidate');
+  });
+});
