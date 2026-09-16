@@ -52,6 +52,9 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'CLIENT_REQUIRED') {
     title = '📥 <b>Request saved, client assignment needed</b>';
     body = `No client could be identified from your message, so no automatic draft was started. The art director will assign the client in Hawa Desk and design it in Canva.\n`;
+  } else if (status === 'MANUAL_DESIGN_REQUIRED') {
+    title = '📥 <b>Request queued for manual design</b>';
+    body = `This request has been queued in Hawa Desk. The art director will review the brief and create the design manually in Canva.\n`;
   } else if (status === 'DESIGN_REJECTED' && code === 'COPY_UNSUPPORTED') {
     title = '📥 <b>Request saved, manual design</b>';
     body = `Automatic drafting sets English and Sorani Kurdish copy. This request contains text it cannot set safely (another script, symbols or emoji), so it is saved exactly as sent and the art director will design it in Canva manually.\n`;

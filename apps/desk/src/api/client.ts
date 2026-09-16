@@ -248,6 +248,8 @@ class HawaApiClient {
     bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
       method: 'POST', body: JSON.stringify({ editUrl }),
     }),
+    redrive: (taskId: string) => this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST' }),
+    sweepFailed: () => this.request<any>('/tasks/sweep-failed', { method: 'POST' }),
     list: async <T = any>(params?: TaskListParams): Promise<TaskListResponse<T>> => {
       const q = new URLSearchParams();
       if (params?.status) q.set('status', params.status);

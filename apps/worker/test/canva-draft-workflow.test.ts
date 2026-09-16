@@ -29,7 +29,13 @@ describe('native Canva workflow',()=>{
     expect(remote.mock.calls[5][1].headers['Idempotency-Key']).toContain('-retry-1');
   });
   it('does not spend on the historical backlog without an explicit generation marker',async()=>{
-    const remote=vi.fn();expect((await runCanvaDraft({...input,canvaAutoGenerate:false},new DurableStepJournal(),remote)).status).toBe('MANUAL_DESIGN_REQUIRED');expect(remote).not.toHaveBeenCalled();
+    vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
+    const remote=vi.fn(async()=>Response.json({ok:true}));
+    const result=await runCanvaDraft({...input,canvaAutoGenerate:false},new DurableStepJournal(),remote);
+    expect(result.status).toBe('MANUAL_DESIGN_REQUIRED');
+    expect(remote).toHaveBeenCalledTimes(1);
+    expect(String(remote.mock.calls[0][0])).toContain('/notifications/canva-status');
+    expect(JSON.parse(remote.mock.calls[0][1].body)).toMatchObject({status:'MANUAL_DESIGN_REQUIRED'});
   });
   it('rejects a different client before model or Canva actions',async()=>{
     vi.stubEnv('HAWA_BEARER_TOKEN','test-only');const remote=vi.fn(async()=>Response.json({tenantId:'tenant',clientId:'OTHER'}));

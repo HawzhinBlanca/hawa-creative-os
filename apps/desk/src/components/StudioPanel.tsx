@@ -564,6 +564,35 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                   Advance Stage
                 </button>
               )}
+              {['failed', 'abandoned'].includes(run.status) && (
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await apiClient.tasks.redrive(taskId);
+                      setMessage('Task generation re-driven successfully');
+                      await refresh();
+                    } catch (err: any) {
+                      setMessage(err.message || 'Re-drive failed');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 4,
+                    background: '#0F766E',
+                    color: '#2DD4BF',
+                    border: '1px solid currentColor',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  🔄 Re-drive Generation
+                </button>
+              )}
               {!['transferred', 'degraded', 'failed', 'abandoned'].includes(run.status) && (
                 <button
                   className="btn"

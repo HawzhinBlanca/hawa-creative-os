@@ -34,6 +34,7 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.test.ts', '**/*.spec.ts'],
     exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**'],
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

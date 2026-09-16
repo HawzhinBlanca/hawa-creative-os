@@ -257,6 +257,46 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(redesignSaved.result.manifest.hasReferenceImage).toBe(true);
     expect(redesignSaved.result.manifest.turns).toBe(2);
   });
+
+  it('re-drives a failed design plan without conflict and successfully plans a new design', async () => {
+    const taskId = (await persistChatIntake(db, {
+      platform: 'telegram',
+      sourceEventId: randomUUID(),
+      sourceChannelId: 'tg-failed-test',
+      rawText: 'Use navy.\n---\nKAAE Gala Dinner Invitation\n\nHonoring Ministers and Delegates.',
+      clientId,
+      title: 'KAAE Gala Dinner',
+      designInstructions: 'Official diplomatic dinner invitation',
+      exactCopy: [],
+    })).task.id;
+
+    // First attempt fails with MODEL_HTTP_400 (e.g. provider balance or model error)
+    const failingFetch = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'Credit exhausted' } }), { status: 400 }));
+    const { planner: failingPlanner } = make(failingFetch);
+
+    const firstResult = await failingPlanner.generate(scope, taskId, 'plan-fail-key-01', 1200, 1697);
+    expect(firstResult.status).toBe('failed');
+
+    // Verify DB records failed plan
+    const failedPlanRow = (await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
+    expect(failedPlanRow.status).toBe('failed');
+
+    // Second attempt (re-drive): provider is working again with gpt-6-astra
+    const freshPlan = structuredClone(plan);
+    freshPlan.background = '#0A1628';
+    const workingFetch = vi.fn(async () => response('gpt-6-astra', freshPlan));
+    const { planner: workingPlanner } = make(workingFetch);
+
+    const retryResult = await workingPlanner.generate(scope, taskId, 'plan-fail-key-01', 1200, 1697);
+    expect(retryResult.status).toBe('submitted');
+
+    // Verify the prior failed plan was marked abandoned and a new planned row exists
+    const allPlans = (await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid ORDER BY created_at ASC`.execute(db)).rows;
+    expect(allPlans).toHaveLength(2);
+    expect(allPlans[0].status).toBe('abandoned');
+    expect(allPlans[1].status).toBe('planned');
+  });
 });
+
 
 

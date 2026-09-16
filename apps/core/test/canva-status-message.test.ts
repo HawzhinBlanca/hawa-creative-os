@@ -16,6 +16,7 @@ describe('requester-facing Canva outcome messages', () => {
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' }).text).toContain('English and Sorani Kurdish');
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'CLIENT_REFERENCE_REQUIRED' }).text).toContain('verified brand reference');
     expect(composeCanvaStatusMessage({ taskId, status: 'CLIENT_REQUIRED' }).text).toContain('No client could be identified');
+    expect(composeCanvaStatusMessage({ taskId, status: 'MANUAL_DESIGN_REQUIRED' }).text).toContain('queued in Hawa Desk');
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_UNCERTAIN' }).text).toContain('will not be retried automatically');
     expect(composeCanvaStatusMessage({ taskId, status: 'CANVA_FONT_MISMATCH', canvaUrl: 'https://www.canva.com/design/DA_x/edit' }).text).toContain('substituted the brand font');
     expect(composeCanvaStatusMessage({ taskId, status: 'CANVA_PREVIEW_FAILED', canvaUrl: 'https://www.canva.com/design/DA_x/edit' }).text).toContain('preview export could not be captured');

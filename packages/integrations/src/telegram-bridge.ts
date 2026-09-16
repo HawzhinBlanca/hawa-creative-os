@@ -72,7 +72,7 @@ export interface TelegramOutboundMessage {
 }
 
 export interface TelegramCommandResult extends TelegramOutboundMessage {
-  action?: 'approve' | 'revision';
+  action?: 'approve' | 'revision' | 'redrive';
   taskId?: string;
   notes?: string;
 }
@@ -726,6 +726,24 @@ export class TelegramBridgeDaemon {
         taskId,
         notes,
         text: `✏️ *Revision request logged for task \`${taskId.replace(/`/g, '')}\`:*\n_${escapeTelegramMarkdown(notes)}_`,
+        parse_mode: 'Markdown',
+      };
+    }
+
+    if (trimmed.startsWith('/redo') || trimmed.startsWith('/redrive')) {
+      const parts = trimmed.split(' ');
+      const taskId = parts[1];
+      if (!taskId) {
+        return {
+          action: 'redrive' as const,
+          text: `🔄 *Re-driving design generation for the most recent failed task...*`,
+          parse_mode: 'Markdown',
+        };
+      }
+      return {
+        action: 'redrive' as const,
+        taskId,
+        text: `🔄 *Re-driving design generation for task \`${taskId.replace(/`/g, '')}\`...*`,
         parse_mode: 'Markdown',
       };
     }

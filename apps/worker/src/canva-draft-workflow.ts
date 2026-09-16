@@ -36,7 +36,6 @@ export function resolveCanvaVariant(input: Pick<WorkflowInput, 'canvaVariant'>):
 export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
-  if (!input.canvaAutoGenerate) return output('MANUAL_DESIGN_REQUIRED');
   const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
   const token = process.env.HAWA_BEARER_TOKEN;
   if (!token) throw new Error('Worker Core credential is not configured');
@@ -70,6 +69,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     return output(status, designId);
   };
 
+  if (!input.canvaAutoGenerate) return finish('MANUAL_DESIGN_REQUIRED');
   if (!input.clientId) return finish('CLIENT_REQUIRED');
   const task = await ctx.run('canva-verify-task-scope', () => call(''));
   if (task.clientId !== input.clientId || task.tenantId !== input.tenantId) throw new WorkflowTerminalError('Workflow task/client/tenant mismatch', 'SCOPE_MISMATCH');

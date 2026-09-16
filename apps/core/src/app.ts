@@ -12,7 +12,7 @@ import type {
   DesignStudioAdapter,
   StudioOperation,
 } from '@hawa/contracts';
-import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID } from '@hawa/contracts';
 import {
   TaskStateMachine,
   extractProtectedTokens,
@@ -139,6 +139,8 @@ import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
 import { composeCanvaStatusMessage } from './services/canva-status-message.js';
+import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
+import { CanvaDesignPlanner } from './services/canva-design-planner.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -1130,12 +1132,41 @@ export function createApp(options?: CreateAppOptions) {
   let lastVerifiedProgressAt = new Date().toISOString();
 
   // The model credential is probed with a token-free request (GET /v1/models) at most every five
-  // minutes. A dead key must show up in /health, not as silent 401s inside the worker's journal.
+  // minutes. Real paid call billing failures (e.g. MODEL_HTTP_400 credit exhausted) are cached and degrade health.
   let modelProviderProbe: { at: number; status: string } = { at: 0, status: 'unverified' };
+  let lastPaidModelError: { at: number; status: string } | null = null;
+  const recordPaidModelBillingError = (status: string = 'billing_exhausted') => {
+    lastPaidModelError = { at: Date.now(), status };
+    modelProviderProbe = { at: Date.now(), status };
+  };
+
   const probeModelProvider = async (): Promise<string> => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return 'unconfigured';
     if (process.env.VITEST || process.env.NODE_ENV === 'test') return 'unverified';
+
+    if (lastPaidModelError && Date.now() - lastPaidModelError.at < 900000) {
+      return lastPaidModelError.status;
+    }
+
+    if (db) {
+      try {
+        const recentBillingFailure = await withRlsContext(db, { tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+          return await sql<any>`
+            SELECT diagnostic FROM hawa.canva_design_plans
+            WHERE created_at > now() - interval '15 minutes' AND status = 'failed'
+              AND (diagnostic LIKE '%MODEL_HTTP_400%' OR diagnostic LIKE '%insufficient_quota%' OR diagnostic LIKE '%credit%')
+            ORDER BY created_at DESC LIMIT 1`.execute(trx);
+        });
+        if (recentBillingFailure.rows[0]) {
+          const status = 'billing_exhausted';
+          lastPaidModelError = { at: Date.now(), status };
+          modelProviderProbe = { at: Date.now(), status };
+          return status;
+        }
+      } catch { /* DB check ignored on error */ }
+    }
+
     if (Date.now() - modelProviderProbe.at < 300000) return modelProviderProbe.status;
     let status = 'unreachable';
     try {
@@ -1207,7 +1238,7 @@ export function createApp(options?: CreateAppOptions) {
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || channelKillSwitches.telegram || channelKillSwitches.waha
-      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
+      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
@@ -1823,6 +1854,182 @@ export function createApp(options?: CreateAppOptions) {
     return { task, brief, costReceipt, latestQAReport, notification };
   }
 
+  // --- Re-drive Failed Tasks & Automated Recovery Sweep ---
+  async function redriveTask(
+    taskId: string,
+    sourceChannelId?: string,
+    actor: { id: string; role: string; type?: string } = { id: PRIMARY_OPERATOR_USER_ID, role: 'operator', type: 'user' }
+  ) {
+    if (!db) throw new Error('Database required for task redrive');
+    const tenantId = DEFAULT_TENANT_ID;
+    const actorId = (actor.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actor.id))
+      ? actor.id
+      : PRIMARY_OPERATOR_USER_ID;
+
+    // 1. Fetch task details from DB
+    const taskData = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      const row = await sql<any>`
+        SELECT t.id, t.tenant_id, t.client_id, t.title, t.description, t.state,
+               (SELECT o.payload FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'task.created' ORDER BY o.created_at DESC LIMIT 1) as payload
+        FROM hawa.tasks t
+        WHERE t.id = ${taskId}::uuid`.execute(trx);
+      return row.rows[0];
+    });
+
+    if (!taskData) {
+      return { ok: false, code: 'TASK_NOT_FOUND', message: `Task ${taskId} not found` };
+    }
+
+    if (!taskData.client_id) {
+      if (sourceChannelId && sourceChannelId !== 'tg_default') {
+        await telegramBridge?.dispatchOutboundMessage(sourceChannelId, {
+          text: composeCanvaStatusMessage({
+            taskId,
+            title: taskData.title,
+            status: 'CLIENT_REQUIRED',
+          }).text,
+          parse_mode: 'HTML',
+        });
+      }
+      return { ok: false, code: 'CLIENT_REQUIRED', message: 'Task has no client assigned' };
+    }
+
+    const channelId = sourceChannelId || taskData.payload?.sourceChannelId || 'tg_default';
+    const variant = taskData.payload?.variant || { width: 1080, height: 1350 };
+    const width = variant.width || 1080;
+    const height = variant.height || 1350;
+
+    // 2. Check if Canva already has a bound design for this task
+    const existingBinding = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      return (await sql<any>`
+        SELECT * FROM hawa.canva_bindings
+        WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status = 'bound'
+        ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+    });
+
+    if (existingBinding?.edit_url) {
+      if (channelId && channelId !== 'tg_default') {
+        const readyMsg = composeCanvaStatusMessage({
+          taskId,
+          title: taskData.title,
+          status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+          canvaUrl: existingBinding.edit_url,
+        });
+        await telegramBridge?.dispatchOutboundMessage(channelId, readyMsg);
+      }
+      return {
+        ok: true,
+        status: 'ALREADY_BOUND',
+        designId: existingBinding.canva_design_id,
+        canvaUrl: existingBinding.edit_url,
+      };
+    }
+
+    // 3. Notify requester on Telegram that re-drive has started
+    if (channelId && channelId !== 'tg_default') {
+      await telegramBridge?.dispatchOutboundMessage(channelId, {
+        text: `🔄 <b>Re-driving design generation for task</b> <code>${taskId}</code>...\n<i>Generating an updated Canva draft now.</i>`,
+        parse_mode: 'HTML',
+      });
+    }
+
+    // 4. Instantiate planner and run generation
+    const service = new CanvaConnectService(db);
+    const planner = new CanvaDesignPlanner(db, service);
+    const scope = { tenantId, actorId };
+
+    const planKey = `redrive_${taskId}_${Date.now()}`;
+    const planResult = await planner.generate(scope, taskId, planKey, width, height);
+
+    if (planResult.status === 'failed' || planResult.status === 'uncertain') {
+      const failedMsg = composeCanvaStatusMessage({
+        taskId,
+        title: taskData.title,
+        status: planResult.status === 'uncertain' ? 'DESIGN_UNCERTAIN' : 'DESIGN_FAILED',
+        code: (planResult as any).message || 'PLAN_FAILED',
+      });
+      if (channelId && channelId !== 'tg_default') {
+        await telegramBridge?.dispatchOutboundMessage(channelId, failedMsg);
+      }
+      return { ok: false, status: planResult.status, diagnostic: (planResult as any).message };
+    }
+
+    // 5. Resume to import into Canva if needed
+    let finalDesignId: string | undefined = (planResult as any).designId;
+    let finalCanvaUrl: string | undefined = (planResult as any).editUrl || (planResult as any).canvaUrl;
+
+    if (!finalCanvaUrl && planResult.planId) {
+      for (let attempt = 0; attempt < 15; attempt++) {
+        const resumeResult = await planner.resume(scope, taskId, planResult.planId);
+        if (resumeResult.status === 'retrieved' && (resumeResult as any).designId) {
+          finalDesignId = (resumeResult as any).designId;
+          finalCanvaUrl = (resumeResult as any).editUrl || `https://www.canva.com/design/${finalDesignId}/edit`;
+          break;
+        }
+        if (resumeResult.status === 'failed') break;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    // 6. Update task state to human review
+    await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      await sql`UPDATE hawa.tasks SET state = 'human_review', updated_at = now() WHERE id = ${taskId}::uuid`.execute(trx);
+    });
+
+    // 7. Notify requester on Telegram
+    if (channelId && channelId !== 'tg_default') {
+      const statusMsg = composeCanvaStatusMessage({
+        taskId,
+        title: taskData.title,
+        status: finalCanvaUrl ? 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' : 'DRAFT_READY',
+        canvaUrl: finalCanvaUrl,
+      });
+      await telegramBridge?.dispatchOutboundMessage(channelId, statusMsg);
+    }
+
+    broadcast('task:transitioned', { taskId, status: 'HUMAN_REVIEW', action: 'redrive' });
+
+    return {
+      ok: true,
+      taskId,
+      status: finalCanvaUrl ? 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' : 'DRAFT_READY',
+      designId: finalDesignId,
+      canvaUrl: finalCanvaUrl,
+    };
+  }
+
+  async function sweepFailedTasks(tenantId: string = DEFAULT_TENANT_ID) {
+    if (!db) return { swept: 0, redriven: 0, errors: [] };
+    const probe = await probeModelProvider();
+    if (probe === 'unauthorized' || probe === 'unreachable' || probe === 'billing_exhausted') {
+      return { swept: 0, redriven: 0, error: `Model provider is not healthy (${probe}), sweep paused` };
+    }
+
+    const failedRows = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      return (await sql<any>`
+        SELECT DISTINCT ON (p.task_id) p.task_id, p.status, p.diagnostic, p.created_at
+        FROM hawa.canva_design_plans p
+        JOIN hawa.tasks t ON t.id = p.task_id
+        LEFT JOIN hawa.canva_bindings b ON b.task_id = p.task_id AND b.status = 'bound'
+        WHERE p.tenant_id = ${tenantId}::uuid
+          AND p.status IN ('failed', 'uncertain')
+          AND b.id IS NULL
+          AND t.client_id IS NOT NULL
+        ORDER BY p.task_id, p.created_at DESC`.execute(trx)).rows;
+    });
+
+    const results: any[] = [];
+    for (const row of failedRows) {
+      try {
+        const res = await redriveTask(row.task_id);
+        results.push({ taskId: row.task_id, success: res.ok, result: res });
+      } catch (err: any) {
+        results.push({ taskId: row.task_id, success: false, error: err.message });
+      }
+    }
+    return { swept: failedRows.length, redriven: results.filter(r => r.success).length, results };
+  }
+
   // --- Reusable Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, ADR-0038) ---
   async function executeOmnichannelPublish(
     taskId: string,
@@ -2413,6 +2620,40 @@ export function createApp(options?: CreateAppOptions) {
           broadcast('task:transitioned', { taskId: cmdReply.taskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'IN_PROGRESS' });
           await telegramBridge.dispatchOutboundMessage(sourceChannelId, cmdReply);
           return c.json({ ok: true, command: true, action: 'revision', taskId: cmdReply.taskId, status: 'IN_PROGRESS' });
+        } else if (cmdReply.action === 'redrive') {
+          let targetTaskId = cmdReply.taskId;
+          if (!targetTaskId && db) {
+            try {
+              const recentFailed = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+                return await sql<any>`
+                  SELECT p.task_id
+                  FROM hawa.canva_design_plans p
+                  JOIN hawa.outbox_commands o ON o.aggregate_id = p.task_id
+                  WHERE o.payload->>'sourceChannelId' = ${sourceChannelId}
+                    AND p.status IN ('failed', 'uncertain')
+                  ORDER BY p.created_at DESC LIMIT 1`.execute(trx);
+              });
+              if (recentFailed.rows[0]?.task_id) {
+                targetTaskId = recentFailed.rows[0].task_id;
+              }
+            } catch (err) {
+              console.warn('[TelegramBridge] Failed to find recent failed task for redrive:', err);
+            }
+          }
+          if (!targetTaskId) {
+            const noTaskMsg = {
+              text: '⚠️ No failed design task found in this chat to re-drive. Specify the task ID: `/redo <taskId>`',
+              parse_mode: 'Markdown',
+            };
+            await telegramBridge.dispatchOutboundMessage(sourceChannelId, noTaskMsg);
+            return c.json({ ok: false, error: 'NO_TASK_TO_REDRIVE' }, 404);
+          }
+          await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+            text: `🔄 <b>Re-driving design generation for task</b> <code>${targetTaskId}</code>...\n<i>Generating an updated Canva draft now...</i>`,
+            parse_mode: 'HTML',
+          });
+          const redriveRes = await redriveTask(targetTaskId, sourceChannelId);
+          return c.json({ ok: true, command: true, action: 'redrive', taskId: targetTaskId, result: redriveRes });
         }
 
         await telegramBridge.dispatchOutboundMessage(sourceChannelId, cmdReply);
@@ -2428,6 +2669,7 @@ export function createApp(options?: CreateAppOptions) {
 
     // Check if this is an interactive revision / feedback message on an active task in this Telegram chat
     let feedbackTargetTask: any = null;
+    let classification: any = null;
 
     if (msg.reply_to_message) {
       const replyContext =
@@ -2546,13 +2788,29 @@ export function createApp(options?: CreateAppOptions) {
         }
       }
 
-      const isRevisionIntent =
-        Boolean(msg.reply_to_message) ||
-        Boolean(referenceImageBase64 && pendingTasks.length > 0) ||
-        /\b(make a new one|new (one|design)|different design|another (one|design|version)|earlier design|previous design|same design|change|revise|revision|redo|better|not what i want|try another|different layout|update|fix|remove|add|replace|adjust|correct|swap|switch|move|shift|resize|widen|narrow|shrink|increase|decrease|bullshit|bullshot|stuck|similar design|keep giving me|keep sending|never hardcode|not good|cleaner|less boxy|too repetitive|fresh)\b/i.test(rawText.trim()) ||
-        /(دیزاینێکی تر|دەستکاری|گۆڕانکاری|چاککردنەوە|جیاواز بێت|باشتر بکە|دیزاینی پێشوو|ئەوەی پێشتر|هەمان دیزاین|بگۆڕە|بجوڵێنە)/.test(rawText.trim());
+      classification = null;
+      if (pendingTasks.length > 0) {
+        classification = await classifyInboundTelegramMessage({
+          messageText: rawText,
+          recentTask: {
+            id: pendingTasks[0].id,
+            title: pendingTasks[0].title,
+            rawText: pendingTasks[0].rawText || pendingTasks[0].payloadText,
+            copy: pendingTasks[0].copyEn ? [pendingTasks[0].copyEn] : undefined,
+          },
+          hasReplyTo: Boolean(msg.reply_to_message),
+          hasReferenceImage: Boolean(referenceImageBase64),
+        });
+      } else {
+        classification = await classifyInboundTelegramMessage({
+          messageText: rawText,
+          recentTask: null,
+          hasReplyTo: Boolean(msg.reply_to_message),
+          hasReferenceImage: Boolean(referenceImageBase64),
+        });
+      }
 
-      if (isRevisionIntent && pendingTasks.length > 0) {
+      if (classification.intent === 'revision_feedback' && pendingTasks.length > 0) {
         feedbackTargetTask = pendingTasks[0];
       }
     }
@@ -2936,6 +3194,44 @@ export function createApp(options?: CreateAppOptions) {
         learnedRules: effectiveTaskRules,
         comment: rawText,
       }, 200);
+    }
+
+    if (!classification) {
+      classification = await classifyInboundTelegramMessage({
+        messageText: rawText,
+        recentTask: null,
+        hasReplyTo: Boolean(msg.reply_to_message),
+        hasReferenceImage: Boolean(referenceImageBase64),
+      });
+    }
+
+    // Refuse auto-generation when the message contains ONLY instructions or styling feedback without any copy/brief
+    if (!feedbackTargetTask && classification?.isInstructionOnly) {
+      if (sourceChannelId && sourceChannelId !== 'tg_default') {
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text:
+            `📝 <b>Design instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
+            `⚠️ <i>No copy or event details were found in your message. Automatic drafting requires the exact text or announcement details to place on the design.</i>\n\n` +
+            `<i>Please send the event title, date, venue, or body copy, and the art director will combine it with your styling preferences.</i>`,
+          parse_mode: 'HTML',
+        });
+      }
+      const hostHeader = c.req.header('x-forwarded-host') || c.req.header('host');
+      const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
+      const result = await ingestChatCampaignTask({
+        platform: 'telegram',
+        sourceEventId,
+        sourceChannelId,
+        senderName,
+        rawText,
+        voiceTranscript,
+        referenceImageBase64,
+        explicitClientId: json.clientId,
+        autoGenerate: false,
+        deskBaseUrl: incomingDeskBase,
+        rawJson: json,
+      });
+      return c.json({ ok: true, task: result.task, instructionOnly: true, notification: result.notification }, 201);
     }
 
     const shouldGenerate = c.req.query('generate') === 'true' || json.autoGenerate === true || process.env.AUTO_GENERATE_CHAT_DESIGNS === 'true';
@@ -4810,6 +5106,35 @@ export function createApp(options?: CreateAppOptions) {
       workflowId: `wf_${taskId}`,
       acceptedAt: new Date().toISOString(),
     }, 202);
+  });
+
+  // Re-drive Failed Task Generation (ADR-025 / Audit 2026-09-16)
+  registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const taskId = c.req.param('taskId');
+    try {
+      const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
+      if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
+      if (!result.ok && (result as any).code === 'TASK_NOT_FOUND') return problem(c, 404, 'TASK_NOT_FOUND', (result as any).message || '');
+      return c.json(result, result.ok ? 200 : 500);
+    } catch (err: any) {
+      return problem(c, 500, 'REDRIVE_FAILED', err.message || 'Task redrive failed');
+    }
+  });
+
+  // Daily / On-Demand Sweep of Failed Generation Tasks
+  registerRoute('post', '/tasks/sweep-failed', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    if (auth.role !== 'administrator' && auth.role !== 'operator') return problem(c, 403, 'Forbidden', 'Operator required');
+    const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+    try {
+      const result = await sweepFailedTasks(tenantId);
+      return c.json(result, 200);
+    } catch (err: any) {
+      return problem(c, 500, 'SWEEP_FAILED', err.message || 'Failed tasks sweep failed');
+    }
   });
 
   // Design Revisions
