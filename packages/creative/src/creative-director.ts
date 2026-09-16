@@ -457,7 +457,7 @@ export class CreativeDirectorRunner {
       let fontFamily = isEnglish ? 'Inter' : 'Noto Naskh Arabic';
       if (isKaae) {
         if (isEnglish) {
-          fontFamily = block.role === 'headline' ? 'Minion Variable Concept' : 'Inter';
+          fontFamily = block.role === 'headline' ? 'Cinzel' : 'Verdana';
         } else {
           fontFamily = block.role === 'headline' ? 'Cairo' : 'Noto Naskh Arabic';
         }

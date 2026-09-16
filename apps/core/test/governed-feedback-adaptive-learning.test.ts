@@ -40,7 +40,7 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
       taskId,
       title: 'Smart Creative Typographic Hierarchy',
       category: 'typography',
-      ruleText: 'Apply smart, high-design typography: Cinzel for monumental headers, Cormorant Garamond for ceremonial prose, and Plus Jakarta Sans for modern executive copy.',
+      ruleText: 'Apply smart, high-design typography: Cinzel for monumental headers, Playfair Display for ceremonial prose, and Plus Jakarta Sans for modern executive copy.',
       rationale: 'Operator established creative font freedom and smart design font pairings.',
       actor: { id: 'operator_hawzhin', role: 'operator', name: 'Hawzhin' },
     });
@@ -115,7 +115,7 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
     const opsWithLearning = creativeDirector.generateKaaeOperations(mockBrief, 'invitation', {
       rawText: 'The Kurdistan Accrediting Association for Education cordially requests the honor of your presence.\n\nSeptember 12, 2026\nSaad Abdullah Hall',
       learnedRules: [
-        'use Playfair Display for headers and Cormorant Garamond for ceremonial prose',
+        'use Playfair Display for headers and Playfair Display for ceremonial prose',
         'palette: accent gold #E8B85C and Kurdistan navy',
       ],
     });

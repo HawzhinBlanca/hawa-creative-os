@@ -837,7 +837,7 @@ export function createApp(options?: CreateAppOptions) {
       clientId: 'c1000000-0000-4000-8000-000000000002',
       version: 1,
       sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Initial baseline KAAE institutional DNA with Cairo/Minion and Navy/Gold',
+      commitMessage: 'Initial baseline KAAE institutional DNA with Cairo/Verdana and Navy/Gold',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
       dna: kaaeClientDNA,
@@ -950,7 +950,7 @@ export function createApp(options?: CreateAppOptions) {
       clientId: 'c1000000-0000-4000-8000-000000000002',
       version: 1,
       sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Minion/Cairo typography',
+      commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Verdana/Cairo typography',
       createdBy: 'autonomous_creative_director',
       createdAt: new Date(Date.now() - 3600000).toISOString(),
       dna: kaaeClientDNA,
@@ -2938,15 +2938,15 @@ export function createApp(options?: CreateAppOptions) {
         } else if (/cormorant/i.test(lowerFb) && !/cinzel/i.test(lowerFb)) {
           extractedRules.push({
             category: 'typography',
-            title: 'Cormorant Garamond Ceremonial Typography',
-            ruleText: 'Apply Cormorant Garamond italic serif typography for ceremonial prose and salutations.',
-            rationale: 'Operator requested Cormorant Garamond for ceremonial copy.',
+            title: 'Playfair Display Ceremonial Typography',
+            ruleText: 'Apply Playfair Display italic serif typography for ceremonial prose and salutations.',
+            rationale: 'Operator requested Playfair Display for ceremonial copy.',
           });
         } else {
           extractedRules.push({
             category: 'typography',
             title: 'Smart Creative Typographic Hierarchy',
-            ruleText: 'Apply smart, high-design typography: Cinzel for monumental headers, Cormorant Garamond for ceremonial prose, and Plus Jakarta Sans for modern executive copy.',
+            ruleText: 'Apply smart, high-design typography: Cinzel for monumental headers, Playfair Display for ceremonial prose, and Plus Jakarta Sans for modern executive copy.',
             rationale: 'Operator established creative font freedom and smart design font pairings.',
           });
         }
@@ -4873,7 +4873,16 @@ export function createApp(options?: CreateAppOptions) {
           imageryStr = `procedural (${concept.motif || 'thin-rules'})`;
         }
 
-        const typefaceStr = 'EB Garamond (draft stand-in for Minion)';
+        const winnerLayout = typeof winner?.layout === 'string' ? JSON.parse(winner.layout) : winner?.layout;
+        const fontFaces = new Set<string>();
+        if (winnerLayout?.text) {
+          for (const t of winnerLayout.text) {
+            if (t.fontFamily) fontFaces.add(t.fontFamily);
+          }
+        }
+        const typefaceStr = fontFaces.size > 0
+          ? [...fontFaces].join(', ')
+          : (concept?.displayFont ? `${concept.displayFont} (Canva native)` : 'Verdana / Noto Sans Arabic');
         let rungNotes = '';
         if (stages.ladderRung && stages.ladderRung > 1) {
           rungNotes = stages.ladderNotes ? ` · ${stages.ladderNotes}` : ` · Rung ${stages.ladderRung} fallback`;

@@ -22,7 +22,7 @@ const BASE_CONTEXT: LayoutValidationContext = {
   copyScripts: ['latin', 'latin', 'latin', 'latin'],
   reference: {
     rules: {
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       palette: KAAE_PALETTE,
       scriptFonts: {
         arabic: 'Noto Sans Arabic',
@@ -30,7 +30,7 @@ const BASE_CONTEXT: LayoutValidationContext = {
     },
     logoAspect: 1.0, // 1:1 aspect
   },
-  draftFont: 'EB Garamond',
+  draftFont: 'Verdana',
 };
 
 function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[] = []): StudioLayoutV2 {
@@ -90,7 +90,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
         height: 30,
         fontSize: eyebrowSize,
         lineHeight: arabicIndices.includes(0) ? 1.7 : 1.3,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#D4E2F0',
         align: 'left',
       },
@@ -103,7 +103,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
         height: 90,
         fontSize: titleSize,
         lineHeight: arabicIndices.includes(1) ? 1.7 : 1.2,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#F7B500',
         align: 'left',
         bold: true,
@@ -117,7 +117,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
         height: 50,
         fontSize: subtitleSize,
         lineHeight: arabicIndices.includes(2) ? 1.7 : 1.3,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#FFFFFF',
         align: 'left',
       },
@@ -130,7 +130,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
         height: 100,
         fontSize: bodySize,
         lineHeight: arabicIndices.includes(3) ? 1.7 : 1.4,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#FDF8F3',
         align: 'left',
       },

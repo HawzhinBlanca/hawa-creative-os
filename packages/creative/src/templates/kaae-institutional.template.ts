@@ -125,7 +125,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 14,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#E8B85C',
       letterSpacing: 1.0,
     },
@@ -168,7 +168,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 28,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#160874',
     },
   });
@@ -207,7 +207,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 32,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#160874',
     },
   });
@@ -248,7 +248,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 16,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#160874',
     },
   });
@@ -267,7 +267,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 18,
       fontWeight: '500',
-      fontFamily: 'Noto Naskh Arabic',
+      fontFamily: 'Noto Sans Arabic',
       color: '#2C3E50',
     },
   });
@@ -310,7 +310,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 16,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#160874',
     },
   });
@@ -328,7 +328,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 16,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#160874',
     },
   });
@@ -347,7 +347,7 @@ export function createKaaeEligibilityDecreeTemplate(params: KaaeEligibilityDecre
     style: {
       fontSize: 15,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#E8B85C',
       textAlign: 'center',
     },
@@ -420,7 +420,7 @@ export function createKaaeGlobalMilestoneTemplate(params: KaaeGlobalMilestonePar
     style: {
       fontSize: 16,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#160874',
       textAlign: 'center',
     },
@@ -440,7 +440,7 @@ export function createKaaeGlobalMilestoneTemplate(params: KaaeGlobalMilestonePar
     style: {
       fontSize: 34,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#FFFFFF',
       textAlign: 'center',
     },
@@ -481,7 +481,7 @@ export function createKaaeGlobalMilestoneTemplate(params: KaaeGlobalMilestonePar
     style: {
       fontSize: 40,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#E8B85C',
       textAlign: 'center',
     },
@@ -523,7 +523,7 @@ export function createKaaeGlobalMilestoneTemplate(params: KaaeGlobalMilestonePar
     style: {
       fontSize: 20,
       fontWeight: '500',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#D0D8E8',
       textAlign: 'center',
     },
@@ -562,7 +562,7 @@ export function createKaaeGlobalMilestoneTemplate(params: KaaeGlobalMilestonePar
     style: {
       fontSize: 18,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#E8B85C',
       textAlign: 'center',
     },
@@ -638,7 +638,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 18,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#E8B85C',
     },
   });
@@ -676,7 +676,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 38,
       fontWeight: '900',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#160874',
     },
   });
@@ -715,7 +715,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 48,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#160874',
     },
   });
@@ -733,7 +733,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#2C3E50',
     },
   });
@@ -751,7 +751,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 48,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#160874',
     },
   });
@@ -769,7 +769,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#2C3E50',
     },
   });
@@ -788,7 +788,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 20,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#160874',
     },
   });
@@ -814,7 +814,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 17,
       fontWeight: '500',
-      fontFamily: 'Noto Naskh Arabic',
+      fontFamily: 'Verdana',
       color: '#333333',
     },
   });
@@ -852,7 +852,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 22,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#E8B85C',
     },
   });
@@ -870,7 +870,7 @@ export function createKaaeEvaluatorCallTemplate(params: KaaeEvaluatorCallParams)
     style: {
       fontSize: 18,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#FFFFFF',
     },
   });
@@ -943,7 +943,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 28,
       fontWeight: '800',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#E8B85C',
       textAlign: 'center',
     },
@@ -990,7 +990,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 64,
       fontWeight: '900',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#E8B85C',
     },
   });
@@ -1008,7 +1008,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#D0D8E8',
     },
   });
@@ -1027,7 +1027,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 64,
       fontWeight: '900',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#FFFFFF',
     },
   });
@@ -1045,7 +1045,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#D0D8E8',
     },
   });
@@ -1064,7 +1064,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 64,
       fontWeight: '900',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#E8B85C',
     },
   });
@@ -1082,7 +1082,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#D0D8E8',
     },
   });
@@ -1101,7 +1101,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 64,
       fontWeight: '900',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Playfair Display',
       color: '#FFFFFF',
     },
   });
@@ -1119,7 +1119,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#D0D8E8',
     },
   });
@@ -1138,7 +1138,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 18,
       fontWeight: '700',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Cinzel',
       color: '#E8B85C',
     },
   });
@@ -1157,7 +1157,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 18,
       fontWeight: '500',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#FFFFFF',
     },
   });
@@ -1195,7 +1195,7 @@ export function createKaaeMetricsReportTemplate(params: KaaeMetricsReportParams)
     style: {
       fontSize: 16,
       fontWeight: '600',
-      fontFamily: 'Minion Variable Concept',
+      fontFamily: 'Verdana',
       color: '#E8B85C',
       textAlign: 'center',
     },

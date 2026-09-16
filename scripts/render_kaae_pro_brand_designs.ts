@@ -43,7 +43,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
   <title>KAAE Institutional Accreditation Charter — University of Kurdistan Hewlêr</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -159,7 +159,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       margin-bottom: 16px;
     }
     .diploma-main-title {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Cinzel', serif;
       font-size: 88px;
       font-weight: 700;
       letter-spacing: -0.01em;
@@ -177,14 +177,14 @@ const design1_CharterA4 = `<!DOCTYPE html>
       margin: 0 auto;
     }
     .conferral-formula {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Playfair Display', serif;
       font-style: italic;
       font-size: 32px;
       color: #475569;
       margin-bottom: 24px;
     }
     .institution-name {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Cinzel', serif;
       font-size: 96px;
       font-weight: 700;
       color: #0F172A;
@@ -302,7 +302,7 @@ const design1_CharterA4 = `<!DOCTYPE html>
       margin-bottom: 4px;
     }
     .seal-text-center {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Cinzel', serif;
       font-size: 32px;
       font-weight: 700;
       color: #1E3A5F;
@@ -729,7 +729,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
   <title>KAAE Presidential Directive — Dr. Boushra Rahal Alameh</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -812,7 +812,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
       max-width: 900px;
     }
     .open-quote {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Playfair Display', serif;
       font-size: 110px;
       line-height: 0.5;
       color: #D4A94C;
@@ -821,7 +821,7 @@ const design3_PresidentialStatement = `<!DOCTYPE html>
       opacity: 0.9;
     }
     .quote-text {
-      font-family: 'Cormorant Garamond', serif;
+      font-family: 'Playfair Display', serif;
       font-style: italic;
       font-size: 50px;
       font-weight: 600;

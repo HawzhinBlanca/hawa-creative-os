@@ -49,16 +49,16 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   </defs>
 
   <style>
-    .minion-bold {
-      font-family: "Minion Pro", "Minion Variable Concept", Georgia, serif;
+    .serif-bold {
+      font-family: "Cinzel", "Playfair Display", Georgia, serif;
       font-weight: 700;
     }
-    .minion-regular {
-      font-family: "Minion Pro", "Minion Variable Concept", Georgia, serif;
+    .serif-regular {
+      font-family: "Cinzel", "Playfair Display", Georgia, serif;
       font-weight: 400;
     }
-    .minion-italic {
-      font-family: "Minion Pro", "Minion Variable Concept", Georgia, serif;
+    .serif-italic {
+      font-family: "Cinzel", "Playfair Display", Georgia, serif;
       font-style: italic;
     }
     .sans-bold {
@@ -113,14 +113,14 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     OFFICIAL PRESIDENTIAL &amp; MINISTERIAL CONVOCATION
   </text>
 
-  <text x="540" y="282" text-anchor="middle" class="minion-bold" font-size="28" fill="#FFFFFF" letter-spacing="0.5">
+  <text x="540" y="282" text-anchor="middle" class="serif-bold" font-size="28" fill="#FFFFFF" letter-spacing="0.5">
     The National Standards for Quality Assurance in Education
   </text>
 
   <!-- Signature KAAE Brand Gold Accent Bar (Underline Anchor from Page 1 & Page 5) -->
   <rect x="440" y="298" width="200" height="4" rx="2" fill="#F7B500"/>
 
-  <text x="540" y="324" text-anchor="middle" class="minion-italic" font-size="17" fill="#E2E8F0">
+  <text x="540" y="324" text-anchor="middle" class="serif-italic" font-size="17" fill="#E2E8F0">
     Advancing Institutional Rigor &amp; Academic Excellence Across the Kurdistan Region
   </text>
 
@@ -129,16 +129,16 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <rect width="720" height="48" rx="8" fill="#0E1E34" stroke="#254A78" stroke-width="1"/>
     <!-- Gold top border highlight -->
     <path d="M 0,8 Q 0,0 8,0 L 712,0 Q 720,0 720,8" fill="none" stroke="#F7B500" stroke-width="1.8"/>
-    <text x="360" y="31" text-anchor="middle" class="minion-italic" font-size="22" font-weight="700" fill="#FFF2D1">
+    <text x="360" y="31" text-anchor="middle" class="serif-italic" font-size="22" font-weight="700" fill="#FFF2D1">
       Mr. / Ms. / Dr. [Full Name]
     </text>
   </g>
 
   <!-- Formal Invitation Prose -->
-  <text x="540" y="420" text-anchor="middle" class="minion-regular" font-size="17" fill="#CBD5E1">
+  <text x="540" y="420" text-anchor="middle" class="serif-regular" font-size="17" fill="#CBD5E1">
     The Kurdistan Accrediting Association for Education cordially requests the honor of your presence
   </text>
-  <text x="540" y="444" text-anchor="middle" class="minion-regular" font-size="17" fill="#CBD5E1">
+  <text x="540" y="444" text-anchor="middle" class="serif-regular" font-size="17" fill="#CBD5E1">
     at this landmark national convocation and official presentation.
   </text>
 
@@ -155,7 +155,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <text x="58" y="40" class="sans-bold" font-size="10" fill="#F7B500" letter-spacing="1.5">KEYNOTE ANNOUNCEMENT</text>
 
     <!-- Keynote Speaker Headline -->
-    <text x="36" y="78" class="minion-bold" font-size="22" fill="#FFFFFF">
+    <text x="36" y="78" class="serif-bold" font-size="22" fill="#FFFFFF">
       His Excellency Prime Minister Masrour Barzani
     </text>
 
@@ -187,7 +187,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <text x="58" y="40" class="sans-bold" font-size="10" fill="#7DD3FC" letter-spacing="1.5">MINISTERIAL COOPERATION ACCORD</text>
 
     <!-- Section Headline -->
-    <text x="36" y="76" class="minion-bold" font-size="20" fill="#FFFFFF">
+    <text x="36" y="76" class="serif-bold" font-size="20" fill="#FFFFFF">
       Official Launch &amp; Bilateral Ministerial MoU Signing
     </text>
 
@@ -210,7 +210,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <path d="M 0,10 Q 0,0 10,0 L 455,0 Q 465,0 465,10" fill="none" stroke="#F7B500" stroke-width="2"/>
 
     <text x="32" y="32" class="sans-bold" font-size="11" fill="#F7B500" letter-spacing="2">DATE &amp; TIME</text>
-    <text x="32" y="64" class="minion-bold" font-size="21" fill="#FFFFFF">Wednesday, September 9, 2026</text>
+    <text x="32" y="64" class="serif-bold" font-size="21" fill="#FFFFFF">Wednesday, September 9, 2026</text>
     <text x="32" y="90" class="sans-medium" font-size="14.5" fill="#7DD3FC">2:30 PM <tspan fill="#94A3B8" font-size="13">· (Guests to be seated by 2:00 PM)</tspan></text>
   </g>
 
@@ -220,7 +220,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <path d="M 0,10 Q 0,0 10,0 L 455,0 Q 465,0 465,10" fill="none" stroke="#F7B500" stroke-width="2"/>
 
     <text x="32" y="32" class="sans-bold" font-size="11" fill="#F7B500" letter-spacing="2">VENUE &amp; LOCATION</text>
-    <text x="32" y="64" class="minion-bold" font-size="20" fill="#FFFFFF">Saad Abdullah Conference Hall</text>
+    <text x="32" y="64" class="serif-bold" font-size="20" fill="#FFFFFF">Saad Abdullah Conference Hall</text>
     <text x="32" y="90" class="sans-medium" font-size="14" fill="#94A3B8">Erbil · Kurdistan Region</text>
   </g>
 
@@ -234,7 +234,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     </text>
   </g>
 
-  <text x="540" y="1100" text-anchor="middle" class="minion-italic" font-size="14" fill="#94A3B8">
+  <text x="540" y="1100" text-anchor="middle" class="serif-italic" font-size="14" fill="#94A3B8">
     This invitation is personal, non-transferable, and strictly required for hall accreditation and admission.
   </text>
 
@@ -242,7 +242,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <line x1="60" y1="1240" x2="1020" y2="1240" stroke="#1E3A5F" stroke-width="1"/>
 
   <!-- Left Footer: Statutory Quality Authority Credential -->
-  <text x="60" y="1272" class="minion-bold" font-size="14" fill="#FFFFFF">
+  <text x="60" y="1272" class="serif-bold" font-size="14" fill="#FFFFFF">
     Kurdistan Accrediting Association for Education (KAAE)
   </text>
   <text x="60" y="1294" class="sans-medium" font-size="11.5" fill="#64748B" letter-spacing="0.5">

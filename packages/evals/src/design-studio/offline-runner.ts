@@ -108,7 +108,7 @@ export class OfflineRunner {
         height: boxHeight,
         fontSize,
         lineHeight,
-        fontFamily: isArabic ? 'Noto Sans Arabic' : 'EB Garamond',
+        fontFamily: isArabic ? 'Noto Sans Arabic' : 'Verdana',
         color: role === 'title' ? '#F7B500' : role === 'eyebrow' ? '#D4E2F0' : '#FFFFFF',
         align: isArabic ? 'right' : 'left',
         bold: role === 'title',
@@ -289,7 +289,7 @@ export class OfflineRunner {
         copyScripts: brief.copyBlocks.map((b) => b.script),
         reference: {
           rules: {
-            fontFamily: 'Minion Variable Concept',
+            fontFamily: 'Verdana',
             palette: KAAE_PALETTE,
             scriptFonts: {
               arabic: 'Noto Sans Arabic',
@@ -297,7 +297,7 @@ export class OfflineRunner {
           },
           logoAspect: 1.0,
         },
-        draftFont: 'EB Garamond',
+        draftFont: 'Verdana',
       };
 
       let hardQaEscapes = 0;
@@ -368,7 +368,7 @@ export class OfflineRunner {
       const pptxBuffer = transferRes.bytes;
 
       // Verify PPTX copy & font
-      const pptxCheck = await checkCanvaPptx(pptxBuffer, copyStrings, 'EB Garamond');
+      const pptxCheck = await checkCanvaPptx(pptxBuffer, copyStrings, 'Verdana');
       if (!pptxCheck.copyPass) {
         hardQaEscapes += 1;
       }

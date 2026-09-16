@@ -153,10 +153,23 @@ export function validateLayoutV2(
   const normalized: StudioLayoutV2 = JSON.parse(JSON.stringify(layout));
 
   // 4. FONT_NOT_ADMITTED & Script Normalization
+  const admittedDisplayFonts = [
+    'cinzel',
+    'playfair display',
+    'montserrat',
+    'lora',
+    'bodoni moda',
+    'cairo',
+    'plus jakarta sans',
+    'vazirmatn',
+    'inter',
+    'verdana',
+  ];
   const admittedLatinFonts = new Set([
-    context.reference.rules.fontFamily.toLowerCase(),
-    (context.draftFont || 'EB Garamond').toLowerCase(),
-    'eb garamond',
+    (context.reference.rules.fontFamily || 'Verdana').toLowerCase(),
+    (context.draftFont || 'Verdana').toLowerCase(),
+    'verdana',
+    ...admittedDisplayFonts,
   ]);
   const arabicScriptFont = context.reference.rules.scriptFonts?.arabic || 'Noto Sans Arabic';
 

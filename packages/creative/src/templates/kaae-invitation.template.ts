@@ -138,7 +138,6 @@ export function buildKaaeInvitationOperations(params?: KaaeInvitationParams, ove
   for (const rule of rules) {
     const lower = rule.toLowerCase();
     if (lower.includes('playfair')) headerFont = 'Playfair Display';
-    else if (lower.includes('cormorant') && !lower.includes('ceremonial')) headerFont = 'Cormorant Garamond';
     else if (lower.includes('cinzel')) headerFont = 'Cinzel';
 
     const hexMatch = rule.match(/#[0-9a-fA-F]{6}\b/);
@@ -148,7 +147,7 @@ export function buildKaaeInvitationOperations(params?: KaaeInvitationParams, ove
   }
 
   addCopy('inv_title', title, 'headline', 30, 30, headerFont, '#F5F3ED', 'center');
-  addCopy('inv_salutation', salutation, 'body', 28, 24, 'Cormorant Garamond', accentColor, 'center');
+  addCopy('inv_salutation', salutation, 'body', 28, 24, 'Playfair Display', accentColor, 'center');
   addCopy('inv_host_prose', hostProse, 'body', 22, 26, 'Plus Jakarta Sans', '#F5F3ED', 'center');
   addCopy('inv_keynote', keynoteBody, 'body', 20, 22);
   addCopy('inv_mou', mouBody, 'body', 20, 28);

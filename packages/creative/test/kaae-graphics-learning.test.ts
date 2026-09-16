@@ -32,7 +32,7 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
     expect(extraction.dimensions.height).toBe(1350);
     expect(extraction.format).toBe('feed');
     expect(extraction.detectedColors.length).toBeGreaterThanOrEqual(3);
-    expect(extraction.typography.primaryFont).toBe('Minion Variable Concept');
+    expect(extraction.typography.primaryFont).toBe('Verdana');
     expect(extraction.typography.displayFont).toBe('Cairo');
     expect(extraction.typography.bodyFont).toBe('Noto Naskh Arabic');
     expect(extraction.learnedRules.length).toBeGreaterThanOrEqual(4);

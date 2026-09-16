@@ -31,8 +31,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   const logo = foundLogo ? readFileSync(foundLogo) : Buffer.alloc(32);
   const ratio = logo.length >= 24 ? (logo.readUInt32BE(16) / (logo.readUInt32BE(20) || 1)) || 1 : 1;
   const plan={width:1200,height:1697,background:'#081F35',shapes:[],logo:{x:500,y:50,width:200,height:200/ratio},text:[
-    {copyIndex:0,x:100,y:600,width:1000,height:100,fontSize:32,fontFamily:'Minion Variable Concept',color:'#fff2db',align:'center'},
-    {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Minion Variable Concept',color:'#fff2db',align:'left'}]};
+    {copyIndex:0,x:100,y:600,width:1000,height:100,fontSize:32,fontFamily:'Verdana',color:'#fff2db',align:'center'},
+    {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Verdana',color:'#fff2db',align:'left'}]};
   const intake=async()=> (await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Plan',rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',designInstructions:'Use navy.',exactCopy:[]})).task.id;
   const make=(fetcher:any)=>{const api={importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService;return {api,planner:new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher})};};
   const response=(model='gpt-6-astra',value:any=plan)=>Response.json({id:'chatcmpl-real-shaped-test',model,choices:[{message:{content:typeof value==='string'?value:JSON.stringify(value)}}],usage:{prompt_tokens:123,completion_tokens:456}});
@@ -66,8 +66,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(saved.status).toBe('planned');
     expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1});
     expect(saved.result.manifest.plan.text[1]).toMatchObject({rtl:true,align:'right',fontFamily:'Noto Sans Arabic'});
-    expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Minion Variable Concept'});
-    const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Minion Variable Concept',{scriptFonts:{arabic:'Noto Sans Arabic'}});
+    expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Verdana'});
+    const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Verdana',{scriptFonts:{arabic:'Noto Sans Arabic'}});
     expect(check).toMatchObject({copyPass:true,fontPass:true,rtlPass:true,arabicTextObjectCount:1,rtlTextObjectCount:1});
   });
   it('refuses copy in a script the transfer cannot set, before any paid call',async()=>{

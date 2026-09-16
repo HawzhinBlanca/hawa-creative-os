@@ -64,7 +64,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
         role: 'eyebrow',
         fontSize: 16,
         lineHeight: 1.3,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#D4E2F0',
         align: 'center',
       },
@@ -77,7 +77,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
         role: 'title',
         fontSize: 48,
         lineHeight: 1.2,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#FFFFFF',
         align: 'center',
         bold: true,
@@ -91,7 +91,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
         role: 'subtitle',
         fontSize: 24,
         lineHeight: 1.3,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#D4E2F0',
         align: 'center',
       },
@@ -104,7 +104,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
         role: 'body',
         fontSize: 20,
         lineHeight: 1.4,
-        fontFamily: 'EB Garamond',
+        fontFamily: 'Verdana',
         color: '#FDF8F3',
         align: 'center',
       },
@@ -146,12 +146,12 @@ function createMockContext(fetchFn: typeof fetch): StageContext {
     referencePack: {
       palette: KAAE_PALETTE,
       referenceFonts: {
-        latin: 'EB Garamond',
+        latin: 'Verdana',
         arabic: 'Noto Sans Arabic',
       },
     },
     promotedRules: 'Keep title clear and centered. Do not crowd logo.',
-    latinFont: 'EB Garamond',
+    latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     logoAspect: 1.0,
     client,
@@ -394,7 +394,7 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
       },
       evidence: {
         hierarchy: 'Unambiguous dominant title',
-        typography: 'Disciplined classical scale with Garamond',
+        typography: 'Disciplined classical scale with Verdana',
         composition: 'Stable centered editorial grid',
         whitespace: 'Intentional breathing room around copy',
         brandFidelity: 'Exact brand navy and gold palette',
@@ -689,7 +689,7 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     const pptxCheck = checkCanvaPptx(
       new Uint8Array(transfer.pptxBytes),
       ctx.copyBlocks.map((c) => c.text),
-      'EB Garamond'
+      'Verdana'
     );
     expect(pptxCheck.copyPass).toBe(true);
     expect(pptxCheck.fontPass).toBe(true);

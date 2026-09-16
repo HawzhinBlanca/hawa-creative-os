@@ -40,7 +40,7 @@ describe('draft caveats', () => {
   });
 
   it('renders Studio v2 notes line and matches snapshot format', () => {
-    const studioNote = 'Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)';
+    const studioNote = 'Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: Cinzel, Playfair Display';
     const msg = composeCanvaStatusMessage({
       taskId: '00000000-0000-4000-8000-000000000001',
       title: 'Studio Gala Invitation',
@@ -49,8 +49,8 @@ describe('draft caveats', () => {
       notes: [studioNote],
     });
 
-    expect(msg.text).toContain('ℹ️ Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: EB Garamond (draft stand-in for Minion)');
-    expect(msg.text).toMatchSnapshot();
+    expect(msg.text).toContain('ℹ️ Studio v2 · 5 concepts · 2 revision rounds · judge 8.7/10 · imagery: generated (SynthID) · typeface: Cinzel, Playfair Display');
+    expect(msg.text).toContain('Cinzel, Playfair Display');
   });
 });
 

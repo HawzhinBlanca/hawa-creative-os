@@ -30,8 +30,8 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
   const isKurdish = params.language === 'ckb';
   const ops: StudioOperation[] = [];
 
-  let recipientFont = isKurdish ? 'Cairo' : 'Minion Variable Concept';
-  let programFont = isKurdish ? 'Cairo' : 'Minion Variable Concept';
+  let recipientFont = isKurdish ? 'Cairo' : 'Playfair Display';
+  let programFont = isKurdish ? 'Cairo' : 'Verdana';
 
   if (params.learnedRules && params.learnedRules.length > 0) {
     for (const rule of params.learnedRules) {
@@ -42,8 +42,8 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
         } else if (/playfair/i.test(lr)) {
           recipientFont = '"Playfair Display", serif';
         }
-        if (/cormorant/i.test(lr)) {
-          programFont = '"Cormorant Garamond", serif';
+        if (/playfair/i.test(lr)) {
+          programFont = '"Playfair Display", serif';
         }
       }
     }
@@ -137,7 +137,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
       <svg width="340" height="340" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
         <circle cx="170" cy="170" r="160" fill="none" stroke="#D4A94C" stroke-width="3" stroke-dasharray="8 6" stroke-opacity="0.6"/>
         <circle cx="170" cy="170" r="145" fill="none" stroke="#4770A3" stroke-width="1.5" stroke-opacity="0.4"/>
-        <text x="170" y="160" font-family="'Minion Variable Concept', 'Crimson Text', serif" font-size="20" font-weight="700" fill="#D4A94C" text-anchor="middle" letter-spacing="3">OFFICIAL SEAL</text>
+        <text x="170" y="160" font-family="'Cinzel', serif" font-size="20" font-weight="700" fill="#D4A94C" text-anchor="middle" letter-spacing="3">OFFICIAL SEAL</text>
         <text x="170" y="190" font-family="'Inter', sans-serif" font-size="14" font-weight="600" fill="#4770A3" text-anchor="middle" letter-spacing="2">KAAE · 2022/6</text>
       </svg>
     `.trim(),
@@ -163,7 +163,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     style: {
       fontSize: isKurdish ? 96 : 108,
       fontWeight: 'bold',
-      fontFamily: isKurdish ? 'Cairo' : 'Minion Variable Concept',
+      fontFamily: isKurdish ? 'Cairo' : 'Cinzel',
       textAlign: 'center',
       color: '#4770A3',
       letterSpacing: isKurdish ? 2 : 10,
@@ -209,7 +209,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     style: {
       fontSize: 48,
       fontStyle: 'italic',
-      fontFamily: isKurdish ? 'Noto Naskh Arabic' : 'Minion Variable Concept',
+      fontFamily: isKurdish ? 'Noto Sans Arabic' : 'Verdana',
       textAlign: 'center',
       color: '#1A202C',
     },
@@ -272,7 +272,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     style: {
       fontSize: 48,
       fontStyle: 'normal',
-      fontFamily: isKurdish ? 'Noto Naskh Arabic' : 'Minion Variable Concept',
+      fontFamily: isKurdish ? 'Noto Sans Arabic' : 'Verdana',
       textAlign: 'center',
       color: '#1A202C',
     },
@@ -380,7 +380,7 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     style: {
       fontSize: 46,
       fontWeight: 'bold',
-      fontFamily: isKurdish ? 'Cairo' : 'Minion Variable Concept',
+      fontFamily: isKurdish ? 'Cairo' : 'Verdana',
       textAlign: 'left',
       color: '#2D4A73',
     },

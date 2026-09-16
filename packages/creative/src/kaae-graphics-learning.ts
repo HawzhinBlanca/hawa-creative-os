@@ -274,7 +274,7 @@ export class KaaeGraphicsLearningEngine {
       dimensions: dims,
       detectedColors,
       typography: {
-        primaryFont: 'Minion Variable Concept',
+        primaryFont: 'Verdana',
         displayFont: 'Cairo',
         bodyFont: 'Noto Naskh Arabic',
         estimatedHeadlineSize: isCertificate ? 36 : isFeedOrStory ? 32 : 28,
@@ -425,7 +425,7 @@ export class KaaeGraphicsLearningEngine {
         { name: 'KAAE Deep Keynote Canvas', hex: '#0A1628', role: 'background', usage: 'Keynote LED widescreen backdrops, high-contrast dark digital announcements' },
       ],
       typographicStandards: {
-        primaryLatin: 'Minion Variable Concept',
+        primaryLatin: 'Verdana',
         kurdishDisplay: 'Cairo',
         kurdishBody: 'Noto Naskh Arabic',
         scaleHeadlinePt: 32,

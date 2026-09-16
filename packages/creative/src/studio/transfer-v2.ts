@@ -84,10 +84,16 @@ export async function encodeStudioTransferV2(
     'Georgia',
     'Verdana',
     'Times New Roman',
-    'Minion Variable Concept',
-    'EB Garamond',
     'Noto Sans Arabic',
+    'Cinzel',
+    'Playfair Display',
+    'Montserrat',
+    'Lora',
+    'Bodoni Moda',
+    'Cairo',
+    'Plus Jakarta Sans',
     'Vazirmatn',
+    'Inter',
     ...(options.extraFonts || []).filter((f) => typeof f === 'string' && /^[A-Za-z0-9 ]{2,40}$/.test(f)),
   ];
 

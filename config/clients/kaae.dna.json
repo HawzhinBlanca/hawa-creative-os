@@ -379,7 +379,7 @@
     "fonts": [
       {
         "id": "font-en-display",
-        "family": "Minion Variable Concept",
+        "family": "Cinzel",
         "styles": [
           "Bold",
           "Semibold"
@@ -393,7 +393,7 @@
       },
       {
         "id": "font-en-subheadings",
-        "family": "Minion Variable Concept",
+        "family": "Playfair Display",
         "styles": [
           "Medium",
           "Italic"
@@ -407,7 +407,7 @@
       },
       {
         "id": "font-en-body",
-        "family": "Minion Variable Concept",
+        "family": "Verdana",
         "styles": [
           "Regular"
         ],
@@ -471,7 +471,7 @@
       "Do not rotate, angle, or place the emblem diagonally.",
       "Do not alter the colors of the emblem rays, central K, or circular banner.",
       "Prohibit placing official lockup logos directly on noisy or low-contrast backgrounds without a minimum 4.5:1 contrast container.",
-      "Headings in Minion Variable Bold (20-30pt Title Case or Small Caps), Subheadings in Medium or Italic (16-20pt), Body in Regular (11-12pt, 1.4x line spacing).",
+      "Formal English body in Verdana, Kurdish/Arabic body in Noto Sans Arabic; display headlines and titles in Canva-native admitted families (Cinzel, Playfair Display, Montserrat).",
       "Stationery: Business cards require logo, name, title, contact info. Letterheads require top logo and footer contact. Certificates require logo, recipient name, seal, date. Email signatures include name, title, KAAE affiliation, phone, email, website, and social links."
     ],
     "imageryRules": [
@@ -648,7 +648,7 @@
       "All primary headlines must maintain minimum 7.0:1 AAA contrast against dark navy or parchment backgrounds",
       "Institutional announcements must state official slogan: \"Empowering Education, Inspiring the Future\"",
       "Always use verified authentic master brand seal and emblem (c1000000-0000-4000-8000-000000000002); never use synthetic approximations.",
-      "Apply smart, high-design typography: Cinzel for monumental headers, Cormorant Garamond for ceremonial prose, and Plus Jakarta Sans for modern executive copy.",
+      "Apply smart, high-design typography: Cinzel for monumental headers, Playfair Display for ceremonial prose, and Verdana for formal body copy.",
       "Use Kurdistan Sun Gold #FFD15C for primary accent highlights and dividers."
     ],
     "requiredDisclaimers": [

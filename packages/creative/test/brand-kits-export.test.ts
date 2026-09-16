@@ -35,7 +35,7 @@ describe('Option C: Pro Brand Kits & Multi-Format Specifications', () => {
 
   it('verifies typography pairings support dual-script Latin and Kurdish', () => {
     for (const kit of Object.values(CANONICAL_BRAND_KITS)) {
-      expect(['Inter', 'Plus Jakarta Sans', 'Minion Variable Concept', 'Verdana']).toContain(kit.typography.latinFont);
+      expect(['Inter', 'Plus Jakarta Sans', 'Verdana']).toContain(kit.typography.latinFont);
       expect(['Vazirmatn', 'Noto Sans Arabic', 'Cairo']).toContain(kit.typography.kurdishFont);
       expect(kit.typography.headlineWeight).toBeGreaterThanOrEqual(700);
     }

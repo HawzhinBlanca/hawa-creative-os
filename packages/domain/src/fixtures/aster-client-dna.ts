@@ -45,7 +45,7 @@ export const asterClientDNA: ClientDNA = {
   ],
   fonts: [
     {
-      family: 'Cormorant Garamond',
+      family: 'Playfair Display',
       style: 'Normal',
       weight: '600',
       role: 'display',
@@ -101,7 +101,7 @@ export const asterClientDNA: ClientDNA = {
     ],
     layoutRules: [
       'Always maintain generous negative space around Aster luxury crest (minimum 32px clear zone).',
-      'Display typography must use Noto Serif Arabic / Cormorant Garamond.',
+      'Display typography must use Noto Serif Arabic / Playfair Display.',
       'High-contrast luxury palette: Royal Gold (#D4AF37) against Midnight Slate (#0F172A).',
     ],
   },

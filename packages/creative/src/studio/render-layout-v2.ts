@@ -134,16 +134,18 @@ function resolveRsvgConvert(options?: RenderLayoutOptions): string {
 
 /**
  * Resolves font fidelity across admitted font families:
- * 'exact' (licensed file present or Noto Sans Arabic) or 'stand-in' (EB Garamond for Minion).
+ * 'exact' for all admitted native families (Verdana, Noto Sans Arabic, Cinzel, Playfair Display, etc.).
  */
-export function getFontFidelityManifest(fontsDir: string): Record<string, 'exact' | 'stand-in'> {
-  const privateMinion = path.join(fontsDir, 'private/MinionVariableConcept-Roman.otf');
-  const hasMinion = fs.existsSync(privateMinion);
-
+export function getFontFidelityManifest(_fontsDir: string): Record<string, 'exact' | 'stand-in'> {
   return {
-    'EB Garamond': 'stand-in',
-    'Minion Variable Concept': hasMinion ? 'exact' : 'stand-in',
+    'Verdana': 'exact',
     'Noto Sans Arabic': 'exact',
+    'Cinzel': 'exact',
+    'Playfair Display': 'exact',
+    'Cairo': 'exact',
+    'Plus Jakarta Sans': 'exact',
+    'Vazirmatn': 'exact',
+    'Inter': 'exact',
   };
 }
 
@@ -154,42 +156,56 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
   const dir = fontsDir || resolveFontsDir();
   const familyLower = fontFamily.toLowerCase();
 
-  let fontFilename = 'EBGaramond-Regular.ttf';
+  let fontPath = '';
 
   if (familyLower.includes('arabic')) {
-    fontFilename = bold ? 'NotoSansArabic-Bold.ttf' : 'NotoSansArabic-Regular.ttf';
+    fontPath = path.join(dir, bold ? 'NotoSansArabic-Bold.ttf' : 'NotoSansArabic-Regular.ttf');
+  } else if (familyLower.includes('cinzel')) {
+    fontPath = path.join(dir, bold ? 'Cinzel-Bold.ttf' : 'Cinzel-SemiBold.ttf');
+  } else if (familyLower.includes('playfair')) {
+    fontPath = path.join(dir, italic ? 'PlayfairDisplay-Italic.ttf' : 'PlayfairDisplay-Bold.ttf');
+  } else if (familyLower.includes('cairo')) {
+    fontPath = path.join(dir, 'Cairo-Regular.ttf');
+  } else if (familyLower.includes('plus jakarta')) {
+    fontPath = path.join(dir, bold ? 'PlusJakartaSans-Bold.ttf' : 'PlusJakartaSans-Regular.ttf');
+  } else if (familyLower.includes('vazirmatn')) {
+    fontPath = path.join(dir, 'Vazirmatn-Regular.ttf');
+  } else if (familyLower.includes('inter')) {
+    fontPath = path.join(dir, 'Inter-Regular.ttf');
   } else {
-    // Check if private Minion is available
-    const privateMinion = path.join(dir, 'private/MinionVariableConcept-Roman.otf');
-    if (familyLower.includes('minion') && fs.existsSync(privateMinion)) {
-      fontFilename = 'private/MinionVariableConcept-Roman.otf';
+    // Default or Verdana resolution
+    const localVerdana = path.join(dir, 'Verdana.ttf');
+    const systemVerdana = bold && italic
+      ? '/System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf'
+      : bold
+      ? '/System/Library/Fonts/Supplemental/Verdana Bold.ttf'
+      : italic
+      ? '/System/Library/Fonts/Supplemental/Verdana Italic.ttf'
+      : '/System/Library/Fonts/Supplemental/Verdana.ttf';
+
+    const linuxVerdana = '/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf';
+
+    if (fs.existsSync(localVerdana)) {
+      fontPath = localVerdana;
+    } else if (fs.existsSync(systemVerdana)) {
+      fontPath = systemVerdana;
+    } else if (fs.existsSync(linuxVerdana)) {
+      fontPath = linuxVerdana;
     } else {
-      // EB Garamond resolution
-      if (bold && italic) {
-        fontFilename = 'EBGaramond-Bold.ttf';
-      } else if (bold) {
-        fontFilename = 'EBGaramond-Bold.ttf';
-      } else if (italic) {
-        fontFilename = 'EBGaramond-Italic.ttf';
+      const interPath = path.join(dir, 'Inter-Regular.ttf');
+      if (fs.existsSync(interPath)) {
+        fontPath = interPath;
       } else {
-        fontFilename = 'EBGaramond-Regular.ttf';
+        fontPath = path.join(dir, 'Cinzel-SemiBold.ttf');
       }
     }
   }
 
-  const fontPath = path.join(dir, fontFilename);
   if (fontCache.has(fontPath)) {
     return fontCache.get(fontPath);
   }
 
   if (!fs.existsSync(fontPath)) {
-    // Fallback to regular EB Garamond if specific weight missing
-    const fallbackPath = path.join(dir, 'EBGaramond-Regular.ttf');
-    if (fs.existsSync(fallbackPath)) {
-      const fallbackFont = fk.openSync(fallbackPath);
-      fontCache.set(fontPath, fallbackFont);
-      return fallbackFont;
-    }
     throw new Error(`Font file not found: ${fontPath}`);
   }
 

@@ -209,7 +209,7 @@ export function buildKaaeMandateOperations(params?: KaaeMandateParams): StudioOp
     locked: true,
   });
 
-  // 5. English Primary Headline (Minion Variable / Inter Display)
+  // 5. English Primary Headline (Playfair Display / Inter Display)
   ops.push({
     op: 'addText',
     nodeId: 'mandate_headline_en',
@@ -223,7 +223,7 @@ export function buildKaaeMandateOperations(params?: KaaeMandateParams): StudioOp
     style: {
       fontSize: 44,
       fontWeight: 'bold',
-      fontFamily: 'Minion Variable Concept, Georgia, serif',
+      fontFamily: 'Playfair Display, serif',
       textAlign: 'left',
       color: '#0A1628',
       lineHeight: 1.25,
@@ -588,7 +588,7 @@ export function buildKaaeHigherEdStandardsOperations(params?: KaaeHigherEdStanda
     style: {
       fontSize: 42,
       fontWeight: 'bold',
-      fontFamily: 'Minion Variable Concept, Georgia, serif',
+      fontFamily: 'Playfair Display, serif',
       textAlign: 'left',
       color: '#FFFFFF',
       lineHeight: 1.25,
@@ -955,7 +955,7 @@ export function buildKaaeStrategicRoadmapOperations(params?: KaaeStrategicRoadma
     style: {
       fontSize: 38,
       fontWeight: 'bold',
-      fontFamily: 'Minion Variable Concept, Georgia, serif',
+      fontFamily: 'Playfair Display, serif',
       textAlign: 'center',
       color: '#FFFFFF',
       lineHeight: 1.25,
@@ -1124,7 +1124,7 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
   const height = params.height || 1350;
 
   // Dynamic Learned Rules Adaptation
-  let headlineEnFont = 'Minion Variable Concept, Georgia, serif';
+  let headlineEnFont = 'Playfair Display, serif';
   let copyEnFont = 'Inter, sans-serif';
   let badgeFont = 'Inter, sans-serif';
   let accentColor = '#F7B500';
@@ -1137,8 +1137,6 @@ export function buildKaaeAnnouncementOperations(params: KaaeAnnouncementParams):
         badgeFont = '"Cinzel", sans-serif';
       } else if (/playfair/i.test(lr)) {
         headlineEnFont = '"Playfair Display", Georgia, serif';
-      } else if (/cormorant/i.test(lr)) {
-        headlineEnFont = '"Cormorant Garamond", Georgia, serif';
       }
       if (/jakarta|plus jakarta/i.test(lr)) {
         copyEnFont = '"Plus Jakarta Sans", sans-serif';

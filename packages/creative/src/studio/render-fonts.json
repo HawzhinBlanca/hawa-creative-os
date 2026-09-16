@@ -1,29 +1,22 @@
 {
-  "version": 1,
+  "version": 2,
   "families": {
-    "EB Garamond": {
-      "name": "EB Garamond",
-      "standInFor": "Minion Variable Concept",
-      "fidelity": "stand-in",
-      "license": "OFL-1.1",
-      "licensePath": "assets/fonts/OFL-EBGaramond.txt",
-      "files": {
-        "regular": "assets/fonts/EBGaramond-Regular.ttf",
-        "semiBold": "assets/fonts/EBGaramond-SemiBold.ttf",
-        "bold": "assets/fonts/EBGaramond-Bold.ttf",
-        "italic": "assets/fonts/EBGaramond-Italic.ttf"
-      }
-    },
-    "Minion Variable Concept": {
-      "name": "Minion Variable Concept",
+    "Verdana": {
+      "name": "Verdana",
+      "role": "formalBody",
       "fidelity": "exact",
-      "private": true,
-      "files": {
-        "regular": "assets/fonts/private/MinionVariableConcept-Roman.otf"
-      }
+      "license": "Microsoft-Core-TrueType / System",
+      "licenseNote": "System-provided on host; non-redistributable container notice in DEVIATIONS.md. Canva export is canonical render.",
+      "script": "latin",
+      "systemPaths": [
+        "/System/Library/Fonts/Supplemental/Verdana.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf"
+      ]
     },
     "Noto Sans Arabic": {
       "name": "Noto Sans Arabic",
+      "role": "formalBody",
       "fidelity": "exact",
       "license": "OFL-1.1",
       "licensePath": "assets/fonts/OFL-NotoSansArabic.txt",
@@ -31,6 +24,59 @@
       "files": {
         "regular": "assets/fonts/NotoSansArabic-Regular.ttf",
         "bold": "assets/fonts/NotoSansArabic-Bold.ttf"
+      }
+    },
+    "Cinzel": {
+      "name": "Cinzel",
+      "role": "display",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "script": "latin",
+      "files": {
+        "semiBold": "assets/fonts/Cinzel-SemiBold.ttf",
+        "bold": "assets/fonts/Cinzel-Bold.ttf"
+      }
+    },
+    "Playfair Display": {
+      "name": "Playfair Display",
+      "role": "display",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "script": "latin",
+      "files": {
+        "bold": "assets/fonts/PlayfairDisplay-Bold.ttf",
+        "italic": "assets/fonts/PlayfairDisplay-Italic.ttf"
+      }
+    },
+    "Cairo": {
+      "name": "Cairo",
+      "role": "display",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "script": "arabic",
+      "files": {
+        "regular": "assets/fonts/Cairo-Regular.ttf"
+      }
+    },
+    "Plus Jakarta Sans": {
+      "name": "Plus Jakarta Sans",
+      "role": "display",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "script": "latin",
+      "files": {
+        "regular": "assets/fonts/PlusJakartaSans-Regular.ttf",
+        "bold": "assets/fonts/PlusJakartaSans-Bold.ttf"
+      }
+    },
+    "Vazirmatn": {
+      "name": "Vazirmatn",
+      "role": "display",
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "script": "arabic",
+      "files": {
+        "regular": "assets/fonts/Vazirmatn-Regular.ttf"
       }
     }
   }

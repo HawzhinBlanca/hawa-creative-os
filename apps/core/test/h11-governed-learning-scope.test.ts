@@ -175,7 +175,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
           message_id: 20004,
           from: { id: 800002, is_bot: false, first_name: 'TestOperator' },
           chat: { id: 800002, type: 'private' },
-          text: `revise task ${task.id}: use this as a future client rule: Apply Cormorant Garamond for ceremonial prose`,
+          text: `revise task ${task.id}: use this as a future client rule: Apply Playfair Display for ceremonial prose`,
         },
       }),
     });
@@ -184,7 +184,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     // Verify candidate rule was PROPOSED (not yet PROMOTED)
     const proposed = globalFeedbackMiner
       .getCandidateRules(KAAE_CLIENT_ID)
-      .find((r) => r.ruleText.includes('Cormorant Garamond') && r.status === 'PROPOSED');
+      .find((r) => r.ruleText.includes('Playfair Display') && r.status === 'PROPOSED');
     expect(proposed).toBeDefined();
     expect(proposed?.status).toBe('PROPOSED');
 

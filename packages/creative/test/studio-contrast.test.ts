@@ -45,7 +45,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
           height: 100,
           fontSize: 18,
           lineHeight: 1.4,
-          fontFamily: 'EB Garamond',
+          fontFamily: 'Verdana',
           color: '#1E3A5F', // Low contrast dark navy on dark navy
           align: 'left',
         },
@@ -71,7 +71,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
       copyScripts: ['latin'],
       reference: {
         rules: {
-          fontFamily: 'EB Garamond',
+          fontFamily: 'Verdana',
           palette: ['#0A1628', '#1E3A5F', '#F7B500', '#FFFFFF', '#FDF8F3', '#D4E2F0'],
         },
         logoAspect: 1.0,
@@ -130,7 +130,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
           height: 100,
           fontSize: 44,
           lineHeight: 1.2,
-          fontFamily: 'EB Garamond',
+          fontFamily: 'Verdana',
           color: '#F7B500', // Gold on navy scrim
           align: 'left',
           bold: true,
@@ -144,7 +144,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
           height: 120,
           fontSize: 20,
           lineHeight: 1.4,
-          fontFamily: 'EB Garamond',
+          fontFamily: 'Verdana',
           color: '#FDF8F3', // Academic cream on navy scrim
           align: 'left',
         },
@@ -173,7 +173,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
       copyScripts: ['latin', 'latin'],
       reference: {
         rules: {
-          fontFamily: 'EB Garamond',
+          fontFamily: 'Verdana',
           palette: ['#0A1628', '#1E3A5F', '#F7B500', '#FFFFFF', '#FDF8F3', '#D4E2F0'],
         },
         logoAspect: 1.0,

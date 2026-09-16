@@ -49,7 +49,7 @@ export async function runFaultInjectionSuite(): Promise<FaultTestResult[]> {
       ledgerAfter: ledgerCountResumed,
       rungsTriggered: resumedRun.rungsTriggered,
       statusMessage:
-        'Studio v2 · 3 concepts · 1 revision round · judge 8.8/10 · imagery: procedural (gradient-wash) · typeface: EB Garamond (draft stand-in for Minion)',
+        'Studio v2 · 3 concepts · 1 revision round · judge 8.8/10 · imagery: procedural (gradient-wash) · typeface: Verdana',
       evidence: {
         runId: randomUUID(),
         briefId: brief.id,
@@ -75,7 +75,7 @@ export async function runFaultInjectionSuite(): Promise<FaultTestResult[]> {
     const triggeredFallback = runResult.rungsTriggered.includes('rung2_art_procedural_fallback') || runResult.status === 'transferred' || runResult.status === 'degraded';
 
     const statusNote =
-      'Studio v2 · 3 concepts · judge 8.8/10 · imagery: procedural (gradient-wash, Gemini unconfigured) · typeface: EB Garamond';
+      'Studio v2 · 3 concepts · judge 8.8/10 · imagery: procedural (gradient-wash, Gemini unconfigured) · typeface: Verdana';
 
     results.push({
       scenario: 'b',

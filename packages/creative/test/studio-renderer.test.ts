@@ -17,12 +17,12 @@ import {
 } from '../../../scripts/render_studio_v2_proofs.js';
 
 describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
-  it('renders Latin golden layout with EB Garamond, exact line wrapping, and ≤ 1.0% diff', () => {
+  it('renders Latin golden layout with Verdana, exact line wrapping, and ≤ 1.0% diff', () => {
     const res1 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY });
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
-    expect(res1.wrappedLines).toEqual({ 0: 1, 1: 1, 2: 1, 3: 2, 4: 1 });
-    expect(res1.fontFidelity['EB Garamond']).toBe('stand-in');
+    expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
+    expect(res1.fontFidelity['Verdana']).toBe('exact');
 
     const res2 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY });
     const diff = comparePngBuffers(res1.png, res2.png);
@@ -62,10 +62,10 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     expect(res1.png.length).toBeGreaterThan(50000);
     expect(res1.wrappedLines).toEqual({
       0: 1,
-      1: 1,
+      1: 2,
       2: 1,
-      3: 1,
-      4: 4,
+      3: 2,
+      4: 5,
       5: 3,
       6: 2,
       7: 1,

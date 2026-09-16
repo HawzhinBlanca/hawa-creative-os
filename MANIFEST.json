@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-16T10:06:07Z",
+  "generatedAt": "2026-09-16T10:40:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 188,
+  "fileCount": 189,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -803,6 +803,11 @@
       "bytes": 24113
     },
     {
+      "path": "scripts/generate_f12_proofs.ts",
+      "sha256": "c1c3506dda8ce60687690378258dcf0751668ead01b51723993f5e46283bf7a7",
+      "bytes": 15875
+    },
+    {
       "path": "scripts/generate_t06_motifs.ts",
       "sha256": "24fe320707b0e8f004a783f83ec9e54b42ca35d925740d16612157ee6b0f10ad",
       "bytes": 1934
@@ -849,18 +854,18 @@
     },
     {
       "path": "scripts/render_brand_dna_invitation.ts",
-      "sha256": "8b2c7c89bb18f86d3bd7a3f41008634c470ab819cfb22625c48bd7c288771750",
-      "bytes": 13613
+      "sha256": "edb883c5c7367ee11f04332edd8d79afaa7194189bc3d4c2316bde487a4d4125",
+      "bytes": 13566
     },
     {
       "path": "scripts/render_kaae_pro_brand_designs.ts",
-      "sha256": "51e33a08f6116378210faaa0d36009b2df34565e45c117cc7f9610699e484281",
-      "bytes": 28207
+      "sha256": "c9894fc776f6993ed08cf5e587541ef5fdd2780215d9473099485582a0b9b3e6",
+      "bytes": 28186
     },
     {
       "path": "scripts/render_presidential_kaae_invitation.ts",
-      "sha256": "19f834f5d8bccb742f47e28e6584cdbcdc75e8ef55fdaf60e80e043a90d203cf",
-      "bytes": 13224
+      "sha256": "a187c36b2671c5941f24c10d136510c7efce47083c61f0b12bf8aa6455c9db4e",
+      "bytes": 13177
     },
     {
       "path": "scripts/render_pro_designer_showcase.ts",
@@ -869,8 +874,8 @@
     },
     {
       "path": "scripts/render_studio_v2_proofs.ts",
-      "sha256": "ecb370d01308968d736eb34a74ce25523a77e9e71ad2a258f78883495d4ac3b2",
-      "bytes": 13045
+      "sha256": "d03cfa9277cb552ee7812efa9a59308cbe4f1e491df30a6454e3428f5b2278e7",
+      "bytes": 12981
     },
     {
       "path": "scripts/run_independent_completion_audit.ts",
@@ -899,8 +904,8 @@
     },
     {
       "path": "scripts/studio_fault_injection.ts",
-      "sha256": "626319ccbf906253d0985d4a910540567676ff31cc25c43b73516f541f34ccf1",
-      "bytes": 9474
+      "sha256": "f56696f020cf0eb4702b0d90e8a59df529e86c5208b5d6a3878fea08e05a97f1",
+      "bytes": 9438
     },
     {
       "path": "scripts/test_gateway_models.ts",

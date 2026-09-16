@@ -212,7 +212,7 @@ export async function runLayoutsStage(
         },
         logoAspect,
       },
-      draftFont: 'EB Garamond',
+      draftFont: ctx.latinFont || 'Verdana',
     };
 
     // Hard validate layout

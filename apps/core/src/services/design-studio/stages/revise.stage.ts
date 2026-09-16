@@ -69,7 +69,7 @@ export async function runReviseStage(
       },
       logoAspect: ctx.logoAspect || 1.0,
     },
-    draftFont: 'EB Garamond',
+    draftFont: ctx.latinFont || 'Verdana',
   };
 
   for (const cand of candidates) {

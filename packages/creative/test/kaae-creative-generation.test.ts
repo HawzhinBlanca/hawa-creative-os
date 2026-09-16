@@ -42,7 +42,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(kit.palette.accent).toBe('#F7B500');    // Sunburst Gold (Pantone 7549 C)
       expect(kit.palette.background).toContain('#0A1628'); // Deep Midnight Gradient
       expect(kit.verifiedSha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
-      expect(kit.typography.latinFont).toBe('Minion Variable Concept');
+      expect(kit.typography.latinFont).toBe('Verdana');
       expect(kit.typography.kurdishFont).toBe('Cairo');
       expect(kit.contactTokens).toContain('60m Street, Erbil');
       expect(kit.contactTokens).toContain('info@kaae.krd');

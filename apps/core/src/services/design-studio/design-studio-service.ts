@@ -471,12 +471,12 @@ export class DesignStudioService {
         '#1A1A1A',
       ],
       referenceFonts: {
-        latin: 'Minion Variable Concept',
+        latin: 'Verdana',
         arabic: 'Noto Sans Arabic',
       },
     };
     let promotedRules = 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.';
-    let latinFont = 'Minion Variable Concept';
+    let latinFont = 'Verdana';
     let arabicFont = 'Noto Sans Arabic';
 
     try {
@@ -1059,8 +1059,11 @@ export class DesignStudioService {
           const pptxCheck = checkCanvaPptx(
             new Uint8Array(transferResult.pptxBytes),
             ctx.copyBlocks.map((b) => b.text),
-            'EB Garamond',
-            { scriptFonts: { arabic: 'Noto Sans Arabic' } }
+            ctx.latinFont || 'Verdana',
+            {
+              documentKind: (ctx as any).documentKind || 'design_piece',
+              scriptFonts: { arabic: ctx.arabicFont || 'Noto Sans Arabic' },
+            }
           );
 
           if (!pptxCheck.copyPass) {

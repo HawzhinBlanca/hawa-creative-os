@@ -173,7 +173,7 @@ export class FeedbackMiner {
         } else if (
           lower.includes('font') ||
           lower.includes('typeface') ||
-          lower.includes('garamond') ||
+          lower.includes('verdana') ||
           lower.includes('cairo') ||
           lower.includes('noto') ||
           lower.includes('serif') ||

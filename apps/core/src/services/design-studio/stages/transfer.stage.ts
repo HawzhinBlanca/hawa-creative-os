@@ -21,7 +21,7 @@ export async function runTransferStage(
     ctx.logo,
     {
       artBuffer: winner.artPng || undefined,
-      extraFonts: [ctx.latinFont, ctx.arabicFont, 'EB Garamond', 'Noto Sans Arabic'],
+      extraFonts: [ctx.latinFont, ctx.arabicFont, 'Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display'],
     }
   );
 

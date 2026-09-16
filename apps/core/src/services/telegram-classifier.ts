@@ -1,11 +1,14 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
 
+export type DocumentKind = 'formal_document' | 'design_piece';
+
 export interface MessageClassification {
   intent: 'revision_feedback' | 'new_brief' | 'question_or_other';
   confidence: number;
   isInstructionOnly: boolean;
   directive?: string;
   reason: string;
+  documentKind?: DocumentKind;
 }
 
 export interface ClassifierOptions {
@@ -43,6 +46,17 @@ const INSTRUCTION_PATTERNS = [
   /^(زیاتر|کەمتر|باگراوندەکە|ڕەنگەکە|تکایە\s+بگۆڕە|جیاوازتر)/i,
 ];
 
+export function detectDocumentKind(text: string): DocumentKind {
+  const lower = text.toLowerCase();
+  if (
+    /\b(letter|certificate|agenda|programme|program|formal paper|decree|resolution|circular|memorandum|statement|statute|report)\b/i.test(lower) ||
+    /(بڕوانامە|بەڵگەنامە|بەرنامە|ئەجێندا|بڕیار|ڕاپۆرت|نوسراو|پەیام|مەرسوم)/.test(text)
+  ) {
+    return 'formal_document';
+  }
+  return 'design_piece';
+}
+
 /**
  * Heuristic classifier used when model call is skipped, fails, or in tests.
  */
@@ -53,6 +67,7 @@ export function classifyWithHeuristics(
 ): MessageClassification {
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
+  const documentKind = detectDocumentKind(trimmed);
 
   // Check if text matches instruction-only patterns
   const matchesInstructionPattern = INSTRUCTION_PATTERNS.some((p) => p.test(trimmed));
@@ -76,6 +91,7 @@ export function classifyWithHeuristics(
       isInstructionOnly,
       directive: trimmed,
       reason: 'User directly replied to a previous task message in chat',
+      documentKind,
     };
   }
 
@@ -86,6 +102,7 @@ export function classifyWithHeuristics(
       isInstructionOnly,
       directive: trimmed,
       reason: `Matched revision keyword or instruction pattern with active task in chat: "${trimmed.slice(0, 50)}"`,
+      documentKind,
     };
   }
 
@@ -95,6 +112,7 @@ export function classifyWithHeuristics(
       confidence: 0.7,
       isInstructionOnly: true,
       reason: 'Instruction-only phrasing detected without active prior task',
+      documentKind,
     };
   }
 
@@ -104,6 +122,7 @@ export function classifyWithHeuristics(
       confidence: 0.9,
       isInstructionOnly: false,
       reason: 'Greeting or command detected',
+      documentKind,
     };
   }
 
@@ -112,6 +131,7 @@ export function classifyWithHeuristics(
     confidence: 0.8,
     isInstructionOnly: false,
     reason: 'Standard new design brief text',
+    documentKind,
   };
 }
 
@@ -170,13 +190,16 @@ Decide:
    - "revision_feedback": The client is critiquing, requesting alterations, asking for improvements, or giving directives on the design (e.g. "make it better", "looks basic", "change the background", "the background is simple and solid, i want a gradient or texture", "thats the same design again", "different font", "move the logo").
    - "new_brief": The client is sending a brand-new design request with new text/copy for a different event or publication.
    - "question_or_other": A question, greeting, or irrelevant chatter.
-2. "isInstructionOnly": true if the incoming message contains ONLY design styling instructions, critique, or preferences, and lacks actual body copy/facts/names/dates for an invitation or post.
-3. "directive": The extracted styling or revision directive.
-4. "confidence": A score between 0.0 and 1.0.
-5. "reason": A brief 1-sentence justification.
+2. "documentKind":
+   - "formal_document": Letters, certificates, agendas, programmes, decrees, statements, formal notices.
+   - "design_piece": Invitations, posters, social graphics, promotional cards, flyers, event announcements.
+3. "isInstructionOnly": true if the incoming message contains ONLY design styling instructions, critique, or preferences, and lacks actual body copy/facts/names/dates for an invitation or post.
+4. "directive": The extracted styling or revision directive.
+5. "confidence": A score between 0.0 and 1.0.
+6. "reason": A brief 1-sentence justification.
 
 Output strictly JSON adhering to the schema:
-{"intent": "revision_feedback"|"new_brief"|"question_or_other", "isInstructionOnly": boolean, "confidence": number, "directive": string, "reason": string}`;
+{"intent": "revision_feedback"|"new_brief"|"question_or_other", "documentKind": "formal_document"|"design_piece", "isInstructionOnly": boolean, "confidence": number, "directive": string, "reason": string}`;
 
     const res = await fetcher('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -215,6 +238,7 @@ Output strictly JSON adhering to the schema:
         isInstructionOnly: Boolean(parsed.isInstructionOnly),
         directive: parsed.directive || messageText.trim(),
         reason: parsed.reason || 'Classified by gpt-6-astra',
+        documentKind: parsed.documentKind === 'formal_document' ? 'formal_document' : (parsed.documentKind === 'design_piece' ? 'design_piece' : detectDocumentKind(messageText)),
       };
     }
   } catch (err) {

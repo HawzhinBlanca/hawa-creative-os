@@ -22,7 +22,7 @@ export async function runQAStage(
       },
       logoAspect: ctx.logoAspect || 1.0,
     },
-    draftFont: 'EB Garamond',
+    draftFont: ctx.latinFont || 'Verdana',
   };
 
   const validation = validateLayoutV2(winner.currentLayout, validationContext);

@@ -6,7 +6,7 @@ const copy = ['Quality Assurance Workshop', 'وۆرکشۆپی دڵنیایی ج�
 const plan = {
   width: 1080, height: 1080, background: '#0A1628',
   text: [
-    { copyIndex: 0, x: 80, y: 300, width: 920, height: 120, fontSize: 48, fontFamily: 'Minion Variable Concept', color: '#F7B500', align: 'center' as const, bold: true },
+    { copyIndex: 0, x: 80, y: 300, width: 920, height: 120, fontSize: 48, fontFamily: 'Verdana', color: '#F7B500', align: 'center' as const, bold: true },
     { copyIndex: 1, x: 80, y: 480, width: 920, height: 200, fontSize: 36, fontFamily: 'Noto Sans Arabic', color: '#FDF8F3', align: 'left' as const, rtl: true },
   ],
   shapes: [],
@@ -24,11 +24,12 @@ describe('editable transfer: Sorani Kurdish blocks', () => {
     expect(kurdish).toContain('<a:cs typeface="Noto Sans Arabic"');
     const english = xml.slice(xml.indexOf('Quality Assurance') - 900, xml.indexOf('Quality Assurance'));
     expect(english).not.toContain('rtl="1"');
-    expect(english).toContain('typeface="Minion Variable Concept"');
+    expect(english).toContain('typeface="Verdana"');
     expect(out.manifest.rtlBlocks).toEqual([1]);
   });
 
   it('refuses a script typeface the reference pack did not admit', async () => {
-    await expect(encodeEditableTransfer(plan, copy)).rejects.toThrow('Unsupported font');
+    const badPlan = { ...plan, text: [plan.text[0], { ...plan.text[1], fontFamily: 'UnadmittedScriptFont' }] };
+    await expect(encodeEditableTransfer(badPlan, copy)).rejects.toThrow('Unsupported font');
   });
 });

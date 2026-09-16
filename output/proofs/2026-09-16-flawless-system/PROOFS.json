@@ -1,0 +1,55 @@
+{
+  "round": "2026-09-16-flawless-system",
+  "generatedAt": "2026-09-16T10:40:40Z",
+  "commit": "67c7097",
+  "proofs": [
+    {
+      "task": "F12",
+      "name": "F12_FONT.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F12_FONT.md",
+      "sha256": "40e1e407386d5b9d1532f62e71af8f6b3c936e29073949257416d950227f511e",
+      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
+      "commit": "67c7097"
+    },
+    {
+      "task": "F12",
+      "name": "f12-formal-doc-check.json",
+      "path": "output/proofs/2026-09-16-flawless-system/f12-formal-doc-check.json",
+      "sha256": "003e05c5b98b78d4ce73c94d50d80f4a623dbc13a7766b56d3f5c064107d7a6a",
+      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
+      "commit": "67c7097"
+    },
+    {
+      "task": "F12",
+      "name": "f12-invitation-check.json",
+      "path": "output/proofs/2026-09-16-flawless-system/f12-invitation-check.json",
+      "sha256": "76dd3a9977ead9fde5c86364cde74537c43a95e2c2c55afcca1068412b00707e",
+      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
+      "commit": "67c7097"
+    },
+    {
+      "task": "F12",
+      "name": "CHANGES.md",
+      "path": "output/proofs/2026-09-16-flawless-system/CHANGES.md",
+      "sha256": "3639c854fefe7c9296e22575af1a16329daabc30c5129b4fc05315c82e4e5322",
+      "producingCommand": "manual audit",
+      "commit": "67c7097"
+    },
+    {
+      "task": "F12",
+      "name": "DEVIATIONS.md",
+      "path": "output/proofs/2026-09-16-flawless-system/DEVIATIONS.md",
+      "sha256": "2cda58cbcb952e3ee790fef64d677b22d6030993516376e04ade89d8585a1d70",
+      "producingCommand": "manual audit",
+      "commit": "67c7097"
+    },
+    {
+      "task": "F12",
+      "name": "LEDGER.csv",
+      "path": "output/proofs/2026-09-16-flawless-system/LEDGER.csv",
+      "sha256": "c72a0e45df31e40d359dd1d3b317bc0f2af8687cd357252550ee6574341d7de3",
+      "producingCommand": "manual audit",
+      "commit": "67c7097"
+    }
+  ]
+}

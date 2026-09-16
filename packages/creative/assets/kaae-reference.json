@@ -7,7 +7,29 @@
   "retrievedAt": "2026-09-13",
   "status": "reference_for_draft_not_release_approval",
   "rules": {
-    "fontFamily": "Minion Variable Concept",
+    "fontFamily": "Verdana",
+    "typography": {
+      "formalBody": {
+        "latin": "Verdana",
+        "arabic": "Noto Sans Arabic"
+      },
+      "display": {
+        "policy": "free",
+        "admitted": [
+          "Cinzel",
+          "Playfair Display",
+          "Montserrat",
+          "Lora",
+          "Bodoni Moda",
+          "Cairo",
+          "Plus Jakarta Sans",
+          "Vazirmatn",
+          "Inter",
+          "Verdana",
+          "Noto Sans Arabic"
+        ]
+      }
+    },
     "palette": [
       "#0A1628",
       "#1E3A5F",
