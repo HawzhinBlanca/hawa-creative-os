@@ -12,3 +12,16 @@ F10,PARTIAL,2026-09-16,billing status from cached diagnostics; no alert proof
 F11,REJECTED,2026-09-16,pricing.json 2.5/10 and flat images; cost-governor 2.5/10; LEDGER.csv empty
 F12,ACCEPTED_PARTIAL,2026-09-16,code and assets done; proofs are local PPTX labelled canva_exported_pptx; DnaScreen.tsx Minion; no fresh Telegram export
 F13,NOT_STARTED,2026-09-16,connector unauthorised
+F01,ACCEPTED,2026-09-16-r2,tree clean HEAD=24cbd75; deploy log real; gates green
+F02,ACCEPTED_BLOCKED,2026-09-16-r2,OpenAiStudioClient wired at design-studio-service.ts:341; honest BLOCKED on live 429 credit_balance_exhausted
+F03,ACCEPTED,2026-09-16-r2,five blockers with real red/green measured test transcripts
+F04,ACCEPTED_WITH_DEFECT,2026-09-16-r2,archetype resolver+prompts deleted; but all 3 proof exports fontPass:false, DIFF_SUMMARY claims verified pass falsely; plan_3 recycled from pre-round task 0b6722bb
+F05,ACCEPTED_BLOCKED,2026-09-16-r2,dual-mode revision code+diffs present; honest BLOCKED on live rounds
+F06,ACCEPTED,2026-09-16-r2,exemplars wired into planner+studio; curator field corrected to Unconfirmed
+F07,ACCEPTED,2026-09-16-r2,10/10 live messages correctly classified with real chatcmpl ids and image conditioning
+F08,ACCEPTED_WITH_DEFECT,2026-09-16-r2,mechanism real; sweep still redrives same 4 non-Telegram fixture tasks from round 1, undisclosed
+F09,PARTIAL,2026-09-16-r2,code correct per finish(); proof is a synthetic sample not live journal entries
+F10,REJECTED,2026-09-16-r2,live production right now: health reports connected/healthy while a fresh probe returns real 429 credit_balance_exhausted
+F11,ACCEPTED,2026-09-16-r2,prices corrected; ledger rows hand-recomputed and match exactly
+F12,ACCEPTED_WITH_DEFECT,2026-09-16-r2,Minion/Garamond fully purged incl. Desk; but body-role font not enforced/corrected, same defect as F04
+F13,ACCEPTED_BLOCKED,2026-09-16-r2,honest BLOCKED pending owner Canva OAuth
