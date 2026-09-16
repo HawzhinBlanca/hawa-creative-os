@@ -1,0 +1,85 @@
+=== F01 DEPLOYMENT VERIFICATION LOG ===
+Timestamp: 2026-09-16T13:26:36Z
+Branch: studio-v2
+Deploy Script: bash infra/docker/deploy.sh --apply
+
+--- 1. WORKING TREE AT DEPLOY TIME ---
+Command: git status --porcelain
+Output:
+(clean - 0 modified, 0 untracked)
+
+--- 2. COMMIT COHERENCE ---
+Command: git rev-parse HEAD
+Output:
+e2fa9f67fea6b581a092abbbda5ae84dc3e9b5e5
+
+Command: docker exec hawa-production-core-1 sh -c 'echo $HAWA_BUILD_COMMIT'
+Output:
+e2fa9f67fea6b581a092abbbda5ae84dc3e9b5e5
+
+Verdict: MATCH (Exact identical SHA)
+
+--- 3. REPOSITORY GATES ---
+Command: python3 scripts/validate_pack.py
+Output:
+MANIFEST.json: 195 entries; SHA256SUMS.txt: 197 lines
+PASS=539 WARN=0 FAIL=0
+Hawa Creative OS blueprint validation passed.
+
+Command: pnpm typecheck (tsc -b)
+Output:
+$ tsc -b
+(clean - exit code 0)
+
+Command: pnpm security:scan
+Output:
+$ python3 infra/security/security_scan.py
+Security scan passed: 0 secrets in committable files; 40 justified allowlist hit(s).
+
+Command: pnpm test
+Output:
+Test Files  131 passed | 2 skipped (133)
+Tests       1000 passed | 12 skipped (1012)
+Duration    37.76s
+
+--- 4. COMMIT LIST ---
+Command: git log -n 5 --oneline
+Output:
+e2fa9f6 feat(system): flawless system round 2 - fix F07 classifier, delete F04 archetypes, wire F02 OpenAI studio client, correct F11 prices & ledger, complete proofs F01-F13
+e1f126d review: flawless-system round 1 — F02/F04/F07/F11 rejected, live 12:01Z brief failed; partial F01/F08/F09/F12
+79b9923 feat(typography): implement F12 role-based policy, purge Minion/Garamond, verify Canva PPTX
+85666ba chore(manifest): update blueprint checksums
+b69b96c fix(telegram): implement failed task re-drive, model classifier, and truthful notifications
+
+--- 5. DEPLOY.SH RAW EXECUTION LOG ---
+=== Hawa Creative OS production deployment (apply) ===
+✓ configuration present, no placeholders, no duplicate credential lines
+✓ compose topology valid
+✓ secret gate
+✓ blueprint pack
+MODE   BYTES      KIND                   PATH
+600    731        plaintext credentials  .env
+600    538        plaintext credentials  .env.test
+600    281438937  database dump          infra/backup/snapshots/hawa_20260916T122001Z.sql
+600    225        plaintext credentials  infra/docker/.env
+600    3603       plaintext credentials  infra/docker/.env.production
+600    3403       plaintext credentials  infra/docker/.env.production.bak
+
+local credential material: 38 file(s); exposed to other users: 0; committable: 0
+After rotating credentials, move snapshots off the checkout to an encrypted location or delete them; this script never deletes.
+✓ backup written: infra/backup/snapshots/hawa_20260916T132549Z.sql (281440120 bytes)
+✓ schema upgrades applied or verified
+[+] Building 14.7s (23/23) FINISHED
+[+] Running 6/6
+ ✔ Container hawa-production-postgres-1 Healthy                             4.7s
+ ✔ Container hawa-production-restate-1  Healthy                             5.2s
+ ✔ Container hawa-production-nginx-1    Running                             0.0s
+ ✔ Container hawa-production-core-1     Healthy                            11.2s
+ ✔ Container hawa-production-desk-1     Healthy                            14.7s
+ ✔ Container hawa-production-worker-1   Started                             7.7s
+✓ nginx configuration reloaded
+✓ containers started
+health: degraded {"postgres": "connected", "canva": "connected", "canvaCircuitBreaker": "CLOSED", "telegram": "active", "waha": "unconfigured", "disk": "writable", "restate": "connected", "modelProvider": "billing_exhausted", "telegramApi": "connected"}
+worker: {"status":"healthy","worker":"restate-worker-1","outboxActive":true,"dependencies":{"postgres":"connected"},"outbox":{"pending":0,"staleOver5m":0,"failed":0},"timestamp":"2026-09-16T13:26:36.073Z"}
+
+=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator) ===
