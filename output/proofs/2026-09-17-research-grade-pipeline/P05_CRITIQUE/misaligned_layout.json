@@ -1,0 +1,128 @@
+{
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "grid": {
+    "margin": 86,
+    "columns": 6,
+    "gutter": 22,
+    "baseline": 14
+  },
+  "background": {
+    "color": "#0A1628"
+  },
+  "shapes": [
+    {
+      "x": 497,
+      "y": 317,
+      "width": 86,
+      "height": 3,
+      "kind": "rect",
+      "color": "#C5A059",
+      "role": "rule",
+      "opacity": 1
+    },
+    {
+      "x": 86,
+      "y": 689,
+      "width": 907,
+      "height": 311,
+      "kind": "rect",
+      "color": "#0A1628",
+      "role": "frame",
+      "opacity": 1,
+      "strokeWidth": 1,
+      "strokeColor": "#C5A059"
+    },
+    {
+      "x": 432,
+      "y": 1121,
+      "width": 216,
+      "height": 1,
+      "kind": "rect",
+      "color": "#C5A059",
+      "role": "rule",
+      "opacity": 1
+    }
+  ],
+  "text": [
+    {
+      "copyIndex": 0,
+      "role": "title",
+      "x": 20,
+      "y": 385,
+      "width": 700,
+      "height": 135,
+      "fontSize": 34,
+      "lineHeight": 1.25,
+      "letterSpacing": 0,
+      "fontFamily": "Cinzel",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": true,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 1,
+      "role": "subtitle",
+      "x": 108,
+      "y": 547,
+      "width": 864,
+      "height": 68,
+      "fontSize": 22,
+      "lineHeight": 1.4,
+      "letterSpacing": 0,
+      "fontFamily": "Playfair Display",
+      "color": "#C5A059",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 2,
+      "role": "body",
+      "x": 135,
+      "y": 1020,
+      "width": 810,
+      "height": 200,
+      "fontSize": 18,
+      "lineHeight": 1.5,
+      "letterSpacing": 0,
+      "fontFamily": "Verdana",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    },
+    {
+      "copyIndex": 3,
+      "role": "footer",
+      "x": 108,
+      "y": 1168,
+      "width": 864,
+      "height": 47,
+      "fontSize": 14,
+      "lineHeight": 1.4,
+      "letterSpacing": 0,
+      "fontFamily": "Verdana",
+      "color": "#FDF8F3",
+      "align": "center",
+      "bold": false,
+      "italic": false,
+      "rtl": false
+    }
+  ],
+  "logo": {
+    "x": 470,
+    "y": 108,
+    "width": 140,
+    "height": 140
+  },
+  "typeScale": {
+    "base": 14,
+    "ratio": 1.25
+  }
+}

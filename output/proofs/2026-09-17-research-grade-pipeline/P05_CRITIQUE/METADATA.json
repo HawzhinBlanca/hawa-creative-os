@@ -1,0 +1,104 @@
+{
+  "receipt": {
+    "model": "gpt-6-astra",
+    "responseId": "chatcmpl-EOtKAJ8tXhyDiPylqkXbvKWbl1oFn",
+    "xRequestId": "req_1615c29f66154b8e8abf8abf3c4129b3",
+    "inputTokens": 1337,
+    "outputTokens": 543,
+    "costUsd": 0.04052,
+    "latencyMs": 13924
+  },
+  "deterministicMetrics": {
+    "compositeScore": 0.921,
+    "passed": false,
+    "failingMetrics": [
+      "regularity"
+    ]
+  },
+  "annotations": [
+    {
+      "boxId": "B0",
+      "role": "logo",
+      "box": {
+        "x": 470,
+        "y": 108,
+        "width": 140,
+        "height": 140
+      }
+    },
+    {
+      "boxId": "B1",
+      "role": "title",
+      "box": {
+        "x": 20,
+        "y": 385,
+        "width": 700,
+        "height": 135
+      },
+      "copyIndex": 0
+    },
+    {
+      "boxId": "B2",
+      "role": "subtitle",
+      "box": {
+        "x": 108,
+        "y": 547,
+        "width": 864,
+        "height": 68
+      },
+      "copyIndex": 1
+    },
+    {
+      "boxId": "B3",
+      "role": "body",
+      "box": {
+        "x": 135,
+        "y": 1020,
+        "width": 810,
+        "height": 200
+      },
+      "copyIndex": 2
+    },
+    {
+      "boxId": "B4",
+      "role": "footer",
+      "box": {
+        "x": 108,
+        "y": 1168,
+        "width": 864,
+        "height": 47
+      },
+      "copyIndex": 3
+    },
+    {
+      "boxId": "B5",
+      "role": "shape (rule)",
+      "box": {
+        "x": 497,
+        "y": 317,
+        "width": 86,
+        "height": 3
+      }
+    },
+    {
+      "boxId": "B6",
+      "role": "shape (frame)",
+      "box": {
+        "x": 86,
+        "y": 689,
+        "width": 907,
+        "height": 311
+      }
+    },
+    {
+      "boxId": "B7",
+      "role": "shape (rule)",
+      "box": {
+        "x": 432,
+        "y": 1121,
+        "width": 216,
+        "height": 1
+      }
+    }
+  ]
+}

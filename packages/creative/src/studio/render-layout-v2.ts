@@ -576,3 +576,100 @@ export function renderLayoutV2(
     fontFidelity,
   };
 }
+
+export interface ElementBoxAnnotation {
+  boxId: string;
+  role: string;
+  box: { x: number; y: number; width: number; height: number };
+  copyIndex?: number;
+}
+
+export interface RenderAnnotatedLayoutResult {
+  svg: string;
+  png: Buffer;
+  annotations: ElementBoxAnnotation[];
+}
+
+export function getLayoutBoxAnnotations(layout: StudioLayoutV2): ElementBoxAnnotation[] {
+  const annotations: ElementBoxAnnotation[] = [];
+  // 1. Logo
+  if (layout.logo) {
+    annotations.push({
+      boxId: 'B0',
+      role: 'logo',
+      box: { ...layout.logo },
+    });
+  }
+  // 2. Text elements
+  layout.text.forEach((t) => {
+    annotations.push({
+      boxId: `B${annotations.length}`,
+      role: t.role,
+      box: { x: t.x, y: t.y, width: t.width, height: t.height },
+      copyIndex: t.copyIndex,
+    });
+  });
+  // 3. Shape elements
+  layout.shapes.forEach((s) => {
+    annotations.push({
+      boxId: `B${annotations.length}`,
+      role: `shape (${s.role || s.kind})`,
+      box: { x: s.x, y: s.y, width: s.width, height: s.height },
+    });
+  });
+  return annotations;
+}
+
+/**
+ * Renders an annotated debug render with Set-of-Mark numbered boxes and badges
+ * overlaid on top of every element for vision model grounded critique.
+ */
+export function renderAnnotatedLayoutV2(
+  layout: StudioLayoutV2,
+  options: RenderLayoutOptions = {}
+): RenderAnnotatedLayoutResult {
+  const { svg } = renderLayoutV2ToSvg(layout, options);
+  const annotations = getLayoutBoxAnnotations(layout);
+
+  const overlayParts: string[] = [];
+  overlayParts.push('<g id="set-of-marks-debug-overlay">');
+
+  for (const ann of annotations) {
+    const { boxId, role, box } = ann;
+    const isLogo = role === 'logo';
+    const isShape = role.startsWith('shape');
+    const stroke = isLogo ? '#FFB800' : isShape ? '#00D2FF' : '#FF0055';
+    const textFill = isLogo ? '#000000' : '#FFFFFF';
+
+    // Bounding Box
+    overlayParts.push(
+      `  <rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="none" stroke="${stroke}" stroke-width="3" stroke-dasharray="6,4"/>`
+    );
+
+    // Badge
+    const label = `${boxId}: ${role}`;
+    const badgeWidth = Math.max(70, label.length * 9 + 16);
+    const badgeHeight = 22;
+    const badgeX = box.x;
+    const badgeY = box.y >= 26 ? box.y - 24 : box.y + 4;
+
+    overlayParts.push(
+      `  <rect x="${badgeX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="4" fill="${stroke}"/>`
+    );
+    overlayParts.push(
+      `  <text x="${badgeX + 8}" y="${badgeY + 16}" font-family="Verdana, sans-serif" font-size="13" font-weight="bold" fill="${textFill}">${escapeXml(label)}</text>`
+    );
+  }
+
+  overlayParts.push('</g>');
+
+  const annotatedSvg = svg.replace('</svg>', `  ${overlayParts.join('\n  ')}\n</svg>`);
+  const png = svgToPng(annotatedSvg, layout.width, layout.height, options);
+
+  return {
+    svg: annotatedSvg,
+    png,
+    annotations,
+  };
+}
+
