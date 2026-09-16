@@ -31,3 +31,4 @@ export * from './studio/exemplar-retrieval.js';
 export * from './studio/layout-generator-v3.js';
 export * from './studio/art-generator-v3.js';
 export * from './studio/box-critique-v3.js';
+export * from './studio/refinement-engine-v3.js';

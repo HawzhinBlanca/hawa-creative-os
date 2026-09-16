@@ -1,0 +1,505 @@
+import { assertModelAllowed } from '@hawa/domain';
+import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
+import {
+  evaluateDesignMetrics,
+  type DesignMetricsReport,
+} from './design-metrics.js';
+import {
+  generateBoxGroundedCritique,
+  type CritiqueComment,
+} from './box-critique-v3.js';
+import {
+  OpenAiStudioClient,
+  type OpenAiMessage,
+} from './openai-studio-client.js';
+
+export const CALIBRATED_BAND_MIN = 0.85;
+
+export interface RefinementGateDecision {
+  shouldRefine: boolean;
+  reason: string;
+}
+
+export interface RefinementRoundRecord {
+  round: number;
+  critiqueComments: CritiqueComment[];
+  preScore: number;
+  postScore: number;
+  scoreDelta: number;
+  preFailingMetrics: string[];
+  postFailingMetrics: string[];
+  repairedLayout: StudioLayoutV2;
+  changesAttributed: Array<{ boxId: string; description: string }>;
+  stopReason?: string;
+  receipt?: {
+    model: string;
+    responseId: string;
+    costUsd: number;
+    latencyMs: number;
+  };
+}
+
+export interface RefinementCandidateResult {
+  candidateId: string | number;
+  initialLayout: StudioLayoutV2;
+  finalLayout: StudioLayoutV2;
+  initialScore: number;
+  finalScore: number;
+  scoreDelta: number;
+  roundsRun: number;
+  gateDecision: 'skip' | 'refine';
+  stopReason: string;
+  rounds: RefinementRoundRecord[];
+  passed: boolean;
+}
+
+export interface RefineOptions {
+  client?: OpenAiStudioClient;
+  openaiApiKey?: string;
+  fetchFn?: typeof fetch;
+  maxRounds?: number;
+  minDelta?: number;
+  model?: string;
+}
+
+export const REPAIR_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    repairSummary: {
+      type: 'string',
+      description: 'Concise summary of geometric coordinate and sizing adjustments made to repair the layout',
+    },
+    layout: {
+      type: 'object',
+      properties: {
+        version: { type: 'integer', enum: [2] },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        grid: {
+          type: 'object',
+          properties: {
+            margin: { type: 'number' },
+            columns: { type: 'number', enum: [6, 12] },
+            gutter: { type: 'number' },
+            baseline: { type: 'number' },
+          },
+          required: ['margin', 'columns', 'gutter', 'baseline'],
+          additionalProperties: false,
+        },
+        background: {
+          type: 'object',
+          properties: { color: { type: 'string' } },
+          required: ['color'],
+          additionalProperties: false,
+        },
+        logo: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+          required: ['x', 'y', 'width', 'height'],
+          additionalProperties: false,
+        },
+        shapes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' },
+              color: { type: 'string' },
+              kind: { type: 'string', enum: ['rect', 'roundRect', 'ellipse', 'line'] },
+              role: { type: 'string', enum: ['rule', 'panel', 'accent', 'frame'] },
+              opacity: { type: ['number', 'null'] },
+              radius: { type: ['number', 'null'] },
+              strokeWidth: { type: ['number', 'null'] },
+              strokeColor: { type: ['string', 'null'] },
+            },
+            required: [
+              'x',
+              'y',
+              'width',
+              'height',
+              'color',
+              'kind',
+              'role',
+              'opacity',
+              'radius',
+              'strokeWidth',
+              'strokeColor',
+            ],
+            additionalProperties: false,
+          },
+        },
+        text: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              copyIndex: { type: 'integer' },
+              role: {
+                type: 'string',
+                enum: [
+                  'eyebrow',
+                  'title',
+                  'subtitle',
+                  'body',
+                  'date',
+                  'venue',
+                  'cta',
+                  'footer',
+                  'other',
+                ],
+              },
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' },
+              fontSize: { type: 'number' },
+              lineHeight: { type: 'number' },
+              letterSpacing: { type: 'number' },
+              fontFamily: { type: 'string' },
+              color: { type: 'string' },
+              align: { type: 'string', enum: ['left', 'center', 'right'] },
+              bold: { type: 'boolean' },
+              italic: { type: 'boolean' },
+              rtl: { type: 'boolean' },
+            },
+            required: [
+              'copyIndex',
+              'role',
+              'x',
+              'y',
+              'width',
+              'height',
+              'fontSize',
+              'lineHeight',
+              'letterSpacing',
+              'fontFamily',
+              'color',
+              'align',
+              'bold',
+              'italic',
+              'rtl',
+            ],
+            additionalProperties: false,
+          },
+        },
+        typeScale: {
+          type: 'object',
+          properties: {
+            base: { type: 'number' },
+            ratio: { type: 'number' },
+          },
+          required: ['base', 'ratio'],
+          additionalProperties: false,
+        },
+      },
+      required: [
+        'version',
+        'width',
+        'height',
+        'grid',
+        'background',
+        'logo',
+        'shapes',
+        'text',
+        'typeScale',
+      ],
+      additionalProperties: false,
+    },
+  },
+  required: ['repairSummary', 'layout'],
+  additionalProperties: false,
+};
+
+/**
+ * Gate check: A candidate is refined ONLY if it fails a P01 metric or scores below the calibrated band (0.850).
+ */
+export function checkRefinementGate(
+  layout: StudioLayoutV2,
+  metrics?: DesignMetricsReport
+): RefinementGateDecision {
+  const m = metrics || evaluateDesignMetrics(layout);
+  if (!m.passed) {
+    return {
+      shouldRefine: true,
+      reason: `Failed deterministic metrics: [${m.failingMetrics.join(', ')}]`,
+    };
+  }
+  if (m.compositeScore < CALIBRATED_BAND_MIN) {
+    return {
+      shouldRefine: true,
+      reason: `Composite score ${m.compositeScore.toFixed(3)} is below calibrated band (${CALIBRATED_BAND_MIN})`,
+    };
+  }
+  return {
+    shouldRefine: false,
+    reason: 'candidate_already_passes_all_checks',
+  };
+}
+
+/**
+ * Compares before and after layouts to attribute changes directly to element box IDs.
+ */
+export function identifyAttributedChanges(
+  before: StudioLayoutV2,
+  after: StudioLayoutV2,
+  critiqueComments: CritiqueComment[]
+): Array<{ boxId: string; description: string }> {
+  const changes: Array<{ boxId: string; description: string }> = [];
+
+  // Check Logo (B0)
+  if (
+    before.logo.x !== after.logo.x ||
+    before.logo.y !== after.logo.y ||
+    before.logo.width !== after.logo.width ||
+    before.logo.height !== after.logo.height
+  ) {
+    changes.push({
+      boxId: 'B0',
+      description: `Logo shifted from (${before.logo.x},${before.logo.y},${before.logo.width}x${before.logo.height}) to (${after.logo.x},${after.logo.y},${after.logo.width}x${after.logo.height})`,
+    });
+  }
+
+  // Check Text elements (B1..Bn)
+  for (let i = 0; i < before.text.length; i++) {
+    const tPre = before.text[i];
+    const tPost = after.text.find((t) => t.copyIndex === tPre.copyIndex) || after.text[i];
+    if (tPost) {
+      const boxId = `B${i + 1}`;
+      const diffs: string[] = [];
+      if (tPre.x !== tPost.x) diffs.push(`x: ${tPre.x}->${tPost.x}`);
+      if (tPre.y !== tPost.y) diffs.push(`y: ${tPre.y}->${tPost.y}`);
+      if (tPre.width !== tPost.width) diffs.push(`w: ${tPre.width}->${tPost.width}`);
+      if (tPre.height !== tPost.height) diffs.push(`h: ${tPre.height}->${tPost.height}`);
+      if (tPre.fontSize !== tPost.fontSize) diffs.push(`font: ${tPre.fontSize}->${tPost.fontSize}`);
+      if (diffs.length > 0) {
+        changes.push({
+          boxId,
+          description: `Text [${tPre.role}] adjusted: ${diffs.join(', ')}`,
+        });
+      }
+    }
+  }
+
+  // Check Shape elements
+  const shapeOffset = 1 + before.text.length;
+  for (let j = 0; j < before.shapes.length; j++) {
+    const sPre = before.shapes[j];
+    const sPost = after.shapes[j];
+    if (sPost) {
+      const boxId = `B${shapeOffset + j}`;
+      const diffs: string[] = [];
+      if (sPre.x !== sPost.x) diffs.push(`x: ${sPre.x}->${sPost.x}`);
+      if (sPre.y !== sPost.y) diffs.push(`y: ${sPre.y}->${sPost.y}`);
+      if (sPre.width !== sPost.width) diffs.push(`w: ${sPre.width}->${sPost.width}`);
+      if (sPre.height !== sPost.height) diffs.push(`h: ${sPre.height}->${sPost.height}`);
+      if (diffs.length > 0) {
+        changes.push({
+          boxId,
+          description: `Shape [${sPre.role || sPre.kind}] adjusted: ${diffs.join(', ')}`,
+        });
+      }
+    }
+  }
+
+  return changes;
+}
+
+/**
+ * Gated Refinement Engine (arXiv:2607.26922):
+ * Refines a layout ONLY if it fails P01 or falls below calibrated band.
+ * Stops on pass, max rounds (2), or plateau (improvement < 0.02).
+ */
+export async function refineCandidate(
+  candidateId: string | number,
+  layout: StudioLayoutV2,
+  options: RefineOptions = {}
+): Promise<RefinementCandidateResult> {
+  const model = options.model || 'gpt-6-astra';
+  assertModelAllowed(model);
+
+  const maxRounds = options.maxRounds || 2;
+  const minDelta = options.minDelta !== undefined ? options.minDelta : 0.02;
+
+  // 1. Gating Check
+  const initialMetrics = evaluateDesignMetrics(layout);
+  const gate = checkRefinementGate(layout, initialMetrics);
+
+  if (!gate.shouldRefine) {
+    return {
+      candidateId,
+      initialLayout: layout,
+      finalLayout: layout,
+      initialScore: initialMetrics.compositeScore,
+      finalScore: initialMetrics.compositeScore,
+      scoreDelta: 0,
+      roundsRun: 0,
+      gateDecision: 'skip',
+      stopReason: gate.reason,
+      rounds: [],
+      passed: initialMetrics.passed,
+    };
+  }
+
+  // 2. Prepare client
+  const client =
+    options.client ||
+    new OpenAiStudioClient({
+      apiKey: options.openaiApiKey || process.env.OPENAI_API_KEY,
+      fetcher: options.fetchFn,
+      primaryModel: model,
+    });
+
+  let currentLayout = layout;
+  let currentMetrics = initialMetrics;
+  let currentScore = initialMetrics.compositeScore;
+  const rounds: RefinementRoundRecord[] = [];
+  let stopReason = 'max_rounds_reached';
+
+  // 3. Iterative Refinement Loop
+  for (let r = 1; r <= maxRounds; r++) {
+    // a. Obtain box-grounded visual critique
+    const critiqueResult = await generateBoxGroundedCritique(currentLayout, {
+      client,
+      deterministicMetrics: currentMetrics,
+      model,
+      detail: 'low',
+    });
+
+    if (critiqueResult.comments.length === 0) {
+      stopReason = 'no_critique_comments_to_address';
+      break;
+    }
+
+    // b. Construct Repair Prompt
+    const systemPrompt = `You are a precision layout refinement specialist.
+Your task is to repair a failing poster layout by applying specific box-grounded critique suggestions while maintaining design harmony.
+Strict requirements:
+- Directly fix the issues cited by the critic comments (e.g. shift coordinates, align with column grid, resize boxes to fix proportion/whitespace).
+- Do NOT change text copy, wording, or colors.
+- Ensure all coordinates stay within canvas bounds (${currentLayout.width}x${currentLayout.height}) and snap to margins (${currentLayout.grid.margin}px).
+- Return the complete repaired layout matching the StudioLayoutV2 JSON schema.`;
+
+    const userPrompt = `CURRENT FAILING LAYOUT:
+\`\`\`json
+${JSON.stringify(currentLayout, null, 2)}
+\`\`\`
+
+DETERMINISTIC EVALUATION GROUND TRUTH:
+- Composite Score: ${currentMetrics.compositeScore.toFixed(3)}
+- Failing Metrics: [${currentMetrics.failingMetrics.join(', ')}]
+
+BOX-GROUNDED CRITIQUE COMMENTS TO REPAIR:
+${critiqueResult.comments
+  .map(
+    (c) =>
+      `- [${c.boxId}] Category: ${c.category} (Severity: ${c.severity}): ${c.issue}
+   Suggested Fix: ${c.suggestedFix}`
+  )
+  .join('\n')}
+
+TASK:
+Produce the corrected layout repairing these exact flaws.`;
+
+    // c. Call OpenAI Structured Output for repair
+    const repairResponse = await client.createStructuredCompletion<{
+      repairSummary: string;
+      layout: StudioLayoutV2;
+    }>({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      jsonSchema: {
+        name: 'layout_v3_repair',
+        schema: REPAIR_JSON_SCHEMA,
+        strict: true,
+      },
+      reasoningEffort: 'low',
+      maxTokens: 3500,
+    });
+
+    const repairedData = repairResponse.data;
+    if (!repairedData || !repairedData.layout) {
+      throw new Error(`Refinement round ${r} returned invalid repair payload`);
+    }
+
+    // Retain art config if present on current layout
+    const repairedLayout: StudioLayoutV2 = {
+      ...repairedData.layout,
+      art: currentLayout.art ? { ...currentLayout.art } : undefined,
+    };
+
+    // d. Re-evaluate P01 deterministic metrics
+    const postMetrics = evaluateDesignMetrics(repairedLayout);
+    const postScore = postMetrics.compositeScore;
+    const delta = Number((postScore - currentScore).toFixed(4));
+    const changesAttributed = identifyAttributedChanges(
+      currentLayout,
+      repairedLayout,
+      critiqueResult.comments
+    );
+
+    const roundRecord: RefinementRoundRecord = {
+      round: r,
+      critiqueComments: critiqueResult.comments,
+      preScore: currentScore,
+      postScore,
+      scoreDelta: delta,
+      preFailingMetrics: currentMetrics.failingMetrics,
+      postFailingMetrics: postMetrics.failingMetrics,
+      repairedLayout,
+      changesAttributed,
+      receipt: {
+        model: repairResponse.receipt.model,
+        responseId: repairResponse.receipt.responseId,
+        costUsd: repairResponse.receipt.costUsd + critiqueResult.receipt.costUsd,
+        latencyMs: repairResponse.receipt.latencyMs + critiqueResult.receipt.latencyMs,
+      },
+    };
+
+    rounds.push(roundRecord);
+
+    currentLayout = repairedLayout;
+    currentMetrics = postMetrics;
+    currentScore = postScore;
+
+    // e. Stop Condition 1: Repaired and passed everything
+    if (postMetrics.passed && postScore >= CALIBRATED_BAND_MIN) {
+      stopReason = 'repaired_and_passed';
+      roundRecord.stopReason = stopReason;
+      break;
+    }
+
+    // f. Stop Condition 2: Plateau stop (delta < 0.02)
+    if (delta < minDelta) {
+      stopReason = `plateau_detected_delta_under_${minDelta.toFixed(2)}`;
+      roundRecord.stopReason = stopReason;
+      break;
+    }
+  }
+
+  const totalDelta = Number((currentScore - initialMetrics.compositeScore).toFixed(4));
+
+  return {
+    candidateId,
+    initialLayout: layout,
+    finalLayout: currentLayout,
+    initialScore: initialMetrics.compositeScore,
+    finalScore: currentScore,
+    scoreDelta: totalDelta,
+    roundsRun: rounds.length,
+    gateDecision: 'refine',
+    stopReason,
+    rounds,
+    passed: currentMetrics.passed,
+  };
+}

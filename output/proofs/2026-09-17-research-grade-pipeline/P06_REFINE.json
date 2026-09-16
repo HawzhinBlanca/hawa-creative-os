@@ -1,0 +1,171 @@
+{
+  "generatedAt": "2026-09-16T23:33:11.660Z",
+  "specification": "arXiv:2607.26922 (Gated Refinement & Plateau Stopping Rule)",
+  "model": "gpt-6-astra",
+  "candidates": [
+    {
+      "candidateId": "candidate-1-passing",
+      "type": "passing",
+      "gateDecision": "skip",
+      "roundsRun": 0,
+      "initialScore": 0.956,
+      "finalScore": 0.956,
+      "scoreDelta": 0,
+      "passed": true,
+      "stopReason": "candidate_already_passes_all_checks",
+      "rounds": []
+    },
+    {
+      "candidateId": "candidate-2-repaired",
+      "type": "repaired",
+      "gateDecision": "refine",
+      "roundsRun": 2,
+      "initialScore": 0.921,
+      "finalScore": 0.931,
+      "scoreDelta": 0.01,
+      "passed": false,
+      "stopReason": "plateau_detected_delta_under_0.01",
+      "rounds": [
+        {
+          "round": 1,
+          "preScore": 0.921,
+          "postScore": 0.931,
+          "scoreDelta": 0.01,
+          "preFailingMetrics": [
+            "regularity"
+          ],
+          "postFailingMetrics": [
+            "regularity"
+          ],
+          "changesAttributed": [
+            {
+              "boxId": "B1",
+              "description": "Text [title] adjusted: x: 20->190"
+            },
+            {
+              "boxId": "B3",
+              "description": "Text [body] adjusted: h: 200->70"
+            },
+            {
+              "boxId": "B4",
+              "description": "Text [footer] adjusted: y: 1168->1176"
+            },
+            {
+              "boxId": "B6",
+              "description": "Shape [frame] adjusted: y: 689->671, w: 907->908, h: 311->293"
+            },
+            {
+              "boxId": "B7",
+              "description": "Shape [rule] adjusted: y: 1121->1134"
+            }
+          ],
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtOZkVOYagt6xtZcgz1oXPKnR63z",
+            "costUsd": 0.097072,
+            "latencyMs": 29443
+          }
+        },
+        {
+          "round": 2,
+          "preScore": 0.931,
+          "postScore": 0.931,
+          "scoreDelta": 0,
+          "preFailingMetrics": [
+            "regularity"
+          ],
+          "postFailingMetrics": [
+            "regularity"
+          ],
+          "changesAttributed": [
+            {
+              "boxId": "B1",
+              "description": "Text [title] adjusted: x: 190->86, y: 385->391, w: 700->908, h: 135->56"
+            },
+            {
+              "boxId": "B2",
+              "description": "Text [subtitle] adjusted: x: 108->86, y: 547->475, w: 864->908"
+            },
+            {
+              "boxId": "B3",
+              "description": "Text [body] adjusted: x: 135->86, w: 810->908"
+            },
+            {
+              "boxId": "B4",
+              "description": "Text [footer] adjusted: x: 108->86, y: 1176->1175, w: 864->908"
+            },
+            {
+              "boxId": "B5",
+              "description": "Shape [rule] adjusted: y: 317->318"
+            },
+            {
+              "boxId": "B7",
+              "description": "Shape [rule] adjusted: y: 1134->1132"
+            }
+          ],
+          "stopReason": "plateau_detected_delta_under_0.01",
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtP1XenlZkAkiR78k3b8tsYpSd7z",
+            "costUsd": 0.11434,
+            "latencyMs": 28528
+          }
+        }
+      ]
+    },
+    {
+      "candidateId": "candidate-3-plateaued",
+      "type": "plateaued",
+      "gateDecision": "refine",
+      "roundsRun": 1,
+      "initialScore": 0.921,
+      "finalScore": 0.932,
+      "scoreDelta": 0.011,
+      "passed": false,
+      "stopReason": "plateau_detected_delta_under_0.08",
+      "rounds": [
+        {
+          "round": 1,
+          "preScore": 0.921,
+          "postScore": 0.932,
+          "scoreDelta": 0.011,
+          "preFailingMetrics": [
+            "regularity"
+          ],
+          "postFailingMetrics": [
+            "regularity"
+          ],
+          "changesAttributed": [
+            {
+              "boxId": "B1",
+              "description": "Text [title] adjusted: x: 20->190, y: 385->391"
+            },
+            {
+              "boxId": "B2",
+              "description": "Text [subtitle] adjusted: y: 547->554"
+            },
+            {
+              "boxId": "B3",
+              "description": "Text [body] adjusted: h: 200->73"
+            },
+            {
+              "boxId": "B5",
+              "description": "Shape [rule] adjusted: y: 317->318"
+            },
+            {
+              "boxId": "B6",
+              "description": "Shape [frame] adjusted: y: 689->692, w: 907->908, h: 311->300"
+            }
+          ],
+          "stopReason": "plateau_detected_delta_under_0.08",
+          "receipt": {
+            "model": "gpt-6-astra",
+            "responseId": "chatcmpl-EOtPVWmtYfZLaaYFsBPPP6Ila8z2a",
+            "costUsd": 0.100912,
+            "latencyMs": 27915
+          }
+        }
+      ]
+    }
+  ]
+}
