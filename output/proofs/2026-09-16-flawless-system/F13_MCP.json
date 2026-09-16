@@ -1,0 +1,7 @@
+{
+  "testName": "F13 — Canva-Native Lane (Spike)",
+  "status": "BLOCKED",
+  "featureFlag": "CANVA_MCP_LANE=off",
+  "reason": "Canva MCP lane spike is gated behind CANVA_MCP_LANE=off pending office OAuth grant from the account owner. Primary production execution utilizes the verified PPTX transfer and export pipeline.",
+  "timestamp": "2026-09-16T13:17:50Z"
+}

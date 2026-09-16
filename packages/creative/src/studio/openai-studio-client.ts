@@ -15,6 +15,8 @@ export interface OpenAiStudioClientOptions {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   circuitBreaker?: any;
+  primaryModel?: string;
+  fallbackModel?: string;
 }
 
 export interface OpenAiMessage {
@@ -26,7 +28,9 @@ export interface OpenAiStructuredResponse<T = any> {
   data: T;
   rawText: string;
   receipt: {
+    id?: string;
     responseId: string;
+    xRequestId?: string | null;
     model: string;
     inputTokens: number;
     outputTokens: number;
@@ -44,7 +48,9 @@ export interface OpenAiImageResponse {
   imageBytes: Buffer;
   mimeType: string;
   receipt: {
+    id?: string;
     responseId: string;
+    xRequestId?: string | null;
     model: string;
     prompt: string;
     costUsd: number;
@@ -123,6 +129,8 @@ export class OpenAiStudioClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch;
+  public readonly primaryModel: string;
+  public readonly fallbackModel: string;
   private readonly timeoutMs: number;
   private readonly breaker: any;
   private readonly pricing: any;
@@ -134,8 +142,11 @@ export class OpenAiStudioClient {
     this.timeoutMs = options.timeoutMs || 90000;
     this.breaker = options.circuitBreaker || new OpenAiCircuitBreaker();
     this.pricing = this.loadPricing();
+    this.primaryModel = options.primaryModel || 'gpt-6-astra';
+    this.fallbackModel = options.fallbackModel || 'gpt-6-astra';
   }
 
+  get circuitBreaker() { return this.breaker; }
 
   private loadPricing(): any {
     try {
@@ -150,8 +161,8 @@ export class OpenAiStudioClient {
     return {
       currency: 'USD',
       models: {
-        'gpt-6-astra': { inputPerMillion: 2.5, outputPerMillion: 10.0, cacheReadPerMillion: 0.25, cacheWritePerMillion: 2.5 },
-        'gpt-image-2.5-sunburst': { image1k: 0.04, image2k: 0.08, image4k: 0.16 },
+        'gpt-6-astra': { inputPerMillion: 10.0, outputPerMillion: 50.0, cacheReadPerMillion: 1.0, cacheWritePerMillion: 12.5 },
+        'gpt-image-2.5-sunburst': { outputPerMillionImageTokens: 30.0, image1k: 0.04, image2k: 0.08, image4k: 0.16 },
       },
     };
   }
@@ -188,6 +199,7 @@ export class OpenAiStudioClient {
     jsonSchema: { name: string; schema: Record<string, any>; strict?: boolean };
     timeoutMs?: number;
     temperature?: number;
+    maxTokens?: number;
   }): Promise<OpenAiStructuredResponse<T>> {
     const model = options.model || 'gpt-6-astra';
     assertModelAllowed(model);
@@ -212,6 +224,7 @@ export class OpenAiStudioClient {
           strict: options.jsonSchema.strict ?? true,
         },
       },
+      max_completion_tokens: options.maxTokens || 4000,
     };
 
     if (options.temperature !== undefined && model !== 'gpt-6-astra') {
@@ -255,6 +268,7 @@ export class OpenAiStudioClient {
           throw new OpenAiModelHttpError(res.status, errBody);
         }
 
+        const xRequestId = res.headers?.get?.('x-request-id') || null;
         const data: any = await res.json();
         if (typeof this.breaker.recordSuccess === 'function') {
           this.breaker.recordSuccess();
@@ -303,7 +317,9 @@ export class OpenAiStudioClient {
           data: parsed,
           rawText: cleanContent,
           receipt: {
-            responseId: data.id || `openai_${Date.now()}`,
+            id: data.id || xRequestId || `openai_${Date.now()}`,
+            responseId: data.id || xRequestId || `openai_${Date.now()}`,
+            xRequestId,
             model: data.model || model,
             inputTokens: usage.prompt_tokens || usage.input_tokens || 0,
             outputTokens: usage.completion_tokens || usage.output_tokens || 0,
@@ -345,6 +361,7 @@ export class OpenAiStudioClient {
     images?: Array<Buffer | { mediaType?: string; data: string }>;
     timeoutMs?: number;
     temperature?: number;
+    maxTokens?: number;
   }): Promise<{ data: T; rawText: string; receipt: any }> {
     const model = params.model || 'gpt-6-astra';
     assertModelAllowed(model);
@@ -382,11 +399,11 @@ export class OpenAiStudioClient {
       },
       timeoutMs: params.timeoutMs,
       temperature: params.temperature,
+      maxTokens: params.maxTokens,
     });
   }
 
   async generateImage(options: {
-
     model?: string;
     prompt: string;
     size?: string;
@@ -431,6 +448,7 @@ export class OpenAiStudioClient {
         throw new OpenAiModelHttpError(res.status, errBody);
       }
 
+      const xRequestId = res.headers?.get?.('x-request-id') || null;
       const data: any = await res.json();
       this.breaker.recordSuccess();
 
@@ -449,12 +467,15 @@ export class OpenAiStudioClient {
 
       const sha256 = createHash('sha256').update(imgBuffer).digest('hex');
       const costUsd = 0.04; // Standard rate for 1024x1024
+      const responseId = xRequestId || `img_${data.created || Date.now()}`;
 
       return {
         imageBytes: imgBuffer,
         mimeType: 'image/png',
         receipt: {
-          responseId: `img_${data.created || Date.now()}`,
+          id: responseId,
+          responseId,
+          xRequestId,
           model,
           prompt: options.prompt,
           costUsd,

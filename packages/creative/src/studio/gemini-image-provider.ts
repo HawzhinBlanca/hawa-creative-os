@@ -39,6 +39,8 @@ export interface ArtReceipt {
   provider: 'openai' | 'gemini' | 'procedural';
   model: string;
   responseId?: string;
+  id?: string;
+  xRequestId?: string | null;
   bytes: number;
   sha256: string;
   mimeType: string;
@@ -272,7 +274,8 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         }
 
         const mimeType = 'image/png';
-        const responseId = `openai-img-${data.created || Date.now()}`;
+        const xRequestId = res.headers?.get?.('x-request-id') || null;
+        const responseId = xRequestId || `openai-img-${data.created || Date.now()}`;
         const sha256 = crypto.createHash('sha256').update(imageBuffer).digest('hex');
 
         // Dominant-colour check
@@ -326,6 +329,8 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
             provider: 'openai',
             model,
             responseId,
+            id: responseId,
+            xRequestId,
             bytes: imageBuffer.length,
             sha256,
             mimeType,

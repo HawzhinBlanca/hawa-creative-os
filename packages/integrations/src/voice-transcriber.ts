@@ -59,53 +59,38 @@ export class KurdishVoiceTranscriber {
   async transcribe(req: VoiceTranscriptionRequest, fallbackText?: string): Promise<VoiceTranscriptionResult> {
     let rawTranscript = fallbackText;
 
-    // 1. Live multimodal audio transcription via Google Gemini if audio is supplied and API key exists
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const base64Data = req.audioBase64 || (req.audioBuffer ? Buffer.from(req.audioBuffer).toString('base64') : undefined);
+    // 1. Live audio transcription via OpenAI Whisper if audio is supplied and API key exists
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const audioBytes = req.audioBuffer ? Buffer.from(req.audioBuffer) : (req.audioBase64 ? Buffer.from(req.audioBase64, 'base64') : undefined);
 
-    if (!rawTranscript && base64Data && geminiKey && !geminiKey.startsWith('mock-')) {
+    if (!rawTranscript && audioBytes && openaiKey && !openaiKey.startsWith('mock-')) {
       try {
-        const mimeType = req.audioMimeType || 'audio/ogg';
-        const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+        const formData = new FormData();
+        const blob = new Blob([audioBytes], { type: req.audioMimeType || 'audio/ogg' });
+        formData.append('file', blob, 'audio.ogg');
+        formData.append('model', 'whisper-1');
+        if (req.languageHint) {
+          formData.append('language', req.languageHint === 'ckb' ? 'ku' : req.languageHint);
+        }
+
+        const endpoint = 'https://api.openai.com/v1/audio/transcriptions';
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': geminiKey,
+            'Authorization': `Bearer ${openaiKey}`,
           },
           signal: AbortSignal.timeout(30000),
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: 'You are an expert Kurdish Sorani transcriber. Transcribe the following spoken Kurdish Sorani audio strictly in Sorani script (ئەلفوبێی کوردی سۆرانی). Preserve original spoken Kurdish vocabulary, numbers, and proper nouns. Do not translate. Output ONLY the raw transcript without any markdown tags or conversational filler.',
-                  },
-                  {
-                    inline_data: {
-                      mime_type: mimeType,
-                      data: base64Data,
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 1024,
-            },
-          }),
+          body: formData,
         });
 
         if (response.ok) {
-          const json = await response.json();
-          const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (candidateText) {
-            rawTranscript = candidateText;
+          const json = await response.json() as any;
+          if (json.text && typeof json.text === 'string') {
+            rawTranscript = json.text.trim();
           }
         }
       } catch (err) {
-        console.warn('[KurdishVoiceTranscriber] Live Gemini audio transcription failed, falling back to rule-based parser:', err);
+        console.warn('[KurdishVoiceTranscriber] Live OpenAI audio transcription failed, falling back to rule-based parser:', err);
       }
     }
 

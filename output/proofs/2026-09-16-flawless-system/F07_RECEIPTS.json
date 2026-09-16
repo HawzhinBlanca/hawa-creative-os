@@ -1,0 +1,242 @@
+[
+  {
+    "index": 1,
+    "message": "The aesthetic feels too sterile, can we give it more warmth and organic depth?",
+    "lang": "en",
+    "expected": "feedback",
+    "classification": {
+      "kind": "feedback",
+      "intent": "revision_feedback",
+      "confidence": 1,
+      "isInstructionOnly": true,
+      "directive": "Make the existing design feel less sterile by adding more warmth and organic depth.",
+      "reason": "The client critiques the existing design’s sterile aesthetic and requests stylistic changes without providing new body copy or event details.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSGPLtkWvJqckMUocvjaqogcV6v",
+        "model": "gpt-6-astra",
+        "inputTokens": 2621,
+        "outputTokens": 73,
+        "cachedTokens": 0,
+        "requestId": "req_5254074fb79141d3af950a555a101f50"
+      }
+    }
+  },
+  {
+    "index": 2,
+    "message": "ئەم بەشەی ناونیشانەکە زۆر گەورەیە و سەرنج دەبات، پێویستە کەمێک نەرمتر و هاوسەنگتر بێت لەگەڵ پەڕەکەدا",
+    "lang": "ckb",
+    "expected": "feedback",
+    "classification": {
+      "kind": "feedback",
+      "intent": "revision_feedback",
+      "confidence": 0.99,
+      "isInstructionOnly": true,
+      "directive": "Reduce the title's size and visual prominence so it feels subtler and more balanced with the rest of the page.",
+      "reason": "The client says the existing title is too large and distracting and requests subtler, more balanced styling, without providing new copy.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSKm2js6DJyLJBmafF0PXUiQTrL",
+        "model": "gpt-6-astra",
+        "inputTokens": 2668,
+        "outputTokens": 83,
+        "cachedTokens": 0,
+        "requestId": "req_d1b2900bfa8c4e4fbc0d05c864117593"
+      }
+    }
+  },
+  {
+    "index": 3,
+    "message": "The visual weight at the bottom is competing with the institutional seal, please rebalance it",
+    "lang": "en",
+    "expected": "feedback",
+    "classification": {
+      "kind": "feedback",
+      "intent": "revision_feedback",
+      "confidence": 1,
+      "isInstructionOnly": true,
+      "directive": "Rebalance the visual weight at the bottom so it does not compete with the institutional seal.",
+      "reason": "The client requests a visual balance adjustment to the existing invitation without providing new content.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSOkco19GK54iacDmSPzdqPFiiK",
+        "model": "gpt-6-astra",
+        "inputTokens": 2623,
+        "outputTokens": 69,
+        "cachedTokens": 0,
+        "requestId": "req_073f93bacb994b71a58353a5c9c0a5e6"
+      }
+    }
+  },
+  {
+    "index": 4,
+    "message": "دەتوانیت باگراوندەکە کەمێک زیندووتر بکەیت بۆ ئەوەی ڕەنگ بداتەوە بە بۆنەکە؟",
+    "lang": "ckb",
+    "expected": "feedback",
+    "classification": {
+      "kind": "feedback",
+      "intent": "revision_feedback",
+      "confidence": 0.99,
+      "isInstructionOnly": true,
+      "directive": "Make the background a little more vibrant to better reflect the occasion.",
+      "reason": "The client requests a livelier background for the existing invitation, with no new event copy or details.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSTjsBANWDfatPgfZtDzmmxzrY8",
+        "model": "gpt-6-astra",
+        "inputTokens": 2651,
+        "outputTokens": 68,
+        "cachedTokens": 0,
+        "requestId": "req_e6e9a55ba48f4de29e26dd64072197bb"
+      }
+    }
+  },
+  {
+    "index": 5,
+    "message": "It needs a more prestigious, commemorative mood rather than feeling like a corporate flyer",
+    "lang": "en",
+    "expected": "feedback",
+    "classification": {
+      "kind": "feedback",
+      "intent": "revision_feedback",
+      "confidence": 1,
+      "isInstructionOnly": true,
+      "directive": "Give the existing invitation a more prestigious, commemorative mood rather than a corporate flyer feel.",
+      "reason": "The client requests a mood change to the existing invitation without supplying new event copy.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSWlzTaf9ps6JEaRUyBbyh8W58A",
+        "model": "gpt-6-astra",
+        "inputTokens": 2622,
+        "outputTokens": 69,
+        "cachedTokens": 0,
+        "requestId": "req_81eed7372efe4693864df4449e2635a9"
+      }
+    }
+  },
+  {
+    "index": 6,
+    "message": "We cordially invite faculty members to the Annual Higher Education Symposium on October 25, 2026 at the Grand Millennium Hotel, Sulaimani. Keynote address begins at 10:00 AM.",
+    "lang": "en",
+    "expected": "new_brief",
+    "classification": {
+      "kind": "new_brief",
+      "intent": "new_brief",
+      "confidence": 1,
+      "isInstructionOnly": false,
+      "directive": "We cordially invite faculty members to the Annual Higher Education Symposium on October 25, 2026 at the Grand Millennium Hotel, Sulaimani. Keynote address begins at 10:00 AM.",
+      "reason": "Provides complete invitation copy for a different event, including its name, audience, date, venue, and keynote time, rather than revisions to the prior design.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSbYlyZuwRBV4uOUMmcemOzuDZ4",
+        "model": "gpt-6-astra",
+        "inputTokens": 2646,
+        "outputTokens": 69,
+        "cachedTokens": 0,
+        "requestId": "req_293d969178f54af888c1dd5ebcb5d6f9"
+      }
+    }
+  },
+  {
+    "index": 7,
+    "message": "دەستەی باڵای دڵنیایی جۆری لە پەروەردە بانگهێشتت دەکات بۆ ئامادەبوون لە مەراسیمی دەستپێکردنی ساڵی ئەکادیمی ٢٠٢٦-٢٠٢٧ لە هۆڵی کۆنگرێس لە زانکۆی سەلاحەدین، ڕێکەوتی ١٥ی تشرینی یەکەم کاتژمێر ٩:٣٠ی بەیانی.",
+    "lang": "ckb",
+    "expected": "new_brief",
+    "classification": {
+      "kind": "new_brief",
+      "intent": "new_brief",
+      "confidence": 1,
+      "isInstructionOnly": false,
+      "directive": "دەستەی باڵای دڵنیایی جۆری لە پەروەردە بانگهێشتت دەکات بۆ ئامادەبوون لە مەراسیمی دەستپێکردنی ساڵی ئەکادیمی ٢٠٢٦-٢٠٢٧ لە هۆڵی کۆنگرێس لە زانکۆی سەلاحەدین، ڕێکەوتی ١٥ی تشرینی یەکەم کاتژمێر ٩:٣٠ی بەیانی.",
+      "reason": "Contains complete Kurdish invitation copy for the 2026–2027 academic year opening ceremony at Salahaddin University’s Congress Hall on October 15 at 9:30 AM, a different event from the prior design.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSfX7uA1JjeVAv59MqK0thbsfq1",
+        "model": "gpt-6-astra",
+        "inputTokens": 2730,
+        "outputTokens": 81,
+        "cachedTokens": 0,
+        "requestId": "req_9bc4e91520ff416b9845ca1caadd205d"
+      }
+    }
+  },
+  {
+    "index": 8,
+    "message": "Invitation: The Ministry of Higher Education and Scientific Research announces the National Quality Framework Forum.\nDate: November 12, 2026.\nLocation: Rotana Hotel, Erbil.\nTime: 2:00 PM.\nRSVP Required.",
+    "lang": "en",
+    "expected": "new_brief",
+    "classification": {
+      "kind": "new_brief",
+      "intent": "new_brief",
+      "confidence": 1,
+      "isInstructionOnly": false,
+      "directive": "Invitation: The Ministry of Higher Education and Scientific Research announces the National Quality Framework Forum.\nDate: November 12, 2026.\nLocation: Rotana Hotel, Erbil.\nTime: 2:00 PM.\nRSVP Required.",
+      "reason": "Provides complete invitation copy for a distinct event, including organizer, event name, date, venue, time, and RSVP requirement, rather than revisions to the prior design.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSjaORWZbzYotZHFtVzh66aYaPY",
+        "model": "gpt-6-astra",
+        "inputTokens": 2654,
+        "outputTokens": 71,
+        "cachedTokens": 0,
+        "requestId": "req_6e79a547c99b4f9a8b639091610f02bf"
+      }
+    }
+  },
+  {
+    "index": 9,
+    "message": "How much does it cost to generate an export with our official institutional seal?",
+    "lang": "en",
+    "expected": "question",
+    "classification": {
+      "kind": "question",
+      "intent": "question_or_other",
+      "confidence": 0.99,
+      "isInstructionOnly": false,
+      "directive": "How much does it cost to generate an export with our official institutional seal?",
+      "reason": "The client asks about the cost of an export with an institutional seal, rather than directing a revision or submitting a new brief.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSmIPPyJOFWVdY5zQB77gtFRnOo",
+        "model": "gpt-6-astra",
+        "inputTokens": 2621,
+        "outputTokens": 61,
+        "cachedTokens": 0,
+        "requestId": "req_e8303b5ebd0349be8de7ed2092e4bbed"
+      }
+    }
+  },
+  {
+    "index": 10,
+    "message": "ئایا دەتوانم فۆرماتی پی دی ئێف بۆ چاپکردنی باجەکان وەربگرم؟",
+    "lang": "ckb",
+    "expected": "question",
+    "classification": {
+      "kind": "question",
+      "intent": "question_or_other",
+      "confidence": 0.99,
+      "isInstructionOnly": false,
+      "directive": "ئایا دەتوانم فۆرماتی پی دی ئێف بۆ چاپکردنی باجەکان وەربگرم؟",
+      "reason": "The client asks whether they can receive a PDF for printing badges, without requesting design changes or providing new design copy.",
+      "documentKind": "design_piece",
+      "needsClarification": false,
+      "callReceipt": {
+        "id": "chatcmpl-EOjSrBuaSrgUzEcP7jGTwxHCE4436",
+        "model": "gpt-6-astra",
+        "inputTokens": 2637,
+        "outputTokens": 99,
+        "cachedTokens": 0,
+        "requestId": "req_54431e3d289f431e88bdf07fddad5026"
+      }
+    }
+  }
+]

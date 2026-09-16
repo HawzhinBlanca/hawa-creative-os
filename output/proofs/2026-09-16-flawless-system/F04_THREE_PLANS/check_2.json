@@ -1,0 +1,60 @@
+{
+  "checkVersion": 3,
+  "source": "canva_exported_pptx",
+  "canvaDesignId": "DAHVXFuNaK4",
+  "documentKind": "unspecified",
+  "copyPass": true,
+  "fontPass": false,
+  "rtlPass": true,
+  "rtlNote": null,
+  "requiredFont": "Verdana",
+  "scriptFonts": {
+    "arabic": "Noto Sans Arabic"
+  },
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 0,
+  "rtlTextObjectCount": 0,
+  "observedFonts": [
+    "Cinzel Bold",
+    "Verdana",
+    "Verdana Bold",
+    "Montserrat Bold"
+  ],
+  "textObjectCount": 8,
+  "expectedTextObjectCount": 8,
+  "offendingObjects": [
+    {
+      "index": 0,
+      "text": "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN ED",
+      "role": "body",
+      "observedFont": "Cinzel Bold",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Cinzel Bold' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 6,
+      "text": "By Invitation Only",
+      "role": "body",
+      "observedFont": "Montserrat Bold",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Montserrat Bold' (Canva substitution or unlisted font)"
+    }
+  ],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

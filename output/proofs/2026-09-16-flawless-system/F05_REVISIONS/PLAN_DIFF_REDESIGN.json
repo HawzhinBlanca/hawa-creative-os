@@ -1,0 +1,53 @@
+{
+  "mode": "redesign_mode",
+  "directive": "change the whole design, try another fresh concept",
+  "priorLayout": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#0A1628",
+    "logo": { "x": 468, "y": 130, "width": 144, "height": 144 },
+    "shapes": [
+      { "x": 90, "y": 460, "width": 425, "height": 2, "color": "#F7B500" },
+      { "x": 565, "y": 460, "width": 425, "height": 2, "color": "#F7B500" }
+    ],
+    "text": [
+      { "copyIndex": 0, "x": 90, "y": 508, "width": 900, "height": 306, "fontSize": 40, "fontFamily": "Verdana", "color": "#FDF8F3", "align": "center" }
+    ]
+  },
+  "revisedLayout": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#1E3A5F",
+    "logo": { "x": 485, "y": 80, "width": 110, "height": 110 },
+    "shapes": [
+      { "x": 80, "y": 240, "width": 4, "height": 800, "color": "#F7B500" },
+      { "x": 120, "y": 1200, "width": 840, "height": 2, "color": "#4770A3" }
+    ],
+    "text": [
+      { "copyIndex": 0, "x": 120, "y": 300, "width": 840, "height": 400, "fontSize": 44, "fontFamily": "Cinzel", "color": "#FDF8F3", "align": "left" }
+    ]
+  },
+  "diff": {
+    "retainedSkeleton": false,
+    "copyPreserved": true,
+    "elementsChanged": [
+      {
+        "target": "background",
+        "change": "Changed from #0A1628 (Midnight Navy) to #1E3A5F (Royal Navy)"
+      },
+      {
+        "target": "logo",
+        "change": "Moved to top (y=80) and resized to 110x110"
+      },
+      {
+        "target": "shapes",
+        "change": "Completely new architectural geometry: vertical gold accent bar (x=80, w=4, h=800) and bottom blue divider (w=840, h=2) replacing horizontal split dividers"
+      },
+      {
+        "target": "text",
+        "change": "Headline switched from centered alignment at y=508 to left alignment at y=300 with Cinzel display typeface"
+      }
+    ],
+    "isCompletelyNewConcept": true
+  }
+}

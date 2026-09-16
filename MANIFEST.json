@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-16T10:40:23Z",
+  "generatedAt": "2026-09-16T13:24:28Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 189,
+  "fileCount": 195,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -803,6 +803,21 @@
       "bytes": 24113
     },
     {
+      "path": "scripts/export_live_f04_proof.ts",
+      "sha256": "f99eb1f1e6608d261f61f972132c39a7cd8a99548c6e4354534e0730801ac0d2",
+      "bytes": 10399
+    },
+    {
+      "path": "scripts/generate_f06_proof.ts",
+      "sha256": "67ac6ac9ffdbe4ddf6190f042aae8fb949803b3c6a7407278127ea338c740dd7",
+      "bytes": 2736
+    },
+    {
+      "path": "scripts/generate_f10_proof.ts",
+      "sha256": "cf2fb21461d7855b2e23cebadc09a29a8752506da8bc39e8de5716c88704d817",
+      "bytes": 4404
+    },
+    {
       "path": "scripts/generate_f12_proofs.ts",
       "sha256": "c1c3506dda8ce60687690378258dcf0751668ead01b51723993f5e46283bf7a7",
       "bytes": 15875
@@ -821,6 +836,11 @@
       "path": "scripts/launch_hawa_os.sh",
       "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362",
       "bytes": 6006
+    },
+    {
+      "path": "scripts/populate_ledger.ts",
+      "sha256": "f32c534dabebdc162df01db1718856389538187e7bf2d8a8ede401266cf80dbd",
+      "bytes": 8496
     },
     {
       "path": "scripts/process_kaae_logo.ts",
@@ -878,6 +898,11 @@
       "bytes": 12981
     },
     {
+      "path": "scripts/run_f07_live_eval.ts",
+      "sha256": "c24a6eab3bac1ed611ceaa36d63b8b0a66e43f770e4d3147a81a40dcddfa2d08",
+      "bytes": 7464
+    },
+    {
       "path": "scripts/run_independent_completion_audit.ts",
       "sha256": "633110bedd284ce4fa4c1f70ec06808b7b510afec2d88f4ea4db2cd42b4e1752",
       "bytes": 75127
@@ -921,6 +946,11 @@
       "path": "scripts/test_opus5_critique.py",
       "sha256": "3e2c58819201c48e9e230e73493019b0a080fa5c86ec51dd216cd684ba3e37d9",
       "bytes": 3912
+    },
+    {
+      "path": "scripts/update_proofs_manifest.ts",
+      "sha256": "055078c06b81daf3db1bf8ad014a4d76a7bf6878dbfff40beea5bf511d60b0c0",
+      "bytes": 3302
     },
     {
       "path": "scripts/validate_pack.py",

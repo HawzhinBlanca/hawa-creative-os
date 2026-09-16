@@ -1,0 +1,54 @@
+{
+  "testName": "F10 — Billing-Aware Health and Alerting",
+  "executedAt": "2026-09-16T13:14:57.153Z",
+  "snapshots": {
+    "invalidatedOrExhaustedState": {
+      "status": "degraded",
+      "timestamp": "2026-09-16T13:14:55.785Z",
+      "dependencies": {
+        "postgres": "connected",
+        "canva": "connected",
+        "canvaCircuitBreaker": "CLOSED",
+        "disk": "writable",
+        "modelProvider": "unauthorized",
+        "lastPaidCall": {
+          "provider": "openai",
+          "status": "auth_error",
+          "error": "401 Unauthorized",
+          "at": "2026-09-16T13:14:55.786Z"
+        }
+      },
+      "alertDispatched": {
+        "channel": "operator_alerts",
+        "messageId": "msg_alert_health_1789564495786",
+        "level": "CRITICAL",
+        "text": "⚠️ Watchdog Alert: OpenAI modelProvider returned auth_error (401 Unauthorized). Immediate operator action required."
+      }
+    },
+    "liveProductionState": {
+      "status": "healthy",
+      "timestamp": "2026-09-16T13:14:57.153Z",
+      "dependencies": {
+        "postgres": "connected",
+        "canva": "connected",
+        "canvaCircuitBreaker": "CLOSED",
+        "disk": "writable",
+        "modelProvider": "connected",
+        "lastPaidCall": {
+          "provider": "openai",
+          "status": "ok",
+          "code": "ok",
+          "message": "Ready",
+          "at": "2026-09-16T13:14:57.153Z"
+        }
+      },
+      "alertDispatched": null
+    }
+  },
+  "watchdogConfig": {
+    "checkIntervalMs": 60000,
+    "alertThresholdMinutes": 5,
+    "alertTarget": "operator_chat"
+  },
+  "verificationVerdict": "PASS — Health reports dynamic provider state; alerts generated within threshold."
+}

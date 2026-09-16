@@ -1,0 +1,120 @@
+{
+  "logo": {
+    "x": 485,
+    "y": 70,
+    "width": 110,
+    "height": 110
+  },
+  "text": [
+    {
+      "x": 80,
+      "y": 222,
+      "bold": true,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 920,
+      "height": 112,
+      "fontSize": 32,
+      "copyIndex": 0,
+      "fontFamily": "Cinzel"
+    },
+    {
+      "x": 80,
+      "y": 370,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 920,
+      "height": 48,
+      "fontSize": 21,
+      "copyIndex": 1,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 80,
+      "y": 437,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 920,
+      "height": 100,
+      "fontSize": 19,
+      "copyIndex": 2,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 80,
+      "y": 584,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 438,
+      "height": 382,
+      "fontSize": 19,
+      "copyIndex": 3,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 562,
+      "y": 584,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 438,
+      "height": 382,
+      "fontSize": 19,
+      "copyIndex": 4,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 80,
+      "y": 1001,
+      "bold": true,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 920,
+      "height": 86,
+      "fontSize": 22,
+      "copyIndex": 5,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 80,
+      "y": 1125,
+      "bold": true,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 920,
+      "height": 42,
+      "fontSize": 17,
+      "copyIndex": 6,
+      "fontFamily": "Montserrat"
+    },
+    {
+      "x": 80,
+      "y": 1190,
+      "align": "center",
+      "color": "#FDF8F3",
+      "width": 920,
+      "height": 68,
+      "fontSize": 15,
+      "copyIndex": 7,
+      "fontFamily": "Verdana"
+    }
+  ],
+  "width": 1080,
+  "height": 1350,
+  "shapes": [
+    {
+      "x": 80,
+      "y": 563,
+      "color": "#F7B500",
+      "width": 438,
+      "height": 2
+    },
+    {
+      "x": 562,
+      "y": 563,
+      "color": "#F7B500",
+      "width": 438,
+      "height": 2
+    }
+  ],
+  "background": "#0A1628"
+}

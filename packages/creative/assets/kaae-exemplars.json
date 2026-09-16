@@ -1,8 +1,8 @@
 {
   "version": "2026-09-15.1",
   "confirmedAt": "2026-09-15T07:37:49.451Z",
-  "status": "CONFIRMED",
-  "curator": "Art Director (User Confirmed)",
+  "status": "UNCONFIRMED",
+  "curator": "Art Director (Unconfirmed - Pending Owner Review)",
   "totalExemplars": 12,
   "notice": "Confirmed KAAE institutional exemplars for Studio v2 multi-concept reference conditioning.",
   "exemplars": [

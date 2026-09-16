@@ -18,10 +18,14 @@ export {
 };
 
 export interface ModelPricing {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cacheReadPerMillion: number;
-  cacheWritePerMillion: number;
+  inputPerMillion?: number;
+  outputPerMillion?: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  outputPerMillionImageTokens?: number;
+  image1k?: number;
+  image2k?: number;
+  image4k?: number;
 }
 
 export interface PricingConfig {
@@ -177,20 +181,19 @@ function loadPricingConfig(): PricingConfig {
   }
   // Fallback defaults if pricing.json is absent
   return {
-    pricedAt: '2026-09-14T00:00:00Z',
+    pricedAt: '2026-09-16T00:00:00Z',
     currency: 'USD',
     models: {
-      'claude-fable-5-1': {
+      'gpt-6-astra': {
         inputPerMillion: 10.0,
         outputPerMillion: 50.0,
-        cacheReadPerMillion: 0.25,
+        cacheReadPerMillion: 1.0,
         cacheWritePerMillion: 12.50,
       },
-      'claude-opus-5': {
-        inputPerMillion: 5.0,
-        outputPerMillion: 25.0,
-        cacheReadPerMillion: 0.50,
-        cacheWritePerMillion: 6.25,
+      'gpt-image-2.5-sunburst': {
+        image1k: 0.04,
+        image2k: 0.08,
+        image4k: 0.16,
       },
     },
   };
@@ -208,6 +211,11 @@ export interface StudioModelClientOptions {
   fallbackModel?: string; // default 'gpt-6-astra'
 }
 
+/**
+ * @deprecated QUARANTINED: StudioModelClient is quarantined per F02 / GEMINI_PROMPT.md.
+ * Active production Studio v2 pipeline uses OpenAiStudioClient.
+ * Preserved only for legacy harnesses and tests.
+ */
 export class StudioModelClient {
   private apiKey: string;
   private fetchFn: typeof fetch;
@@ -250,15 +258,20 @@ export class StudioModelClient {
       cacheWritePerMillion: 12.50,
     };
 
+    const inPer1M = modelPrice.inputPerMillion ?? 10.0;
+    const outPer1M = modelPrice.outputPerMillion ?? 50.0;
+    const cacheReadPer1M = modelPrice.cacheReadPerMillion ?? 1.0;
+    const cacheWritePer1M = modelPrice.cacheWritePerMillion ?? 12.5;
+
     const cacheReadTokens = usage.cache_read_input_tokens || 0;
     const cacheWriteTokens = usage.cache_creation_input_tokens || 0;
     const regularInputTokens = Math.max(0, usage.input_tokens - cacheReadTokens);
     const outputTokens = usage.output_tokens || 0;
 
-    const inputCost = (regularInputTokens * modelPrice.inputPerMillion) / 1_000_000;
-    const outputCost = (outputTokens * modelPrice.outputPerMillion) / 1_000_000;
-    const cacheReadCost = (cacheReadTokens * modelPrice.cacheReadPerMillion) / 1_000_000;
-    const cacheWriteCost = (cacheWriteTokens * modelPrice.cacheWritePerMillion) / 1_000_000;
+    const inputCost = (regularInputTokens * inPer1M) / 1_000_000;
+    const outputCost = (outputTokens * outPer1M) / 1_000_000;
+    const cacheReadCost = (cacheReadTokens * cacheReadPer1M) / 1_000_000;
+    const cacheWriteCost = (cacheWriteTokens * cacheWritePer1M) / 1_000_000;
 
     const total = inputCost + outputCost + cacheReadCost + cacheWriteCost;
     return Number(total.toFixed(6));

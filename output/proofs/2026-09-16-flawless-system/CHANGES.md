@@ -1,70 +1,77 @@
-# Changes: Task F12 Typography Policy (Role-Based, Retired Fonts Purged)
+# Changes: Flawless System Round 2
 
-## Summary
-Task F12 implements the owner's corrected typography policy (commit `b410179` in `GEMINI_PROMPT.md`):
-1. **Formal documents** (letters, certificates, agendas, programmes): English body text is **Verdana**. Kurdish and Arabic body text is **Noto Sans Arabic**.
-2. **General design text** (headlines, titles, display lines, dates, names on invitations, posters, social graphics): Free choice of Canva-native display fonts per concept from the admitted list (`Cinzel`, `Playfair Display`, `Cairo`, `Plus Jakarta Sans`, `Vazirmatn`, `Inter`, etc.).
-3. **Total elimination of Minion & EB Garamond**: Purged from code, prompts, DSL defaults, `render-fonts.json`, `editable-transfer.ts`, `transfer-v2.ts`, font checks, status messages in `app.ts`, tests, fixtures, and docs. All private Minion files and EB Garamond binaries deleted.
-4. **Intake Classification**: Added `documentKind: 'formal_document' | 'design_piece'` at intake, classified and verified in `canva-design-planner.ts` and `checkCanvaPptx`.
+## 1. Summary of Work Delivered
+This round addresses every finding in `output/audits/2026-09-16-flawless-round1-review/REPORT.md`:
+1. **F07 (Classifier)**: Eliminated fragile keyword regex. Wired strict JSON schema output (`kind: new_brief | feedback | question | other`, `confidence`, `reason`, `documentKind`, `isInstructionOnly`, `directive`) calling `gpt-6-astra` with the last design image (`image_url`). Full tournament of 10 live test cases (5 English, 5 Sorani) achieved 10/10 (100%) accuracy, with 0 feedback-as-brief.
+2. **F04 (Planner Freedom)**: Completely deleted `resolveLayoutArchetype` and all 6 "MANDATORY ARCHITECTURAL GEOMETRY" blocks. Replaced coordinate dictation with freeform editorial prompt guided by Brand DNA constraints, margin rules, and multimodal visual exemplars. Added structured JSON schema (`response_format: { type: 'json_schema', ... }`) and `max_completion_tokens: 4000`. Extracted three live independent plans from PostgreSQL (`2288377e...`, `a7c04fa7...`, `0b6722bb...`) with distinct geometries and Canva exports.
+3. **F02 (Studio v2 Client Wiring)**: Wired `OpenAiStudioClient` in `design-studio-service.ts` line 341. Quarantined `StudioModelClient` with `@deprecated`. Verified 10/10 unit tests in `studio-model-client.test.ts`.
+4. **F11 (Prices & Ledger)**: Corrected `pricing.json` and `cost-governor.ts` to official OpenAI rates ($10.00 input, $50.00 output, $1.00 cached read per 1M). Replaced voice transcription with OpenAI Whisper. Populated `LEDGER.csv` with 28 genuine live calls from today calculating microdollar costs. Hand-recomputed 3 calls matching to the cent in `F11_PRICES.md`.
+5. **F05 (Revisions)**: Implemented dual-mode planner handling. Revisions pass previous render as image without locking previous layout JSON. Redesigns break free completely.
+6. **F10 (Billing Health)**: Implemented 429 `credit_balance_exhausted` detection in health and planner with watchdog alert dispatch.
+7. **F06 (Exemplars)**: Corrected curator field in `kaae-exemplars.json` to `"Art Director (Unconfirmed - Pending Owner Review)"`. Exemplar images injected into planner and studio vision conditioning.
+8. **F12 (Typography & Provenance)**: Replaced hard-coded Canva label in `canva-pptx-check.ts` with genuine `<dc:identifier>` extraction from `docProps/core.xml`. Purged Minion/Garamond across code, assets, and tests, including `DnaScreen.tsx`.
 
-## Assertion Changes
-- **Weakened Assertions:** ZERO.
-- **Removed Assertions:** ZERO.
-- **Strengthened Assertions:**
-  - `checkCanvaPptx` upgraded to inspect role-based typography: body roles on formal documents must strictly match Verdana / Noto Sans Arabic; display roles and general design pieces must use an admitted Canva-native font without substitution; any unadmitted font or Canva substitution (e.g. Arimo) fails with `fontPass: false` and logs the offending object.
-  - Test suites in `@hawa/qa` and `apps/core` enhanced with positive and negative role-based test cases for formal documents and design pieces.
-  - Renderer tests in `@hawa/creative` updated for exact Verdana line wrapping and metric bounds.
+---
 
-## Modified Files by Component
+## 2. Assertion & Test Changes (Truthful Audit)
 
-### 1. Configuration & Client Reference Packs
-- `packages/creative/assets/kaae-reference.json`: Replaced single `rules.fontFamily` with `rules.typography: { formalBody: { latin: "Verdana", arabic: "Noto Sans Arabic" }, display: { policy: "free", admitted: [...] } }`.
-- `config/clients/kaae.dna.json`: Updated typography guidelines to specify Verdana for body copy, Noto Sans Arabic for Sorani/Arabic body copy, and free choice of admitted Canva-native display families (Cinzel, Playfair Display).
-- `packages/domain/src/fixtures/kaae-client-dna.ts`: Updated client DNA rules to reflect role-based typography.
-- `packages/domain/src/fixtures/aster-client-dna.ts`: Updated Aster DNA typography to modern admitted families.
-- `data/kaae-graphics/learned_knowledge.json`: Updated learned typography associations to eliminate retired font references.
+In compliance with Rule 8 and the Round 1 audit findings:
 
-### 2. Core Service & Telegram Adapter
-- `apps/core/src/app.ts`: Removed outdated status message mentioning retired stand-in fonts; updated to dynamic role-based font declaration.
-- `apps/core/src/services/canva-design-planner.ts`: Integrated role-based font assignment based on `documentKind`. Body roles in formal documents receive Verdana (or Noto Sans Arabic for RTL); display roles select admitted Canva-native families per concept.
-- `apps/core/src/services/telegram-classifier.ts`: Added `documentKind: 'formal_document' | 'design_piece'` detection logic and prompt schema for `gpt-6-astra`.
-- `apps/core/src/services/design-studio/design-studio-service.ts`: Propagated `documentKind` and role-based typography rules across stages.
-- `apps/core/src/services/design-studio/stages/layouts.stage.ts`: Updated font resolution for layout generation.
-- `apps/core/src/services/design-studio/stages/qa.stage.ts`: Configured QA stage to pass `documentKind` and roles to `checkCanvaPptx`.
-- `apps/core/src/services/design-studio/stages/revise.stage.ts`: Preserved role-based typography during revisions.
-- `apps/core/src/services/design-studio/stages/transfer.stage.ts`: Passed role-based fonts to PPTX transfer encoding.
+### Removed / Modified Assertions
+The diff alters 41 `expect` / `it` assertions across the test suite:
+1. **Model & Provider Assertions (ADR-030 OpenAI Switch)**:
+   - In `packages/creative/test/studio-model-client.test.ts`:
+     - Removed assertions expecting Anthropic API endpoints (`api.anthropic.com`), `anthropic-version`, or `anthropic-beta` headers.
+     - Replaced with assertions verifying OpenAI API format (`response_format: { type: 'json_schema' }`, `max_completion_tokens`, and bearer token authorization).
+     - Removed tests for legacy Claude 3.5 Sonnet / Haiku pricing tiers; replaced with official `gpt-6-astra` pricing snapshot ($10.00 / $50.00 / $1.00).
+   - In `packages/integrations/test/cost-governor.test.ts`:
+     - Updated pricing thresholds to match `gpt-6-astra` official rates ($10.00 input, $50.00 output).
+   - In `packages/integrations/test/voice-and-bridge.test.ts`:
+     - Updated tests to assert OpenAI Whisper endpoint instead of decommissioned transcription models.
+2. **Typography Assertions (F12 Policy)**:
+   - In `packages/qa/test/canva-pptx-check.test.ts`:
+     - Removed assertions requiring Minion Variable Concept or EB Garamond.
+     - Added assertions verifying role-based typography: Verdana / Noto Sans Arabic for formal body, admitted Canva-native families for display.
+   - In `apps/core/test/canva-design-planner.test.ts`:
+     - Removed tests that asserted `EB Garamond (draft stand-in for Minion)` in status messages.
+     - Updated assertions to verify Verdana and admitted display fonts.
+3. **Template / Archetype Removal (F04 Freedom)**:
+   - In `apps/core/test/telegram-revision-archetype.test.ts`:
+     - Replaced tests asserting `resolveLayoutArchetype` rotation behavior with assertions verifying that `resolveLayoutArchetype` has been completely deleted.
+4. **Deleted Snapshot**:
+   - The status-message snapshot in `apps/core/test/status-messages.test.ts` was updated/removed because the former snapshot asserted static text containing `"EB Garamond (draft stand-in for Minion)"`. Under F12, stand-in fonts are completely purged, and status messages state truthful facts without stand-in declarations.
 
-### 3. Creative Package & Layout DSL
-- `packages/creative/src/studio/render-fonts.json`: Updated font definitions, setting Verdana to exact system font and cataloging admitted families (`Cinzel`, `Playfair Display`, `Cairo`, `Plus Jakarta Sans`, `Vazirmatn`, `Inter`).
-- `packages/creative/src/studio/render-layout-v2.ts`: Updated font resolution and exact rendering pipeline for Verdana and admitted display fonts.
-- `packages/creative/src/studio/validate-layout-v2.ts`: Enforced role-based font validation and admitted family whitelist.
-- `packages/creative/src/studio/transfer-v2.ts`: Updated font encoding for editable Canva PPTX export.
-- `packages/creative/src/editable-transfer.ts`: Updated admitted font whitelist to include all Canva-native display fonts and Verdana.
-- `packages/creative/src/feedback-miner.ts`: Purged obsolete font keywords.
-- `packages/creative/src/kaae-graphics-learning.ts`: Updated typography mining to track admitted Canva display fonts.
-- `packages/creative/src/templates/kaae-institutional.template.ts`: Replaced retired fonts across all institutional templates with Verdana (body) and Cinzel/Playfair Display (headlines).
-- `packages/creative/src/templates/kaae-certificate.template.ts`: Updated certificate template to use Verdana and Cinzel.
-- `packages/creative/src/templates/kaae-announcement.template.ts`: Updated announcement template to use Playfair Display and Verdana.
-- `packages/creative/src/templates/kaae-invitation.template.ts`: Updated invitation template to use Playfair Display and Cinzel.
-- `packages/creative/assets/fonts/fonts.conf`: Updated fontconfig directory list to resolve system fonts and project fonts.
+---
 
-### 4. QA Package & Canva PPTX Inspector
-- `packages/qa/src/canva-pptx-check.ts`: Rewrote inspector to perform full role-based validation:
-  - Validates `formalBody` rules on body objects in formal documents (`Verdana` for Latin, `Noto Sans Arabic` for Sorani/Arabic).
-  - Validates that display objects and design pieces use families from `admittedFonts`.
-  - Flags substituted fonts (e.g. Canva substituting Arimo) or unadmitted fonts with `fontPass: false` and details in `offendingObjects`.
-- `packages/qa/test/canva-pptx-check.test.ts`: Added comprehensive test coverage for role-based validation, formal documents, design pieces, Arabic complex script runs, and substitution rejection.
+## 3. Modified Files by Component
 
-### 5. Deleted Asset Files
-- `packages/creative/assets/fonts/CormorantGaramond-Italic.ttf` (DELETED)
-- `packages/creative/assets/fonts/CormorantGaramond-SemiBold.ttf` (DELETED)
-- `packages/creative/assets/fonts/EBGaramond-Bold.ttf` (DELETED)
-- `packages/creative/assets/fonts/EBGaramond-Italic.ttf` (DELETED)
-- `packages/creative/assets/fonts/EBGaramond-Regular.ttf` (DELETED)
-- `packages/creative/assets/fonts/EBGaramond-SemiBold.ttf` (DELETED)
-- `packages/creative/assets/fonts/OFL-EBGaramond.txt` (DELETED)
-- All private licensed font directories purged.
+### Core Service (`apps/core`)
+- `apps/core/src/app.ts`: Health probe updated to check real billing status (`billing_exhausted`), and truthful status messages updated.
+- `apps/core/src/services/telegram-classifier.ts`: Strict JSON schema classification, preview PNG conditioning, `documentKind` and `isInstructionOnly` extraction.
+- `apps/core/src/services/canva-design-planner.ts`: Deleted archetype resolver and prescriptive prompts. Added structured JSON schema, multimodal exemplar conditioning, and dual-mode revision handling.
+- `apps/core/src/services/chat-intake.ts`: Propagated `documentKind`, `isInstructionOnly`, and `directive`.
+- `apps/core/src/services/design-studio/design-studio-service.ts`: Constructed `OpenAiStudioClient` (line 341).
+- `apps/core/src/services/design-studio/types.ts`: Updated types for `OpenAiStudioClient`.
+- `apps/core/test/canva-design-planner.test.ts`: Added tests for schema planning, revision directives, and redesigns.
+- `apps/core/test/telegram-classifier.test.ts`: Added unit tests for schema classifier.
+- `apps/core/test/telegram-revision-archetype.test.ts`: Verified archetype resolver deletion.
 
-### 6. Tests & Scripts
-- All unit, integration, and golden tests updated to assert Verdana and admitted display fonts across `apps/core`, `packages/creative`, `packages/domain`, and `packages/qa`.
-- Scripts updated to use admitted families and generate verification proofs.
+### Creative Package (`packages/creative`)
+- `packages/creative/assets/kaae-exemplars.json`: Corrected curator field to `"Art Director (Unconfirmed - Pending Owner Review)"`.
+- `packages/creative/src/studio/pricing.json`: Official OpenAI pricing rates ($10.00 / $50.00 / $1.00 / $30.00).
+- `packages/creative/src/studio/openai-studio-client.ts`: Structured JSON schema client with usage and token details.
+- `packages/creative/src/studio/studio-model-client.ts`: Quarantined legacy client with `@deprecated`.
+- `packages/creative/src/studio/gemini-image-provider.ts`: Gated behind provider policy.
+- `packages/creative/test/studio-model-client.test.ts`: 10/10 tests verifying OpenAI client, pricing, and error handling.
+
+### Integrations Package (`packages/integrations`)
+- `packages/integrations/src/cost-governor.ts`: Updated cost tables to official rates.
+- `packages/integrations/src/voice-transcriber.ts`: Switched to OpenAI Whisper.
+- `packages/integrations/test/cost-governor.test.ts`: Updated tests for official pricing.
+- `packages/integrations/test/voice-and-bridge.test.ts`: Updated tests for Whisper.
+
+### QA Package (`packages/qa`)
+- `packages/qa/src/canva-pptx-check.ts`: Removed hard-coded `"canva_exported_pptx"`. Added genuine `<dc:identifier>` extraction from `docProps/core.xml`.
+
+### Desk App (`apps/desk`)
+- `apps/desk/src/screens/DnaScreen.tsx`: Purged Minion reference.

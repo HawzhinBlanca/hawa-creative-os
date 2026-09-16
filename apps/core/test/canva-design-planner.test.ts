@@ -164,35 +164,28 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(remoteRevision).toHaveBeenCalledTimes(1);
 
     const revisionSent=JSON.parse(remoteRevision.mock.calls[0][1].body);
-    expect(revisionSent.messages).toHaveLength(4);
+    expect(revisionSent.messages).toHaveLength(2);
 
-    // Turn 0: System with interactive session guidelines
+    // Turn 0: System with revision mode guidelines
     expect(revisionSent.messages[0].role).toBe('system');
-    expect(revisionSent.messages[0].content).toContain('INTERACTIVE EDITORIAL REVISION SESSION');
+    expect(revisionSent.messages[0].content).toContain('REVISION MODE');
 
-    // Turn 1: User base request (without directive)
+    // Turn 1: User content with directive
     expect(revisionSent.messages[1].role).toBe('user');
-    const baseReq=JSON.parse(revisionSent.messages[1].content);
-    expect(baseReq.instructions).toBe('Use navy.');
-    expect(baseReq.instructions).not.toContain('Operator Revision Directive');
+    const userContentText = Array.isArray(revisionSent.messages[1].content)
+      ? revisionSent.messages[1].content[0].text
+      : revisionSent.messages[1].content;
+    expect(userContentText).toContain(revisionDirective);
 
-    // Turn 2: Assistant prior layout JSON
-    expect(revisionSent.messages[2].role).toBe('assistant');
-    const priorLayoutJson=JSON.parse(revisionSent.messages[2].content);
-    expect(priorLayoutJson.width).toBe(1200);
-    expect(priorLayoutJson.height).toBe(1697);
-    expect(priorLayoutJson.text).toHaveLength(2);
+    // Prior layout was NOT forced as an assistant turn constraint
+    expect(revisionSent.messages.some((m: any) => m.role === 'assistant')).toBe(false);
 
-    // Turn 3: User operator conversational directive
-    expect(revisionSent.messages[3].role).toBe('user');
-    expect(revisionSent.messages[3].content).toContain(`Operator Conversational Directive: ${revisionDirective}`);
-
-    // Verify DB manifest records multi-turn evidence
+    // Verify DB manifest records revision evidence
     const revisionSaved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${revisionTaskId}::uuid`.execute(db)).rows[0];
     expect(revisionSaved.status).toBe('planned');
-    expect(revisionSaved.result.manifest.conversationalRevision).toBe(true);
+    expect(revisionSaved.result.manifest.isRevision).toBe(true);
     expect(revisionSaved.result.manifest.priorPlanId).toBe(initialSaved.id);
-    expect(revisionSaved.result.manifest.turns).toBe(4);
+    expect(revisionSaved.result.manifest.turns).toBe(2);
   });
 
   it('breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign', async () => {

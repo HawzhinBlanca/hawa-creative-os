@@ -181,7 +181,7 @@ const KAAE_FALLBACK_DNA: ClientDNA = {
   fonts: [
     { family: 'Cairo', style: 'Bold', weight: 700, role: 'display', license: 'OFL', supportedLocales: ['ckb', 'ar', 'en'] },
     { family: 'Vazirmatn', style: 'Regular', weight: 400, role: 'body', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
-    { family: 'Minion Variable Concept', style: 'Semibold', weight: 600, role: 'caption', license: 'Commercial', supportedLocales: ['en'] },
+    { family: 'Verdana', style: 'Regular', weight: 400, role: 'body', license: 'Standard', supportedLocales: ['en'] },
   ],
   assets: [
     { assetId: 'kaae_logo_primary', name: 'KAAE Official 21-Ray Seal', role: 'logo_primary', storageKey: '/assets/logos/kaae-official-logo.png', sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc', mimeType: 'image/png' },

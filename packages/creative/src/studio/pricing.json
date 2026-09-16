@@ -1,42 +1,20 @@
 {
-  "pricedAt": "2026-09-14T00:00:00Z",
-  "updatedAt": "2026-09-15T00:00:00Z",
+  "pricedAt": "2026-09-16T00:00:00Z",
+  "updatedAt": "2026-09-16T12:00:00Z",
   "currency": "USD",
+  "source": "https://openai.com/api/pricing",
   "models": {
     "gpt-6-astra": {
-      "inputPerMillion": 2.50,
-      "outputPerMillion": 10.00,
-      "cacheReadPerMillion": 0.25,
-      "cacheWritePerMillion": 2.50
+      "inputPerMillion": 10.00,
+      "outputPerMillion": 50.00,
+      "cacheReadPerMillion": 1.00,
+      "cacheWritePerMillion": 12.50
     },
     "gpt-image-2.5-sunburst": {
+      "outputPerMillionImageTokens": 30.00,
       "image1k": 0.04,
       "image2k": 0.08,
       "image4k": 0.16
-    },
-    "claude-fable-5-1": {
-      "inputPerMillion": 10.00,
-      "outputPerMillion": 50.00,
-      "cacheReadPerMillion": 0.25,
-      "cacheWritePerMillion": 12.50,
-      "status": "disabled"
-    },
-    "claude-opus-5": {
-      "inputPerMillion": 5.00,
-      "outputPerMillion": 25.00,
-      "cacheReadPerMillion": 0.50,
-      "cacheWritePerMillion": 6.25,
-      "status": "disabled"
-    },
-    "gemini-3-pro-image": {
-      "image2k": 0.134,
-      "image4k": 0.24,
-      "status": "disabled"
-    },
-    "nano-banana-pro-preview": {
-      "image2k": 0.134,
-      "image4k": 0.24,
-      "status": "disabled"
     }
   }
 }

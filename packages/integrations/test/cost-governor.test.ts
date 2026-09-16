@@ -19,12 +19,12 @@ describe('CostGovernor: Token & GPU Budget Controller (B-082, FR-079)', () => {
   });
 
   it('accurately computes token and GPU execution costs', () => {
-    // 10,000 input tokens + 2,000 output tokens on Claude 3.5 Sonnet ($3.0 / $15.0 per 1M)
-    // input = 10000 * 3 / 1M = 0.03
-    // output = 2000 * 15 / 1M = 0.03
-    // total = 0.06
-    const claudeCost = governor.calculateEstimatedCost('anthropic', 'claude-3-5-sonnet', { input: 10_000, output: 2_000 });
-    expect(claudeCost).toBeCloseTo(0.06, 4);
+    // 10,000 input tokens + 2,000 output tokens on GPT-6 Astra ($10.0 / $50.0 per 1M)
+    // input = 10000 * 10.0 / 1M = 0.10
+    // output = 2000 * 50.0 / 1M = 0.10
+    // total = 0.20
+    const astraCost = governor.calculateEstimatedCost('openai', 'gpt-6-astra', { input: 10_000, output: 2_000 });
+    expect(astraCost).toBeCloseTo(0.20, 4);
 
     // 10 seconds of ComfyUI SDXL GPU compute @ $0.0003/sec = $0.003
     const gpuCost = governor.calculateEstimatedCost('comfyui', 'sdxl-turbo', { input: 0, output: 0 }, 10);

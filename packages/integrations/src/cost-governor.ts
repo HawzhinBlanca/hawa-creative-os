@@ -64,12 +64,9 @@ export class CostGovernor {
   private budgets = new Map<string, ClientBudgetConfig>();
   private reservations = new Map<string, BudgetReservation>();
 
-  public readonly pricingRates: Record<string, { inputPer1M: number; outputPer1M: number; gpuPerSec?: number }> = {
-    'openai:gpt-6-astra': { inputPer1M: 2.5, outputPer1M: 10.0 },
-    'openai:gpt-image-2.5-sunburst': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.04 },
-    'google:gemini-1.5-pro': { inputPer1M: 1.25, outputPer1M: 5.0 },
-    'google:gemini-1.5-flash': { inputPer1M: 0.075, outputPer1M: 0.3 },
-    'anthropic:claude-3-5-sonnet': { inputPer1M: 3.0, outputPer1M: 15.0 },
+  public readonly pricingRates: Record<string, { inputPer1M: number; outputPer1M: number; cacheReadPer1M?: number; cacheWritePer1M?: number; gpuPerSec?: number; imagePer1M?: number }> = {
+    'openai:gpt-6-astra': { inputPer1M: 10.0, outputPer1M: 50.0, cacheReadPer1M: 1.0, cacheWritePer1M: 12.5 },
+    'openai:gpt-image-2.5-sunburst': { inputPer1M: 0.0, outputPer1M: 0.0, imagePer1M: 30.0, gpuPerSec: 0.04 },
     'openai:gpt-4o': { inputPer1M: 2.5, outputPer1M: 10.0 },
     'openai:gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.6 },
     'comfyui:sdxl-turbo': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.0003 },

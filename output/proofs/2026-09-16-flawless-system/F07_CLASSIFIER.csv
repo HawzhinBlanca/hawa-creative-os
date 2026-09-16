@@ -1,0 +1,11 @@
+message,expected,got,call_id,confidence,tokens_in,tokens_out,match
+"The aesthetic feels too sterile, can we give it more warmth and organic depth?",feedback,feedback,chatcmpl-EOjSGPLtkWvJqckMUocvjaqogcV6v,1,2621,73,true
+"ئەم بەشەی ناونیشانەکە زۆر گەورەیە و سەرنج دەبات، پێویستە کەمێک نەرمتر و هاوسەنگتر بێت لەگەڵ پەڕەکەدا",feedback,feedback,chatcmpl-EOjSKm2js6DJyLJBmafF0PXUiQTrL,0.99,2668,83,true
+"The visual weight at the bottom is competing with the institutional seal, please rebalance it",feedback,feedback,chatcmpl-EOjSOkco19GK54iacDmSPzdqPFiiK,1,2623,69,true
+"دەتوانیت باگراوندەکە کەمێک زیندووتر بکەیت بۆ ئەوەی ڕەنگ بداتەوە بە بۆنەکە؟",feedback,feedback,chatcmpl-EOjSTjsBANWDfatPgfZtDzmmxzrY8,0.99,2651,68,true
+"It needs a more prestigious, commemorative mood rather than feeling like a corporate flyer",feedback,feedback,chatcmpl-EOjSWlzTaf9ps6JEaRUyBbyh8W58A,1,2622,69,true
+"We cordially invite faculty members to the Annual Higher Education Symposium on October 25, 2026 at the Grand Millennium Hotel, Sulaimani. Keynote address begins at 10:00 AM.",new_brief,new_brief,chatcmpl-EOjSbYlyZuwRBV4uOUMmcemOzuDZ4,1,2646,69,true
+"دەستەی باڵای دڵنیایی جۆری لە پەروەردە بانگهێشتت دەکات بۆ ئامادەبوون لە مەراسیمی دەستپێکردنی ساڵی ئەکادیمی ٢٠٢٦-٢٠٢٧ لە هۆڵی کۆنگرێس لە زانکۆی سەلاحەدین، ڕێکەوتی ١٥ی تشرینی یەکەم کاتژمێر ٩:٣٠ی بەیانی.",new_brief,new_brief,chatcmpl-EOjSfX7uA1JjeVAv59MqK0thbsfq1,1,2730,81,true
+"Invitation: The Ministry of Higher Education and Scientific Research announces the National Quality Framework Forum. Date: November 12, 2026. Location: Rotana Hotel, Erbil. Time: 2:00 PM. RSVP Required.",new_brief,new_brief,chatcmpl-EOjSjaORWZbzYotZHFtVzh66aYaPY,1,2654,71,true
+"How much does it cost to generate an export with our official institutional seal?",question,question,chatcmpl-EOjSmIPPyJOFWVdY5zQB77gtFRnOo,0.99,2621,61,true
+"ئایا دەتوانم فۆرماتی پی دی ئێف بۆ چاپکردنی باجەکان وەربگرم؟",question,question,chatcmpl-EOjSrBuaSrgUzEcP7jGTwxHCE4436,0.99,2637,99,true

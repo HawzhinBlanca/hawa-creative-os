@@ -76,12 +76,37 @@ Cordially invites all university presidents and quality assurance directors.`;
       expect(res.intent).toBe('new_brief');
       expect(res.isInstructionOnly).toBe(false);
     });
+
+    it('classifies full brief with styling keywords and divider as new_brief even with active prior task', () => {
+      const userBrief = `I need a an invitation design for Kaae, here is all the information. Make it nice and professional, in english. It needs to go with kaaes brand guidelines, currently we prefer the dark blue navy as a background, feel free to add textures as you see fit in the brand guidelines. Don’t change anything from my content, i only need the design. I have attached the kaae logo as well so please use that 
+__________
+
+
+THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION
+
+Mr. / Ms. / Dr. [Full Name]
+
+The Kurdistan Accrediting Association for Education
+cordially requests the honor of your presence at this landmark occasion.
+
+September 9, 2026 | 2:30 PM
+Saad Abdullah Conference Hall
+
+By Invitation Only`;
+
+      const res = classifyWithHeuristics(userBrief, true, false);
+      expect(res.intent).toBe('new_brief');
+      expect(res.isInstructionOnly).toBe(false);
+      expect(res.confidence).toBeGreaterThanOrEqual(0.9);
+    });
   });
 
   describe('classifyInboundTelegramMessage with model & fallback', () => {
-    it('uses gpt-6-astra when available to classify feedback', async () => {
-      const mockFetch = vi.fn(async () =>
-        new Response(
+    it('uses gpt-6-astra when available to classify feedback with max_completion_tokens', async () => {
+      let passedBody: any;
+      const mockFetch = vi.fn(async (_url: any, init: any) => {
+        passedBody = JSON.parse(init.body);
+        return new Response(
           JSON.stringify({
             choices: [
               {
@@ -98,8 +123,8 @@ Cordially invites all university presidents and quality assurance directors.`;
             ],
           }),
           { status: 200 }
-        )
-      );
+        );
+      });
 
       const res = await classifyInboundTelegramMessage(
         {
@@ -114,6 +139,93 @@ Cordially invites all university presidents and quality assurance directors.`;
       expect(res.isInstructionOnly).toBe(true);
       expect(res.directive).toContain('gradient or texture');
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(passedBody.max_completion_tokens).toBe(300);
+      expect(passedBody.max_tokens).toBeUndefined();
+      expect(passedBody.temperature).toBeUndefined();
+      expect(passedBody.response_format.type).toBe('json_schema');
+      expect(passedBody.response_format.json_schema.name).toBe('telegram_classifier');
+      expect(passedBody.response_format.json_schema.strict).toBe(true);
+    });
+
+    it('passes preview image as image_url when available in recentTask', async () => {
+      let passedBody: any;
+      const mockFetch = vi.fn(async (_url: any, init: any) => {
+        passedBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            id: 'chatcmpl-test-vision-123',
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    kind: 'feedback',
+                    confidence: 0.96,
+                    isInstructionOnly: true,
+                    directive: 'Make the title larger and gold',
+                    reason: 'Client wants title scaled up based on image',
+                    documentKind: 'design_piece',
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'x-request-id': 'req-test-vision' } }
+        );
+      });
+
+      const res = await classifyInboundTelegramMessage(
+        {
+          messageText: 'make the title larger and gold',
+          recentTask: {
+            ...activeTask,
+            previewImageBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          },
+        },
+        { apiKey: 'test-key', fetcher: mockFetch }
+      );
+
+      expect(res.kind).toBe('feedback');
+      expect(res.callReceipt?.id).toBe('chatcmpl-test-vision-123');
+      expect(res.callReceipt?.requestId).toBe('req-test-vision');
+      const userMsg = passedBody.messages.find((m: any) => m.role === 'user');
+      expect(Array.isArray(userMsg.content)).toBe(true);
+      expect(userMsg.content.some((c: any) => c.type === 'image_url')).toBe(true);
+    });
+
+    it('triggers clarification question when confidence is below 0.75', async () => {
+      const mockFetch = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    kind: 'other',
+                    confidence: 0.6,
+                    isInstructionOnly: false,
+                    directive: '',
+                    reason: 'Ambiguous short message',
+                    documentKind: 'design_piece',
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+
+      const res = await classifyInboundTelegramMessage(
+        {
+          messageText: 'hawa',
+          recentTask: activeTask,
+        },
+        { apiKey: 'test-key', fetcher: mockFetch }
+      );
+
+      expect(res.needsClarification).toBe(true);
+      expect(res.clarifyingQuestion).toBeDefined();
+      expect(res.clarifyingQuestion).toContain('Could you please clarify');
     });
 
     it('falls back seamlessly to heuristics if model API fails with 500', async () => {

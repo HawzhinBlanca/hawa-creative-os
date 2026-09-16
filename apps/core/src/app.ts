@@ -1155,7 +1155,7 @@ export function createApp(options?: CreateAppOptions) {
           return await sql<any>`
             SELECT diagnostic FROM hawa.canva_design_plans
             WHERE created_at > now() - interval '15 minutes' AND status = 'failed'
-              AND (diagnostic LIKE '%MODEL_HTTP_400%' OR diagnostic LIKE '%insufficient_quota%' OR diagnostic LIKE '%credit%')
+              AND (diagnostic LIKE '%MODEL_HTTP_400%' OR diagnostic LIKE '%MODEL_HTTP_429%' OR diagnostic LIKE '%insufficient_quota%' OR diagnostic LIKE '%credit%')
             ORDER BY created_at DESC LIMIT 1`.execute(trx);
         });
         if (recentBillingFailure.rows[0]) {
@@ -1174,7 +1174,18 @@ export function createApp(options?: CreateAppOptions) {
         headers: { Authorization: `Bearer ${key}` },
         signal: AbortSignal.timeout(5000),
       });
-      status = res.status === 401 || res.status === 403 ? 'unauthorized' : res.ok ? 'connected' : `http_${res.status}`;
+      if (res.status === 401 || res.status === 403) {
+        status = 'unauthorized';
+      } else if (res.status === 429) {
+        const errJson = await res.json().catch(() => ({}));
+        status = (errJson?.error?.code === 'credit_balance_exhausted' || errJson?.error?.type === 'insufficient_quota')
+          ? 'billing_exhausted'
+          : 'rate_limited';
+      } else if (res.ok) {
+        status = 'connected';
+      } else {
+        status = `http_${res.status}`;
+      }
     } catch { status = 'unreachable'; }
     modelProviderProbe = { at: Date.now(), status };
     return status;
@@ -1504,8 +1515,9 @@ export function createApp(options?: CreateAppOptions) {
     autoGenerate?: boolean;
     rawJson?: any;
     deskBaseUrl?: string;
+    isInstructionOnly?: boolean;
   }) {
-    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, referenceImageBase64, explicitClientId, autoGenerate, deskBaseUrl } = input;
+    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, referenceImageBase64, explicitClientId, autoGenerate, deskBaseUrl, isInstructionOnly } = input;
     const normalizedText = normalizeKurdishIncomingText(rawText);
 
     // 1. Client Routing & Lock (Invariant #4)
@@ -1617,7 +1629,14 @@ export function createApp(options?: CreateAppOptions) {
 
     const remainingPayloadText = payloadLines.slice(1).join('\n').trim();
 
-    if (primaryLanguage === 'en') {
+    if (input.isInstructionOnly) {
+      headlineEn = undefined;
+      headlineCkb = undefined;
+      copyEn = undefined;
+      copyCkb = undefined;
+      title = `${senderName}: Directive (${rawText.slice(0, 35).trim()}…)`;
+      taskStatus = 'CLARIFICATION_REQUIRED';
+    } else if (primaryLanguage === 'en') {
       headlineEn = firstNonEmptyPayloadLine;
       copyEn = remainingPayloadText;
       title = isKaae ? `KAAE: ${headlineEn.slice(0, 45)}…` : `${senderName}: ${headlineEn.slice(0, 45)}…`;
@@ -1632,10 +1651,12 @@ export function createApp(options?: CreateAppOptions) {
 
     // Preserve every submitted paragraph, including unfamiliar event details. A template
     // parser must never discard copy or invent missing event facts during intake.
-    const exactCopy: ExactCopyBlock[] = payloadText.split(/\n\s*\n/).filter(t=>t.trim()).map((text,index)=>({
-      id: `copy_${index}`, role: index===0?'headline':'body', text: text.trim(),
-      language: primaryLanguage, direction, approved: true, protectedTokens: [],
-    }));
+    const exactCopy: ExactCopyBlock[] = input.isInstructionOnly
+      ? []
+      : payloadText.split(/\n\s*\n/).filter(t=>t.trim()).map((text,index)=>({
+          id: `copy_${index}`, role: index===0?'headline':'body', text: text.trim(),
+          language: primaryLanguage, direction, approved: true, protectedTokens: [],
+        }));
 
     const variantWidth = 1080;
     const variantHeight = isInvitation || isKaae ? 1350 : 1080;
@@ -1763,8 +1784,9 @@ export function createApp(options?: CreateAppOptions) {
         platform, sourceEventId, sourceChannelId, rawText, rawJson: input.rawJson,
         clientId: durableClient, title, headlineEn, headlineCkb, copyEn, copyCkb,
         designInstructions: clientInstructions, exactCopy,
+        isInstructionOnly: Boolean(input.isInstructionOnly),
         // Automatic drafting needs a scoped client; unscoped requests wait for the art director.
-        autoGenerate: Boolean(autoGenerate && durableClient),
+        autoGenerate: Boolean(autoGenerate && durableClient && !input.isInstructionOnly),
         variant: { width: variantWidth, height: variantHeight },
         studioOptions: referenceImageBase64 ? { referenceImageBase64 } : undefined,
       });
@@ -2744,12 +2766,18 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     if (!feedbackTargetTask && sourceChannelId && sourceChannelId !== 'tg_default') {
+      const isReply = Boolean(msg.reply_to_message);
+      const maxAgeMs = isReply ? 48 * 3600 * 1000 : 2 * 3600 * 1000;
+      const nowMs = Date.now();
       let pendingTasks = Array.from(tasks.values())
         .filter((t: any) =>
           t.sourceChannelId === sourceChannelId &&
           t.clientId &&
           t.clientId !== 'client-office-1' &&
           isValidUuid(t.clientId) &&
+          !t.isInstructionOnly &&
+          t.status !== 'CLARIFICATION_REQUIRED' &&
+          (nowMs - new Date(t.createdAt).getTime() <= maxAgeMs) &&
           (t.status === 'RECEIVED' || t.status === 'AWAITING_APPROVAL' || t.status === 'IN_PROGRESS' || t.status === 'OPERATOR_REQUIRED' || t.status === 'COMPLETED')
         )
         .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -2758,12 +2786,17 @@ export function createApp(options?: CreateAppOptions) {
         try {
           const recentDbTask = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
             return await sql<any>`
-              SELECT t.id, t.tenant_id, t.client_id, t.state, t.title, t.description, t.created_at, t.updated_at, o.payload
+              SELECT t.id, t.tenant_id, t.client_id, t.state, t.title, t.description, t.created_at, t.updated_at, o.payload,
+                (SELECT encode(e.content, 'base64')
+                 FROM hawa.canva_export_bytes e
+                 WHERE e.task_id = t.id AND e.format = 'png'
+                 ORDER BY e.created_at DESC LIMIT 1) AS preview_image
               FROM hawa.tasks t
               JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
               WHERE o.payload->>'sourceChannelId' = ${sourceChannelId}
                 AND t.created_at > now() - interval '48 hours'
                 AND t.client_id IS NOT NULL
+                AND COALESCE(o.payload->>'isInstructionOnly', 'false') != 'true'
               ORDER BY t.created_at DESC LIMIT 1`.execute(trx);
           });
           if (recentDbTask.rows[0]) {
@@ -2777,6 +2810,9 @@ export function createApp(options?: CreateAppOptions) {
               sourcePlatform: 'telegram',
               sourceChannelId,
               rawText: row.payload?.rawRequestText || row.description,
+              isInstructionOnly: row.payload?.isInstructionOnly === true || row.payload?.isInstructionOnly === 'true',
+              previewImageBase64: row.preview_image && row.preview_image.length > 200 ? row.preview_image : undefined,
+              previewImageUrl: row.preview_image && row.preview_image.startsWith('http') ? row.preview_image : undefined,
               createdAt: row.created_at,
               updatedAt: row.updated_at,
             };
@@ -2785,6 +2821,23 @@ export function createApp(options?: CreateAppOptions) {
           }
         } catch (dbErr) {
           console.warn('[Core] Failed to query recent task by sourceChannelId:', dbErr);
+        }
+      }
+
+      if (pendingTasks.length > 0 && !pendingTasks[0].previewImageBase64 && db) {
+        try {
+          const imgRow = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+            return await sql<any>`
+              SELECT encode(content, 'base64') AS b64
+              FROM hawa.canva_export_bytes
+              WHERE task_id = ${pendingTasks[0].id}::uuid AND format = 'png'
+              ORDER BY created_at DESC LIMIT 1`.execute(trx);
+          });
+          if (imgRow.rows[0]?.b64) {
+            pendingTasks[0].previewImageBase64 = imgRow.rows[0].b64;
+          }
+        } catch (imgErr) {
+          console.warn('[Core] Failed to fetch previewImageBase64 for pending task:', imgErr);
         }
       }
 
@@ -2797,21 +2850,56 @@ export function createApp(options?: CreateAppOptions) {
             title: pendingTasks[0].title,
             rawText: pendingTasks[0].rawText || pendingTasks[0].payloadText,
             copy: pendingTasks[0].copyEn ? [pendingTasks[0].copyEn] : undefined,
+            previewImageBase64: pendingTasks[0].previewImageBase64,
+            previewImageUrl: pendingTasks[0].previewImageUrl,
           },
-          hasReplyTo: Boolean(msg.reply_to_message),
+          hasReplyTo: isReply,
           hasReferenceImage: Boolean(referenceImageBase64),
         });
       } else {
         classification = await classifyInboundTelegramMessage({
           messageText: rawText,
           recentTask: null,
-          hasReplyTo: Boolean(msg.reply_to_message),
+          hasReplyTo: isReply,
           hasReferenceImage: Boolean(referenceImageBase64),
         });
       }
 
-      if (classification.intent === 'revision_feedback' && pendingTasks.length > 0) {
+      // Handle clarification when confidence is below threshold (< 0.75)
+      if (classification.needsClarification && classification.clarifyingQuestion) {
+        if (sourceChannelId && sourceChannelId !== 'tg_default') {
+          await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+            text: `❓ <b>Clarification needed:</b>\n\n${escapeTelegramHtml(classification.clarifyingQuestion)}`,
+            parse_mode: 'HTML',
+          });
+        }
+        return c.json({ ok: true, status: 'CLARIFICATION_REQUIRED', question: classification.clarifyingQuestion });
+      }
+
+      // Handle questions and general chatter without polluting task pipeline
+      if (classification.kind === 'question' || classification.kind === 'other') {
+        if (sourceChannelId && sourceChannelId !== 'tg_default') {
+          const isSorani = /[\u0600-\u06FF]/.test(rawText);
+          const replyText = classification.kind === 'question'
+            ? (isSorani
+                ? `ℹ️ <b>پەیامەکەت گەیشت:</b> "${escapeTelegramHtml(rawText)}"\n\nئەگەر دەتەوێت داواکاری دیزاین بنێریت، تکایە دەقی ڕاگەیاندن، بەروار، و شوێن بنێرە.`
+                : `ℹ️ <b>Question received:</b> "${escapeTelegramHtml(rawText)}"\n\nTo generate a design, please send your announcement text, date, and venue. For revisions on an existing design, reply directly to the preview message.`)
+            : (isSorani
+                ? `👋 سڵاو! چۆن دەتوانم یارمەتیت بدەم لە دیزاینەکانتدا؟ تکایە دەقی دیزاینەکەت بنێرە.`
+                : `👋 Hello! How can Hawa Creative OS assist you today? Please send your event brief or announcement copy to start.`);
+          await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+            text: replyText,
+            parse_mode: 'HTML',
+          });
+        }
+        return c.json({ ok: true, status: 'PROCESSED', kind: classification.kind });
+      }
+
+      // Explicit routing: only 'feedback' intent binds to an existing task
+      if (classification.kind === 'feedback' && pendingTasks.length > 0) {
         feedbackTargetTask = pendingTasks[0];
+      } else {
+        feedbackTargetTask = null;
       }
     }
 
@@ -3112,7 +3200,38 @@ export function createApp(options?: CreateAppOptions) {
           });
 
           const priorRow = priorTaskDetails.rows[0];
-          const priorPayload = priorRow?.payload || {};
+          let priorPayload = priorRow?.payload || {};
+
+          // If the prior task was itself a revision or had its headline contaminated with an instruction,
+          // follow parentTaskId to restore the authentic event copy
+          if (priorPayload?.studioOptions?.parentTaskId && db) {
+            try {
+              const rootDetails = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+                return await sql<any>`
+                  SELECT o.payload FROM hawa.tasks t
+                  JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+                  WHERE t.id = ${priorPayload.studioOptions.parentTaskId}::uuid
+                  ORDER BY o.created_at DESC LIMIT 1`.execute(trx);
+              });
+              const rootPayload = rootDetails.rows[0]?.payload;
+              if (rootPayload?.exactCopy && Array.isArray(rootPayload.exactCopy) && rootPayload.exactCopy.length > 0) {
+                const priorHeadline = priorPayload.headlineEn || priorPayload.exactCopy?.[0]?.text || '';
+                if (/^(?:the\s+)?background\s+is\b|^(?:i\s+)?want\s+|make\s+it\b/i.test(priorHeadline)) {
+                  priorPayload = {
+                    ...priorPayload,
+                    headlineEn: rootPayload.headlineEn,
+                    headlineCkb: rootPayload.headlineCkb,
+                    copyEn: rootPayload.copyEn,
+                    copyCkb: rootPayload.copyCkb,
+                    exactCopy: rootPayload.exactCopy,
+                    rawRequestText: rootPayload.rawRequestText,
+                  };
+                }
+              }
+            } catch (e) {
+              console.warn('[Core] Failed to resolve parent task payload:', e);
+            }
+          }
 
           const baseInstructions = priorPayload.designInstructions || '';
           const revisionInstructions = `${baseInstructions}\nOperator Revision Directive: ${rawText.trim()}`.trim();
@@ -3230,6 +3349,7 @@ export function createApp(options?: CreateAppOptions) {
         autoGenerate: false,
         deskBaseUrl: incomingDeskBase,
         rawJson: json,
+        isInstructionOnly: true,
       });
       return c.json({ ok: true, task: result.task, instructionOnly: true, notification: result.notification }, 201);
     }

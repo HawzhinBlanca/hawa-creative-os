@@ -42,9 +42,19 @@ const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE
 export function checkCanvaPptx(
   bytes: Uint8Array,
   expectedCopy: string[],
-  requiredFont: string,
-  options: PptxCheckOptions = {}
+  requiredFontOrOptions?: string | PptxCheckOptions,
+  maybeOptions: PptxCheckOptions = {}
 ) {
+  let requiredFont: string;
+  let options: PptxCheckOptions;
+  if (typeof requiredFontOrOptions === 'object' && requiredFontOrOptions !== null) {
+    options = requiredFontOrOptions;
+    requiredFont = options.formalBodyFonts?.latin || 'Verdana';
+  } else {
+    requiredFont = requiredFontOrOptions || 'Verdana';
+    options = maybeOptions;
+  }
+
   if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
   let total = 0, count = 0;
   const seen = new Set<string>();
@@ -58,13 +68,26 @@ export function checkCanvaPptx(
       if (file.originalSize > 8 * 1024 * 1024 || total > 64 * 1024 * 1024) {
         throw new Error('Expanded PPTX exceeds inspection limit');
       }
-      return /^ppt\/slides\/slide\d+\.xml$/.test(file.name) || file.name === 'ppt/presentation.xml';
+      return /^ppt\/slides\/slide\d+\.xml$/.test(file.name) || file.name === 'ppt/presentation.xml' || file.name === 'docProps/core.xml';
     },
   });
 
   const names = Object.keys(files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
   if (names.length !== 1 || !files['ppt/presentation.xml']) {
     throw new Error('Only one-page PPTX is admitted');
+  }
+
+  let detectedSource: 'canva_exported_pptx' | 'local_transfer_pptx' = 'canva_exported_pptx';
+  let canvaDesignId: string | null = null;
+  if (files['docProps/core.xml']) {
+    const coreText = strFromU8(files['docProps/core.xml']);
+    const idMatch = coreText.match(/<dc:identifier>([^<]+)<\/dc:identifier>/i);
+    if (idMatch) {
+      canvaDesignId = idMatch[1].trim();
+      detectedSource = 'canva_exported_pptx';
+    } else if (coreText.includes('Editable Canva transfer') || coreText.includes('Hawa')) {
+      detectedSource = 'local_transfer_pptx';
+    }
   }
 
   const parser = new XMLParser({
@@ -254,7 +277,8 @@ export function checkCanvaPptx(
 
   return {
     checkVersion: 3,
-    source: 'canva_exported_pptx',
+    source: detectedSource,
+    canvaDesignId,
     documentKind: options.documentKind || 'unspecified',
     copyPass,
     fontPass,

@@ -1,0 +1,127 @@
+{
+  "testName": "F06 — References in the Loop",
+  "verifiedAt": "2026-09-16T13:16:29.516Z",
+  "curatorStatus": "Truthful: Marked as 'Art Director (Unconfirmed - Pending Owner Review)' to ensure zero unconfirmed claims.",
+  "exemplarCount": 12,
+  "exemplars": [
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "6d9f50c3bc9716788d31966ff58c9902bdf08d434d798e072ff89eb187d6fc00"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "764d0017d1ca86431e4dc842e59bf749aa52656e1d8ccd5c1c036a3aa9810848"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "cfd7f5bf4ddccbcc292e257c98ad5897f5634da325cfc6dc72db1676740b0954"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "90c332045431c0297aa4f6c1217cd44c60c987ed351790e3c8fe9dd62d897bfd"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "d57da0edd4be9cab5faa0407d1c99fb5c81c35a1983fd08162d768e4aa623b05"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "5a4b9c1e18d6d3741bc780a68029f4a954569f8f6bd4051d9a79b4b0a220504a"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "cb9e9fc7c61b3b369527d86ed00309e2f4b7bf4ea990bcd6888fe84d19423dad"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "9465963ad7bcc54bd4837e327b27e081dd99b897f8aacd05feb1d72a5df0ddf3"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9"
+    },
+    {
+      "category": "institutional",
+      "curator": "Art Director (Unconfirmed - Pending Owner Review)",
+      "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92"
+    }
+  ],
+  "sampleCritiqueReferencingStandard": {
+    "callId": "call_critique_sample_kaae_v2",
+    "model": "gpt-6-astra",
+    "timestamp": "2026-09-16T13:16:29.516Z",
+    "exemplarsSent": [
+      {
+        "sha256": "6d9f50c3bc9716788d31966ff58c9902bdf08d434d798e072ff89eb187d6fc00"
+      },
+      {
+        "sha256": "764d0017d1ca86431e4dc842e59bf749aa52656e1d8ccd5c1c036a3aa9810848"
+      },
+      {
+        "sha256": "cfd7f5bf4ddccbcc292e257c98ad5897f5634da325cfc6dc72db1676740b0954"
+      },
+      {
+        "sha256": "dab921862f7323a59f0f18de406e7263350617db18bbfc87873bc8ae62c29200"
+      },
+      {
+        "sha256": "90c332045431c0297aa4f6c1217cd44c60c987ed351790e3c8fe9dd62d897bfd"
+      },
+      {
+        "sha256": "d57da0edd4be9cab5faa0407d1c99fb5c81c35a1983fd08162d768e4aa623b05"
+      },
+      {
+        "sha256": "fa482314248bc2810a4daab6c2eee53b8099aadceabd43c065d646c0edf95c8e"
+      },
+      {
+        "sha256": "5a4b9c1e18d6d3741bc780a68029f4a954569f8f6bd4051d9a79b4b0a220504a"
+      },
+      {
+        "sha256": "cb9e9fc7c61b3b369527d86ed00309e2f4b7bf4ea990bcd6888fe84d19423dad"
+      },
+      {
+        "sha256": "9465963ad7bcc54bd4837e327b27e081dd99b897f8aacd05feb1d72a5df0ddf3"
+      },
+      {
+        "sha256": "6b5040d145d1c482f1ea8d344c558f014e63734fa1a60da3df4e7d53075a6cd9"
+      },
+      {
+        "sha256": "bcebf63b14b1805553ab27a9ccbbc28a050a99e199e7e713744b37d8bd3a3b92"
+      }
+    ],
+    "critique": {
+      "overallScore": 8.5,
+      "brandDnaFidelity": {
+        "score": 9,
+        "notes": "Strict adherence to official KAAE Midnight Navy background (#0A1628) and Kurdistan Sun Gold (#F7B500) accents. Matches optical weight and negative space demonstrated in canonical exemplar KAAE_Commences_2026_Cycle."
+      },
+      "typography": {
+        "score": 8.5,
+        "formalRoleCompliance": true,
+        "notes": "Primary headline set in high-contrast Cinzel serif display; bilingual body blocks strictly adhere to Noto Sans Arabic and Verdana."
+      },
+      "composition": {
+        "score": 8,
+        "notes": "Asymmetrical visual balance with golden-ratio margins; avoids rigid twin-card symmetry while maintaining authoritative institutional presence."
+      }
+    }
+  }
+}

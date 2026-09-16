@@ -1,0 +1,129 @@
+{
+  "checkVersion": 3,
+  "source": "canva_exported_pptx",
+  "canvaDesignId": "DAHVWKcpVec",
+  "documentKind": "unspecified",
+  "copyPass": true,
+  "fontPass": false,
+  "rtlPass": true,
+  "rtlNote": null,
+  "requiredFont": "Verdana",
+  "scriptFonts": {
+    "arabic": "Noto Sans Arabic"
+  },
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 0,
+  "rtlTextObjectCount": 0,
+  "observedFonts": [
+    "Arimo"
+  ],
+  "textObjectCount": 8,
+  "expectedTextObjectCount": 8,
+  "offendingObjects": [
+    {
+      "index": 0,
+      "text": "THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN ED",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 1,
+      "text": "Mr. / Ms. / Dr. [Full Name]",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 2,
+      "text": "The Kurdistan Accrediting Association for Educatio",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 2,
+      "text": "The Kurdistan Accrediting Association for Educatio",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 3,
+      "text": "His Excellency Prime Minister Masrour Barzani will",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 4,
+      "text": "As part of the official launch, the Minister of Ed",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 5,
+      "text": "September 9, 2026 | 2:30 PM\nSaad Abdullah Conferen",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 5,
+      "text": "September 9, 2026 | 2:30 PM\nSaad Abdullah Conferen",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 6,
+      "text": "By Invitation Only",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 7,
+      "text": "This invitation is personal and non-transferable.\n",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    },
+    {
+      "index": 7,
+      "text": "This invitation is personal and non-transferable.\n",
+      "role": "body",
+      "observedFont": "Arimo",
+      "expectedFont": "Verdana",
+      "reason": "Expected font 'Verdana', observed 'Arimo' (Canva substitution or unlisted font)"
+    }
+  ],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

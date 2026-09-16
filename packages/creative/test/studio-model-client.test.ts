@@ -22,28 +22,15 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
     const pricing = (client as any).pricing;
 
     expect(pricing.currency).toBe('USD');
-    expect(pricing.pricedAt).toBe('2026-09-14T00:00:00Z');
-    expect(pricing.models['claude-fable-5-1']).toEqual({
-      inputPerMillion: 10.0,
-      outputPerMillion: 50.0,
-      cacheReadPerMillion: 0.25,
-      cacheWritePerMillion: 12.50,
-      status: 'disabled',
-    });
-    expect(pricing.models['claude-opus-5']).toEqual({
-      inputPerMillion: 5.0,
-      outputPerMillion: 25.0,
-      cacheReadPerMillion: 0.50,
-      cacheWritePerMillion: 6.25,
-      status: 'disabled',
-    });
+    expect(pricing.pricedAt).toBe('2026-09-16T00:00:00Z');
     expect(pricing.models['gpt-6-astra']).toEqual({
-      inputPerMillion: 2.50,
-      outputPerMillion: 10.00,
-      cacheReadPerMillion: 0.25,
-      cacheWritePerMillion: 2.50,
+      inputPerMillion: 10.00,
+      outputPerMillion: 50.00,
+      cacheReadPerMillion: 1.00,
+      cacheWritePerMillion: 12.50,
     });
     expect(pricing.models['gpt-image-2.5-sunburst']).toEqual({
+      outputPerMillionImageTokens: 30.00,
       image1k: 0.04,
       image2k: 0.08,
       image4k: 0.16,
@@ -53,9 +40,9 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
   it('computes exact USD cost from pricing.json including cache creation and read tokens', () => {
     const client = new StudioModelClient({ apiKey: 'mock-key' });
 
-    // Official 2026-09-14 pricing for claude-fable-5-1:
-    // input: 10.0/M, output: 50.0/M, cacheRead: 0.25/M, cacheWrite: 12.50/M
-    const cost = client.calculateCost('claude-fable-5-1', {
+    // Official 2026-09-16 pricing for gpt-6-astra:
+    // input: 10.0/M, output: 50.0/M, cacheRead: 1.00/M, cacheWrite: 12.50/M
+    const cost = client.calculateCost('gpt-6-astra', {
       input_tokens: 15_000, // 10k uncached + 5k cache read
       output_tokens: 1_000,
       cache_read_input_tokens: 5_000,
@@ -64,10 +51,10 @@ describe('Design Studio v2: Studio Model Client (studio-model-client.ts)', () =>
 
     // 10,000 * 10.0 / 1M = 0.1000
     // 1,000 * 50.0 / 1M = 0.0500
-    // 5,000 * 0.25 / 1M = 0.00125
+    // 5,000 * 1.00 / 1M = 0.0050
     // 2,000 * 12.50 / 1M = 0.0250
-    // Total = 0.17625
-    expect(cost).toBeCloseTo(0.17625, 5);
+    // Total = 0.18000
+    expect(cost).toBeCloseTo(0.18, 5);
   });
 
   it('handles 429 rate limit with retry, succeeding on attempt 2', async () => {

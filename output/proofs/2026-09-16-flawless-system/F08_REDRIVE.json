@@ -1,0 +1,82 @@
+{
+  "testName": "F08 — Re-Drive of Failed Requests Qualification",
+  "executedAt": "2026-09-16T13:17:00Z",
+  "mechanism": {
+    "command": "/redo (operator only) and scheduled sweep",
+    "preFlightProbe": "1-token live paid probe ensures provider availability before re-planning",
+    "journaling": "Each re-drive creates a new journaled attempt; prior attempts are marked abandoned with diagnostic reason"
+  },
+  "reDrivenTasks": [
+    {
+      "taskId": "5f94e0e3-4934-4490-9c1f-44147a0e66b6",
+      "client": "c1000000-0000-4000-8000-000000000002",
+      "originalStatus": "failed",
+      "originalError": "Model or layout validation failed (MODEL_HTTP_400)",
+      "reDriveAttempt": {
+        "planId": "a5963318-4574-4e49-b4a4-ec5c4897c3c9",
+        "requestKey": "redrive_5f94e0e3-4934-4490-9c1f-44147a0e66b6_1789551861421",
+        "status": "planned",
+        "responseId": "chatcmpl-EOgTgvO8GPCEYEkj2MuptjkN1C2f2",
+        "notificationSent": true,
+        "notification": "Design re-plan complete. Review editable draft in Canva."
+      }
+    },
+    {
+      "taskId": "0653aeec-6052-43b5-872a-9ab1850bb172",
+      "client": "c1000000-0000-4000-8000-000000000002",
+      "originalStatus": "uncertain",
+      "priorPlanId": "f84d5cae-9d70-4fcf-9283-58a0c65776f5",
+      "priorDiagnostic": "Auto-abandoned for re-drive retry",
+      "reDriveAttempt": {
+        "planId": "449529fe-343b-4103-affe-2adf0bfcf64f",
+        "requestKey": "redrive_0653aeec-6052-43b5-872a-9ab1850bb172_1789552617941",
+        "status": "planned",
+        "responseId": "chatcmpl-EOgfr0N3mmrA4KbPmx9ysFrMBs68i",
+        "notificationSent": true
+      }
+    },
+    {
+      "taskId": "23b71a0c-06fe-4758-aa64-c1ac65a17e6d",
+      "client": "c1000000-0000-4000-8000-000000000002",
+      "originalStatus": "uncertain",
+      "priorPlanId": "ebaa33ac-78f8-4566-bac6-90597ffc2e32",
+      "priorDiagnostic": "Auto-abandoned for re-drive retry",
+      "reDriveAttempt": {
+        "planId": "b1824ab9-59f1-426b-b437-564c1eec79f3",
+        "requestKey": "redrive_23b71a0c-06fe-4758-aa64-c1ac65a17e6d_1789552644859",
+        "status": "planned",
+        "responseId": "chatcmpl-EOggIapaPm4GswuzDJcSYCf8JArSE",
+        "notificationSent": true
+      }
+    },
+    {
+      "taskId": "59751c4b-eb8f-498c-b6ab-74ea96036ba7",
+      "client": "c1000000-0000-4000-8000-000000000002",
+      "originalStatus": "uncertain",
+      "priorPlanId": "b09d0bb8-abf0-4539-9752-082ebe184489",
+      "priorDiagnostic": "Auto-abandoned for re-drive retry",
+      "reDriveAttempt": {
+        "planId": "a17f7528-4dd7-41ea-a624-53963b5b45af",
+        "requestKey": "redrive_59751c4b-eb8f-498c-b6ab-74ea96036ba7_1789552672775",
+        "status": "planned",
+        "responseId": "chatcmpl-EOggklvhLeY4QBHaPuokUmZv8i8Qi",
+        "notificationSent": true
+      }
+    },
+    {
+      "taskId": "dc6eb019-eec3-4f7a-abc1-9b77985f1d0c",
+      "client": "c1000000-0000-4000-8000-000000000002",
+      "originalStatus": "uncertain",
+      "priorPlanId": "7827cd70-e1e9-46f6-9b12-87292b9ae294",
+      "priorDiagnostic": "Auto-abandoned for re-drive retry",
+      "reDriveAttempt": {
+        "planId": "884c8816-4dab-4e43-b90e-957ca2dd46c3",
+        "requestKey": "redrive_dc6eb019-eec3-4f7a-abc1-9b77985f1d0c_1789552689412",
+        "status": "planned",
+        "responseId": "chatcmpl-EOgh0hjWHXnnqMKmRxb5zQRUcf2RQ",
+        "notificationSent": true
+      }
+    }
+  ],
+  "verdict": "PASS — All failed/uncertain rows successfully re-driven with explicit journaling and notifications."
+}

@@ -14,7 +14,7 @@ import {
   type DesignStudioCandidateStatus,
 } from '@hawa/db';
 import {
-  StudioModelClient,
+  OpenAiStudioClient,
   OpenAiImageProvider,
   GeminiImageProvider,
   type StudioLayoutV2,
@@ -338,12 +338,10 @@ export class DesignStudioService {
     const fetchFn = this.options.fetcher || fetch;
     const apiKey = this.options.apiKey || process.env.OPENAI_API_KEY || 'mock-key';
 
-    const baseClient = new StudioModelClient({
+    const baseClient = new OpenAiStudioClient({
       apiKey,
-      fetchFn,
-      maxRetries: this.options.maxRetries ?? 3,
-      primaryModel: 'gpt-6-astra',
-      fallbackModel: 'gpt-6-astra',
+      fetcher: fetchFn,
+      timeoutMs: 90000,
     });
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
@@ -361,7 +359,7 @@ export class DesignStudioService {
         }
 
         const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel;
+        const model = params.model || baseClient.primaryModel || 'gpt-6-astra';
 
         // Ledger insert-before-dispatch
         await this.repo.recordCallStart({

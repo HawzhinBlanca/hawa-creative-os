@@ -1,0 +1,127 @@
+{
+  "logo": {
+    "x": 480,
+    "y": 70,
+    "width": 120,
+    "height": 120
+  },
+  "text": [
+    {
+      "x": 90,
+      "y": 222,
+      "bold": true,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 900,
+      "height": 130,
+      "fontSize": 36,
+      "copyIndex": 0,
+      "fontFamily": "Cinzel"
+    },
+    {
+      "x": 90,
+      "y": 395,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 51,
+      "fontSize": 23,
+      "copyIndex": 1,
+      "fontFamily": "Lora"
+    },
+    {
+      "x": 90,
+      "y": 461,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 76,
+      "fontSize": 20,
+      "copyIndex": 2,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 90,
+      "y": 554,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 190,
+      "fontSize": 20,
+      "copyIndex": 3,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 90,
+      "y": 762,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 161,
+      "fontSize": 20,
+      "copyIndex": 4,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 120,
+      "y": 971,
+      "bold": true,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 840,
+      "height": 83,
+      "fontSize": 23,
+      "copyIndex": 5,
+      "fontFamily": "Verdana"
+    },
+    {
+      "x": 90,
+      "y": 1109,
+      "bold": true,
+      "align": "center",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 44,
+      "fontSize": 19,
+      "copyIndex": 6,
+      "fontFamily": "Montserrat"
+    },
+    {
+      "x": 90,
+      "y": 1172,
+      "align": "center",
+      "color": "#FDF8F3",
+      "width": 900,
+      "height": 70,
+      "fontSize": 18,
+      "copyIndex": 7,
+      "fontFamily": "Verdana"
+    }
+  ],
+  "width": 1080,
+  "height": 1350,
+  "shapes": [
+    {
+      "x": 450,
+      "y": 372,
+      "color": "#F7B500",
+      "width": 180,
+      "height": 3
+    },
+    {
+      "x": 90,
+      "y": 949,
+      "color": "#1E3A5F",
+      "width": 900,
+      "height": 134
+    },
+    {
+      "x": 90,
+      "y": 949,
+      "color": "#F7B500",
+      "width": 900,
+      "height": 3
+    }
+  ],
+  "background": "#0A1628"
+}

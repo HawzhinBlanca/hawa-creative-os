@@ -1,0 +1,124 @@
+{
+  "logo": {
+    "x": 482,
+    "y": 70,
+    "width": 116,
+    "height": 116
+  },
+  "text": [
+    {
+      "x": 76,
+      "y": 224,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 928,
+      "height": 144,
+      "fontSize": 44,
+      "copyIndex": 0,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 395,
+      "align": "center",
+      "color": "#FFFFFF",
+      "width": 928,
+      "height": 53,
+      "fontSize": 25,
+      "copyIndex": 1,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 466,
+      "align": "center",
+      "color": "#FDF8F3",
+      "width": 928,
+      "height": 88,
+      "fontSize": 23,
+      "copyIndex": 2,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 618,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 438,
+      "height": 351,
+      "fontSize": 21,
+      "copyIndex": 3,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 566,
+      "y": 618,
+      "align": "left",
+      "color": "#FDF8F3",
+      "width": 438,
+      "height": 351,
+      "fontSize": 21,
+      "copyIndex": 4,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 1002,
+      "align": "center",
+      "color": "#F7B500",
+      "width": 928,
+      "height": 98,
+      "fontSize": 28,
+      "copyIndex": 5,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 1134,
+      "align": "center",
+      "color": "#FFFFFF",
+      "width": 928,
+      "height": 48,
+      "fontSize": 21,
+      "copyIndex": 6,
+      "fontFamily": "Minion Variable Concept"
+    },
+    {
+      "x": 76,
+      "y": 1202,
+      "align": "center",
+      "color": "#FDF8F3",
+      "width": 928,
+      "height": 69,
+      "fontSize": 18,
+      "copyIndex": 7,
+      "fontFamily": "Minion Variable Concept"
+    }
+  ],
+  "width": 1080,
+  "height": 1350,
+  "shapes": [
+    {
+      "x": 76,
+      "y": 594,
+      "color": "#F7B500",
+      "width": 438,
+      "height": 2
+    },
+    {
+      "x": 566,
+      "y": 594,
+      "color": "#F7B500",
+      "width": 438,
+      "height": 2
+    },
+    {
+      "x": 446,
+      "y": 1116,
+      "color": "#4770A3",
+      "width": 188,
+      "height": 1
+    }
+  ],
+  "background": "#0A1628"
+}

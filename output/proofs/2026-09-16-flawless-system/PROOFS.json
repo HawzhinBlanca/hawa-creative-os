@@ -1,55 +1,287 @@
 {
   "round": "2026-09-16-flawless-system",
-  "generatedAt": "2026-09-16T10:40:40Z",
-  "commit": "67c7097",
+  "generatedAt": "2026-09-16T13:24:22.992Z",
+  "commit": "HEAD",
   "proofs": [
+    {
+      "task": "GENERAL",
+      "name": "CHANGES.md",
+      "path": "output/proofs/2026-09-16-flawless-system/CHANGES.md",
+      "sha256": "cac856408b22a7860a37960ce750775d6ed10f6cbb3c71f7b121dc44f534a952",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "GENERAL",
+      "name": "DEVIATIONS.md",
+      "path": "output/proofs/2026-09-16-flawless-system/DEVIATIONS.md",
+      "sha256": "671ad1dd5c3975c7e09465dd6116e2e7e78dfac0c9645aeac264b4c2141d0e75",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F02",
+      "name": "F02_RUN.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F02_RUN.json",
+      "sha256": "ed180d2f285b7f18dd9b1e3580c1ce47d8fba97975deaed8b053727ac4002686",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F03",
+      "name": "F03_BLOCKERS.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F03_BLOCKERS.md",
+      "sha256": "21a702d237b2c812a590159dc5a05f795779d672461f51609a10dacb070f1882",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "DIFF_SUMMARY.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/DIFF_SUMMARY.md",
+      "sha256": "d28c934ade0dad069153d6e4270ba053bb70e4f8ba4fb363c87b108bd82429aa",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_1.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/canva_export_1.pptx",
+      "sha256": "31478ca2182600b5b4bbe42ab72013235e1a1b1cfec7288830aa05f236dfd21b",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_2.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/canva_export_2.pptx",
+      "sha256": "576511a2ef8a7ade2742e631df0d9afc6d861e3d8488c78f407d5e8c70597930",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "canva_export_3.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/canva_export_3.pptx",
+      "sha256": "ea12e20ee3471e84ea74f7bce95bc37e4d4a2024454adebe450472aff100f89c",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_1.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/check_1.json",
+      "sha256": "7ebda8002d48e60da19a0380b1ca4eb5a04513937a73d3863c9b02d42ff8a452",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_2.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/check_2.json",
+      "sha256": "178288ced503f2a0a1903a9a44c439f0359b15631b7e460fddad4eb6a068d17a",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "check_3.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/check_3.json",
+      "sha256": "477859f02fe36ee636f2d33be60f5a8a7d12928005a1b5d9dfcab37ad735f5d6",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_1.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/plan_1.json",
+      "sha256": "d5ac376c9f352b4ea413ef1738c844cd9620a852511d7a63c1064a57fa8bfe36",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_2.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/plan_2.json",
+      "sha256": "6935fb863fde1afecca41cb0dfd332399dc50475e1202d68b0ed06c28e2f9823",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "plan_3.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/plan_3.json",
+      "sha256": "47a1d5c0fd2322fab5af887caeec702ac275398f47b4dbbd30a334d5f9cf38b7",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_1.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/render_1.png",
+      "sha256": "1df81de3d7794be74df82f15cd344c95f0ae1def74bd4b848b163b5ddc64d524",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_2.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/render_2.png",
+      "sha256": "fe1356e95aa2408c9b8e04f6d87671d04b62e7f98cc8183e96063d7810446a2a",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "render_3.png",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/render_3.png",
+      "sha256": "be56c6e22acd71195e3875ede69a8ec3c6318d6fc52bcef00589302bfc2e9b03",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_1.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/transfer_1.pptx",
+      "sha256": "5a15d1ed6ca98459b62802488180f8709a6ed6a5317305a1ef8b7c95f26d0499",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_2.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/transfer_2.pptx",
+      "sha256": "faee55c338abccc1020c3e0ea7d73bd447049f5fa588eb678204ed1b54064c12",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F04",
+      "name": "transfer_3.pptx",
+      "path": "output/proofs/2026-09-16-flawless-system/F04_THREE_PLANS/transfer_3.pptx",
+      "sha256": "1c1184d3746f37205d774b34b59a54590125ae177c61c0252606d959aafb32a1",
+      "producingCommand": "npx tsx scripts/export_live_f04_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F05",
+      "name": "F05_REVISIONS.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F05_REVISIONS/F05_REVISIONS.md",
+      "sha256": "1801466ed528048116ac9a2e549090fdde4b14bc5bdf0c903eeb68c5e06c730c",
+      "producingCommand": "automated test suite & plan diff extraction",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F05",
+      "name": "PLAN_DIFF_INCREMENTAL.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F05_REVISIONS/PLAN_DIFF_INCREMENTAL.json",
+      "sha256": "aa1c5201619fcfc8eea1abeb4c7e39420f2083cb9c7b8a4bb3289e67f144db8d",
+      "producingCommand": "automated test suite & plan diff extraction",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F05",
+      "name": "PLAN_DIFF_REDESIGN.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F05_REVISIONS/PLAN_DIFF_REDESIGN.json",
+      "sha256": "f2f8c721d6793cd29c5cc6f2a91be23d130edfa921597755a64bb1d011b1d482",
+      "producingCommand": "automated test suite & plan diff extraction",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F06",
+      "name": "F06_EXEMPLARS.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F06_EXEMPLARS.json",
+      "sha256": "b18188270c8931e51b1cc0a4929180d9fc5baf7f98ba846384bdb4be815f2619",
+      "producingCommand": "npx tsx scripts/generate_f06_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F07",
+      "name": "F07_CLASSIFIER.csv",
+      "path": "output/proofs/2026-09-16-flawless-system/F07_CLASSIFIER.csv",
+      "sha256": "3f712726faa1420088fd4a5a1b9be6737c9656327a9a1a38fb0fb290b57babc6",
+      "producingCommand": "npx tsx scripts/run_f07_live_eval.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F07",
+      "name": "F07_RECEIPTS.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F07_RECEIPTS.json",
+      "sha256": "7ccc34dcfe6eeef4460135d9539f783d09cf77882b9077f6ecf61767cb909a99",
+      "producingCommand": "npx tsx scripts/run_f07_live_eval.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F08",
+      "name": "F08_REDRIVE.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F08_REDRIVE.json",
+      "sha256": "983925889397a35122e1622b73fdcfa4ae649a89a5dd32a1eef95e738d4ca00c",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F09",
+      "name": "F09_TERMINAL.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F09_TERMINAL.md",
+      "sha256": "c4537a0c3c02733e4fcabfe3ab2b254dbc565a13fbb91addf3fc4a2c2623857d",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F10",
+      "name": "F10_HEALTH.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F10_HEALTH.json",
+      "sha256": "fbf58d5fd0f081cc1f7acdfd03cb7ec9776d620d7e350bc0133fc89dbbd14cb6",
+      "producingCommand": "npx tsx scripts/generate_f10_proof.ts",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F11",
+      "name": "F11_PRICES.md",
+      "path": "output/proofs/2026-09-16-flawless-system/F11_PRICES.md",
+      "sha256": "51e79426dac32a31739771e7945d582c6d7e9582ec7995149a022aaafff9fdb4",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
     {
       "task": "F12",
       "name": "F12_FONT.md",
       "path": "output/proofs/2026-09-16-flawless-system/F12_FONT.md",
       "sha256": "40e1e407386d5b9d1532f62e71af8f6b3c936e29073949257416d950227f511e",
-      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
-      "commit": "67c7097"
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F13",
+      "name": "F13_MCP.json",
+      "path": "output/proofs/2026-09-16-flawless-system/F13_MCP.json",
+      "sha256": "f8016075a89d7a6181315a0fec8eb28334523f478930baae2f5c8462a613ba09",
+      "producingCommand": "manual audit",
+      "commit": "HEAD"
+    },
+    {
+      "task": "F11",
+      "name": "LEDGER.csv",
+      "path": "output/proofs/2026-09-16-flawless-system/LEDGER.csv",
+      "sha256": "59d3a70966c2ab050aad4460f9fcd74714513608955fdb43653f780e0d2786aa",
+      "producingCommand": "npx tsx scripts/populate_ledger.ts",
+      "commit": "HEAD"
     },
     {
       "task": "F12",
       "name": "f12-formal-doc-check.json",
       "path": "output/proofs/2026-09-16-flawless-system/f12-formal-doc-check.json",
       "sha256": "003e05c5b98b78d4ce73c94d50d80f4a623dbc13a7766b56d3f5c064107d7a6a",
-      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
-      "commit": "67c7097"
+      "producingCommand": "packages/qa/src/canva-pptx-check.ts",
+      "commit": "HEAD"
     },
     {
       "task": "F12",
       "name": "f12-invitation-check.json",
       "path": "output/proofs/2026-09-16-flawless-system/f12-invitation-check.json",
       "sha256": "76dd3a9977ead9fde5c86364cde74537c43a95e2c2c55afcca1068412b00707e",
-      "producingCommand": "npx tsx scripts/generate_f12_proofs.ts",
-      "commit": "67c7097"
-    },
-    {
-      "task": "F12",
-      "name": "CHANGES.md",
-      "path": "output/proofs/2026-09-16-flawless-system/CHANGES.md",
-      "sha256": "3639c854fefe7c9296e22575af1a16329daabc30c5129b4fc05315c82e4e5322",
-      "producingCommand": "manual audit",
-      "commit": "67c7097"
-    },
-    {
-      "task": "F12",
-      "name": "DEVIATIONS.md",
-      "path": "output/proofs/2026-09-16-flawless-system/DEVIATIONS.md",
-      "sha256": "2cda58cbcb952e3ee790fef64d677b22d6030993516376e04ade89d8585a1d70",
-      "producingCommand": "manual audit",
-      "commit": "67c7097"
-    },
-    {
-      "task": "F12",
-      "name": "LEDGER.csv",
-      "path": "output/proofs/2026-09-16-flawless-system/LEDGER.csv",
-      "sha256": "c72a0e45df31e40d359dd1d3b317bc0f2af8687cd357252550ee6574341d7de3",
-      "producingCommand": "manual audit",
-      "commit": "67c7097"
+      "producingCommand": "packages/qa/src/canva-pptx-check.ts",
+      "commit": "HEAD"
     }
   ]
 }

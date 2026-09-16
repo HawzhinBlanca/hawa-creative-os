@@ -1,0 +1,41 @@
+{
+  "mode": "incremental_revision",
+  "directive": "make the gold bar 300 px wide",
+  "priorLayout": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#0A1628",
+    "logo": { "x": 468, "y": 130, "width": 144, "height": 144 },
+    "shapes": [
+      { "x": 90, "y": 460, "width": 425, "height": 2, "color": "#F7B500" },
+      { "x": 565, "y": 460, "width": 425, "height": 2, "color": "#F7B500" }
+    ],
+    "text": [
+      { "copyIndex": 0, "x": 90, "y": 508, "width": 900, "height": 306, "fontSize": 40, "fontFamily": "Verdana", "color": "#FDF8F3", "align": "center" }
+    ]
+  },
+  "revisedLayout": {
+    "width": 1080,
+    "height": 1350,
+    "background": "#0A1628",
+    "logo": { "x": 468, "y": 130, "width": 144, "height": 144 },
+    "shapes": [
+      { "x": 390, "y": 460, "width": 300, "height": 4, "color": "#F7B500" }
+    ],
+    "text": [
+      { "copyIndex": 0, "x": 90, "y": 508, "width": 900, "height": 306, "fontSize": 40, "fontFamily": "Verdana", "color": "#FDF8F3", "align": "center" }
+    ]
+  },
+  "diff": {
+    "retainedSkeleton": true,
+    "copyPreserved": true,
+    "elementsChanged": [
+      {
+        "target": "shapes",
+        "change": "Updated gold bar divider to single centered bar with width 300px (x=390, y=460, width=300, height=4, color=#F7B500)",
+        "coordinatesChanged": true
+      }
+    ],
+    "textPreserved": true
+  }
+}
