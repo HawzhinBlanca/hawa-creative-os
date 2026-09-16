@@ -33,12 +33,13 @@ Read these before starting: the three reports above, ADR-029, `output/plans/2026
 8. **Do not weaken existing checks** (tests, hard QA thresholds, binding checks, RLS, allowlists). Any changed assertion in an existing test must be listed in `CHANGES.md` with the reason.
 9. **ADRs are proposals** until the owner or lead marks them Accepted. Write ADR-031 for this round in `Proposed` status; do not mark ADR-029 superseded.
 10. **English only** in wiki, ADR, reports and requester-facing messages other than Sorani copy.
+11. **Typeface is decided:** Verdana for all English text; Minion and EB Garamond are removed from the codebase, not deprecated or hidden behind a flag. No draft may reach Canva naming any other Latin font.
 
 ---
 
 ## 2. Definition of "flawless" for this round
 
-The owner's words: a system where a requester on Telegram always gets a truthful answer, feedback changes the design, no two consecutive drafts share a skeleton unless asked, every draft is judged before delivery, and the design quality is measured, not declared. "10/10" is a measured outcome of section 6, never a sentence in a report.
+The owner's words: a system where a requester on Telegram always gets a truthful answer, feedback changes the design, no two consecutive drafts share a skeleton unless asked, every draft is judged before delivery, and the design quality is measured, not declared. Typography is Verdana for English, set natively in Canva, with no substitution warnings. "10/10" is a measured outcome of section 6, never a sentence in a report.
 
 ---
 
@@ -101,10 +102,11 @@ Each task lists **Do**, **Accept when** (the lead's acceptance test) and **Proof
 **Accept when:** the lead recomputes three ledger rows by hand from usage and the price table and matches to the cent; a voice note yields a transcript with a receipt or a truthful refusal.
 **Proof:** `F11_PRICES.md` with the source URL, fetch date, the three recomputations, and a voice-note journal excerpt.
 
-### F12 — Brand font path (with the owner)
-**Do:** Ask the owner to either upload Minion to the Canva Brand Kit or approve EB Garamond as the declared stand-in; implement the declared choice in the reference pack and the font check; no draft is delivered with a silent substitution.
-**Accept when:** the exported PPTX of a fresh draft passes `fontPass: true`, or the status message names the substitution explicitly.
-**Proof:** the content-check JSON of one fresh export.
+### F12 — KAAE typeface: Verdana, Minion removed everywhere
+**Owner decision (2026-09-16):** the KAAE Latin typeface is **Verdana** for every English text role (headline, subtitle, body, date, footer). Minion Variable Concept and its EB Garamond stand-in are retired. Sorani Kurdish stays Noto Sans Arabic (provisional) until the owner names a Kurdish face.
+**Do:** In `packages/creative/assets/kaae-reference.json` set `rules.fontFamily` to `Verdana` and rewrite the body rule accordingly; remove every reference to Minion and EB Garamond from the planner, Studio v2 prompts and layout DSL defaults, `render-fonts.json`, `editable-transfer.ts`, `transfer-v2.ts`, the Canva font check (`checkCanvaPptx` required font), status messages ("EB Garamond (draft stand-in for Minion)" in `app.ts` must go), tests, fixtures, ADRs' current sections and docs; delete the private Minion font files under `packages/creative/assets/fonts/private/` and the EB Garamond files and licence entries; register Verdana (regular, bold, italic, bold-italic) for the local renderer with a licence note (Verdana ships with macOS/Windows; if no redistributable file is available in the container, state so in `DEVIATIONS.md` and use the Canva export as the only render, never a silent stand-in). Verdana is in Canva's library, so no Brand Kit upload is needed.
+**Accept when:** `grep -rniE "minion|garamond" --include='*.ts' --include='*.json' --include='*.md' . | grep -v node_modules | grep -v output/audits` returns only historical audit/ADR history lines, none in code, prompts, assets or tests; a fresh Telegram draft exports with `fontPass: true`, `requiredFont: "Verdana"`, observed fonts `Verdana`/`Verdana Bold` only; the local renderer, if used, resolves Verdana (no fallback font in the fontconfig log).
+**Proof:** `F12_FONT.md` with the grep output, the content-check JSON of the fresh export, the fontconfig resolution log, and the list of deleted font files.
 
 ### F13 — Canva-native lane (spike, flag off)
 **Do:** Behind `CANVA_MCP_LANE=off`, implement generate → judge → native text replacement → fills/sizes → commit → export against Canva's MCP using the office OAuth the owner grants. No shared tokens, no bulk automation.
