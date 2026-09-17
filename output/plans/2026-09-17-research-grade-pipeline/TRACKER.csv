@@ -1,0 +1,15 @@
+task,lead_verdict,date,evidence
+P01,ACCEPTED,2026-09-17,thirteen real pure-function metrics; test recalibrated to SIX_CONFIRMED + SIX_DROPPED negative fixtures 8/8; thresholds need recalibration since a 40%-empty canvas scored 0.858 pass
+P02,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,retrieval code present; no hash-attested artifacts in PROOFS.json
+P03,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,nine layouts with genuine 38-char chatcmpl ids; no ledger
+P04,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,art conditioned on layout with region measurements; no ledger
+P05,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,box-grounded critique real; one cited cost id is fabricated (33-char)
+P06,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,gated refinement with plateau stop; one cited cost id is fabricated (33-char)
+P07,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,dimension-wise pairwise judge; k/l id pair with byte-identical usage
+P08,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,approve/edit/reject flow with signed tokens; not exercised in production
+P09,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,cost architecture and cached prefix; LEDGER.csv absent entirely
+P10,REJECTED,2026-09-17,offline harness: no network in runner; wallClock padded with Math.random*120+80; one constant cost 0.092874 on all 20 rows; orderSwapConsistent and editabilityPass hard-coded true; mean 0.897 marked PASS against stated band 0.940-0.965
+P11,CODE_PRESENT_PROOF_PARTIAL,2026-09-17,three entry points and circular guard implemented; not exercised live
+R1,ACCEPTED,2026-09-17,live billing_exhausted health snapshot with real provider error and alert id 179; fresh lastPaidProbe confirmed by lead
+R2,ACCEPTED,2026-09-17,F04_THREE_PLANS_V2 all three fontPass true with Verdana body and display families
+DEPLOY,NOT_DONE,2026-09-17,production on ac2ce79 while HEAD is a64faed; zero plans since midnight; design_studio_calls frozen at 99 since 2026-09-14
