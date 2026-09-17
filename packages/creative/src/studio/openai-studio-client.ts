@@ -125,6 +125,13 @@ export class OpenAiCircuitBreaker {
   }
 }
 
+function computeRetryDelayMs(attempt: number): number {
+  if (process.env.NODE_ENV === 'test') return 10 * attempt;
+  const base = Math.pow(2, attempt) * 1000;
+  const jitter = Math.floor(Math.random() * 250);
+  return base + jitter;
+}
+
 export class OpenAiStudioClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -266,7 +273,7 @@ export class OpenAiStudioClient {
           if (!res.ok) {
             const errBody = await res.text().catch(() => '');
             if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
-              const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+              const delay = computeRetryDelayMs(attempt);
               await new Promise((r) => setTimeout(r, delay));
               continue;
             }
@@ -352,7 +359,7 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw err;
         }
-        const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+        const delay = computeRetryDelayMs(attempt);
         await new Promise((r) => setTimeout(r, delay));
       } finally {
         clearTimeout(timeoutId);
@@ -463,7 +470,7 @@ export class OpenAiStudioClient {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
           if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
-            const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+            const delay = computeRetryDelayMs(attempt);
             await new Promise((r) => setTimeout(r, delay));
             continue;
           }
@@ -518,7 +525,7 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw err;
         }
-        const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+        const delay = computeRetryDelayMs(attempt);
         await new Promise((r) => setTimeout(r, delay));
       } finally {
         // Without this an aborted or thrown attempt leaves its abort timer pending.

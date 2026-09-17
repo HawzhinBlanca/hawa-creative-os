@@ -1,7 +1,8 @@
 /**
  * Verifies the two clustered spacing fixes against the eighteen real T5 layouts, with no model
- * calls: applies the committed centerSeparatorsInGaps to each saved layout, and reports the
- * deterministic design metrics before and after alongside the separator asymmetry it removed.
+ * calls: applies the committed normalisations to each saved layout in the same order the generator
+ * runs them — centerLoneTextInPanels then centerSeparatorsInGaps, since moving a text block changes
+ * the gaps a separator sits in — and reports the deterministic design metrics before and after.
  *
  * The saved layouts were generated before the fix, so this is a fix-verification pass over
  * existing data. It is NOT a qualification run and its output is kept out of the proof set.
@@ -14,7 +15,7 @@ import path from 'node:path';
 
 const gen = await import('../../packages/creative/dist/studio/layout-generator-v3.js');
 const metrics = await import('../../packages/creative/dist/studio/design-metrics.js');
-const { centerSeparatorsInGaps } = gen;
+const { centerSeparatorsInGaps, centerLoneTextInPanels, findAsymmetricSeparators } = gen;
 const { evaluateDesignMetrics } = metrics;
 
 const briefsDir = process.argv[2];
@@ -35,7 +36,9 @@ for (const name of fs.readdirSync(briefsDir).sort()) {
   const after = JSON.parse(JSON.stringify(before));
 
   const mBefore = evaluateDesignMetrics(before);
+  const textCentred = centerLoneTextInPanels(after.shapes, after.text);
   const moved = centerSeparatorsInGaps(after.shapes, after.text);
+  const residual = findAsymmetricSeparators(after.shapes, after.text).length;
   const mAfter = evaluateDesignMetrics(after);
   movedTotal += moved;
 
@@ -43,6 +46,8 @@ for (const name of fs.readdirSync(briefsDir).sort()) {
   rows.push({
     brief: name,
     separatorsMoved: moved,
+    textCentred,
+    residual,
     composite: { before: mBefore.compositeScore, after: mAfter.compositeScore },
     whitespace: { before: score(mBefore, 'negativeSpace'), after: score(mAfter, 'negativeSpace') },
     alignment: { before: score(mBefore, 'alignment'), after: score(mAfter, 'alignment') },
@@ -61,12 +66,12 @@ for (const name of fs.readdirSync(briefsDir).sort()) {
 
 const f = (n) => (typeof n === 'number' ? n.toFixed(3) : String(n));
 console.log(
-  `${'brief'.padEnd(9)} ${'moved'.padStart(5)} ${'composite'.padStart(16)} ${'negativeSpace'.padStart(16)} ${'balance'.padStart(16)}`
+  `${'brief'.padEnd(9)} ${'sep'.padStart(4)} ${'txt'.padStart(4)} ${'composite'.padStart(16)} ${'negativeSpace'.padStart(16)} ${'balance'.padStart(16)}`
 );
 for (const r of rows) {
   const arrow = (b, a) => `${f(b)}->${f(a)}${a > b ? ' +' : a < b ? ' -' : '  '}`;
   console.log(
-    `${r.brief.padEnd(9)} ${String(r.separatorsMoved).padStart(5)} ` +
+    `${r.brief.padEnd(9)} ${String(r.separatorsMoved).padStart(4)} ${String(r.textCentred).padStart(4)} ` +
       `${arrow(r.composite.before, r.composite.after).padStart(16)} ` +
       `${arrow(r.whitespace.before, r.whitespace.after).padStart(16)} ` +
       `${arrow(r.balance.before, r.balance.after).padStart(16)}`
@@ -74,7 +79,10 @@ for (const r of rows) {
 }
 
 const mean = (k) => rows.reduce((a, r) => a + (r[k].after ?? 0) - (r[k].before ?? 0), 0) / rows.length;
-console.log(`\nlayouts: ${rows.length}, separators recentred: ${movedTotal}`);
+const textTotal = rows.reduce((a, r) => a + r.textCentred, 0);
+const residualTotal = rows.reduce((a, r) => a + r.residual, 0);
+console.log(`\nlayouts: ${rows.length}, separators recentred: ${movedTotal}, lone text blocks centred in a panel: ${textTotal}`);
+console.log(`asymmetric separators left after normalisation: ${residualTotal}`);
 for (const k of ['composite', 'whitespace', 'alignment', 'balance', 'regularity']) {
   const d = mean(k);
   console.log(`mean ${k.padEnd(11)} change ${d >= 0 ? '+' : ''}${d.toFixed(4)}`);

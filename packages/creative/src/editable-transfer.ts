@@ -69,7 +69,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
     if(kind==='line'){
       // Mirrors the raster: a rule is a stroked line, not a filled box.
       slide.addShape(pptx.ShapeType.line,{...geom,h:0,
-        line:{color:hex(shape.strokeColor||shape.color),width:Math.max(0.75,(shape.strokeWidth||Math.max(1,shape.height))*0.75),transparency}});
+        line:{color:hex(shape.strokeColor||shape.color),width:Math.max(0.75,(shape.strokeWidth??Math.max(1,shape.height))*0.75),transparency}});
       continue;
     }
     const type=kind==='ellipse'?pptx.ShapeType.ellipse:kind==='roundRect'?pptx.ShapeType.roundRect:pptx.ShapeType.rect;

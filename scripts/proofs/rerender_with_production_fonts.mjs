@@ -48,7 +48,9 @@ for (const name of fs.readdirSync(briefsDir).sort()) {
   const standIns = familiesUsed.filter((f) => manifest[f] === 'stand-in');
 
   const rendered = renderLayoutV2(layout, { copyText });
-  const outPath = path.join(outDir, `${name}_${brief.id}.png`);
+  const safeName = String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeBriefId = String(brief.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const outPath = path.join(outDir, `${safeName}_${safeBriefId}.png`);
   fs.writeFileSync(outPath, rendered.png);
 
   const entry = {

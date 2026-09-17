@@ -205,9 +205,10 @@ export function probeFontFidelity(
   if (cached) return cached;
 
   const render = (fam: string): Buffer | null => {
-    const tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-font-probe-'));
-    const file = path.join(tempDir, 'probe.svg');
+    let tempDir: string | null = null;
     try {
+      tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-font-probe-'));
+      const file = path.join(tempDir, 'probe.svg');
       fs.writeFileSync(file, probeSvg(fam), { mode: 0o600 });
       const res = spawnSync(rsvg, ['-w', '900', '-h', '120', '-f', 'png', file], {
         env: { ...process.env, FONTCONFIG_FILE: fontconfigFile },
@@ -216,8 +217,16 @@ export function probeFontFidelity(
       });
       if (res.status !== 0 || !res.stdout || res.stdout.length < 100) return null;
       return res.stdout;
+    } catch {
+      return null;
     } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      if (tempDir) {
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup failures
+        }
+      }
     }
   };
 

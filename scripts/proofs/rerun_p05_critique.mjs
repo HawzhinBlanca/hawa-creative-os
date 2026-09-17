@@ -150,7 +150,10 @@ async function runOne(job) {
 
 const entries = [];
 const failures = [];
-const CONCURRENCY = 2;
+const concurrencyArg = process.argv.find((a) => a.startsWith('--concurrency='));
+const CONCURRENCY = concurrencyArg
+  ? Math.max(1, parseInt(concurrencyArg.slice('--concurrency='.length), 10) || 2)
+  : 2;
 for (let i = 0; i < jobs.length; i += CONCURRENCY) {
   const batch = jobs.slice(i, i + CONCURRENCY);
   const settled = await Promise.allSettled(batch.map(runOne));
