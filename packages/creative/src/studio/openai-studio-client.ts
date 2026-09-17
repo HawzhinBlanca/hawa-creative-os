@@ -246,42 +246,41 @@ export class OpenAiStudioClient {
 
     while (attempt < maxAttempts) {
       attempt++;
+      let timeoutId: any;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const res = await this.fetcher(`${this.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
 
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
-            const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
-            await new Promise((r) => setTimeout(r, delay));
-            continue;
+          if (!res.ok) {
+            const errBody = await res.text().catch(() => '');
+            if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
+              const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+              await new Promise((r) => setTimeout(r, delay));
+              continue;
+            }
+            if (typeof this.breaker.recordFailure === 'function') {
+              this.breaker.recordFailure();
+            }
+            throw new OpenAiModelHttpError(res.status, errBody);
           }
-          if (typeof this.breaker.recordFailure === 'function') {
-            this.breaker.recordFailure();
+
+          const xRequestId = res.headers?.get?.('x-request-id') || null;
+          const data: any = await res.json();
+          if (typeof this.breaker.recordSuccess === 'function') {
+            this.breaker.recordSuccess();
           }
-          throw new OpenAiModelHttpError(res.status, errBody);
-        }
 
-        const xRequestId = res.headers?.get?.('x-request-id') || null;
-        const data: any = await res.json();
-        if (typeof this.breaker.recordSuccess === 'function') {
-          this.breaker.recordSuccess();
-        }
-
-        const latencyMs = Date.now() - startTime;
+          const latencyMs = Date.now() - startTime;
         const toolUsePart = Array.isArray(data.content)
           ? data.content.find((b: any) => b.type === 'tool_use')?.input
           : null;
@@ -339,8 +338,6 @@ export class OpenAiStudioClient {
             attempts: attempt,
           },
         };
-
-
       } catch (err: any) {
         if (err.name === 'AbortError') {
           this.breaker.recordFailure();
@@ -355,6 +352,8 @@ export class OpenAiStudioClient {
         }
         const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
         await new Promise((r) => setTimeout(r, delay));
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 

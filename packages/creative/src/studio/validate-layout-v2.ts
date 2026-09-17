@@ -254,8 +254,16 @@ export function validateLayoutV2(
     height: layout.height - 2 * layout.grid.margin,
   };
 
+  if (!layout.logo) {
+    return {
+      ok: false,
+      code: 'LOGO',
+      message: 'Layout logo is missing',
+    };
+  }
+
   // Check all shapes are inside canvas
-  for (const s of layout.shapes) {
+  for (const s of (layout.shapes || [])) {
     if (!boxContains(canvasBox, s)) {
       return {
         ok: false,
@@ -266,7 +274,7 @@ export function validateLayoutV2(
   }
 
   // Check all text boxes are inside safe margin
-  for (const t of layout.text) {
+  for (const t of (layout.text || [])) {
     if (!boxContains(safeMarginBox, t)) {
       return {
         ok: false,

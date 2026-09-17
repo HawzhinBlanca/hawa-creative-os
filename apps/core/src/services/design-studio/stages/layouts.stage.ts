@@ -269,7 +269,100 @@ export async function runLayoutsStage(
       schemaName: 'StudioLayoutV2Output',
     });
 
-    let layout = layoutResponse.data.layout;
+    const normalizeCandidateLayout = (lyt: any): StudioLayoutV2 => {
+      if (!lyt) lyt = {};
+      if (!lyt.shapes) lyt.shapes = [];
+      if (!lyt.text) lyt.text = [];
+      if (!lyt.width) lyt.width = ctx.width;
+      if (!lyt.height) lyt.height = ctx.height;
+
+      const shortEdge = Math.min(ctx.width, ctx.height);
+      const minSafeMargin = Math.floor(0.06 * shortEdge);
+      if (!lyt.grid) {
+        lyt.grid = {
+          margin: minSafeMargin,
+          columns: 12,
+          gutter: 16,
+          baseline: 8,
+        };
+      } else {
+        lyt.grid.margin = Math.max(minSafeMargin, lyt.grid.margin || minSafeMargin);
+      }
+
+      if (!lyt.logo) {
+        const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
+        lyt.logo = {
+          x: Math.round(ctx.width / 2 - logoMinPx / 2),
+          y: lyt.grid.margin,
+          width: logoMinPx,
+          height: Math.round(logoMinPx / logoAspect),
+        };
+      } else {
+        lyt.logo.width = Math.max(100, lyt.logo.width || 100);
+        lyt.logo.height = Math.round(lyt.logo.width / logoAspect);
+        const maxLogoX = ctx.width - lyt.grid.margin - lyt.logo.width;
+        const maxLogoY = ctx.height - lyt.grid.margin - lyt.logo.height;
+        lyt.logo.x = Math.max(lyt.grid.margin, Math.min(lyt.logo.x ?? lyt.grid.margin, maxLogoX));
+        lyt.logo.y = Math.max(lyt.grid.margin, Math.min(lyt.logo.y ?? lyt.grid.margin, maxLogoY));
+      }
+
+      if (lyt.art) {
+        if (!lyt.art.box) {
+          lyt.art.box = { x: 0, y: 0, width: lyt.width, height: lyt.height };
+        }
+        if (!lyt.art.calmRegion) {
+          lyt.art.calmRegion = { ...lyt.art.box };
+        }
+      }
+
+      const minBodyPx = Math.ceil(0.016 * ctx.width);
+      for (const t of lyt.text) {
+        if (t.role === 'body') t.fontSize = Math.max(t.fontSize || 0, minBodyPx);
+        else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize || 0, 12);
+        else t.fontSize = Math.max(t.fontSize || 0, 12);
+
+        const maxTextX = ctx.width - lyt.grid.margin - t.width;
+        const maxTextY = ctx.height - lyt.grid.margin - t.height;
+        if (maxTextX >= lyt.grid.margin) {
+          t.x = Math.max(lyt.grid.margin, Math.min(t.x ?? lyt.grid.margin, maxTextX));
+        }
+        if (maxTextY >= lyt.grid.margin) {
+          t.y = Math.max(lyt.grid.margin, Math.min(t.y ?? lyt.grid.margin, maxTextY));
+        }
+      }
+
+      const roleSizes: Record<string, number> = {};
+      for (const t of lyt.text) {
+        roleSizes[t.role] = Math.max(roleSizes[t.role] || 0, t.fontSize);
+      }
+      const titleSize = roleSizes['title'];
+      const subtitleSize = roleSizes['subtitle'];
+      const dateVenueSize = Math.max(roleSizes['date'] || 0, roleSizes['venue'] || 0);
+      if (titleSize && subtitleSize && dateVenueSize && subtitleSize < dateVenueSize && titleSize > dateVenueSize) {
+        for (const t of lyt.text) {
+          if (t.role === 'subtitle') {
+            t.fontSize = dateVenueSize;
+          }
+        }
+      }
+
+      const checkBoxesIntersect = (a: any, b: any) =>
+        !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+
+      lyt.shapes = (lyt.shapes || []).map((s: any) => {
+        if (s.role === 'frame') return { ...s, role: 'panel' };
+        return s;
+      }).filter((s: any) => {
+        if (s.role === 'panel') return true;
+        const hitsText = lyt.text.some((t: any) => checkBoxesIntersect(s, t));
+        const hitsLogo = lyt.logo ? checkBoxesIntersect(s, lyt.logo) : false;
+        return !hitsText && !hitsLogo;
+      });
+
+      return lyt as StudioLayoutV2;
+    };
+
+    let layout = normalizeCandidateLayout(layoutResponse.data.layout);
 
     const validationContext: LayoutValidationContext = {
       expectedWidth: ctx.width,
@@ -304,7 +397,7 @@ export async function runLayoutsStage(
         schemaName: 'StudioLayoutV2Output',
       });
 
-      layout = layoutResponse.data.layout;
+      layout = normalizeCandidateLayout(layoutResponse.data.layout);
       validation = validateLayoutV2(layout, validationContext);
       if (!validation.ok) {
         console.warn(`[LayoutsStage] Candidate ${ordinal} failed repair validation: [${validation.code}] ${validation.message}`);
@@ -312,24 +405,6 @@ export async function runLayoutsStage(
     }
 
     if (validation.ok) {
-      if (layout.art) {
-        if (!layout.art.box) {
-          layout.art.box = { x: 0, y: 0, width: layout.width, height: layout.height };
-        }
-        if (!layout.art.calmRegion) {
-          layout.art.calmRegion = { ...layout.art.box };
-        }
-      }
-      if (!layout.logo) {
-        const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
-        const marginPx = Math.round(Math.min(ctx.width, ctx.height) * 0.06);
-        layout.logo = {
-          x: Math.round(ctx.width / 2 - logoMinPx / 2),
-          y: marginPx,
-          width: logoMinPx,
-          height: logoMinPx,
-        };
-      }
       const existing = existingCandidates?.find((c) => c.ordinal === ordinal);
       candidates.push({
         id: existing?.id || randomUUID(),

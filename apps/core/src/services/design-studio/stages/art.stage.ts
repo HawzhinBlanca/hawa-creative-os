@@ -10,13 +10,25 @@ export async function runArtStage(
     const artConfig = cand.currentLayout.art;
     if (!artConfig) continue;
 
-    const box = artConfig.box || { x: 0, y: 0, width: cand.currentLayout.width, height: cand.currentLayout.height };
+    const rawBox = artConfig.box || { x: 0, y: 0, width: cand.currentLayout.width, height: cand.currentLayout.height };
+    const box = {
+      x: rawBox.x ?? 0,
+      y: rawBox.y ?? 0,
+      width: rawBox.width ?? cand.currentLayout.width,
+      height: rawBox.height ?? cand.currentLayout.height,
+    };
     const width = Math.max(320, Math.round(box.width));
     const height = Math.max(320, Math.round(box.height));
 
     if (artConfig.source === 'generated' && ctx.artProvider) {
       const basePrompt = artConfig.prompt || cand.concept.artPrompt || 'Editorial still life composition';
-      const calmBox = artConfig.calmRegion || { x: box.x, y: box.y, width: box.width, height: box.height };
+      const rawCalm = artConfig.calmRegion || box;
+      const calmBox = {
+        x: rawCalm.x ?? box.x,
+        y: rawCalm.y ?? box.y,
+        width: rawCalm.width ?? box.width,
+        height: rawCalm.height ?? box.height,
+      };
       const calmRegionDesc = `centered around (${Math.round(calmBox.x)}, ${Math.round(calmBox.y)}) measuring ${Math.round(calmBox.width)}x${Math.round(calmBox.height)}`;
 
       try {
