@@ -100,11 +100,18 @@ export async function runReviseStage(
       });
 
       const revisedLayout = response.data.layout;
+      const minBodyPx = Math.ceil(0.016 * ctx.width);
+      for (const t of revisedLayout.text) {
+        if (t.role === 'body') t.fontSize = Math.max(t.fontSize, minBodyPx);
+        else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize, 12);
+        else t.fontSize = Math.max(t.fontSize, 12);
+      }
       const validation = validateLayoutV2(revisedLayout, validationContext);
 
       if (validation.ok) {
-        cand.layouts.push(revisedLayout);
-        cand.currentLayout = revisedLayout;
+        const layoutToUse = validation.layout || revisedLayout;
+        cand.layouts.push(layoutToUse);
+        cand.currentLayout = layoutToUse;
 
         const artDataUri = cand.artPng
           ? `data:image/png;base64,${cand.artPng.toString('base64')}`

@@ -187,6 +187,12 @@ export async function runLayoutsStage(
 
       if (v3Result.layouts.length > 0) {
         return v3Result.layouts.map((layout, i) => {
+          const minBodyPx = Math.ceil(0.016 * ctx.width);
+          for (const t of layout.text) {
+            if (t.role === 'body') t.fontSize = Math.max(t.fontSize, minBodyPx);
+            else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize, 12);
+            else t.fontSize = Math.max(t.fontSize, 12);
+          }
           if (layout.art) {
             if (!layout.art.box) {
               layout.art.box = { x: 0, y: 0, width: layout.width, height: layout.height };

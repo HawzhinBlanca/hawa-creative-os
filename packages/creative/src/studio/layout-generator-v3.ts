@@ -241,13 +241,14 @@ export function scaleNormalizedLayoutToV2(
     strokeColor: s.strokeColor || undefined,
   }));
 
+  const minBodyPx = Math.ceil(0.016 * canvasWidth);
   const text: TextElement[] = norm.text.map((t) => {
     let minSize = 12;
-    if (t.role === 'title') minSize = 24;
-    else if (t.role === 'subtitle') minSize = 16;
-    else if (t.role === 'body') minSize = 14;
+    if (t.role === 'title') minSize = Math.max(32, Math.round(minBodyPx * 2.2));
+    else if (t.role === 'subtitle') minSize = 20;
+    else if (t.role === 'body') minSize = minBodyPx;
     else if (t.role === 'cta') minSize = 14;
-    else if (t.role === 'footer') minSize = 10;
+    else if (t.role === 'footer') minSize = 12;
 
     const rawFontSize =
       t.fontSize <= 1
