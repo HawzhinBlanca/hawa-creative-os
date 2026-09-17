@@ -345,13 +345,56 @@ this way. Full suite after all of it: **1081 passed, 12 skipped, 0 failed** acro
 
 Total re-critique spend across the three passes: $0.518080 + $0.261680 + $0.481230 = **$1.260990**.
 
-## 15. What remains
+## 15. Second re-critique: 13 comments, 10 of 18 designs clean
+
+18 of 18, $0.451130, every cost recomputed and all 18 provider ids distinct. Run against layouts
+carrying both normalisations in the order the generator applies them — text blocks centred in their
+panels first, since moving a block changes the gaps a separator sits in, then separators centred.
+
+| State | Comments | Designs with none |
+|---|---|---|
+| Original T5 run, substituted typefaces | 29 | 1 |
+| + correct fonts and faces | 21 | 3 |
+| + ink centring, first separator fix | 23 | 4 |
+| **+ panel boundaries, panel rules exempt, panel text centred** | **13** | **10** |
+
+Every one of the 13 is low severity. Comments naming a rule, divider or accent fell from 8 to 2 —
+and one of those two reads *"B7 is nearly equidistant between B3 and B4, with 59px above and 58px
+below"*, which is the model remarking on a 1px difference in a separator the fix had just centred.
+
+**The run found one more hole, now closed.** `brief_08`'s divider is a 22x22 **ellipse** accent, and
+the separator test required thinness, so it was skipped: 34px above, 59px below. Size is no longer
+part of the test — a shape tagged `rule` or `accent`, or drawn as a line, is a divider mark whatever
+its outline — and whether it is a mark rather than a block is decided against the gap it sits in
+(at most a third of it). The ellipse now lands at 756, the exact centre of its 709-824 gap. 24
+separators are repositioned across the eighteen layouts, the 7 panel top rules still untouched, and
+the pass still converges to zero residual.
+
+### What is left, and it is no longer clustered
+
+The 13 are individually distinct rather than one repeated fault, which is the real change:
+
+- **Canvas margin balance (3).** 157px below the footer against 76px above the eyebrow; a footer panel 128px off the canvas bottom against a 95px top margin. Top and bottom margins are not reconciled.
+- **Boxes far larger than their content (3).** A single rendered line inside a 130px-high allocation. The generator sizes a box for the worst case and does not shrink it once the copy fits in one line.
+- **A block or logo off the shared alignment edge (4).** A footer inset 38px from the x=951 edge its four neighbours share; a logo overhanging that edge by 38px.
+- **Residual uneven intervals (2)** and one top-of-frame gap.
+
+Groups one and three are each a plausible next normalisation of the same deterministic kind as the
+three already landed. Group two is different: it needs the generator to size a box to its copy,
+which is a generation change rather than a post-pass.
+
+Spend across all four critique passes: $0.518080 + $0.261680 + $0.481230 + $0.451130 = **$1.712120**.
+Artifacts: `P05_RECRITIQUE_FINAL/`, and `SPACING_FIX_LAYOUTS/` with `renders/`, kept out of the
+qualification proof set because these layouts were adjusted after generation rather than produced
+that way. Full suite: **1083 passed, 12 skipped, 0 failed** across 147 files.
+
+## 16. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
 3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
 4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
-5. **The critique has not been re-run since the last three fixes.** The $0.48 pass measured the state before panels became separator boundaries, before panel-attached rules were exempted, and before lone text blocks were centred in their panels. The free detector converges to zero on all three, but the surviving comment set will have changed.
+5. **The critique has not been re-run since the ellipse-accent fix.** It closed one of the 13, so the current figure should be 12; everything else in that pass still stands.
 5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
 6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
 7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.

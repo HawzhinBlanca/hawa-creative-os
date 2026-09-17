@@ -487,3 +487,34 @@ describe('lone text block centring inside a panel', () => {
     expect(centerLoneTextInPanels(shapes, text)).toBe(0);
   });
 });
+
+describe('separator marks that are not thin lines', () => {
+  it('centres a circular accent dividing two blocks', async () => {
+    const { centerSeparatorsInGaps } = await import('../src/studio/layout-generator-v3.js');
+    // brief_08 in the T5 set: a 22x22 ellipse accent sitting 34px below the subtitle and 59px
+    // above the body. A thinness test skipped it, so the critique kept raising it.
+    const shapes: any[] = [
+      { x: 529, y: 743, width: 22, height: 22, kind: 'ellipse', color: '#C5A059', role: 'accent' },
+    ];
+    const text: any[] = [
+      { copyIndex: 0, x: 97, y: 608, width: 886, height: 101, role: 'subtitle' },
+      { copyIndex: 1, x: 130, y: 824, width: 821, height: 176, role: 'body' },
+    ];
+    centerSeparatorsInGaps(shapes, text);
+    expect(shapes[0].y).toBe(756); // 709 + (115 - 22) / 2
+  });
+
+  it('leaves an accent that fills most of the gap, since it is a block not a mark', async () => {
+    const { centerSeparatorsInGaps } = await import('../src/studio/layout-generator-v3.js');
+    const shapes: any[] = [
+      { x: 100, y: 215, width: 800, height: 60, kind: 'rect', color: '#162B48', role: 'accent' },
+    ];
+    const text: any[] = [
+      { copyIndex: 0, x: 100, y: 100, width: 800, height: 100, role: 'title' },
+      { copyIndex: 1, x: 100, y: 300, width: 800, height: 100, role: 'body' },
+    ];
+    // 60px tall in a 100px gap is more than a third of it: a band, not a divider.
+    expect(centerSeparatorsInGaps(shapes, text)).toBe(0);
+    expect(shapes[0].y).toBe(215);
+  });
+});

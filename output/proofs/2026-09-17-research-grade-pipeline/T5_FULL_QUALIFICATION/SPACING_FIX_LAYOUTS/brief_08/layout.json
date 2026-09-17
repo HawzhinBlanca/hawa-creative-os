@@ -27,7 +27,7 @@
     },
     {
       "x": 529,
-      "y": 743,
+      "y": 756,
       "width": 22,
       "height": 22,
       "kind": "ellipse",
@@ -131,7 +131,7 @@
       "copyIndex": 4,
       "role": "footer",
       "x": 97,
-      "y": 1148,
+      "y": 1144,
       "width": 886,
       "height": 54,
       "fontSize": 18,

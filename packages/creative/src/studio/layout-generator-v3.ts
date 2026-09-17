@@ -454,10 +454,19 @@ export interface SeparatorGap {
 /** A separator within this distance of a solid shape's edge is treated as attached to it. */
 const EDGE_ATTACH_TOLERANCE_PX = 2;
 
-const isThinSeparator = (s: ShapeElement): boolean =>
+/**
+ * A shape acting as a divider mark between blocks. Size is not part of the test: a 22x22 ellipse
+ * accent divides a subtitle from a body exactly as a hairline rule does, and requiring thinness
+ * skipped it. Whether it is small enough to be a mark rather than a block is decided against the
+ * gap it sits in, in findSeparatorGaps.
+ */
+const isSeparatorCandidate = (s: ShapeElement): boolean =>
   s.width > 0 &&
-  s.height <= Math.max(6, s.width * 0.1) &&
+  s.height > 0 &&
   (s.kind === 'line' || s.role === 'rule' || s.role === 'accent');
+
+/** A divider mark should be a small fraction of the gap it divides, not a block filling it. */
+const MAX_SEPARATOR_SHARE_OF_GAP = 1 / 3;
 
 /**
  * Finds every thin horizontal separator that sits clear inside a vertical gap, and reports how
@@ -476,7 +485,7 @@ export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): 
 
   for (let i = 0; i < shapes.length; i++) {
     const s = shapes[i];
-    if (!isThinSeparator(s)) continue;
+    if (!isSeparatorCandidate(s)) continue;
 
     const sTop = s.y;
     const sBottom = s.y + s.height;
@@ -484,7 +493,7 @@ export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): 
       s.x < b.right && s.x + s.width > b.left;
 
     const solids = shapes
-      .filter((o, j) => j !== i && !isThinSeparator(o))
+      .filter((o, j) => j !== i && !isSeparatorCandidate(o))
       .map((o) => ({ top: o.y, bottom: o.y + o.height, left: o.x, right: o.x + o.width }));
 
     // A separator flush with a panel's edge is that panel's own rule, placed there on purpose.
@@ -522,7 +531,7 @@ export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): 
     if (straddled || above === -Infinity || below === Infinity) continue;
 
     const gap = below - above;
-    if (gap <= s.height) continue;
+    if (gap <= s.height || s.height > gap * MAX_SEPARATOR_SHARE_OF_GAP) continue;
 
     const padTop = sTop - above;
     const padBottom = below - sBottom;
@@ -563,7 +572,7 @@ export function centerSeparatorsInGaps(shapes: ShapeElement[], text: TextElement
 export function centerLoneTextInPanels(shapes: ShapeElement[], text: TextElement[]): number {
   let moved = 0;
   for (const panel of shapes) {
-    if (isThinSeparator(panel) || panel.width <= 0 || panel.height <= 0) continue;
+    if (isSeparatorCandidate(panel) || panel.width <= 0 || panel.height <= 0) continue;
 
     const panelTop = panel.y;
     const panelBottom = panel.y + panel.height;

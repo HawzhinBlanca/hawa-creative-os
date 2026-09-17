@@ -21,8 +21,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "199926f95eb03501bcf64b46e29519e6a7359810bbc3af22ea931a508fb32fd3",
-      "bytes": 83549
+      "sha256": "5ed0b7e05bc0bd717d746ea8f024e4b6611ccb07c20b4de2e4ee76109fdf5dd8",
+      "bytes": 83554
     },
     {
       "brief": "brief_02_en_square",
@@ -34,7 +34,7 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "037d9a956a1cb15759c014818d0f2bc444abbf3ba2aaa2a4289633cbed68cebe",
+      "sha256": "140a5d216c0b1dc305ffc1271f412a5a8fe6c0dc513f4eb7a59b732a6c136eaf",
       "bytes": 83454
     },
     {
@@ -60,8 +60,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "9d7d1a8a6fba20221fe532408e3c8a58d84734ca00519b93b7b62098880b8d9b",
-      "bytes": 66621
+      "sha256": "1acf7f2d8c23998b4ea4513764ce5dd9b8ff06a18c16e498fff38b0ca039ddda",
+      "bytes": 66609
     },
     {
       "brief": "brief_05_en_portrait45",
@@ -73,8 +73,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "c030933e02fbfd9878a59a76193e2021c47eda22510991e2ed97f6a69881da2e",
-      "bytes": 97456
+      "sha256": "699951899d2a657749b4f8fffb533fc029dc0db9b97451b49ae4745cc003014d",
+      "bytes": 97450
     },
     {
       "brief": "brief_06_en_portrait45",
@@ -86,8 +86,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "9c43e1545885bf0269ffdce65a38c835d66a685306f0092c6bef5d32095930fc",
-      "bytes": 97135
+      "sha256": "63bfc4e4fcd401196b18c244652719db0513cab15ca8f6c2291031bee47dc72e",
+      "bytes": 97133
     },
     {
       "brief": "brief_07_ckb_portrait45",
@@ -99,7 +99,7 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "f0f11f1fb5fac2a0fe81a513001a71bb3275add00bdc1c9d5140f77748a4d266",
+      "sha256": "638d5c477bd026479e4a528a3727571f7ef5cd48e98c6902c816ca89b692695d",
       "bytes": 82391
     },
     {
@@ -112,8 +112,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "be70d6eb997e15342f115a5edd7be2ba79da9ed0762bd341c5f1a19ef9455501",
-      "bytes": 79501
+      "sha256": "35cbf0f7b2e17c4b5e6fa9686290269d05c2cf0c45b5dc7b2ca1db3a78a22dab",
+      "bytes": 79500
     },
     {
       "brief": "brief_09_en_story916",
@@ -125,8 +125,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "74529a5a459e718b37365e38afab9495fa265b89a89db36731cee7448814722f",
-      "bytes": 115999
+      "sha256": "3925a6191570d72200a63861a4fe592f47041f72a472d156da3f6a28417143bc",
+      "bytes": 115976
     },
     {
       "brief": "brief_10_en_story916",
@@ -151,8 +151,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "c7dd7ca6ba5885f98b940e69898bb18cb83a8f3872613ec77e2ce613409b3f45",
-      "bytes": 95831
+      "sha256": "6c989650d4a206af22a2954c25cf76cf4e9e5c12ef330b9abbc1765ce805de92",
+      "bytes": 95821
     },
     {
       "brief": "brief_12_ckb_story916",
@@ -203,8 +203,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "b752952bf256fe7a9dbc1d764ff55f8d4b34194661a1d1334a48fdc00b3c4ce2",
-      "bytes": 135674
+      "sha256": "bb708b81acba66cd0ccc38bec3e19bfe16530d1a5691b72250b315eff3f63435",
+      "bytes": 135657
     },
     {
       "brief": "brief_18_en_landscape169",
