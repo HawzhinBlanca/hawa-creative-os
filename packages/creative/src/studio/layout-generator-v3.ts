@@ -793,7 +793,7 @@ export async function generateLayoutCandidatesV3(
         schema: LAYOUT_V3_JSON_SCHEMA,
         strict: true,
       },
-      maxTokens: 4000,
+      maxTokens: 16000,
       reasoningEffort: 'low',
     });
 

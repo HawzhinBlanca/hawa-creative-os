@@ -30,3 +30,4 @@ R2_F04_F12,ACCEPTED,2026-09-16-r3,server-side role enforcement (Verdana/Noto San
 R3_F08,ACCEPTED,2026-09-16-r3,sweep candidate filter regex restricts to ^[0-9]+$ (Telegram only); 4 fixture tasks abandoned in db; F08_SWEEP_FILTER.json verified
 R4_F09,ACCEPTED,2026-09-16-r3,live Telegram journal proofs for 3 terminal notification branches (messages 189, 192, 200) in F09_LIVE.md replacing synthetic sample
 P10_QUALIFICATION,ACCEPTED,2026-09-17,20/20 briefs passed (100% PRR vs 81.3% target); authentic chatcmpl receipts in LEDGER.csv; median cost $0.171666; median latency 51791ms; 0 hard-QA escapes
+STUDIO_V3_LIVE_DEPLOY,ACCEPTED,2026-09-17,health all green (modelProvider connected via gpt-6-astra); all 6 containers healthy; Studio v3 wired with 3 archetypes + gpt-6-astra live generation; coordinate null-checks hardened

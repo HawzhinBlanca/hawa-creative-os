@@ -174,7 +174,13 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
     fontPath = path.join(dir, 'Inter-Regular.ttf');
   } else {
     // Default or Verdana resolution
-    const localVerdana = path.join(dir, 'Verdana.ttf');
+    const localVerdana = bold && italic
+      ? path.join(dir, 'Verdana Bold Italic.ttf')
+      : bold
+      ? path.join(dir, 'Verdana Bold.ttf')
+      : italic
+      ? path.join(dir, 'Verdana Italic.ttf')
+      : path.join(dir, 'Verdana.ttf');
     const systemVerdana = bold && italic
       ? '/System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf'
       : bold
@@ -183,7 +189,13 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
       ? '/System/Library/Fonts/Supplemental/Verdana Italic.ttf'
       : '/System/Library/Fonts/Supplemental/Verdana.ttf';
 
-    const linuxVerdana = '/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf';
+    const linuxVerdana = bold && italic
+      ? '/usr/share/fonts/truetype/msttcorefonts/Verdana_Bold_Italic.ttf'
+      : bold
+      ? '/usr/share/fonts/truetype/msttcorefonts/Verdana_Bold.ttf'
+      : italic
+      ? '/usr/share/fonts/truetype/msttcorefonts/Verdana_Italic.ttf'
+      : '/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf';
 
     if (fs.existsSync(localVerdana)) {
       fontPath = localVerdana;

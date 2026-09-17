@@ -44,7 +44,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       method: body === undefined ? 'GET' : 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(140000),
+      signal: AbortSignal.timeout(300000),
     });
     if (!res.ok) {
       let code: string | undefined;
