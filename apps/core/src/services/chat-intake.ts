@@ -81,7 +81,7 @@ export async function persistChatIntake(db: Kysely<Database>, input: ChatIntake)
     }
     const designStudio = typeof input.designStudio === 'boolean'
       ? input.designStudio
-      : process.env.DESIGN_STUDIO_V2 === 'on';
+      : (process.env.DESIGN_PIPELINE_V3 === 'on' || process.env.DESIGN_STUDIO_V2 === 'on');
     const payload = {
       sourcePlatform: input.platform, sourceEventId: input.sourceEventId, sourceChannelId: input.sourceChannelId,
       rawRequestText: input.rawText, headlineEn: input.headlineEn || null, headlineCkb: input.headlineCkb || null,
