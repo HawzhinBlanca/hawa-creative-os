@@ -1,4 +1,4 @@
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import {
   evaluateDesignMetrics,
@@ -216,7 +216,7 @@ export async function evaluatePairOrder(
   order: 'AB' | 'BA',
   options: JudgeOptions = {}
 ): Promise<OrderComparisonResult> {
-  const model = options.model || 'gpt-6-astra';
+  const model = options.model || resolveModel('judge');
   assertModelAllowed(model);
 
   const client =

@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('node:fs').copyFileSync('src/studio/pricing.json','dist/studio/pricing.json')\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

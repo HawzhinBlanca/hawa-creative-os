@@ -1,4 +1,4 @@
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import {
   evaluateDesignMetrics,
@@ -322,7 +322,7 @@ export async function refineCandidate(
   layout: StudioLayoutV2,
   options: RefineOptions = {}
 ): Promise<RefinementCandidateResult> {
-  const model = options.model || 'gpt-6-astra';
+  const model = options.model || resolveModel('layout');
   assertModelAllowed(model);
 
   const maxRounds = options.maxRounds || 2;

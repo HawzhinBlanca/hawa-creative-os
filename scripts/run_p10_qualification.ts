@@ -1,6 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { resolveModel, isDevModelTier, activeModelTier } from '../packages/domain/dist/provider-policy.js';
+
+const PRICING = createRequire(import.meta.url)('../packages/creative/src/studio/pricing.json') as {
+  models: Record<string, { inputPerMillion?: number; outputPerMillion?: number; cacheReadPerMillion?: number }>;
+};
 import {
   OpenAiStudioClient,
   ExemplarRetrievalIndex,
@@ -392,12 +399,29 @@ export interface BriefResult {
   distinctSkeleton: boolean;
 }
 
-function computeTokenCosts(inputTokens: number, cachedTokens: number, outputTokens: number) {
+function computeTokenCosts(
+  inputTokens: number,
+  cachedTokens: number,
+  outputTokens: number,
+  model: string = resolveModel('text')
+) {
+  // Rates come from the priced model, not from constants: with a cheaper dev tier active, fixed
+  // production rates would overstate every row in the ledger by up to eighty times.
+  const rates = (PRICING.models as Record<string, any>)[model];
+  if (!rates?.inputPerMillion) {
+    throw new Error(
+      `No price for model '${model}' in pricing.json — refusing to write a ledger with invented rates.`
+    );
+  }
+  const inRate = rates.inputPerMillion;
+  const outRate = rates.outputPerMillion;
+  const cacheRate = rates.cacheReadPerMillion ?? inRate;
+
   const uncachedInput = Math.max(0, inputTokens - cachedTokens);
-  const grossCostUsd = Number(((inputTokens * 10.0 + outputTokens * 50.0) / 1_000_000).toFixed(6));
-  const cacheDiscountUsd = Number(((cachedTokens * 9.0) / 1_000_000).toFixed(6));
+  const grossCostUsd = Number(((inputTokens * inRate + outputTokens * outRate) / 1_000_000).toFixed(6));
+  const cacheDiscountUsd = Number(((cachedTokens * (inRate - cacheRate)) / 1_000_000).toFixed(6));
   const netCostUsd = Number(
-    ((uncachedInput * 10.0 + cachedTokens * 1.0 + outputTokens * 50.0) / 1_000_000).toFixed(6)
+    ((uncachedInput * inRate + cachedTokens * cacheRate + outputTokens * outRate) / 1_000_000).toFixed(6)
   );
   return { grossCostUsd, cacheDiscountUsd, netCostUsd };
 }
@@ -447,6 +471,8 @@ async function executeBriefLive(
   }));
 
   const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
+  // One model name for the whole brief, recorded on every row so the ledger says what actually ran.
+  const layoutModel = resolveModel('layout');
   const isRtl = brief.language === 'ckb';
 
   console.log(`[P10 LIVE] Starting Brief ${briefIndex + 1}/20: ${brief.id} (${brief.sizeName})...`);
@@ -463,13 +489,13 @@ async function executeBriefLive(
     isRtl,
   });
 
-  const layoutCosts = computeTokenCosts(genResult.inputTokens, genResult.cachedTokens, genResult.outputTokens);
+  const layoutCosts = computeTokenCosts(genResult.inputTokens, genResult.cachedTokens, genResult.outputTokens, layoutModel);
   briefLedgerRows.push({
     call_id: genResult.responseId,
     x_request_id: genResult.xRequestId || '',
     stage: 'P03_LAYOUT',
     brief_id: brief.id,
-    model: 'gpt-6-astra',
+    model: layoutModel,
     input_tokens: genResult.inputTokens,
     cached_tokens: genResult.cachedTokens,
     output_tokens: genResult.outputTokens,
@@ -508,7 +534,7 @@ async function executeBriefLive(
   console.log(`[P10 LIVE] Brief ${brief.id}: Invoking P05 vision critique on top candidate...`);
   const critiqueResult = await generateBoxGroundedCritique(best.cand, {
     client,
-    model: 'gpt-6-astra',
+    model: layoutModel,
     deterministicMetrics: best.metrics,
   });
 
@@ -516,7 +542,8 @@ async function executeBriefLive(
   const critiqueCosts = computeTokenCosts(
     critiqueReceipt.inputTokens,
     critiqueReceipt.cachedTokens ?? 0,
-    critiqueReceipt.outputTokens
+    critiqueReceipt.outputTokens,
+    critiqueReceipt.model || layoutModel
   );
   briefLedgerRows.push({
     call_id: critiqueReceipt.responseId,
@@ -546,11 +573,11 @@ async function executeBriefLive(
         client,
         maxRounds: 2,
         minDelta: 0.01,
-        model: 'gpt-6-astra',
+        model: layoutModel,
       });
       for (const r of refineResult.rounds) {
         if (r.receipt) {
-          const rCosts = computeTokenCosts(r.receipt.inputTokens, r.receipt.cachedTokens ?? 0, r.receipt.outputTokens);
+          const rCosts = computeTokenCosts(r.receipt.inputTokens, r.receipt.cachedTokens ?? 0, r.receipt.outputTokens, r.receipt.model || layoutModel);
           briefLedgerRows.push({
             call_id: r.receipt.responseId,
             x_request_id: r.receipt.xRequestId || '',
@@ -588,13 +615,14 @@ async function executeBriefLive(
 
   const matchResult = await comparePairWithOrderSwap(cand1Input, cand2Input, {
     client,
-    model: 'gpt-6-astra',
+    model: layoutModel,
   });
 
   const abCosts = computeTokenCosts(
     matchResult.orderAB.receipt.inputTokens,
     matchResult.orderAB.receipt.cachedTokens ?? 0,
-    matchResult.orderAB.receipt.outputTokens
+    matchResult.orderAB.receipt.outputTokens,
+    matchResult.orderAB.receipt.model || layoutModel
   );
   briefLedgerRows.push({
     call_id: matchResult.orderAB.receipt.responseId,
@@ -615,7 +643,8 @@ async function executeBriefLive(
   const baCosts = computeTokenCosts(
     matchResult.orderBA.receipt.inputTokens,
     matchResult.orderBA.receipt.cachedTokens ?? 0,
-    matchResult.orderBA.receipt.outputTokens
+    matchResult.orderBA.receipt.outputTokens,
+    matchResult.orderBA.receipt.model || layoutModel
   );
   briefLedgerRows.push({
     call_id: matchResult.orderBA.receipt.responseId,
@@ -645,13 +674,14 @@ async function executeBriefLive(
 
   const canaryMatch = await evaluatePairOrder(cand1Input, canaryCandidate, 'AB', {
     client,
-    model: 'gpt-6-astra',
+    model: layoutModel,
   });
 
   const canaryCosts = computeTokenCosts(
     canaryMatch.receipt.inputTokens,
     canaryMatch.receipt.cachedTokens ?? 0,
-    canaryMatch.receipt.outputTokens
+    canaryMatch.receipt.outputTokens,
+    canaryMatch.receipt.model || layoutModel
   );
   briefLedgerRows.push({
     call_id: canaryMatch.receipt.responseId,
@@ -1090,8 +1120,10 @@ async function main() {
     editabilityRate === 100.0 &&
     briefsWithStandIns.length === 0 &&
     allLedgerRows.length >= expectedCalls;
-  const qualificationVerdict =
-    failures.length > 0
+  const devTier = isDevModelTier();
+  const qualificationVerdict = devTier
+    ? `**NOT A QUALIFICATION RUN.** This ran on the ${activeModelTier()} model tier (${resolveModel('layout')}), not the production model. Its scores describe the cheap tier and cannot be read as production evidence.`
+    : failures.length > 0
       ? `**PARTIAL — NOT A QUALIFICATION PASS.** ${failures.length} of ${QUALIFICATION_BRIEFS.length} briefs never ran.`
       : allGatesPass
         ? `**PASS** — all ${QUALIFICATION_BRIEFS.length} briefs completed and every gate met.`
@@ -1188,7 +1220,22 @@ Artifacts:
   console.log(`- Total Calls Recorded: ${allLedgerRows.length}`);
 }
 
-main().catch((err) => {
-  console.error('P10 Qualification Runner Failed:', err);
-  process.exit(1);
-});
+// Only run when this file is the entry point. It exports QUALIFICATION_BRIEFS and LedgerRow, so
+// importing it for those must not launch a paid twenty-brief run — which is exactly what happened
+// on 2026-09-18 when a comparison script imported the brief list and spent USD 5.46 unattended.
+const isEntryPoint = (() => {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return path.resolve(invoked) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+})();
+
+if (isEntryPoint) {
+  main().catch((err) => {
+    console.error('P10 Qualification Runner Failed:', err);
+    process.exit(1);
+  });
+}

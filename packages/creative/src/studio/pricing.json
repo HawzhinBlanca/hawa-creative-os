@@ -5,16 +5,35 @@
   "source": "https://openai.com/api/pricing",
   "models": {
     "gpt-6-astra": {
-      "inputPerMillion": 10.00,
-      "outputPerMillion": 50.00,
-      "cacheReadPerMillion": 1.00,
-      "cacheWritePerMillion": 12.50
+      "inputPerMillion": 10.0,
+      "outputPerMillion": 50.0,
+      "cacheReadPerMillion": 1.0,
+      "cacheWritePerMillion": 12.5
     },
     "gpt-image-2.5-sunburst": {
-      "outputPerMillionImageTokens": 30.00,
+      "outputPerMillionImageTokens": 30.0,
       "image1k": 0.04,
       "image2k": 0.08,
       "image4k": 0.16
+    },
+    "gpt-4.1-mini": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6,
+      "cacheReadPerMillion": 0.1,
+      "note": "dev tier only; list price entered by operator, not verified against an invoice"
+    },
+    "gpt-4o-mini": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6,
+      "cacheReadPerMillion": 0.075,
+      "note": "dev tier only; list price entered by operator, not verified against an invoice"
+    },
+    "o4-mini": {
+      "inputPerMillion": 1.1,
+      "outputPerMillion": 4.4,
+      "cacheReadPerMillion": 0.275,
+      "note": "dev tier only; list price entered by operator, not verified against an invoice"
     }
-  }
+  },
+  "devTierPricesUnverified": true
 }

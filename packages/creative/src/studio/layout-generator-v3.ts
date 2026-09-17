@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
+import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import { evaluateDesignMetrics, checkCandidateSetDegeneracy } from './design-metrics.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
@@ -976,6 +977,8 @@ export interface GenerateLayoutCandidatesOptions {
   canvasHeight?: number;
   exemplars?: ExemplarRetrievalMatch[];
   isRtl?: boolean;
+  /** Override the model for this call. Defaults to the active tier's layout model. */
+  model?: string;
 }
 
 export interface GenerateLayoutCandidatesResult {
@@ -1180,7 +1183,7 @@ export async function generateLayoutCandidatesV3(
 
   const response: OpenAiStructuredResponse<{ layouts: NormalizedLayoutCandidate[] }> =
     await options.client.createStructuredCompletion({
-      model: 'gpt-6-astra',
+      model: options.model || resolveModel('layout'),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -1191,7 +1194,11 @@ export async function generateLayoutCandidatesV3(
         strict: true,
       },
       maxTokens: 16000,
-      reasoningEffort: 'low',
+      // gpt-4.1-mini and gpt-4o-mini reject reasoning_effort with a 400, so it is sent only to a
+      // model that accepts it rather than assumed.
+      ...(modelSupportsReasoningEffort(options.model || resolveModel('layout'))
+        ? { reasoningEffort: 'low' as const }
+        : {}),
       timeoutMs: 240000,
     });
 

@@ -1,4 +1,4 @@
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import {
   renderAnnotatedLayoutV2,
   type ElementBoxAnnotation,
@@ -171,7 +171,7 @@ export async function generateBoxGroundedCritique(
   layout: StudioLayoutV2,
   options: GenerateBoxCritiqueOptions = {}
 ): Promise<BoxCritiqueResult> {
-  const model = options.model || 'gpt-6-astra';
+  const model = options.model || resolveModel('critique');
   assertModelAllowed(model);
 
   // 1. Evaluate deterministic design metrics (Facts First)

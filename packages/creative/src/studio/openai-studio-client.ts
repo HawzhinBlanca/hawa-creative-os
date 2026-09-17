@@ -141,6 +141,7 @@ export class OpenAiStudioClient {
   private readonly timeoutMs: number;
   private readonly breaker: any;
   private readonly pricing: any;
+  private static readonly unpricedWarned = new Set<string>();
 
   constructor(options: OpenAiStudioClientOptions = {}) {
     this.apiKey = options.apiKey || process.env.OPENAI_API_KEY || '';
@@ -156,11 +157,19 @@ export class OpenAiStudioClient {
   get circuitBreaker() { return this.breaker; }
 
   private loadPricing(): any {
+    // Looks beside the compiled module and beside the source. tsc does not copy JSON, so for a
+    // long time only the built path was checked, it never existed, and every price silently came
+    // from the fallback table below — which made the table-driven pricing an illusion.
     try {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const pricingPath = path.join(currentDir, 'pricing.json');
-      if (fs.existsSync(pricingPath)) {
-        return JSON.parse(fs.readFileSync(pricingPath, 'utf8'));
+      for (const candidate of [
+        path.join(currentDir, 'pricing.json'),
+        path.resolve(currentDir, '../../src/studio/pricing.json'),
+        path.resolve(process.cwd(), 'packages/creative/src/studio/pricing.json'),
+      ]) {
+        if (fs.existsSync(candidate)) {
+          return JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        }
       }
     } catch {
       // Fallback defaults
@@ -183,7 +192,20 @@ export class OpenAiStudioClient {
     cache_creation_input_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number };
   }): number {
-    const rates = this.pricing.models?.[model] || this.pricing.models?.['gpt-6-astra'];
+    let rates = this.pricing.models?.[model];
+    if (!rates?.inputPerMillion) {
+      // Never price an unknown model at another model's rates in silence: the production rates are
+      // up to eighty times the cheap tier's, so a quiet fallback overstates a whole ledger.
+      if (!OpenAiStudioClient.unpricedWarned.has(model)) {
+        OpenAiStudioClient.unpricedWarned.add(model);
+        console.warn(
+          `[openai-studio-client] No price for model '${model}' in pricing.json. Falling back to ` +
+            `gpt-6-astra rates, which will overstate the cost of any cheaper model. Add it to ` +
+            `packages/creative/src/studio/pricing.json.`
+        );
+      }
+      rates = this.pricing.models?.['gpt-6-astra'];
+    }
     if (!rates || !rates.inputPerMillion) return 0.01;
 
     const inTok = usage.prompt_tokens ?? usage.input_tokens ?? 0;
