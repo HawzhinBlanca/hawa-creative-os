@@ -116,7 +116,9 @@ is precisely why the defect survived a guard written to catch it.
 critique, the pair images fed to the P07 pairwise judge and to the canary, and the T8 blind test set
 were drawn with a grotesque substituted for both display faces. **The 0.953 mean composite score and
 every critique and judge verdict in this run were formed on typography production does not produce.**
-The layout geometry, the copy fidelity, the editability test and the cost ledger are unaffected.
+The layout geometry, the copy fidelity, the editability test and the cost ledger are unaffected. The
+P05 critique has since been re-run on correct typography — see section 11; the judge and canary have
+not.
 
 **Fixed and re-proved.** `probeFontFidelity` measures per host, caches per process, and now covers
 Amiri as well. The manifest is measured. The qualification report carries a Font Fidelity row that
@@ -197,12 +199,51 @@ qualification costs about $6.30 there. There is no cheaper route to valid aesthe
 pairwise judge needs both candidates of each pair, and only the winning layout was persisted, so the
 judge and canary verdicts cannot be recomputed from the artifacts on disk.
 
-## 11. What remains
+## 11. Re-critique on correct typography — what the designs are actually like
 
-1. **Re-run the qualification inside the production image.** ~$6.30. Until then the aesthetic scores in this proof stand on substituted typography and do not count.
+Owner's decision: re-render and re-critique rather than re-run the whole qualification. The layouts
+were reused untouched, so this paid for one vision call per brief instead of regenerating anything.
+Run inside the production image, which refuses to spend if any layout uses a substituted face.
+
+While reading the first results, one HIGH severity finding turned out to be a real renderer bug and
+led to a fourth fix, so the nine Kurdish designs were re-critiqued again after it:
+
+**The renderer measured text with a different font file than it asked the rasteriser to draw.**
+`loadFont` had no Amiri branch at all, so Amiri text was measured with the Verdana fallback — a face
+with no Arabic glyphs. And Cairo has only a regular file, yet the SVG still carried
+`font-weight="bold"`, so pango synthesised a wider face than fontkit had measured. 16 of 45 RTL
+blocks are bold and 10 use Amiri. The visible consequence: `brief_11`'s Kurdish title rendered about
+950px wide inside an 821px box and was **clipped by the canvas edge**, while the wrapper recorded it
+as fitting on one line. Fixed by adding the Amiri branch and by emitting only the weight and style
+the measured file actually provides. The title now sits inside its box. Nine of eighteen renders
+changed, all of them Kurdish, and only those nine were re-critiqued.
+
+| | Original run (substituted type) | Now (correct type and faces) |
+|---|---|---|
+| Critique comments across 18 designs | 29 | **21** |
+| Designs with no comments at all | 1 | **3** |
+| **High-severity findings** | 1 | **0** |
+
+Every remaining comment is low severity, and they cluster on two root causes rather than eighteen
+separate problems:
+
+- **Visible ink sits high inside its box (7 comments).** Text is positioned from the line box, whose height includes ascender and descender space, so glyphs sit above the box's optical centre. One renderer change addresses all seven — but `t.y` currently means "top of the first line box", and the Canva/pptx transfer maps text frames by those coordinates, so this has to be done together with the raster/Canva parity check rather than in isolation.
+- **Dividers and accents are not centred between the blocks they separate (9 comments).** Gaps like "38px above, 84px below" — a generator spacing issue, not a rendering one.
+
+Cost: $0.518080 for the first 18 plus $0.261680 for the nine corrected Kurdish designs = **$0.779760**.
+All 27 calls have distinct 38-character provider ids and every cost recomputes exactly.
+Artifacts: `P05_RECRITIQUE/` and `P05_RECRITIQUE_KURDISH_FIXED/`, each with its own ledger, the
+annotated Set-of-Mark image the model was shown, and the before/after verdict for every brief.
+
+Total spend for this session: $5.655748 qualification + $0.779760 re-critique = **$6.435508**.
+
+## 12. What remains
+
+1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
 3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
 4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
+5. **The two clustered defects above** — ink centring in the renderer (with the parity check) and divider centring in the generator — are the highest-value remaining design fixes, since between them they account for 16 of the 21 surviving critique comments.
 5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
 6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
 7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.

@@ -232,6 +232,38 @@ export function getFontFidelityManifest(
 }
 
 /**
+ * Which style axes the file `loadFont` would pick actually provides. The measured face and the
+ * drawn face have to be the same one: asking the rasteriser for bold when only a regular file
+ * exists makes it synthesise a wider face than fontkit measured, and the text overflows its box.
+ * A Kurdish bold Cairo title in the T5 run rendered ~950px wide inside an 821px box and was
+ * clipped by the canvas edge, while the wrapper believed it fitted on one line.
+ */
+export function fontFaceSupports(
+  fontFamily: string,
+  bold?: boolean,
+  italic?: boolean,
+  fontsDir?: string
+): { bold: boolean; italic: boolean } {
+  const dir = fontsDir || resolveFontsDir();
+  const familyLower = (fontFamily || '').toLowerCase();
+  const has = (file: string) => fs.existsSync(path.join(dir, file));
+
+  if (familyLower.includes('arabic')) return { bold: !!bold && has('NotoSansArabic-Bold.ttf'), italic: false };
+  if (familyLower.includes('cinzel')) return { bold: !!bold && has('Cinzel-Bold.ttf'), italic: false };
+  if (familyLower.includes('playfair')) {
+    // Non-italic Playfair always resolves to the Bold file, so the drawn weight is bold either way.
+    return { bold: !italic, italic: !!italic && has('PlayfairDisplay-Italic.ttf') };
+  }
+  if (familyLower.includes('amiri')) return { bold: !!bold && has('Amiri-Bold.ttf'), italic: false };
+  if (familyLower.includes('cairo')) return { bold: false, italic: false };
+  if (familyLower.includes('plus jakarta')) return { bold: !!bold && has('PlusJakartaSans-Bold.ttf'), italic: false };
+  if (familyLower.includes('vazirmatn')) return { bold: false, italic: false };
+  if (familyLower.includes('inter')) return { bold: false, italic: false };
+  // Verdana and the default path ship all four faces.
+  return { bold: !!bold, italic: !!italic };
+}
+
+/**
  * Loads font binary via fontkit and returns Font instance.
  */
 function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
@@ -246,6 +278,10 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
     fontPath = path.join(dir, bold ? 'Cinzel-Bold.ttf' : 'Cinzel-SemiBold.ttf');
   } else if (familyLower.includes('playfair')) {
     fontPath = path.join(dir, italic ? 'PlayfairDisplay-Italic.ttf' : 'PlayfairDisplay-Bold.ttf');
+  } else if (familyLower.includes('amiri')) {
+    // Only the regular face ships today; fall back rather than throw if the bold file is absent.
+    const amiriBold = path.join(dir, 'Amiri-Bold.ttf');
+    fontPath = bold && fs.existsSync(amiriBold) ? amiriBold : path.join(dir, 'Amiri-Regular.ttf');
   } else if (familyLower.includes('cairo')) {
     fontPath = path.join(dir, 'Cairo-Regular.ttf');
   } else if (familyLower.includes('plus jakarta')) {
@@ -468,8 +504,10 @@ function renderTextElementToSvg(
     tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}">${escapeXml(lines[i])}</tspan>`);
   }
 
-  const fontWeight = t.bold ? 'bold' : 'normal';
-  const fontStyle = t.italic ? ' font-style="italic"' : '';
+  // Ask the rasteriser for exactly the face fontkit measured with — see fontFaceSupports.
+  const faceAxes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
+  const fontWeight = faceAxes.bold ? 'bold' : 'normal';
+  const fontStyle = faceAxes.italic ? ' font-style="italic"' : '';
   const opacityAttr = t.opacity !== undefined ? ` opacity="${t.opacity}"` : '';
   const bidiAttr = t.rtl ? ' direction="rtl"' : '';
   // Emit the spacing and size the lines were measured with. Using the raw t.* values here meant

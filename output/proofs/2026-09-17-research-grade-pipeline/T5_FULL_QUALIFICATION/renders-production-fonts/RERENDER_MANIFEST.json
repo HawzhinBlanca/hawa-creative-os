@@ -47,8 +47,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "10acee882bb5f7b21bb394744fdbe289cfaff17df125f41b7917b54f5ffa976f",
-      "bytes": 60675
+      "sha256": "860dfa0546bb33c733f819e1a239fcae75120c6ce7c286c9ed268e4908f18165",
+      "bytes": 60389
     },
     {
       "brief": "brief_04_ckb_square",
@@ -60,8 +60,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "04607db62317305646605a73922d6e2a578c3da447d788679f3ebe1c27a37729",
-      "bytes": 66991
+      "sha256": "6a3f85cc968cb825815f8330362f8fd21e87e31792ce1f1ce6bf99b051a98ee6",
+      "bytes": 66155
     },
     {
       "brief": "brief_05_en_portrait45",
@@ -99,8 +99,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "d21ce8d758658a65dafee6b42a03676e57967ed4cc0de88b4b78984943130249",
-      "bytes": 83593
+      "sha256": "c710689a1902983bf05819c57bc95fe9936b5b7949235c2ee1123b1753e87ace",
+      "bytes": 83175
     },
     {
       "brief": "brief_08_ckb_portrait45",
@@ -112,8 +112,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "2464d88783696f880e92c4ac47fddedc8b075c0e570824be95ed4a64cb67beed",
-      "bytes": 80153
+      "sha256": "e2c651ba7aa642dde27edb415ad63aa16dd68b24d1b45ec15006c29118b8e29b",
+      "bytes": 79765
     },
     {
       "brief": "brief_09_en_story916",
@@ -151,8 +151,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "9628b7df1cd569b4b989b8d87b08b11c373defd9cfb3cc7880a6a76c186e8f3f",
-      "bytes": 95688
+      "sha256": "fa203124a7cbc9c51dca913e7168810c0fd0660de96e3790ff2a37089482fc4c",
+      "bytes": 95793
     },
     {
       "brief": "brief_12_ckb_story916",
@@ -164,8 +164,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "bb32f2432109ac629b2593873a286a96d004e35ef6aac293b8b92267b0b47001",
-      "bytes": 90988
+      "sha256": "fcfee05cc3b14daf384ba15e84685cf12ca5c6cc4e5796feedf83a731e119eb9",
+      "bytes": 90420
     },
     {
       "brief": "brief_14_en_a4doc",
@@ -190,8 +190,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "ecac6ea1afe735fdcda6fe9afa368b076d5a9f2386d88f987683c33b38414493",
-      "bytes": 89173
+      "sha256": "76a15905d15bd99f792317aa291e3b75c76b3e817479c5bb7d46afdb41c99a3c",
+      "bytes": 88465
     },
     {
       "brief": "brief_17_en_landscape169",
@@ -229,8 +229,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "6b108f3b7db166c02bef2d6daaadeb17fa1adb0cf79dd23e6e17b1ad39e765f7",
-      "bytes": 124179
+      "sha256": "3d01926be626515b0fc0538abf64c98135da9587511e84dbce60114ab5e9b21c",
+      "bytes": 123189
     },
     {
       "brief": "brief_20_ckb_landscape169",
@@ -241,8 +241,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "35d53bfcd9f0ff8f8e8405b78862f0cf6e07d533c7ee49cfcdf686f16f3b7be5",
-      "bytes": 96802
+      "sha256": "ced0e0ea12e889e0d375ae7f4206883a92d7a36f7eb5277cd8f88281729e0649",
+      "bytes": 96836
     }
   ]
 }

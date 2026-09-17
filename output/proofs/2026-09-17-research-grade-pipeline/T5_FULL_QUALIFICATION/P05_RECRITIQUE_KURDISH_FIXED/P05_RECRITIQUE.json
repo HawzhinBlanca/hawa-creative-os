@@ -1,0 +1,567 @@
+{
+  "fontFidelity": {
+    "Verdana": "exact",
+    "Noto Sans Arabic": "exact",
+    "Cinzel": "exact",
+    "Playfair Display": "exact",
+    "Cairo": "exact",
+    "Amiri": "exact",
+    "Plus Jakarta Sans": "exact",
+    "Vazirmatn": "stand-in",
+    "Inter": "exact"
+  },
+  "entries": [
+    {
+      "brief": "brief_03_ckb_square",
+      "folder": "brief_03",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B8 form a consistently centered composition with clear typographic hierarchy and no visible overlap, broadly supporting the passing metrics. The only notable refinement is a minor spacing imbalance around B8.",
+        "comments": [
+          {
+            "boxId": "B8",
+            "category": "whitespace",
+            "issue": "The lower divider has 48px of clearance above it from B4, but 63px below it before B5, making its placement slightly uneven within the available interval.",
+            "severity": "low",
+            "suggestedFix": "Move B8 from y=815 to approximately y=822, retaining its width and horizontal position, to produce nearly equal clearances of 55px and 56px."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.947
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 0,
+        "categories": [],
+        "severities": [],
+        "overallAssessment": "B0–B8 form a consistently centered composition, with clear size hierarchy between B2, B3, and B4 and balanced internal padding around B3 within B7. The render supports the passing metrics: generous spacing is evident, but no clear alignment, overlap, margin, or hierarchy defect warrants correction.",
+        "responseId": "chatcmpl-EPBTEhBCW6kP6JLtktkqmoeFpr8ra"
+      },
+      "annotatedSha256": "ac04a61195c03975e245b92484cf1fcee4f43fa411d0885c385df39f9b2b11aa",
+      "ledger": {
+        "call_id": "chatcmpl-EPCovzTG6pitQAZ5Nmtdb9JniPNBs",
+        "x_request_id": "req_d5e5b61d96fb4e429c9ac1cccd3db9f0",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_03_ckb_square",
+        "model": "gpt-6-astra",
+        "input_tokens": 1427,
+        "cached_tokens": 0,
+        "output_tokens": 314,
+        "gross_cost_usd": 0.029970000000000004,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.029970000000000004,
+        "latency_ms": 14379
+      }
+    },
+    {
+      "brief": "brief_04_ckb_square",
+      "folder": "brief_04",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B8 maintain a consistent central axis, generous outer margins, and a clear title-to-footer hierarchy, broadly supporting the passing metrics. B4 shows a minor optical spacing issue within B7 that the box-level measurements do not capture.",
+        "comments": [
+          {
+            "boxId": "B4",
+            "category": "whitespace",
+            "issue": "The visible body text sits toward the upper portion of B7, leaving noticeably more unused space below it than above it, despite the body box itself being approximately centered.",
+            "severity": "low",
+            "suggestedFix": "Vertically center the rendered text within B7 rather than centering only its allocation box. Move the visible text down approximately 25–30px while preserving its current horizontal center and width."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.957
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "The render supports the passing metrics: B0–B5 share a consistent central axis, and B2 establishes clear title dominance within generous margins. No substantial structural defects are evident; B4 has a minor vertical-centering refinement within B7.",
+        "responseId": "chatcmpl-EPBPlCyczlenwaq2FDHLLal5Xjovg"
+      },
+      "annotatedSha256": "4f770a76ef0230588c38fa736dc782327debd0978d937559b6adf45d1270597e",
+      "ledger": {
+        "call_id": "chatcmpl-EPCovMJbLwTJtTXxe6DLezOM1guee",
+        "x_request_id": "req_077e6717ff4340fba660a7ded49f6cd0",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_04_ckb_square",
+        "model": "gpt-6-astra",
+        "input_tokens": 1427,
+        "cached_tokens": 0,
+        "output_tokens": 326,
+        "gross_cost_usd": 0.030570000000000003,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.030570000000000003,
+        "latency_ms": 13017
+      }
+    },
+    {
+      "brief": "brief_07_ckb_portrait45",
+      "folder": "brief_07",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B9 form a balanced, consistently centered composition with a clear hierarchy, consistent with the passing metrics. No substantial spatial defects are apparent; B7 offers a minor spacing refinement.",
+        "comments": [
+          {
+            "boxId": "B7",
+            "category": "whitespace",
+            "issue": "The accent sits slightly high between B3 and B4: its upper clearance is 43px, while its lower clearance is 74px. This creates a mildly uneven transition between the two text sections.",
+            "severity": "low",
+            "suggestedFix": "If equal spacing is intended, move B7 from y=752 to approximately y=768, retaining its existing width, height, and horizontal center. This yields approximately 59px of clearance on each side."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.954
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "whitespace",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low"
+        ],
+        "overallAssessment": "The centered composition and consistent horizontal symmetry support the passing alignment and balance metrics. B2 and B4 nevertheless reserve substantially more vertical space than their visible text occupies, making the typographic sequence feel more dispersed than the box geometry alone suggests.",
+        "responseId": "chatcmpl-EPBb9Euv8p5beCO6G0UPKSnnnQMcF"
+      },
+      "annotatedSha256": "0f8725f42bebac48864a14990dc70ccc584ead5068ab5d47928d59df9f484256",
+      "ledger": {
+        "call_id": "chatcmpl-EPCp8lhGA0tPGBYuOsm2NvxJgTMxe",
+        "x_request_id": "req_5d7cd9501bf3468392c533734dd9a0fe",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_07_ckb_portrait45",
+        "model": "gpt-6-astra",
+        "input_tokens": 1406,
+        "cached_tokens": 0,
+        "output_tokens": 314,
+        "gross_cost_usd": 0.02976,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.02976,
+        "latency_ms": 12252
+      }
+    },
+    {
+      "brief": "brief_08_ckb_portrait45",
+      "folder": "brief_08",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "proportion"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "The shared center axis of B0–B9 and consistent outer alignment support the strong deterministic scores. The render shows no major structural defects, although B4 appears substantially underfilled relative to its allocated height.",
+        "comments": [
+          {
+            "boxId": "B4",
+            "category": "proportion",
+            "issue": "The body text occupies a shallow strip near the top of its 176px-high box, leaving most of the allocated area unused. Its small apparent type size also creates a pronounced scale drop from B3.",
+            "severity": "low",
+            "suggestedFix": "Increase B4’s type size modestly, approximately 15–20%, while retaining its centered 821px width. Then fit the box height to the resulting text block rather than preserving the unused 176px allocation, and reassess its spacing above B8."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.961
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "placement",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "medium"
+        ],
+        "overallAssessment": "The shared center axis of B0–B9 and consistent widths of B1–B3 support the strong alignment and balance scores. However, the visible text occupies only the upper portions of B2 and B4, creating uneven spacing that the box-level metrics do not fully capture.",
+        "responseId": "chatcmpl-EPBYyQGOyf4qR2LHEXpYqSqQFXzCZ"
+      },
+      "annotatedSha256": "9eea6e18b0c88a943b5af50de93694165cd6e10b1d0c63b4f50ba191404104bf",
+      "ledger": {
+        "call_id": "chatcmpl-EPCp8fyvaGjEd4R4harvgpo8Zm44E",
+        "x_request_id": "req_3c18f02414a942428ebbf1b291e3face",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_08_ckb_portrait45",
+        "model": "gpt-6-astra",
+        "input_tokens": 1406,
+        "cached_tokens": 0,
+        "output_tokens": 322,
+        "gross_cost_usd": 0.03016,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.03016,
+        "latency_ms": 12609
+      }
+    },
+    {
+      "brief": "brief_11_ckb_story916",
+      "folder": "brief_11",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "proportion",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low"
+        ],
+        "overallAssessment": "The shared right edge of B0–B4 and clear separation of B2, B3, and B4 support the strong alignment and hierarchy metrics. No major structural failures are evident; B7 and B8 offer minor opportunities to tighten spatial regularity.",
+        "comments": [
+          {
+            "boxId": "B7",
+            "category": "proportion",
+            "issue": "B7 starts flush with B2 but extends 58px below its box, occupying most of the 77px gap before B3. This makes the accent less precisely tied to the title region.",
+            "severity": "low",
+            "suggestedFix": "Reduce B7 height from 346px to 288px, retaining y=547, so its lower edge aligns with B2 at y=835."
+          },
+          {
+            "boxId": "B8",
+            "category": "whitespace",
+            "issue": "B8 sits 38px below B3 but 84px above B4, producing noticeably uneven spacing within the subtitle-to-body transition.",
+            "severity": "low",
+            "suggestedFix": "If B8 is intended as a neutral separator, move it from y=1056 to y=1079, yielding approximately 61px of whitespace on either side."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.955
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "proportion",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low"
+        ],
+        "overallAssessment": "B1–B4 share consistent horizontal bounds, and B0 aligns with their right edge, supporting the strong alignment and balance metrics. B7 and B8 present minor spacing refinements rather than substantial structural defects.",
+        "responseId": "chatcmpl-EPBkygpWz8VDtfX8eMauJYLhZy2k6"
+      },
+      "annotatedSha256": "3e9434660534f2683c34767e10fc4ad1c3aebdd16a224f7e684dae4e08ea5fd2",
+      "ledger": {
+        "call_id": "chatcmpl-EPCpM8TXNIvHca8rZ2SpSSKfWkPGu",
+        "x_request_id": "req_4cb7fe44d8da4366a5ccce27b12a790b",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_11_ckb_story916",
+        "model": "gpt-6-astra",
+        "input_tokens": 1331,
+        "cached_tokens": 0,
+        "output_tokens": 289,
+        "gross_cost_usd": 0.02776,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.02776,
+        "latency_ms": 9863
+      }
+    },
+    {
+      "brief": "brief_12_ckb_story916",
+      "folder": "brief_12",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 3,
+        "categories": [
+          "placement",
+          "whitespace",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low",
+          "low"
+        ],
+        "overallAssessment": "B0–B5 maintain a consistent central axis and generous outer margins, supporting the strong alignment and balance scores. No major structural defects are evident; B7–B9 offer minor opportunities to regularize spacing.",
+        "comments": [
+          {
+            "boxId": "B7",
+            "category": "whitespace",
+            "issue": "The divider has 47px of clearance from B2 above but 75px from B3 below, creating a slightly uneven transition between the two text tiers.",
+            "severity": "low",
+            "suggestedFix": "Move B7 from y=854 to y=868 to provide approximately 61px of clearance on each side."
+          },
+          {
+            "boxId": "B8",
+            "category": "whitespace",
+            "issue": "B4 has only 22–23px of horizontal inset within B8, compared with 48px vertically. This makes the panel's internal spacing noticeably narrower at the sides.",
+            "severity": "low",
+            "suggestedFix": "Increase B4's horizontal inset to approximately 40px by setting x=148 and width=784; retain its centered alignment and verify that the text still fits its allotted height."
+          },
+          {
+            "boxId": "B9",
+            "category": "placement",
+            "issue": "B9 sits 124px below B8 but only 65px above B5. This creates a less regular lower-page spacing rhythm, although it does help associate the rule with the footer.",
+            "severity": "low",
+            "suggestedFix": "If an evenly paced transition is preferred, move B9 from y=1584 to approximately y=1554, leaving roughly 94–95px on either side."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.955
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "whitespace",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low"
+        ],
+        "overallAssessment": "The centered structure across B0–B9 supports the passing alignment and balance metrics, while B4 has nearly symmetric padding within B8. No major geometric defects are evident; the main opportunities are minor refinements to separator spacing.",
+        "responseId": "chatcmpl-EPBpsGqA8gbkLy4gAvcM4n5u0cyW2"
+      },
+      "annotatedSha256": "af804ddc8e5c80848edccf4f6fdd0379e2ae7e8c8bee5aaccf01a8b33b749c92",
+      "ledger": {
+        "call_id": "chatcmpl-EPCpMtDUlqecohTxKKN7wf1W3Fzjn",
+        "x_request_id": "req_852b1b2b524e44989d4e8445c8e54a48",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_12_ckb_story916",
+        "model": "gpt-6-astra",
+        "input_tokens": 1330,
+        "cached_tokens": 0,
+        "output_tokens": 463,
+        "gross_cost_usd": 0.03645,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.03645,
+        "latency_ms": 14205
+      }
+    },
+    {
+      "brief": "brief_15_ckb_a4doc",
+      "folder": "brief_15",
+      "size": "1240x1754",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "The render broadly supports the passing metrics: B1–B5 share consistent horizontal bounds, and B6 provides balanced inset spacing around the header elements. No major spatial defects are evident at this resolution; B8 offers a minor spacing refinement.",
+        "comments": [
+          {
+            "boxId": "B8",
+            "category": "whitespace",
+            "issue": "The separator sits slightly closer to B3 than B4: there are 52px above the rule and 68px below it. This introduces a small spacing irregularity between otherwise consistently aligned sections.",
+            "severity": "low",
+            "suggestedFix": "If equal separation is intended, move B8 from y=1026 to y=1034, retaining its width and height, to create 60px gaps on both sides."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.964
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 2,
+        "categories": [
+          "whitespace",
+          "whitespace"
+        ],
+        "severities": [
+          "low",
+          "low"
+        ],
+        "overallAssessment": "The shared edges of B1–B5 and matching widths of B8–B9 support the strong alignment metrics; no major spatial defects are evident. Minor spacing asymmetries around B8 and B9 offer optional refinements rather than corrections to a failing layout.",
+        "responseId": "chatcmpl-EPCRvRYmy3COxHXWKb4jBT1KzYnau"
+      },
+      "annotatedSha256": "8e984ff6bf58a8ea7e57b75a4df2a3e4c54703fa0d170a7c8afeafb99e71e2c4",
+      "ledger": {
+        "call_id": "chatcmpl-EPCpbTTraFce8wprdVHYpI6Saoo3J",
+        "x_request_id": "req_679378388ad345a8892c7e071523cd55",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_15_ckb_a4doc",
+        "model": "gpt-6-astra",
+        "input_tokens": 1397,
+        "cached_tokens": 0,
+        "output_tokens": 371,
+        "gross_cost_usd": 0.03252,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.03252,
+        "latency_ms": 15121
+      }
+    },
+    {
+      "brief": "brief_19_ckb_landscape169",
+      "folder": "brief_19",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 0,
+        "categories": [],
+        "severities": [],
+        "overallAssessment": "The render supports the passing metrics: B0–B8 share a consistent horizontal center, B2 and B7 align to the 115px outer margins, and B4 has nearly equal top and bottom padding within B7. The hierarchy and section spacing appear deliberate; no material spatial or typographic geometry defects are evident at this inspection scale.",
+        "comments": [],
+        "rejectedCount": 0,
+        "compositeScore": 0.958
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B8 maintain a consistent central axis, while B2 and B7 share the outer margins, supporting the strong alignment and balance scores. No major spatial defects are evident; B4 offers one minor opportunity to refine internal spacing.",
+        "responseId": "chatcmpl-EPC7i6AKdztDKABU87FuonsNlamrK"
+      },
+      "annotatedSha256": "bdec6eff1c7df42612a2acb825f2c0a2e30f8d0e802b987dba87ad2b62d180b0",
+      "ledger": {
+        "call_id": "chatcmpl-EPCpaWbwpfLlHWqACKrGSmCn91XeP",
+        "x_request_id": "req_4ca2b2d007f949a7b1c142e85e6a87f9",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_19_ckb_landscape169",
+        "model": "gpt-6-astra",
+        "input_tokens": 1299,
+        "cached_tokens": 0,
+        "output_tokens": 176,
+        "gross_cost_usd": 0.021790000000000004,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.021790000000000004,
+        "latency_ms": 8661
+      }
+    },
+    {
+      "brief": "brief_20_ckb_landscape169",
+      "folder": "brief_20",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Noto Sans Arabic"
+      ],
+      "after": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B8 form a well-aligned composition with consistent outer margins and a clear title hierarchy, supporting the passing metrics. The main refinement is the oversized vertical interval between B2 and B6; no major spatial defects are evident.",
+        "comments": [
+          {
+            "boxId": "B6",
+            "category": "whitespace",
+            "issue": "The panel starts 157px below B2, creating a disproportionately large break between the title and supporting content relative to the 43px panel-to-footer gap.",
+            "severity": "low",
+            "suggestedFix": "Move B6 and its associated B7, B3, and B4 elements upward by 32px, preserving internal padding. This reduces the title-to-panel gap to 125px and increases the panel-to-B5 gap to 75px."
+          }
+        ],
+        "rejectedCount": 0,
+        "compositeScore": 0.933
+      },
+      "before": {
+        "status": "success",
+        "commentCount": 1,
+        "categories": [
+          "whitespace"
+        ],
+        "severities": [
+          "low"
+        ],
+        "overallAssessment": "B0–B8 form a well-contained composition with consistent outer edges and a clear title-to-supporting-text hierarchy, consistent with the passing metrics. The main opportunity is to tighten the vertical relationship between B2 and B6 rather than change the underlying grid.",
+        "responseId": "chatcmpl-EPC7haeWfvsqmQhsyzzFcAdUnxK8V"
+      },
+      "annotatedSha256": "cb1d632e4f63b6ec6320853d4e5d0576c7fcc620905c700b749b9424c679ce95",
+      "ledger": {
+        "call_id": "chatcmpl-EPCppPcX3iBfiQGSy0Hfw9l7jUGIm",
+        "x_request_id": "req_2fecee6a4af8439d94cb74ef916ea0ba",
+        "stage": "P05_CRITIQUE_RERUN",
+        "brief_id": "brief_20_ckb_landscape169",
+        "model": "gpt-6-astra",
+        "input_tokens": 1300,
+        "cached_tokens": 0,
+        "output_tokens": 194,
+        "gross_cost_usd": 0.0227,
+        "cache_discount_usd": 0,
+        "net_cost_usd": 0.0227,
+        "latency_ms": 5081
+      }
+    }
+  ],
+  "failures": []
+}
