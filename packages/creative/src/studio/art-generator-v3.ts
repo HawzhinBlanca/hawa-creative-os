@@ -270,11 +270,12 @@ export async function generateConditionedArtLayer(
   // Map calm region coordinates to art image coordinates
   const scaleX = artPng.width / layout.width;
   const scaleY = artPng.height / layout.height;
+  const calmRegion = layout.art?.calmRegion || layout.art?.box || { x: 0, y: 0, width: layout.width, height: layout.height };
   const artCalmBox: Box = {
-    x: layout.art.calmRegion.x * scaleX,
-    y: layout.art.calmRegion.y * scaleY,
-    width: layout.art.calmRegion.width * scaleX,
-    height: layout.art.calmRegion.height * scaleY,
+    x: calmRegion.x * scaleX,
+    y: calmRegion.y * scaleY,
+    width: calmRegion.width * scaleX,
+    height: calmRegion.height * scaleY,
   };
 
   const calmMeasurements = measureBoxLuminanceAndVariance(artPng, artCalmBox);

@@ -624,7 +624,7 @@ export function computeOcclusion(layout: StudioLayoutV2): MetricResult {
     return { score: 1.0, passed: true, metric: 'occlusion', details: { hasCalmRegion: false } };
   }
 
-  const artBox = layout.art.box;
+  const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
   let penaltyArea = 0;
   let totalTextArea = 0;
 

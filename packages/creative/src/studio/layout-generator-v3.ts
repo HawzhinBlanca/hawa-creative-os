@@ -346,22 +346,24 @@ export function scaleNormalizedLayoutToV2(
 
   let art: ArtConfig | undefined = undefined;
   if (norm.art) {
+    const boxNorm = norm.art.box || { x: 0, y: 0, width: 1, height: 1 };
+    const calmNorm = norm.art.calmRegion || boxNorm;
     art = {
       source: norm.art.source,
       prompt: norm.art.prompt || undefined,
       motif: norm.art.motif || undefined,
       box: {
-        x: scaleX(norm.art.box.x),
-        y: scaleY(norm.art.box.y),
-        width: scaleDimX(norm.art.box.width),
-        height: scaleDimY(norm.art.box.height),
+        x: scaleX(boxNorm.x),
+        y: scaleY(boxNorm.y),
+        width: scaleDimX(boxNorm.width),
+        height: scaleDimY(boxNorm.height),
       },
-      opacity: Number(clamp(norm.art.opacity).toFixed(2)),
+      opacity: Number(clamp(norm.art.opacity ?? 0.5).toFixed(2)),
       calmRegion: {
-        x: scaleX(norm.art.calmRegion.x),
-        y: scaleY(norm.art.calmRegion.y),
-        width: scaleDimX(norm.art.calmRegion.width),
-        height: scaleDimY(norm.art.calmRegion.height),
+        x: scaleX(calmNorm.x),
+        y: scaleY(calmNorm.y),
+        width: scaleDimX(calmNorm.width),
+        height: scaleDimY(calmNorm.height),
       },
     };
   }

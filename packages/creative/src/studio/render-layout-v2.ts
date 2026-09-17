@@ -402,9 +402,10 @@ export function renderLayoutV2ToSvg(
   // Art Layer
   if (layout.art) {
     const art = layout.art;
+    const artBox = art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
     const clipId = 'art-clip';
     defsParts.push(
-      `<clipPath id="${clipId}"><rect x="${art.box.x}" y="${art.box.y}" width="${art.box.width}" height="${art.box.height}"/></clipPath>`
+      `<clipPath id="${clipId}"><rect x="${artBox.x}" y="${artBox.y}" width="${artBox.width}" height="${artBox.height}"/></clipPath>`
     );
 
     let artHref = options.artImagePath;
@@ -416,7 +417,7 @@ export function renderLayoutV2ToSvg(
 
     if (artHref) {
       bodyPartsNoText.push(
-        `<image id="art-layer" xlink:href="${artHref}" x="${art.box.x}" y="${art.box.y}" width="${art.box.width}" height="${art.box.height}" preserveAspectRatio="xMidYMid slice" opacity="${art.opacity}" clip-path="url(#${clipId})"/>`
+        `<image id="art-layer" xlink:href="${artHref}" x="${artBox.x}" y="${artBox.y}" width="${artBox.width}" height="${artBox.height}" preserveAspectRatio="xMidYMid slice" opacity="${art.opacity ?? 1.0}" clip-path="url(#${clipId})"/>`
       );
     }
 
@@ -447,7 +448,7 @@ export function renderLayoutV2ToSvg(
         );
       }
       bodyPartsNoText.push(
-        `<rect id="art-scrim" x="${art.box.x}" y="${art.box.y}" width="${art.box.width}" height="${art.box.height}" fill="url(#${scrimId})" clip-path="url(#${clipId})"/>`
+        `<rect id="art-scrim" x="${artBox.x}" y="${artBox.y}" width="${artBox.width}" height="${artBox.height}" fill="url(#${scrimId})" clip-path="url(#${clipId})"/>`
       );
     }
   }

@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { StageContext, CreativeBrief, Concept, CandidateState } from '../types.js';
-import type { StudioLayoutV2 } from '@hawa/creative';
-import { validateLayoutV2, type LayoutValidationContext } from '@hawa/creative';
+import {
+  validateLayoutV2,
+  type LayoutValidationContext,
+  type StudioLayoutV2,
+  generateLayoutCandidatesV3,
+  type CopyBlockSlotInput,
+} from '@hawa/creative';
 import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
 
 export const LAYOUT_SCHEMA = {
@@ -153,6 +158,69 @@ export async function runLayoutsStage(
   concepts: Concept[],
   existingCandidates?: Array<{ id: string; ordinal: number }>
 ): Promise<CandidateState[]> {
+  if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+    try {
+      const copyBlockSlots: CopyBlockSlotInput[] = ctx.copyBlocks.map((b, i) => {
+        const roleEntry = brief.roles?.find((r) => r.copyIndex === i);
+        return {
+          index: i,
+          text: b.text,
+          role: (roleEntry?.role as any) || (i === 0 ? 'title' : 'body'),
+          script: b.script === 'arabic' ? 'arabic' : 'latin',
+        };
+      });
+
+      const briefSummary =
+        [brief.occasion, brief.audience, (brief.toneWords || []).join(', ')].filter(Boolean).join(' - ') ||
+        ctx.instructions ||
+        'Official Institutional Communication';
+
+      const v3Result = await generateLayoutCandidatesV3({
+        client: ctx.client as any,
+        brief: briefSummary,
+        copyBlocks: copyBlockSlots,
+        palette: ctx.referencePack.palette,
+        canvasWidth: ctx.width,
+        canvasHeight: ctx.height,
+        isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
+      });
+
+      if (v3Result.layouts.length > 0) {
+        return v3Result.layouts.map((layout, i) => {
+          if (layout.art) {
+            if (!layout.art.box) {
+              layout.art.box = { x: 0, y: 0, width: layout.width, height: layout.height };
+            }
+            if (!layout.art.calmRegion) {
+              layout.art.calmRegion = { ...layout.art.box };
+            }
+          }
+          const existing = existingCandidates?.find((c) => c.ordinal === i);
+          const raw = v3Result.rawCandidates[i];
+          const concept: Concept = concepts[i] || {
+            id: raw?.id || `v3-concept-${i}`,
+            title: raw?.conceptTitle || `Archetype: ${raw?.compositionArchetype || i}`,
+            rationale: `Research-grade layout archetype: ${raw?.compositionArchetype}`,
+            visualMetaphor: raw?.compositionArchetype || 'institutional_dignity',
+            motif: (raw?.art?.motif as any) || 'thin-rules',
+            artPrompt: raw?.art?.prompt || undefined,
+          };
+          return {
+            id: existing?.id || randomUUID(),
+            ordinal: i,
+            concept,
+            layouts: [layout],
+            currentLayout: layout,
+            critiques: [],
+            status: 'draft' as const,
+          };
+        });
+      }
+    } catch (v3Err) {
+      console.warn('[LayoutsStage] v3 layout generation failed, falling back to sequential stage:', v3Err);
+    }
+  }
+
   const systemPrompt = buildP0SystemPrompt({
     referencePackJson: JSON.stringify(ctx.referencePack),
     promotedRules: ctx.promotedRules || 'None',
@@ -238,6 +306,14 @@ export async function runLayoutsStage(
     }
 
     if (validation.ok) {
+      if (layout.art) {
+        if (!layout.art.box) {
+          layout.art.box = { x: 0, y: 0, width: layout.width, height: layout.height };
+        }
+        if (!layout.art.calmRegion) {
+          layout.art.calmRegion = { ...layout.art.box };
+        }
+      }
       const existing = existingCandidates?.find((c) => c.ordinal === ordinal);
       candidates.push({
         id: existing?.id || randomUUID(),

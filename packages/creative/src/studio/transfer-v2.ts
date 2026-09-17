@@ -147,7 +147,7 @@ export async function encodeStudioTransferV2(
 
   // 1. Art layer (if provided)
   if (layout.art && options.artBuffer) {
-    const artBox = layout.art.box;
+    const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
     slide.addImage({
       data: `image/png;base64,${options.artBuffer.toString('base64')}`,
       x: artBox.x / 96,

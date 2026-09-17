@@ -10,7 +10,7 @@ export async function runArtStage(
     const artConfig = cand.currentLayout.art;
     if (!artConfig) continue;
 
-    const box = artConfig.box;
+    const box = artConfig.box || { x: 0, y: 0, width: cand.currentLayout.width, height: cand.currentLayout.height };
     const width = Math.max(320, Math.round(box.width));
     const height = Math.max(320, Math.round(box.height));
 
@@ -44,7 +44,7 @@ export async function runArtStage(
           width,
           height,
           palette: ctx.referencePack.palette,
-          opacity: artConfig.opacity,
+          opacity: artConfig.opacity ?? 0.5,
         });
         cand.artPng = pngBytes;
         cand.artSha256 = createHash('sha256').update(pngBytes).digest('hex');
@@ -60,7 +60,7 @@ export async function runArtStage(
         width,
         height,
         palette: ctx.referencePack.palette,
-        opacity: artConfig.opacity,
+        opacity: artConfig.opacity ?? 0.5,
       });
       cand.artPng = pngBytes;
       cand.artSha256 = createHash('sha256').update(pngBytes).digest('hex');

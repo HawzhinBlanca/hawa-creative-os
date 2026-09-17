@@ -518,14 +518,16 @@ export function validateLayoutV2(
         };
       }
     }
-    // calmRegion must cover every text box
-    for (const t of layout.text) {
-      if (!boxContains(layout.art.calmRegion, t)) {
-        return {
-          ok: false,
-          code: 'ART_SAFETY',
-          message: `Text box copyIndex ${t.copyIndex} is not fully covered by art calmRegion`,
-        };
+    // calmRegion must cover every text box if present
+    if (layout.art.calmRegion) {
+      for (const t of layout.text) {
+        if (!boxContains(layout.art.calmRegion, t)) {
+          return {
+            ok: false,
+            code: 'ART_SAFETY',
+            message: `Text box copyIndex ${t.copyIndex} is not fully covered by art calmRegion`,
+          };
+        }
       }
     }
   }
