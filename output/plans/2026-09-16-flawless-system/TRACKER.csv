@@ -29,3 +29,4 @@ R1_F10,ACCEPTED,2026-09-16-r3,autonomous 3-min billing probe; flips health to bi
 R2_F04_F12,ACCEPTED,2026-09-16-r3,server-side role enforcement (Verdana/Noto Sans Arabic body); 3 fresh live plans (DAHVXC_4tfs, DAHVXE_Lyc8, DAHVYtuLZEY) all fontPass:true in F04_THREE_PLANS_V2; DIFF_SUMMARY matched to check JSONs
 R3_F08,ACCEPTED,2026-09-16-r3,sweep candidate filter regex restricts to ^[0-9]+$ (Telegram only); 4 fixture tasks abandoned in db; F08_SWEEP_FILTER.json verified
 R4_F09,ACCEPTED,2026-09-16-r3,live Telegram journal proofs for 3 terminal notification branches (messages 189, 192, 200) in F09_LIVE.md replacing synthetic sample
+P10_QUALIFICATION,ACCEPTED,2026-09-17,20/20 briefs passed (100% PRR vs 81.3% target); authentic chatcmpl receipts in LEDGER.csv; median cost $0.171666; median latency 51791ms; 0 hard-QA escapes

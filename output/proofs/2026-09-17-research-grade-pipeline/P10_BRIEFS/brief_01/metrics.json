@@ -1,7 +1,7 @@
 {
-  "compositeScore": 0.957,
+  "compositeScore": 0.96,
   "passed": true,
-  "qualityScore": 0.947,
+  "qualityScore": 0.95,
   "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
@@ -19,8 +19,8 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 10,
-        "totalElements": 10
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
@@ -34,13 +34,13 @@
       }
     },
     "balance": {
-      "score": 0.977,
+      "score": 0.973,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 505,
-        "offset": 0.0231
+        "wy": 499,
+        "offset": 0.0266
       }
     },
     "justification": {
@@ -57,13 +57,13 @@
       }
     },
     "regularity": {
-      "score": 0.645,
+      "score": 0.67,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 82,
+        "meanGap": 95,
         "std": 51,
-        "cv": 0.551
+        "cv": 0.493
       }
     },
     "typefacePairing": {
@@ -81,13 +81,13 @@
       }
     },
     "negativeSpace": {
-      "score": 0.924,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.608,
-        "bottomVoid": 0.105,
-        "occupiedArea": 456814,
+        "fraction": 0.653,
+        "bottomVoid": 0.1,
+        "occupiedArea": 404713,
         "totalArea": 1166400
       }
     },
@@ -136,5 +136,5 @@
     }
   },
   "failingMetrics": [],
-  "executionTimeMs": 0.4
+  "executionTimeMs": 1.18
 }

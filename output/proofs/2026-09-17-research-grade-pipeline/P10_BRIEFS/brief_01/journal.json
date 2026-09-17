@@ -2,14 +2,14 @@
   "briefId": "brief_01_en_square",
   "size": "1080x1080",
   "language": "en",
-  "responseId": "chatcmpl-EP168dsvxxscCLzw7mxWc3DajTDHd",
-  "xRequestId": "req_a97641078037496ca75bcf5a1260e8c1",
+  "responseId": "chatcmpl-EP1wi36tzN40DNRgiDjHfQKNThS2P",
+  "xRequestId": "req_2964ba4c2ee342ccae2bf18cdd99f770",
   "model": "gpt-6-astra",
   "inputTokens": 2955,
   "cachedTokens": 2952,
-  "outputTokens": 3380,
-  "costUsd": 0.171982,
-  "wallClockMs": 52924,
+  "outputTokens": 3294,
+  "costUsd": 0.167682,
+  "wallClockMs": 48133,
   "prrPass": true,
   "geometricPass": true,
   "readabilityPass": true,
@@ -19,6 +19,6 @@
   "canaryWon": true,
   "orderSwapConsistent": true,
   "distinctSkeleton": true,
-  "compositeScore": 0.957,
-  "timestamp": "2026-09-17T07:46:20.713Z"
+  "compositeScore": 0.96,
+  "timestamp": "2026-09-17T08:40:35.006Z"
 }

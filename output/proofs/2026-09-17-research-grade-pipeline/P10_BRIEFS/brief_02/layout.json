@@ -2,8 +2,9 @@
   "version": 2,
   "width": 1080,
   "height": 1080,
+  "genre": "poster",
   "grid": {
-    "margin": 86,
+    "margin": 76,
     "columns": 6,
     "gutter": 22,
     "baseline": 11
@@ -14,7 +15,7 @@
   "shapes": [
     {
       "x": 497,
-      "y": 243,
+      "y": 232,
       "width": 86,
       "height": 2,
       "kind": "rect",
@@ -23,33 +24,23 @@
       "opacity": 1
     },
     {
-      "x": 346,
-      "y": 567,
-      "width": 389,
-      "height": 2,
-      "kind": "rect",
-      "color": "#C5A059",
-      "role": "rule",
-      "opacity": 1
-    },
-    {
-      "x": 540,
-      "y": 778,
-      "width": 1,
-      "height": 86,
-      "kind": "rect",
-      "color": "#C5A059",
-      "role": "accent",
-      "opacity": 1
-    },
-    {
-      "x": 86,
-      "y": 902,
-      "width": 907,
+      "x": 130,
+      "y": 621,
+      "width": 821,
       "height": 1,
       "kind": "rect",
       "color": "#C5A059",
       "role": "rule",
+      "opacity": 1
+    },
+    {
+      "x": 539,
+      "y": 826,
+      "width": 2,
+      "height": 59,
+      "kind": "rect",
+      "color": "#C5A059",
+      "role": "accent",
       "opacity": 1
     }
   ],
@@ -58,7 +49,7 @@
       "copyIndex": 0,
       "role": "eyebrow",
       "x": 108,
-      "y": 281,
+      "y": 270,
       "width": 864,
       "height": 38,
       "fontSize": 16,
@@ -92,9 +83,9 @@
       "copyIndex": 2,
       "role": "subtitle",
       "x": 108,
-      "y": 481,
+      "y": 502,
       "width": 864,
-      "height": 59,
+      "height": 70,
       "fontSize": 25,
       "lineHeight": 1.4,
       "letterSpacing": 0,
@@ -108,12 +99,12 @@
     {
       "copyIndex": 3,
       "role": "body",
-      "x": 108,
-      "y": 626,
-      "width": 864,
+      "x": 130,
+      "y": 675,
+      "width": 821,
       "height": 108,
       "fontSize": 16,
-      "lineHeight": 1.5,
+      "lineHeight": 1.55,
       "letterSpacing": 0,
       "fontFamily": "Verdana",
       "color": "#FDF8F3",
@@ -141,10 +132,10 @@
     }
   ],
   "logo": {
-    "x": 475,
-    "y": 86,
-    "width": 130,
-    "height": 130
+    "x": 481,
+    "y": 81,
+    "width": 119,
+    "height": 119
   },
   "typeScale": {
     "base": 16,

@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.849,
-  "passed": false,
-  "qualityScore": 0.862,
+  "compositeScore": 0.96,
+  "passed": true,
+  "qualityScore": 0.95,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.6,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -15,32 +15,32 @@
       }
     },
     "gridAppropriateness": {
-      "score": 0.3,
-      "passed": false,
+      "score": 1,
+      "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "reason": "WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)",
-        "aspectRatio": "1920:1080"
+        "alignedElements": 8,
+        "totalElements": 8
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.998,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0.002
+        "widthVariance": 0.002,
+        "lineUniformityDev": 0.006,
+        "d": 0.02
       }
     },
     "balance": {
-      "score": 0.991,
+      "score": 0.977,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 953,
-        "wy": 527,
-        "offset": 0.0089
+        "wx": 960,
+        "wy": 505,
+        "offset": 0.0232
       }
     },
     "justification": {
@@ -49,21 +49,21 @@
       "metric": "justification",
       "details": {
         "counts": {
-          "left": 5,
-          "center": 0,
+          "left": 0,
+          "center": 5,
           "right": 0
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.677,
+      "score": 0.668,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 50,
-        "std": 29,
-        "cv": 0.478
+        "meanGap": 64,
+        "std": 37,
+        "cv": 0.497
       }
     },
     "typefacePairing": {
@@ -81,13 +81,13 @@
       }
     },
     "negativeSpace": {
-      "score": 0.857,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.63,
-        "bottomVoid": 0.075,
-        "occupiedArea": 767961,
+        "fraction": 0.704,
+        "bottomVoid": 0.14,
+        "occupiedArea": 613251,
         "totalArea": 2073600
       }
     },
@@ -135,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "gridAppropriateness"
-  ],
-  "executionTimeMs": 0.03
+  "failingMetrics": [],
+  "executionTimeMs": 0.22
 }

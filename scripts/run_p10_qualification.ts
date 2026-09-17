@@ -7,6 +7,7 @@ import {
   generateLayoutCandidatesV3,
   evaluateDesignMetrics,
   renderLayoutV2,
+  refineCandidate,
   type StudioLayoutV2,
   type DesignMetricsReport,
   createDegradedCanaryLayout,
@@ -371,15 +372,19 @@ interface BriefResult {
   distinctSkeleton: boolean;
 }
 
-function sanitizeFont(font: string, isRtl: boolean): string {
+function sanitizeFont(font: string, isRtl: boolean, role?: string): string {
+  if (role === 'body' || role === 'footer') {
+    return isRtl ? 'Noto Sans Arabic' : 'Verdana';
+  }
   if (isRtl) {
-    if (font === 'Amiri' || font === 'Cairo' || font === 'Noto Sans Arabic') return font;
+    if (font === 'Cairo' || font === 'Amiri') return font;
     return 'Cairo';
   } else {
-    if (font === 'Cinzel' || font === 'Playfair Display' || font === 'Verdana') return font;
+    if (font === 'Cinzel' || font === 'Playfair Display') return font;
     if (font === 'Lora') return 'Playfair Display';
-    if (font === 'Cormorant Garamond') return 'Cinzel';
-    return 'Playfair Display';
+    if (font === 'Cormorant Garamond' || font === 'Montserrat') return 'Cinzel';
+    if (font === 'Verdana') return font;
+    return 'Cinzel';
   }
 }
 
@@ -427,7 +432,7 @@ async function executeBriefLive(
   // Ensure fonts resolve against installed fontconfig assets
   for (const cand of genResult.layouts) {
     for (const t of cand.text) {
-      t.fontFamily = sanitizeFont(t.fontFamily, isRtl) as any;
+      t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
     }
   }
 
@@ -450,8 +455,43 @@ async function executeBriefLive(
   });
 
   const best = evaluatedCandidates[0];
-  const layout = best.cand;
-  const metrics = best.metrics;
+  let layout = best.cand;
+  let metrics = best.metrics;
+  let refinementCostUsd = 0;
+
+  // P06 Gated Visual Critique & Repair Loop if 1-shot did not pass all metrics
+  if (!best.metrics.passed) {
+    console.log(
+      `[P10 LIVE] Brief ${brief.id}: 1-shot failed metrics [${best.metrics.failingMetrics.join(
+        ', '
+      )}]. Invoking P06 gated refinement...`
+    );
+    try {
+      const refineResult = await refineCandidate(best.cand, {
+        client,
+        maxRounds: 2,
+        minDelta: 0.01,
+        model: 'gpt-6-astra',
+      });
+      if (refineResult.finalScore > best.metrics.compositeScore || refineResult.passed) {
+        console.log(
+          `[P10 LIVE] Brief ${brief.id}: refinement improved score: ${best.metrics.compositeScore} -> ${refineResult.finalScore} (passed: ${refineResult.passed})`
+        );
+        layout = refineResult.finalLayout;
+        for (const t of layout.text) {
+          t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
+        }
+        metrics = evaluateDesignMetrics(layout);
+        for (const r of refineResult.rounds) {
+          if (r.receipt) {
+            refinementCostUsd += r.receipt.costUsd;
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[P10 LIVE] Brief ${brief.id}: refinement error (retaining 1-shot):`, err?.message);
+    }
+  }
 
   // 1. PosterMELD PRR 4 Structural Checks:
   // Check A: Geometric (occlusion, balance, alignment, and recalibrated negative space)
@@ -536,6 +576,8 @@ async function executeBriefLive(
       1_000_000
     ).toFixed(6)
   );
+  const totalNetCostUsd = Number((netCostUsd + refinementCostUsd).toFixed(6));
+  const totalGrossCostUsd = Number((grossCostUsd + refinementCostUsd).toFixed(6));
 
   const receipt = {
     responseId: genResult.responseId,
@@ -544,9 +586,9 @@ async function executeBriefLive(
     inputTokens: genResult.inputTokens,
     cachedTokens: genResult.cachedTokens,
     outputTokens: genResult.outputTokens,
-    grossCostUsd,
+    grossCostUsd: totalGrossCostUsd,
     cacheDiscountUsd,
-    netCostUsd,
+    netCostUsd: totalNetCostUsd,
     latencyMs: unpaddedWallClockMs,
     timestamp: new Date().toISOString(),
   };

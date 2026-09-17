@@ -2,71 +2,68 @@
   "version": 2,
   "width": 1240,
   "height": 1754,
+  "genre": "poster",
   "grid": {
-    "margin": 74,
-    "columns": 12,
-    "gutter": 25,
-    "baseline": 18
+    "margin": 99,
+    "columns": 6,
+    "gutter": 30,
+    "baseline": 14
   },
   "background": {
     "color": "#0A1628"
   },
   "shapes": [
     {
-      "x": 285,
-      "y": 175,
-      "width": 880,
-      "height": 3,
-      "kind": "rect",
-      "color": "#C5A059",
-      "role": "rule",
-      "opacity": 1
-    },
-    {
-      "x": 74,
-      "y": 1026,
-      "width": 1091,
-      "height": 623,
-      "kind": "rect",
-      "color": "#FDF8F3",
-      "role": "panel",
-      "opacity": 1
-    },
-    {
-      "x": 74,
-      "y": 1026,
-      "width": 1091,
-      "height": 11,
-      "kind": "rect",
-      "color": "#C5A059",
-      "role": "accent",
-      "opacity": 1
-    },
-    {
-      "x": 130,
-      "y": 1456,
-      "width": 980,
+      "x": 546,
+      "y": 370,
+      "width": 149,
       "height": 2,
-      "kind": "rect",
-      "color": "#1E3A5F",
+      "kind": "line",
+      "color": "#C5A059",
       "role": "rule",
-      "opacity": 1
+      "opacity": 1,
+      "strokeWidth": 1,
+      "strokeColor": "#C5A059"
+    },
+    {
+      "x": 397,
+      "y": 973,
+      "width": 446,
+      "height": 2,
+      "kind": "line",
+      "color": "#C5A059",
+      "role": "rule",
+      "opacity": 1,
+      "strokeWidth": 1,
+      "strokeColor": "#C5A059"
+    },
+    {
+      "x": 99,
+      "y": 1407,
+      "width": 1042,
+      "height": 2,
+      "kind": "line",
+      "color": "#C5A059",
+      "role": "rule",
+      "opacity": 1,
+      "strokeWidth": 1,
+      "strokeColor": "#C5A059"
     }
   ],
   "text": [
     {
       "copyIndex": 0,
       "role": "eyebrow",
-      "x": 74,
-      "y": 333,
-      "width": 1091,
+      "x": 99,
+      "y": 421,
+      "width": 1042,
       "height": 61,
-      "fontSize": 18,
+      "fontSize": 16,
       "lineHeight": 1.35,
-      "letterSpacing": 744,
+      "letterSpacing": 1.2,
       "fontFamily": "Cinzel",
       "color": "#C5A059",
-      "align": "left",
+      "align": "center",
       "bold": true,
       "italic": false,
       "rtl": false
@@ -74,16 +71,16 @@
     {
       "copyIndex": 1,
       "role": "title",
-      "x": 74,
-      "y": 465,
-      "width": 1091,
+      "x": 124,
+      "y": 535,
+      "width": 992,
       "height": 210,
-      "fontSize": 69,
-      "lineHeight": 1.2,
+      "fontSize": 54,
+      "lineHeight": 1.25,
       "letterSpacing": 0,
       "fontFamily": "Cinzel",
       "color": "#FDF8F3",
-      "align": "left",
+      "align": "center",
       "bold": true,
       "italic": false,
       "rtl": false
@@ -91,16 +88,16 @@
     {
       "copyIndex": 2,
       "role": "subtitle",
-      "x": 229,
-      "y": 781,
-      "width": 936,
-      "height": 140,
-      "fontSize": 35,
+      "x": 149,
+      "y": 807,
+      "width": 942,
+      "height": 114,
+      "fontSize": 24,
       "lineHeight": 1.4,
       "letterSpacing": 0,
       "fontFamily": "Playfair Display",
       "color": "#C5A059",
-      "align": "right",
+      "align": "center",
       "bold": false,
       "italic": false,
       "rtl": false
@@ -108,16 +105,16 @@
     {
       "copyIndex": 3,
       "role": "body",
-      "x": 130,
-      "y": 1131,
-      "width": 980,
-      "height": 228,
-      "fontSize": 28,
+      "x": 149,
+      "y": 1061,
+      "width": 942,
+      "height": 210,
+      "fontSize": 24,
       "lineHeight": 1.55,
       "letterSpacing": 0,
       "fontFamily": "Verdana",
-      "color": "#0A1628",
-      "align": "left",
+      "color": "#FDF8F3",
+      "align": "center",
       "bold": false,
       "italic": false,
       "rtl": false
@@ -125,29 +122,29 @@
     {
       "copyIndex": 4,
       "role": "footer",
-      "x": 130,
-      "y": 1517,
-      "width": 980,
+      "x": 99,
+      "y": 1465,
+      "width": 1042,
       "height": 70,
-      "fontSize": 18,
+      "fontSize": 16,
       "lineHeight": 1.4,
       "letterSpacing": 0,
       "fontFamily": "Verdana",
-      "color": "#1E3A5F",
-      "align": "left",
+      "color": "#FDF8F3",
+      "align": "center",
       "bold": false,
       "italic": false,
       "rtl": false
     }
   ],
   "logo": {
-    "x": 74,
-    "y": 105,
-    "width": 149,
-    "height": 149
+    "x": 533,
+    "y": 140,
+    "width": 174,
+    "height": 175
   },
   "typeScale": {
-    "base": 18,
-    "ratio": 1.25
+    "base": 16,
+    "ratio": 1.5
   }
 }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
 import { evaluateDesignMetrics, checkCandidateSetDegeneracy } from './design-metrics.js';
+import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
 import type { ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 
@@ -241,10 +242,77 @@ export function scaleNormalizedLayoutToV2(
   }));
 
   const text: TextElement[] = norm.text.map((t) => {
-    const fontSizePx =
+    let minSize = 12;
+    if (t.role === 'title') minSize = 24;
+    else if (t.role === 'subtitle') minSize = 16;
+    else if (t.role === 'body') minSize = 14;
+    else if (t.role === 'cta') minSize = 14;
+    else if (t.role === 'footer') minSize = 10;
+
+    const rawFontSize =
       t.fontSize <= 1
-        ? Math.max(10, Math.round(t.fontSize * canvasHeight))
-        : Math.max(10, Math.round(t.fontSize));
+        ? Math.round(t.fontSize * canvasHeight)
+        : Math.round(t.fontSize);
+    const fontSizePx = Math.max(minSize, rawFontSize);
+    const clampedLineHeight = Math.max(1.15, Math.min(1.85, Number(t.lineHeight.toFixed(2))));
+
+    // Typography invariant enforcement
+    let resolvedFont: string = t.fontFamily;
+    if (t.rtl) {
+      if (t.role === 'body' || t.role === 'footer') {
+        resolvedFont = 'Noto Sans Arabic';
+      } else {
+        if (resolvedFont === 'Amiri' || resolvedFont === 'Cairo') {
+          // Keep admitted installed font
+        } else {
+          resolvedFont = 'Cairo';
+        }
+      }
+    } else {
+      if (t.role === 'body' || t.role === 'footer') {
+        resolvedFont = 'Verdana';
+      } else {
+        if (resolvedFont === 'Lora') {
+          resolvedFont = 'Playfair Display';
+        } else if (resolvedFont === 'Cormorant Garamond' || resolvedFont === 'Amiri' || resolvedFont === 'Noto Sans Arabic' || !resolvedFont) {
+          resolvedFont = 'Cinzel';
+        } else if (resolvedFont !== 'Cinzel' && resolvedFont !== 'Playfair Display') {
+          resolvedFont = 'Cinzel';
+        }
+      }
+    }
+
+    // WCAG 2.1 AA Contrast Enforcement:
+    // Determine underlying surface color (panel behind text or canvas background)
+    let effectiveBg = norm.background?.color || '#0A1628';
+    for (let i = norm.shapes.length - 1; i >= 0; i--) {
+      const s = norm.shapes[i];
+      if (s.role === 'panel' || s.kind === 'rect' || s.kind === 'roundRect') {
+        const containsX = t.x >= s.x - 0.05 && (t.x + t.width) <= (s.x + s.width + 0.05);
+        const containsY = t.y >= s.y - 0.05 && (t.y + t.height) <= (s.y + s.height + 0.05);
+        if (containsX && containsY && s.color && s.color.startsWith('#')) {
+          effectiveBg = s.color;
+          break;
+        }
+      }
+    }
+
+    const bgLum = hexToLuminance(effectiveBg);
+    const textLum = hexToLuminance(t.color);
+    const contrast = calculateLuminanceContrastRatio(textLum, bgLum);
+    const requiredContrast = fontSizePx >= 20 || (fontSizePx >= 16 && t.bold) ? 3.0 : 4.5;
+
+    let resolvedColor = t.color;
+    if (contrast < requiredContrast) {
+      if (bgLum < 0.2) {
+        // Dark background: Cream or Gold
+        resolvedColor = (t.role === 'eyebrow' || t.role === 'date' || t.role === 'venue') ? '#C5A059' : '#FDF8F3';
+      } else {
+        // Light background: Deep Navy
+        resolvedColor = '#0A1628';
+      }
+    }
+
     return {
       copyIndex: t.copyIndex,
       role: t.role,
@@ -253,15 +321,15 @@ export function scaleNormalizedLayoutToV2(
       width: scaleDimX(t.width),
       height: scaleDimY(t.height),
       fontSize: fontSizePx,
-      lineHeight: Number(t.lineHeight.toFixed(2)),
+      lineHeight: clampedLineHeight,
       letterSpacing:
         t.letterSpacing !== null && t.letterSpacing !== undefined
           ? t.letterSpacing <= 1
             ? Number((t.letterSpacing * canvasWidth).toFixed(1))
             : Number(t.letterSpacing.toFixed(1))
           : undefined,
-      fontFamily: t.fontFamily,
-      color: t.color,
+      fontFamily: resolvedFont,
+      color: resolvedColor,
       align: t.align,
       bold: t.bold,
       italic: t.italic,
@@ -302,6 +370,7 @@ export function scaleNormalizedLayoutToV2(
     version: 2,
     width: canvasWidth,
     height: canvasHeight,
+    genre: canvasWidth / canvasHeight >= 1.6 ? ('banner' as const) : ('poster' as const),
     grid: scaledGrid,
     background: { color: norm.background.color },
     art,

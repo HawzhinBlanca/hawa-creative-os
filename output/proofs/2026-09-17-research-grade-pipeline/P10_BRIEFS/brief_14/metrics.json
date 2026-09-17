@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.904,
-  "passed": false,
-  "qualityScore": 0.918,
+  "compositeScore": 0.96,
+  "passed": true,
+  "qualityScore": 0.95,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -24,23 +24,23 @@
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.999,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
+        "widthVariance": 0.002,
         "lineUniformityDev": 0,
-        "d": 0.003
+        "d": 0.012
       }
     },
     "balance": {
-      "score": 0.96,
+      "score": 0.969,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 620,
-        "wy": 779,
-        "offset": 0.0396
+        "wy": 801,
+        "offset": 0.0307
       }
     },
     "justification": {
@@ -57,13 +57,13 @@
       }
     },
     "regularity": {
-      "score": 0.595,
+      "score": 0.671,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 108,
-        "std": 80,
-        "cv": 0.68
+        "meanGap": 119,
+        "std": 63,
+        "cv": 0.491
       }
     },
     "typefacePairing": {
@@ -81,13 +81,13 @@
       }
     },
     "negativeSpace": {
-      "score": 0.634,
-      "passed": false,
+      "score": 0.95,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.699,
-        "bottomVoid": 0.135,
-        "occupiedArea": 654945,
+        "fraction": 0.684,
+        "bottomVoid": 0.104,
+        "occupiedArea": 687144,
         "totalArea": 2174960
       }
     },
@@ -120,7 +120,7 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 18,
+        "declaredBase": 16,
         "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
@@ -135,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "negativeSpace"
-  ],
-  "executionTimeMs": 0.09
+  "failingMetrics": [],
+  "executionTimeMs": 0.13
 }

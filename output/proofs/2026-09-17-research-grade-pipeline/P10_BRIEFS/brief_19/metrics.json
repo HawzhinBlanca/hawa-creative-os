@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.853,
-  "passed": false,
-  "qualityScore": 0.866,
+  "compositeScore": 0.956,
+  "passed": true,
+  "qualityScore": 0.945,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.6,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -15,32 +15,32 @@
       }
     },
     "gridAppropriateness": {
-      "score": 0.3,
-      "passed": false,
+      "score": 1,
+      "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "reason": "WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)",
-        "aspectRatio": "1920:1080"
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
-      "score": 0.997,
+      "score": 0.995,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0.003,
+        "widthVariance": 0.006,
         "lineUniformityDev": 0.013,
-        "d": 0.029
+        "d": 0.054
       }
     },
     "balance": {
-      "score": 0.976,
+      "score": 0.951,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 960,
-        "wy": 504,
-        "offset": 0.0238
+        "wy": 465,
+        "offset": 0.0489
       }
     },
     "justification": {
@@ -57,36 +57,37 @@
       }
     },
     "regularity": {
-      "score": 0.674,
+      "score": 0.648,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 64,
-        "std": 36,
-        "cv": 0.484
+        "meanGap": 81,
+        "std": 50,
+        "cv": 0.544
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
           "Cairo",
+          "Amiri",
           "Noto Sans Arabic"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.797,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.649,
-        "bottomVoid": 0.109,
-        "occupiedArea": 727630,
+        "fraction": 0.603,
+        "bottomVoid": 0.1,
+        "occupiedArea": 824076,
         "totalArea": 2073600
       }
     },
@@ -120,7 +121,7 @@
       "metric": "typeScale",
       "details": {
         "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -134,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "gridAppropriateness"
-  ],
-  "executionTimeMs": 0.25
+  "failingMetrics": [],
+  "executionTimeMs": 0.12
 }

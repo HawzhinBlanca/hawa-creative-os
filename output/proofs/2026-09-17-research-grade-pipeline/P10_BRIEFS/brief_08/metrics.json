@@ -1,8 +1,8 @@
 {
-  "compositeScore": 0.878,
-  "passed": false,
-  "qualityScore": 0.886,
-  "complianceScore": 0.7,
+  "compositeScore": 0.959,
+  "passed": true,
+  "qualityScore": 0.949,
+  "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
@@ -28,19 +28,19 @@
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0.002,
-        "lineUniformityDev": 0,
-        "d": 0.013
+        "widthVariance": 0.001,
+        "lineUniformityDev": 0.013,
+        "d": 0.01
       }
     },
     "balance": {
-      "score": 0.97,
+      "score": 0.969,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 618,
-        "offset": 0.0301
+        "wy": 616,
+        "offset": 0.0307
       }
     },
     "justification": {
@@ -57,18 +57,18 @@
       }
     },
     "regularity": {
-      "score": 0.611,
+      "score": 0.66,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 81,
-        "std": 58,
-        "cv": 0.637
+        "meanGap": 93,
+        "std": 53,
+        "cv": 0.516
       }
     },
     "typefacePairing": {
-      "score": 0.35,
-      "passed": false,
+      "score": 0.85,
+      "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
@@ -77,20 +77,17 @@
           "Noto Sans Arabic"
         ],
         "familyCount": 3,
-        "failures": [
-          "Unadmitted font family: \"Amiri\"",
-          "Unadmitted font family: \"Amiri\""
-        ]
+        "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.705,
-      "passed": false,
+      "score": 0.95,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.678,
-        "bottomVoid": 0.11,
-        "occupiedArea": 469089,
+        "fraction": 0.692,
+        "bottomVoid": 0.1,
+        "occupiedArea": 449035,
         "totalArea": 1458000
       }
     },
@@ -123,7 +120,7 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 18,
+        "declaredBase": 16,
         "declaredRatio": 1.25,
         "conforming": 5,
         "total": 5
@@ -138,9 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "typefacePairing",
-    "negativeSpace"
-  ],
-  "executionTimeMs": 0.23
+  "failingMetrics": [],
+  "executionTimeMs": 0.52
 }

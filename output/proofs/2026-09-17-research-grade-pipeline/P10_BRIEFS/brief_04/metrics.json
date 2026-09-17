@@ -1,77 +1,74 @@
 {
-  "compositeScore": 0.876,
-  "passed": false,
-  "qualityScore": 0.883,
-  "complianceScore": 0.7,
+  "compositeScore": 0.956,
+  "passed": true,
+  "qualityScore": 0.945,
+  "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 0.8,
-      "passed": false,
+      "score": 1,
+      "passed": true,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [
-          "Text 2 (subtitle) contrast 2.33:1 < 3:1",
-          "Text 3 (body) contrast 1.00:1 < 4.5:1"
-        ],
+        "failingIssues": [],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.9,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
         "alignedElements": 9,
-        "totalElements": 10
+        "totalElements": 9
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.999,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0.001
+        "widthVariance": 0.001,
+        "lineUniformityDev": 0.013,
+        "d": 0.01
       }
     },
     "balance": {
-      "score": 0.989,
+      "score": 0.973,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 548,
-        "wy": 526,
-        "offset": 0.0106
+        "wx": 540,
+        "wy": 498,
+        "offset": 0.0274
       }
     },
     "justification": {
-      "score": 0.75,
+      "score": 0.95,
       "passed": true,
       "metric": "justification",
       "details": {
         "counts": {
           "left": 0,
-          "center": 2,
-          "right": 3
+          "center": 5,
+          "right": 0
         },
-        "dominanceRatio": 0.6
+        "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.704,
+      "score": 0.608,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 91,
-        "std": 42,
-        "cv": 0.421
+        "meanGap": 77,
+        "std": 56,
+        "cv": 0.644
       }
     },
     "typefacePairing": {
-      "score": 0.6,
-      "passed": false,
+      "score": 0.85,
+      "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
@@ -80,9 +77,7 @@
           "Noto Sans Arabic"
         ],
         "familyCount": 3,
-        "failures": [
-          "Unadmitted font family: \"Amiri\""
-        ]
+        "failures": []
       }
     },
     "negativeSpace": {
@@ -90,9 +85,9 @@
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.508,
-        "bottomVoid": 0.075,
-        "occupiedArea": 573967,
+        "fraction": 0.593,
+        "bottomVoid": 0.1,
+        "occupiedArea": 474611,
         "totalArea": 1166400
       }
     },
@@ -125,7 +120,7 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 12,
+        "declaredBase": 16,
         "declaredRatio": 1.25,
         "conforming": 5,
         "total": 5
@@ -140,9 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "textLegibility",
-    "typefacePairing"
-  ],
-  "executionTimeMs": 0.07
+  "failingMetrics": [],
+  "executionTimeMs": 0.05
 }

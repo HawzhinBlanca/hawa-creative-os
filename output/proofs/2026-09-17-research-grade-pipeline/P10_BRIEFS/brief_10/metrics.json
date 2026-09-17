@@ -1,7 +1,7 @@
 {
-  "compositeScore": 0.948,
+  "compositeScore": 0.955,
   "passed": true,
-  "qualityScore": 0.935,
+  "qualityScore": 0.943,
   "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
@@ -19,28 +19,28 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 10,
-        "totalElements": 10
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
-      "score": 0.998,
+      "score": 1,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0.002,
-        "lineUniformityDev": 0.013,
-        "d": 0.021
+        "widthVariance": 0,
+        "lineUniformityDev": 0.006,
+        "d": 0.004
       }
     },
     "balance": {
-      "score": 0.983,
+      "score": 0.945,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 914,
-        "offset": 0.0168
+        "wy": 812,
+        "offset": 0.0546
       }
     },
     "justification": {
@@ -57,13 +57,13 @@
       }
     },
     "regularity": {
-      "score": 0.568,
+      "score": 0.624,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 117,
-        "std": 97,
-        "cv": 0.76
+        "meanGap": 132,
+        "std": 86,
+        "cv": 0.604
       }
     },
     "typefacePairing": {
@@ -81,13 +81,13 @@
       }
     },
     "negativeSpace": {
-      "score": 0.846,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.633,
-        "bottomVoid": 0.08,
-        "occupiedArea": 760280,
+        "fraction": 0.698,
+        "bottomVoid": 0.135,
+        "occupiedArea": 627179,
         "totalArea": 2073600
       }
     },
@@ -136,5 +136,5 @@
     }
   },
   "failingMetrics": [],
-  "executionTimeMs": 0.06
+  "executionTimeMs": 0.19
 }

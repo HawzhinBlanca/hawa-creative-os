@@ -1,28 +1,26 @@
 {
-  "compositeScore": 0.918,
-  "passed": false,
-  "qualityScore": 0.897,
+  "compositeScore": 0.957,
+  "passed": true,
+  "qualityScore": 0.946,
   "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 0.844,
-      "passed": false,
+      "score": 1,
+      "passed": true,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [
-          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
-        ],
+        "failingIssues": [],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.7,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 10
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
@@ -31,18 +29,18 @@
       "metric": "alignment",
       "details": {
         "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "lineUniformityDev": 0.006,
+        "d": 0.004
       }
     },
     "balance": {
-      "score": 0.955,
+      "score": 0.956,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 550,
-        "wy": 838,
-        "offset": 0.0453
+        "wx": 540,
+        "wy": 840,
+        "offset": 0.0443
       }
     },
     "justification": {
@@ -52,43 +50,44 @@
       "details": {
         "counts": {
           "left": 0,
-          "center": 0,
-          "right": 5
+          "center": 5,
+          "right": 0
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.568,
+      "score": 0.644,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 137,
-        "std": 112,
-        "cv": 0.76
+        "meanGap": 108,
+        "std": 65,
+        "cv": 0.553
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
           "Cairo",
+          "Amiri",
           "Noto Sans Arabic"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.945,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.601,
-        "bottomVoid": 0.06,
-        "occupiedArea": 826424,
+        "fraction": 0.667,
+        "bottomVoid": 0.15,
+        "occupiedArea": 690716,
         "totalArea": 2073600
       }
     },
@@ -122,7 +121,7 @@
       "metric": "typeScale",
       "details": {
         "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -136,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "textLegibility"
-  ],
-  "executionTimeMs": 0.11
+  "failingMetrics": [],
+  "executionTimeMs": 0.08
 }

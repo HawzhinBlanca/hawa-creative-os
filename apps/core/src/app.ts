@@ -1170,9 +1170,9 @@ export function createApp(options?: CreateAppOptions) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: process.env.OPENAI_MODEL || 'gpt-6-astra',
           messages: [{ role: 'user', content: 'p' }],
-          max_tokens: 1,
+          max_completion_tokens: 16,
         }),
         signal: AbortSignal.timeout(7000),
       });

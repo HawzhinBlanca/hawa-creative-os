@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.898,
-  "passed": false,
-  "qualityScore": 0.909,
+  "compositeScore": 0.958,
+  "passed": true,
+  "qualityScore": 0.947,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -19,8 +19,8 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 10,
-        "totalElements": 10
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
@@ -29,18 +29,18 @@
       "metric": "alignment",
       "details": {
         "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "lineUniformityDev": 0.006,
+        "d": 0.004
       }
     },
     "balance": {
-      "score": 0.954,
+      "score": 0.961,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 469,
-        "offset": 0.0465
+        "wy": 480,
+        "offset": 0.039
       }
     },
     "justification": {
@@ -57,13 +57,13 @@
       }
     },
     "regularity": {
-      "score": 0.552,
+      "score": 0.65,
       "passed": true,
       "metric": "regularity",
       "details": {
         "meanGap": 81,
-        "std": 74,
-        "cv": 0.813
+        "std": 49,
+        "cv": 0.539
       }
     },
     "typefacePairing": {
@@ -81,13 +81,13 @@
       }
     },
     "negativeSpace": {
-      "score": 0.585,
-      "passed": false,
+      "score": 0.95,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.713,
+        "fraction": 0.711,
         "bottomVoid": 0.1,
-        "occupiedArea": 334765,
+        "occupiedArea": 336553,
         "totalArea": 1166400
       }
     },
@@ -135,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "negativeSpace"
-  ],
-  "executionTimeMs": 1.12
+  "failingMetrics": [],
+  "executionTimeMs": 0.1
 }

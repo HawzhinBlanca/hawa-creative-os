@@ -1,49 +1,46 @@
 {
-  "compositeScore": 0.924,
-  "passed": false,
-  "qualityScore": 0.905,
+  "compositeScore": 0.957,
+  "passed": true,
+  "qualityScore": 0.947,
   "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 0.689,
-      "passed": false,
+      "score": 1,
+      "passed": true,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [
-          "Text 3 (body) contrast 1.00:1 < 4.5:1",
-          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
-        ],
+        "failingIssues": [],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.9,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
         "alignedElements": 9,
-        "totalElements": 10
+        "totalElements": 9
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.998,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "widthVariance": 0.002,
+        "lineUniformityDev": 0.013,
+        "d": 0.018
       }
     },
     "balance": {
-      "score": 0.986,
+      "score": 0.967,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 522,
-        "wy": 689,
-        "offset": 0.014
+        "wx": 540,
+        "wy": 613,
+        "offset": 0.0326
       }
     },
     "justification": {
@@ -53,20 +50,20 @@
       "details": {
         "counts": {
           "left": 0,
-          "center": 0,
-          "right": 5
+          "center": 5,
+          "right": 0
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.696,
+      "score": 0.636,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 87,
-        "std": 42,
-        "cv": 0.437
+        "meanGap": 92,
+        "std": 58,
+        "cv": 0.572
       }
     },
     "typefacePairing": {
@@ -88,9 +85,9 @@
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.537,
-        "bottomVoid": 0.08,
-        "occupiedArea": 674593,
+        "fraction": 0.7,
+        "bottomVoid": 0.112,
+        "occupiedArea": 436778,
         "totalArea": 1458000
       }
     },
@@ -138,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "textLegibility"
-  ],
-  "executionTimeMs": 0.07
+  "failingMetrics": [],
+  "executionTimeMs": 0.22
 }

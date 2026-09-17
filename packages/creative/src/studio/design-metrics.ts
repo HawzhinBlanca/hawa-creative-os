@@ -44,6 +44,7 @@ const ADMITTED_DISPLAY_FONTS = new Set([
   'Montserrat',
   'Lora',
   'Cairo',
+  'Amiri',
   'Playfair Display',
   'Plus Jakarta Sans',
   'Vazirmatn',
@@ -94,8 +95,23 @@ export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
     }
 
     // Contrast check
+    // Determine effective background (underlying shape panel or canvas background)
+    let effectiveBg = bgColor;
+    for (let sIdx = (layout.shapes || []).length - 1; sIdx >= 0; sIdx--) {
+      const s = layout.shapes[sIdx];
+      if (s.role === 'panel' || s.kind === 'rect' || s.kind === 'roundRect') {
+        const containsX = el.x >= s.x - 20 && (el.x + el.width) <= (s.x + s.width + 20);
+        const containsY = el.y >= s.y - 20 && (el.y + el.height) <= (s.y + s.height + 20);
+        if (containsX && containsY && s.color && s.color.startsWith('#')) {
+          effectiveBg = s.color;
+          break;
+        }
+      }
+    }
+
+    const effectiveBgLum = hexToLuminance(effectiveBg);
     const textLum = hexToLuminance(el.color);
-    const contrast = calculateLuminanceContrastRatio(textLum, bgLum);
+    const contrast = calculateLuminanceContrastRatio(textLum, effectiveBgLum);
     const requiredContrast = el.fontSize >= 20 || (el.fontSize >= 16 && el.bold) ? 3.0 : 4.5;
     if (contrast < requiredContrast) {
       const deficit = (requiredContrast - contrast) / requiredContrast;
@@ -125,7 +141,7 @@ export function computeGridAppropriateness(layout: StudioLayoutV2): MetricResult
 
   // 16:9 PowerPoint presentation slides fail grid appropriateness for wrong canvas genre
   // (institutional social announcements, invitations, and posters are 1:1, 4:5, 9:16)
-  if (width / height >= 1.6) {
+  if (layout.genre === 'presentation_slide') {
     return {
       score: 0.30,
       passed: false,

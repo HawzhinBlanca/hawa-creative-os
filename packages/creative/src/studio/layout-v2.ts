@@ -66,6 +66,7 @@ export interface StudioLayoutV2 {
   version: 2;
   width: number;
   height: number;
+  genre?: 'social_announcement' | 'invitation' | 'poster' | 'presentation_slide' | 'banner';
   grid: GridConfig;
   background: { color: Hex };
   art?: ArtConfig;
@@ -143,6 +144,7 @@ export const studioLayoutV2Schema = z.object({
   version: z.literal(2),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  genre: z.enum(['social_announcement', 'invitation', 'poster', 'presentation_slide', 'banner']).optional(),
   grid: gridSchema,
   background: z.object({ color: hexSchema }).strict(),
   art: artSchema.optional(),
