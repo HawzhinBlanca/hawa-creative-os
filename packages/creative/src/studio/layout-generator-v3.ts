@@ -102,10 +102,12 @@ export function computeCapacitySlot(
   const widthRange: [number, number] = [0.75, 0.88];
 
   switch (block.role) {
-    case 'title':
-      fontRange = [36 / canvasHeight, 46 / canvasHeight];
+    case 'title': {
+      const minTitlePx = Math.max(36, Math.round(Math.ceil(0.016 * canvasWidth) * 2.2));
+      fontRange = [minTitlePx / canvasHeight, Math.max(minTitlePx * 1.3, 52) / canvasHeight];
       heightRange = [0.07, 0.12];
       break;
+    }
     case 'subtitle':
       fontRange = [20 / canvasHeight, 26 / canvasHeight];
       heightRange = [0.04, 0.08];
@@ -115,16 +117,20 @@ export function computeCapacitySlot(
       heightRange = [0.025, 0.04];
       break;
     case 'body': {
-      fontRange = [15 / canvasHeight, 19 / canvasHeight];
+      const minBodyPx = Math.ceil(0.016 * canvasWidth);
+      const minBodyNorm = minBodyPx / canvasHeight;
+      fontRange = [minBodyNorm, Math.max(minBodyNorm * 1.3, 24 / canvasHeight)];
       const estLines = Math.ceil(charCount / 65);
       const estHeight = Math.max(0.10, Math.min(0.28, (estLines * 28) / canvasHeight));
       heightRange = [estHeight * 0.9, estHeight * 1.3];
       break;
     }
-    case 'footer':
-      fontRange = [11 / canvasHeight, 14 / canvasHeight];
+    case 'footer': {
+      const minFooterNorm = 12 / canvasHeight;
+      fontRange = [minFooterNorm, 16 / canvasHeight];
       heightRange = [0.025, 0.045];
       break;
+    }
     default:
       fontRange = [14 / canvasHeight, 18 / canvasHeight];
       heightRange = [0.04, 0.08];
@@ -659,6 +665,12 @@ Strict font family adherence is required. You may ONLY use the following admitte
   * Subtitles: 1.30 to 1.45.
   * Body text: 1.40 to 1.60 (sufficient leading for readability).
   * Footers: 1.30 to 1.45.
+- MINIMUM FONT SIZE CONSTRAINTS (HARD QA REQUIREMENTS):
+  * Absolute minimum font size for ANY text element is 12px (normalized: >= 12 / canvasHeight).
+  * Body copy (role: "body") MUST have fontSize >= 1.6% of canvas width (e.g. >= 18px on 1080px width canvas; normalized: >= (0.016 * canvasWidth) / canvasHeight).
+  * Title copy (role: "title") MUST have fontSize >= 2.2x body copy fontSize (e.g. >= 40px on 1080px width canvas).
+  * Subtitle copy (role: "subtitle") MUST have fontSize >= 20px.
+  * Any font size below 12px or body text below 1.6% width (such as 9px body) will be REJECTED by Hard QA with defect code MIN_SIZE / UNREADABLE_FONT_SIZE. Layouts are never silently rewritten.
 
 ================================================================================
 3. SPATIAL GRID, MARGINS & WCAG 2.1 AA LEGIBILITY
@@ -759,7 +771,12 @@ CRITICAL CONSTRAINTS:
 3. Use ONLY F12 admitted fonts (Verdana or Noto Sans Arabic for body/footer; Cinzel/Lora/Cairo/Amiri for titles).
 4. All coordinates strictly in [0.0, 1.0].
 5. Declare typeScale (base and ratio) for each candidate.
-6. Declare calmRegion if an art layer is requested.`;
+6. Declare calmRegion if an art layer is requested.
+7. MINIMUM FONT SIZES (STRICT ENFORCEMENT):
+   - Absolute minimum font size for ANY text: 12px (normalized: ${(12 / canvasHeight).toFixed(4)}).
+   - Body copy (role: "body") minimum font size: ${Math.ceil(0.016 * canvasWidth)}px (1.6% of canvas width ${canvasWidth}px; normalized: ${(Math.ceil(0.016 * canvasWidth) / canvasHeight).toFixed(4)}).
+   - Title copy (role: "title") minimum font size: ${Math.max(36, Math.round(Math.ceil(0.016 * canvasWidth) * 2.2))}px (>= 2.2x body font size).
+   - NEVER generate font sizes below these minimums (e.g. 9px body text is strictly rejected by QA).`;
 }
 
 /**

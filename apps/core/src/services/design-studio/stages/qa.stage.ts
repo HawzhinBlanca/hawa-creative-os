@@ -1,5 +1,5 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { validateLayoutV2, type LayoutValidationContext } from '@hawa/creative';
+import { validateLayoutV2, computeLayoutMetrics, type LayoutValidationContext } from '@hawa/creative';
 
 export async function runQAStage(
   ctx: StageContext,
@@ -25,32 +25,45 @@ export async function runQAStage(
     draftFont: ctx.latinFont || 'Verdana',
   };
 
-  // Safe clamp of text element font sizes to guarantee minimum readability requirements
+  // Explicit check for unreadable font sizes: fail QA, do NOT mutatively rewrite font sizes
   const minBodyPx = Math.ceil(0.016 * ctx.width);
   for (const t of winner.currentLayout.text) {
-    if (t.role === 'body') t.fontSize = Math.max(t.fontSize, minBodyPx);
-    else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize, 12);
-    else t.fontSize = Math.max(t.fontSize, 12);
+    if (t.fontSize < 12 || (t.role === 'body' && t.fontSize < minBodyPx)) {
+      if (!defectCodes.includes('MIN_SIZE')) defectCodes.push('MIN_SIZE');
+      if (!defectCodes.includes('UNREADABLE_FONT_SIZE')) defectCodes.push('UNREADABLE_FONT_SIZE');
+    }
   }
 
   const validation = validateLayoutV2(winner.currentLayout, validationContext);
 
   if (!validation.ok) {
-    defectCodes.push(validation.code);
+    if (!defectCodes.includes(validation.code)) {
+      defectCodes.push(validation.code);
+    }
   } else if (validation.layout) {
+    // Preserve layout normalization (e.g. script font) only if validated OK
     winner.currentLayout = validation.layout;
   }
 
   // Hard QA check: Metrics validation
-  if (winner.metrics) {
-    if (winner.metrics.overlapCount > 0) {
-      defectCodes.push('OVERLAP');
-    }
+  // Compute metrics if not present to ensure metrics report describes what ships
+  const metrics = winner.metrics || computeLayoutMetrics(winner.currentLayout);
+  winner.metrics = metrics;
+
+  if (metrics.overlapCount > 0) {
+    defectCodes.push('OVERLAP');
+  }
+
+  // Restore POOR_GRID_ALIGNMENT defect gate
+  // Calibrated against six confirmed KAAE exemplars (range 0.792 - 1.000, mean 0.949)
+  // An alignment score < 0.70 represents severe raggedness / off-grid drift that violates institutional dignity
+  if (metrics.alignmentScore < 0.70) {
+    defectCodes.push('POOR_GRID_ALIGNMENT');
   }
 
   return {
     passed: defectCodes.length === 0,
     defectCodes,
-    metrics: winner.metrics!,
+    metrics,
   };
 }
