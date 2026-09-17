@@ -96,3 +96,58 @@ that certifies the pipeline works.
 | Proof honesty | **Much improved** — the live qualification and ledger are genuine |
 | Design quality | Improved, roughly 7/10, with named defects and low diversity |
 | Ship-ready | **No** |
+
+---
+
+# Addendum, same evening: remediation checked (T0–T8)
+
+Seven further commits, `4699792`..`8dc06c4`. Gates at HEAD are green: typecheck clean, 146 files /
+1061 tests pass, pack validation PASS=573.
+
+## Genuinely fixed, verified independently
+
+| Task | Verification |
+|---|---|
+| **T0 restore** | **Data is back.** 1557 tasks, 77 plans, 47 bindings, 98 inbox events, 134 studio calls. Task `8c32c048…` resolves again. **Sewa's recovered design `DAHVWVDUOuA` is present.** The proof states the loss window honestly as 79 minutes 18 seconds, and containers were paused before the restore |
+| **T1 volume protection** | Real: `postgres_data` is now declared `external: true`, so compose can no longer recreate it |
+| **T2 traceability** | `HAWA_BUILD_COMMIT` is a real commit again, and both flags are back to `off` as instructed |
+| **T4 regressions reversed** | `POOR_GRID_ALIGNMENT` restored with its threshold justified against the six exemplars (range 0.792–1.000, mean 0.949). The QA font clamp is gone, replaced by a check that raises `UNREADABLE_FONT_SIZE` instead of rewriting, with a comment saying exactly that. Metrics are now computed so they describe what ships |
+
+## T6 is rejected on measurement
+
+T6 claims the Sorani footer defect is fixed, and specifically that panel text "resolves to Gold
+(`#C5A059`) or Cream (`#FDF8F3`), achieving contrast ratio > 4.5:1".
+
+I sampled the actual pixels of `T6_DEFECTS/brief_07_after.png`. The text band contains exactly two
+colours: the panel `#162B48` and the glyphs `#0E1C32`, a *darker* navy. There is no gold or cream
+anywhere in it.
+
+| | Contrast against the panel |
+|---|---|
+| Measured glyphs `#0E1C32` | **1.20:1** |
+| Claimed gold `#C5A059` | 5.80:1 |
+| Claimed cream `#FDF8F3` | 13.51:1 |
+| WCAG body minimum | 4.50:1 |
+
+At 1.20:1 the text is effectively invisible. The fix replaced a cream block that clashed with a navy
+block whose text cannot be read, and the existing 4.5:1 contrast gate did not catch it.
+
+**Both after-renders also use placeholder copy** ("Sample copy block 0" through 4, confirmed in the
+SVG) while the before-renders are the real briefs, byte-identical to the P10 previews. A real-copy
+before against a placeholder after does not demonstrate the fix, and T6 does not disclose it.
+
+Both after-renders still carry large voids: `brief_01_after` has a panel that is mostly empty, and
+`brief_07_after` has roughly a quarter of the canvas empty above the unreadable panel.
+
+## T5, T7, T8 are blocked, legitimately
+
+The critique stage is now wired into the qualification (`generateBoxGroundedCritique` is called), but
+the ledger still shows one row per brief because **credits are exhausted** and it cannot be re-run.
+T7's end-to-end proof and T8's blind pairs are blocked for the same reason.
+
+## Standing state
+
+- Production: **degraded**, `billing_exhausted`, alert id 239. No design can be produced.
+- Deployed build `4699792` is six commits behind HEAD `8dc06c4`, which is fine while flags are off.
+- Remaining before shippable: credits, then T5 re-run, T6 redone on real copy with measured contrast,
+  then T7 and T8.
