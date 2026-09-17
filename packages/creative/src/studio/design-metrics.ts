@@ -459,9 +459,13 @@ export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
   const totalArea = layout.width * layout.height;
   let occupiedArea = 0;
 
+  interface Span { y1: number; y2: number; }
+  const substantiveSpans: Span[] = [];
+
   let maxSubstantiveY = 0;
   for (const t of layout.text || []) {
     occupiedArea += t.width * t.height;
+    substantiveSpans.push({ y1: t.y, y2: t.y + t.height });
     maxSubstantiveY = Math.max(maxSubstantiveY, t.y + t.height);
   }
 
@@ -471,38 +475,60 @@ export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
       (s.width >= layout.width * 0.95 && s.height >= layout.height * 0.95);
     if (isCanvasFrame) continue;
     occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? 0.6 : 0.4);
-    if (s.height > 10 && s.role !== 'rule') {
+    if (s.height >= 20 && s.role !== 'rule') {
+      substantiveSpans.push({ y1: s.y, y2: s.y + s.height });
       maxSubstantiveY = Math.max(maxSubstantiveY, s.y + s.height);
     }
   }
 
   if (layout.logo) {
     occupiedArea += layout.logo.width * layout.logo.height;
+    substantiveSpans.push({ y1: layout.logo.y, y2: layout.logo.y + layout.logo.height });
     maxSubstantiveY = Math.max(maxSubstantiveY, layout.logo.y + layout.logo.height);
   }
 
   const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));
 
-  // Optimal band: 0.30 to 0.72 calibrated against confirmed exemplars (range 0.340 - 0.568) and institutional text layouts
+  // Optimal band: 0.30 to 0.60 calibrated against 6 confirmed exemplars (range 0.340 - 0.568)
   let score = 1.0;
   if (fraction < 0.25) {
     score = Math.max(0, (fraction / 0.25) * 0.5);
   } else if (fraction < 0.30) {
     score = 0.75 + (fraction - 0.25) * 4.0;
-  } else if (fraction <= 0.72) {
+  } else if (fraction <= 0.60) {
     score = 0.95;
-  } else if (fraction <= 0.80) {
-    score = 0.95 - ((fraction - 0.72) / 0.08) * 0.25; // Linear drop from 0.95 down to 0.70
+  } else if (fraction <= 0.65) {
+    score = 0.95 - ((fraction - 0.60) / 0.05) * 0.25; // Linear drop from 0.95 down to 0.70
   } else {
-    // Fraction > 0.80: excessive emptiness fails gate (< 0.70)
-    score = Math.max(0, 0.70 - ((fraction - 0.80) / 0.15) * 0.70);
+    // Fraction > 0.65: excessive emptiness fails gate (< 0.70)
+    score = Math.max(0, 0.68 - ((fraction - 0.65) / 0.15) * 0.68);
   }
 
-  // Bottom void penalty: substantive institutional content must span >= 72% of canvas height (bottomVoid <= 0.28)
-  // Sparse renders terminating at 66% canvas height (34% bottom void) suffer penalty dropping score below 0.70
+  // Detect largest internal dead gap between consecutive substantive content blocks
+  substantiveSpans.sort((a, b) => a.y1 - b.y1);
+  let maxInternalGap = 0;
+  let currentFurthest = substantiveSpans[0]?.y2 || 0;
+
+  for (let i = 1; i < substantiveSpans.length; i++) {
+    const span = substantiveSpans[i];
+    if (span.y1 > currentFurthest) {
+      const gap = span.y1 - currentFurthest;
+      maxInternalGap = Math.max(maxInternalGap, gap);
+    }
+    currentFurthest = Math.max(currentFurthest, span.y2);
+  }
+
+  const internalGapFraction = maxInternalGap / layout.height;
+  if (internalGapFraction > 0.22) {
+    // Dead void > 22% canvas height penalizes
+    const gapPenalty = ((internalGapFraction - 0.22) / 0.10) * 0.35;
+    score = Math.max(0, score - gapPenalty);
+  }
+
+  // Bottom void penalty: substantive institutional content must span >= 75% of canvas height (bottomVoid <= 0.25)
   const bottomVoid = (layout.height - maxSubstantiveY) / layout.height;
   if (bottomVoid > 0.25) {
-    const penalty = ((bottomVoid - 0.25) / 0.15) * 0.50;
+    const penalty = ((bottomVoid - 0.25) / 0.15) * 0.40;
     score = Math.max(0, score - penalty);
   }
 
@@ -515,6 +541,7 @@ export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
     metric: 'negativeSpace',
     details: {
       fraction: parseFloat(fraction.toFixed(3)),
+      internalGapFraction: parseFloat(internalGapFraction.toFixed(3)),
       bottomVoid: parseFloat(bottomVoid.toFixed(3)),
       occupiedArea: Math.round(occupiedArea),
       totalArea,

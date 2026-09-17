@@ -319,8 +319,22 @@ function renderTextElementToSvg(
   fontsDir: string
 ): { svgSnippet: string; lineCount: number } {
   const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
-  const letterSpacingVal = t.letterSpacing || 0;
-  const lines = wrapTextWithFontkit(copyText, t.width, font, t.fontSize, letterSpacingVal);
+  let letterSpacingVal = t.letterSpacing || 0;
+  if (t.role === 'eyebrow' && letterSpacingVal > 0.06) {
+    letterSpacingVal = 0.04;
+  }
+  let lines = wrapTextWithFontkit(copyText, t.width, font, t.fontSize, letterSpacingVal);
+
+  // Invariant: Eyebrows must NEVER wrap onto multiple lines
+  if (t.role === 'eyebrow' && lines.length > 1) {
+    letterSpacingVal = 0;
+    lines = wrapTextWithFontkit(copyText, t.width, font, t.fontSize, 0);
+    let curSize = t.fontSize;
+    while (lines.length > 1 && curSize > 10) {
+      curSize -= 1;
+      lines = wrapTextWithFontkit(copyText, t.width, font, curSize, 0);
+    }
+  }
 
   if (lines.length === 0) {
     return { svgSnippet: '', lineCount: 0 };

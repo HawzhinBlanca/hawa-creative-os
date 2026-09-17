@@ -46,10 +46,26 @@ export interface NormalizedArtConfig {
   calmRegion: NormalizedBox;
 }
 
+export type CompositionArchetype =
+  | 'monolith_centered'
+  | 'asymmetric_editorial'
+  | 'hero_statement_grid'
+  | 'split_statutory_banner'
+  | 'minimal_framed'
+  | 'stat_card_triptych'
+  | 'numbered_standards_stack'
+  | 'executive_roadmap_quad'
+  | 'crest_banner_split'
+  | 'credential_badge_card'
+  | 'chevron_band_institutional'
+  | 'monograph_bilateral_column'
+  | 'academic_citation_folio'
+  | 'commencement_diploma_frame';
+
 export interface NormalizedLayoutCandidate {
   id: string;
   conceptTitle: string;
-  compositionArchetype: 'monolith_centered' | 'asymmetric_editorial' | 'hero_statement_grid' | 'split_statutory_banner' | 'minimal_framed';
+  compositionArchetype: CompositionArchetype;
   typeScale: {
     base: number;
     ratio: number;
@@ -230,22 +246,36 @@ export function scaleNormalizedLayoutToV2(
     baseline: Math.max(4, Math.round(norm.grid.baseline * canvasHeight || 8)),
   };
 
-  const shapes: ShapeElement[] = norm.shapes.map((s) => ({
-    x: scaleX(s.x),
-    y: scaleY(s.y),
-    width: scaleDimX(s.width),
-    height: scaleDimY(s.height),
-    kind: s.kind,
-    color: s.color,
-    role: s.role,
-    opacity: s.opacity !== null && s.opacity !== undefined ? Number(clamp(s.opacity).toFixed(2)) : undefined,
-    radius: s.radius !== null && s.radius !== undefined ? Math.round(s.radius * canvasWidth) : undefined,
-    strokeWidth:
-      s.strokeWidth !== null && s.strokeWidth !== undefined
-        ? Math.max(1, Math.round(s.strokeWidth * canvasWidth))
-        : undefined,
-    strokeColor: s.strokeColor || undefined,
-  }));
+  const canvasBgLum = hexToLuminance(norm.background?.color || '#0A1628');
+  const shapes: ShapeElement[] = norm.shapes.map((s) => {
+    let resolvedColor = s.color;
+    let strokeColor = s.strokeColor || undefined;
+    // T6(c): Fix footer or venue band so it inherits the palette instead of defaulting to cream
+    if (canvasBgLum < 0.2) {
+      const sLum = hexToLuminance(s.color || '#000000');
+      // If a panel on a dark background is cream/white (> 0.5 luminance)
+      if ((s.role === 'panel' || s.y >= 0.6) && sLum > 0.5) {
+        resolvedColor = '#162B48';
+        if (!strokeColor) strokeColor = '#1E3A5F';
+      }
+    }
+    return {
+      x: scaleX(s.x),
+      y: scaleY(s.y),
+      width: scaleDimX(s.width),
+      height: scaleDimY(s.height),
+      kind: s.kind,
+      color: resolvedColor,
+      role: s.role,
+      opacity: s.opacity !== null && s.opacity !== undefined ? Number(clamp(s.opacity).toFixed(2)) : undefined,
+      radius: s.radius !== null && s.radius !== undefined ? Math.round(s.radius * canvasWidth) : undefined,
+      strokeWidth:
+        s.strokeWidth !== null && s.strokeWidth !== undefined
+          ? Math.max(1, Math.round(s.strokeWidth * canvasWidth))
+          : undefined,
+      strokeColor,
+    };
+  });
 
   const minBodyPx = Math.ceil(0.016 * canvasWidth);
   const text: TextElement[] = norm.text.map((t) => {
@@ -320,6 +350,14 @@ export function scaleNormalizedLayoutToV2(
       }
     }
 
+    // T6(b): Restrain letterSpacing to em units [0, 0.06] and never multiply by canvasWidth!
+    const resolvedLetterSpacing =
+      t.letterSpacing !== null && t.letterSpacing !== undefined
+        ? t.role === 'eyebrow'
+          ? Math.min(0.04, Math.max(0, t.letterSpacing > 1 ? t.letterSpacing / 100 : t.letterSpacing))
+          : Math.min(0.06, Math.max(0, t.letterSpacing > 1 ? t.letterSpacing / 100 : t.letterSpacing))
+        : undefined;
+
     return {
       copyIndex: t.copyIndex,
       role: t.role,
@@ -329,12 +367,7 @@ export function scaleNormalizedLayoutToV2(
       height: scaleDimY(t.height),
       fontSize: fontSizePx,
       lineHeight: clampedLineHeight,
-      letterSpacing:
-        t.letterSpacing !== null && t.letterSpacing !== undefined
-          ? t.letterSpacing <= 1
-            ? Number((t.letterSpacing * canvasWidth).toFixed(1))
-            : Number(t.letterSpacing.toFixed(1))
-          : undefined,
+      letterSpacing: resolvedLetterSpacing,
       fontFamily: resolvedFont,
       color: resolvedColor,
       align: t.align,
@@ -411,6 +444,15 @@ export const LAYOUT_V3_JSON_SCHEMA = {
               'hero_statement_grid',
               'split_statutory_banner',
               'minimal_framed',
+              'stat_card_triptych',
+              'numbered_standards_stack',
+              'executive_roadmap_quad',
+              'crest_banner_split',
+              'credential_badge_card',
+              'chevron_band_institutional',
+              'monograph_bilateral_column',
+              'academic_citation_folio',
+              'commencement_diploma_frame',
             ],
           },
           typeScale: {
@@ -682,9 +724,15 @@ Strict font family adherence is required. You may ONLY use the following admitte
   * Light text on dark background (e.g., Cream #FDF8F3 or Gold #C5A059 on Navy #0A1628 / #0C2340): contrast ratio MUST exceed 4.5:1.
   * Dark text on light background (e.g., Navy on Cream panel): contrast ratio MUST exceed 4.5:1.
   * NEVER place low-contrast text (e.g., dark blue on dark blue, or pale gray on cream).
+- Eyebrows & Tracking:
+  * Eyebrows (role: "eyebrow") must fit cleanly on a SINGLE line. NEVER allow an eyebrow to wrap onto multiple lines.
+  * Use restrained tracking (0.02 to 0.04em).
+- Footer and Venue Bands:
+  * If the canvas background is dark, NEVER place a solid cream (#FDF8F3) or white rectangle across the footer or venue area.
+  * Footer and venue bands on dark canvases MUST harmonize with the palette: use a deep tone (#162B48, #1E3A5F), a subtle border/rule (#C5A059), or a translucent container. An unstyled stark cream block on a dark poster is strictly rejected.
 - Vertical Rhythm & Negative Space:
-  * Negative space fraction must be balanced (typically 0.35 to 0.65 of canvas area).
-  * Avoid excessive dead voids (no single uncomposed vertical void > 0.25 of canvas height).
+  * Negative space fraction must stay in the optimal band (0.35 to 0.58 of canvas area, matching confirmed exemplars).
+  * Avoid excessive dead voids (no single uncomposed vertical void > 0.20 of canvas height). Never leave 40% of the canvas empty.
   * Group related elements (title + subtitle, body paragraphs, statutory footer) with intentional proximity.
 
 ================================================================================
@@ -761,9 +809,11 @@ ${slotsFormatted}
 
 TASK:
 Generate exactly THREE deliberately distinct normalized layout candidates as JSON.
-- Candidate 1: Explore Archetype "monolith_centered" or "split_statutory_banner".
-- Candidate 2: Explore Archetype "asymmetric_editorial" (offset axis, accent line).
-- Candidate 3: Explore Archetype "hero_statement_grid" or "minimal_framed".
+Choose 3 distinct composition archetypes tailored to the brief from the 14 institutional archetypes:
+- monolith_centered, asymmetric_editorial, hero_statement_grid, split_statutory_banner, minimal_framed,
+- stat_card_triptych, numbered_standards_stack, executive_roadmap_quad, crest_banner_split,
+- credential_badge_card, chevron_band_institutional, monograph_bilateral_column, academic_citation_folio, commencement_diploma_frame.
+Ensure wide architectural diversity: vary alignment axes (centered vs asymmetric), column structures (6 vs 12 columns), and content grouping across candidates.
 
 CRITICAL CONSTRAINTS:
 1. No two candidates may have identical or near-identical geometry (geometric distance > 15px).
