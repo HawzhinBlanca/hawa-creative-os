@@ -44,6 +44,7 @@ export interface BoxCritiqueResult {
     responseId: string;
     xRequestId: string | null;
     inputTokens: number;
+    cachedTokens?: number;
     outputTokens: number;
     costUsd: number;
     latencyMs: number;
@@ -298,6 +299,7 @@ Identify any spatial, alignment, margin, or hierarchy defects and return actiona
       responseId: response.receipt.responseId,
       xRequestId: response.receipt.xRequestId ?? null,
       inputTokens: response.receipt.inputTokens,
+      cachedTokens: (response.receipt as any).cacheReadTokens ?? 0,
       outputTokens: response.receipt.outputTokens,
       costUsd: response.receipt.costUsd,
       latencyMs: response.receipt.latencyMs,

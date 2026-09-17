@@ -58,6 +58,7 @@ export interface OrderComparisonResult {
     responseId: string;
     xRequestId: string | null;
     inputTokens: number;
+    cachedTokens?: number;
     outputTokens: number;
     costUsd: number;
     latencyMs: number;
@@ -339,6 +340,7 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
       responseId: res.receipt.responseId,
       xRequestId: res.receipt.xRequestId ?? null,
       inputTokens: res.receipt.inputTokens,
+      cachedTokens: (res.receipt as any).cacheReadTokens ?? 0,
       outputTokens: res.receipt.outputTokens,
       costUsd: res.receipt.costUsd,
       latencyMs: res.receipt.latencyMs,
