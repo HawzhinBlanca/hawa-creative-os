@@ -1171,8 +1171,8 @@ export function createApp(options?: CreateAppOptions) {
         },
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || 'gpt-6-astra',
-          messages: [{ role: 'user', content: 'p' }],
-          max_completion_tokens: 16,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_completion_tokens: 100,
         }),
         signal: AbortSignal.timeout(7000),
       });
@@ -1193,6 +1193,9 @@ export function createApp(options?: CreateAppOptions) {
         return { status: 'connected' };
       } else {
         const errJson: any = await res.json().catch(() => ({}));
+        if (errJson?.error?.message?.includes('max_tokens or model output limit was reached')) {
+          return { status: 'connected' };
+        }
         return { status: `http_${res.status}`, detail: errJson?.error || { message: `HTTP ${res.status}` } };
       }
     } catch (err: any) {
