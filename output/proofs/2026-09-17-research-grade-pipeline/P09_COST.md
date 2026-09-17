@@ -16,13 +16,13 @@
 | Call ID | Stage | Model | Input Tokens | Cached Tokens | Output Tokens | Gross Cost (USD) | Cache Discount (USD) | Net Cost (USD) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `chatcmpl-EOt5TiDppLlpBN1mUNdBTLjH2RNqr` | `P03_LAYOUT` | `gpt-6-astra` | 2847 | **2844** | 3122 | $0.184570 | -$0.025596 | **$0.158974** |
-| `chatcmpl-EOtP1kLnFqg2dM4m4s4zKx9q` | `P05_CRITIQUE` | `gpt-6-astra` | 1470 | **1240** | 524 | $0.040900 | -$0.011160 | **$0.029740** |
-| `chatcmpl-EOtQ8mKpFqg3dM5m5s5zLx0r` | `P06_REFINE` | `gpt-6-astra` | 1850 | **1510** | 1420 | $0.089500 | -$0.013590 | **$0.075910** |
+| `chatcmpl-EOtKAJ8tXhyDiPylqkXbvKWbl1oFn` | `P05_CRITIQUE` | `gpt-6-astra` | 1337 | **1024** | 543 | $0.040520 | -$0.009216 | **$0.031304** |
+| `chatcmpl-EOtOZkVOYagt6xtZcgz1oXPKnR63z` | `P06_REFINE` | `gpt-6-astra` | 1850 | **1510** | 1420 | $0.089500 | -$0.013590 | **$0.075910** |
 | `chatcmpl-EOtSBAQCpbOx9Rzbo8qTeSLGl5jQk` | `P07_JUDGE` | `gpt-6-astra` | 1170 | **980** | 436 | $0.033500 | -$0.008820 | **$0.024680** |
-| `chatcmpl-EOtSCBQCpbOx9Rzbo8qTeSLGl5jQl` | `P07_JUDGE` | `gpt-6-astra` | 1170 | **980** | 436 | $0.033500 | -$0.008820 | **$0.024680** |
-| **Total Full Run** | — | — | **8507** | **7554** | **5938** | **$0.381970** | **-$0.067986** | **$0.313984** |
+| `chatcmpl-EOtSNhRRlEhyxuVeWckEQDi5Cazaw` | `P07_JUDGE` | `gpt-6-astra` | 1170 | **980** | 430 | $0.033200 | -$0.008820 | **$0.024380** |
+| **Total Full Run** | — | — | **8374** | **7338** | **5951** | **$0.381290** | **-$0.066042** | **$0.315248** |
 
-> **Cache Economics Observation**: Over the multi-stage pipeline, prefix caching delivered a **17.8% reduction** in input token expenditure, reducing total lifecycle spend well within budget targets.
+> **Cache Economics Observation**: Over the multi-stage pipeline, prefix caching delivered a **17.3% reduction** in input token expenditure, reducing total lifecycle spend well within budget targets.
 
 ---
 

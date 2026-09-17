@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { SHA256, UUID } from '@hawa/contracts';
 
 export interface DocumentChunk {
@@ -27,12 +28,7 @@ export interface ParsedDocument {
 
 export class DoclingParser {
   private computeHash(text: string): SHA256 {
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = (hash << 5) - hash + text.charCodeAt(i);
-      hash |= 0;
-    }
-    return `sha256_chunk_${Math.abs(hash).toString(16)}`;
+    return createHash('sha256').update(text).digest('hex') as SHA256;
   }
 
   async parse(

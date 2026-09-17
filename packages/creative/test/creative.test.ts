@@ -3,7 +3,6 @@ import {
   BriefBuilder,
   DesignRouter,
   CreativeDirectorRunner,
-  TemplateEngine,
   HoldoutCopyAuditor,
   encodeEditableTransfer,
   renderOperationsToSvg,
@@ -13,7 +12,6 @@ describe('Creative: Brief, Router & Studio Operations', () => {
   const briefBuilder = new BriefBuilder();
   const router = new DesignRouter();
   const director = new CreativeDirectorRunner();
-  const templateEngine = new TemplateEngine();
 
   it('BriefBuilder: locks exact copy and extracts protected tokens', () => {
     const res = briefBuilder.build({
@@ -75,7 +73,7 @@ describe('Creative: Brief, Router & Studio Operations', () => {
     }
   });
 
-  it('TemplateEngine: populates template slots without inventing copy', () => {
+  it('HoldoutCopyAuditor: audits replaceText operations without dropping exact copy', () => {
     const briefRes = briefBuilder.build({
       taskId: 't-tmpl-1',
       clientId: 'c-tmpl-1',
@@ -85,25 +83,10 @@ describe('Creative: Brief, Router & Studio Operations', () => {
     });
 
     if (briefRes.ok) {
-      const ops = templateEngine.populateTemplate(
-        {
-          templateId: 'tmpl_1',
-          name: 'Hero Banner',
-          baseWidth: 1080,
-          baseHeight: 1080,
-          slots: [
-            { nodeId: 'node_title', role: 'headline' },
-            { nodeId: 'node_logo', role: 'logo' },
-          ],
-        },
-        briefRes.value,
-        'logo-sha-1'
-      );
+      const ops = [
+        { op: 'replaceText', nodeId: 'node_title', text: 'بەخێربێن بۆ ئاستەر' },
+      ];
 
-      expect(ops.length).toBe(2);
-      expect(ops.some((o) => o.op === 'replaceText' && o.text === 'بەخێربێن بۆ ئاستەر')).toBe(true);
-
-      // Verify HoldoutCopyAuditor audits replaceText operations without dropping them
       const auditor = new HoldoutCopyAuditor();
       const auditRes = auditor.auditCandidateCopy(briefRes.value, { operations: ops as any });
       expect(auditRes.ok).toBe(true);

@@ -1,7 +1,7 @@
 {
-  "compositeScore": 0.863,
+  "compositeScore": 0.853,
   "passed": false,
-  "qualityScore": 0.878,
+  "qualityScore": 0.866,
   "complianceScore": 1,
   "exemplarSimilarityScore": 0.6,
   "metrics": {
@@ -24,23 +24,23 @@
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.997,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "widthVariance": 0.003,
+        "lineUniformityDev": 0.013,
+        "d": 0.029
       }
     },
     "balance": {
-      "score": 0.917,
+      "score": 0.976,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 960,
-        "wy": 414,
-        "offset": 0.0828
+        "wy": 504,
+        "offset": 0.0238
       }
     },
     "justification": {
@@ -57,13 +57,13 @@
       }
     },
     "regularity": {
-      "score": 0.774,
+      "score": 0.674,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 54,
-        "std": 19,
-        "cv": 0.292
+        "meanGap": 64,
+        "std": 36,
+        "cv": 0.484
       }
     },
     "typefacePairing": {
@@ -72,20 +72,21 @@
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Noto Sans Arabic",
-          "Cairo"
+          "Cairo",
+          "Noto Sans Arabic"
         ],
         "familyCount": 2,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.929,
+      "score": 0.797,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.753,
-        "occupiedArea": 511588,
+        "fraction": 0.649,
+        "bottomVoid": 0.109,
+        "occupiedArea": 727630,
         "totalArea": 2073600
       }
     },
@@ -136,5 +137,5 @@
   "failingMetrics": [
     "gridAppropriateness"
   ],
-  "executionTimeMs": 0.07
+  "executionTimeMs": 0.25
 }

@@ -1,16 +1,18 @@
 {
-  "compositeScore": 0.863,
+  "compositeScore": 0.839,
   "passed": false,
-  "qualityScore": 0.878,
+  "qualityScore": 0.849,
   "complianceScore": 1,
   "exemplarSimilarityScore": 0.6,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.844,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
+        ],
         "count": 5
       }
     },
@@ -30,17 +32,17 @@
       "details": {
         "widthVariance": 0,
         "lineUniformityDev": 0,
-        "d": 0
+        "d": 0.003
       }
     },
     "balance": {
-      "score": 0.917,
+      "score": 0.964,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 960,
-        "wy": 414,
-        "offset": 0.0828
+        "wx": 1008,
+        "wy": 492,
+        "offset": 0.0364
       }
     },
     "justification": {
@@ -49,43 +51,45 @@
       "metric": "justification",
       "details": {
         "counts": {
-          "left": 0,
-          "center": 5,
+          "left": 5,
+          "center": 0,
           "right": 0
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.774,
+      "score": 0.701,
       "passed": true,
       "metric": "regularity",
       "details": {
         "meanGap": 54,
-        "std": 19,
-        "cv": 0.292
+        "std": 27,
+        "cv": 0.426
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Cinzel"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.929,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.753,
-        "occupiedArea": 511588,
+        "fraction": 0.564,
+        "bottomVoid": 0.07,
+        "occupiedArea": 903855,
         "totalArea": 2073600
       }
     },
@@ -118,8 +122,8 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredBase": 18,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -134,7 +138,8 @@
     }
   },
   "failingMetrics": [
+    "textLegibility",
     "gridAppropriateness"
   ],
-  "executionTimeMs": 0.06
+  "executionTimeMs": 0.02
 }

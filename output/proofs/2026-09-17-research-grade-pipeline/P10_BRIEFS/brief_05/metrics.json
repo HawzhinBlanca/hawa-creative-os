@@ -1,91 +1,96 @@
 {
-  "compositeScore": 0.948,
-  "passed": true,
-  "qualityScore": 0.935,
+  "compositeScore": 0.913,
+  "passed": false,
+  "qualityScore": 0.892,
   "complianceScore": 1,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.689,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 3 (body) contrast 1.00:1 < 4.5:1",
+          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
+        ],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.875,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 8
+        "alignedElements": 10,
+        "totalElements": 10
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.998,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
+        "widthVariance": 0.002,
         "lineUniformityDev": 0,
-        "d": 0
+        "d": 0.017
       }
     },
     "balance": {
-      "score": 0.879,
+      "score": 0.953,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 540,
-        "wy": 445,
-        "offset": 0.1207
+        "wx": 548,
+        "wy": 586,
+        "offset": 0.0466
       }
     },
     "justification": {
-      "score": 0.95,
+      "score": 0.75,
       "passed": true,
       "metric": "justification",
       "details": {
         "counts": {
-          "left": 0,
-          "center": 5,
-          "right": 0
+          "left": 2,
+          "center": 0,
+          "right": 3
         },
-        "dominanceRatio": 1
+        "dominanceRatio": 0.6
       }
     },
     "regularity": {
-      "score": 0.768,
+      "score": 0.634,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 68,
-        "std": 23,
-        "cv": 0.302
+        "meanGap": 98,
+        "std": 62,
+        "cv": 0.578
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Playfair Display"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.838,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.821,
-        "occupiedArea": 260413,
+        "fraction": 0.477,
+        "bottomVoid": 0.08,
+        "occupiedArea": 762566,
         "totalArea": 1458000
       }
     },
@@ -133,6 +138,8 @@
       }
     }
   },
-  "failingMetrics": [],
-  "executionTimeMs": 0.16
+  "failingMetrics": [
+    "textLegibility"
+  ],
+  "executionTimeMs": 0.07
 }

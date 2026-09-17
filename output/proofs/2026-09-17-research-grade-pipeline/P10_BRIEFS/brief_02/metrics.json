@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.967,
-  "passed": true,
-  "qualityScore": 0.959,
+  "compositeScore": 0.898,
+  "passed": false,
+  "qualityScore": 0.909,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 1,
+  "exemplarSimilarityScore": 0.7,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -19,8 +19,8 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 7
+        "alignedElements": 10,
+        "totalElements": 10
       }
     },
     "alignment": {
@@ -34,13 +34,13 @@
       }
     },
     "balance": {
-      "score": 0.908,
+      "score": 0.954,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 400,
-        "offset": 0.0916
+        "wy": 469,
+        "offset": 0.0465
       }
     },
     "justification": {
@@ -57,35 +57,37 @@
       }
     },
     "regularity": {
-      "score": 0.774,
+      "score": 0.552,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 54,
-        "std": 19,
-        "cv": 0.292
+        "meanGap": 81,
+        "std": 74,
+        "cv": 0.813
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Cinzel"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.897,
-      "passed": true,
+      "score": 0.585,
+      "passed": false,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.777,
-        "occupiedArea": 260413,
+        "fraction": 0.713,
+        "bottomVoid": 0.1,
+        "occupiedArea": 334765,
         "totalArea": 1166400
       }
     },
@@ -133,6 +135,8 @@
       }
     }
   },
-  "failingMetrics": [],
-  "executionTimeMs": 0.29
+  "failingMetrics": [
+    "negativeSpace"
+  ],
+  "executionTimeMs": 1.12
 }

@@ -438,38 +438,56 @@ export function computeTypefacePairing(layout: StudioLayoutV2): MetricResult {
   };
 }
 
-// 8. Negative-Space Fraction
+// 8. Negative-Space Fraction (Calibrated against 6 institutional exemplars: 0.34 - 0.57)
 export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
   const totalArea = layout.width * layout.height;
   let occupiedArea = 0;
 
+  let maxSubstantiveY = 0;
   for (const t of layout.text || []) {
     occupiedArea += t.width * t.height;
+    maxSubstantiveY = Math.max(maxSubstantiveY, t.y + t.height);
   }
 
   for (const s of layout.shapes || []) {
-    if (s.role === 'frame' || (s.width >= layout.width * 0.9 && s.height >= layout.height * 0.9)) continue;
-    occupiedArea += s.width * s.height * (s.role === 'panel' ? 0.6 : 0.4);
+    const isCanvasFrame =
+      (s.role === 'frame' && s.width >= layout.width * 0.85 && s.height >= layout.height * 0.85) ||
+      (s.width >= layout.width * 0.95 && s.height >= layout.height * 0.95);
+    if (isCanvasFrame) continue;
+    occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? 0.6 : 0.4);
+    if (s.height > 10 && s.role !== 'rule') {
+      maxSubstantiveY = Math.max(maxSubstantiveY, s.y + s.height);
+    }
   }
 
   if (layout.logo) {
     occupiedArea += layout.logo.width * layout.logo.height;
+    maxSubstantiveY = Math.max(maxSubstantiveY, layout.logo.y + layout.logo.height);
   }
 
   const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));
 
-  // Optimal band: 0.35 to 0.70
+  // Optimal band: 0.30 to 0.72 calibrated against confirmed exemplars (range 0.340 - 0.568) and institutional text layouts
   let score = 1.0;
   if (fraction < 0.25) {
-    score = Math.max(0, fraction / 0.25 * 0.5);
-  } else if (fraction > 0.85) {
-    score = Math.max(0, (1 - fraction) / 0.15 * 0.6);
-  } else if (fraction < 0.35) {
-    score = 0.70 + (fraction - 0.25) * 3.0;
-  } else if (fraction > 0.70) {
-    score = 0.80 + (0.85 - fraction) * 1.33;
-  } else {
+    score = Math.max(0, (fraction / 0.25) * 0.5);
+  } else if (fraction < 0.30) {
+    score = 0.75 + (fraction - 0.25) * 4.0;
+  } else if (fraction <= 0.72) {
     score = 0.95;
+  } else if (fraction <= 0.80) {
+    score = 0.95 - ((fraction - 0.72) / 0.08) * 0.25; // Linear drop from 0.95 down to 0.70
+  } else {
+    // Fraction > 0.80: excessive emptiness fails gate (< 0.70)
+    score = Math.max(0, 0.70 - ((fraction - 0.80) / 0.15) * 0.70);
+  }
+
+  // Bottom void penalty: substantive institutional content must span >= 72% of canvas height (bottomVoid <= 0.28)
+  // Sparse renders terminating at 66% canvas height (34% bottom void) suffer penalty dropping score below 0.70
+  const bottomVoid = (layout.height - maxSubstantiveY) / layout.height;
+  if (bottomVoid > 0.25) {
+    const penalty = ((bottomVoid - 0.25) / 0.15) * 0.50;
+    score = Math.max(0, score - penalty);
   }
 
   score = Math.max(0, Math.min(1, score));
@@ -479,7 +497,12 @@ export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
     score: parseFloat(score.toFixed(3)),
     passed,
     metric: 'negativeSpace',
-    details: { fraction: parseFloat(fraction.toFixed(3)), occupiedArea: Math.round(occupiedArea), totalArea }
+    details: {
+      fraction: parseFloat(fraction.toFixed(3)),
+      bottomVoid: parseFloat(bottomVoid.toFixed(3)),
+      occupiedArea: Math.round(occupiedArea),
+      totalArea,
+    },
   };
 }
 

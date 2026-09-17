@@ -25,15 +25,15 @@ Per Art Director review recorded in `packages/creative/assets/kaae-exemplars.jso
 | **Justification (arXiv 2402.06945)** | 0.08 | 0.750 | 0.750 | 0.950 | 0.950 | 0.950 | 0.950 | **0.883** |
 | **Regularity (arXiv 2402.06945)** | 0.08 | 0.671 | 0.615 | 0.648 | 0.552 | 0.570 | 0.570 | **0.604** |
 | **Typeface Pairing (F12 Admitted)** | 0.08 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
-| **Negative Space Distribution** | 0.08 | 0.950 | 0.950 | 0.970 | 0.950 | 0.950 | 0.950 | **0.953** |
+| **Negative Space Distribution** | 0.08 | 0.950 | 0.950 | 0.950 | 0.950 | 0.950 | 0.950 | **0.950** |
 | **Semantic Layout Hierarchy** | 0.08 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
 | **Semantic Typography Hierarchy** | 0.08 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
 | **Occlusion / Calm Region** | 0.02 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
 | **Type-Scale Conformance** | 0.02 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
 | **Candidate Degeneracy Check** | Gate | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
-| **Composite Score** | **1.00** | **0.926** | **0.941** | **0.952** | **0.956** | **0.958** | **0.958** | **0.949** |
+| **Composite Score** | **1.00** | **0.926** | **0.941** | **0.951** | **0.956** | **0.958** | **0.958** | **0.948** |
 | **Gate Result** | - | PASS | PASS | PASS | PASS | PASS | PASS | **100% PASS** |
-| **Execution Time** | - | 0.72ms | 0.20ms | 0.37ms | 0.09ms | 0.11ms | 0.05ms | **0.26ms** |
+| **Execution Time** | - | 0.80ms | 0.24ms | 0.16ms | 0.20ms | 0.52ms | 0.05ms | **0.33ms** |
 
 ## 4. Dropped Review Entries (Negative Fixtures)
 
@@ -41,9 +41,9 @@ All 6 dropped entries from `droppedInReview` fail the deterministic gate on thei
 
 | Fixture | Former Rank | Expected Defect | Gate Result | Flagged Metrics | Diagnostic Reason |
 | :--- | :---: | :--- | :---: | :--- | :--- |
-| **KAAE_Commences_2026_Cycle_1080x1350 (Dropped: Circular & Low Contrast Footer)** | - | `textLegibility` | **FAILED (BLOCKED)** | `textLegibility, regularity` | {"failingIssues":["Text 2 (footer) contrast 3.81:1 < 4.5:1"],"count":3} |
+| **KAAE_Commences_2026_Cycle_1080x1350 (Dropped: Circular & Low Contrast Footer)** | - | `textLegibility` | **FAILED (BLOCKED)** | `textLegibility, regularity, negativeSpace` | {"failingIssues":["Text 2 (footer) contrast 3.81:1 < 4.5:1"],"count":3} |
 | **kaae 5 kurdi (Dropped: Photograph of officials with caption bar)** | - | `semanticLayout` | **FAILED (BLOCKED)** | `gridAppropriateness, negativeSpace, semanticLayout, semanticTypography` | "Lacks primary title/headline hierarchy — photograph with caption bar cannot establish institutional composition" |
-| **call for kurdi (Dropped: Large dead area / excessive void)** | - | `regularity` | **FAILED (BLOCKED)** | `regularity` | "EXCESSIVE_DEAD_AREA: Vertical gap exceeds 25% canvas height without composition" |
+| **call for kurdi (Dropped: Large dead area / excessive void)** | - | `regularity` | **FAILED (BLOCKED)** | `regularity, negativeSpace` | "EXCESSIVE_DEAD_AREA: Vertical gap exceeds 25% canvas height without composition" |
 | **image16 (Dropped: 16:9 PowerPoint slide)** | - | `gridAppropriateness` | **FAILED (BLOCKED)** | `gridAppropriateness` | "WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)" |
 | **image17 (Dropped: 16:9 PowerPoint slide)** | - | `gridAppropriateness` | **FAILED (BLOCKED)** | `gridAppropriateness` | "WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)" |
 | **image19 (Dropped: 16:9 PowerPoint slide)** | - | `gridAppropriateness` | **FAILED (BLOCKED)** | `gridAppropriateness` | "WRONG_CANVAS_GENRE: 16:9 presentation slide aspect ratio rejected for social/announcement canvas (admitted: 1:1, 4:5, 9:16)" |
@@ -54,8 +54,8 @@ The deterministic gate was verified against the 3 representative audit failure m
 
 | Case | Target Defect | Composite Score | Gate Result | Failing Metrics Flagged | Execution Time |
 | :--- | :--- | :---: | :---: | :--- | :---: |
-| **Known-Bad 1 (Off-Grid Bilateral Collapse)** | `gridAppropriateness` | 0.788 | **FAILED (BLOCKED)** | `gridAppropriateness, regularity` | 0.06ms |
-| **Known-Bad 2 (Low Contrast Royal/Midnight Navy)** | `textLegibility` | 0.741 | **FAILED (BLOCKED)** | `textLegibility, negativeSpace, semanticLayout, semanticTypography` | 0.02ms |
+| **Known-Bad 1 (Off-Grid Bilateral Collapse)** | `gridAppropriateness` | 0.723 | **FAILED (BLOCKED)** | `gridAppropriateness, regularity, negativeSpace` | 0.05ms |
+| **Known-Bad 2 (Low Contrast Royal/Midnight Navy)** | `textLegibility` | 0.723 | **FAILED (BLOCKED)** | `textLegibility, negativeSpace, semanticLayout, semanticTypography` | 0.02ms |
 | **Known-Bad 3 (Boxy Bilateral Grid DAHVV23EF_8)** | `typefacePairing` | 0.743 | **FAILED (BLOCKED)** | `gridAppropriateness, typefacePairing` | 0.04ms |
 
 ## 6. Degeneracy Detection Proof
@@ -64,7 +64,7 @@ The deterministic gate was verified against the 3 representative audit failure m
   - **Result:** Degenerate = `true` (Correctly flagged)
   - **Pairwise Distances:** [1,0.5,1.21] px
   - **Reason:** Pairwise geometric distance (0.5px) indicates near-identical candidates
-  - **Execution Time:** 0.04ms
+  - **Execution Time:** 0.05ms
 
 - **Non-Degenerate Candidate Set Test (Diverse 3 layouts from confirmed exemplars):**
   - **Result:** Degenerate = `false` (Correctly accepted)
@@ -72,7 +72,7 @@ The deterministic gate was verified against the 3 representative audit failure m
 
 ## 7. Performance and Runtime Invariants
 
-- **Average Metric Evaluation Time:** 0.26ms per layout (< 50ms requirement)
-- **Total Wall Time for 6 Exemplars:** 2.19ms
+- **Average Metric Evaluation Time:** 0.33ms per layout (< 50ms requirement)
+- **Total Wall Time for 6 Exemplars:** 2.61ms
 - **External Network / API Calls:** Exactly 0
 - **Cost:** $0.0000

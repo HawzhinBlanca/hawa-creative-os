@@ -39,8 +39,11 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
     // Deliberately misaligned layout from P05: title at x: 20, width: 700, body at y: 1020
     const fs = await import('node:fs');
     const path = await import('node:path');
+    const rootDir = fs.existsSync(path.resolve(process.cwd(), 'packages'))
+      ? process.cwd()
+      : path.resolve(process.cwd(), '../..');
     const layout4Path = path.resolve(
-      process.cwd(),
+      rootDir,
       'output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_04.json'
     );
     const base = JSON.parse(fs.readFileSync(layout4Path, 'utf8'));
@@ -48,6 +51,7 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
 
     const failingLayout: StudioLayoutV2 = {
       ...base,
+      logo: { x: 490, y: 50, width: 100, height: 100 },
       text: base.text.map((t: any) => {
         if (t.role === 'title') return { ...t, x: 20, width: 700 };
         if (t.role === 'body') return { ...t, y: 1020, height: 200 };
@@ -100,6 +104,7 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
         // Repair call: returns fixed layout
         const repairedLayout = {
           ...base,
+          logo: { x: 490, y: 50, width: 100, height: 100 },
         };
         return {
           ok: true,
@@ -129,7 +134,6 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
       fetchFn: mockFetcher,
       maxRounds: 2,
     });
-
     expect(result.gateDecision).toBe('refine');
     expect(result.roundsRun).toBe(1);
     expect(result.stopReason).toBe('repaired_and_passed');
@@ -146,8 +150,11 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
     // Failing layout from P05
     const fs = await import('node:fs');
     const path = await import('node:path');
+    const rootDir = fs.existsSync(path.resolve(process.cwd(), 'packages'))
+      ? process.cwd()
+      : path.resolve(process.cwd(), '../..');
     const layout4Path = path.resolve(
-      process.cwd(),
+      rootDir,
       'output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_04.json'
     );
     const base = JSON.parse(fs.readFileSync(layout4Path, 'utf8'));
@@ -155,6 +162,7 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
 
     const failingLayout: StudioLayoutV2 = {
       ...base,
+      logo: { x: 490, y: 50, width: 100, height: 100 },
       text: base.text.map((t: any) => {
         if (t.role === 'title') return { ...t, x: 20, width: 700 };
         if (t.role === 'body') return { ...t, y: 1020, height: 200 };

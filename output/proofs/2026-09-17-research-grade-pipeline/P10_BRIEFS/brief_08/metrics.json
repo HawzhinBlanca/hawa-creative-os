@@ -1,8 +1,8 @@
 {
-  "compositeScore": 0.96,
-  "passed": true,
-  "qualityScore": 0.95,
-  "complianceScore": 1,
+  "compositeScore": 0.878,
+  "passed": false,
+  "qualityScore": 0.886,
+  "complianceScore": 0.7,
   "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
@@ -19,28 +19,28 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 7
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.999,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
+        "widthVariance": 0.002,
         "lineUniformityDev": 0,
-        "d": 0
+        "d": 0.013
       }
     },
     "balance": {
-      "score": 0.879,
+      "score": 0.97,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 445,
-        "offset": 0.1207
+        "wy": 618,
+        "offset": 0.0301
       }
     },
     "justification": {
@@ -57,35 +57,40 @@
       }
     },
     "regularity": {
-      "score": 0.768,
+      "score": 0.611,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 68,
-        "std": 23,
-        "cv": 0.302
+        "meanGap": 81,
+        "std": 58,
+        "cv": 0.637
       }
     },
     "typefacePairing": {
-      "score": 1,
-      "passed": true,
+      "score": 0.35,
+      "passed": false,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Noto Sans Arabic",
-          "Cairo"
+          "Cairo",
+          "Amiri",
+          "Noto Sans Arabic"
         ],
-        "familyCount": 2,
-        "failures": []
+        "familyCount": 3,
+        "failures": [
+          "Unadmitted font family: \"Amiri\"",
+          "Unadmitted font family: \"Amiri\""
+        ]
       }
     },
     "negativeSpace": {
-      "score": 0.838,
-      "passed": true,
+      "score": 0.705,
+      "passed": false,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.821,
-        "occupiedArea": 260413,
+        "fraction": 0.678,
+        "bottomVoid": 0.11,
+        "occupiedArea": 469089,
         "totalArea": 1458000
       }
     },
@@ -118,7 +123,7 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 16,
+        "declaredBase": 18,
         "declaredRatio": 1.25,
         "conforming": 5,
         "total": 5
@@ -133,6 +138,9 @@
       }
     }
   },
-  "failingMetrics": [],
-  "executionTimeMs": 0.06
+  "failingMetrics": [
+    "typefacePairing",
+    "negativeSpace"
+  ],
+  "executionTimeMs": 0.23
 }

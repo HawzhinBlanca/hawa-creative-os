@@ -1,9 +1,9 @@
 {
-  "compositeScore": 0.892,
-  "passed": false,
-  "qualityScore": 0.903,
+  "compositeScore": 0.948,
+  "passed": true,
+  "qualityScore": 0.935,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
       "score": 1,
@@ -15,32 +15,32 @@
       }
     },
     "gridAppropriateness": {
-      "score": 0.875,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 8
+        "alignedElements": 10,
+        "totalElements": 10
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.998,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "widthVariance": 0.002,
+        "lineUniformityDev": 0.013,
+        "d": 0.021
       }
     },
     "balance": {
-      "score": 0.837,
+      "score": 0.983,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 517,
-        "offset": 0.1632
+        "wy": 914,
+        "offset": 0.0168
       }
     },
     "justification": {
@@ -57,35 +57,37 @@
       }
     },
     "regularity": {
-      "score": 0.764,
+      "score": 0.568,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 81,
-        "std": 28,
-        "cv": 0.308
+        "meanGap": 117,
+        "std": 97,
+        "cv": 0.76
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Playfair Display"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.502,
-      "passed": false,
+      "score": 0.846,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.874,
-        "occupiedArea": 260413,
+        "fraction": 0.633,
+        "bottomVoid": 0.08,
+        "occupiedArea": 760280,
         "totalArea": 2073600
       }
     },
@@ -119,7 +121,7 @@
       "metric": "typeScale",
       "details": {
         "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -133,8 +135,6 @@
       }
     }
   },
-  "failingMetrics": [
-    "negativeSpace"
-  ],
-  "executionTimeMs": 0.07
+  "failingMetrics": [],
+  "executionTimeMs": 0.06
 }

@@ -6,9 +6,12 @@ import { ReferenceLibraryManager } from '../src/studio/reference-manager.js';
 import { ExemplarRetrievalIndex } from '../src/studio/exemplar-retrieval.js';
 
 describe('P11 — Reference Library & Ingestion Manager', () => {
-  const tmpDir = path.resolve(process.cwd(), 'tmp/test-reference-manager');
+  const rootDir = fs.existsSync(path.resolve(process.cwd(), 'packages'))
+    ? process.cwd()
+    : path.resolve(process.cwd(), '../..');
+  const tmpDir = path.resolve(rootDir, 'tmp/test-reference-manager');
   const tmpManifest = path.join(tmpDir, 'kaae-exemplars.json');
-  const realManifestPath = path.resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json');
+  const realManifestPath = path.resolve(rootDir, 'packages/creative/assets/kaae-exemplars.json');
 
   beforeEach(() => {
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -23,7 +26,7 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
   });
 
   it('preserves droppedInReview history intact across additions and updates', () => {
-    const manager = new ReferenceLibraryManager(process.cwd(), tmpManifest, path.join(tmpDir, 'references'));
+    const manager = new ReferenceLibraryManager(rootDir, tmpManifest, path.join(tmpDir, 'references'));
     const initialManifest = manager.getManifest();
     expect(initialManifest.droppedInReview.entries.length).toBe(6);
 
@@ -49,10 +52,10 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
   });
 
   it('refuses to add any file generated under output/ (hard guard against circular references)', () => {
-    const manager = new ReferenceLibraryManager(process.cwd(), tmpManifest, path.join(tmpDir, 'references'));
+    const manager = new ReferenceLibraryManager(rootDir, tmpManifest, path.join(tmpDir, 'references'));
 
     // Pick a real file from output/proofs/
-    const proofFile = path.resolve(process.cwd(), 'output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/preview.png');
+    const proofFile = path.resolve(rootDir, 'output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/preview.png');
     expect(fs.existsSync(proofFile)).toBe(true);
 
     const outputBuf = fs.readFileSync(proofFile);
@@ -70,7 +73,7 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
   });
 
   it('exercises all 3 entry points (folder_drop, telegram, desk) and saves as pending', () => {
-    const manager = new ReferenceLibraryManager(process.cwd(), tmpManifest, path.join(tmpDir, 'references'));
+    const manager = new ReferenceLibraryManager(rootDir, tmpManifest, path.join(tmpDir, 'references'));
 
     const createDummyPng = (seed: string) => {
       const b = Buffer.alloc(128);
@@ -117,7 +120,7 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
   });
 
   it('retrieval index (P02) ignores pending references, and includes them after owner confirmation', () => {
-    const manager = new ReferenceLibraryManager(process.cwd(), tmpManifest, path.join(tmpDir, 'references'));
+    const manager = new ReferenceLibraryManager(rootDir, tmpManifest, path.join(tmpDir, 'references'));
 
     const dummyPng = Buffer.alloc(128);
     dummyPng[0] = 0x89; dummyPng[1] = 0x50; dummyPng[2] = 0x4e; dummyPng[3] = 0x47;

@@ -1,26 +1,28 @@
 {
-  "compositeScore": 0.904,
+  "compositeScore": 0.918,
   "passed": false,
-  "qualityScore": 0.918,
+  "qualityScore": 0.897,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.844,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
+        ],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 1,
+      "score": 0.7,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
         "alignedElements": 7,
-        "totalElements": 7
+        "totalElements": 10
       }
     },
     "alignment": {
@@ -34,13 +36,13 @@
       }
     },
     "balance": {
-      "score": 0.837,
+      "score": 0.955,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 540,
-        "wy": 517,
-        "offset": 0.1632
+        "wx": 550,
+        "wy": 838,
+        "offset": 0.0453
       }
     },
     "justification": {
@@ -50,20 +52,20 @@
       "details": {
         "counts": {
           "left": 0,
-          "center": 5,
-          "right": 0
+          "center": 0,
+          "right": 5
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.764,
+      "score": 0.568,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 81,
-        "std": 28,
-        "cv": 0.308
+        "meanGap": 137,
+        "std": 112,
+        "cv": 0.76
       }
     },
     "typefacePairing": {
@@ -72,20 +74,21 @@
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Noto Sans Arabic",
-          "Cairo"
+          "Cairo",
+          "Noto Sans Arabic"
         ],
         "familyCount": 2,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.502,
-      "passed": false,
+      "score": 0.945,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.874,
-        "occupiedArea": 260413,
+        "fraction": 0.601,
+        "bottomVoid": 0.06,
+        "occupiedArea": 826424,
         "totalArea": 2073600
       }
     },
@@ -134,7 +137,7 @@
     }
   },
   "failingMetrics": [
-    "negativeSpace"
+    "textLegibility"
   ],
-  "executionTimeMs": 0.06
+  "executionTimeMs": 0.11
 }

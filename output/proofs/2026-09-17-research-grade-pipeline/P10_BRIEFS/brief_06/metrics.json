@@ -1,26 +1,29 @@
 {
-  "compositeScore": 0.851,
+  "compositeScore": 0.924,
   "passed": false,
-  "qualityScore": 0.864,
+  "qualityScore": 0.905,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.6,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.689,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 3 (body) contrast 1.00:1 < 4.5:1",
+          "Text 4 (footer) contrast 1.00:1 < 4.5:1"
+        ],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.286,
-      "passed": false,
+      "score": 0.9,
+      "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 2,
-        "totalElements": 7
+        "alignedElements": 9,
+        "totalElements": 10
       }
     },
     "alignment": {
@@ -34,13 +37,13 @@
       }
     },
     "balance": {
-      "score": 0.878,
+      "score": 0.986,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 513,
-        "wy": 445,
-        "offset": 0.122
+        "wx": 522,
+        "wy": 689,
+        "offset": 0.014
       }
     },
     "justification": {
@@ -49,43 +52,45 @@
       "metric": "justification",
       "details": {
         "counts": {
-          "left": 5,
+          "left": 0,
           "center": 0,
-          "right": 0
+          "right": 5
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.768,
+      "score": 0.696,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 68,
-        "std": 23,
-        "cv": 0.302
+        "meanGap": 87,
+        "std": 42,
+        "cv": 0.437
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Cinzel"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.838,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.821,
-        "occupiedArea": 260413,
+        "fraction": 0.537,
+        "bottomVoid": 0.08,
+        "occupiedArea": 674593,
         "totalArea": 1458000
       }
     },
@@ -134,7 +139,7 @@
     }
   },
   "failingMetrics": [
-    "gridAppropriateness"
+    "textLegibility"
   ],
   "executionTimeMs": 0.07
 }

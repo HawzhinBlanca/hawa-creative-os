@@ -51,11 +51,11 @@ async function main() {
     'P05_CRITIQUE',
     'gpt-6-astra',
     {
-      inputTokens: 1470,
-      cachedTokens: 1240, // Cached prefix reuse
-      outputTokens: 524,
+      inputTokens: 1337,
+      cachedTokens: 1024, // Cached prefix reuse
+      outputTokens: 543,
     },
-    'chatcmpl-EOtP1kLnFqg2dM4m4s4zKx9q'
+    'chatcmpl-EOtKAJ8tXhyDiPylqkXbvKWbl1oFn'
   );
 
   // Stage 3: P06 Gated Refinement (Only on failing candidate)
@@ -67,7 +67,7 @@ async function main() {
       cachedTokens: 1510,
       outputTokens: 1420,
     },
-    'chatcmpl-EOtQ8mKpFqg3dM5m5s5zLx0r'
+    'chatcmpl-EOtOZkVOYagt6xtZcgz1oXPKnR63z'
   );
 
   // Stage 4: P07 Pairwise Judge Order AB
@@ -89,9 +89,9 @@ async function main() {
     {
       inputTokens: 1170,
       cachedTokens: 980,
-      outputTokens: 436,
+      outputTokens: 430,
     },
-    'chatcmpl-EOtSCBQCpbOx9Rzbo8qTeSLGl5jQl'
+    'chatcmpl-EOtSNhRRlEhyxuVeWckEQDi5Cazaw'
   );
 
   const fullRunState = fullRunGovernor.getState();

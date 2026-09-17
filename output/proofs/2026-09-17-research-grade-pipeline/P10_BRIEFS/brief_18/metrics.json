@@ -1,7 +1,7 @@
 {
-  "compositeScore": 0.863,
+  "compositeScore": 0.849,
   "passed": false,
-  "qualityScore": 0.878,
+  "qualityScore": 0.862,
   "complianceScore": 1,
   "exemplarSimilarityScore": 0.6,
   "metrics": {
@@ -30,17 +30,17 @@
       "details": {
         "widthVariance": 0,
         "lineUniformityDev": 0,
-        "d": 0
+        "d": 0.002
       }
     },
     "balance": {
-      "score": 0.917,
+      "score": 0.991,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 960,
-        "wy": 414,
-        "offset": 0.0828
+        "wx": 953,
+        "wy": 527,
+        "offset": 0.0089
       }
     },
     "justification": {
@@ -49,43 +49,45 @@
       "metric": "justification",
       "details": {
         "counts": {
-          "left": 0,
-          "center": 5,
+          "left": 5,
+          "center": 0,
           "right": 0
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.774,
+      "score": 0.677,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 54,
-        "std": 19,
-        "cv": 0.292
+        "meanGap": 50,
+        "std": 29,
+        "cv": 0.478
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Playfair Display"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.929,
+      "score": 0.857,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.753,
-        "occupiedArea": 511588,
+        "fraction": 0.63,
+        "bottomVoid": 0.075,
+        "occupiedArea": 767961,
         "totalArea": 2073600
       }
     },
@@ -119,7 +121,7 @@
       "metric": "typeScale",
       "details": {
         "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -136,5 +138,5 @@
   "failingMetrics": [
     "gridAppropriateness"
   ],
-  "executionTimeMs": 0.06
+  "executionTimeMs": 0.03
 }

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-16T23:51:54Z",
+  "generatedAt": "2026-09-17T08:01:57Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 208,
+  "fileCount": 209,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -859,8 +859,8 @@
     },
     {
       "path": "scripts/generate-p09-proof.ts",
-      "sha256": "ad52c1353fdc3c59943b6723486b1f394b100550584607a93170c14c3c7655b7",
-      "bytes": 8336
+      "sha256": "6cc19600f6c3a52b7042a565465f3df0b656193f8871302ed03455b85b9ca9f8",
+      "bytes": 8346
     },
     {
       "path": "scripts/generate_f06_proof.ts",
@@ -881,6 +881,11 @@
       "path": "scripts/generate_p11_proof.ts",
       "sha256": "ea1c0571c6d5a0f4bd9002cbe1311fea0a9a709fb12af317284d52177478e10f",
       "bytes": 10395
+    },
+    {
+      "path": "scripts/generate_proofs_manifest.ts",
+      "sha256": "393e2dcfcc394924b1cea568c53091a5ed71ab03b170fab47b677cfa90ffa1e1",
+      "bytes": 8325
     },
     {
       "path": "scripts/generate_t06_motifs.ts",
@@ -969,8 +974,8 @@
     },
     {
       "path": "scripts/run_p10_qualification.ts",
-      "sha256": "a77c5e441e91024b89140fdd604f523e302cdd671c045feccab849405f289d79",
-      "bytes": 35007
+      "sha256": "928833042e81a259cf15e3447fd89882fa2c433b0feaa2aec1776b102fea7d05",
+      "bytes": 38405
     },
     {
       "path": "scripts/run_studio_qualification.ts",

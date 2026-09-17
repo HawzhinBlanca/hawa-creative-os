@@ -1,26 +1,28 @@
 {
-  "compositeScore": 0.896,
+  "compositeScore": 0.898,
   "passed": false,
-  "qualityScore": 0.908,
-  "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "qualityScore": 0.91,
+  "complianceScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.867,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 3 (body) contrast 1.00:1 < 3:1"
+        ],
         "count": 5
       }
     },
     "gridAppropriateness": {
-      "score": 0.875,
+      "score": 1,
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 8
+        "alignedElements": 9,
+        "totalElements": 9
       }
     },
     "alignment": {
@@ -30,17 +32,17 @@
       "details": {
         "widthVariance": 0,
         "lineUniformityDev": 0,
-        "d": 0
+        "d": 0.003
       }
     },
     "balance": {
-      "score": 0.849,
+      "score": 0.975,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 620,
-        "wy": 503,
-        "offset": 0.1508
+        "wy": 814,
+        "offset": 0.0253
       }
     },
     "justification": {
@@ -57,35 +59,39 @@
       }
     },
     "regularity": {
-      "score": 0.764,
+      "score": 0.607,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 81,
-        "std": 28,
-        "cv": 0.308
+        "meanGap": 128,
+        "std": 89,
+        "cv": 0.647
       }
     },
     "typefacePairing": {
-      "score": 1,
-      "passed": true,
+      "score": 0.6,
+      "passed": false,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Noto Sans Arabic",
-          "Cairo"
+          "Cairo",
+          "Amiri",
+          "Noto Sans Arabic"
         ],
-        "familyCount": 2,
-        "failures": []
+        "familyCount": 3,
+        "failures": [
+          "Unadmitted font family: \"Amiri\""
+        ]
       }
     },
     "negativeSpace": {
-      "score": 0.546,
-      "passed": false,
+      "score": 0.95,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.863,
-        "occupiedArea": 297030,
+        "fraction": 0.577,
+        "bottomVoid": 0.1,
+        "occupiedArea": 919295,
         "totalArea": 2174960
       }
     },
@@ -134,7 +140,8 @@
     }
   },
   "failingMetrics": [
-    "negativeSpace"
+    "textLegibility",
+    "typefacePairing"
   ],
-  "executionTimeMs": 0.06
+  "executionTimeMs": 0.27
 }

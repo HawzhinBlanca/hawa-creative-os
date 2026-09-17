@@ -2,6 +2,14 @@
   "briefId": "brief_19_ckb_landscape169",
   "size": "1920x1080",
   "language": "ckb",
+  "responseId": "chatcmpl-EP19jjvZcr9TzU4SvCIhe3ubDBB8E",
+  "xRequestId": "req_858b0f639a374df5a201f2b58e620699",
+  "model": "gpt-6-astra",
+  "inputTokens": 3179,
+  "cachedTokens": 1933,
+  "outputTokens": 3208,
+  "costUsd": 0.174793,
+  "wallClockMs": 46871,
   "prrPass": true,
   "geometricPass": true,
   "readabilityPass": true,
@@ -10,8 +18,7 @@
   "editabilityPass": true,
   "canaryWon": true,
   "orderSwapConsistent": true,
-  "compositeScore": 0.863,
-  "costUsd": 0.092874,
-  "wallClockMs": 180,
-  "timestamp": "2026-09-16T23:47:30.791Z"
+  "distinctSkeleton": false,
+  "compositeScore": 0.853,
+  "timestamp": "2026-09-17T07:49:57.830Z"
 }

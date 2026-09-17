@@ -2,6 +2,14 @@
   "briefId": "brief_10_en_story916",
   "size": "1080x1920",
   "language": "en",
+  "responseId": "chatcmpl-EP17wnm7Lt5CFKXMN0uTKv5ZvmJiI",
+  "xRequestId": "req_bf44e73a94ef40dc92a77278813115de",
+  "model": "gpt-6-astra",
+  "inputTokens": 2931,
+  "cachedTokens": 1933,
+  "outputTokens": 3590,
+  "costUsd": 0.191413,
+  "wallClockMs": 53624,
   "prrPass": true,
   "geometricPass": true,
   "readabilityPass": true,
@@ -10,8 +18,7 @@
   "editabilityPass": true,
   "canaryWon": true,
   "orderSwapConsistent": true,
-  "compositeScore": 0.892,
-  "costUsd": 0.092874,
-  "wallClockMs": 198,
-  "timestamp": "2026-09-16T23:47:27.351Z"
+  "distinctSkeleton": false,
+  "compositeScore": 0.948,
+  "timestamp": "2026-09-17T07:48:13.587Z"
 }

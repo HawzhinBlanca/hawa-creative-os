@@ -1,7 +1,6 @@
 export * from './brief-builder.js';
 export * from './design-router.js';
 export * from './creative-director.js';
-export * from './template-engine.js';
 export * from './diff.js';
 export * from './comfy-sandbox.js';
 export * from './brand-kits.js';
@@ -9,7 +8,6 @@ export * from './vector-compositor.js';
 export * from './feedback-miner.js';
 export * from './kaae-graphics-learning.js';
 export * from './templates/index.js';
-export * from './vazirmatn-font-base64.js';
 export * from './holdout-copy-auditor.js';
 export * from './bounded-creative-planner.js';
 export * from './operations-to-svg.js';

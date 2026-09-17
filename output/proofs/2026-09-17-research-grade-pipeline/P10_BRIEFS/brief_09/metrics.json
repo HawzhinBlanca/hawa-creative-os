@@ -1,16 +1,18 @@
 {
-  "compositeScore": 0.904,
+  "compositeScore": 0.941,
   "passed": false,
-  "qualityScore": 0.918,
+  "qualityScore": 0.926,
   "complianceScore": 1,
-  "exemplarSimilarityScore": 0.7,
+  "exemplarSimilarityScore": 1,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.867,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 3 (body) contrast 1.00:1 < 3:1"
+        ],
         "count": 5
       }
     },
@@ -19,28 +21,28 @@
       "passed": true,
       "metric": "gridAppropriateness",
       "details": {
-        "alignedElements": 7,
-        "totalElements": 7
+        "alignedElements": 10,
+        "totalElements": 10
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.998,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "widthVariance": 0.002,
+        "lineUniformityDev": 0.006,
+        "d": 0.017
       }
     },
     "balance": {
-      "score": 0.837,
+      "score": 0.96,
       "passed": true,
       "metric": "balance",
       "details": {
         "wx": 540,
-        "wy": 517,
-        "offset": 0.1632
+        "wy": 852,
+        "offset": 0.0399
       }
     },
     "justification": {
@@ -57,35 +59,37 @@
       }
     },
     "regularity": {
-      "score": 0.764,
+      "score": 0.59,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 81,
-        "std": 28,
-        "cv": 0.308
+        "meanGap": 128,
+        "std": 96,
+        "cv": 0.696
       }
     },
     "typefacePairing": {
-      "score": 1,
+      "score": 0.85,
       "passed": true,
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Verdana",
-          "Playfair Display"
+          "Cinzel",
+          "Playfair Display",
+          "Verdana"
         ],
-        "familyCount": 2,
+        "familyCount": 3,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.502,
-      "passed": false,
+      "score": 0.95,
+      "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.874,
-        "occupiedArea": 260413,
+        "fraction": 0.565,
+        "bottomVoid": 0.109,
+        "occupiedArea": 901078,
         "totalArea": 2073600
       }
     },
@@ -118,8 +122,8 @@
       "passed": true,
       "metric": "typeScale",
       "details": {
-        "declaredBase": 16,
-        "declaredRatio": 1.25,
+        "declaredBase": 18,
+        "declaredRatio": 1.5,
         "conforming": 5,
         "total": 5
       }
@@ -134,7 +138,7 @@
     }
   },
   "failingMetrics": [
-    "negativeSpace"
+    "textLegibility"
   ],
-  "executionTimeMs": 0.07
+  "executionTimeMs": 0.08
 }

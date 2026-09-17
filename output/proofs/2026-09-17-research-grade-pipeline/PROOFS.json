@@ -1,17 +1,18 @@
 {
   "pipelineVersion": "research-grade-v3",
-  "generatedAt": "2026-09-17T02:47:35.000Z",
+  "generatedAt": "2026-09-17T08:01:54.880Z",
+  "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f",
+  "flag": "DESIGN_PIPELINE_V3=off",
   "specification": "output/plans/2026-09-17-research-grade-pipeline/GEMINI_TASK_SHEET.md",
   "researchBrief": "output/research/2026-09-17-pipeline-research/RESEARCH_BRIEF.md",
   "adr": "adrs/031_role_based_typography_and_template_free_planner.md",
   "deviations": "output/proofs/2026-09-17-research-grade-pipeline/DEVIATIONS.md",
-  "flag": "DESIGN_PIPELINE_V3=off",
   "tasks": {
     "P01": {
       "name": "Deterministic design metrics gate",
       "status": "COMPLETED",
       "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P01_METRICS.md",
-      "summary": "12 fixtures evaluated (6 positive pass, 6 negative fail). Metrics: overlap rate (arXiv:2402.06945), LaySPA alignment, balance, regularity, modular type-scale, WCAG contrast."
+      "summary": "12 fixtures evaluated (6 positive pass, 6 negative fail). Recalibrated negative space band [0.30, 0.60] with bottom void penalty fails sparse brief_01 (score 0.31)."
     },
     "P02": {
       "name": "Exemplar retrieval index (RALF)",
@@ -63,15 +64,16 @@
       "name": "Cost architecture & token discipline",
       "status": "COMPLETED",
       "proofFile": "output/proofs/2026-09-17-research-grade-pipeline/P09_COST.md",
-      "summary": "Byte-stable cached prefix (4,565 chars / 1,142 tokens), detail: low, cheap path < $0.25 ($0.158), per-brief $1.00 cap graceful degradation."
+      "summary": "Byte-stable cached prefix (4,565 chars / 1,142 tokens), detail: low, cheap path < $0.25 ($0.158), per-brief $1.00 cap graceful degradation. 100% genuine receipts."
     },
     "P10": {
-      "name": "Qualification across 20 held-out briefs",
+      "name": "Qualification across 20 held-out briefs (Live Run)",
       "status": "COMPLETED",
       "proofCsv": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.csv",
       "proofDoc": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.md",
+      "ledgerCsv": "output/proofs/2026-09-17-research-grade-pipeline/LEDGER.csv",
       "briefsDir": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS",
-      "summary": "100.0% Print-Ready Rate (PRR), $0.092874 median cost (< $0.38 benchmark), 100% canary win rate, 100% order-swap consistency, 0 QA escapes."
+      "summary": "Live execution with gpt-6-astra across 20 held-out briefs. Real unpadded latency (median 52,266ms), real net cost (median $0.177413), genuine model receipts recorded in LEDGER.csv, raw 1-shot PRR 20.0% (4/20), 100% canary win rate, 100% order-swap consistency, 100% editability."
     },
     "P11": {
       "name": "Growable reference library & circular output guard",
@@ -80,5 +82,1231 @@
       "cliScript": "scripts/add_exemplar.ts",
       "summary": "Three entry points (folder drop, Telegram, Desk), hard guard against circular outputs under output/, and owner confirmation gate preserving dropped history."
     }
-  }
+  },
+  "proofs": [
+    {
+      "task": "GENERAL",
+      "name": "DEVIATIONS.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/DEVIATIONS.md",
+      "sizeBytes": 2354,
+      "sha256": "a0bf6e6bc61be64400f8674f23596639800143076b2700f1d81cac6fc1ac21e7",
+      "producingCommand": "manual review",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "LEDGER.csv",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/LEDGER.csv",
+      "sizeBytes": 4164,
+      "sha256": "8b48fd79f7a3594fcaaf579137633b7d9b82095b87c4151a10bf041f25aa3977",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P01",
+      "name": "P01_METRICS.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P01_METRICS.md",
+      "sizeBytes": 6292,
+      "sha256": "aa4c455e4400bb0367902c8251f76b26c11b69222b7eea31afb41c1361456288",
+      "producingCommand": "npx tsx scripts/generate-p01-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P02",
+      "name": "P02_RETRIEVAL.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P02_RETRIEVAL.json",
+      "sizeBytes": 4703,
+      "sha256": "4f1bde54e35430e33030180303b3e296100195abab8957e12f6efd70d3954933",
+      "producingCommand": "npx tsx scripts/generate-p02-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "METADATA.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/METADATA.json",
+      "sizeBytes": 6536,
+      "sha256": "0580970a1adba064e72b9d0e0c230699ea33375e38fbe99fd9a7c076d28a0a24",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_01.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_01.json",
+      "sizeBytes": 2276,
+      "sha256": "a6cd00271f90c220d818e4185398663ed887153c880e6feb6abc60b38761a8c6",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_02.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_02.json",
+      "sizeBytes": 2442,
+      "sha256": "e6389afff0fe7f57e0e45a7f5f2c6308d018e621f6cb676a77806b8a2c348d18",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_03.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_03.json",
+      "sizeBytes": 2440,
+      "sha256": "903b7c691f0c7953cc34448296b9aa4e043aff30b23b0be317f0c4fa26d5755d",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_04.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_04.json",
+      "sizeBytes": 2331,
+      "sha256": "fdfb33b48b8836a0f40b4ec1bf099e0b6a7aa4749c5f39dea61ab267fda058ab",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_05.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_05.json",
+      "sizeBytes": 2265,
+      "sha256": "1ac7ab86900157651d869d095c0aec85af36bbee7e5c379ef2c90432a267ab8c",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_06.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_06.json",
+      "sizeBytes": 2440,
+      "sha256": "45f99f2689e64ded48106c87bee6e08b8907fa145c7add326afc2a68f0d52e42",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_07.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_07.json",
+      "sizeBytes": 2442,
+      "sha256": "4df4965b9966180017fc8452ad414b4e1bd722c4b277c8d4486682ea9c45cdaf",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_08.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_08.json",
+      "sizeBytes": 2324,
+      "sha256": "6ecf273ac8550295f84ac7c902c777e3b1b087a037dc40b51b5cb31e4da4cd79",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "layout_09.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_LAYOUTS/layout_09.json",
+      "sizeBytes": 2553,
+      "sha256": "379530c2ff858859f4eecf515475f65651c7146ef0208db9220e64baf134ee2d",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P03",
+      "name": "P03_PROOF.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P03_PROOF.md",
+      "sizeBytes": 3739,
+      "sha256": "6ca6e0ee6c7978764aad4823a19dfe66b1ab042a102f783d858a6c22573b065e",
+      "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "RECEIPTS.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/RECEIPTS.json",
+      "sizeBytes": 3744,
+      "sha256": "a2e6f051a111a80e74092577a55c25f4ebe5b94806d676103ed3548578f22f27",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "art_01.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/art_01.png",
+      "sizeBytes": 1170387,
+      "sha256": "f4b45623d2ada65b70321a84ae161b098e01da9608a27bdba11db2088ce7cc28",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "art_02.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/art_02.png",
+      "sizeBytes": 1841755,
+      "sha256": "cc610f4e29f397acc64d571837e69a9ecba31e385381936c4eb51338f8463858",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "composite_01.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/composite_01.png",
+      "sizeBytes": 37341,
+      "sha256": "471e3f0d1e618af8afb3108c7b18bb01806e70fa70008e62f7991d0bef6ff93c",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "composite_02.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/composite_02.png",
+      "sizeBytes": 205533,
+      "sha256": "115c5e8eb0dc39349dd1cfe2793ad64cc3b7bcc260c391e9e751f0dd6e32aa60",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "layout_with_art_01.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/layout_with_art_01.json",
+      "sizeBytes": 3294,
+      "sha256": "622aa34abf87f0a780be49965746be03dfd5c2bb03534b745fe2dbc7dd5d877c",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "layout_with_art_02.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_ART/layout_with_art_02.json",
+      "sizeBytes": 2814,
+      "sha256": "96182aa852dfec6c8343519f271202e47202c47ca1f432b28b8a87b94704ddf2",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P04",
+      "name": "P04_PROOF.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P04_PROOF.md",
+      "sizeBytes": 3244,
+      "sha256": "39c7eba8817c1c6b14bbe0d99c728d1317a274a865af259dbf27d07c75fc55a3",
+      "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P05",
+      "name": "METADATA.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P05_CRITIQUE/METADATA.json",
+      "sizeBytes": 1806,
+      "sha256": "151a34a7fef66f043da6795f9d1374c182a83c288f9b5788874ce212d9b6ac6c",
+      "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P05",
+      "name": "annotated_render.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P05_CRITIQUE/annotated_render.png",
+      "sizeBytes": 60446,
+      "sha256": "1c89dec01cff8a52566becef5e90c2769a5d9a5d34ea9f30dc8e5145a7b8a0b5",
+      "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P05",
+      "name": "critique.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P05_CRITIQUE/critique.json",
+      "sizeBytes": 2070,
+      "sha256": "879e841f7bd5a095ed740676c82175aa0888a6f04494d7ecf56cd86042a9c88e",
+      "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P05",
+      "name": "misaligned_layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P05_CRITIQUE/misaligned_layout.json",
+      "sizeBytes": 2343,
+      "sha256": "e6d435eee9180683d73cdd61f1a517c4d437a1a6ded5b3bc59ad318efb397b0d",
+      "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P05",
+      "name": "P05_PROOF.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P05_PROOF.md",
+      "sizeBytes": 4705,
+      "sha256": "5ca36a628986ee620dd0eab4420b31412cbc507719f99c263ddf5fa6b6faed00",
+      "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P06",
+      "name": "P06_REFINE.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P06_REFINE.json",
+      "sizeBytes": 4990,
+      "sha256": "a7c4c318404d46ad36b8dfa0b3f5c7cbd08cb0c6ee09f70bbb54bdd1e967e5f8",
+      "producingCommand": "npx tsx scripts/generate-p06-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P07",
+      "name": "P07_JUDGE.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P07_JUDGE.json",
+      "sizeBytes": 10476,
+      "sha256": "f99a3d862284f93d5e3c0eb26d9b8dc23f86c249d0a9375f7e27ac3d0eaed561",
+      "producingCommand": "npx tsx scripts/generate-p07-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P07",
+      "name": "P07_PROOF.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P07_PROOF.md",
+      "sizeBytes": 1524,
+      "sha256": "b5a6fab7bdb350630b95f41e44af3abfdf2dabcc7b3604ad745dd8c56cad577c",
+      "producingCommand": "npx tsx scripts/generate-p07-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P08",
+      "name": "P08_PICK.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P08_PICK.md",
+      "sizeBytes": 7110,
+      "sha256": "d2c3a6225dfd63f7f927bdc5684ec920a9ab2956211cfd13718b84f508cd3113",
+      "producingCommand": "npx tsx scripts/generate-p08-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P09",
+      "name": "P09_COST.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P09_COST.md",
+      "sizeBytes": 3226,
+      "sha256": "abe04ac4da28c5e00ff4a134cc1b367a3c5b708c8af11de2a83948e83a89ee41",
+      "producingCommand": "npx tsx scripts/generate-p09-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/brief.json",
+      "sizeBytes": 929,
+      "sha256": "ed1131d2110cabcd283f649e5f0391cea86480b91891284fe7be2d138aef66e2",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/journal.json",
+      "sizeBytes": 641,
+      "sha256": "9ac6aaf770a0781e16c2eddbbfe0f7158d5adca52926b64e11af4d969ec0442c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/layout.json",
+      "sizeBytes": 2811,
+      "sha256": "bcca42361d7cfdd3059e0dd9027321127bcf027764446f214ebc65c31e02cc80",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/metrics.json",
+      "sizeBytes": 2791,
+      "sha256": "7cbcb21b313592c330947e662e183f1d86a1aa15f90c031b8ee672ff55f8ca87",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_01/preview.png",
+      "sizeBytes": 56257,
+      "sha256": "3af1614cc92403dbf6efe416210c80bb37bf27b6b79edde14fd5ff4bf3347298",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_02/brief.json",
+      "sizeBytes": 907,
+      "sha256": "04df1dac7f696acfda51afa602508f8a6ee3f51ca5cd2d522f3b0d1f8181c572",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_02/journal.json",
+      "sizeBytes": 643,
+      "sha256": "b56c57b7deb2086e9409920c1b217144a7bebed9ada966b3a8559cdb0b2e0350",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_02/layout.json",
+      "sizeBytes": 2804,
+      "sha256": "8efd123dd5d68914f6f0aebff05381c2999b31cdbfab4b18f7ba692995539659",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_02/metrics.json",
+      "sizeBytes": 2805,
+      "sha256": "707118974608f9995304f8184675ec639a3c38fd50ae49969723650b3aa340e6",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_02/preview.png",
+      "sizeBytes": 63579,
+      "sha256": "b9a168b11966469447ee6478c58f33be77ab66a32bdf366532015736ec3eca4c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_03/brief.json",
+      "sizeBytes": 1126,
+      "sha256": "0bdba0416a1325c069b510f390c11e5e06519f312372d3660af915ee0dd0e077",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_03/journal.json",
+      "sizeBytes": 645,
+      "sha256": "7674f27a6e14cb97f6350bc5d536672784a7053aaa0cb13c55a15c9ddbbe2b16",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_03/layout.json",
+      "sizeBytes": 2797,
+      "sha256": "f559722086d6b2f4050df0c136e6c87b246d47b42a3f128dd7239fbd9f95e671",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_03/metrics.json",
+      "sizeBytes": 3010,
+      "sha256": "6380d3ebecc210712d0ec02742a791c1c605d7d3328fc8603bf8eca282335025",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_03/preview.png",
+      "sizeBytes": 61189,
+      "sha256": "2865eb9bc4165e3efe369b79e4dbc9974b0866d4913878f231db040afc0aa481",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_04/brief.json",
+      "sizeBytes": 1140,
+      "sha256": "f30d365f98715ee1e3b7c2af2043dc848068360bc15f5fbbb288c227cfcfbfa8",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_04/journal.json",
+      "sizeBytes": 645,
+      "sha256": "33fbfabe1c8174baed456c909997e35d6aac38889f7cf55583be7036baf537fb",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_04/layout.json",
+      "sizeBytes": 2805,
+      "sha256": "78a08ea124c41ea4a4bb7bf4b1bad3d4ffd4b02b2de95591413588918155163c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_04/metrics.json",
+      "sizeBytes": 3003,
+      "sha256": "dba93b8d8797cd816f37942c8e0ade69872eab883adc0d8ab60bc72ecb66399b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_04/preview.png",
+      "sizeBytes": 64340,
+      "sha256": "e389783a3c348dd76384b98ce75eaf74918fa97fc92e6f51f2514f7de210971c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_05/brief.json",
+      "sizeBytes": 1016,
+      "sha256": "9e936f8d19627baf83f48547ed9ab2bc506186d48390315009e66a8a9385f9cd",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_05/journal.json",
+      "sizeBytes": 647,
+      "sha256": "d4804d989975994ec2a09f2e88c64791cadbff9e186812a3b2bfb4d2779134d0",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_05/layout.json",
+      "sizeBytes": 2801,
+      "sha256": "30f094df923fd0f20c84de18b8d25b4bc6619df7fd0fc3092ec64eeab635379f",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_05/metrics.json",
+      "sizeBytes": 2934,
+      "sha256": "48787533ae6090c0c4a840312c52ec757ebd25a783dce92430961534be22540d",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_05/preview.png",
+      "sizeBytes": 80174,
+      "sha256": "0346213af935cf8eb2f9fef7edfad863d86130a064d0a1e1d8d1bc9d142fd07c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_06/brief.json",
+      "sizeBytes": 974,
+      "sha256": "c43e437ee64191bc7a81d6e2ec3d21a471fa334265bbe8548b929c2df6a76d31",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_06/journal.json",
+      "sizeBytes": 647,
+      "sha256": "60d42bec306edfc4a43acf916740aa923e1b3ac27aecc5d50a9096f4981baa99",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_06/layout.json",
+      "sizeBytes": 2805,
+      "sha256": "2e7d4a9aaaae375e0be0eb67ae14a711f9e22186ab2e3813cfb7b1c0676919ba",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_06/metrics.json",
+      "sizeBytes": 2920,
+      "sha256": "3a368d3f965a8ea557236f831e287b7755a4b38eb7d5d7c960decfc56201311f",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_06/preview.png",
+      "sizeBytes": 78342,
+      "sha256": "6f8dd97d197e6b4924008d1633a88e98e88624978bc326d21f47ebb2705216bd",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_07/brief.json",
+      "sizeBytes": 1294,
+      "sha256": "a97c35ca3f6382c3fa8f58899ceff1d262253614a41b79ecb31cb7c9646e4b49",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_07/journal.json",
+      "sizeBytes": 649,
+      "sha256": "c6abfbb5fab2a700578f6da7fe7c859029dc1bbf8bb24819c65d6a2a22af7af6",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_07/layout.json",
+      "sizeBytes": 2917,
+      "sha256": "7cc852cf9c91249cfc5d9765e07b0972f542ffa4141dc372cae8dd9cdd1faf94",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_07/metrics.json",
+      "sizeBytes": 2965,
+      "sha256": "105b559f89f6e2ffc9e814c7905f2d67fc5a402413b927f283c5e9cc0024d9e2",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_07/preview.png",
+      "sizeBytes": 78703,
+      "sha256": "8524ec8c109e296ee1b97c93589cd7a3d7941dba42a9eaf265028da389a62fc6",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_08/brief.json",
+      "sizeBytes": 1235,
+      "sha256": "d8eb5d379b5c4bf5d6af17b73841f6e279e2c26e303a4c206aa69a2fb5900193",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_08/journal.json",
+      "sizeBytes": 650,
+      "sha256": "35d2aad5240f937aa69d31b6129a5977a5cd4b671a10e72b6bf3551f8c990f45",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_08/layout.json",
+      "sizeBytes": 2798,
+      "sha256": "5b6257591417a5a53afd84a328eb5a1ec9670a165e10a6d1ddae3e33eb389ed3",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_08/metrics.json",
+      "sizeBytes": 2938,
+      "sha256": "4bc00a92bec26008d690a6004475a766dc226748bd5066105066c17c26a61c7b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_08/preview.png",
+      "sizeBytes": 78994,
+      "sha256": "dfb88b8520f8a08e2470d9bb4d341696805971962744a779c418cb2df6b94407",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_09/brief.json",
+      "sizeBytes": 931,
+      "sha256": "96334a4a96daef1f212604b652963c1057c1c94ae66951ddbe3426886b4b32fa",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_09/journal.json",
+      "sizeBytes": 646,
+      "sha256": "f9177d605915e879f5ccf72048f6dca0618b01e9aa02f93ccc9da1884a0cf943",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_09/layout.json",
+      "sizeBytes": 2977,
+      "sha256": "10b6cf88122d3c05433ed35a5cc5bddbec04456746fa1ae46622d6f7f9bb868f",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_09/metrics.json",
+      "sizeBytes": 2880,
+      "sha256": "ac3a6e31cd0e6fa32c59cff980f62d1f5438ae0447b0c03e83e965d9108b2b65",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_09/preview.png",
+      "sizeBytes": 110251,
+      "sha256": "abef624f16ee96b6084f97a02a1d330773de78f37c8d451f1c9628017fb7b7cc",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_10/brief.json",
+      "sizeBytes": 943,
+      "sha256": "865f3f2923778fddcb7efb884eb72afa3c775eae403cb24d1669645b80f97d0f",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_10/journal.json",
+      "sizeBytes": 644,
+      "sha256": "00a361564022df6c5008a465bac18b12c59dba70a6f4765d0484e0413fac1a40",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_10/layout.json",
+      "sizeBytes": 2815,
+      "sha256": "a38b20226ab0af4483d7ab6a0ab22eac1c535e21f7ca94621be8c76d29f71098",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_10/metrics.json",
+      "sizeBytes": 2794,
+      "sha256": "4d449476165e82bf7130458344c63a023f898b7062463befd6908ac5f3a75374",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_10/preview.png",
+      "sizeBytes": 99065,
+      "sha256": "7f3fa72ddd94190ceb75e8194b2a6a66551dece4e591056923348578f274343e",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_11/brief.json",
+      "sizeBytes": 1185,
+      "sha256": "791d4b8166218048abe0f3543273c104fc4b3103d71f5218b940dc2cca7bec8b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_11/journal.json",
+      "sizeBytes": 648,
+      "sha256": "c7c48f89312abfb134a272fbb1e8fca3431ee99c54bdd7f8a280849ddf980563",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_11/layout.json",
+      "sizeBytes": 2750,
+      "sha256": "e037593b3db56ac90b07f0b8e542023f48a3edce37632344b2d709c1e595e4d1",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_11/metrics.json",
+      "sizeBytes": 2893,
+      "sha256": "47de4c6848e713e1f63b53891b379f16b2776b2563be33f6ebf342a98a185d8a",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_11/preview.png",
+      "sizeBytes": 101513,
+      "sha256": "71176cc53e4b4db816647475c17c9e3188d302fe7b452302af1c5eb28a859ee6",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_12/brief.json",
+      "sizeBytes": 1119,
+      "sha256": "4c946654c0e852340ec26a5835bae3c145dd1eabc78aeab614220ef9462e423b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_12/journal.json",
+      "sizeBytes": 647,
+      "sha256": "99a306088f47280c2bc655f74bc5c3ee89d72de37e1f72fd701575fecc73ca02",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_12/layout.json",
+      "sizeBytes": 2809,
+      "sha256": "124cbe59f20b8b379eff350088f985c70fe12b812d7d933cc0dea0d071573016",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_12/metrics.json",
+      "sizeBytes": 2847,
+      "sha256": "44ea0851899a445842141faab9ae02786aa7af0f83529a8bee3323be6865fe80",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_12/preview.png",
+      "sizeBytes": 81858,
+      "sha256": "ae3fac3b2ba5075ad83b2aa4f5cfe2196458429ec92793b5087d023104db8c07",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_13/brief.json",
+      "sizeBytes": 1046,
+      "sha256": "d82cb4ba9cb3440d09504820997f2e4e721a5b7520d2ebef21f5e128c8f69c3d",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_13/journal.json",
+      "sizeBytes": 642,
+      "sha256": "7d4ea0033dc12b5c7338afe4963f50646a67ae01c3f33b85943b1a54d82753c0",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_13/layout.json",
+      "sizeBytes": 2811,
+      "sha256": "339fe845ecf3c858616c49a798eaedafcfc2f359cd14b1f14fa609468b03a41d",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_13/metrics.json",
+      "sizeBytes": 2938,
+      "sha256": "f2e4ff2150d82357b9128b291ffdc6f4812c7e1247ed64f64d179be1aacffefb",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_13/preview.png",
+      "sizeBytes": 121707,
+      "sha256": "c2317b7e82eedeaf38ab621d1081b2eace2d11ec59c6f18fa339f5f518fd41ac",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_14/brief.json",
+      "sizeBytes": 986,
+      "sha256": "a768a133790f94b1df7a5a9b8760385c3bbe50a66aafe92a54400feafbf85439",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_14/journal.json",
+      "sizeBytes": 643,
+      "sha256": "57ee30b942c57a8aabcb8dea445491548db99a22e1ef6cd18677a7d4aa9471bf",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_14/layout.json",
+      "sizeBytes": 2804,
+      "sha256": "d768847fb771271e71363b6a57d246d5249097239eb97daa40f46ae7fbcf9ffc",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_14/metrics.json",
+      "sizeBytes": 2807,
+      "sha256": "ed1a47af912ae0893cc9f93da8dc64b56a76ab1cf2ffa7823ecd6bb715268f9f",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_14/preview.png",
+      "sizeBytes": 120358,
+      "sha256": "736d9e22c0bea9b4165bda97ca4ec445d1d3a925a9902996267fe9be52caecb3",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_15/brief.json",
+      "sizeBytes": 1269,
+      "sha256": "7f59f8312f5c83682ec7bfc1e92e8c99e58cbe41b07ed4d3c076ad7f35b70369",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_15/journal.json",
+      "sizeBytes": 645,
+      "sha256": "5f8b8a583f6651dcbefc2dc11a13ccf7a3f1a43deb31bd5f31d47e7f2d494f6d",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_15/layout.json",
+      "sizeBytes": 2750,
+      "sha256": "96a81503a98870ccaad6323b6a66b090445318f3b677b8e3e734396b1400dcbd",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_15/metrics.json",
+      "sizeBytes": 2943,
+      "sha256": "db3970858a559fa31e6e963cc3dd199ce968b7b5a6949cf7aa85053bf67946a6",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_15/preview.png",
+      "sizeBytes": 102440,
+      "sha256": "d189aa1752698cf0ff6a8fd1e5d58cbb0152007527e90978686320c6e1f7700c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_16/brief.json",
+      "sizeBytes": 1189,
+      "sha256": "b3cff3036c0c5349e0c7a7ea3d4315214b5ce8fb1319e697023a4ed96b184652",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_16/journal.json",
+      "sizeBytes": 645,
+      "sha256": "46bb7275715f13634551e41e868f474b21946b0d5e8eb577f86b0c28a97836ef",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_16/layout.json",
+      "sizeBytes": 2752,
+      "sha256": "8f3f9b19b346bb3ea542a404eeed4233d93e8cdd150ad609bbf30c93692c752b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_16/metrics.json",
+      "sizeBytes": 2882,
+      "sha256": "93d3f1eeab9ee2422e301d228eaa103a7caa62ada94f311d00bb5abd9f9b93c0",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_16/preview.png",
+      "sizeBytes": 97017,
+      "sha256": "41ebb28de119b90a4738ed5cf21b35f58ee2ad1d781548eba557ef08a142f1a3",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_17/brief.json",
+      "sizeBytes": 998,
+      "sha256": "675ff82e9efeaf1d5952eb942653f17d311b8ede93bd14632a6054b5b4661d49",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_17/journal.json",
+      "sizeBytes": 649,
+      "sha256": "e7e4f70092f3aa07ae1100f4c01c62c0c18c146459f2d92452ee1d8d818c7bdc",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_17/layout.json",
+      "sizeBytes": 2470,
+      "sha256": "0427cf207e5003d7cafb29ff0038cab9039e788246902348b9480bab487976f2",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_17/metrics.json",
+      "sizeBytes": 3026,
+      "sha256": "acad372a7dcae643c81f09ef64ab4713a925e1c971db9c263cf0b36d79eafc87",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_17/preview.png",
+      "sizeBytes": 112639,
+      "sha256": "8bd6896a659b2aeaa316d56d064ed92b8ae29e1fb1bbd0a08d0e4a4629880cce",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_18/brief.json",
+      "sizeBytes": 978,
+      "sha256": "6ec1f661e67e7f254e6cbcb3f200a9511ed2e517035b78695689246c1e0bba2c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_18/journal.json",
+      "sizeBytes": 647,
+      "sha256": "ebbf4b1e0f114f3e3ea78b9e718ac53a18cd090755f39538e64378b88a798688",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_18/layout.json",
+      "sizeBytes": 2642,
+      "sha256": "2e4065cdb27f6012286948207a21ef5b3aacaad2e3ffa3562c672bce4cba8d3e",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_18/metrics.json",
+      "sizeBytes": 2938,
+      "sha256": "d738df249ac828f38533de27ba7de7c1b253120f6c95c101dbddbc1a387cd083",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_18/preview.png",
+      "sizeBytes": 105260,
+      "sha256": "265999b9a21e471bed16a68a481526a95121f330b706bc554dba02a102831084",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_19/brief.json",
+      "sizeBytes": 1227,
+      "sha256": "e51ca99e11711da1dac01d072750d17c4837c16035cb65c6f145c75e8a20e68b",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_19/journal.json",
+      "sizeBytes": 650,
+      "sha256": "f9edc5db329ebd251ef059f049862637db137dd4aa2447944472d30411dce58d",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_19/layout.json",
+      "sizeBytes": 2579,
+      "sha256": "7fd42d6da23c1f4151c51439b4556d56582209223a501741b4086e391987da73",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_19/metrics.json",
+      "sizeBytes": 2927,
+      "sha256": "19ff54bc151519e829b728c4cb7325b20c9a74ba3e93a7ecc4e0f060f09c6018",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_19/preview.png",
+      "sizeBytes": 105689,
+      "sha256": "17e9872ee1ae30d474fd9245cc75a4c4787760f9e6b1919c826af2b563842df0",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "brief.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_20/brief.json",
+      "sizeBytes": 1190,
+      "sha256": "31751b4622dc05346f7f4ef264b2e5e50d58edd7d6322cdc4981e0b104f91b02",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "journal.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_20/journal.json",
+      "sizeBytes": 651,
+      "sha256": "cba3765be5b1a8dac718c6427ca51030669633c3dd50700078c5aed391246d6a",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "layout.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_20/layout.json",
+      "sizeBytes": 2696,
+      "sha256": "abd63be1ced0b1f26fc18bb26bad1a0c391d17e69263c00c2d2596e480c83e42",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "metrics.json",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_20/metrics.json",
+      "sizeBytes": 3115,
+      "sha256": "0bd6e7f8d430f5155996cb1f108ac0891b3498a50350c8a32b7b48ff0d092743",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "preview.png",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_BRIEFS/brief_20/preview.png",
+      "sizeBytes": 113790,
+      "sha256": "3e7bf0fad07bee5c96400eda5e4ae338240b6b821539ac4ee1e039b22937e68a",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "P10_QUALIFICATION.csv",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.csv",
+      "sizeBytes": 2271,
+      "sha256": "1b03df20c37ac7c0bf342d01eb48676c8c46e7700cffccf2bc3562067c2b770c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P10",
+      "name": "P10_QUALIFICATION.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P10_QUALIFICATION.md",
+      "sizeBytes": 9067,
+      "sha256": "837ab9c5fda0020ce40b8dfd4fc4cdac1649ea23aeac8933a5a681d01ca1ca2c",
+      "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    },
+    {
+      "task": "P11",
+      "name": "P11_ADD_REFERENCE.md",
+      "path": "output/proofs/2026-09-17-research-grade-pipeline/P11_ADD_REFERENCE.md",
+      "sizeBytes": 7548,
+      "sha256": "ea3a589312a953a7c9b68d8241cdfef76c92f175cd9e66b5c8ac37c70c4b3f18",
+      "producingCommand": "npx tsx scripts/generate-p11-proof.ts",
+      "commit": "1fe8744ff2bf6c9f3221380715db5e0531e5279f"
+    }
+  ]
 }

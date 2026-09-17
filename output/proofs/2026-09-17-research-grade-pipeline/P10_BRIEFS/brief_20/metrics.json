@@ -1,16 +1,20 @@
 {
-  "compositeScore": 0.863,
+  "compositeScore": 0.822,
   "passed": false,
-  "qualityScore": 0.878,
+  "qualityScore": 0.828,
   "complianceScore": 1,
   "exemplarSimilarityScore": 0.6,
   "metrics": {
     "textLegibility": {
-      "score": 1,
-      "passed": true,
+      "score": 0.638,
+      "passed": false,
       "metric": "textLegibility",
       "details": {
-        "failingIssues": [],
+        "failingIssues": [
+          "Text 2 (subtitle) contrast 1.00:1 < 3:1",
+          "Text 3 (body) contrast 1.00:1 < 3:1",
+          "Text 4 (footer) contrast 1.58:1 < 3:1"
+        ],
         "count": 5
       }
     },
@@ -24,23 +28,23 @@
       }
     },
     "alignment": {
-      "score": 1,
+      "score": 0.957,
       "passed": true,
       "metric": "alignment",
       "details": {
-        "widthVariance": 0,
-        "lineUniformityDev": 0,
-        "d": 0
+        "widthVariance": 0.001,
+        "lineUniformityDev": 2.212,
+        "d": 0.449
       }
     },
     "balance": {
-      "score": 0.917,
+      "score": 0.97,
       "passed": true,
       "metric": "balance",
       "details": {
-        "wx": 960,
-        "wy": 414,
-        "offset": 0.0828
+        "wx": 1024,
+        "wy": 511,
+        "offset": 0.0302
       }
     },
     "justification": {
@@ -50,20 +54,20 @@
       "details": {
         "counts": {
           "left": 0,
-          "center": 5,
-          "right": 0
+          "center": 0,
+          "right": 5
         },
         "dominanceRatio": 1
       }
     },
     "regularity": {
-      "score": 0.774,
+      "score": 0.652,
       "passed": true,
       "metric": "regularity",
       "details": {
-        "meanGap": 54,
-        "std": 19,
-        "cv": 0.292
+        "meanGap": 99,
+        "std": 58,
+        "cv": 0.534
       }
     },
     "typefacePairing": {
@@ -72,20 +76,21 @@
       "metric": "typefacePairing",
       "details": {
         "families": [
-          "Noto Sans Arabic",
-          "Cairo"
+          "Cairo",
+          "Noto Sans Arabic"
         ],
         "familyCount": 2,
         "failures": []
       }
     },
     "negativeSpace": {
-      "score": 0.929,
+      "score": 0.95,
       "passed": true,
       "metric": "negativeSpace",
       "details": {
-        "fraction": 0.753,
-        "occupiedArea": 511588,
+        "fraction": 0.425,
+        "bottomVoid": 0.059,
+        "occupiedArea": 1191292,
         "totalArea": 2073600
       }
     },
@@ -134,7 +139,8 @@
     }
   },
   "failingMetrics": [
+    "textLegibility",
     "gridAppropriateness"
   ],
-  "executionTimeMs": 0.05
+  "executionTimeMs": 0.06
 }
