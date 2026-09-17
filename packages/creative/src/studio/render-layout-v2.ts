@@ -60,7 +60,7 @@ export interface RenderLayoutV2Result {
 const fontCache = new Map<string, any>();
 
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
-const ARABIC_SCRIPT_FAMILIES = new Set(['Noto Sans Arabic', 'Cairo', 'Amiri', 'Vazirmatn']);
+export const ARABIC_SCRIPT_FAMILIES = new Set(['Noto Sans Arabic', 'Cairo', 'Amiri', 'Vazirmatn']);
 
 function getProjectRoot(): string {
   // Current file is at packages/creative/src/studio/render-layout-v2.ts
@@ -86,11 +86,34 @@ function resolveFontconfigFile(options?: RenderLayoutOptions): string {
   return path.resolve(fontsDir, 'fonts.conf');
 }
 
+const substitutionWarned = new Set<string>();
+
 /**
- * Verifies font resolution via fc-match against the configured fonts.conf.
- * Throws FONT_UNRESOLVED if the resolved font family differs from the requested family.
+ * Checks that fontconfig knows the family, and warns when the rasteriser will substitute it.
+ *
+ * What this can detect: a family fontconfig cannot resolve at all.
+ *
+ * What it cannot detect on its own: a family fontconfig resolves by name while the rasteriser
+ * still draws something else. On a Homebrew/macOS host `fc-match` returns Cinzel for "Cinzel"
+ * and Playfair Display for "Playfair Display" while rsvg-convert renders Helvetica for both, so
+ * for most of the T5 qualification this guard passed on every heading that was being substituted.
+ * The authoritative check is `probeFontFidelity`, which rasterises and compares bytes; it is
+ * consulted here to warn, and the render result's `fontFidelity` map carries the verdict for
+ * callers that need to fail on it.
  */
 export function assertFontResolves(fontFamily: string, fontconfigFile: string): void {
+  if (probeFontFidelity(fontFamily, { fontconfigFile }) === 'stand-in') {
+    const key = `${fontconfigFile}|${fontFamily}`;
+    if (!substitutionWarned.has(key)) {
+      substitutionWarned.add(key);
+      console.warn(
+        `[render-layout-v2] FONT_SUBSTITUTED: '${fontFamily}' is not drawn by this renderer — ` +
+          `its output is byte-identical to a family that does not exist. The render will show a ` +
+          `fallback face. See the fontFidelity map on the render result.`
+      );
+    }
+  }
+
   try {
     const res = spawnSync('fc-match', ['-f', '%{family}', fontFamily], {
       env: {
@@ -494,9 +517,34 @@ function renderTextElementToSvg(
   }
 
   const scale = renderFontSize / font.unitsPerEm;
-  const ascent = (font.ascent || 800) * scale;
   const nominalLineHeight = renderFontSize * t.lineHeight;
-  const firstLineY = t.y + ascent;
+
+  // Centre the visible glyphs in the box instead of hanging the first line box from its top edge.
+  //
+  // The old `t.y + ascent` used the font's metric ascent, which is far taller than the ink: Cairo
+  // declares 1.303em of ascent to reserve room for stacked diacritics, so a 61px Cairo line put
+  // 30px of empty space above the glyphs and left the text sitting high in its box. The T5
+  // re-critique raised that as its most repeated complaint. Measuring the shaped run's bounding
+  // box gives the real ink extent, so the glyphs can be centred on the box's optical centre.
+  let inkAbove = 0;
+  let inkBelow = 0;
+  for (const line of lines) {
+    if (!line) continue;
+    try {
+      const bbox = font.layout(line).bbox;
+      if (bbox && Number.isFinite(bbox.maxY)) inkAbove = Math.max(inkAbove, bbox.maxY * scale);
+      if (bbox && Number.isFinite(bbox.minY)) inkBelow = Math.max(inkBelow, -bbox.minY * scale);
+    } catch {
+      // fall through to the metric fallback below
+    }
+  }
+  if (inkAbove <= 0) inkAbove = (font.capHeight || font.ascent || 800) * scale;
+
+  const inkHeight = (lines.length - 1) * nominalLineHeight + inkAbove + inkBelow;
+  // When the ink is taller than the box the text keeps its old behaviour of starting at the top
+  // edge and spilling downward, rather than being pushed up past the canvas edge.
+  const verticalSlack = Math.max(0, (t.height - inkHeight) / 2);
+  const firstLineY = t.y + verticalSlack + inkAbove;
 
   const tspans: string[] = [];
   for (let i = 0; i < lines.length; i++) {

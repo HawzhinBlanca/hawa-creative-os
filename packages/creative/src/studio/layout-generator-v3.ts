@@ -411,6 +411,8 @@ export function scaleNormalizedLayoutToV2(
     };
   }
 
+  centerSeparatorsInGaps(shapes, text);
+
   return {
     version: 2,
     width: canvasWidth,
@@ -424,6 +426,120 @@ export function scaleNormalizedLayoutToV2(
     logo,
     typeScale: norm.typeScale ? { base: norm.typeScale.base, ratio: norm.typeScale.ratio } : undefined,
   };
+}
+
+/**
+ * Recentres a thin horizontal separator inside the vertical gap between the two text blocks it
+ * divides. The model routinely leaves one lopsided — 38px below the block above and 84px above the
+ * block below — and the T5 re-critique raised that asymmetry nine times across eighteen designs.
+ *
+ * Deliberately narrow: only thin, horizontally-oriented rules and accents that sit clear of every
+ * text block and horizontally overlap the blocks on both sides. Panels, frames, vertical accent
+ * bars and anything a text block overlaps are left exactly where the model put them, because for
+ * those the offset is usually the intent.
+ */
+export interface SeparatorGap {
+  shapeIndex: number;
+  /** Clear space between the block above and the separator. */
+  padTop: number;
+  /** Clear space between the separator and the block below. */
+  padBottom: number;
+  /** Where the separator would sit if it were centred in the gap. */
+  centredY: number;
+  /** |padTop - padBottom| as a fraction of the gap; 0 is perfectly centred. */
+  skew: number;
+}
+
+/**
+ * Finds every thin horizontal separator that sits clear inside a vertical gap between two text
+ * blocks, and reports how lopsided it is. Read-only counterpart to `centerSeparatorsInGaps`.
+ */
+export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): SeparatorGap[] {
+  const out: SeparatorGap[] = [];
+  if (text.length < 2 || shapes.length === 0) return out;
+
+  const blocks = text.map((t) => ({
+    top: t.y,
+    bottom: t.y + t.height,
+    left: t.x,
+    right: t.x + t.width,
+  }));
+
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    const thin = s.height <= Math.max(6, s.width * 0.1);
+    const separator = s.kind === 'line' || s.role === 'rule' || s.role === 'accent';
+    if (!thin || !separator || s.width <= 0) continue;
+
+    const sTop = s.y;
+    const sBottom = s.y + s.height;
+    const overlapsHorizontally = (b: { left: number; right: number }) =>
+      s.x < b.right && s.x + s.width > b.left;
+
+    let above = -Infinity;
+    let below = Infinity;
+    let straddlesText = false;
+    for (const b of blocks) {
+      if (b.bottom <= sTop) {
+        if (overlapsHorizontally(b)) above = Math.max(above, b.bottom);
+      } else if (b.top >= sBottom) {
+        if (overlapsHorizontally(b)) below = Math.min(below, b.top);
+      } else {
+        straddlesText = true;
+        break;
+      }
+    }
+    if (straddlesText || above === -Infinity || below === Infinity) continue;
+
+    const gap = below - above;
+    if (gap <= s.height) continue;
+
+    const padTop = sTop - above;
+    const padBottom = below - sBottom;
+    const span = padTop + padBottom;
+    out.push({
+      shapeIndex: i,
+      padTop,
+      padBottom,
+      centredY: Math.round(above + (gap - s.height) / 2),
+      skew: span > 0 ? Math.abs(padTop - padBottom) / span : 0,
+    });
+  }
+  return out;
+}
+
+export function centerSeparatorsInGaps(shapes: ShapeElement[], text: TextElement[]): number {
+  let moved = 0;
+  for (const g of findSeparatorGaps(shapes, text)) {
+    const s = shapes[g.shapeIndex];
+    if (g.centredY !== s.y) {
+      s.y = g.centredY;
+      moved++;
+    }
+  }
+  return moved;
+}
+
+/**
+ * Separators a reader would see as lopsided. Thresholds are relative and absolute together, so a
+ * few pixels in a tight gap is not a defect while 38px above against 84px below is.
+ *
+ * None of the thirteen deterministic design metrics responds to separator position: recentring all
+ * 31 separators across the eighteen T5 layouts moved every metric by exactly 0.0000, which is why
+ * the model kept emitting lopsided rules while the free gate scored them at 0.95. The generator
+ * now centres them unconditionally; this detector is the gate that catches a layout which reaches
+ * QA without having gone through that normalisation.
+ */
+export function findAsymmetricSeparators(
+  shapes: ShapeElement[],
+  text: TextElement[],
+  opts: { minSkew?: number; minPixels?: number } = {}
+): SeparatorGap[] {
+  const minSkew = opts.minSkew ?? 0.25;
+  const minPixels = opts.minPixels ?? 8;
+  return findSeparatorGaps(shapes, text).filter(
+    (g) => g.skew >= minSkew && Math.abs(g.padTop - g.padBottom) >= minPixels
+  );
 }
 
 /**

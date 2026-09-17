@@ -21,8 +21,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "b1f8fcede0357a5f0afa37f343e931095a7223895492f4b6d905b3e3eb07dc86",
-      "bytes": 83376
+      "sha256": "3eea79a442b20ed5ccd739a7702357074859db5f2697f6c825c0ea0239456881",
+      "bytes": 83549
     },
     {
       "brief": "brief_02_en_square",
@@ -34,8 +34,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "be820a6cf862241ec16a518d162a1ceb7df2bde3f5d079d0ddd33801954f6fa3",
-      "bytes": 82474
+      "sha256": "100ce382847cdcb7a0ef2be4acd8d2482c7cee8f8ca3374f22b99e709b4a6ddb",
+      "bytes": 83454
     },
     {
       "brief": "brief_03_ckb_square",
@@ -47,8 +47,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "860dfa0546bb33c733f819e1a239fcae75120c6ce7c286c9ed268e4908f18165",
-      "bytes": 60389
+      "sha256": "072a2841d4ca4f077ad118e88954c7c406aa229123c661023f536579378ffa34",
+      "bytes": 60306
     },
     {
       "brief": "brief_04_ckb_square",
@@ -60,8 +60,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "6a3f85cc968cb825815f8330362f8fd21e87e31792ce1f1ce6bf99b051a98ee6",
-      "bytes": 66155
+      "sha256": "e90ce9014ac3bda878627b453d94cec953fb05aa0f35b1ba3607fce5a1656369",
+      "bytes": 66621
     },
     {
       "brief": "brief_05_en_portrait45",
@@ -73,8 +73,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "6ada3ccc6c7131a1c0699183df534f727360cf6cf65974d40e5b6c7e7523efef",
-      "bytes": 97408
+      "sha256": "5e266cdbbf59370063e7e2273da3e6575989a7ebc3cc3b0f25b9f2b4089a5bb8",
+      "bytes": 97456
     },
     {
       "brief": "brief_06_en_portrait45",
@@ -86,8 +86,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "96dcd004ea1120e777b83ddc9aa3a2e377dc9a63ae9389ce553c472ca2ef86b1",
-      "bytes": 96561
+      "sha256": "aa493439ad2945ce15b41a04cc6950f6d5d8aded1eaef2dc317bed5118bea778",
+      "bytes": 97135
     },
     {
       "brief": "brief_07_ckb_portrait45",
@@ -99,8 +99,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "c710689a1902983bf05819c57bc95fe9936b5b7949235c2ee1123b1753e87ace",
-      "bytes": 83175
+      "sha256": "6d20f3de7f7acd19bd150789229f61bf8b01b8d83555963d55b80759429c86b7",
+      "bytes": 82391
     },
     {
       "brief": "brief_08_ckb_portrait45",
@@ -112,8 +112,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "e2c651ba7aa642dde27edb415ad63aa16dd68b24d1b45ec15006c29118b8e29b",
-      "bytes": 79765
+      "sha256": "1ff3a5cd5892e014c989f9c3c8dbfe66e5301e0746b10513ec0d896a99be8290",
+      "bytes": 79501
     },
     {
       "brief": "brief_09_en_story916",
@@ -125,8 +125,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "bdc5d05923de964d8f7689e00e57f9a74c801879498f6e380cae6c0fe3e80a22",
-      "bytes": 115780
+      "sha256": "9b173ce64b3cdae6e183441c4ec5f03b953266bed335f723da4768bd80f08903",
+      "bytes": 115999
     },
     {
       "brief": "brief_10_en_story916",
@@ -138,8 +138,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "22aaea0fb383baaffa4c9c7e5ab64eca7de446273e229651d82f47886b41d49d",
-      "bytes": 109833
+      "sha256": "899fc54a8a7f5baebc513cb8cbac867093e1310d686b2ed0f3835d73deb90269",
+      "bytes": 109745
     },
     {
       "brief": "brief_11_ckb_story916",
@@ -151,8 +151,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "fa203124a7cbc9c51dca913e7168810c0fd0660de96e3790ff2a37089482fc4c",
-      "bytes": 95793
+      "sha256": "9b6fc5801d479170293068380441d77d5290444eb8692da578a0d1e7c4c432a4",
+      "bytes": 95831
     },
     {
       "brief": "brief_12_ckb_story916",
@@ -164,8 +164,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "fcfee05cc3b14daf384ba15e84685cf12ca5c6cc4e5796feedf83a731e119eb9",
-      "bytes": 90420
+      "sha256": "28763c032f975cd55eaef403b4d97fd97a19d01c30837950309ec7db5228563f",
+      "bytes": 90162
     },
     {
       "brief": "brief_14_en_a4doc",
@@ -177,8 +177,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "a3373be706654c28ce8de7e02939fde21f040d4f1ecea256993d640cf648bfe8",
-      "bytes": 116596
+      "sha256": "90d3aa31260984d008caef119ff6c31aba11ab3f36b3b1578c9de30289b8a5f1",
+      "bytes": 115229
     },
     {
       "brief": "brief_15_ckb_a4doc",
@@ -190,8 +190,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "76a15905d15bd99f792317aa291e3b75c76b3e817479c5bb7d46afdb41c99a3c",
-      "bytes": 88465
+      "sha256": "74e71f1c09d51c6008f2bcb2c8f032c223cf3d0487f1f6ad421eb6b0f94c9469",
+      "bytes": 88468
     },
     {
       "brief": "brief_17_en_landscape169",
@@ -203,8 +203,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "67b15acc325ecf799369a1312eb65254a9a55fabe334e43c3d32cac7c2e17b19",
-      "bytes": 135041
+      "sha256": "b752952bf256fe7a9dbc1d764ff55f8d4b34194661a1d1334a48fdc00b3c4ce2",
+      "bytes": 135674
     },
     {
       "brief": "brief_18_en_landscape169",
@@ -216,8 +216,8 @@
         "Verdana"
       ],
       "standIns": [],
-      "sha256": "c4b260d24a25010736cc561b58addcc60b92c4adeaed427f4d4d8c39caf41841",
-      "bytes": 119708
+      "sha256": "0fce1f7985bf47d53acf85ccddfe3c4caa33c27b185ac2a2ca6d10dc4dcbf9cc",
+      "bytes": 119125
     },
     {
       "brief": "brief_19_ckb_landscape169",
@@ -229,8 +229,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "3d01926be626515b0fc0538abf64c98135da9587511e84dbce60114ab5e9b21c",
-      "bytes": 123189
+      "sha256": "cbce88a64161a1ad5de3673edff4cf962640384d9d3d486f62abbd05fe282ee1",
+      "bytes": 124774
     },
     {
       "brief": "brief_20_ckb_landscape169",
@@ -241,8 +241,8 @@
         "Noto Sans Arabic"
       ],
       "standIns": [],
-      "sha256": "ced0e0ea12e889e0d375ae7f4206883a92d7a36f7eb5277cd8f88281729e0649",
-      "bytes": 96836
+      "sha256": "313d360cd92058fd3aad1b21817fc277ec0ed764e5ef4a73463beb410869ea1d",
+      "bytes": 96785
     }
   ]
 }

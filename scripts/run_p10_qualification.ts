@@ -1015,8 +1015,6 @@ async function main() {
   const editabilityCount = results.filter((r) => r.editabilityPass).length;
   const editabilityRate = (editabilityCount / totalBriefs) * 100;
 
-  const distinctSkeletonCount = results.filter((r) => r.distinctSkeleton).length;
-
   const costs = results.map((r) => r.totalNetCostUsd).sort((a, b) => a - b);
   const latencies = results.map((r) => r.totalLatencyMs).sort((a, b) => a - b);
   const compositeScores = results.map((r) => r.metrics.compositeScore);

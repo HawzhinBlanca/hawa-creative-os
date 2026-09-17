@@ -237,13 +237,74 @@ annotated Set-of-Mark image the model was shown, and the before/after verdict fo
 
 Total spend for this session: $5.655748 qualification + $0.779760 re-critique = **$6.435508**.
 
-## 12. What remains
+## 12. The two clustered defects, fixed
+
+### 12.1 Ink centring — text now sits on the box's optical centre
+
+The renderer placed the first baseline at `t.y + ascent`, using the font's declared metric ascent.
+That is far taller than the ink. Measured from the bundled faces:
+
+| Face | size | metric ascent | ink above baseline | empty space it created |
+|---|---|---|---|---|
+| Playfair Display Bold | 54px | 58.4px | 42.3px | 16.1px |
+| Verdana | 24px | 24.1px | 18.2px | 5.9px |
+| Cairo | 61px | 79.5px | 49.2px | **30.3px** |
+| Noto Sans Arabic | 27px | 37.1px | 19.3px | 17.8px |
+
+Arabic faces declare a very tall ascent to reserve room for stacked diacritics — Cairo asks for
+1.303em — so the taller the Kurdish type, the further the glyphs drifted from centre. The renderer
+now measures each shaped line's bounding box with fontkit and centres the real ink inside the box.
+When the ink is taller than the box the old top-anchored behaviour is kept, so nothing is pushed off
+the canvas. All 18 renders changed.
+
+This had to land with the deck encoders, which is why it was deferred earlier: both `transfer-v2`
+and `editable-transfer` anchored pptx text with `vertAnchor: 'top'`. Centring the raster alone would
+have made the preview and the Canva design disagree in every block. Both now use `'middle'`.
+
+### 12.2 Separator centring — and a metric that could not see the problem
+
+The generator now centres a thin horizontal rule or accent inside the gap between the two text
+blocks it divides, before the layout leaves the generator. Deliberately narrow: only thin,
+horizontally-oriented separators that sit clear of every text block and overlap the blocks on both
+sides. Panels, frames, vertical accent bars and anything a text block overlaps are left alone,
+because for those the offset is usually the intent.
+
+Measured over the eighteen real T5 layouts: **31 separators sit in a text gap, and 28 of them were
+off-centre by 3px or more** — up to 172px above against 65px below. The nine the vision critique
+happened to name were a sample, not the extent.
+
+The reason the model kept emitting them is worth recording: **not one of the thirteen deterministic
+metrics responds to separator position.** Recentring all 31 separators moved every metric score by
+exactly 0.0000 — composite, negative space, alignment, balance, regularity, all unchanged. The free
+gate scored these layouts at 0.95 while a paid vision call was the only thing that could see the
+defect. `findAsymmetricSeparators` now closes that: a relative-and-absolute threshold (skew >= 0.25
+and >= 8px difference, so a few pixels in a tight gap is not a defect) feeding a new hard
+`ASYMMETRIC_SEPARATOR` QA code. It is a hard gate rather than a fourteenth weighted metric, so no
+existing threshold or proof had to be re-weighted. Against the real layouts it flags **12 of 18**,
+including the exact cases the critique quoted (43/74, 38/84, 48/84).
+
+Verification output: `SPACING_FIX_VERIFICATION.txt`, reproducible with
+`node scripts/proofs/verify_spacing_fixes.mjs <briefsDir>` — no model calls.
+
+## 13. Further bugs and gaps found while fixing those two
+
+1. **A centre-aligned Kurdish title reached Canva without RTL.** `studioLayoutV2ToTransferPlan` decided direction with "Arabic-ish family name OR right-aligned". Amiri was not in that family list, so a centre-aligned Amiri title — **9 of the 18 layouts** — was handed to the deck with `rtl: false`, no `rtlMode` and no `lang: "ku"`, and was left out of the manifest's `rtlBlocks`. The same test marked an English right-aligned footer as Kurdish. Both now use the layout's own `rtl` flag with the cursive-script families as a safety net.
+2. **Every shape reached Canva as an opaque filled rectangle.** The transfer plan carried only x, y, width, height and colour, so a hairline frame, a translucent wash, an ellipse and a rule all arrived as solid slabs. `kind`, `opacity`, `radius` and the stroke fields now cross the boundary and the encoder maps them to the matching pptx shape, mirroring the raster.
+3. **The deck ignored the layout's line height.** The encoders imposed a fixed multiple (1.3, 1.7 or 1.4) while the layout specifies one per block in the 1.15-1.85 range, so text reflowed away from the preview. Both now use the block's own value.
+4. **`assertFontResolves` gave false assurance.** It ran `fc-match`, which resolves a family name the rasteriser then fails to use — the whole reason the substitution in section 5 survived a guard written to catch it. It now consults the render probe and warns once per family, with the machine-readable verdict on the render result's `fontFidelity`.
+5. **A test that passed per-package and failed from the root.** The new spacing tests resolved the fonts directory from `process.cwd()`, which differs between `pnpm --filter` and `pnpm test`. Now resolved from the test file. Worth noting because `pnpm --filter` masked it entirely.
+6. Removed a dead adjacency counter left behind in the qualification script when the archetype-set figure replaced it.
+
+Coverage for all of the above: `packages/creative/test/layout-spacing-fixes.test.ts`, 13 tests.
+Full suite: **1074 passed, 12 skipped, 0 failed** across 147 files, and a clean repo typecheck.
+
+## 14. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
 3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
 4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
-5. **The two clustered defects above** — ink centring in the renderer (with the parity check) and divider centring in the generator — are the highest-value remaining design fixes, since between them they account for 16 of the 21 surviving critique comments.
+5. **Re-critiquing on the fixed renders has not been paid for.** Both clustered defects are fixed, tested and measured, but the 21 surviving comments were raised against the pre-fix renders. A re-critique (~$0.5) would show what is left; the fixes themselves are verified without it.
 5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
 6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
 7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.

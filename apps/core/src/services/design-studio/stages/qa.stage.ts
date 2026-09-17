@@ -1,5 +1,10 @@
 import type { StageContext, CandidateState, HardQAResult } from '../types.js';
-import { validateLayoutV2, computeLayoutMetrics, type LayoutValidationContext } from '@hawa/creative';
+import {
+  validateLayoutV2,
+  computeLayoutMetrics,
+  findAsymmetricSeparators,
+  type LayoutValidationContext,
+} from '@hawa/creative';
 
 export async function runQAStage(
   ctx: StageContext,
@@ -59,6 +64,19 @@ export async function runQAStage(
   // An alignment score < 0.70 represents severe raggedness / off-grid drift that violates institutional dignity
   if (metrics.alignmentScore < 0.70) {
     defectCodes.push('POOR_GRID_ALIGNMENT');
+  }
+
+  // A divider that sits far closer to one of the two blocks it separates. The v3 generator centres
+  // these unconditionally, so this fires only for a layout that reached QA without that
+  // normalisation. It is a hard gate rather than a weighted metric because no deterministic metric
+  // responds to separator position at all: recentring all 31 separators across the eighteen T5
+  // layouts changed every one of the thirteen metric scores by exactly 0.0000.
+  const asymmetricSeparators = findAsymmetricSeparators(
+    winner.currentLayout.shapes || [],
+    winner.currentLayout.text || []
+  );
+  if (asymmetricSeparators.length > 0) {
+    defectCodes.push('ASYMMETRIC_SEPARATOR');
   }
 
   return {

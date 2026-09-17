@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { StudioLayoutV2 } from './layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES } from './render-layout-v2.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 export interface TransferV2Options extends TransferOptions {
@@ -9,10 +10,12 @@ export interface TransferV2Options extends TransferOptions {
 }
 
 export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
-  const isArabicFont = (fontFamily: string) =>
-    fontFamily.toLowerCase().includes('arabic') ||
-    fontFamily.toLowerCase().includes('vazirmatn') ||
-    fontFamily.toLowerCase().includes('cairo');
+  // The layout's own rtl flag decides direction, with the cursive-script families as a safety net.
+  // The previous test — an Arabic-ish family name OR right alignment — got this wrong both ways:
+  // it missed Amiri entirely, so a centre-aligned Kurdish Amiri title reached Canva without
+  // rtlMode (9 of the 18 T5 layouts), and it marked an English right-aligned footer as Kurdish.
+  const isRtlBlock = (t: { rtl?: boolean; fontFamily: string }) =>
+    t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
 
   return {
     width: layout.width,
@@ -24,6 +27,11 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       width: s.width,
       height: s.height,
       color: s.color,
+      kind: s.kind,
+      opacity: s.opacity,
+      radius: s.radius,
+      strokeWidth: s.strokeWidth,
+      strokeColor: s.strokeColor,
     })),
     text: [...layout.text]
       .sort((a, b) => a.copyIndex - b.copyIndex)
@@ -38,7 +46,8 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       color: t.color,
       align: t.align,
       bold: t.bold,
-      rtl: isArabicFont(t.fontFamily) || t.align === 'right',
+      lineHeight: t.lineHeight,
+      rtl: isRtlBlock(t),
     })),
     logo: layout.logo
       ? {
@@ -192,7 +201,10 @@ export async function encodeStudioTransferV2(
   // 3. Text (sorted canonically by copyIndex so PPTX shape tree order matches expected copy order)
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
   for (const t of sortedText) {
-    const isArabic = t.fontFamily === 'Noto Sans Arabic' || t.fontFamily === 'Vazirmatn' || t.align === 'right';
+    // The layout's own rtl flag is the RTL signal, plus the cursive-script families as a
+    // safety net. Treating any right-aligned block as Arabic gave an English right-aligned
+    // footer rtlMode and lang="ku" in the deck, which Canva then rendered right-to-left.
+    const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
     slide.addText(copy[t.copyIndex], {
       x: t.x / 96,
       y: t.y / 96,
@@ -205,9 +217,13 @@ export async function encodeStudioTransferV2(
       bold: t.bold || false,
       italic: t.italic || false,
       margin: 0,
-      lineSpacingMultiple: isArabic ? 1.7 : 1.3,
+      // The layout specifies a line height per block (clamped to 1.15-1.85); the deck used to
+      // ignore it and impose a fixed multiple, which reflowed text away from the raster.
+      lineSpacingMultiple: t.lineHeight || (isArabic ? 1.7 : 1.3),
       breakLine: false,
-      vertAnchor: 'top',
+      // Matches the raster, which centres the visible glyphs in the box. With 'top' the deck
+      // and the preview disagreed on vertical placement in every block.
+      vertAnchor: 'middle',
       paraSpaceAfterPt: 0,
       fit: 'resize',
       ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
