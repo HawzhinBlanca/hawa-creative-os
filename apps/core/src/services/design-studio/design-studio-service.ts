@@ -407,6 +407,58 @@ export class DesignStudioService {
           throw err;
         }
       },
+      createStructuredCompletion: async <T>(params: any): Promise<any> => {
+        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
+          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
+        }
+
+        const callId = randomUUID();
+        const model = params.model || baseClient.primaryModel || 'gpt-6-astra';
+
+        await this.repo.recordCallStart({
+          id: callId,
+          runId: run.id,
+          tenantId: s.tenantId,
+          stage: currentStageName,
+          provider: 'openai',
+          model,
+          requestedModel: model,
+        });
+        currentBudget.calls++;
+
+        try {
+          const result = await baseClient.createStructuredCompletion<T>(params);
+          const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
+            input_tokens: result.receipt.inputTokens,
+            output_tokens: result.receipt.outputTokens,
+          });
+
+          await this.repo.finalizeCall({
+            id: callId,
+            tenantId: s.tenantId,
+            responseId: result.receipt.id || result.receipt.responseId,
+            inputTokens: result.receipt.inputTokens,
+            cachedInputTokens: result.receipt.cacheReadTokens || 0,
+            outputTokens: result.receipt.outputTokens,
+            usdEstimate: cost,
+            status: 'ok',
+          });
+
+          await onSpendUpdate(cost);
+          return result;
+        } catch (err: any) {
+          await this.repo.finalizeCall({
+            id: callId,
+            tenantId: s.tenantId,
+            inputTokens: 0,
+            outputTokens: 0,
+            usdEstimate: 0,
+            status: 'error',
+            errorCode: err.message || 'CALL_FAILED',
+          });
+          throw err;
+        }
+      },
     };
 
     const ledgerArtProvider: any = {
