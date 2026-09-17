@@ -121,3 +121,35 @@ revision proven end to end; and the owner preferring the new pipeline in a seale
 
 Report per task in the usual shape: `TASK / STATUS / COMMITS / PROOF / LIVE IDS / DEVIATIONS / WHAT I DID
 NOT DO`. Do not mark anything accepted yourself; the lead re-executes every proof.
+
+---
+
+## T9 — Make the qualification survivable (added 2026-09-17 after two failed lead runs)
+
+The lead ran the full multi-stage qualification twice. Both runs made genuine multi-stage calls — the
+log confirms P05 vision critique, P07 order-swapped judge and a real degraded-canary judgement per
+brief — and both died with `TypeError: fetch failed` / `UND_ERR_SOCKET` ("other side closed") against
+`172.66.0.243:443`, first at brief 7 of 20, then at brief 5 of 20. **Neither run wrote any output**, so
+`LEDGER.csv` and `P10_QUALIFICATION.*` are still the earlier single-stage run, and roughly ten briefs of
+paid calls were spent with nothing recorded. This is now the blocker on the whole qualification.
+
+**Do:**
+1. **Checkpoint per brief.** Append each brief's ledger row and write its artifacts as soon as that
+   brief completes. A failure at brief 12 must leave 11 briefs of usable, paid-for evidence.
+2. **Resume.** Support `--resume` so a re-run skips briefs already completed rather than paying twice.
+3. **Retry transient failures with backoff.** `UND_ERR_SOCKET`, `ECONNRESET`, `ETIMEDOUT` and
+   `fetch failed` are retryable: at least three attempts with exponential backoff, and log each retry.
+   A run must not die on one dropped connection.
+4. **Hold the connection properly.** Configure an HTTP agent with keep-alive for these long
+   multi-minute requests, and reduce concurrency if that is what is provoking the drops.
+5. **Report partial runs honestly.** If only 14 of 20 briefs completed, the report says 14 of 20 — it
+   must never present a partial run as a full one, and must never fill gaps with estimates.
+
+**Accept when:** the lead kills the process deliberately at around brief 8 and the ledger still contains
+eight complete, hand-checkable rows; a re-run with `--resume` completes the remainder without repaying
+for the first eight; and a full run finishes with one ledger row per stage per brief.
+**Proof:** `T9_RESILIENCE.md` with the deliberate-kill transcript, the resumed run, and the final ledger.
+
+**Note for whoever investigates:** the failing socket had local address `10.3.0.2`, which suggests a
+tunnel or VPN in the path rather than an OpenAI fault. Confirm the host's egress route before assuming
+the provider is at fault.
