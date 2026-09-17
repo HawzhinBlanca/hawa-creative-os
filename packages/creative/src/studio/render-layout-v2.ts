@@ -481,15 +481,17 @@ export function renderLayoutV2ToSvg(
     logoHref = getKaaeOfficialLogoDataUri();
   }
 
-  if (logoHref) {
-    bodyPartsNoText.push(
-      `<image id="logo" xlink:href="${logoHref}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
-    );
-  } else {
-    // Vector fallback logo box
-    bodyPartsNoText.push(
-      `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#F7B500" opacity="0.9" rx="8"/>`
-    );
+  if (layout.logo) {
+    if (logoHref) {
+      bodyPartsNoText.push(
+        `<image id="logo" xlink:href="${logoHref}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
+      );
+    } else {
+      // Vector fallback logo box
+      bodyPartsNoText.push(
+        `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#F7B500" opacity="0.9" rx="8"/>`
+      );
+    }
   }
 
   // Text Elements Layer

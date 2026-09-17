@@ -139,7 +139,7 @@ export class OpenAiStudioClient {
     this.apiKey = options.apiKey || process.env.OPENAI_API_KEY || '';
     this.baseUrl = options.baseUrl || 'https://api.openai.com/v1';
     this.fetcher = options.fetcher || fetch;
-    this.timeoutMs = options.timeoutMs || 90000;
+    this.timeoutMs = options.timeoutMs || 240000;
     this.breaker = options.circuitBreaker || new OpenAiCircuitBreaker();
     this.pricing = this.loadPricing();
     this.primaryModel = options.primaryModel || 'gpt-6-astra';

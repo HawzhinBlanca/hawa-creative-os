@@ -795,6 +795,7 @@ export async function generateLayoutCandidatesV3(
       },
       maxTokens: 16000,
       reasoningEffort: 'low',
+      timeoutMs: 240000,
     });
 
   const rawCandidates = response.data.layouts;

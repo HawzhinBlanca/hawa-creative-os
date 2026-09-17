@@ -314,6 +314,16 @@ export async function runLayoutsStage(
           layout.art.calmRegion = { ...layout.art.box };
         }
       }
+      if (!layout.logo) {
+        const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
+        const marginPx = Math.round(Math.min(ctx.width, ctx.height) * 0.06);
+        layout.logo = {
+          x: Math.round(ctx.width / 2 - logoMinPx / 2),
+          y: marginPx,
+          width: logoMinPx,
+          height: logoMinPx,
+        };
+      }
       const existing = existingCandidates?.find((c) => c.ordinal === ordinal);
       candidates.push({
         id: existing?.id || randomUUID(),

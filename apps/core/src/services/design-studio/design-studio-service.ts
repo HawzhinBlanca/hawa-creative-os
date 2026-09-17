@@ -342,7 +342,7 @@ export class DesignStudioService {
     const baseClient = new OpenAiStudioClient({
       apiKey,
       fetcher: fetchFn,
-      timeoutMs: 90000,
+      timeoutMs: 240000,
     });
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
