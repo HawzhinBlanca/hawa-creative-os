@@ -1,0 +1,4 @@
+SEAL: badf903296caa9276c1a247ba28f3d8ab7e7b8d7711bb3b295ec0b6bb1d93f7a
+TIMESTAMP: 2026-09-17T16:53:34.428Z
+SEED: 2026-09-17-t8-research-grade-blind-eval-commitment-seed
+TOTAL_PAIRS: 10

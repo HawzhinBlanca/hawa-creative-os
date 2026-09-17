@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-17T16:48:46Z",
+  "generatedAt": "2026-09-17T16:54:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 210,
+  "fileCount": 212,
   "files": [
     {
       "path": ".claude/settings.local.json",
@@ -903,6 +903,11 @@
       "bytes": 6006
     },
     {
+      "path": "scripts/package_t8_blind_eval.ts",
+      "sha256": "13b401ea4b1a7790b39a9cf13a518420b7b4e69c816a229671050572422a005a",
+      "bytes": 7493
+    },
+    {
       "path": "scripts/populate_ledger.ts",
       "sha256": "f32c534dabebdc162df01db1718856389538187e7bf2d8a8ede401266cf80dbd",
       "bytes": 8496
@@ -1046,6 +1051,11 @@
       "path": "scripts/verify_live_h04_h05_h10.ts",
       "sha256": "1a82c0e6124450372c915da9578f7472dbe5569e2872a9de881c72e163bca504",
       "bytes": 6915
+    },
+    {
+      "path": "scripts/verify_t8_ratings.ts",
+      "sha256": "52c7a2623086c6c77377cb419a7c971ef714b2d0ec18d2b08796ac38048f6f49",
+      "bytes": 3587
     },
     {
       "path": "ui/design-system.md",

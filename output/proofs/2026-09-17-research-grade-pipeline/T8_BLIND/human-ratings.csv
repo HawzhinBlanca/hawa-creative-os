@@ -1,0 +1,15 @@
+# T8 Human Blind Preference Evaluation
+# Instructions: Inspect Option A and Option B side-by-side for each pair.
+# Rate each option 1-10 on visual hierarchy, typography, negative space, and brand dignity.
+# Choose preferred: A, B, or tie.
+pairId,briefId,choice,ratingA,ratingB,notes
+pair-01,compare-01,,,
+pair-02,compare-02,,,
+pair-03,compare-03,,,
+pair-04,compare-04,,,
+pair-05,compare-05,,,
+pair-06,compare-06,,,
+pair-07,compare-07,,,
+pair-08,compare-08,,,
+pair-09,compare-09,,,
+pair-10,compare-10,,,
