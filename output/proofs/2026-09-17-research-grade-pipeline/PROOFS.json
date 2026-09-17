@@ -1,7 +1,7 @@
 {
   "pipelineVersion": "research-grade-v3",
-  "generatedAt": "2026-09-17T08:51:20.286Z",
-  "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c",
+  "generatedAt": "2026-09-17T08:52:59.510Z",
+  "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6",
   "flag": "DESIGN_PIPELINE_V3=off",
   "specification": "output/plans/2026-09-17-research-grade-pipeline/GEMINI_TASK_SHEET.md",
   "researchBrief": "output/research/2026-09-17-pipeline-research/RESEARCH_BRIEF.md",
@@ -91,7 +91,7 @@
       "sizeBytes": 2354,
       "sha256": "a0bf6e6bc61be64400f8674f23596639800143076b2700f1d81cac6fc1ac21e7",
       "producingCommand": "manual review",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -100,7 +100,7 @@
       "sizeBytes": 4164,
       "sha256": "198866492d6c67477e1dff4135da45f886292817d87510c704ead9031b549e4b",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P01",
@@ -109,7 +109,7 @@
       "sizeBytes": 6292,
       "sha256": "aa4c455e4400bb0367902c8251f76b26c11b69222b7eea31afb41c1361456288",
       "producingCommand": "npx tsx scripts/generate-p01-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P02",
@@ -118,7 +118,7 @@
       "sizeBytes": 4703,
       "sha256": "4f1bde54e35430e33030180303b3e296100195abab8957e12f6efd70d3954933",
       "producingCommand": "npx tsx scripts/generate-p02-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -127,7 +127,7 @@
       "sizeBytes": 6536,
       "sha256": "0580970a1adba064e72b9d0e0c230699ea33375e38fbe99fd9a7c076d28a0a24",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -136,7 +136,7 @@
       "sizeBytes": 2276,
       "sha256": "a6cd00271f90c220d818e4185398663ed887153c880e6feb6abc60b38761a8c6",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -145,7 +145,7 @@
       "sizeBytes": 2442,
       "sha256": "e6389afff0fe7f57e0e45a7f5f2c6308d018e621f6cb676a77806b8a2c348d18",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -154,7 +154,7 @@
       "sizeBytes": 2440,
       "sha256": "903b7c691f0c7953cc34448296b9aa4e043aff30b23b0be317f0c4fa26d5755d",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -163,7 +163,7 @@
       "sizeBytes": 2331,
       "sha256": "fdfb33b48b8836a0f40b4ec1bf099e0b6a7aa4749c5f39dea61ab267fda058ab",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -172,7 +172,7 @@
       "sizeBytes": 2265,
       "sha256": "1ac7ab86900157651d869d095c0aec85af36bbee7e5c379ef2c90432a267ab8c",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -181,7 +181,7 @@
       "sizeBytes": 2440,
       "sha256": "45f99f2689e64ded48106c87bee6e08b8907fa145c7add326afc2a68f0d52e42",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -190,7 +190,7 @@
       "sizeBytes": 2442,
       "sha256": "4df4965b9966180017fc8452ad414b4e1bd722c4b277c8d4486682ea9c45cdaf",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -199,7 +199,7 @@
       "sizeBytes": 2324,
       "sha256": "6ecf273ac8550295f84ac7c902c777e3b1b087a037dc40b51b5cb31e4da4cd79",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -208,7 +208,7 @@
       "sizeBytes": 2553,
       "sha256": "379530c2ff858859f4eecf515475f65651c7146ef0208db9220e64baf134ee2d",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P03",
@@ -217,7 +217,7 @@
       "sizeBytes": 3739,
       "sha256": "6ca6e0ee6c7978764aad4823a19dfe66b1ab042a102f783d858a6c22573b065e",
       "producingCommand": "npx tsx scripts/generate-p03-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -226,7 +226,7 @@
       "sizeBytes": 3744,
       "sha256": "a2e6f051a111a80e74092577a55c25f4ebe5b94806d676103ed3548578f22f27",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -235,7 +235,7 @@
       "sizeBytes": 1170387,
       "sha256": "f4b45623d2ada65b70321a84ae161b098e01da9608a27bdba11db2088ce7cc28",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -244,7 +244,7 @@
       "sizeBytes": 1841755,
       "sha256": "cc610f4e29f397acc64d571837e69a9ecba31e385381936c4eb51338f8463858",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -253,7 +253,7 @@
       "sizeBytes": 37341,
       "sha256": "471e3f0d1e618af8afb3108c7b18bb01806e70fa70008e62f7991d0bef6ff93c",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -262,7 +262,7 @@
       "sizeBytes": 205533,
       "sha256": "115c5e8eb0dc39349dd1cfe2793ad64cc3b7bcc260c391e9e751f0dd6e32aa60",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -271,7 +271,7 @@
       "sizeBytes": 3294,
       "sha256": "622aa34abf87f0a780be49965746be03dfd5c2bb03534b745fe2dbc7dd5d877c",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -280,7 +280,7 @@
       "sizeBytes": 2814,
       "sha256": "96182aa852dfec6c8343519f271202e47202c47ca1f432b28b8a87b94704ddf2",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P04",
@@ -289,7 +289,7 @@
       "sizeBytes": 3244,
       "sha256": "39c7eba8817c1c6b14bbe0d99c728d1317a274a865af259dbf27d07c75fc55a3",
       "producingCommand": "npx tsx scripts/generate-p04-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P05",
@@ -298,7 +298,7 @@
       "sizeBytes": 1806,
       "sha256": "151a34a7fef66f043da6795f9d1374c182a83c288f9b5788874ce212d9b6ac6c",
       "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P05",
@@ -307,7 +307,7 @@
       "sizeBytes": 60446,
       "sha256": "1c89dec01cff8a52566becef5e90c2769a5d9a5d34ea9f30dc8e5145a7b8a0b5",
       "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P05",
@@ -316,7 +316,7 @@
       "sizeBytes": 2070,
       "sha256": "879e841f7bd5a095ed740676c82175aa0888a6f04494d7ecf56cd86042a9c88e",
       "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P05",
@@ -325,7 +325,7 @@
       "sizeBytes": 2343,
       "sha256": "e6d435eee9180683d73cdd61f1a517c4d437a1a6ded5b3bc59ad318efb397b0d",
       "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P05",
@@ -334,7 +334,7 @@
       "sizeBytes": 4705,
       "sha256": "5ca36a628986ee620dd0eab4420b31412cbc507719f99c263ddf5fa6b6faed00",
       "producingCommand": "npx tsx scripts/generate-p05-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P06",
@@ -343,7 +343,7 @@
       "sizeBytes": 4990,
       "sha256": "a7c4c318404d46ad36b8dfa0b3f5c7cbd08cb0c6ee09f70bbb54bdd1e967e5f8",
       "producingCommand": "npx tsx scripts/generate-p06-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P07",
@@ -352,7 +352,7 @@
       "sizeBytes": 10476,
       "sha256": "f99a3d862284f93d5e3c0eb26d9b8dc23f86c249d0a9375f7e27ac3d0eaed561",
       "producingCommand": "npx tsx scripts/generate-p07-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P07",
@@ -361,7 +361,7 @@
       "sizeBytes": 1524,
       "sha256": "b5a6fab7bdb350630b95f41e44af3abfdf2dabcc7b3604ad745dd8c56cad577c",
       "producingCommand": "npx tsx scripts/generate-p07-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P08",
@@ -370,7 +370,7 @@
       "sizeBytes": 7110,
       "sha256": "d2c3a6225dfd63f7f927bdc5684ec920a9ab2956211cfd13718b84f508cd3113",
       "producingCommand": "npx tsx scripts/generate-p08-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P09",
@@ -379,7 +379,7 @@
       "sizeBytes": 3226,
       "sha256": "abe04ac4da28c5e00ff4a134cc1b367a3c5b708c8af11de2a83948e83a89ee41",
       "producingCommand": "npx tsx scripts/generate-p09-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -388,7 +388,7 @@
       "sizeBytes": 929,
       "sha256": "ed1131d2110cabcd283f649e5f0391cea86480b91891284fe7be2d138aef66e2",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -397,7 +397,7 @@
       "sizeBytes": 640,
       "sha256": "ccf8bb4225e85050a1a7399be04b63cdc5829c2d6b704f94e5bae35191f25704",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -406,7 +406,7 @@
       "sizeBytes": 2824,
       "sha256": "5250e32c0ba05799a90095ebbc29c8de041b606cd8e4649e0aa508f78634ee2f",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -415,7 +415,7 @@
       "sizeBytes": 2784,
       "sha256": "c21b9bbbab31539bee14b7b987386768517aa8501a412a827320bd26b4ba0f66",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -424,7 +424,7 @@
       "sizeBytes": 60721,
       "sha256": "3e30841bdfe1bb59cae445297dac0eea08f083ff7fc5fc46e4461ed4faf24f04",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -433,7 +433,7 @@
       "sizeBytes": 907,
       "sha256": "04df1dac7f696acfda51afa602508f8a6ee3f51ca5cd2d522f3b0d1f8181c572",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -442,7 +442,7 @@
       "sizeBytes": 641,
       "sha256": "22444de67eec5cd77dbb44e9cf68c1211a48e0a0135f4406d953a3c53019813a",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -451,7 +451,7 @@
       "sizeBytes": 2654,
       "sha256": "b0ddfd4b10fa0613f50d1b0d6deca68b6c348f5fbb91d9148400358d8b8a6577",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -460,7 +460,7 @@
       "sizeBytes": 2780,
       "sha256": "1988f70e94307c1f09d3f61cef4b1c3ca74e3cc328ad287678c13fd10d9606cf",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -469,7 +469,7 @@
       "sizeBytes": 61907,
       "sha256": "e619a27d8b46a0d42357ec0596bd62491c1111b385c8f91191c95276394da7e4",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -478,7 +478,7 @@
       "sizeBytes": 1126,
       "sha256": "0bdba0416a1325c069b510f390c11e5e06519f312372d3660af915ee0dd0e077",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -487,7 +487,7 @@
       "sizeBytes": 643,
       "sha256": "51f7668e3faa227e6406e4ab54798b2fcf33e0125b753175c95c004b8cc6ab0e",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -496,7 +496,7 @@
       "sizeBytes": 2709,
       "sha256": "2cd6099006abfe9b95071d4fa6c54d4edaca3c9be39009d1c7f5eaa1a37b5fbd",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -505,7 +505,7 @@
       "sizeBytes": 2789,
       "sha256": "6d8eb9c35de7155fde07e806e6dd72b1060f29341dcb3f0a172816aaac301623",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -514,7 +514,7 @@
       "sizeBytes": 58378,
       "sha256": "6e9141cbf3c61a9ccae357ff4b8c72b93f773f20ea1832edf9cc64a3321779b0",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -523,7 +523,7 @@
       "sizeBytes": 1140,
       "sha256": "f30d365f98715ee1e3b7c2af2043dc848068360bc15f5fbbb288c227cfcfbfa8",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -532,7 +532,7 @@
       "sizeBytes": 643,
       "sha256": "b33318c73cdde10a93bfb92d69582a8ae137201aed24989d276d6f20aed05424",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -541,7 +541,7 @@
       "sizeBytes": 2652,
       "sha256": "35eb22ad73c1cdb2121dc9daeb4e6f33342d236d762322e33df32ee4d0482274",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -550,7 +550,7 @@
       "sizeBytes": 2787,
       "sha256": "e1dac731176691ef8396277aae6c867be3ad70a2420ada42c9311ae77ad6f5b5",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -559,7 +559,7 @@
       "sizeBytes": 60836,
       "sha256": "3d87102a788dc217618c269c9afb566c8e111c925b2aff9ab52785dfa2068c01",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -568,7 +568,7 @@
       "sizeBytes": 1016,
       "sha256": "9e936f8d19627baf83f48547ed9ab2bc506186d48390315009e66a8a9385f9cd",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -577,7 +577,7 @@
       "sizeBytes": 646,
       "sha256": "67498d5f7302d83415905081c58830b5e6c55f74aef7291777b6b4c555247568",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -586,7 +586,7 @@
       "sizeBytes": 2835,
       "sha256": "13a19966fd7d3f2c4157f89d0947235a63b0be9e418c2481983a585490c677e3",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -595,7 +595,7 @@
       "sizeBytes": 2787,
       "sha256": "464ff5b6b73c0db169f14215158d65db1addd1f73c09276b4a734654d54038c8",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -604,7 +604,7 @@
       "sizeBytes": 88593,
       "sha256": "13c361c76ef9162d021d36ce8c4c7702515e1e804b2c917f693e267335f406b9",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -613,7 +613,7 @@
       "sizeBytes": 974,
       "sha256": "c43e437ee64191bc7a81d6e2ec3d21a471fa334265bbe8548b929c2df6a76d31",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -622,7 +622,7 @@
       "sizeBytes": 646,
       "sha256": "de408af07d50c3ef341a8775c47dae9203b431a27107d52bd7814633f5454979",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -631,7 +631,7 @@
       "sizeBytes": 2655,
       "sha256": "a9f1765bbb062fa63e2399defa4164a9aefe68145a47895fc821a85a49e92b62",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -640,7 +640,7 @@
       "sizeBytes": 2791,
       "sha256": "8a9116e16016827d10e7417ae400f6789042efd962e95c2c01e490f17dc0aae3",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -649,7 +649,7 @@
       "sizeBytes": 69733,
       "sha256": "5abca78cb02bbdee0319eaf6a8f99d47032ce12aa568485f596e459e450bcfc5",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -658,7 +658,7 @@
       "sizeBytes": 1294,
       "sha256": "a97c35ca3f6382c3fa8f58899ceff1d262253614a41b79ecb31cb7c9646e4b49",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -667,7 +667,7 @@
       "sizeBytes": 648,
       "sha256": "ce56f3b57fbbd187cc37d1f0ca4c532a1e69e7a15b8e1265e36370132fc5653f",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -676,7 +676,7 @@
       "sizeBytes": 2766,
       "sha256": "211992c53f4f9ebba67d3c0a3c102cc938d261caf1812637cabc3177e18c7115",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -685,7 +685,7 @@
       "sizeBytes": 2789,
       "sha256": "fda9a8561fd457b0153e8e41294c7c81b4b2e6defb0bebbb94248cb6cd8bde17",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -694,7 +694,7 @@
       "sizeBytes": 71222,
       "sha256": "8ddca6c6a8332ecc0fe52b057274cd306c7a8c70017a6d53587113411a591c7d",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -703,7 +703,7 @@
       "sizeBytes": 1235,
       "sha256": "d8eb5d379b5c4bf5d6af17b73841f6e279e2c26e303a4c206aa69a2fb5900193",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -712,7 +712,7 @@
       "sizeBytes": 647,
       "sha256": "941cf8d7957024281b704da70a209029ecb80f39525d2c5d9a4fc2507cfdd113",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -721,7 +721,7 @@
       "sizeBytes": 2770,
       "sha256": "1985715c3e79a3041c57ab4112d61ff2993e3bd0d6fc4125720aeca964eaea52",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -730,7 +730,7 @@
       "sizeBytes": 2786,
       "sha256": "27159caf54cf0389b2c7c341bd25d195fbfbea385526368c31b1695497179cd1",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -739,7 +739,7 @@
       "sizeBytes": 70238,
       "sha256": "dabac0407a3c66d2be8a9596ff9bab2e1ad51444613753aafb55ef1926759819",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -748,7 +748,7 @@
       "sizeBytes": 931,
       "sha256": "96334a4a96daef1f212604b652963c1057c1c94ae66951ddbe3426886b4b32fa",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -757,7 +757,7 @@
       "sizeBytes": 644,
       "sha256": "859795e4296d15d025eae41fe86df5a218caefc8647619c6b27827ab5f0941b2",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -766,7 +766,7 @@
       "sizeBytes": 2772,
       "sha256": "6421cbf9bf35d6f87f3524ddeb0ae7f2a83e879548457317dc0b96ad2a98d2d6",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -775,7 +775,7 @@
       "sizeBytes": 2785,
       "sha256": "0c72b1e9e036debe410f5aab5d84cc169ac2fc4b0f6d95ac5c573ea0acfb14e5",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -784,7 +784,7 @@
       "sizeBytes": 99764,
       "sha256": "babce92d179da63f0cdfd1ea3fe0ec92fee5f7678c2cbd51d8759adbfcfe5649",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -793,7 +793,7 @@
       "sizeBytes": 943,
       "sha256": "865f3f2923778fddcb7efb884eb72afa3c775eae403cb24d1669645b80f97d0f",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -802,7 +802,7 @@
       "sizeBytes": 644,
       "sha256": "0e0a2e7a6858ac733620fe12870c94a6538b29acc2b62703de196febf50cf7b6",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -811,7 +811,7 @@
       "sizeBytes": 2775,
       "sha256": "3769f53ff84900978b498211885eaccd2a68e604974379a2b0f69e50720691c7",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -820,7 +820,7 @@
       "sizeBytes": 2785,
       "sha256": "e287d891cfa2f44a6a3d03c408a4818580570de51607d6f229e6a486de01a541",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -829,7 +829,7 @@
       "sizeBytes": 99298,
       "sha256": "c69c9cd6ea810d333f9c729f65d2a004ab4ff8de590c7c5f6ef158d981575d84",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -838,7 +838,7 @@
       "sizeBytes": 1185,
       "sha256": "791d4b8166218048abe0f3543273c104fc4b3103d71f5218b940dc2cca7bec8b",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -847,7 +847,7 @@
       "sizeBytes": 646,
       "sha256": "0c115a2bf09ce5faeb0b6ceb34c39eb5240c48a42f393c6f71c667e9222edc1e",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -856,7 +856,7 @@
       "sizeBytes": 2657,
       "sha256": "f194139c66a57bdac3a31d291dc045a3a8308eb7dcedc6a7e213b07046d875e8",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -865,7 +865,7 @@
       "sizeBytes": 2788,
       "sha256": "8c4a0fe77ea0eac8212922413503c4a255cd5c8cf456cacc0b1a2ffbf5c53cd2",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -874,7 +874,7 @@
       "sizeBytes": 111460,
       "sha256": "91756cce61c04bd9669c99ae611fad7b45daea960804cf01a1fdd8038d3a5483",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -883,7 +883,7 @@
       "sizeBytes": 1119,
       "sha256": "4c946654c0e852340ec26a5835bae3c145dd1eabc78aeab614220ef9462e423b",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -892,7 +892,7 @@
       "sizeBytes": 645,
       "sha256": "4db6dbe6c235167e4d99620fc17c5b505c26378a9212062a6d8cc13acb765962",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -901,7 +901,7 @@
       "sizeBytes": 2765,
       "sha256": "53180e1e01c9d95c50a2a036f50e400d1e22a0314529083dbc3f1fe98f7775c6",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -910,7 +910,7 @@
       "sizeBytes": 2781,
       "sha256": "2384b630c6e66ff1446e168eaff72becb6e38bce88cda9fd174ae3cb9acd85d9",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -919,7 +919,7 @@
       "sizeBytes": 92952,
       "sha256": "e1902dc2c23319b48264b4baf11b660893b65c26b0422560034adc289aaf94b2",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -928,7 +928,7 @@
       "sizeBytes": 1046,
       "sha256": "d82cb4ba9cb3440d09504820997f2e4e721a5b7520d2ebef21f5e128c8f69c3d",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -937,7 +937,7 @@
       "sizeBytes": 641,
       "sha256": "47738d47eb1146fd5ce1dd74dfc65d062e6820fcf1ebe4d95f9173eedc3e39c7",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -946,7 +946,7 @@
       "sizeBytes": 2828,
       "sha256": "0f8798ab9f4db135b1b9a545272c5389926c0ee2367c16045290e4338a0a53c4",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -955,7 +955,7 @@
       "sizeBytes": 2789,
       "sha256": "c21f78198180c809096c286a89a211f39799ceb7e1ea7cf903c7cc9615e00e97",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -964,7 +964,7 @@
       "sizeBytes": 112689,
       "sha256": "c304c9d0fb37d1fbe3f1bbef02db8701497f5b0d4bdf6d54410810ebc0a67a91",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -973,7 +973,7 @@
       "sizeBytes": 986,
       "sha256": "a768a133790f94b1df7a5a9b8760385c3bbe50a66aafe92a54400feafbf85439",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -982,7 +982,7 @@
       "sizeBytes": 640,
       "sha256": "65e7d5f990a865170e6d026dbaab6b18fa7d6fb428f4245a3add23aab3e3eb4d",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -991,7 +991,7 @@
       "sizeBytes": 2658,
       "sha256": "60abfa0b12e96d4a9011c44961229058beebec681e40da33bb7cc28be83eb2f5",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1000,7 +1000,7 @@
       "sizeBytes": 2787,
       "sha256": "6b4a0e3fc67c86a82c3da3463d8cdd8be94b834569573a9a577f33ef0c65850a",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1009,7 +1009,7 @@
       "sizeBytes": 105156,
       "sha256": "d2081bce9358a71012b02c8cef406fd77bfdeb12b8482938bb4e5c92f1ad6a11",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1018,7 +1018,7 @@
       "sizeBytes": 1269,
       "sha256": "7f59f8312f5c83682ec7bfc1e92e8c99e58cbe41b07ed4d3c076ad7f35b70369",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1027,7 +1027,7 @@
       "sizeBytes": 642,
       "sha256": "dcecf5d3a88777c218143dc21b9ca813b07bf2fa16f9cbd98b365f3b1ec05b5c",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1036,7 +1036,7 @@
       "sizeBytes": 2942,
       "sha256": "6885af799628c569508d6a92b3e9688bee4b1f6d5ef317d1cbc4cb4d949ae243",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1045,7 +1045,7 @@
       "sizeBytes": 2767,
       "sha256": "819dfa12a5dcf5d17f96562a09625fcbe611e5e14e0996197144b96b4f38d407",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1054,7 +1054,7 @@
       "sizeBytes": 85911,
       "sha256": "680bb9899cef4ec08cdde748daf2f1fc20dff8b33fed2ee2220d7804eeb536f7",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1063,7 +1063,7 @@
       "sizeBytes": 1189,
       "sha256": "b3cff3036c0c5349e0c7a7ea3d4315214b5ce8fb1319e697023a4ed96b184652",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1072,7 +1072,7 @@
       "sizeBytes": 643,
       "sha256": "079206f6094a62fb45a31f8e314ad4663a291e422537824f0471d5e25e90e4e1",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1081,7 +1081,7 @@
       "sizeBytes": 2771,
       "sha256": "a7a56af288c377b86350c93f8395d9b6209754f60053c399063ecab6ab0f680b",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1090,7 +1090,7 @@
       "sizeBytes": 2785,
       "sha256": "45ab5a3c4dfffb12d9c152ccedb070e5af3c274c9b9bda676e10dbf840745e32",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1099,7 +1099,7 @@
       "sizeBytes": 80780,
       "sha256": "72c50a21bee496eef6643be760f3992d699e4141f0a821819a895c1ced18d20a",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1108,7 +1108,7 @@
       "sizeBytes": 998,
       "sha256": "675ff82e9efeaf1d5952eb942653f17d311b8ede93bd14632a6054b5b4661d49",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1117,7 +1117,7 @@
       "sizeBytes": 648,
       "sha256": "ba1ec1885212fd7b76a65fb3963a52eebfaf7141d6d916e89b803e610af98d01",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1126,7 +1126,7 @@
       "sizeBytes": 2485,
       "sha256": "31f8bc43305ed6584a36329205d6c6d62b838a5165fe432b139f01719dde612d",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1135,7 +1135,7 @@
       "sizeBytes": 2788,
       "sha256": "5e5d9b818bca9a74f84963e1ff6d563a25db62433b3041bdb800de8dd58f74b8",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1144,7 +1144,7 @@
       "sizeBytes": 126948,
       "sha256": "b5cc66bbb25cfb178f406a8f3a4caccdebc699158ee77753a04d4feeec2c70b2",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1153,7 +1153,7 @@
       "sizeBytes": 978,
       "sha256": "6ec1f661e67e7f254e6cbcb3f200a9511ed2e517035b78695689246c1e0bba2c",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1162,7 +1162,7 @@
       "sizeBytes": 647,
       "sha256": "89090d6a8d7d5494e641b70161c41779138f190d5bd303196d6ff14f0a0e3c0f",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1171,7 +1171,7 @@
       "sizeBytes": 2487,
       "sha256": "3a841afcf117419714ab2a89124883fcbd543a5aa1cc282c3518f82c6d7c8cb7",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1180,7 +1180,7 @@
       "sizeBytes": 2788,
       "sha256": "c4234d3ab364846923b1b2614557afc825d88a73e5b9400f6d35442b147d3536",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1189,7 +1189,7 @@
       "sizeBytes": 94623,
       "sha256": "b200fbea8ddc7666629e92856af969c032364695ea572a80f4339ce44d83be6a",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1198,7 +1198,7 @@
       "sizeBytes": 1227,
       "sha256": "e51ca99e11711da1dac01d072750d17c4837c16035cb65c6f145c75e8a20e68b",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1207,7 +1207,7 @@
       "sizeBytes": 650,
       "sha256": "68b3a85b92bd9bc90ead3cc676667a3685a88eb54ae6d94be0d5a8953a17dcd9",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1216,7 +1216,7 @@
       "sizeBytes": 2775,
       "sha256": "86b1a4ae823c3c759a48c3b32eae8eb1b3c6c7b26567a95eef7bcd082861ea08",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1225,7 +1225,7 @@
       "sizeBytes": 2787,
       "sha256": "eba6ec807b4d54775bd65ba65b445d7b553f933e0fd9a680d26dcd1af3da13c9",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1234,7 +1234,7 @@
       "sizeBytes": 115732,
       "sha256": "c7ab21d35cabe4800d318ed2f90ee89edeafab7080acff0cdd57b8169e867c84",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1243,7 +1243,7 @@
       "sizeBytes": 1190,
       "sha256": "31751b4622dc05346f7f4ef264b2e5e50d58edd7d6322cdc4981e0b104f91b02",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1252,7 +1252,7 @@
       "sizeBytes": 650,
       "sha256": "1ec909853803a070e6bafdbc87a5a1240c78024d674d46eb3f09e8fd8caab477",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1261,7 +1261,7 @@
       "sizeBytes": 2774,
       "sha256": "5c5140337f99b8637f93d771eb958cc10cda24d41e0d4bb8ea7724064fc34e87",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1270,7 +1270,7 @@
       "sizeBytes": 2785,
       "sha256": "3f831ff9a7aa74bf6597838f8288701a5cfcb150d9319dda5fcd2b1e33d0529e",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1279,7 +1279,7 @@
       "sizeBytes": 101149,
       "sha256": "ad1c4fbed9017355d30129f3890552ab94591bb0111aad328fe6f62e801fe139",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1288,7 +1288,7 @@
       "sizeBytes": 2246,
       "sha256": "4d9b64253b17d65926962de1d222697a2166e232b0b8cef416c957158934bffa",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P10",
@@ -1297,7 +1297,7 @@
       "sizeBytes": 9044,
       "sha256": "ed12fd79cef181dc91d7b0d6cde69fae4ccd9a55e40d1936015ac351b2db3c76",
       "producingCommand": "npx tsx scripts/run_p10_qualification.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     },
     {
       "task": "P11",
@@ -1306,7 +1306,7 @@
       "sizeBytes": 7548,
       "sha256": "ea3a589312a953a7c9b68d8241cdfef76c92f175cd9e66b5c8ac37c70c4b3f18",
       "producingCommand": "npx tsx scripts/generate-p11-proof.ts",
-      "commit": "59bb1bb1d141f1876ce7e810dc1ac63c6249f67c"
+      "commit": "3f226b4d2201b2f0a36b7992585bc08664c81ba6"
     }
   ]
 }

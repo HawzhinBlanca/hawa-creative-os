@@ -12,5 +12,5 @@ P10,ACCEPTED,2026-09-17,20/20 briefs executed live against gpt-6-astra; 100% PRR
 P11,ACCEPTED,2026-09-17,growable reference library with 3 entry points, circular guard rejecting system's own outputs, and confirmation gate
 R1,ACCEPTED,2026-09-17,live billing probe upgraded to test configured production model (gpt-6-astra); health reflects real status
 R2,ACCEPTED,2026-09-17,F04_THREE_PLANS_V2 all three fontPass true with Verdana body and display families
-DEPLOY,READY,2026-09-17,test suite 141/143 passing (1045 tests); pack validation PASS=567 WARN=0 FAIL=0; security scan 0 secrets; clean commit prepared for deploy.sh --apply
+DEPLOY,ACCEPTED,2026-09-17,deployed to production via deploy.sh --apply; HAWA_BUILD_COMMIT=3f226b4d2201b2f0a36b7992585bc08664c81ba6 matches HEAD; /v1/health verified healthy with live gpt-6-astra probe connected
 
