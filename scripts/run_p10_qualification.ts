@@ -1130,7 +1130,7 @@ async function main() {
 
 **Briefs attempted:** ${QUALIFICATION_BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
 
-**Verdict: ${qualificationVerdict}**
+Verdict: ${qualificationVerdict}
 
 > Rates below are computed over the ${results.length} completed briefs. A partial run is reported as partial and does NOT constitute a qualification pass.
 

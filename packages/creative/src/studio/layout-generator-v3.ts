@@ -351,8 +351,11 @@ export function scaleNormalizedLayoutToV2(
     }
 
     // T6(b): Restrain letterSpacing to em units [0, 0.06] and never multiply by canvasWidth!
-    const resolvedLetterSpacing =
-      t.letterSpacing !== null && t.letterSpacing !== undefined
+    // Arabic script joins cursively, so any tracking pulls the joined letters apart and reads as
+    // broken text. The model emitted 0.02 on the eyebrow of every Kurdish layout in the T5 run.
+    const resolvedLetterSpacing = t.rtl
+      ? 0
+      : t.letterSpacing !== null && t.letterSpacing !== undefined
         ? t.role === 'eyebrow'
           ? Math.min(0.04, Math.max(0, t.letterSpacing > 1 ? t.letterSpacing / 100 : t.letterSpacing))
           : Math.min(0.06, Math.max(0, t.letterSpacing > 1 ? t.letterSpacing / 100 : t.letterSpacing))
@@ -740,6 +743,8 @@ Strict font family adherence is required. You may ONLY use the following admitte
 ================================================================================
 When generating layouts for Kurdish or Arabic copy:
 - Set rtl: true on all Arabic/Kurdish text elements.
+- Set letterSpacing to 0 on every Arabic/Kurdish element. Arabic script joins cursively, so any
+  tracking separates joined letters and reads as broken text to a native reader.
 - Alignment must be "right" or "center" (NEVER left-aligned for Arabic script).
 - Font family must be "Cairo" or "Amiri" for titles, and "Noto Sans Arabic" for body and footer.
 

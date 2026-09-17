@@ -1,0 +1,248 @@
+{
+  "fontFidelity": {
+    "Verdana": "exact",
+    "Noto Sans Arabic": "exact",
+    "Cinzel": "exact",
+    "Playfair Display": "exact",
+    "Cairo": "exact",
+    "Amiri": "exact",
+    "Plus Jakarta Sans": "exact",
+    "Vazirmatn": "stand-in",
+    "Inter": "exact"
+  },
+  "renders": [
+    {
+      "brief": "brief_01_en_square",
+      "folder": "brief_01",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "b1f8fcede0357a5f0afa37f343e931095a7223895492f4b6d905b3e3eb07dc86",
+      "bytes": 83376
+    },
+    {
+      "brief": "brief_02_en_square",
+      "folder": "brief_02",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "be820a6cf862241ec16a518d162a1ceb7df2bde3f5d079d0ddd33801954f6fa3",
+      "bytes": 82474
+    },
+    {
+      "brief": "brief_03_ckb_square",
+      "folder": "brief_03",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "10acee882bb5f7b21bb394744fdbe289cfaff17df125f41b7917b54f5ffa976f",
+      "bytes": 60675
+    },
+    {
+      "brief": "brief_04_ckb_square",
+      "folder": "brief_04",
+      "size": "1080x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "04607db62317305646605a73922d6e2a578c3da447d788679f3ebe1c27a37729",
+      "bytes": 66991
+    },
+    {
+      "brief": "brief_05_en_portrait45",
+      "folder": "brief_05",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "6ada3ccc6c7131a1c0699183df534f727360cf6cf65974d40e5b6c7e7523efef",
+      "bytes": 97408
+    },
+    {
+      "brief": "brief_06_en_portrait45",
+      "folder": "brief_06",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "96dcd004ea1120e777b83ddc9aa3a2e377dc9a63ae9389ce553c472ca2ef86b1",
+      "bytes": 96561
+    },
+    {
+      "brief": "brief_07_ckb_portrait45",
+      "folder": "brief_07",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "d21ce8d758658a65dafee6b42a03676e57967ed4cc0de88b4b78984943130249",
+      "bytes": 83593
+    },
+    {
+      "brief": "brief_08_ckb_portrait45",
+      "folder": "brief_08",
+      "size": "1080x1350",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "2464d88783696f880e92c4ac47fddedc8b075c0e570824be95ed4a64cb67beed",
+      "bytes": 80153
+    },
+    {
+      "brief": "brief_09_en_story916",
+      "folder": "brief_09",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "bdc5d05923de964d8f7689e00e57f9a74c801879498f6e380cae6c0fe3e80a22",
+      "bytes": 115780
+    },
+    {
+      "brief": "brief_10_en_story916",
+      "folder": "brief_10",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "22aaea0fb383baaffa4c9c7e5ab64eca7de446273e229651d82f47886b41d49d",
+      "bytes": 109833
+    },
+    {
+      "brief": "brief_11_ckb_story916",
+      "folder": "brief_11",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "9628b7df1cd569b4b989b8d87b08b11c373defd9cfb3cc7880a6a76c186e8f3f",
+      "bytes": 95688
+    },
+    {
+      "brief": "brief_12_ckb_story916",
+      "folder": "brief_12",
+      "size": "1080x1920",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "bb32f2432109ac629b2593873a286a96d004e35ef6aac293b8b92267b0b47001",
+      "bytes": 90988
+    },
+    {
+      "brief": "brief_14_en_a4doc",
+      "folder": "brief_14",
+      "size": "1240x1754",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "a3373be706654c28ce8de7e02939fde21f040d4f1ecea256993d640cf648bfe8",
+      "bytes": 116596
+    },
+    {
+      "brief": "brief_15_ckb_a4doc",
+      "folder": "brief_15",
+      "size": "1240x1754",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "ecac6ea1afe735fdcda6fe9afa368b076d5a9f2386d88f987683c33b38414493",
+      "bytes": 89173
+    },
+    {
+      "brief": "brief_17_en_landscape169",
+      "folder": "brief_17",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "67b15acc325ecf799369a1312eb65254a9a55fabe334e43c3d32cac7c2e17b19",
+      "bytes": 135041
+    },
+    {
+      "brief": "brief_18_en_landscape169",
+      "folder": "brief_18",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cinzel",
+        "Playfair Display",
+        "Verdana"
+      ],
+      "standIns": [],
+      "sha256": "c4b260d24a25010736cc561b58addcc60b92c4adeaed427f4d4d8c39caf41841",
+      "bytes": 119708
+    },
+    {
+      "brief": "brief_19_ckb_landscape169",
+      "folder": "brief_19",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Amiri",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "6b108f3b7db166c02bef2d6daaadeb17fa1adb0cf79dd23e6e17b1ad39e765f7",
+      "bytes": 124179
+    },
+    {
+      "brief": "brief_20_ckb_landscape169",
+      "folder": "brief_20",
+      "size": "1920x1080",
+      "familiesUsed": [
+        "Cairo",
+        "Noto Sans Arabic"
+      ],
+      "standIns": [],
+      "sha256": "35d53bfcd9f0ff8f8e8405b78862f0cf6e07d533c7ee49cfcdf686f16f3b7be5",
+      "bytes": 96802
+    }
+  ]
+}
