@@ -242,7 +242,9 @@ export class OpenAiStudioClient {
     const timeout = options.timeoutMs || this.timeoutMs;
 
     let attempt = 0;
-    const maxAttempts = 3;
+    // T9: VPN/tunnel egress intermittently drops long-lived TLS mid-request (UND_ERR_SOCKET).
+    // Three attempts with 2s/4s backoff proved insufficient; six with exponential backoff survives it.
+    const maxAttempts = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 6);
 
     while (attempt < maxAttempts) {
       attempt++;

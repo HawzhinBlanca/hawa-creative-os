@@ -815,6 +815,7 @@ ${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${
     canaryWon,
     orderSwapConsistent,
     distinctSkeleton,
+    rawArchetype: currentArchetype,
   };
 }
 
@@ -862,6 +863,21 @@ async function main() {
   const allLedgerRows: LedgerRow[] = [];
   const concurrency = 2; // Controlled concurrency to respect rate limits
   let lastArchetype: string | null = null;
+  const failures: Array<{ briefId: string; reason: string }> = [];
+
+  // T9: checkpoint + resume. --resume reuses ledger rows from completed briefs instead of repaying.
+  const checkpointPath = path.join(outputDir, '.qualification-checkpoint.json');
+  const completedIds = new Set<string>();
+  if (process.argv.includes('--resume') && fs.existsSync(checkpointPath)) {
+    try {
+      const cp = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+      for (const id of cp.completed || []) completedIds.add(id);
+      if (Array.isArray(cp.ledgerRows)) allLedgerRows.push(...cp.ledgerRows);
+      console.log(`[P10 RESUME] Loaded checkpoint: ${completedIds.size} briefs already complete, ${allLedgerRows.length} ledger rows carried forward`);
+    } catch (e) {
+      console.warn('[P10 RESUME] Checkpoint unreadable, starting fresh');
+    }
+  }
 
   for (let i = 0; i < QUALIFICATION_BRIEFS.length; i += concurrency) {
     const batch = QUALIFICATION_BRIEFS.slice(i, i + concurrency);
@@ -873,20 +889,42 @@ async function main() {
 
     const batchPromises = batch.map((brief, batchIdx) => {
       const overallIdx = i + batchIdx;
+      if (completedIds.has(brief.id)) {
+        console.log(`[P10 RESUME] Skipping already-completed brief ${brief.id}`);
+        return Promise.resolve(null);
+      }
       return executeBriefLive(brief, overallIdx, client, retrievalIndex, briefsDir, lastArchetype);
     });
 
-    const batchResults = await Promise.all(batchPromises);
-    for (const res of batchResults) {
+    // T9: one brief's failure must never discard the whole run.
+    const settled = await Promise.allSettled(batchPromises);
+    for (let k = 0; k < settled.length; k++) {
+      const outcome = settled[k];
+      const brief = batch[k];
+      if (outcome.status === 'rejected') {
+        const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+        console.error(`[P10 FAILED] Brief ${brief.id}: ${reason}`);
+        failures.push({ briefId: brief.id, reason });
+        continue;
+      }
+      const res: any = outcome.value;
+      if (!res) continue;
       results.push(res);
       allLedgerRows.push(...res.ledgerRows);
-      lastArchetype = res.layout ? 'monolith_centered' : null;
+      lastArchetype = res.rawArchetype || lastArchetype;
 
       // Copy journal to JOURNALS/
       const briefSrcFolder = path.join(briefsDir, `brief_${String(res.briefIndex + 1).padStart(2, '0')}`);
       fs.copyFileSync(path.join(briefSrcFolder, 'journal.json'), path.join(journalsDir, `${res.brief.id}.json`));
       fs.copyFileSync(path.join(briefSrcFolder, 'journal.md'), path.join(journalsDir, `${res.brief.id}.md`));
     }
+
+    // T9: checkpoint after every batch so paid work is never lost.
+    fs.writeFileSync(
+      checkpointPath,
+      JSON.stringify({ completed: results.map((r) => r.brief.id), failures, ledgerRows: allLedgerRows }, null, 2),
+      'utf8'
+    );
   }
 
   // Sort results by briefIndex to maintain canonical order 1..20
@@ -944,22 +982,26 @@ async function main() {
   fs.writeFileSync(csvPath, csvHeader + csvBody, 'utf8');
 
   // 3. Generate P10_QUALIFICATION.md
-  const mdReport = `# P10 Full Qualification Report: 20 Held-Out Briefs (Multi-Stage Live Run)
+  const mdReport = `# P10 Full Qualification Report: ${QUALIFICATION_BRIEFS.length} Held-Out Briefs (Multi-Stage Live Run)
+
+**Briefs attempted:** ${QUALIFICATION_BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
+
+> Rates below are computed over the ${results.length} completed briefs. A partial run is reported as partial and does NOT constitute a qualification pass.
 
 ## 1. Headline Results & Comparative Benchmarks
 
 | Metric | Target / Published Benchmark | Pipeline Result (Multi-Stage Live Run) | Status |
 | :--- | :--- | :--- | :--- |
 | **Total Model Calls Recorded** | >= 80 calls across 20 briefs | **${allLedgerRows.length} calls** | **${allLedgerRows.length >= 80 ? 'PASS' : 'FAIL'}** |
-| **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **${prrRate.toFixed(1)}%** (${prrPassCount}/20) | **${prrRate >= 81.3 ? 'PASS' : 'FAIL'}** |
+| **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **${prrRate.toFixed(1)}%** (${prrPassCount}/${QUALIFICATION_BRIEFS.length}) | **${prrRate >= 81.3 ? 'PASS' : 'FAIL'}** |
 | **Median Cost per Brief** | USD 0.380 (Published Comparison) | **$${medianCostUsd.toFixed(6)}** | **${medianCostUsd < 0.38 ? 'PASS' : 'FAIL'}** |
-| **Canary Win Rate (Real Judge)** | >= 19 of 20 (95.0%) | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/20) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
-| **Order-Swap Consistency** | >= 80.0% | **${orderSwapRate.toFixed(1)}%** (${orderSwapConsistentCount}/20) | **${orderSwapRate >= 80.0 ? 'PASS' : 'FAIL'}** |
+| **Canary Win Rate (Real Judge)** | >= 19 of 20 (95.0%) | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/${QUALIFICATION_BRIEFS.length}) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
+| **Order-Swap Consistency** | >= 80.0% | **${orderSwapRate.toFixed(1)}%** (${orderSwapConsistentCount}/${QUALIFICATION_BRIEFS.length}) | **${orderSwapRate >= 80.0 ? 'PASS' : 'FAIL'}** |
 | **Mean Composite Score** | Measured Mean Score | **${avgCompositeScore.toFixed(3)}** | **${avgCompositeScore >= 0.70 ? 'PASS' : 'FAIL'}** |
 | **Canva Copy & Font Checks**| >= 18 of 20 (90.0%) | **${((results.filter((r) => r.copyExactPass && r.readabilityPass).length / 20) * 100).toFixed(1)}%** | **PASS** |
 | **Hard-QA Escapes** | Exactly 0 | **0** | **PASS** |
 | **Distinct Skeletons** | Diverse Architectures | **${distinctSkeletonCount}/20** | **PASS** |
-| **Editability Rate** | 100.0% Verified Mutation Test | **${editabilityRate.toFixed(1)}%** (${editabilityCount}/20) | **${editabilityRate === 100.0 ? 'PASS' : 'FAIL'}** |
+| **Editability Rate** | 100.0% Verified Mutation Test | **${editabilityRate.toFixed(1)}%** (${editabilityCount}/${QUALIFICATION_BRIEFS.length}) | **${editabilityRate === 100.0 ? 'PASS' : 'FAIL'}** |
 
 ---
 
