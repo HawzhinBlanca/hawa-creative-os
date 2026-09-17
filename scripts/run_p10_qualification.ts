@@ -7,6 +7,7 @@ import {
   generateLayoutCandidatesV3,
   evaluateDesignMetrics,
   renderLayoutV2,
+  getFontFidelityManifest,
   refineCandidate,
   generateBoxGroundedCritique,
   comparePairWithOrderSwap,
@@ -725,6 +726,14 @@ async function executeBriefLive(
 
   // Render preview PNG & SVG
   const rendered = renderLayoutV2(layout, { copyText: copyMap });
+  // Measured, not assumed: families this layout uses that the renderer silently substituted.
+  const familiesUsed = [...new Set(layout.text.map((t: any) => t.fontFamily).filter(Boolean))];
+  const fontStandIns = familiesUsed.filter((f) => rendered.fontFidelity?.[f] === 'stand-in');
+  if (fontStandIns.length) {
+    console.warn(
+      `[P10 FONT] Brief ${brief.id}: renderer substituted ${fontStandIns.join(', ')} — the preview does not show the specified typography.`
+    );
+  }
   fs.writeFileSync(path.join(briefFolder, 'preview.png'), rendered.png);
   fs.writeFileSync(path.join(briefFolder, 'preview.svg'), rendered.svg, 'utf8');
 
@@ -816,6 +825,7 @@ ${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${
     orderSwapConsistent,
     distinctSkeleton,
     rawArchetype: currentArchetype,
+    fontStandIns,
   };
 }
 
@@ -873,7 +883,40 @@ async function main() {
       const cp = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
       for (const id of cp.completed || []) completedIds.add(id);
       if (Array.isArray(cp.ledgerRows)) allLedgerRows.push(...cp.ledgerRows);
-      console.log(`[P10 RESUME] Loaded checkpoint: ${completedIds.size} briefs already complete, ${allLedgerRows.length} ledger rows carried forward`);
+      if (typeof cp.lastArchetype === 'string') lastArchetype = cp.lastArchetype;
+      // Rehydrate the per-brief result rows. Carrying the ledger alone is not enough: the report
+      // would then compute every rate over only the briefs this run re-executed while the ledger
+      // showed all of them, which is an internally inconsistent proof.
+      let rehydrated = 0;
+      for (const row of cp.resultRows || []) {
+        const id: string | undefined = row?.brief?.id || row?.briefId;
+        if (!id) continue;
+        // Resolve the brief definition and its canonical index from source, never from the
+        // checkpoint copy, so a stale or partial checkpoint cannot misreport size or language.
+        const briefIdx = QUALIFICATION_BRIEFS.findIndex((b) => b.id === id);
+        if (briefIdx < 0) {
+          console.warn(`[P10 RESUME] Checkpoint row ${id} is not a known brief; it will be re-run.`);
+          continue;
+        }
+        results.push({
+          ...row,
+          brief: QUALIFICATION_BRIEFS[briefIdx],
+          briefIndex: briefIdx,
+          ledgerRows: allLedgerRows.filter((lr) => lr.brief_id === id),
+        } as any);
+        rehydrated++;
+      }
+      if (rehydrated !== completedIds.size) {
+        console.warn(
+          `[P10 RESUME] Checkpoint holds ${completedIds.size} completed ids but only ${rehydrated} result rows; briefs without a result row will be re-run.`
+        );
+        for (const id of [...completedIds]) {
+          if (!results.some((r) => r.brief.id === id)) completedIds.delete(id);
+        }
+      }
+      console.log(
+        `[P10 RESUME] Loaded checkpoint: ${completedIds.size} briefs already complete, ${rehydrated} result rows rehydrated, ${allLedgerRows.length} ledger rows carried forward`
+      );
     } catch (e) {
       console.warn('[P10 RESUME] Checkpoint unreadable, starting fresh');
     }
@@ -919,10 +962,38 @@ async function main() {
       fs.copyFileSync(path.join(briefSrcFolder, 'journal.md'), path.join(journalsDir, `${res.brief.id}.md`));
     }
 
-    // T9: checkpoint after every batch so paid work is never lost.
+    // T9: checkpoint after every batch so paid work is never lost. Result rows are persisted
+    // alongside the ledger so a --resume run reports over every completed brief, not just the
+    // ones it re-ran.
     fs.writeFileSync(
       checkpointPath,
-      JSON.stringify({ completed: results.map((r) => r.brief.id), failures, ledgerRows: allLedgerRows }, null, 2),
+      JSON.stringify(
+        {
+          completed: results.map((r) => r.brief.id),
+          failures,
+          lastArchetype,
+          ledgerRows: allLedgerRows,
+          resultRows: results.map((r: any) => ({
+            brief: r.brief,
+            briefIndex: r.briefIndex,
+            metrics: { compositeScore: r.metrics.compositeScore },
+            totalNetCostUsd: r.totalNetCostUsd,
+            totalLatencyMs: r.totalLatencyMs,
+            prrPass: r.prrPass,
+            geometricPass: r.geometricPass,
+            readabilityPass: r.readabilityPass,
+            assetIntegrityPass: r.assetIntegrityPass,
+            copyExactPass: r.copyExactPass,
+            editabilityPass: r.editabilityPass,
+            canaryWon: r.canaryWon,
+            orderSwapConsistent: r.orderSwapConsistent,
+            distinctSkeleton: r.distinctSkeleton,
+            rawArchetype: r.rawArchetype,
+          })),
+        },
+        null,
+        2
+      ),
       'utf8'
     );
   }
@@ -950,10 +1021,83 @@ async function main() {
   const latencies = results.map((r) => r.totalLatencyMs).sort((a, b) => a - b);
   const compositeScores = results.map((r) => r.metrics.compositeScore);
 
-  const medianCostUsd = costs[Math.floor(costs.length / 2)] || 0;
-  const medianLatencyMs = latencies[Math.floor(latencies.length / 2)] || 0;
+  const median = (xs: number[]) =>
+    xs.length === 0 ? 0 : xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
+  const medianCostUsd = median(costs);
+  const medianLatencyMs = median(latencies);
   const avgCompositeScore =
     compositeScores.length > 0 ? compositeScores.reduce((a, b) => a + b, 0) / compositeScores.length : 0;
+
+  // Real Canva copy+font rate. This row previously divided by a hardcoded 20 and printed a
+  // literal PASS, so it reported 80.0% against a >= 90% target and still claimed to pass.
+  const copyFontPassCount = results.filter((r) => r.copyExactPass && r.readabilityPass).length;
+  const copyFontRate = totalBriefs > 0 ? (copyFontPassCount / totalBriefs) * 100 : 0;
+
+  // Real hard-QA escape count: a brief the pipeline declared print-ready while a hard
+  // deterministic check failed. This row previously printed a literal 0 and a literal PASS,
+  // measuring nothing at all.
+  const hardQaEscapes = results.filter(
+    (r) => r.prrPass && !(r.geometricPass && r.readabilityPass && r.assetIntegrityPass && r.copyExactPass)
+  );
+
+  // Real skeleton diversity: the size of the archetype set over completed briefs, with a
+  // histogram so it can be audited. The per-brief distinct_skeleton flag only compares a brief
+  // against the one dispatched before it, which is order-dependent under parallel batches and
+  // is not a measure of diversity.
+  const archetypeCounts = new Map<string, number>();
+  for (const r of results as any[]) {
+    const a = r.rawArchetype || 'unknown';
+    archetypeCounts.set(a, (archetypeCounts.get(a) || 0) + 1);
+  }
+  const distinctArchetypeCount = archetypeCounts.size;
+  const archetypeHistogram = [...archetypeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([a, n]) => `${a}=${n}`)
+    .join(', ');
+
+  // Measured typography fidelity across the run, read from this host and from the layouts on
+  // disk so it is correct for resumed briefs too. A preview rendered with a substituted face is
+  // not evidence about the design production will produce, so a stand-in fails the run.
+  const fidelityManifest = getFontFidelityManifest(
+    path.resolve(process.cwd(), 'packages/creative/assets/fonts')
+  );
+  const briefsWithStandIns: Array<{ id: string; families: string[] }> = [];
+  for (const r of results as any[]) {
+    const layoutPath = path.join(
+      briefsDir,
+      `brief_${String(r.briefIndex + 1).padStart(2, '0')}`,
+      'layout.json'
+    );
+    if (!fs.existsSync(layoutPath)) continue;
+    let used: string[] = [];
+    try {
+      const l = JSON.parse(fs.readFileSync(layoutPath, 'utf8'));
+      used = [...new Set((l.text || []).map((t: any) => t.fontFamily).filter(Boolean))] as string[];
+    } catch {
+      continue;
+    }
+    const standIns = used.filter((f) => fidelityManifest[f] === 'stand-in');
+    if (standIns.length) briefsWithStandIns.push({ id: r.brief.id, families: standIns });
+  }
+  const standInFamilies = [...new Set(briefsWithStandIns.flatMap((b) => b.families))].sort();
+
+  const expectedCalls = totalBriefs * 5;
+  const allGatesPass =
+    prrRate >= 81.3 &&
+    medianCostUsd < 0.38 &&
+    canaryWinRate >= 95.0 &&
+    orderSwapRate >= 80.0 &&
+    copyFontRate >= 90.0 &&
+    hardQaEscapes.length === 0 &&
+    editabilityRate === 100.0 &&
+    briefsWithStandIns.length === 0 &&
+    allLedgerRows.length >= expectedCalls;
+  const qualificationVerdict =
+    failures.length > 0
+      ? `**PARTIAL — NOT A QUALIFICATION PASS.** ${failures.length} of ${QUALIFICATION_BRIEFS.length} briefs never ran.`
+      : allGatesPass
+        ? `**PASS** — all ${QUALIFICATION_BRIEFS.length} briefs completed and every gate met.`
+        : `**FAIL** — all ${QUALIFICATION_BRIEFS.length} briefs completed but at least one gate was not met.`;
 
   // 1. Generate Multi-Row LEDGER.csv (one row per model call)
   const ledgerHeader =
@@ -970,11 +1114,11 @@ async function main() {
 
   // 2. Generate P10_QUALIFICATION.csv
   const csvHeader =
-    'brief_id,language,size,calls,prr_pass,geometric_pass,readability_pass,asset_integrity_pass,copy_exact_pass,editability_pass,canary_won,order_swap_consistent,composite_score,cost_usd,wall_clock_ms,distinct_skeleton\n';
+    'brief_id,language,size,calls,prr_pass,geometric_pass,readability_pass,asset_integrity_pass,copy_exact_pass,editability_pass,canary_won,order_swap_consistent,composite_score,cost_usd,wall_clock_ms,distinct_skeleton,archetype\n';
   const csvBody = results
     .map(
       (r) =>
-        `${r.brief.id},${r.brief.language},${r.brief.width}x${r.brief.height},${r.ledgerRows.length},${r.prrPass},${r.geometricPass},${r.readabilityPass},${r.assetIntegrityPass},${r.copyExactPass},${r.editabilityPass},${r.canaryWon},${r.orderSwapConsistent},${r.metrics.compositeScore.toFixed(3)},${r.totalNetCostUsd.toFixed(6)},${r.totalLatencyMs},${r.distinctSkeleton}`
+        `${r.brief.id},${r.brief.language},${r.brief.width}x${r.brief.height},${r.ledgerRows.length},${r.prrPass},${r.geometricPass},${r.readabilityPass},${r.assetIntegrityPass},${r.copyExactPass},${r.editabilityPass},${r.canaryWon},${r.orderSwapConsistent},${r.metrics.compositeScore.toFixed(3)},${r.totalNetCostUsd.toFixed(6)},${r.totalLatencyMs},${r.distinctSkeleton},${(r as any).rawArchetype || 'unknown'}`
     )
     .join('\n');
 
@@ -986,22 +1130,30 @@ async function main() {
 
 **Briefs attempted:** ${QUALIFICATION_BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
 
+**Verdict: ${qualificationVerdict}**
+
 > Rates below are computed over the ${results.length} completed briefs. A partial run is reported as partial and does NOT constitute a qualification pass.
 
 ## 1. Headline Results & Comparative Benchmarks
 
 | Metric | Target / Published Benchmark | Pipeline Result (Multi-Stage Live Run) | Status |
 | :--- | :--- | :--- | :--- |
-| **Total Model Calls Recorded** | >= 80 calls across 20 briefs | **${allLedgerRows.length} calls** | **${allLedgerRows.length >= 80 ? 'PASS' : 'FAIL'}** |
-| **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **${prrRate.toFixed(1)}%** (${prrPassCount}/${QUALIFICATION_BRIEFS.length}) | **${prrRate >= 81.3 ? 'PASS' : 'FAIL'}** |
+| **Total Model Calls Recorded** | 5 calls x ${totalBriefs} completed briefs = ${expectedCalls} | **${allLedgerRows.length} calls** | **${allLedgerRows.length >= expectedCalls ? 'PASS' : 'FAIL'}** |
+| **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **${prrRate.toFixed(1)}%** (${prrPassCount}/${totalBriefs}) | **${prrRate >= 81.3 ? 'PASS' : 'FAIL'}** |
 | **Median Cost per Brief** | USD 0.380 (Published Comparison) | **$${medianCostUsd.toFixed(6)}** | **${medianCostUsd < 0.38 ? 'PASS' : 'FAIL'}** |
-| **Canary Win Rate (Real Judge)** | >= 19 of 20 (95.0%) | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/${QUALIFICATION_BRIEFS.length}) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
-| **Order-Swap Consistency** | >= 80.0% | **${orderSwapRate.toFixed(1)}%** (${orderSwapConsistentCount}/${QUALIFICATION_BRIEFS.length}) | **${orderSwapRate >= 80.0 ? 'PASS' : 'FAIL'}** |
+| **Canary Win Rate (Real Judge)** | >= 95.0% of completed briefs | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/${totalBriefs}) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
+| **Order-Swap Consistency** | >= 80.0% | **${orderSwapRate.toFixed(1)}%** (${orderSwapConsistentCount}/${totalBriefs}) | **${orderSwapRate >= 80.0 ? 'PASS' : 'FAIL'}** |
 | **Mean Composite Score** | Measured Mean Score | **${avgCompositeScore.toFixed(3)}** | **${avgCompositeScore >= 0.70 ? 'PASS' : 'FAIL'}** |
-| **Canva Copy & Font Checks**| >= 18 of 20 (90.0%) | **${((results.filter((r) => r.copyExactPass && r.readabilityPass).length / 20) * 100).toFixed(1)}%** | **PASS** |
-| **Hard-QA Escapes** | Exactly 0 | **0** | **PASS** |
-| **Distinct Skeletons** | Diverse Architectures | **${distinctSkeletonCount}/20** | **PASS** |
-| **Editability Rate** | 100.0% Verified Mutation Test | **${editabilityRate.toFixed(1)}%** (${editabilityCount}/${QUALIFICATION_BRIEFS.length}) | **${editabilityRate === 100.0 ? 'PASS' : 'FAIL'}** |
+| **Canva Copy & Font Checks**| >= 90.0% of completed briefs | **${copyFontRate.toFixed(1)}%** (${copyFontPassCount}/${totalBriefs}) | **${copyFontRate >= 90.0 ? 'PASS' : 'FAIL'}** |
+| **Hard-QA Escapes** | Exactly 0 | **${hardQaEscapes.length}**${hardQaEscapes.length ? ' — ' + hardQaEscapes.map((r) => r.brief.id).join(', ') : ''} | **${hardQaEscapes.length === 0 ? 'PASS' : 'FAIL'}** |
+| **Distinct Skeletons** | No published threshold | **${distinctArchetypeCount} distinct archetypes** over ${totalBriefs} briefs (${archetypeHistogram}) | **MEASURED** |
+| **Editability Rate** | 100.0% Verified Mutation Test | **${editabilityRate.toFixed(1)}%** (${editabilityCount}/${totalBriefs}) | **${editabilityRate === 100.0 ? 'PASS' : 'FAIL'}** |
+| **Font Fidelity (measured at render)** | Every specified family renders exactly | **${briefsWithStandIns.length === 0 ? 'every family used renders exactly on this host' : `${briefsWithStandIns.length}/${totalBriefs} briefs rendered with a substituted face — ${standInFamilies.join(', ')}`}** | **${briefsWithStandIns.length === 0 ? 'PASS' : 'FAIL'}** |
+
+> The **Distinct Skeletons** row has no numeric target in the published literature, so it is reported as measured rather than scored. The per-brief \`distinct_skeleton\` column in the CSV compares a brief only against the one dispatched immediately before it and is order-dependent under parallel batches; the archetype set size above is the diversity figure to read.
+> **Hard-QA escapes** are counted as briefs marked print-ready while any of the geometric, readability, asset-integrity or copy-exactness checks failed.
+> This run exercises the layout, critique and judge stages. No image-generation call is made, so the cost figures above are text-model costs only and do not include the art lane.
+> **Font fidelity** is measured by rasterising a probe in each family and in a family that cannot exist: identical output means the renderer substituted a fallback face. \`fc-match\` is not a valid check, because it resolves a family name that the rasteriser then fails to use. When this row fails, the preview images are not evidence about the typography of the design.
 
 ---
 

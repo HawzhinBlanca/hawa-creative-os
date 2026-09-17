@@ -436,69 +436,96 @@ export class OpenAiStudioClient {
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+    // T9: the image lane made a single attempt with no retry, so one dropped connection lost
+    // the call outright. Same transient-network and 429/5xx handling as the text path.
+    const maxAttempts = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 6);
+    let attempt = 0;
 
-      const res = await this.fetcher(`${this.baseUrl}/images/generations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+    while (attempt < maxAttempts) {
+      attempt++;
+      let timeoutId: any;
+      try {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      clearTimeout(timeoutId);
+        const res = await this.fetcher(`${this.baseUrl}/images/generations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
 
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        this.breaker.recordFailure();
-        throw new OpenAiModelHttpError(res.status, errBody);
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
+            const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+          this.breaker.recordFailure();
+          throw new OpenAiModelHttpError(res.status, errBody);
+        }
+
+        const xRequestId = res.headers?.get?.('x-request-id') || null;
+        const data: any = await res.json();
+        this.breaker.recordSuccess();
+
+        const latencyMs = Date.now() - startTime;
+        const b64Json = data.data?.[0]?.b64_json;
+        let imgBuffer: Buffer;
+        if (b64Json) {
+          imgBuffer = Buffer.from(b64Json, 'base64');
+        } else if (data.data?.[0]?.url) {
+          const urlRes = await this.fetcher(data.data[0].url);
+          const arrayBuf = await urlRes.arrayBuffer();
+          imgBuffer = Buffer.from(arrayBuf);
+        } else {
+          throw new Error('No image payload returned by OpenAI image generation');
+        }
+
+        const sha256 = createHash('sha256').update(imgBuffer).digest('hex');
+        const costUsd = 0.04; // Standard rate for 1024x1024
+        const responseId = xRequestId || `img_${data.created || Date.now()}`;
+
+        return {
+          imageBytes: imgBuffer,
+          mimeType: 'image/png',
+          receipt: {
+            id: responseId,
+            responseId,
+            xRequestId,
+            model,
+            prompt: options.prompt,
+            costUsd,
+            sha256,
+            latencyMs,
+          },
+        };
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          this.breaker.recordFailure();
+          throw new OpenAiModelTimeoutError(timeout);
+        }
+        if (err instanceof OpenAiModelHttpError) {
+          throw err;
+        }
+        if (attempt >= maxAttempts) {
+          this.breaker.recordFailure();
+          throw err;
+        }
+        const delay = process.env.NODE_ENV === 'test' ? 10 * attempt : Math.pow(2, attempt) * 1000;
+        await new Promise((r) => setTimeout(r, delay));
+      } finally {
+        // Without this an aborted or thrown attempt leaves its abort timer pending.
+        clearTimeout(timeoutId);
       }
-
-      const xRequestId = res.headers?.get?.('x-request-id') || null;
-      const data: any = await res.json();
-      this.breaker.recordSuccess();
-
-      const latencyMs = Date.now() - startTime;
-      const b64Json = data.data?.[0]?.b64_json;
-      let imgBuffer: Buffer;
-      if (b64Json) {
-        imgBuffer = Buffer.from(b64Json, 'base64');
-      } else if (data.data?.[0]?.url) {
-        const urlRes = await this.fetcher(data.data[0].url);
-        const arrayBuf = await urlRes.arrayBuffer();
-        imgBuffer = Buffer.from(arrayBuf);
-      } else {
-        throw new Error('No image payload returned by OpenAI image generation');
-      }
-
-      const sha256 = createHash('sha256').update(imgBuffer).digest('hex');
-      const costUsd = 0.04; // Standard rate for 1024x1024
-      const responseId = xRequestId || `img_${data.created || Date.now()}`;
-
-      return {
-        imageBytes: imgBuffer,
-        mimeType: 'image/png',
-        receipt: {
-          id: responseId,
-          responseId,
-          xRequestId,
-          model,
-          prompt: options.prompt,
-          costUsd,
-          sha256,
-          latencyMs,
-        },
-      };
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        this.breaker.recordFailure();
-        throw new OpenAiModelTimeoutError(timeout);
-      }
-      throw err;
     }
+
+    throw new Error('Failed to complete OpenAI image generation after retries');
   }
 }

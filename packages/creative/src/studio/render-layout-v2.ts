@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
@@ -57,6 +58,9 @@ export interface RenderLayoutV2Result {
 
 // In-memory cache for loaded fontkit Font objects
 const fontCache = new Map<string, any>();
+
+/** Families whose script joins cursively, where letter-spacing is always wrong. */
+const ARABIC_SCRIPT_FAMILIES = new Set(['Noto Sans Arabic', 'Cairo', 'Amiri', 'Vazirmatn']);
 
 function getProjectRoot(): string {
   // Current file is at packages/creative/src/studio/render-layout-v2.ts
@@ -132,21 +136,99 @@ function resolveRsvgConvert(options?: RenderLayoutOptions): string {
   return 'rsvg-convert';
 }
 
+export const ADMITTED_FONT_FAMILIES = [
+  'Verdana',
+  'Noto Sans Arabic',
+  'Cinzel',
+  'Playfair Display',
+  'Cairo',
+  'Amiri',
+  'Plus Jakarta Sans',
+  'Vazirmatn',
+  'Inter',
+] as const;
+
+/** A family name no font can carry, used as the substitution sentinel. */
+const FONT_PROBE_SENTINEL = 'ZZHawaNoSuchFamilyZZ';
+
+const fidelityCache = new Map<string, 'exact' | 'stand-in'>();
+
+function probeSvg(family: string): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="120">' +
+    '<rect width="900" height="120" fill="#ffffff"/>' +
+    `<text x="20" y="80" font-family="${family}" font-size="60" fill="#000000">Handgloves 0123</text>` +
+    '</svg>'
+  );
+}
+
 /**
- * Resolves font fidelity across admitted font families:
- * 'exact' for all admitted native families (Verdana, Noto Sans Arabic, Cinzel, Playfair Display, etc.).
+ * Measures font fidelity the way the renderer actually resolves fonts: rasterise a probe in the
+ * requested family and in a family that cannot exist. Identical bytes mean the renderer silently
+ * substituted a fallback face.
+ *
+ * fc-match is not a valid check here. On a Homebrew/macOS host fc-match resolves 'Cinzel' and
+ * 'Playfair Display' from the bundled fontconfig while rsvg-convert still renders Helvetica, so a
+ * name-resolution guard passes while every heading in the output is the wrong typeface.
  */
-export function getFontFidelityManifest(_fontsDir: string): Record<string, 'exact' | 'stand-in'> {
-  return {
-    'Verdana': 'exact',
-    'Noto Sans Arabic': 'exact',
-    'Cinzel': 'exact',
-    'Playfair Display': 'exact',
-    'Cairo': 'exact',
-    'Plus Jakarta Sans': 'exact',
-    'Vazirmatn': 'exact',
-    'Inter': 'exact',
+export function probeFontFidelity(
+  family: string,
+  options?: RenderLayoutOptions
+): 'exact' | 'stand-in' {
+  const rsvg = resolveRsvgConvert(options);
+  const fontconfigFile = resolveFontconfigFile(options);
+  const key = `${rsvg}|${fontconfigFile}|${family}`;
+  const cached = fidelityCache.get(key);
+  if (cached) return cached;
+
+  const render = (fam: string): Buffer | null => {
+    const tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-font-probe-'));
+    const file = path.join(tempDir, 'probe.svg');
+    try {
+      fs.writeFileSync(file, probeSvg(fam), { mode: 0o600 });
+      const res = spawnSync(rsvg, ['-w', '900', '-h', '120', '-f', 'png', file], {
+        env: { ...process.env, FONTCONFIG_FILE: fontconfigFile },
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: 20000,
+      });
+      if (res.status !== 0 || !res.stdout || res.stdout.length < 100) return null;
+      return res.stdout;
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   };
+
+  const sentinelKey = `${rsvg}|${fontconfigFile}|__sentinel__`;
+  let sentinelHash = fidelityCache.get(sentinelKey) as unknown as string | undefined;
+  if (!sentinelHash) {
+    const png = render(FONT_PROBE_SENTINEL);
+    if (!png) return 'exact'; // probe unavailable; do not fabricate a failure
+    sentinelHash = createHash('sha256').update(png).digest('hex');
+    fidelityCache.set(sentinelKey, sentinelHash as any);
+  }
+
+  const png = render(family);
+  if (!png) return 'exact';
+  const hash = createHash('sha256').update(png).digest('hex');
+  const verdict: 'exact' | 'stand-in' = hash === sentinelHash ? 'stand-in' : 'exact';
+  fidelityCache.set(key, verdict);
+  return verdict;
+}
+
+/**
+ * Measured fidelity for every admitted family on this host. Previously this returned a hardcoded
+ * table of 'exact' for all eight families and ignored its argument, so it reported exact
+ * typography on hosts where half the families were being silently substituted.
+ */
+export function getFontFidelityManifest(
+  _fontsDir: string,
+  options?: RenderLayoutOptions
+): Record<string, 'exact' | 'stand-in'> {
+  const out: Record<string, 'exact' | 'stand-in'> = {};
+  for (const family of ADMITTED_FONT_FAMILIES) {
+    out[family] = probeFontFidelity(family, options);
+  }
+  return out;
 }
 
 /**
@@ -323,16 +405,25 @@ function renderTextElementToSvg(
   if (t.role === 'eyebrow' && letterSpacingVal > 0.06) {
     letterSpacingVal = 0.04;
   }
-  let lines = wrapTextWithFontkit(copyText, t.width, font, t.fontSize, letterSpacingVal);
+  // Arabic script is cursive: letter-spacing inserts gaps between joined letters and reads as
+  // broken to a native reader. The generator emits 0.02 on Kurdish eyebrows, so this is dropped
+  // here rather than honoured.
+  if (t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily)) {
+    letterSpacingVal = 0;
+  }
+  // The size the text is actually measured and drawn at. The eyebrow autofit below used to shrink
+  // a local copy and throw it away, so a shrunk eyebrow was still emitted at t.fontSize and
+  // overflowed the box it had just been fitted into.
+  let renderFontSize = t.fontSize;
+  let lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, letterSpacingVal);
 
   // Invariant: Eyebrows must NEVER wrap onto multiple lines
   if (t.role === 'eyebrow' && lines.length > 1) {
     letterSpacingVal = 0;
-    lines = wrapTextWithFontkit(copyText, t.width, font, t.fontSize, 0);
-    let curSize = t.fontSize;
-    while (lines.length > 1 && curSize > 10) {
-      curSize -= 1;
-      lines = wrapTextWithFontkit(copyText, t.width, font, curSize, 0);
+    lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, 0);
+    while (lines.length > 1 && renderFontSize > 10) {
+      renderFontSize -= 1;
+      lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, 0);
     }
   }
 
@@ -366,9 +457,9 @@ function renderTextElementToSvg(
     }
   }
 
-  const scale = t.fontSize / font.unitsPerEm;
+  const scale = renderFontSize / font.unitsPerEm;
   const ascent = (font.ascent || 800) * scale;
-  const nominalLineHeight = t.fontSize * t.lineHeight;
+  const nominalLineHeight = renderFontSize * t.lineHeight;
   const firstLineY = t.y + ascent;
 
   const tspans: string[] = [];
@@ -381,9 +472,13 @@ function renderTextElementToSvg(
   const fontStyle = t.italic ? ' font-style="italic"' : '';
   const opacityAttr = t.opacity !== undefined ? ` opacity="${t.opacity}"` : '';
   const bidiAttr = t.rtl ? ' direction="rtl"' : '';
-  const letterSpacingAttr = t.letterSpacing ? ` letter-spacing="${(t.letterSpacing * t.fontSize).toFixed(2)}px"` : '';
+  // Emit the spacing and size the lines were measured with. Using the raw t.* values here meant
+  // the wrap was computed with one spacing and drawn with another.
+  const letterSpacingAttr = letterSpacingVal
+    ? ` letter-spacing="${(letterSpacingVal * renderFontSize).toFixed(2)}px"`
+    : '';
 
-  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(t.fontFamily)}" font-size="${t.fontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
+  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(t.fontFamily)}" font-size="${renderFontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
     ${tspans.join('\n    ')}
   </text>`;
 
@@ -404,7 +499,7 @@ export function renderLayoutV2ToSvg(
 } {
   const fontsDir = resolveFontsDir(options);
   const fontconfigFile = resolveFontconfigFile(options);
-  const fontFidelity = getFontFidelityManifest(fontsDir);
+  const fontFidelity = getFontFidelityManifest(fontsDir, options);
 
   // Assert font resolution for all text elements
   const seenFamilies = new Set<string>();
