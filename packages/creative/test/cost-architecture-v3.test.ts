@@ -95,4 +95,42 @@ describe('P09 — Cost Architecture & Token Discipline', () => {
     expect(state.degradationReason).toContain('CAP_EXCEEDED');
     expect(state.degradationReason).toContain('completing with best passing candidate');
   });
+
+  it('refuses pre-flight when office daily cap is set to USD 0.01', async () => {
+    const { checkOfficeDailyBudget } = await import('../src/studio/cost-architecture-v3.js');
+    const originalCap = process.env.HAWA_DAILY_CAP_USD;
+    try {
+      process.env.HAWA_DAILY_CAP_USD = '0.01';
+      // An operation estimated at $0.05 must be rejected
+      const check = checkOfficeDailyBudget(0.05);
+      expect(check.allowed).toBe(false);
+      expect(check.reason).toContain('DAILY_CAP_EXCEEDED');
+      expect(check.capUsd).toBe(0.01);
+      expect(check.warningTriggered).toBe(true);
+    } finally {
+      if (originalCap !== undefined) {
+        process.env.HAWA_DAILY_CAP_USD = originalCap;
+      } else {
+        delete process.env.HAWA_DAILY_CAP_USD;
+      }
+    }
+  });
+
+  it('triggers low-balance warning when remaining budget is at or below threshold', async () => {
+    const { checkOfficeDailyBudget } = await import('../src/studio/cost-architecture-v3.js');
+    const originalCap = process.env.HAWA_DAILY_CAP_USD;
+    const originalThreshold = process.env.HAWA_LOW_BALANCE_THRESHOLD_USD;
+    try {
+      process.env.HAWA_DAILY_CAP_USD = '10.00';
+      process.env.HAWA_LOW_BALANCE_THRESHOLD_USD = '20.00'; // threshold higher than cap guarantees trigger
+      const check = checkOfficeDailyBudget(0.00);
+      expect(check.warningTriggered).toBe(true);
+      expect(check.warningMessage).toContain('Low Balance Alert');
+    } finally {
+      if (originalCap !== undefined) process.env.HAWA_DAILY_CAP_USD = originalCap;
+      else delete process.env.HAWA_DAILY_CAP_USD;
+      if (originalThreshold !== undefined) process.env.HAWA_LOW_BALANCE_THRESHOLD_USD = originalThreshold;
+      else delete process.env.HAWA_LOW_BALANCE_THRESHOLD_USD;
+    }
+  });
 });

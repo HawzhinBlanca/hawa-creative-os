@@ -178,15 +178,156 @@ export function calculateCallCost(
   };
 }
 
+export function getOfficeDailyCapUsd(): number {
+  const envVal = process.env.HAWA_DAILY_CAP_USD || process.env.OFFICE_DAILY_CAP_USD || process.env.DAILY_CAP_USD;
+  if (envVal !== undefined && envVal !== '') {
+    const parsed = parseFloat(envVal);
+    if (!isNaN(parsed) && parsed >= 0) return parsed;
+  }
+  return 30.00;
+}
+
+export function getPerBriefCapUsd(): number {
+  const envVal = process.env.HAWA_PER_BRIEF_CAP_USD || process.env.PER_BRIEF_CAP_USD;
+  if (envVal !== undefined && envVal !== '') {
+    const parsed = parseFloat(envVal);
+    if (!isNaN(parsed) && parsed >= 0) return parsed;
+  }
+  return 1.00;
+}
+
+export function getLowBalanceWarningThresholdUsd(): number {
+  const envVal = process.env.HAWA_LOW_BALANCE_THRESHOLD_USD || process.env.LOW_BALANCE_WARNING_THRESHOLD_USD;
+  if (envVal !== undefined && envVal !== '') {
+    const parsed = parseFloat(envVal);
+    if (!isNaN(parsed) && parsed >= 0) return parsed;
+  }
+  return 5.00;
+}
+
+function getDailySpendFilePath(dateStr?: string): string {
+  const today = dateStr || new Date().toISOString().slice(0, 10);
+  const stateDir = path.resolve(process.cwd(), '.hawa-state', 'spend');
+  try {
+    fs.mkdirSync(stateDir, { recursive: true });
+  } catch {}
+  return path.join(stateDir, `daily_spend_${today}.json`);
+}
+
+export function getDailyOfficeSpend(dateStr?: string): number {
+  const filePath = getDailySpendFilePath(dateStr);
+  if (!fs.existsSync(filePath)) return 0;
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Number(data.totalSpentUsd || 0);
+  } catch {
+    return 0;
+  }
+}
+
+export function resetDailyOfficeSpend(dateStr?: string): void {
+  const filePath = getDailySpendFilePath(dateStr);
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {}
+}
+
+export function recordOfficeDailySpend(costUsd: number, entry?: CostLedgerEntry): void {
+  const filePath = getDailySpendFilePath();
+  let data: { date: string; totalSpentUsd: number; entries: CostLedgerEntry[] } = {
+    date: new Date().toISOString().slice(0, 10),
+    totalSpentUsd: 0,
+    entries: [],
+  };
+  if (fs.existsSync(filePath)) {
+    try {
+      data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {}
+  }
+  data.totalSpentUsd = Number((data.totalSpentUsd + costUsd).toFixed(6));
+  if (entry) {
+    data.entries.push(entry);
+  }
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch {}
+}
+
+export interface OfficeDailyBudgetCheckResult {
+  allowed: boolean;
+  reason?: string;
+  currentSpentUsd: number;
+  remainingUsd: number;
+  capUsd: number;
+  warningTriggered: boolean;
+  warningMessage?: string;
+}
+
+export async function sendOperatorAlert(text: string): Promise<boolean> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chat = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0];
+  if (!token || !chat) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function checkOfficeDailyBudget(estimatedCostUsd: number = 0): OfficeDailyBudgetCheckResult {
+  const capUsd = getOfficeDailyCapUsd();
+  const currentSpentUsd = getDailyOfficeSpend();
+  const projectedSpend = Number((currentSpentUsd + estimatedCostUsd).toFixed(6));
+  const remainingUsd = Number(Math.max(0, capUsd - currentSpentUsd).toFixed(6));
+  const warningThreshold = getLowBalanceWarningThresholdUsd();
+
+  const warningTriggered = remainingUsd <= warningThreshold || (capUsd > 0 && currentSpentUsd >= capUsd * 0.8);
+  let warningMessage: string | undefined;
+  if (warningTriggered) {
+    warningMessage = `⚠️ <b>Hawa Low Balance Alert</b>: Remaining office AI budget is $${remainingUsd.toFixed(2)} (cap: $${capUsd.toFixed(2)}, spent: $${currentSpentUsd.toFixed(2)}, warning threshold: $${warningThreshold.toFixed(2)}).`;
+    sendOperatorAlert(warningMessage).catch(() => {});
+  }
+
+  if (projectedSpend > capUsd || (capUsd > 0 && estimatedCostUsd > 0 && remainingUsd < estimatedCostUsd)) {
+    return {
+      allowed: false,
+      reason: `DAILY_CAP_EXCEEDED: Daily office spend ($${currentSpentUsd.toFixed(2)} spent + $${estimatedCostUsd.toFixed(2)} required) would breach office daily cap of $${capUsd.toFixed(2)}. Remaining: $${remainingUsd.toFixed(2)}.`,
+      currentSpentUsd,
+      remainingUsd,
+      capUsd,
+      warningTriggered: true,
+      warningMessage,
+    };
+  }
+
+  return {
+    allowed: true,
+    currentSpentUsd,
+    remainingUsd,
+    capUsd,
+    warningTriggered,
+    warningMessage,
+  };
+}
+
 export class PipelineCostGovernorV3 {
   private accumulatedCostUsd = 0;
-  private readonly perBriefCapUsd = PER_BRIEF_CAP_USD;
-  private readonly officeDailyCapUsd = OFFICE_DAILY_CAP_USD;
+  private readonly perBriefCapUsd: number;
+  private readonly officeDailyCapUsd: number;
   private readonly ledger: CostLedgerEntry[] = [];
   private isCapExceeded = false;
   private degradationReason?: string;
 
-  constructor(private readonly briefId: string) {}
+  constructor(private readonly briefId: string) {
+    this.perBriefCapUsd = getPerBriefCapUsd();
+    this.officeDailyCapUsd = getOfficeDailyCapUsd();
+  }
 
   getState(): CostArchitectureState {
     return {
@@ -234,6 +375,9 @@ export class PipelineCostGovernorV3 {
 
     this.ledger.push(entry);
     this.accumulatedCostUsd += cost.netCostUsd;
+    recordOfficeDailySpend(cost.netCostUsd, entry);
+
+    const dailySpend = getDailyOfficeSpend();
 
     if (this.accumulatedCostUsd > this.perBriefCapUsd) {
       this.isCapExceeded = true;
@@ -242,6 +386,18 @@ export class PipelineCostGovernorV3 {
       )} exceeded cap of $${this.perBriefCapUsd.toFixed(
         2
       )}. Halting model calls; completing with best passing candidate.`;
+    } else if (dailySpend > this.officeDailyCapUsd) {
+      this.isCapExceeded = true;
+      this.degradationReason = `OFFICE_DAILY_CAP_EXCEEDED: Total daily spend $${dailySpend.toFixed(
+        4
+      )} exceeded office daily cap of $${this.officeDailyCapUsd.toFixed(
+        2
+      )}. Halting all pipeline generation.`;
+    }
+
+    const check = checkOfficeDailyBudget(0);
+    if (check.warningTriggered && check.warningMessage) {
+      sendOperatorAlert(check.warningMessage).catch(() => {});
     }
 
     return {

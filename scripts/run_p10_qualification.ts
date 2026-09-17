@@ -13,6 +13,10 @@ import {
   createDegradedCanaryLayout,
   JUDGE_DIMENSIONS,
   type CopyBlockSlotInput,
+  checkOfficeDailyBudget,
+  PipelineCostGovernorV3,
+  getOfficeDailyCapUsd,
+  getPerBriefCapUsd,
 } from '../packages/creative/dist/index.js';
 
 export interface QualificationBrief {
@@ -654,6 +658,22 @@ async function executeBriefLive(
 
 async function main() {
   console.log('=== Starting P10 Genuine Live Qualification Run (20 Held-Out Briefs) ===');
+
+  const dailyCap = getOfficeDailyCapUsd();
+  const perBriefCap = getPerBriefCapUsd();
+  console.log(`[Cost Governor] Active Caps: Per-Brief = $${perBriefCap.toFixed(2)} | Office Daily = $${dailyCap.toFixed(2)}`);
+
+  // Pre-flight check: can we afford at least 1 brief?
+  const estimatedMinCost = 0.05;
+  const budgetCheck = checkOfficeDailyBudget(estimatedMinCost);
+  if (!budgetCheck.allowed) {
+    console.error(`\n================================================================================`);
+    console.error(`🛑 COST GOVERNOR REFUSAL: Qualification run refused.`);
+    console.error(`Reason: ${budgetCheck.reason}`);
+    console.error(`Office Daily Cap: $${budgetCheck.capUsd.toFixed(2)} | Current Spend: $${budgetCheck.currentSpentUsd.toFixed(2)} | Remaining: $${budgetCheck.remainingUsd.toFixed(2)}`);
+    console.error(`================================================================================\n`);
+    process.exit(1);
+  }
 
   const outputDir = path.resolve(
     process.cwd(),
