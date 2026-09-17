@@ -468,6 +468,63 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(mockPlanner.generate).toHaveBeenCalledTimes(1);
   }, 25000);
 
+  it('5b. when DESIGN_PIPELINE_V3=on, studio stage failure marks run as failed and NEVER calls single-shot planner fallback', async () => {
+    const originalEnv = process.env.DESIGN_PIPELINE_V3;
+    process.env.DESIGN_PIPELINE_V3 = 'on';
+
+    try {
+      const taskId = await createTask();
+
+      const baseFetch = createMockFetch();
+      const failFetch = vi.fn().mockImplementation(async (url: any, init: any) => {
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+        const promptText = (
+          Array.isArray(body.messages)
+            ? body.messages.map((m: any) => typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')).join(' ')
+            : ''
+        ) + ' ' + JSON.stringify(body.system || '') + ' ' + (body.prompt || '');
+
+        if (promptText.includes('StudioLayoutV2') || promptText.includes('produce the complete layout') || promptText.includes('Art Director')) {
+          throw new Error('Fatal layout model outage');
+        }
+
+        return baseFetch(url, init);
+      });
+
+      const mockPlanner = {
+        generate: vi.fn(),
+      } as unknown as CanvaDesignPlanner;
+
+      const service = new DesignStudioService(db, undefined, {
+        apiKey: 'test-key',
+        fetcher: failFetch,
+        planner: mockPlanner,
+        defaultTier: 'standard',
+        maxRetries: 0,
+      });
+
+      const key = `key-${randomUUID().slice(0, 16)}`;
+      const { run } = await service.createOrGetRun(scope, taskId, key, {
+        width: 1080,
+        height: 1350,
+        tier: 'standard',
+      });
+
+      // Advance to conceiving
+      await service.resume(scope, taskId, run.id);
+      // Advance to laying_out
+      await service.resume(scope, taskId, run.id);
+      // Laying_out fails -> must NOT call single-shot planner
+      const step = await service.resume(scope, taskId, run.id);
+
+      expect(step.status).toBe('failed');
+      expect(step.diagnostic).toContain('Studio v3 failed');
+      expect(mockPlanner.generate).not.toHaveBeenCalled();
+    } finally {
+      process.env.DESIGN_PIPELINE_V3 = originalEnv;
+    }
+  }, 25000);
+
   it('6. advances full pipeline to transferred status and creates canva_design_plans row', async () => {
     const taskId = await createTask();
     const fetcher = createMockFetch();

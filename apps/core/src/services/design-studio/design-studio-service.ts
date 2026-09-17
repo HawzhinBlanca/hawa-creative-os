@@ -1142,11 +1142,29 @@ export class DesignStudioService {
 
           let designId: string | undefined;
           if (this.canva) {
-            const imported = await this.canva.importEditableDesign(s, run.task_id, 'studio-' + planId, {
+            let imported = await this.canva.importEditableDesign(s, run.task_id, 'studio-' + planId, {
               bytes: transferResult.pptxBytes,
               sha256: transferResult.sha256,
               manifest: transferResult.manifest as any,
             });
+            const opId = (imported as any).operationId;
+            let attempts = 0;
+            while (
+              imported.status === 'submitted' &&
+              !(imported as any).designId &&
+              attempts < 30 &&
+              opId &&
+              typeof (this.canva as any).resumeImport === 'function'
+            ) {
+              await new Promise((r) => setTimeout(r, 1500));
+              attempts++;
+              imported = await this.canva.resumeImport(s, run.task_id, opId);
+            }
+            if (imported.status !== 'retrieved' && !(imported as any).designId) {
+              throw new Error(
+                `Canva PPTX import did not settle: status=${imported.status} ${'message' in imported ? (imported as any).message : ''}`
+              );
+            }
             designId = (imported as any).designId;
           }
 
@@ -1175,6 +1193,20 @@ export class DesignStudioService {
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
         return this.handleBudgetExhaustion(s, run, ctx);
+      }
+
+      if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+        const errorMsg = err.message || String(err);
+        await this.repo.updateRunStatus(runId, s.tenantId, 'failed', {
+          diagnostic: `Studio v3 failed at stage ${run.status}: ${errorMsg}`,
+        });
+        return {
+          runId,
+          status: 'failed',
+          stage: run.status,
+          diagnostic: `Studio v3 failed: ${errorMsg}`,
+          message: errorMsg,
+        };
       }
 
       // If failure happened during generation stages, execute Rung 4 fallback
@@ -1238,6 +1270,16 @@ export class DesignStudioService {
    * Degradation ladder Rung 4: Studio stage fails after retries -> fallback to single-shot planner path.
    */
   private async executeRung4Fallback(s: Scope, run: any, reason: string): Promise<StudioResumeResult> {
+    if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
+        diagnostic: `Studio v3 failed: ${reason}. Legacy single-shot fallback is disabled under DESIGN_PIPELINE_V3=on.`,
+      });
+      return {
+        runId: run.id,
+        status: 'failed',
+        diagnostic: `Studio v3 failed: ${reason}`,
+      };
+    }
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const planner =
       this.options.planner ||
