@@ -1221,12 +1221,12 @@ export function createApp(options?: CreateAppOptions) {
         const targetChat = telegramAllowedUsers[0];
         if (targetChat && telegramBridge) {
           const alertText = probeResult.status === 'billing_exhausted'
-            ? `⚠️ *Hawa Watchdog Alert*: OpenAI credit balance exhausted (429 insufficient_quota).\nOperator action required: Add credits at https://platform.openai.com/settings/organization/billing/`
-            : `⚠️ *Hawa Watchdog Alert*: OpenAI API key unauthorized (HTTP ${probeResult.status}).\nOperator action required: Verify API credentials.`;
+            ? `⚠️ <b>Hawa Watchdog Alert</b>: OpenAI credit balance exhausted (429 insufficient_quota).\nOperator action required: Add credits at <a href="https://platform.openai.com/settings/organization/billing/">OpenAI Billing</a>`
+            : `⚠️ <b>Hawa Watchdog Alert</b>: OpenAI API key unauthorized (HTTP ${probeResult.status}).\nOperator action required: Verify API credentials.`;
           try {
             const outRes: any = await telegramBridge.dispatchOutboundMessage(targetChat, {
               text: alertText,
-              parse_mode: 'Markdown',
+              parse_mode: 'HTML',
             });
             lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : `alert_${now}`);
           } catch (err) {
@@ -1340,6 +1340,11 @@ export function createApp(options?: CreateAppOptions) {
     return c.json({
       status,
       timestamp: new Date().toISOString(),
+      buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
+      flags: {
+        DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
+        DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
+      },
       lastVerifiedProgressAt,
       lastPaidProbe: {
         at: lastPaidProbe.at ? new Date(lastPaidProbe.at).toISOString() : null,
@@ -2593,8 +2598,8 @@ export function createApp(options?: CreateAppOptions) {
 
         if (chatId) {
           await telegramBridge.dispatchOutboundMessage(chatId, {
-            text: `✏️ *Revision request logged for task \`${targetTaskId}\`*\nDesign team alerted in Hawa Desk.`,
-            parse_mode: 'Markdown',
+            text: `✏️ <b>Revision request logged for task</b> <code>${escapeTelegramHtml(targetTaskId)}</code>\nDesign team alerted in Hawa Desk.`,
+            parse_mode: 'HTML',
           });
         }
 
@@ -2783,8 +2788,8 @@ export function createApp(options?: CreateAppOptions) {
           }
           if (!targetTaskId) {
             const noTaskMsg = {
-              text: '⚠️ No failed design task found in this chat to re-drive. Specify the task ID: `/redo <taskId>`',
-              parse_mode: 'Markdown',
+              text: '⚠️ No failed design task found in this chat to re-drive. Specify the task ID: <code>/redo &lt;taskId&gt;</code>',
+              parse_mode: 'HTML',
             };
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, noTaskMsg);
             return c.json({ ok: false, error: 'NO_TASK_TO_REDRIVE' }, 404);
@@ -3426,11 +3431,11 @@ export function createApp(options?: CreateAppOptions) {
       if (!revisedPhotoSent) {
         const learnedRuleSummary = effectiveTaskRules.join('; ') || 'Operator preferences';
         const ackNotice = {
-          text: `✏️ *Revision Feedback Recorded for Task* \`${targetId}\`\n\n` +
-            `📝 *Feedback Notes:* "${rawText.slice(0, 300)}"\n` +
-            `🧠 *Applied Preferences:* "${learnedRuleSummary}"\n\n` +
+          text: `✏️ <b>Revision Feedback Recorded for Task</b> <code>${escapeTelegramHtml(targetId)}</code>\n\n` +
+            `📝 <b>Feedback Notes:</b> "${escapeTelegramHtml(rawText.slice(0, 300))}"\n` +
+            `🧠 <b>Applied Preferences:</b> "${escapeTelegramHtml(learnedRuleSummary)}"\n\n` +
             `⚡ Feedback is recorded. Native Canva changes still require a verified edit and capture.`,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
         };
         await telegramBridge.dispatchOutboundMessage(sourceChannelId, ackNotice);
       }

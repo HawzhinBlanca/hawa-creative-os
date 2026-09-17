@@ -26,11 +26,12 @@ write_plist() { # label, script, schedule-xml
 </dict></plist>
 PLIST
 }
-for label in design.hawa.watchdog design.hawa.nightly-backup; do launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true; done
+for label in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill; do launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true; done
 if [[ "${1:-}" == "--uninstall" ]]; then rm -f "$AGENTS"/design.hawa.*.plist; echo "launch agents removed"; exit 0; fi
 write_plist design.hawa.watchdog "$ROOT/infra/ops/watchdog.sh" "<key>RunAtLoad</key><true/><key>StartInterval</key><integer>300</integer>"
 write_plist design.hawa.nightly-backup "$ROOT/infra/backup/nightly_backup.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>"
-for label in design.hawa.watchdog design.hawa.nightly-backup; do
+write_plist design.hawa.backup-restore-drill "$ROOT/infra/backup/backup_restore_drill.sh" "<key>StartCalendarInterval</key><dict><key>Weekday</key><integer>7</integer><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>"
+for label in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill; do
   launchctl bootstrap "gui/$uid" "$AGENTS/$label.plist"
   launchctl print "gui/$uid/$label" >/dev/null 2>&1 && echo "✓ $label loaded" || { echo "ERROR: $label did not load"; exit 1; }
 done

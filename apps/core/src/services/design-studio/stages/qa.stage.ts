@@ -37,6 +37,8 @@ export async function runQAStage(
 
   if (!validation.ok) {
     defectCodes.push(validation.code);
+  } else if (validation.layout) {
+    winner.currentLayout = validation.layout;
   }
 
   // Hard QA check: Metrics validation

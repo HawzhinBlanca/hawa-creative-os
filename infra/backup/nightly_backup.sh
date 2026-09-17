@@ -40,7 +40,22 @@ EVENTS="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) F
 docker exec "$PG" dropdb -U hawa_owner "$VDB" || fail "could not drop verification database"
 [[ "$REST" -gt 0 && "$LIVE" -ge "$REST" && $((LIVE - REST)) -lt 50 ]] || fail "restored task count ${REST} does not match live ${LIVE}"
 
-# Retention: keep the 14 newest nightly dumps (deploy-time .sql snapshots are untouched).
+# Retention: keep the 14 newest nightly dumps, and copy off-disk to archive destination
+ARCHIVE_DEST="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}"
+if [[ "$ARCHIVE_DEST" == gs://* ]]; then
+  if command -v gsutil >/dev/null 2>&1; then
+    gsutil cp "$OUT" "$OUT.sha256" "$ARCHIVE_DEST/" 2>/dev/null || echo "WARNING: off-disk upload to $ARCHIVE_DEST failed" >&2
+  fi
+else
+  mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST"
+  cp "$OUT" "$OUT.sha256" "$ARCHIVE_DEST/"
+fi
+
 ls -1t "$DIR"/hawa_*.dump 2>/dev/null | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256"; done
+ls -1t "$DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
+  [[ -d "$ARCHIVE_DEST" ]] && cp "$old" "$ARCHIVE_DEST/" 2>/dev/null || true
+  rm -f "$old"
+done
+
 echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16)" >> "$LOG"
-echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}"
+echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, archived to ${ARCHIVE_DEST}"

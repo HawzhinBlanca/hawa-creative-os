@@ -46,6 +46,32 @@ VALUES
   ('00000000-0000-4000-a000-000000000001'::uuid, '00000000-0000-4000-b000-000000000011'::uuid, 'operator', true)
 ON CONFLICT (tenant_id, user_id, role) DO NOTHING;
 
+-- Test and multi-tenant isolation fixtures
+INSERT INTO tenants (id, name, slug, timezone)
+VALUES 
+  ('00000000-0000-4000-a000-000000000005'::uuid, 'Test Tenant 5', 'test-tenant-5', 'Asia/Baghdad'),
+  ('00000000-0000-4000-a000-000000000006'::uuid, 'Test Tenant 6', 'test-tenant-6', 'Asia/Baghdad'),
+  ('00000000-0000-4000-a000-000000000007'::uuid, 'Test Tenant 7', 'test-tenant-7', 'Asia/Baghdad'),
+  ('00000000-0000-4000-a000-000000000008'::uuid, 'Test Tenant 8', 'test-tenant-8', 'Asia/Baghdad')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO tenant_memberships (tenant_id, user_id, role, active)
+SELECT t.id, u.id, 'operator'::membership_role, true
+FROM (
+  VALUES 
+    ('00000000-0000-4000-a000-000000000005'::uuid),
+    ('00000000-0000-4000-a000-000000000006'::uuid),
+    ('00000000-0000-4000-a000-000000000007'::uuid),
+    ('00000000-0000-4000-a000-000000000008'::uuid)
+) AS t(id)
+CROSS JOIN (
+  VALUES
+    ('00000000-0000-4000-b000-000000000001'::uuid),
+    ('00000000-0000-4000-b000-000000000010'::uuid),
+    ('00000000-0000-4000-b000-000000000011'::uuid)
+) AS u(id)
+ON CONFLICT (tenant_id, user_id, role) DO NOTHING;
+
 -- Canonical Clients
 INSERT INTO clients (id, tenant_id, code, name, default_language, status)
 VALUES

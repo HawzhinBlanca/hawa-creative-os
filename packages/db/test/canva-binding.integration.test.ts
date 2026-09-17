@@ -16,8 +16,8 @@ describe('CanvaBindingRepository — Live Database Integration Suite (hawa_test)
   const testTenantId = '00000000-0000-4000-a000-000000000001';
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002'; // KAAE from seed
   const fastpayClientId = 'c1000000-0000-4000-8000-000000000004'; // FastPay from seed
-  const testTaskId = '99990000-0000-4000-9000-000000000001';
-  const testDesignId = 'DAHU6ovIEc4';
+  const testTaskId = crypto.randomUUID();
+  const testDesignId = `DAHU_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
   beforeAll(async () => {
     pool = new pg.Pool({ connectionString: TEST_DB_URL });
@@ -26,11 +26,6 @@ describe('CanvaBindingRepository — Live Database Integration Suite (hawa_test)
     });
     db = createDb(TEST_DB_URL);
     repo = new CanvaBindingRepository(db);
-
-    // Clean up any stale test fixtures
-    await pool.query(`DELETE FROM hawa.canva_capture_sets WHERE tenant_id = $1;`, [testTenantId]);
-    await pool.query(`DELETE FROM hawa.canva_bindings WHERE tenant_id = $1;`, [testTenantId]);
-    await pool.query(`DELETE FROM hawa.tasks WHERE id = $1;`, [testTaskId]);
 
     // Insert test task belonging to KAAE
     await pool.query(
@@ -43,9 +38,6 @@ describe('CanvaBindingRepository — Live Database Integration Suite (hawa_test)
 
   afterAll(async () => {
     if (pool) {
-      await pool.query(`DELETE FROM hawa.canva_capture_sets WHERE tenant_id = $1;`, [testTenantId]);
-      await pool.query(`DELETE FROM hawa.canva_bindings WHERE tenant_id = $1;`, [testTenantId]);
-      await pool.query(`DELETE FROM hawa.tasks WHERE id = $1;`, [testTaskId]);
       await db.destroy();
       await pool.end();
     }

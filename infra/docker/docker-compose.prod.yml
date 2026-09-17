@@ -127,6 +127,7 @@ services:
       - max_connections=${PG_MAX_CONNECTIONS:-100}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
       - ../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
       - ../../db/seed.sql:/docker-entrypoint-initdb.d/03-seed.sql:ro
@@ -163,5 +164,7 @@ networks:
     internal: true
 
 volumes:
-  postgres_data: {}
+  postgres_data:
+    name: hawa-production_postgres_data
+    external: true
   restate_data: {}

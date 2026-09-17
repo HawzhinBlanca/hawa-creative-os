@@ -3,7 +3,7 @@ import { StudioBudgetExhaustedError, type StageContext, type CandidateState } fr
 import type { StudioLayoutV2 } from '@hawa/creative';
 import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
-import { LAYOUT_SCHEMA } from './layouts.stage.js';
+import { LAYOUT_SCHEMA, normalizeCandidateLayout } from './layouts.stage.js';
 
 export const REVISION_SCHEMA = {
   type: 'object',
@@ -99,13 +99,8 @@ export async function runReviseStage(
         schemaName: 'LayoutRevision',
       });
 
-      const revisedLayout = response.data.layout;
-      const minBodyPx = Math.ceil(0.016 * ctx.width);
-      for (const t of revisedLayout.text) {
-        if (t.role === 'body') t.fontSize = Math.max(t.fontSize, minBodyPx);
-        else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize, 12);
-        else t.fontSize = Math.max(t.fontSize, 12);
-      }
+      const rawRevised = response.data.layout;
+      const revisedLayout = normalizeCandidateLayout(rawRevised, ctx.width, ctx.height, ctx.logoAspect || 1.0);
       const validation = validateLayoutV2(revisedLayout, validationContext);
 
       if (validation.ok) {
@@ -118,7 +113,7 @@ export async function runReviseStage(
           : undefined;
 
         // Re-render
-        const renderResult = renderLayoutV2(revisedLayout, {
+        const renderResult = renderLayoutV2(layoutToUse, {
           copyText: copyMap,
           artImagePath: artDataUri,
           logoDataUri,
@@ -131,14 +126,14 @@ export async function runReviseStage(
         let contrastValues: Record<number, number> | undefined;
         if (renderResult.noTextPng) {
           try {
-            const contrastResult = evaluateCompositeContrast(renderResult.noTextPng, revisedLayout);
+            const contrastResult = evaluateCompositeContrast(renderResult.noTextPng, layoutToUse);
             contrastValues = contrastResult.p05PerBox;
           } catch {
             // Fallback to background calculation in computeLayoutMetrics
           }
         }
 
-        cand.metrics = computeLayoutMetrics(revisedLayout, {
+        cand.metrics = computeLayoutMetrics(layoutToUse, {
           copyText: copyMap,
           measuredLines: renderResult.wrappedLines,
           contrastValues,

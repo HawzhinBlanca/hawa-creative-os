@@ -110,6 +110,11 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
         worker: 'restate-worker-1',
+        buildCommit: process.env.HAWA_BUILD_COMMIT || 'unknown',
+        flags: {
+          DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
+          DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
+        },
         outboxActive: Boolean(outboxConsumer),
         dependencies: { postgres },
         outbox,

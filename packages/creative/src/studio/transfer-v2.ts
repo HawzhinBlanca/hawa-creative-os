@@ -10,7 +10,9 @@ export interface TransferV2Options extends TransferOptions {
 
 export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
   const isArabicFont = (fontFamily: string) =>
-    fontFamily.toLowerCase().includes('arabic') || fontFamily.toLowerCase().includes('vazirmatn');
+    fontFamily.toLowerCase().includes('arabic') ||
+    fontFamily.toLowerCase().includes('vazirmatn') ||
+    fontFamily.toLowerCase().includes('cairo');
 
   return {
     width: layout.width,
@@ -58,15 +60,16 @@ export async function encodeStudioTransferV2(
   const hex = (color: string) => {
     let c = color.trim();
     if (/^#?[a-fA-F0-9]{3}$/.test(c)) {
-      const raw = c.replace('#', '');
-      c = `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
+      c = '#' + c.replace('#', '').split('').map((ch) => ch + ch).join('');
     }
-    if (!/^#?[a-fA-F0-9]{6}$/.test(c)) throw new Error(`Invalid color: ${color}`);
-    return c.replace('#', '');
+    if (!/^#?[a-fA-F0-9]{6}$/.test(c)) {
+      throw new Error(`Invalid hex color: ${color}`);
+    }
+    return c.replace('#', '').toUpperCase();
   };
 
-  if (![layout.width, layout.height].every((n) => Number.isInteger(n) && n >= 320 && n <= 4000)) {
-    throw new Error('Unsupported canvas dimensions');
+  if (!Number.isFinite(layout.width) || !Number.isFinite(layout.height) || layout.width <= 0 || layout.height <= 0) {
+    throw new Error('Invalid layout canvas size');
   }
   if (!copy.length || copy.length > 40 || copy.some((t) => !t || t.length > 10000)) {
     throw new Error('Missing or excessive factual copy');
@@ -97,26 +100,43 @@ export async function encodeStudioTransferV2(
     ...(options.extraFonts || []).filter((f) => typeof f === 'string' && /^[A-Za-z0-9 ]{2,40}$/.test(f)),
   ];
 
+  const fontMap = new Map<string, string>();
+  for (const font of admittedFonts) {
+    fontMap.set(font.toLowerCase().trim(), font);
+  }
+
+  const EPSILON = 0.5;
   const bounds = (box: { x: number; y: number; width: number; height: number }) => {
     if (
       ![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
-      box.x < 0 ||
-      box.y < 0 ||
+      box.x < -EPSILON ||
+      box.y < -EPSILON ||
       box.width <= 0 ||
       box.height <= 0 ||
-      box.x + box.width > layout.width ||
-      box.y + box.height > layout.height
+      box.x + box.width > layout.width + EPSILON ||
+      box.y + box.height > layout.height + EPSILON
     ) {
       throw new Error('Layout element exceeds canvas bounds');
     }
+    box.x = Math.max(0, box.x);
+    box.y = Math.max(0, box.y);
+    if (box.x + box.width > layout.width) {
+      box.width = Math.max(1, layout.width - box.x);
+    }
+    if (box.y + box.height > layout.height) {
+      box.height = Math.max(1, layout.height - box.y);
+    }
   };
 
+  const maxFontSize = Math.max(240, Math.round(0.25 * layout.height));
   for (const t of layout.text) {
     bounds(t);
     hex(t.color);
-    if (!admittedFonts.includes(t.fontFamily) || !Number.isFinite(t.fontSize) || t.fontSize < 12 || t.fontSize > 160) {
+    const canonicalFont = fontMap.get(t.fontFamily?.toLowerCase()?.trim());
+    if (!canonicalFont || !Number.isFinite(t.fontSize) || t.fontSize < 12 || t.fontSize > maxFontSize) {
       throw new Error(`Unsupported font or unreadable size: ${t.fontFamily} ${t.fontSize}px`);
     }
+    t.fontFamily = canonicalFont;
     if (!['left', 'center', 'right'].includes(t.align)) {
       throw new Error(`Invalid text alignment: ${t.align}`);
     }

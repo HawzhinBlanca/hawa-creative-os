@@ -14,13 +14,43 @@ COMPOSE=(docker compose -f "${SCRIPT_DIR}/docker-compose.prod.yml")
 [[ -f "${SCRIPT_DIR}/canva-release.override.yml" ]] && COMPOSE+=(-f "${SCRIPT_DIR}/canva-release.override.yml")
 APPLY=0; [[ "${1:-}" == "--apply" ]] && APPLY=1
 # The running build must be able to say which commit it is (GET /v1/system/cutover/status).
-export HAWA_BUILD_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+# Unstamped deployments are strictly refused.
+if [[ -n "${HAWA_BUILD_COMMIT+x}" ]]; then
+  BUILD_COMMIT="$HAWA_BUILD_COMMIT"
+else
+  BUILD_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+if [[ -z "$BUILD_COMMIT" || "$BUILD_COMMIT" == "unknown" ]]; then
+  echo "ERROR: HAWA_BUILD_COMMIT is unknown or unset. Unstamped deployments are strictly refused." >&2
+  exit 1
+fi
+export HAWA_BUILD_COMMIT="$BUILD_COMMIT"
 
 echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo apply || echo pre-flight)) ==="
+echo "Build stamp: ${HAWA_BUILD_COMMIT}"
 
 # 1. Prerequisites
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "ERROR: docker compose is required"; exit 1; }
+
+# 1b. Postgres volume durability verification: volume must exist and creation timestamp must match
+VOLUME_NAME="hawa-production_postgres_data"
+VOLUME_STAMP_FILE="${SCRIPT_DIR}/.postgres_volume_created"
+if ! docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+  echo "ERROR: Postgres volume '$VOLUME_NAME' does not exist! Refusing to start or recreate." >&2
+  exit 1
+fi
+VOLUME_CREATED="$(docker volume inspect "$VOLUME_NAME" --format '{{.CreatedAt}}')"
+if [[ -f "$VOLUME_STAMP_FILE" ]]; then
+  EXPECTED_STAMP="$(tr -d '[:space:]' < "$VOLUME_STAMP_FILE")"
+  if [[ "$VOLUME_CREATED" != "$EXPECTED_STAMP" ]]; then
+    echo "ERROR: Postgres volume creation timestamp changed! Expected: '$EXPECTED_STAMP', Got: '$VOLUME_CREATED'. Refusing deployment to prevent data loss." >&2
+    exit 1
+  fi
+else
+  echo "$VOLUME_CREATED" > "$VOLUME_STAMP_FILE"
+fi
+echo "✓ postgres volume '$VOLUME_NAME' verified (created at ${VOLUME_CREATED})"
 
 # 2. Configuration must exist and must be real
 ENV_FILE="${SCRIPT_DIR}/.env.production"
@@ -69,6 +99,14 @@ BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 7
 until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1; do sleep 1; done
 docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 pg_dump -U hawa_owner hawa > "${BACKUP_DIR}/hawa_${STAMP}.sql"
 echo "✓ backup written: infra/backup/snapshots/hawa_${STAMP}.sql ($(wc -c < "${BACKUP_DIR}/hawa_${STAMP}.sql") bytes)"
+
+# Archive older snapshots off checkout to prevent disk exhaustion
+ARCHIVE_DIR="${HAWA_BACKUP_ARCHIVE_DIR:-$HOME/.hawa/snapshots_archive}"
+mkdir -p "$ARCHIVE_DIR" && chmod 700 "$ARCHIVE_DIR"
+ls -1t "$BACKUP_DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
+  cp "$old" "$ARCHIVE_DIR/" 2>/dev/null || true
+  rm -f "$old"
+done
 
 # 6. Versioned schema upgrades (idempotent; checksums of applied files are verified)
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
