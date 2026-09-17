@@ -109,7 +109,8 @@ describe('separator centring in the generator', () => {
       1000,
       1000
     );
-    expect(scaled.shapes[0].y).toBe(230);
+    // Asserted relative to the content: balanceCanvasMargins may shift the whole composition.
+    expect(scaled.shapes[0].y - scaled.text[0].y).toBe(180);
   });
 
   it('leaves a rule that a text block overlaps vertically', () => {
@@ -125,7 +126,7 @@ describe('separator centring in the generator', () => {
       1000,
       1000
     );
-    expect(scaled.shapes[0].y).toBe(180);
+    expect(scaled.shapes[0].y - scaled.text[0].y).toBe(80);
   });
 
   it('leaves a rule with no text block on one side', () => {
@@ -137,7 +138,7 @@ describe('separator centring in the generator', () => {
       1000,
       1000
     );
-    expect(scaled.shapes[0].y).toBe(800);
+    expect(scaled.shapes[0].y - scaled.text[0].y).toBe(700);
   });
 });
 
@@ -516,5 +517,108 @@ describe('separator marks that are not thin lines', () => {
     // 60px tall in a 100px gap is more than a third of it: a band, not a divider.
     expect(centerSeparatorsInGaps(shapes, text)).toBe(0);
     expect(shapes[0].y).toBe(215);
+  });
+});
+
+describe('drifted text block snapping', () => {
+  const shared = (copyIndex: number, role: string, y: number) => ({
+    copyIndex, role, x: 130, y, width: 821, height: 60,
+  });
+
+  it('snaps a block that drifted off a span three others share', async () => {
+    const { snapDriftedTextBlocks } = await import('../src/studio/layout-generator-v3.js');
+    // brief_11: a footer at 103..913 against its neighbours' 130..951 — the same width to within
+    // 11px, simply out of position.
+    const text: any[] = [
+      shared(0, 'eyebrow', 100),
+      shared(1, 'title', 200),
+      shared(2, 'subtitle', 300),
+      { copyIndex: 3, role: 'footer', x: 103, y: 400, width: 810, height: 60 },
+    ];
+    expect(snapDriftedTextBlocks(text)).toBe(1);
+    expect(text[3].x).toBe(130);
+    expect(text[3].width).toBe(821);
+  });
+
+  it('leaves a block given a measure of its own', async () => {
+    const { snapDriftedTextBlocks } = await import('../src/studio/layout-generator-v3.js');
+    // A body inset 65px inside a panel is a design decision, and the critique accepted all 21 of
+    // these across the T5 set. Distance alone cannot tell them apart — width can.
+    const text: any[] = [
+      shared(0, 'eyebrow', 100),
+      shared(1, 'title', 200),
+      shared(2, 'subtitle', 300),
+      { copyIndex: 3, role: 'body', x: 173, y: 400, width: 734, height: 60 },
+    ];
+    expect(snapDriftedTextBlocks(text)).toBe(0);
+    expect(text[3].x).toBe(173);
+  });
+
+  it('does nothing without a shared span to snap to', async () => {
+    const { snapDriftedTextBlocks } = await import('../src/studio/layout-generator-v3.js');
+    const text: any[] = [
+      { copyIndex: 0, role: 'title', x: 100, y: 100, width: 800, height: 60 },
+      { copyIndex: 1, role: 'body', x: 120, y: 200, width: 790, height: 60 },
+      { copyIndex: 2, role: 'footer', x: 140, y: 300, width: 780, height: 60 },
+      { copyIndex: 3, role: 'eyebrow', x: 160, y: 400, width: 770, height: 60 },
+    ];
+    expect(snapDriftedTextBlocks(text)).toBe(0);
+  });
+});
+
+describe('canvas margin balance', () => {
+  const layout = (over: any = {}) => ({
+    width: 1080,
+    height: 1080,
+    grid: { margin: 76, columns: 6, gutter: 20, baseline: 6 },
+    shapes: [],
+    text: [
+      { copyIndex: 0, role: 'eyebrow', x: 108, y: 76, width: 864, height: 40 },
+      { copyIndex: 1, role: 'footer', x: 108, y: 885, width: 864, height: 38 },
+    ],
+    ...over,
+  });
+
+  it('shifts the composition so the space above and below match', async () => {
+    const { balanceCanvasMargins } = await import('../src/studio/layout-generator-v3.js');
+    const l: any = layout(); // top 76, bottom 1080 - 923 = 157
+    expect(balanceCanvasMargins(l)).toBe(1);
+    const top = Math.min(...l.text.map((t: any) => t.y));
+    const bottom = l.height - Math.max(...l.text.map((t: any) => t.y + t.height));
+    expect(Math.abs(top - bottom)).toBeLessThanOrEqual(1);
+    expect(top).toBeGreaterThanOrEqual(l.grid.margin);
+  });
+
+  it('leaves an already balanced composition alone', async () => {
+    const { balanceCanvasMargins } = await import('../src/studio/layout-generator-v3.js');
+    const l: any = layout({
+      text: [
+        { copyIndex: 0, role: 'eyebrow', x: 108, y: 100, width: 864, height: 40 },
+        { copyIndex: 1, role: 'footer', x: 108, y: 940, width: 864, height: 40 },
+      ],
+    });
+    expect(balanceCanvasMargins(l)).toBe(0);
+  });
+
+  it('never lifts the composition above the grid margin', async () => {
+    const { balanceCanvasMargins } = await import('../src/studio/layout-generator-v3.js');
+    // Bottom-heavy the other way: content starts at 300 with only 40px below it.
+    const l: any = layout({
+      text: [
+        { copyIndex: 0, role: 'eyebrow', x: 108, y: 300, width: 864, height: 40 },
+        { copyIndex: 1, role: 'footer', x: 108, y: 1000, width: 864, height: 40 },
+      ],
+    });
+    balanceCanvasMargins(l);
+    expect(Math.min(...l.text.map((t: any) => t.y))).toBeGreaterThanOrEqual(l.grid.margin);
+  });
+
+  it('neither measures nor moves a full-bleed background', async () => {
+    const { balanceCanvasMargins } = await import('../src/studio/layout-generator-v3.js');
+    const l: any = layout({
+      shapes: [{ x: 0, y: 0, width: 1080, height: 1080, kind: 'rect', color: '#0A1628', role: 'panel' }],
+    });
+    expect(balanceCanvasMargins(l)).toBe(1);
+    expect(l.shapes[0].y).toBe(0);
   });
 });

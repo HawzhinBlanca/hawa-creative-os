@@ -15,7 +15,7 @@
   "shapes": [
     {
       "x": 988,
-      "y": 125,
+      "y": 149,
       "width": 3,
       "height": 1622,
       "kind": "rect",
@@ -26,7 +26,7 @@
     },
     {
       "x": 65,
-      "y": 547,
+      "y": 571,
       "width": 38,
       "height": 346,
       "kind": "rect",
@@ -37,7 +37,7 @@
     },
     {
       "x": 130,
-      "y": 1079,
+      "y": 1103,
       "width": 821,
       "height": 2,
       "kind": "line",
@@ -49,7 +49,7 @@
     },
     {
       "x": 65,
-      "y": 1488,
+      "y": 1512,
       "width": 886,
       "height": 250,
       "kind": "rect",
@@ -64,7 +64,7 @@
       "copyIndex": 0,
       "role": "eyebrow",
       "x": 130,
-      "y": 374,
+      "y": 398,
       "width": 821,
       "height": 67,
       "fontSize": 18,
@@ -81,7 +81,7 @@
       "copyIndex": 1,
       "role": "title",
       "x": 130,
-      "y": 547,
+      "y": 571,
       "width": 821,
       "height": 288,
       "fontSize": 61,
@@ -98,7 +98,7 @@
       "copyIndex": 2,
       "role": "subtitle",
       "x": 130,
-      "y": 912,
+      "y": 936,
       "width": 821,
       "height": 106,
       "fontSize": 27,
@@ -115,7 +115,7 @@
       "copyIndex": 3,
       "role": "body",
       "x": 130,
-      "y": 1142,
+      "y": 1166,
       "width": 821,
       "height": 250,
       "fontSize": 27,
@@ -131,9 +131,9 @@
     {
       "copyIndex": 4,
       "role": "footer",
-      "x": 103,
-      "y": 1570,
-      "width": 810,
+      "x": 130,
+      "y": 1594,
+      "width": 821,
       "height": 86,
       "fontSize": 18,
       "lineHeight": 1.4,
@@ -148,7 +148,7 @@
   ],
   "logo": {
     "x": 778,
-    "y": 125,
+    "y": 149,
     "width": 173,
     "height": 173
   },

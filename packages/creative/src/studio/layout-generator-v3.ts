@@ -411,8 +411,7 @@ export function scaleNormalizedLayoutToV2(
     };
   }
 
-  centerLoneTextInPanels(shapes, text);
-  centerSeparatorsInGaps(shapes, text);
+  normalizeLayoutGeometry({ shapes, text, height: canvasHeight, width: canvasWidth, grid: scaledGrid, logo });
 
   return {
     version: 2,
@@ -555,6 +554,127 @@ export function centerSeparatorsInGaps(shapes: ShapeElement[], text: TextElement
       s.y = g.centredY;
       moved++;
     }
+  }
+  return moved;
+}
+
+/** A block whose width is within this much of the shared measure counts as the same measure. */
+const MEASURE_MATCH_TOLERANCE_SHARE = 0.02;
+/** A span needs this many text blocks on it before it counts as the layout's shared measure. */
+const MEASURE_CONSENSUS_MIN = 3;
+
+/**
+ * Translates a text block back onto the span the rest of the layout shares, when that block has
+ * drifted rather than been given a measure of its own.
+ *
+ * The distinction is width, not distance. Across the eighteen T5 layouts, 22 text blocks sit off
+ * the shared span; 21 of them are 43px to 173px narrower or wider — nested bodies, full-bleed
+ * eyebrows, deliberate secondary measures — and the vision critique accepted every one. The
+ * twenty-second was a footer at 103..913 against its four neighbours' 130..951: the same width to
+ * within 11px, simply 27px out of position. That is the one the critique raised, and the only
+ * shape of defect this corrects. Distance thresholds cannot separate the two cases, because the
+ * drifted footer and the deliberate insets deviate by the same 27-38px.
+ */
+/** Below this share of canvas height, a top/bottom margin difference is not worth moving for. */
+const MARGIN_IMBALANCE_MIN_SHARE = 0.02;
+/** A shape this close to covering the canvas is a background, not composed content. */
+const FULL_BLEED_SHARE = 0.98;
+
+/**
+ * Shifts the whole composition so the space above it and below it match, when they differ enough
+ * to read as the design sitting high or low on the canvas.
+ *
+ * The generator places content from the top margin down and lets the remainder fall at the bottom,
+ * which left 157px under one footer against 76px above its eyebrow. The shift never takes the top
+ * element above the grid margin, so the margin stays a floor rather than an exact position, and
+ * full-bleed background shapes are neither measured nor moved because they have no margin.
+ */
+export function balanceCanvasMargins(
+  layout: Pick<StudioLayoutV2, 'height' | 'width' | 'grid' | 'text' | 'shapes'> & {
+    logo?: StudioLayoutV2['logo'];
+  },
+  opts: { minImbalanceShare?: number } = {}
+): number {
+  const minShare = opts.minImbalanceShare ?? MARGIN_IMBALANCE_MIN_SHARE;
+
+  const composed = layout.shapes.filter(
+    (sh) => !(sh.height >= layout.height * FULL_BLEED_SHARE && sh.width >= layout.width * FULL_BLEED_SHARE)
+  );
+  const boxes: Array<{ y: number; height: number }> = [
+    ...layout.text,
+    ...composed,
+    ...(layout.logo ? [layout.logo] : []),
+  ];
+  if (boxes.length === 0) return 0;
+
+  const top = Math.min(...boxes.map((b) => b.y));
+  const bottom = layout.height - Math.max(...boxes.map((b) => b.y + b.height));
+  const imbalance = bottom - top;
+  if (Math.abs(imbalance) < layout.height * minShare) return 0;
+
+  let shift = Math.round(imbalance / 2);
+  if (top + shift < layout.grid.margin) shift = layout.grid.margin - top;
+  if (shift === 0) return 0;
+
+  for (const b of boxes) b.y += shift;
+  return 1;
+}
+
+/**
+ * Runs the geometry normalisations in dependency order and is safe to run again: each pass is
+ * idempotent, and a later pass needs the earlier ones to have settled. Drifted blocks move first
+ * because their position defines the panels and gaps; a text block centred in its panel then
+ * changes the gaps a separator divides, so separators go last.
+ */
+export function normalizeLayoutGeometry(
+  layout: {
+    shapes: ShapeElement[];
+    text: TextElement[];
+  } & Partial<Pick<StudioLayoutV2, 'height' | 'width' | 'grid' | 'logo'>>
+): { drifted: number; textCentred: number; separators: number; marginBalanced: number } {
+  const drifted = snapDriftedTextBlocks(layout.text);
+  const textCentred = centerLoneTextInPanels(layout.shapes, layout.text);
+  const separators = centerSeparatorsInGaps(layout.shapes, layout.text);
+  // Balancing shifts the whole composition, so it runs last: it preserves every interval the
+  // passes above have just settled.
+  const marginBalanced =
+    layout.height && layout.width && layout.grid
+      ? balanceCanvasMargins(
+          layout as Pick<StudioLayoutV2, 'height' | 'width' | 'grid' | 'text' | 'shapes'> & {
+            logo?: StudioLayoutV2['logo'];
+          }
+        )
+      : 0;
+  return { drifted, textCentred, separators, marginBalanced };
+}
+
+export function snapDriftedTextBlocks(text: TextElement[]): number {
+  if (text.length < MEASURE_CONSENSUS_MIN + 1) return 0;
+
+  const spans = new Map<string, { left: number; right: number; count: number }>();
+  for (const t of text) {
+    const key = `${t.x}:${t.x + t.width}`;
+    const seen = spans.get(key);
+    if (seen) seen.count++;
+    else spans.set(key, { left: t.x, right: t.x + t.width, count: 1 });
+  }
+
+  let measure: { left: number; right: number; count: number } | null = null;
+  for (const span of spans.values()) {
+    if (!measure || span.count > measure.count) measure = span;
+  }
+  if (!measure || measure.count < MEASURE_CONSENSUS_MIN) return 0;
+
+  const measureWidth = measure.right - measure.left;
+  const tolerance = Math.max(12, measureWidth * MEASURE_MATCH_TOLERANCE_SHARE);
+
+  let moved = 0;
+  for (const t of text) {
+    if (t.x === measure.left && t.x + t.width === measure.right) continue;
+    if (Math.abs(t.width - measureWidth) > tolerance) continue; // its own measure, left alone
+    t.x = measure.left;
+    t.width = measureWidth;
+    moved++;
   }
   return moved;
 }
@@ -1080,7 +1200,12 @@ export async function generateLayoutCandidatesV3(
     throw new Error(`Expected at least 3 layout candidates, received ${rawCandidates?.length || 0}`);
   }
 
-  // Scale candidates server-side
+  // Scale candidates server-side. Deliberately no box-to-content fitting here: shrinking a text
+  // box around its centre leaves the ink exactly where it was, so it changes no visible pixel of
+  // the design (measured: ~6k of 1.17M pixels differ, purely 1px rounding of the baseline), while
+  // dropping the exemplar-calibrated negativeSpace metric from 0.95 to 0.27. The critique
+  // complaints it would have answered — "a shallow line within a 130px-high box" — are readings of
+  // the Set-of-Mark annotation drawn for the critique, not of anything the design shows.
   const scaledLayouts: StudioLayoutV2[] = rawCandidates.map((c) =>
     scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight)
   );

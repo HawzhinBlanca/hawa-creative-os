@@ -388,13 +388,88 @@ Artifacts: `P05_RECRITIQUE_FINAL/`, and `SPACING_FIX_LAYOUTS/` with `renders/`, 
 qualification proof set because these layouts were adjusted after generation rather than produced
 that way. Full suite: **1083 passed, 12 skipped, 0 failed** across 147 files.
 
-## 16. What remains
+## 16. The last groups: two fixed, one measured and rejected
+
+### 16.1 Drifted blocks — width tells a defect from a decision
+
+Across the eighteen layouts, 22 text blocks sit off the span the rest of the layout shares. My first
+attempt snapped by distance and moved 22 of them, which was wrong twice over: it translated blocks
+by their `x` and so dragged their opposite edge along, and it fired on deliberate insets.
+
+The distinction is width, not distance. 21 of the 22 are 43px to 173px narrower or wider — nested
+bodies, full-bleed eyebrows, secondary measures — and the critique accepted every one. The
+twenty-second was a footer at 103..913 against its neighbours' 130..951: the same width to within
+11px, simply 27px out of position. **No distance threshold can separate them**, because the drifted
+footer and the deliberate insets deviate by the same 27-38px. `snapDriftedTextBlocks` therefore
+moves a block only when its width already matches the shared measure. One correction across the
+eighteen layouts, and it is the one the critique raised.
+
+The logo is left out on purpose. `brief_18`'s logo overhangs the shared right edge by 38px, but a
+logo is an image with a fixed aspect ratio and no obligation to the text measure; translating it
+risks decentring it to satisfy a low-severity remark.
+
+### 16.2 Canvas margins — the composition no longer hugs the top
+
+The generator lays content from the top margin down and lets the remainder fall at the bottom,
+which left 157px under one footer against 76px above its eyebrow. `balanceCanvasMargins` shifts the
+whole composition so the two match, never lifting the top element above the grid margin, and
+neither measuring nor moving a full-bleed background. It runs last, so every interval the earlier
+passes settled is preserved.
+
+It corrects **9 of the 18** layouts, and the metrics endorse it: mean composite +0.0007, balance
++0.0072, negative space unchanged, and **no layout regresses**. Checked visually on the A4 document
+as well, the case most likely to suffer from being centred rather than top-anchored: it improves
+there too.
+
+### 16.3 Box-to-content fitting — implemented, measured, removed
+
+The critique twice complained of a "generous vertical allocation": a single 27px line inside a
+130px-high box. I implemented the obvious fix, and the measurements rejected it.
+
+Fitting every box shrank 80 of them and dropped the exemplar-calibrated negative-space metric from
+0.95 to 0.27, taking the composite from 0.957 to 0.889 on 17 of 18 layouts. Sweeping the threshold
+did not help: **every** threshold from 1.35x to 4.0x excess regressed the composite, down to 7
+boxes fitted at 4.0x and still −0.0112 mean, −0.062 worst.
+
+Then the decisive measurement. A box shrunk around its centre leaves the ink exactly where it was,
+so I rendered before and after: the images differ by about **6,000 pixels in 1.17 million**, an RMSE
+of 0.016 — the signature of a 1px rounding shift of the baseline and nothing else. The design is
+visually unchanged.
+
+Two conclusions follow. First, the fix cannot answer the complaint, because the complaint is about
+something the delivered design does not contain — the critique reads a Set-of-Mark **annotation**
+drawn over the render for its benefit, and the box outlines it is measuring are not in the output.
+Second, and more useful: **negativeSpace scores box geometry rather than visible whitespace.** A
+metric that moves 0.68 while the rendered design is visually identical is not measuring the design,
+and it carries 8% of the composite weight. That is the third defect found in this metric set, after
+the three literal PASS rows and the blindness to separator position. Re-weighting is not something
+to do unilaterally — it would move every threshold in the proof chain — so it is recorded here
+rather than changed.
+
+The function is removed rather than left exported and unwired, with the finding written where it
+stood so no one re-wires it without the measurements.
+
+### Where the normalisation pipeline now stands
+
+`normalizeLayoutGeometry` runs four passes in dependency order, each idempotent: drifted blocks
+snap first because their position defines the panels and gaps; a lone text block is then centred in
+its panel, which changes the gaps a separator divides; separators centre next; and the whole
+composition is balanced last so the settled intervals survive. Over the eighteen real layouts: 1
+drifted block, 10 text blocks centred, 24 separators, 9 compositions balanced, **0 residual
+asymmetric separators**, slot capacity intact on every layout, and every metric flat or improved.
+
+Full suite: **1090 passed, 12 skipped, 0 failed** across 147 files.
+
+## 17. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
 3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
 4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
-5. **The critique has not been re-run since the ellipse-accent fix.** It closed one of the 13, so the current figure should be 12; everything else in that pass still stands.
+5. **The critique has not been re-run since the last four fixes** — the ellipse accent, drifted blocks, canvas margins, and the removal of box fitting. Of the 13 it last reported, 3 were the margin complaints, 1 the drifted footer, 1 the ellipse, and 2-3 were the annotation-driven box remarks that are not output defects. What survives it has never seen.
+6. **Frame-internal padding (2 instances).** `balanceCanvasMargins` balances against the canvas; content inside a large frame shape is not balanced against the frame. Same class, one reference level down.
+7. **A vertical accent longer than the box it marks (1).** Changing an accent's length is a design decision rather than a centring one, so it is deliberately untouched.
+8. **negativeSpace measures box geometry, not visible whitespace** (16.3). It is 8% of the composite and can be moved 0.68 without changing a pixel. Fixing it means re-weighting, which moves every threshold in the proof chain.
 5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
 6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
 7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.
