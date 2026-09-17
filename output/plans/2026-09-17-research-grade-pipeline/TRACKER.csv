@@ -14,3 +14,12 @@ R1,ACCEPTED,2026-09-17,live billing probe upgraded to test configured production
 R2,ACCEPTED,2026-09-17,F04_THREE_PLANS_V2 all three fontPass true with Verdana body and display families
 DEPLOY,ACCEPTED,2026-09-17,deployed to production via deploy.sh --apply; HAWA_BUILD_COMMIT=3f226b4d2201b2f0a36b7992585bc08664c81ba6 matches HEAD; /v1/health verified healthy with live gpt-6-astra probe connected
 
+T0,ACCEPTED,2026-09-17,restore verified by lead: 1557 tasks / 77 plans / 47 bindings / 98 inbox / 134 studio calls; task 8c32c048 resolves; Sewa design DAHVWVDUOuA recovered; 79m18s loss stated honestly
+T1,ACCEPTED,2026-09-17,postgres_data now external:true so compose cannot recreate it
+T2,ACCEPTED,2026-09-17,HAWA_BUILD_COMMIT is a real commit again; DESIGN_PIPELINE_V3=off and DESIGN_STUDIO_V2=off
+T3,ACCEPTED,2026-09-17,caps enforced and announced at runtime by the cost governor: per-brief $1.00, office daily $30.00 (observed in the live run log)
+T4,ACCEPTED,2026-09-17,POOR_GRID_ALIGNMENT restored with threshold justified against the six exemplars; QA font clamp replaced by UNREADABLE_FONT_SIZE failure; metrics now describe what ships
+T5,IN_PROGRESS_LEAD_RUN,2026-09-17,lead is running the full multi-stage qualification; log confirms P05 vision critique, P07 order-swapped judge and a real degraded-canary judge per brief
+T6,REJECTED,2026-09-17,claims panel text resolves to gold/cream at >4.5:1; measured 1.20:1 (panel #162B48, glyphs #0E1C32, no gold or cream present); after-renders use undisclosed placeholder copy against real-copy before-renders; large voids remain
+T7,BLOCKED_ON_OWNER,2026-09-17,DESIGN_PIPELINE_V3_CHATS is unset and setting it means editing infra/docker/.env.production which is owner-only; also needs a real message sent from that chat
+T8,REJECTED,2026-09-17,blind pairs reuse the placeholder-copy T6 renders (hash d5cfbde=brief_05_after, 51eb70b=brief_01_after, 06c9800=brief_07_after) so the new-pipeline side is identifiable and the copy is dummy; 40 files where 20 expected (same images duplicated as A/B and L/R); must be regenerated from real-copy output
