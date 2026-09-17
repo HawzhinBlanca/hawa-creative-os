@@ -9,3 +9,4 @@ export * from './tournament.stage.js';
 export * from './canary.stage.js';
 export * from './qa.stage.js';
 export * from './transfer.stage.js';
+export * from './parity.stage.js';
