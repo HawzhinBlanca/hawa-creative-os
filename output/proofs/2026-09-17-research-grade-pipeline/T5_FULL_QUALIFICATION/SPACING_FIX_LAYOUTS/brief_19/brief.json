@@ -1,0 +1,40 @@
+{
+  "id": "brief_19_ckb_landscape169",
+  "name": "دیداری لوتکەی سەرۆک زانکۆکانی کوردستان",
+  "language": "ckb",
+  "width": 1920,
+  "height": 1080,
+  "sizeName": "Landscape 16:9",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "فەرمانگەی باڵای خوێندنی ئەکادیمی",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "دیداری لوتکەی سەرۆک زانکۆکان ٢٠٢٦",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "هەنگاوەکانی بەدەستهێنانی دانپێدانانی نێودەوڵەتی",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "کۆکردنەوەی تواناکان بۆ داڕشتنی ڕوانگەیەکی هاوبەش بەرەو پێشەنگی پەروەردەیی و زانستی لە ناوچەکەدا.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "هۆڵی کۆبوونەوەکانی KAAE • هەولێر • پەخشی ڕاستەوخۆ",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

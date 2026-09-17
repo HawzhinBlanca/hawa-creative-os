@@ -1,0 +1,40 @@
+{
+  "id": "brief_03_ckb_square",
+  "name": "ڕاگەیاندنی پێوەرەکانی دڵنیایی جۆری KAAE",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1080,
+  "sizeName": "Square",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "دەستەی باڵای متمانەبەخشین بە پەروەردە",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "پێوەرە نیشتمانییەکانی کوالیتی خوێندن",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "بەپێی یاسای ژمارە ٦ی ساڵی ٢٠٢٢",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "پێویستە هەموو کۆلێژ و زانکۆکان ڕاپۆرتی بەراوردکاری متمانەبەخشین ئامادە بکەن.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "هەولێر • ئەنجومەنی باڵا • kaae.gov.krd",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

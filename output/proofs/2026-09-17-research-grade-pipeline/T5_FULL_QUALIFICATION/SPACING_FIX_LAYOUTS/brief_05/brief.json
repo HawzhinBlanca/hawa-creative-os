@@ -1,0 +1,40 @@
+{
+  "id": "brief_05_en_portrait45",
+  "name": "KAAE Annual Accreditation Symposium 2026",
+  "language": "en",
+  "width": 1080,
+  "height": 1350,
+  "sizeName": "Portrait 4:5",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Kurdistan Accreditation Agency for Education",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Annual Accreditation Symposium 2026",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Advancing Academic Standards Across Kurdistan",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Join university chancellors and accreditation delegates for keynote sessions and national curriculum framework reviews.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Erbil International Conference Center • October 24, 2026 • 09:30 AM",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

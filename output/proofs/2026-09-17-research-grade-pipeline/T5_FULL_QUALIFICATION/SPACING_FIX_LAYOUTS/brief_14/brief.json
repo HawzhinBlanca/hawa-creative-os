@@ -1,0 +1,40 @@
+{
+  "id": "brief_14_en_a4doc",
+  "name": "National Quality Assurance Charter",
+  "language": "en",
+  "width": 1240,
+  "height": 1754,
+  "sizeName": "A4 Document",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Charter of Academic Excellence",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "National Quality Assurance Covenant",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Guiding Principles for Academic Autonomy and Rigor",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Signatory universities pledge strict institutional integrity, peer-reviewed assessment, and open educational data governance.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Council of Chancellors & Accrediting Commission • 2026",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

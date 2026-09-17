@@ -1,0 +1,40 @@
+{
+  "id": "brief_10_en_story916",
+  "name": "Research Grant & Faculty Recognition",
+  "language": "en",
+  "width": 1080,
+  "height": 1920,
+  "sizeName": "Story 9:16",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "Academic Innovation Directorate",
+      "role": "eyebrow",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 1,
+      "text": "Presidential Fellowship Awards",
+      "role": "title",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 2,
+      "text": "Honoring Distinguished Scholarly Research",
+      "role": "subtitle",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 3,
+      "text": "Recognizing peer-reviewed breakthroughs across engineering, medicine, and social sciences in Kurdistan.",
+      "role": "body",
+      "script": "latin"
+    },
+    {
+      "copyIndex": 4,
+      "text": "Applications open via KAAE Academic Registry",
+      "role": "footer",
+      "script": "latin"
+    }
+  ]
+}

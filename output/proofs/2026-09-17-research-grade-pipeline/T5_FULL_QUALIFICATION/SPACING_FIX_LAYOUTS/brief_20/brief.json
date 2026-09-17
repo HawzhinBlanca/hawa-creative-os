@@ -1,0 +1,40 @@
+{
+  "id": "brief_20_ckb_landscape169",
+  "name": "فۆڕمی پەیوەندییە نێودەوڵەتییەکان بۆ دڵنیایی جۆری",
+  "language": "ckb",
+  "width": 1920,
+  "height": 1080,
+  "sizeName": "Landscape 16:9",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "پەیمانگەی نێودەوڵەتیی کوالیتی پەروەردە",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "فۆڕمی نێودەوڵەتیی متمانەبەخشین",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پەرەپێدانی هاوبەشییە زانستییەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "بەشداریی شارەزایانی بیانی لە تاوتوێکردنی سیستەمی دڵنیایی جۆری زانکۆکانی هەرێمی کوردستان.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "هەولێر • تشرینی دووەمی ٢٠٢٦ • kaae.gov.krd",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

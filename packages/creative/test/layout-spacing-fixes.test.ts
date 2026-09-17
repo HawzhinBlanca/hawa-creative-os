@@ -392,3 +392,98 @@ describe('separator asymmetry detector', () => {
     expect(findAsymmetricSeparators(shapes, text)).toHaveLength(0);
   });
 });
+
+describe('separator boundaries: panels count, panel edges are intent', () => {
+  it('centres against a panel edge, not the text block behind it', async () => {
+    const { centerSeparatorsInGaps } = await import('../src/studio/layout-generator-v3.js');
+    // Body text ends at 794, a panel wraps it and ends at 827, the footer starts at 934.
+    // Centring against the text alone put the rule at 864 — dead centre of 794..934 and visibly
+    // lopsided, because a reader sees the panel edge at 827 as where the content ends.
+    const shapes: any[] = [
+      { x: 130, y: 643, width: 821, height: 184, kind: 'rect', color: '#162B48', role: 'panel' },
+      { x: 324, y: 864, width: 432, height: 1, kind: 'line', color: '#C5A059', role: 'rule' },
+    ];
+    const text: any[] = [
+      { copyIndex: 0, x: 173, y: 675, width: 734, height: 119, role: 'body' },
+      { copyIndex: 1, x: 108, y: 934, width: 864, height: 38, role: 'footer' },
+    ];
+    centerSeparatorsInGaps(shapes, text);
+    expect(shapes[1].y).toBe(880); // 827 + (107 - 1) / 2
+  });
+
+  it('leaves a rule flush with a panel top edge exactly where it is', async () => {
+    const { centerSeparatorsInGaps, findAsymmetricSeparators } = await import(
+      '../src/studio/layout-generator-v3.js'
+    );
+    // Every one of the seven residual cases in the T5 set was this: a panel's own top rule,
+    // sitting at 0px from the panel. Centring them pulled each one off its panel.
+    const shapes: any[] = [
+      { x: 76, y: 1067, width: 929, height: 155, kind: 'rect', color: '#162B48', role: 'panel' },
+      { x: 76, y: 1067, width: 929, height: 2, kind: 'line', color: '#C5A059', role: 'rule' },
+    ];
+    const text: any[] = [
+      { copyIndex: 0, x: 130, y: 830, width: 821, height: 149, role: 'body' },
+      { copyIndex: 1, x: 108, y: 1116, width: 864, height: 54, role: 'footer' },
+    ];
+    expect(centerSeparatorsInGaps(shapes, text)).toBe(0);
+    expect(shapes[1].y).toBe(1067);
+    expect(findAsymmetricSeparators(shapes, text)).toHaveLength(0);
+  });
+
+  it('still centres a rule that divides two text blocks inside a panel', async () => {
+    const { centerSeparatorsInGaps } = await import('../src/studio/layout-generator-v3.js');
+    // The panel contains the rule, so it is a container rather than a boundary.
+    const shapes: any[] = [
+      { x: 100, y: 100, width: 800, height: 600, kind: 'rect', color: '#162B48', role: 'panel' },
+      { x: 150, y: 260, width: 700, height: 2, kind: 'line', color: '#C5A059', role: 'rule' },
+    ];
+    const text: any[] = [
+      { copyIndex: 0, x: 150, y: 150, width: 700, height: 100, role: 'title' },
+      { copyIndex: 1, x: 150, y: 450, width: 700, height: 100, role: 'body' },
+    ];
+    centerSeparatorsInGaps(shapes, text);
+    expect(shapes[1].y).toBe(349); // 250 + (200 - 2) / 2
+  });
+});
+
+describe('lone text block centring inside a panel', () => {
+  const panel = { x: 100, y: 600, width: 800, height: 200, kind: 'rect', color: '#162B48', role: 'panel' };
+
+  it('centres a panel with exactly one text block in it', async () => {
+    const { centerLoneTextInPanels } = await import('../src/studio/layout-generator-v3.js');
+    const shapes: any[] = [{ ...panel }];
+    const text: any[] = [{ copyIndex: 0, x: 150, y: 640, width: 700, height: 100, role: 'body' }];
+    expect(centerLoneTextInPanels(shapes, text)).toBe(1);
+    expect(text[0].y).toBe(650); // 600 + (200 - 100) / 2
+  });
+
+  it('leaves a panel holding several blocks alone', async () => {
+    const { centerLoneTextInPanels } = await import('../src/studio/layout-generator-v3.js');
+    const shapes: any[] = [{ ...panel }];
+    const text: any[] = [
+      { copyIndex: 0, x: 150, y: 620, width: 700, height: 60, role: 'body' },
+      { copyIndex: 1, x: 150, y: 700, width: 700, height: 60, role: 'footer' },
+    ];
+    // Redistributing a stack is a composition decision, not a centring one.
+    expect(centerLoneTextInPanels(shapes, text)).toBe(0);
+    expect(text[0].y).toBe(620);
+  });
+
+  it('does not move a block onto another shape inside the same panel', async () => {
+    const { centerLoneTextInPanels } = await import('../src/studio/layout-generator-v3.js');
+    const shapes: any[] = [
+      { ...panel },
+      { x: 150, y: 645, width: 700, height: 20, kind: 'rect', color: '#C5A059', role: 'frame' },
+    ];
+    const text: any[] = [{ copyIndex: 0, x: 150, y: 690, width: 700, height: 100, role: 'body' }];
+    expect(centerLoneTextInPanels(shapes, text)).toBe(0);
+    expect(text[0].y).toBe(690);
+  });
+
+  it('leaves a block that is already centred', async () => {
+    const { centerLoneTextInPanels } = await import('../src/studio/layout-generator-v3.js');
+    const shapes: any[] = [{ ...panel }];
+    const text: any[] = [{ copyIndex: 0, x: 150, y: 650, width: 700, height: 100, role: 'body' }];
+    expect(centerLoneTextInPanels(shapes, text)).toBe(0);
+  });
+});

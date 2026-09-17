@@ -298,13 +298,60 @@ Verification output: `SPACING_FIX_VERIFICATION.txt`, reproducible with
 Coverage for all of the above: `packages/creative/test/layout-spacing-fixes.test.ts`, 13 tests.
 Full suite: **1074 passed, 12 skipped, 0 failed** across 147 files, and a clean repo typecheck.
 
-## 14. What remains
+## 14. The re-critique, and what it caught
+
+18 of 18, $0.481230, every cost recomputed and every provider id distinct. Run in the production
+image against the layouts with all fixes applied, so it measures the fixed state rather than the
+qualification's.
+
+**The ink fix is fully validated.** Comments naming the visible text sitting high in its box went
+from **7 to 0**. That class is gone.
+
+**The separator fix was wrong, and the critique is what proved it.** Eight of the 23 remaining
+comments named a rule or accent sitting unevenly, in wording like *"the rule sits 37px below B7 but
+69px above B5"*. B7 is a panel, and there lay the fault: the fix centred separators between *text
+blocks* only. In `brief_01` the footer rule was at dead centre of the gap between the body text
+(ending 794) and the footer (starting 934) — and visibly lopsided, because the panel's edge at 827
+is where a reader sees the content end. Panels now count as boundaries, which puts that rule at 880
+instead of 864.
+
+Worse, the first version of the fix **introduced a regression**, and the convergence check is what
+exposed it: after centring, 7 separators were still flagged asymmetric, which cannot happen if the
+fix is correct. All seven turned out to be sitting at exactly **0px** from a panel's top edge —
+panel top rules, deliberate design elements, not gap separators — and the fix had been pulling each
+one off its panel. A separator flush with a solid shape's edge is now left alone. With both
+corrections the pass converges: 9 genuinely lopsided separators found, 9 centred, **0 residual**,
+and the 7 panel rules untouched. 23 separators are repositioned across the eighteen layouts, down
+from the 31 the wrong version moved.
+
+**A third cluster, which the critique also named.** Five comments said a text block sits below the
+vertical centre of its panel — *"96px above and 77px below"*, *"65px above and 54px below"*.
+`centerLoneTextInPanels` centres a text block in the panel that contains it, but only when that
+panel holds exactly one block; redistributing a stack is a composition decision, and the move is
+skipped if it would land the block on another shape inside the panel. It corrects **10 of the 18
+layouts** — the critique's five were again a sample.
+
+What the critique's own count does not show: comments went 21 to 23 while the coarse defects
+disappeared, because the model moved on to finer observations — a 1px bounding-box overlap, two
+centres differing by 0.5px. Of the 23, eight were the separator-versus-panel fault now fixed, five
+were the panel-centring cluster now fixed, one was sub-pixel noise, and the rest are individually
+distinct: canvas bottom margin against top margin (3), a body box far larger than its content, a
+logo overhanging a shared right edge, a panel's horizontal inset against its vertical one.
+
+Artifacts: `P05_RECRITIQUE_ALL_FIXES/` with its ledger and annotated images;
+`SPACING_FIX_LAYOUTS/` with the normalised layouts and `renders/`, kept separate from the
+qualification proof set because these layouts were adjusted after the fact rather than generated
+this way. Full suite after all of it: **1081 passed, 12 skipped, 0 failed** across 147 files.
+
+Total re-critique spend across the three passes: $0.518080 + $0.261680 + $0.481230 = **$1.260990**.
+
+## 15. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
 3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
 4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
-5. **Re-critiquing on the fixed renders has not been paid for.** Both clustered defects are fixed, tested and measured, but the 21 surviving comments were raised against the pre-fix renders. A re-critique (~$0.5) would show what is left; the fixes themselves are verified without it.
+5. **The critique has not been re-run since the last three fixes.** The $0.48 pass measured the state before panels became separator boundaries, before panel-attached rules were exempted, and before lone text blocks were centred in their panels. The free detector converges to zero on all three, but the surviving comment set will have changed.
 5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
 6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
 7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.

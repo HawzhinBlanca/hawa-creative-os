@@ -1,0 +1,40 @@
+{
+  "id": "brief_04_ckb_square",
+  "name": "مۆڵەتی ئەکادیمی بەرنامەکانی خوێندنی باڵا",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1080,
+  "sizeName": "Square",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "کوالیتی خوێندنی باڵا و توێژینەوەی زانستی",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "دەستپێکی هەڵسەنگاندنی دامەزراوەیی",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "پێداچوونەوەی هاوتا نێودەوڵەتییەکان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "شاندی نێودەوڵەتی سەردانی زانکۆکانی هەرێم دەکەن بۆ دڵنیابوون لە شایستەیی خوێندن.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "حکومەتی هەرێمی کوردستان • KAAE",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

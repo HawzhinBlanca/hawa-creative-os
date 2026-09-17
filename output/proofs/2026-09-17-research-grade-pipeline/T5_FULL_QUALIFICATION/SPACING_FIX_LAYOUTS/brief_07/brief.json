@@ -1,0 +1,40 @@
+{
+  "id": "brief_07_ckb_portrait45",
+  "name": "کۆنفرانسی نیشتمانیی دڵنیایی جۆری ٢٠٢٦",
+  "language": "ckb",
+  "width": 1080,
+  "height": 1350,
+  "sizeName": "Portrait 4:5",
+  "copyBlocks": [
+    {
+      "copyIndex": 0,
+      "text": "دەستەی متمانەبەخشین بە دامەزراوەکانی پەروەردە",
+      "role": "eyebrow",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 1,
+      "text": "کۆنفرانسی نیشتمانیی دڵنیایی جۆری ٢٠٢٦",
+      "role": "title",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 2,
+      "text": "بەرەو بەرزکردنەوەی ئاستی زانستی لە زانکۆکانی کوردستان",
+      "role": "subtitle",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 3,
+      "text": "بانگهێشتی سەرجەم سەرۆک زانکۆکان و پسپۆڕانی پەروەردەیی دەکرێت بۆ بەشداریکردن لە شیکاری پێوەرە نێودەوڵەتییەکان.",
+      "role": "body",
+      "script": "arabic"
+    },
+    {
+      "copyIndex": 4,
+      "text": "هۆڵی سەعد عەبدوڵڵا، هەولێر • ٢٨ی تشرینی یەکەمی ٢٠٢٦",
+      "role": "footer",
+      "script": "arabic"
+    }
+  ]
+}

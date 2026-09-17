@@ -411,6 +411,7 @@ export function scaleNormalizedLayoutToV2(
     };
   }
 
+  centerLoneTextInPanels(shapes, text);
   centerSeparatorsInGaps(shapes, text);
 
   return {
@@ -450,46 +451,75 @@ export interface SeparatorGap {
   skew: number;
 }
 
+/** A separator within this distance of a solid shape's edge is treated as attached to it. */
+const EDGE_ATTACH_TOLERANCE_PX = 2;
+
+const isThinSeparator = (s: ShapeElement): boolean =>
+  s.width > 0 &&
+  s.height <= Math.max(6, s.width * 0.1) &&
+  (s.kind === 'line' || s.role === 'rule' || s.role === 'accent');
+
 /**
- * Finds every thin horizontal separator that sits clear inside a vertical gap between two text
- * blocks, and reports how lopsided it is. Read-only counterpart to `centerSeparatorsInGaps`.
+ * Finds every thin horizontal separator that sits clear inside a vertical gap, and reports how
+ * lopsided it is. Read-only counterpart to `centerSeparatorsInGaps`.
+ *
+ * Boundaries are text blocks *and* solid shapes such as panels and frames, because a reader reads
+ * the edge of a panel as the edge of the content. Centring only against text put a footer rule
+ * 37px below a panel and 69px above the footer text — dead centre between the two text blocks and
+ * visibly lopsided, which the vision critique kept raising. A shape that vertically contains the
+ * separator is a container, not a boundary, so a rule dividing two blocks inside a panel still
+ * centres against those blocks.
  */
 export function findSeparatorGaps(shapes: ShapeElement[], text: TextElement[]): SeparatorGap[] {
   const out: SeparatorGap[] = [];
   if (text.length < 2 || shapes.length === 0) return out;
 
-  const blocks = text.map((t) => ({
-    top: t.y,
-    bottom: t.y + t.height,
-    left: t.x,
-    right: t.x + t.width,
-  }));
-
   for (let i = 0; i < shapes.length; i++) {
     const s = shapes[i];
-    const thin = s.height <= Math.max(6, s.width * 0.1);
-    const separator = s.kind === 'line' || s.role === 'rule' || s.role === 'accent';
-    if (!thin || !separator || s.width <= 0) continue;
+    if (!isThinSeparator(s)) continue;
 
     const sTop = s.y;
     const sBottom = s.y + s.height;
     const overlapsHorizontally = (b: { left: number; right: number }) =>
       s.x < b.right && s.x + s.width > b.left;
 
+    const solids = shapes
+      .filter((o, j) => j !== i && !isThinSeparator(o))
+      .map((o) => ({ top: o.y, bottom: o.y + o.height, left: o.x, right: o.x + o.width }));
+
+    // A separator flush with a panel's edge is that panel's own rule, placed there on purpose.
+    // Every one of the seven residual cases in the T5 set was a panel top rule sitting at exactly
+    // 0px from its panel, and centring them pulled each one off its panel. They are left alone.
+    const attachedToSolidEdge = solids.some(
+      (o) =>
+        overlapsHorizontally(o) &&
+        (Math.abs(sTop - o.top) <= EDGE_ATTACH_TOLERANCE_PX ||
+          Math.abs(sBottom - o.top) <= EDGE_ATTACH_TOLERANCE_PX ||
+          Math.abs(sTop - o.bottom) <= EDGE_ATTACH_TOLERANCE_PX ||
+          Math.abs(sBottom - o.bottom) <= EDGE_ATTACH_TOLERANCE_PX)
+    );
+    if (attachedToSolidEdge) continue;
+
+    const boundaries = [
+      ...text.map((t) => ({ top: t.y, bottom: t.y + t.height, left: t.x, right: t.x + t.width })),
+      ...solids,
+    ];
+
     let above = -Infinity;
     let below = Infinity;
-    let straddlesText = false;
-    for (const b of blocks) {
+    let straddled = false;
+    for (const b of boundaries) {
+      if (b.top <= sTop && b.bottom >= sBottom) continue; // container, not a boundary
       if (b.bottom <= sTop) {
         if (overlapsHorizontally(b)) above = Math.max(above, b.bottom);
       } else if (b.top >= sBottom) {
         if (overlapsHorizontally(b)) below = Math.min(below, b.top);
       } else {
-        straddlesText = true;
+        straddled = true;
         break;
       }
     }
-    if (straddlesText || above === -Infinity || below === Infinity) continue;
+    if (straddled || above === -Infinity || below === Infinity) continue;
 
     const gap = below - above;
     if (gap <= s.height) continue;
@@ -516,6 +546,55 @@ export function centerSeparatorsInGaps(shapes: ShapeElement[], text: TextElement
       s.y = g.centredY;
       moved++;
     }
+  }
+  return moved;
+}
+
+/**
+ * Centres a text block vertically inside the panel that contains it, when that panel holds exactly
+ * one block. The generator routinely leaves the block low or high in its panel — "96px above and
+ * 77px below", "65px above and 54px below" — which the T5 re-critique raised five times over
+ * eighteen designs, and which no deterministic metric registers.
+ *
+ * Only a panel with exactly one text block inside it is touched. A panel holding several blocks is
+ * left alone, because redistributing a stack is a composition decision rather than a centring one,
+ * and the move is skipped if it would push the block onto another shape inside the same panel.
+ */
+export function centerLoneTextInPanels(shapes: ShapeElement[], text: TextElement[]): number {
+  let moved = 0;
+  for (const panel of shapes) {
+    if (isThinSeparator(panel) || panel.width <= 0 || panel.height <= 0) continue;
+
+    const panelTop = panel.y;
+    const panelBottom = panel.y + panel.height;
+    const inside = text.filter(
+      (t) =>
+        t.y >= panelTop &&
+        t.y + t.height <= panelBottom &&
+        t.x >= panel.x &&
+        t.x + t.width <= panel.x + panel.width
+    );
+    if (inside.length !== 1) continue;
+
+    const t = inside[0];
+    const target = Math.round(panelTop + (panel.height - t.height) / 2);
+    if (target === t.y || target < panelTop) continue;
+
+    // Anything else sitting inside this panel that the block must not land on.
+    const obstacles = shapes.filter(
+      (o) => o !== panel && o.y + o.height > panelTop && o.y < panelBottom
+    );
+    const collides = obstacles.some(
+      (o) =>
+        target < o.y + o.height &&
+        target + t.height > o.y &&
+        t.x < o.x + o.width &&
+        t.x + t.width > o.x
+    );
+    if (collides) continue;
+
+    t.y = target;
+    moved++;
   }
   return moved;
 }
