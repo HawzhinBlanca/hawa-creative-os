@@ -218,9 +218,11 @@ export async function encodeStudioTransferV2(
       bold: t.bold || false,
       italic: t.italic || false,
       margin: 0,
-      // The layout specifies a line height per block (clamped to 1.15-1.85); the deck used to
-      // ignore it and impose a fixed multiple, which reflowed text away from the raster.
-      lineSpacingMultiple: t.lineHeight || (isArabic ? 1.7 : 1.3),
+      // The line pitch in points, exactly as the raster sets it. A multiple ("1.3x") is read by
+      // PowerPoint and Canva against the font's own line height (about 1.33 em for Playfair
+      // Display), so every multi-line block drew ~30% looser than rendered and a box sized to the
+      // render clipped its last line (task b6621947, 2026-09-18: the title's third line cut off).
+      lineSpacing: Math.round(t.fontSize * (t.lineHeight || (isArabic ? 1.7 : 1.3)) * 0.75 * 100) / 100,
       breakLine: false,
       // Matches the raster, which centres the visible glyphs in the box. With 'top' the deck
       // and the preview disagreed on vertical placement in every block.

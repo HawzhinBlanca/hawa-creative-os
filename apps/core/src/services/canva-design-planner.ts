@@ -51,6 +51,27 @@ function loadConfirmedExemplars(): Array<{ label: string; sha256?: string; base6
 }
 
 /** Only explicit saved copy is eligible. Never substitute a marketing or template fallback. */
+const ENVELOPE_CLOSE:Record<string,string>={'(':')','[':']','{':'}','"':'"','\u201C':'\u201D','\u00AB':'\u00BB'};
+/**
+ * Copy the requester wrapped in brackets or quotes, with a remark after the closing mark:
+ * "( ...copy... ) make sure you do a new pro design" (task b6621947, 2026-09-18) put a lone "(" in
+ * the title and the remark in the footer. The marks are not copy and the remark is an instruction.
+ * Unwrapped only when the pair encloses more than one paragraph and what follows is one remark, so
+ * copy that merely starts with "(Draft)" or "(1)" is left exactly as written.
+ */
+export function unwrapCopyEnvelope(text:string):{copy:string;trailing:string} {
+  const s=String(text||'').trim(),open=s[0],close=ENVELOPE_CLOSE[open];
+  if(!close)return {copy:s,trailing:''};
+  let end=-1;
+  if(close===open){end=s.lastIndexOf(close);if(end===0)end=-1;}
+  else{let depth=0;for(let i=0;i<s.length;i++){if(s[i]===open)depth++;else if(s[i]===close&&--depth===0){end=i;break;}}}
+  if(end<0)return {copy:s,trailing:''};
+  const inner=s.slice(1,end).trim(),trailing=s.slice(end+1).trim();
+  // The pair wraps the copy only if it encloses more than one paragraph, and what follows is one remark.
+  if(!/\n\s*\n/.test(inner)||/\n\s*\n/.test(trailing))return {copy:s,trailing:''};
+  return {copy:inner,trailing};
+}
+
 export function savedDesignCopy(payload:any,description:string):{copy:string[];instructions:string} {
   const p=payload?.payload||payload||{},body=p.body||p;
   const raw:string=typeof p.rawRequestText==='string'?p.rawRequestText:description;
@@ -61,7 +82,9 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     if(explicit&&explicit!==instructions&&(explicit.includes('Operator Revision Directive:')||!instructions)){
       instructions=explicit;
     }
-    return {instructions,copy:raw.slice(divider.index+divider[0].length).split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean)};
+    const envelope=unwrapCopyEnvelope(raw.slice(divider.index+divider[0].length));
+    if(envelope.trailing)instructions=[instructions,envelope.trailing].filter(Boolean).join('\n');
+    return {instructions,copy:envelope.copy.split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean)};
   }
   const blocks=body.copyBlocks||p.exactCopy;
   if(Array.isArray(blocks)&&blocks.length&&blocks.every(b=>typeof b.text==='string'&&b.text.trim()))
