@@ -31,6 +31,8 @@ export interface CreativeBrief {
   imageryRationale: string;
   kurdishLeads: boolean;
   riskFlags: string[];
+  /** Brand-palette hex the client explicitly asked for as the background; '' when they did not. Absent on briefs before 2026-09-18. */
+  requestedBackground?: string;
 }
 
 export type Archetype =
@@ -143,6 +145,8 @@ export interface StageContext {
   ledger?: DesignStudioRepository;
   /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
   pipelineV3?: boolean;
+  /** The palette colour the client asked for as the background, applied to every layout in code. */
+  requestedBackground?: string;
 }
 
 export interface StageExecutionReceipt {

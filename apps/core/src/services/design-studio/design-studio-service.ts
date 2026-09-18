@@ -22,6 +22,13 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel } from '@hawa/domain';
+import { requestedBackgroundFor } from './stages/brief.stage.js';
+
+/** A run's stage record, whether the driver returned JSON or text. */
+const runStages = (run: { stages?: unknown }): Record<string, any> => {
+  if (typeof run.stages !== 'string') return (run.stages as Record<string, any>) || {};
+  try { return JSON.parse(run.stages); } catch { return {}; }
+};
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
 import { runsPipelineV3 } from '../chat-intake.js';
@@ -664,6 +671,7 @@ export class DesignStudioService {
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
+      requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
     };
   }
 
