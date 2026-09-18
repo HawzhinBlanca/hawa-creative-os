@@ -21,13 +21,18 @@ export const ASTER_PRIMARY_LOGO_SHA256 = 'sha256_aster_pharmacy_verified_b87a12'
  */
 export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {}): StudioOperation[] {
   const pageId = params.pageId || 'aster_healthcare_4x5';
-  const headlineCkb = params.headlineCkb || 'خزمەتگوزاری تەندروستی ٢٤ کاتژمێری لە دەرمانخانەی ئاستەر';
-  const headlineEn = params.headlineEn || '24/7 Professional Healthcare & Prescription Service';
-  const copyCkb = params.copyCkb || 'باشترین براندە جیهانییەکانی ڤیتامین و تەندروستی خێزان بە گەرەنتی کوالیتی سەردەمیانە';
-  const copyEn = params.copyEn || 'Trusted worldwide wellness & infant care · Licensed by KRG Ministry of Health';
-  const badgeText = params.badgeText || '🏥 تەندروستی و دەرمان · 24/7 CLINICAL CARE';
-  const discountText = params.discountText || 'داشکاندنی وەرزی: ٪٢٥ بۆ هەموو ڤیتامین و بەرهەمەکان';
-  const contactText = params.contactText || 'aster.krd · 066 455 1122 · هەولێر، شەقامی ١٠٠ مەتری، نزیک نەخۆشخانەی فریاکەوتن';
+  // Only copy the client sent is drawn. An empty slot is left out, never filled with sample text.
+  const sent = (text?: string) => (text?.trim() ? text : undefined);
+  const headlineCkb = sent(params.headlineCkb);
+  const headlineEn = sent(params.headlineEn);
+  const copyCkb = sent(params.copyCkb);
+  const copyEn = sent(params.copyEn);
+  const badgeText = sent(params.badgeText);
+  const discountText = sent(params.discountText);
+  const contactText = sent(params.contactText);
+  // The card holds one body: the Kurdish one when sent, otherwise the English one. The English
+  // body sits below the card only when both were sent.
+  const cardBody = copyCkb ?? copyEn;
 
   const ops: StudioOperation[] = [
     // 1. Vector 4:5 Clinical Emerald Backdrop with Medical Cross Geometry
@@ -84,8 +89,11 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
       height: 72,
       locked: true,
     },
-    // 3. Clinical Authority Badge (Top-Right)
-    {
+  ];
+
+  // 3. Clinical Authority Badge (Top-Right)
+  if (badgeText) {
+    ops.push({
       op: 'addText',
       nodeId: 'aster_authority_badge',
       pageId,
@@ -104,9 +112,12 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
         textAlign: 'right',
       },
       locked: true,
-    },
-    // 4. Primary Kurdish Headline (Sorani)
-    {
+    });
+  }
+
+  // 4. Primary Kurdish Headline (Sorani)
+  if (headlineCkb) {
+    ops.push({
       op: 'addText',
       nodeId: 'aster_headline_ckb',
       pageId,
@@ -125,29 +136,32 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
         lineHeight: 1.35,
       },
       locked: false,
-    },
-    // 5. English Subheading
-    {
+    });
+  }
+
+  // 5. English headline: a subheading under the Kurdish one, or the headline itself when alone
+  if (headlineEn) {
+    const alone = !headlineCkb;
+    ops.push({
       op: 'addText',
       nodeId: 'aster_headline_en',
       pageId,
       text: headlineEn,
-      role: 'subheading',
+      role: alone ? 'headline' : 'subheading',
       x: 80,
-      y: 380,
+      y: alone ? 220 : 380,
       width: 920,
-      height: 52,
-      style: {
-        fontSize: 24,
-        fontWeight: '600',
-        fontFamily: 'Montserrat, Inter, sans-serif',
-        fill: '#A7F3D0',
-        direction: 'ltr',
-      },
+      height: alone ? 140 : 52,
+      style: alone
+        ? { fontSize: 46, fontWeight: '800', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#FFFFFF', direction: 'ltr', lineHeight: 1.35 }
+        : { fontSize: 24, fontWeight: '600', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#A7F3D0', direction: 'ltr' },
       locked: false,
-    },
-    // 6. Clinical Discount / Offer Card
-    {
+    });
+  }
+
+  // 6. Offer Card, drawn only around copy
+  if (discountText || cardBody) {
+    ops.push({
       op: 'addVector',
       nodeId: 'aster_discount_card',
       pageId,
@@ -171,9 +185,12 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
       width: 920,
       height: 260,
       locked: true,
-    },
-    // 7. Discount / Clinical Text inside Card
-    {
+    });
+  }
+
+  // 7. Offer Text inside Card
+  if (discountText) {
+    ops.push({
       op: 'addText',
       nodeId: 'aster_discount_display',
       pageId,
@@ -191,30 +208,37 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
         direction: 'rtl',
       },
       locked: false,
-    },
-    // 8. Body Copy Sorani (Kurdish)
-    {
+    });
+  }
+
+  // 8. Body inside Card: Kurdish, or English when no Kurdish body was sent. It moves up into the
+  // offer line's place when there is none.
+  if (cardBody) {
+    ops.push({
       op: 'addText',
-      nodeId: 'aster_body_ckb',
+      nodeId: copyCkb ? 'aster_body_ckb' : 'aster_copy_en',
       pageId,
-      text: `\u2067${copyCkb}\u2069`,
+      text: copyCkb ? `\u2067${copyCkb}\u2069` : cardBody,
       role: 'body',
       x: 120,
-      y: 605,
+      y: discountText ? 605 : 520,
       width: 660,
-      height: 90,
+      height: discountText ? 90 : 175,
       style: {
         fontSize: 22,
         fontWeight: '500',
-        fontFamily: 'Noto Sans Arabic, sans-serif',
+        fontFamily: copyCkb ? 'Noto Sans Arabic, sans-serif' : 'Inter, sans-serif',
         fill: '#F1F5F9',
-        direction: 'rtl',
+        direction: copyCkb ? 'rtl' : 'ltr',
         lineHeight: 1.5,
       },
       locked: false,
-    },
-    // 9. English Regulatory / Ministry of Health Disclaimer
-    {
+    });
+  }
+
+  // 9. English body below the card, when the Kurdish body holds the card
+  if (copyCkb && copyEn) {
+    ops.push({
       op: 'addText',
       nodeId: 'aster_copy_en',
       pageId,
@@ -232,42 +256,12 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
         direction: 'ltr',
       },
       locked: false,
-    },
-    // 10. Secondary Clinical Pillars (Prescriptions, Vitamins, Diagnostics)
-    {
-      op: 'addVector',
-      nodeId: 'aster_pillars_bg',
-      pageId,
-      source: `
-        <svg width="920" height="240" viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg">
-          <g transform="translate(0, 0)">
-            <rect width="290" height="240" rx="18" fill="#064E3B" fill-opacity="0.4" stroke="#10B981" stroke-width="1.2"/>
-            <circle cx="145" cy="70" r="32" fill="#10B981" fill-opacity="0.2"/>
-            <text x="145" y="145" fill="#FFFFFF" font-family="Noto Sans Arabic, sans-serif" font-weight="700" font-size="20" text-anchor="middle">دەرمانی ڕەسەن</text>
-            <text x="145" y="180" fill="#94A3B8" font-family="Inter, sans-serif" font-size="14" text-anchor="middle">100% Genuine RX</text>
-          </g>
-          <g transform="translate(315, 0)">
-            <rect width="290" height="240" rx="18" fill="#064E3B" fill-opacity="0.4" stroke="#10B981" stroke-width="1.2"/>
-            <circle cx="145" cy="70" r="32" fill="#10B981" fill-opacity="0.2"/>
-            <text x="145" y="145" fill="#FFFFFF" font-family="Noto Sans Arabic, sans-serif" font-weight="700" font-size="20" text-anchor="middle">راوێژی پزیشکی</text>
-            <text x="145" y="180" fill="#94A3B8" font-family="Inter, sans-serif" font-size="14" text-anchor="middle">Expert Pharmacists</text>
-          </g>
-          <g transform="translate(630, 0)">
-            <rect width="290" height="240" rx="18" fill="#064E3B" fill-opacity="0.4" stroke="#10B981" stroke-width="1.2"/>
-            <circle cx="145" cy="70" r="32" fill="#10B981" fill-opacity="0.2"/>
-            <text x="145" y="145" fill="#FFFFFF" font-family="Noto Sans Arabic, sans-serif" font-weight="700" font-size="20" text-anchor="middle">گەیاندنی خێرا</text>
-            <text x="145" y="180" fill="#94A3B8" font-family="Inter, sans-serif" font-size="14" text-anchor="middle">Express Delivery</text>
-          </g>
-        </svg>
-      `.trim(),
-      x: 80,
-      y: 860,
-      width: 920,
-      height: 240,
-      locked: true,
-    },
-    // 11. Footer Clinical Contact Bar
-    {
+    });
+  }
+
+  // 10–11. Footer bar and contact line, drawn only with contact details the client sent
+  if (contactText) {
+    ops.push({
       op: 'addVector',
       nodeId: 'aster_footer_bg',
       pageId,
@@ -283,9 +277,8 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
       width: 920,
       height: 108,
       locked: true,
-    },
-    // 12. Footer Contact Text
-    {
+    });
+    ops.push({
       op: 'addText',
       nodeId: 'aster_contact_info',
       pageId,
@@ -303,8 +296,8 @@ export function buildAsterHealthcareTemplate(params: AsterHealthcareParams = {})
         direction: 'rtl',
       },
       locked: true,
-    },
-  ];
+    });
+  }
 
   return ops;
 }
