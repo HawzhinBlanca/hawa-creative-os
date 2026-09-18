@@ -23,6 +23,7 @@ import {
 import { checkCanvaPptx } from '@hawa/qa';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
+import { runsPipelineV3 } from '../chat-intake.js';
 import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult } from './types.js';
 import {
   runBriefStage,
@@ -42,6 +43,16 @@ import {
 export type Scope = { tenantId: string; actorId: string };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+/**
+ * Whether a run executes the v3 pipeline. The run's own record decides — it was fixed when the run
+ * was created, from the chat the task came from. The global flag is honoured too, which covers runs
+ * created before the decision was recorded.
+ */
+export function isPipelineV3Run(run: { request?: unknown }): boolean {
+  const request: any = typeof run?.request === 'string' ? JSON.parse(run.request) : run?.request;
+  return request?.pipelineV3 === true || process.env.DESIGN_PIPELINE_V3 === 'on';
+}
 
 export interface CreateStudioRunInput {
   width: number;
@@ -204,6 +215,11 @@ export class DesignStudioService {
 
     const taskCtx = await this.getTaskContext(s, taskId, params.width, params.height);
 
+    // Which pipeline a run uses is decided once, here, from the chat the task came from, and
+    // recorded on the run so every later stage and every resume agrees. The key is omitted rather
+    // than written false so a non-v3 run's request hash is unchanged from before it existed.
+    const pipelineV3 = runsPipelineV3(taskCtx.task.source?.sourceChannelId);
+
     const requestPayload = {
       width: params.width,
       height: params.height,
@@ -217,6 +233,7 @@ export class DesignStudioService {
       referenceHash: hash(JSON.stringify(taskCtx.reference)),
       logoSha256: hash(taskCtx.logo),
       logoAspect: taskCtx.logoAspect,
+      ...(pipelineV3 ? { pipelineV3: true } : {}),
     };
 
     const requestHash = hash(JSON.stringify(requestPayload));
@@ -640,6 +657,7 @@ export class DesignStudioService {
       exemplars,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
+      pipelineV3: isPipelineV3Run(run),
     };
   }
 
@@ -1209,7 +1227,7 @@ export class DesignStudioService {
         return this.handleBudgetExhaustion(s, run, ctx);
       }
 
-      if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+      if (ctx.pipelineV3) {
         const errorMsg = err.message || String(err);
         await this.repo.updateRunStatus(runId, s.tenantId, 'failed', {
           diagnostic: `Studio v3 failed at stage ${run.status}: ${errorMsg}`,
@@ -1284,9 +1302,9 @@ export class DesignStudioService {
    * Degradation ladder Rung 4: Studio stage fails after retries -> fallback to single-shot planner path.
    */
   private async executeRung4Fallback(s: Scope, run: any, reason: string): Promise<StudioResumeResult> {
-    if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+    if (isPipelineV3Run(run)) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
-        diagnostic: `Studio v3 failed: ${reason}. Legacy single-shot fallback is disabled under DESIGN_PIPELINE_V3=on.`,
+        diagnostic: `Studio v3 failed: ${reason}. Legacy single-shot fallback is disabled for v3 runs.`,
       });
       return {
         runId: run.id,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterAll, beforeAll, beforeEach } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { DesignStudioService, isPipelineV3Run } from '../src/services/design-studio/design-studio-service.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
@@ -215,11 +215,14 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     actorId: '00000000-0000-4000-b000-000000000001',
   };
 
-  const createTask = async (rawText = 'Keep title centered.\n---\nEXACT TITLE\n\nExact body text line. Never rewrite it.') => {
+  const createTask = async (
+    rawText = 'Keep title centered.\n---\nEXACT TITLE\n\nExact body text line. Never rewrite it.',
+    sourceChannelId = `isolated-test-${randomUUID().slice(0, 8)}`
+  ) => {
     const intake = await persistChatIntake(db, {
       platform: 'telegram',
       sourceEventId: randomUUID(),
-      sourceChannelId: `isolated-test-${randomUUID().slice(0, 8)}`,
+      sourceChannelId,
       clientId,
       title: '[TEST] Studio Task',
       rawText,
@@ -522,6 +525,57 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       expect(mockPlanner.generate).not.toHaveBeenCalled();
     } finally {
       process.env.DESIGN_PIPELINE_V3 = originalEnv;
+    }
+  }, 25000);
+
+  it('5c. a pilot chat runs v3 while the global flag is off; a chat off the list does not', async () => {
+    const originalFlag = process.env.DESIGN_PIPELINE_V3;
+    const originalChats = process.env.DESIGN_PIPELINE_V3_CHATS;
+    const pilotChat = `isolated-pilot-${randomUUID().slice(0, 8)}`;
+    process.env.DESIGN_PIPELINE_V3 = 'off';
+    process.env.DESIGN_PIPELINE_V3_CHATS = ` other-chat , ${pilotChat} `;
+
+    try {
+      const pilotTaskId = await createTask(undefined, pilotChat);
+      const otherTaskId = await createTask();
+
+      const service = new DesignStudioService(db, undefined, {
+        apiKey: 'test-key',
+        fetcher: createMockFetch(),
+        planner: { generate: vi.fn() } as unknown as CanvaDesignPlanner,
+        defaultTier: 'standard',
+        maxRetries: 0,
+      });
+
+      const pilot = await service.createOrGetRun(scope, pilotTaskId, `key-${randomUUID().slice(0, 16)}`, {
+        width: 1080,
+        height: 1350,
+        tier: 'standard',
+      });
+      const pilotRequest =
+        typeof pilot.run.request === 'string' ? JSON.parse(pilot.run.request) : pilot.run.request;
+      expect(pilotRequest.pipelineV3).toBe(true);
+      expect(isPipelineV3Run(pilot.run)).toBe(true);
+
+      const other = await service.createOrGetRun(scope, otherTaskId, `key-${randomUUID().slice(0, 16)}`, {
+        width: 1080,
+        height: 1350,
+        tier: 'standard',
+      });
+      const otherRequest =
+        typeof other.run.request === 'string' ? JSON.parse(other.run.request) : other.run.request;
+      expect(otherRequest.pipelineV3).toBeUndefined();
+      expect(isPipelineV3Run(other.run)).toBe(false);
+
+      // The decision is the run's, not the environment's: clearing the list afterwards does not
+      // move a pilot run off v3 halfway through.
+      process.env.DESIGN_PIPELINE_V3_CHATS = '';
+      expect(isPipelineV3Run(pilot.run)).toBe(true);
+    } finally {
+      if (originalFlag === undefined) delete process.env.DESIGN_PIPELINE_V3;
+      else process.env.DESIGN_PIPELINE_V3 = originalFlag;
+      if (originalChats === undefined) delete process.env.DESIGN_PIPELINE_V3_CHATS;
+      else process.env.DESIGN_PIPELINE_V3_CHATS = originalChats;
     }
   }, 25000);
 

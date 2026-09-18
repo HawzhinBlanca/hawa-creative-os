@@ -44,7 +44,6 @@ function canonicalStringify(obj: any): string {
   return '{' + keys.map(k => JSON.stringify(k) + ':' + canonicalStringify(obj[k])).join(',') + '}';
 }
 
-/** Commit the verified original event and its task before broadcasting or acknowledging. */
 /**
  * Whether a chat is on the v3 pilot list, from DESIGN_PIPELINE_V3_CHATS.
  *
@@ -64,6 +63,22 @@ export function isV3PilotChat(
     .includes(sourceChannelId.trim());
 }
 
+/**
+ * Whether work from this chat runs the v3 pipeline: every chat when DESIGN_PIPELINE_V3 is on,
+ * otherwise only chats on the pilot list.
+ *
+ * Enrolling a chat used to route it into the studio and stop there — the studio's v3 branches read
+ * the global flag, so a pilot chat silently ran v2, and the only way to get v3 at all was to switch
+ * it on for every chat at once. The studio now records this decision on the run when it is created.
+ */
+export function runsPipelineV3(
+  sourceChannelId: string | undefined | null,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return env.DESIGN_PIPELINE_V3 === 'on' || isV3PilotChat(sourceChannelId, env.DESIGN_PIPELINE_V3_CHATS);
+}
+
+/** Commit the verified original event and its task before broadcasting or acknowledging. */
 export async function persistChatIntake(db: Kysely<Database>, input: ChatIntake) {
   const tenantId = input.tenantId || '00000000-0000-4000-a000-000000000001';
   // Channel messages are written by the Channel Ingress service identity, never by a person (ADR-027).

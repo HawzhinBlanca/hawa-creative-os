@@ -256,7 +256,7 @@ export async function runLayoutsStage(
   concepts: Concept[],
   existingCandidates?: Array<{ id: string; ordinal: number }>
 ): Promise<CandidateState[]> {
-  if (process.env.DESIGN_PIPELINE_V3 === 'on') {
+  if (ctx.pipelineV3) {
     try {
       const copyBlockSlots: CopyBlockSlotInput[] = ctx.copyBlocks.map((b, i) => {
         const roleEntry = brief.roles?.find((r) => r.copyIndex === i);

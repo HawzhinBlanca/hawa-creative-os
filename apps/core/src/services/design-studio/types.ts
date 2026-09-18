@@ -141,6 +141,8 @@ export interface StageContext {
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider | GeminiImageProvider;
   ledger?: DesignStudioRepository;
+  /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
+  pipelineV3?: boolean;
 }
 
 export interface StageExecutionReceipt {
