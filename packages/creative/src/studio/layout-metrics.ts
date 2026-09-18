@@ -67,14 +67,26 @@ export function computeLayoutMetrics(
     edgesX.push(el.x, el.x + el.width);
   }
 
+  // An element centred on the canvas axis, or on another element's centre, is aligned: that is
+  // how a centred composition aligns. Counting edges only, this gate rejected three of the owner's
+  // six confirmed exemplars (0.542, 0.600, 0.667 against 0.70) and 13 of the 20 production-model
+  // qualification designs, while the deliberately off-grid fixture still fails with centres
+  // counted (0.600). Its 0.70 threshold was justified on the v3 alignment metric's exemplar scores
+  // (0.792–1.000), which is a different measure; with centres counted, this one agrees with them.
+  const centresX = allElements.map((el) => el.x + el.width / 2);
+  const centred = centresX.map(
+    (c, k) => Math.abs(c - width / 2) <= threshold || centresX.some((o, j) => j !== k && Math.abs(o - c) <= threshold)
+  );
+
   // Check alignment of each edge
   let alignedEdges = 0;
   for (let i = 0; i < edgesX.length; i++) {
     const x = edgesX[i];
-    let isAligned = false;
+    let isAligned = centred[Math.floor(i / 2)];
 
     // Check against grid lines
     for (const gx of gridLinesX) {
+      if (isAligned) break;
       if (Math.abs(x - gx) <= threshold) {
         isAligned = true;
         break;
