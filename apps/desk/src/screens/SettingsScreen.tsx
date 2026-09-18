@@ -471,16 +471,16 @@ export const SettingsScreen: React.FC = () => {
 
               <div>
                 <label htmlFor="gemini-api-key-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  Google Gemini API Key (Optional override for Workspace ADC)
+                  Google Gemini API Key
                 </label>
                 <input
                   id="gemini-api-key-input"
                   name="geminiApiKey"
-                  aria-label="Google Gemini API Key (Optional override for Workspace ADC)"
+                  aria-label="Google Gemini API Key"
                   type="password"
                   className="input"
                   style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder="AIza... (Leave blank to use qualified Google ADC)"
+                  placeholder={keyIsSet('gemini') ? '••••••••••••••••••••• (configured)' : 'AIza...'}
                   value={keysForm.geminiApiKey}
                   onChange={(e) => setKeysForm({ ...keysForm, geminiApiKey: e.target.value })}
                 />

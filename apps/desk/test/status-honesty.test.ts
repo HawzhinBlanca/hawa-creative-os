@@ -118,7 +118,13 @@ describe('screens show nothing invented before Core has answered', () => {
     const html = renderToStaticMarkup(React.createElement(SettingsScreen));
     expect(html).toContain('checking…');
     expect(html).toContain('Check webhook');
-    expect(html).not.toMatch(/hawdesign_official_bot|Workspace ADC<\/span>: Active|hawzhin88|Test webhook|Fallback Engine|token configured/);
+    expect(html).not.toMatch(/hawdesign_official_bot|\bADC\b|hawzhin88|Test webhook|Fallback Engine|token configured/);
+  });
+
+  it('no Desk source claims Google ADC or names an account, modals included', () => {
+    // Nothing in Core uses Application Default Credentials; Gemini is configured by GEMINI_API_KEY only.
+    const offenders = sourceFiles(DESK_SRC).filter((file) => /\bADC\b|hawzhin88/.test(fs.readFileSync(file, 'utf8')));
+    expect(offenders.map((f) => path.relative(DESK_SRC, f))).toEqual([]);
   });
 
   it('Ops starts with no counts, no sample budgets and no invented component health', () => {
@@ -133,6 +139,9 @@ describe('screens show nothing invented before Core has answered', () => {
     expect(html).not.toMatch(/134|\$0\.012|60 cases|% pass</);
     const cards = html.slice(html.indexOf('<div class="score"'), html.indexOf('cases passed</span>'));
     expect(cards.match(/<b>(.*?)<\/b>/g)).toEqual(['<b>—</b>', '<b>—</b>', '<b>—</b>', '<b>—</b>']);
+    // Core returns no admission-gate results, so the screen admits no model.
+    expect(html).toContain('Not reported. Core does not return admission-gate results');
+    expect(html).not.toMatch(/passed all admission gates|Gemini 3\.8 Flash|GPT-5\.6 Sol/);
 
     expect(statsFromReport(undefined)).toEqual({ copyGuard: '—', recall: '—', overall: '—', testsPassed: null, totalTests: null });
     expect(statsFromReport({

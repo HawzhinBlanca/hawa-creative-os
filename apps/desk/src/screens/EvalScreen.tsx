@@ -527,13 +527,11 @@ export const EvalScreen: React.FC = () => {
             </table>
           )}
 
+          {/* Core reports no admission-gate results, so no model is shown as admitted here. */}
           <h3 style={{ marginTop: 20, fontSize: 13 }}>Admission Status</h3>
-          <div className="finding" style={{ background: '#f2f8f4', borderColor: '#4d9d69' }}>
-            <b style={{ color: '#1d733c' }}>Gemini 3.8 Flash & GPT-5.6 Sol passed all admission gates</b>
-            <p style={{ margin: '4px 0 0', fontSize: 12 }}>
-              100% protected token preservation, zero hallucinated facts, zero hard QA rule overrides, and verified Sorani Kurdish missing-information detection.
-            </p>
-          </div>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
+            Not reported. Core does not return admission-gate results, so this screen shows no model as admitted.
+          </p>
         </div>
       </div>
 
