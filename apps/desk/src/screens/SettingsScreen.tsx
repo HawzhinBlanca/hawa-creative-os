@@ -363,16 +363,20 @@ export const SettingsScreen: React.FC = () => {
         <div className="panel" style={{ padding: 16 }}>
           <h2>Model registry</h2>
           <div className="rule">
-            <b>fast_router & brief_builder</b>
-            <p>Gemini 3.8 Flash (Primary) / Claude Sonnet 5 · exact snapshot 2026-09-03</p>
+            <b>Reasoning, layout, critique & judge</b>
+            <p>gpt-6-astra · every studio stage and the Telegram planner · ADR-030</p>
           </div>
           <div className="rule">
-            <b>creative_director</b>
-            <p>GPT-5.6 Sol (Primary) / GPT-4.1 · creator/judge separation active · discrete editable nodes</p>
+            <b>Artwork</b>
+            <p>gpt-image-2.5-sunburst · only when a concept asks for generated imagery; zero image calls otherwise</p>
           </div>
           <div className="rule">
-            <b>visual_judge (advisory)</b>
-            <p>Claude Opus 5 (Advisory) / Gemini 3.8 Flash · independent model family · cannot waive hard QA</p>
+            <b>Voice notes</b>
+            <p>whisper-1 · transcription of Telegram voice messages</p>
+          </div>
+          <div className="rule">
+            <b>Other providers</b>
+            <p>Anthropic and Google models are disabled in production and fail closed before any network call · deterministic hard QA cannot be waived by a model</p>
           </div>
 
           <h3 style={{ marginTop: 24 }}>Upstream locks</h3>
