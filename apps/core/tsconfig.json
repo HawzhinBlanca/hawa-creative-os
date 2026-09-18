@@ -12,7 +12,9 @@
     { "path": "../../packages/creative" },
     { "path": "../../packages/qa" },
     { "path": "../../packages/observability" },
-    { "path": "../../packages/testkit" }
+    { "path": "../../packages/testkit" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/evals" }
   ],
   "include": ["src/**/*"]
 }

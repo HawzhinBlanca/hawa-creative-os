@@ -9,7 +9,9 @@
     { "path": "../domain" },
     { "path": "../qa" },
     { "path": "../retrieval" },
-    { "path": "../testkit" }
+    { "path": "../testkit" },
+    { "path": "../integrations" },
+    { "path": "../creative" }
   ],
   "include": ["src/**/*"]
 }
