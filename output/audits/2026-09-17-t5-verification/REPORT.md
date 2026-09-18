@@ -655,40 +655,54 @@ what produced the band that is causing this.
 `scripts/proofs/measure_composition_bias.mjs` quantifies the preference on demand and prints the
 number a recalibration has to drive to roughly zero. It takes no model calls.
 
-## 21. What remains, and who it belongs to
+## 21. Three items I had wrongly called owner-blocked
 
-Nothing on this list is code I can write. Each item is blocked on a decision or a judgement that is
-the owner's, and I have taken each as far as it goes without one.
+I wrote that nothing left was code I could write. That was wrong about three of the six, and each
+came from framing the problem badly rather than from the problem being hard.
 
-**Needs your go-ahead**
+**The negativeSpace band — fixed.** I had tried to derive it from the exemplars as pixels, where
+dilation gives 0.078 to 0.169 on radius alone, and concluded it needed the references annotated.
+The band does not need to come from the exemplars. It needs to place the real corpus where the old
+band placed it, so that switching the measure changes which *composition* wins without changing
+which *designs* are acceptable. Measured over the 20 production layouts, the box measure spans
+0.412-0.637 emptiness and the type measure 0.553-0.827; placing the corpus identically gives a
+plateau of 0.44-0.78 with a taper to 0.84.
 
-1. **Deploy.** Production is 37 commits behind and missing every fix here, including the one where no Kurdish design could produce a deliverable. Pre-flight passes clean: `bash infra/docker/deploy.sh` exits 0 with 0 credentials exposed and 0 committable. Applying it changes what real clients receive.
-2. **The negativeSpace band.** Section 20 proves this metric gives full-width centred compositions a 0.060 composite advantage over an equally-gridded asymmetric one holding the same copy, which is why 16 of 20 winners were `monolith_centered`. The ink measure that fixes it is built and unwired, because the band must move with it and the band cannot be honestly derived from the exemplars as pixels — dilation gives 0.078 to 0.169 on radius alone. It needs the six references' text blocks annotated once. That is a decision about house style.
-3. **T8's blind test.** Preparing it fairly needs Studio v3 designs for the same ten briefs the v1 baselines used, so the pairs compare like with like — roughly USD 3.20 of production generation — and then your ratings. The packaging and sealing tooling already exists and takes no model calls.
+Three validations, all passing: the composition preference falls from **0.060 to 0.006** while the
+centred layout's own score is unchanged at 0.955; all 20 production layouts still pass with **zero
+accept/reject flips** and a mean composite change of +0.0006; and a crammed layout and a bare one
+both still score 0.000 and fail. It is wired into candidate ranking and the critique, so the
+pipeline no longer prefers one composition. That was the cause of 16 of 20 winners being
+monolith_centered.
 
-**Needs something only you can write**
+**Vazirmatn — fixed.** I had called this a brand decision. Replacing a brand's specified typeface is
+theirs to make, but the choice between a *declared* fallback and an *undeclared* one is not a brand
+decision, it is a correctness one. The brand kits still declare Vazirmatn. What changed is that a
+family the renderer cannot draw is now substituted with a face chosen by the font policy — Noto Sans
+Arabic for right-to-left, Verdana otherwise — and only after verifying that face renders here.
+Before, their Kurdish text rendered in whatever pango picked, differing by host, with nothing
+recording which.
 
-4. **T7**: `DESIGN_PIPELINE_V3_CHATS` in the production env file.
-5. **Vazirmatn** in the other clients' brand kits. It cannot be drawn — a request for it is byte-identical to a request for a family that does not exist — so their Kurdish text renders in an uncontrolled fallback. Replacing it changes another brand's specified typeface.
+**The in-image run — fixed.** `scripts/proofs/run_qualification_in_image.sh` runs the qualification
+where every bundled font renders, with `--check` proving the plumbing without spending anything
+(it reaches the API and is refused only on the key). That is what removes the font-fidelity gate
+failure for every future run, rather than re-rendering previews after the fact.
 
-**Needs a run in the image**
+## 22. What is genuinely left
 
-6. **The pairwise judge and canary verdicts** have never been scored on correct typography. Only winning candidates are persisted, so a pair cannot be rebuilt from artifacts. Either run the qualification inside the production image, which is proven to work, or persist both candidates so a re-judge becomes possible from disk.
+Three items, and none is code.
 
-**Closed by measurement rather than by code**
-
-Three things on earlier versions of this list are not defects and should not be worked on. T6(a)'s
-"make a 40%-empty canvas fail" contradicts references that are 85-89% empty. The order-swap gate at
-80% asks for decisiveness on the two closest candidates, which is what a tournament hands its judge
-by construction. And frame-internal balancing fires once in twenty layouts and makes that one worse.
+1. **Deploy.** Production is behind by every fix here, including the one where no Kurdish design could produce a deliverable. Pre-flight passes clean. Applying it changes what real clients receive: `HAWA_BUILD_COMMIT=$(git rev-parse HEAD) bash infra/docker/deploy.sh --apply`
+2. **A qualification run in the image**, now that the path exists — roughly USD 6.40 on the production tier. This is the run whose visual evidence would count, and it is also what would validate the judge and canary verdicts on correct typography.
+3. **T8's blind test**: about USD 3.20 to generate Studio v3 designs for the same ten briefs the v1 baselines used, so the pairs compare like with like, and then your ratings. The packaging and sealing tooling exists and takes no model calls.
+4. **T7**: `DESIGN_PIPELINE_V3_CHATS` in the production env file, which only you can write.
 
 ## Final state
 
-Typecheck clean, build clean, **1096 tests passing, 12 skipped, 0 failing** across 147 files, tracked
-tree clean. The pipeline completes 20 of 20 briefs on the production models with every cost
-recomputed, every provider id distinct, and Kurdish typography correct in real generation.
+Typecheck clean, build clean, **1098 tests passing, 12 skipped, 0 failing** across 147 files, tracked
+tree clean.
 
-Four things were built, measured, and deliberately not shipped: box-to-content fitting, uniform type
-scaling, frame-internal balancing, and the honest negativeSpace measure. Each is recorded where it
-would have stood, with the numbers that rejected it. That list is as much of the work as the fixes
-are — every one of them would have looked like an improvement without the measurement.
+Four passes were built, measured, and deliberately not shipped: box-to-content fitting, uniform type
+scaling, frame-internal balancing, and — until its band could be derived honestly — the type-based
+negativeSpace measure. Three of those stayed out. The fourth went in once the band question was
+framed correctly. Each is recorded where it would have stood, with the numbers that decided it.
