@@ -4,6 +4,8 @@ import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
 import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
+import { captureForReview } from '../services/canvaCapture.js';
+import { reasonOf } from '../services/statusReport.js';
 
 export interface LiveTask {
   id: string;
@@ -306,56 +308,20 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     } finally { setActionLoading(false); }
   };
 
-  // Primary Action 2: Capture for review (FR-078, CV-13, CV-14)
+  // Primary Action 2: Capture for review (FR-078). Core exports the linked Canva design as PNG, then
+  // validates, hashes and stores it. No QA runs and no revision is created, so the task's status and
+  // QA result are whatever Core reports afterwards; nothing is set locally.
   const handleCaptureForReview = async () => {
     if (!selectedTask) return;
+    const taskId = selectedTask.id;
     setActionLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 400));
-      const newRevVersion = (selectedTask.latestRevision?.version || 1) + 1;
-      const newRevId = `rev_${selectedTask.id}_v${newRevVersion}`;
-      const newHash = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      const updatedTask: LiveTask = {
-        ...selectedTask,
-        status: 'AWAITING_APPROVAL',
-        latestRevisionId: newRevId,
-        latestRevision: {
-          id: newRevId,
-          version: newRevVersion,
-          previewUrl: selectedTask.latestRevision?.previewUrl || '/assets/sample_kaae_preview.png',
-          sha256: newHash,
-          byteSize: 1890400,
-          dimensions: { width: 1080, height: 1350 },
-          format: 'PNG (24-bit RGB) + PDF Print',
-          createdAt: new Date().toISOString(),
-        },
-        qaReport: {
-          passed: true,
-          bidiIsolation: true,
-          safeMargins: true,
-          contrastCompliant: true,
-          fontCoverage: true,
-          errors: [],
-        },
-        history: [
-          ...(selectedTask.history || []),
-          {
-            id: `h_${Date.now()}`,
-            type: 'capture',
-            actor: 'Operator',
-            summary: `Captured immutable revision v${newRevVersion} from Canva (SHA: ${newHash.slice(0, 10)}...)`,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
-      showToast(`Captured Revision v${newRevVersion} successfully. Automated QA preflight passed.`, 'success');
-    } catch (err: any) {
-      showToast(`Capture failed: ${err.message || 'Server error'}`, 'error');
+      const outcome = await captureForReview(apiClient.canva, taskId, { key: crypto.randomUUID() });
+      showToast(outcome.text, outcome.tone);
+      const refreshed = await apiClient.tasks.get<LiveTask>(taskId).catch(() => null);
+      if (refreshed) setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...refreshed } : t)));
+    } catch (err) {
+      showToast(`Nothing captured: ${reasonOf(err)}`, 'error');
     } finally {
       setActionLoading(false);
     }
@@ -469,7 +435,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return {
         pill: 'IN DESIGN',
         pillClass: 'pill-progress',
-        message: 'Design work is in progress. Native capture is not connected; review and release remain blocked.',
+        message: 'Design work is in progress. Capture for Review stores a PNG export of the linked Canva design; it runs no QA and approves nothing.',
         primaryButton: 'capture',
       };
     }
@@ -872,7 +838,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     className="action-btn capture-btn"
                     onClick={handleCaptureForReview}
                     disabled={actionLoading}
-                    title="Capture immutable release package and run automated QA checks (FR-078)"
+                    title="Export the linked Canva design as PNG and store it, hashed, as review evidence. QA and approval are separate (FR-078)"
                   >
                     <span className="btn-icon" aria-hidden="true">📸</span>
                     <span>Capture for Review</span>
