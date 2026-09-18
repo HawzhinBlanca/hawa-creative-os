@@ -1,0 +1,172 @@
+# P10 Full Qualification Report: 20 Held-Out Briefs (Multi-Stage Live Run)
+
+**Briefs attempted:** 20 · **completed:** 20 · **failed:** 0
+
+Verdict: **FAIL** — all 20 briefs completed but at least one gate was not met.
+
+> Rates below are computed over the 20 completed briefs. A partial run is reported as partial and does NOT constitute a qualification pass.
+
+## 1. Headline Results & Comparative Benchmarks
+
+| Metric | Target / Published Benchmark | Pipeline Result (Multi-Stage Live Run) | Status |
+| :--- | :--- | :--- | :--- |
+| **Total Model Calls Recorded** | 5 calls x 20 completed briefs = 100 | **100 calls** | **PASS** |
+| **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **100.0%** (20/20) | **PASS** |
+| **Median Cost per Brief** | USD 0.380 (Published Comparison) | **$0.316824** | **PASS** |
+| **Canary Win Rate (Real Judge)** | >= 95.0% of completed briefs | **100.0%** (20/20) | **PASS** |
+| **Order-Swap Consistency** | >= 80.0% | **75.0%** (15/20) | **FAIL** |
+| **Mean Composite Score** | Measured Mean Score | **0.961** | **PASS** |
+| **Canva Copy & Font Checks**| >= 90.0% of completed briefs | **100.0%** (20/20) | **PASS** |
+| **Hard-QA Escapes** | Exactly 0 | **0** | **PASS** |
+| **Distinct Skeletons** | No published threshold | **2 distinct archetypes** over 20 briefs (monolith_centered=16, hero_statement_grid=4) | **MEASURED** |
+| **Editability Rate** | 100.0% Verified Mutation Test | **100.0%** (20/20) | **PASS** |
+| **Font Fidelity (measured at render)** | Every specified family renders exactly | **10/20 briefs rendered with a substituted face — Cinzel, Playfair Display** | **FAIL** |
+
+> The **Distinct Skeletons** row has no numeric target in the published literature, so it is reported as measured rather than scored. The per-brief `distinct_skeleton` column in the CSV compares a brief only against the one dispatched immediately before it and is order-dependent under parallel batches; the archetype set size above is the diversity figure to read.
+> **Hard-QA escapes** are counted as briefs marked print-ready while any of the geometric, readability, asset-integrity or copy-exactness checks failed.
+> This run exercises the layout, critique and judge stages. No image-generation call is made, so the cost figures above are text-model costs only and do not include the art lane.
+> **Font fidelity** is measured by rasterising a probe in each family and in a family that cannot exist: identical output means the renderer substituted a fallback face. `fc-match` is not a valid check, because it resolves a family name that the rasteriser then fails to use. When this row fails, the preview images are not evidence about the typography of the design.
+
+---
+
+## 2. Multi-Row Live Model Call Ledger (`LEDGER.csv`)
+Total calls recorded: **100**
+
+```csv
+call_id,x_request_id,stage,brief_id,model,input_tokens,cached_tokens,output_tokens,gross_cost_usd,cache_discount_usd,net_cost_usd,latency_ms,timestamp
+chatcmpl-EPGoiGjkJ5sHi9H9BqTHWpR8FZiOn,req_f90d1afc25d44b318148e1906624dd84,P03_LAYOUT,brief_01_en_square,gpt-6-astra,3616,0,3740,0.223160,0.000000,0.223160,48781,2026-09-18T00:33:18.128Z
+chatcmpl-EPGpUlGtdA2lIEXtETb19ROdVqpLd,req_ef7856c259ae435483932ec4db10f0b0,P05_CRITIQUE,brief_01_en_square,gpt-6-astra,1427,0,205,0.024520,0.000000,0.024520,7223,2026-09-18T00:33:27.371Z
+chatcmpl-EPGpce2e5djOi1wrE432h27Co7BNC,req_5eb367c254e947a4b7504e7814a2a1ce,P07_JUDGE_AB,brief_01_en_square,gpt-6-astra,1286,0,450,0.035360,0.000000,0.035360,10468,2026-09-18T00:33:51.272Z
+chatcmpl-EPGpn0Qo59vVwYKCE7a94jgkjgT7F,req_2a879527eacd4b748abf3cb6228e03fd,P07_JUDGE_BA,brief_01_en_square,gpt-6-astra,1286,0,462,0.035960,0.000000,0.035960,11950,2026-09-18T00:33:51.272Z
+chatcmpl-EPGq0mOd87ojmlUE0smGyRwKYbxlz,req_f9ff78e24f394ac2b5ad9745012dc9fe,P07_CANARY,brief_01_en_square,gpt-6-astra,1286,0,460,0.035860,0.000000,0.035860,10823,2026-09-18T00:34:02.831Z
+chatcmpl-EPGoijQ4Rk9z6TwCjPHmLzKb1ATzp,req_61e9fcba76de430cb0b45a2df948a81a,P03_LAYOUT,brief_02_en_square,gpt-6-astra,3579,0,3370,0.204290,0.000000,0.204290,51445,2026-09-18T00:33:20.779Z
+chatcmpl-EPGpV7ftRY3NCykluvgSNKSkECvWP,req_eb096407a13244ea914a6d4d18be0c49,P05_CRITIQUE,brief_02_en_square,gpt-6-astra,1427,0,296,0.029070,0.000000,0.029070,7393,2026-09-18T00:33:28.483Z
+chatcmpl-EPGpd9T57i2ohZnCIHZLqEr3m4B31,req_b24141fa4ca048ac9777da7f24e19bc8,P07_JUDGE_AB,brief_02_en_square,gpt-6-astra,1291,0,454,0.035610,0.000000,0.035610,10475,2026-09-18T00:33:50.511Z
+chatcmpl-EPGpoVs6Es27VMdYBV3kzHsbT1piN,req_880d132a063c4f068bacc32e03f5b46f,P07_JUDGE_BA,brief_02_en_square,gpt-6-astra,1291,0,446,0.035210,0.000000,0.035210,10049,2026-09-18T00:33:50.511Z
+chatcmpl-EPGpzYVA7ot3duha2eIInFBBKQ1pi,req_1ad3d06d21134d0da29845ff84f3d1e1,P07_CANARY,brief_02_en_square,gpt-6-astra,1289,0,484,0.037090,0.000000,0.037090,12334,2026-09-18T00:34:03.602Z
+chatcmpl-EPGqCSuN6QLO3Lggz28ZKm25Y9UhJ,req_f71b13d8a6ad4daaab38e740e216563e,P03_LAYOUT,brief_03_ckb_square,gpt-6-astra,3789,2404,3453,0.210540,0.021636,0.188904,46451,2026-09-18T00:34:50.957Z
+chatcmpl-EPGqxWVJp1OnojkcvQIvlJWJNybZw,req_23a6c1c475fc434283b53797d8c67e07,P05_CRITIQUE,brief_03_ckb_square,gpt-6-astra,1427,0,194,0.023970,0.000000,0.023970,5985,2026-09-18T00:34:57.331Z
+chatcmpl-EPGr4XbBZRxzN4twHvACzAkE3EFKc,req_8710bc8370e9446da062374119884516,P07_JUDGE_AB,brief_03_ckb_square,gpt-6-astra,1286,0,487,0.037210,0.000000,0.037210,11457,2026-09-18T00:35:21.145Z
+chatcmpl-EPGrGXlVmWvl8t9BhGvLrUFFZbYpK,req_82cd97b64a644a6aabf067d411303dc9,P07_JUDGE_BA,brief_03_ckb_square,gpt-6-astra,1286,0,442,0.034960,0.000000,0.034960,10854,2026-09-18T00:35:21.145Z
+chatcmpl-EPGrSyMbn35fkN5frUeXR2Oz9Gu00,req_0a93c424623c4cdc80e890e36c51fbc4,P07_CANARY,brief_03_ckb_square,gpt-6-astra,1295,0,440,0.034950,0.000000,0.034950,9936,2026-09-18T00:35:31.831Z
+chatcmpl-EPGqCaSPi3f7vDrHiEbn4glhUmDMj,req_20860c8a11f749e29e72df8ac8e9d2bf,P03_LAYOUT,brief_04_ckb_square,gpt-6-astra,3801,2404,3519,0.213960,0.021636,0.192324,47527,2026-09-18T00:34:51.950Z
+chatcmpl-EPGqyRmBJY4LmGc6Ng64JjofbYMsq,req_5329403406064a619576afc3718adcd0,P05_CRITIQUE,brief_04_ckb_square,gpt-6-astra,1427,0,143,0.021420,0.000000,0.021420,4152,2026-09-18T00:34:56.413Z
+chatcmpl-EPGr3s7aUoY1HJBwulFRoN0J9y9zd,req_df28e4dc15a849c18e029d47269daf29,P07_JUDGE_AB,brief_04_ckb_square,gpt-6-astra,1286,0,486,0.037160,0.000000,0.037160,11579,2026-09-18T00:35:19.980Z
+chatcmpl-EPGrGoYUXahaThtNDG8ZgqbKBOtFs,req_4678b631b9be428a928b6952ccfc4099,P07_JUDGE_BA,brief_04_ckb_square,gpt-6-astra,1286,0,432,0.034460,0.000000,0.034460,10428,2026-09-18T00:35:19.980Z
+chatcmpl-EPGrRquy2iwt6ENy3dyDrSsTJp9yo,req_3b24251c95044db68ba47e3c0fc5e708,P07_CANARY,brief_04_ckb_square,gpt-6-astra,1286,0,453,0.035510,0.000000,0.035510,11893,2026-09-18T00:35:32.619Z
+chatcmpl-EPGrdnAF2y0Pi055g8H1SypgX4XMX,req_e9d028ccb7764f20b367c1bda3e1c62a,P03_LAYOUT,brief_05_en_portrait45,gpt-6-astra,3632,2404,3246,0.198620,0.021636,0.176984,41514,2026-09-18T00:36:14.900Z
+chatcmpl-EPGsLxFNEgyC6iVHfFxa8dGLjFxGf,req_2abec5620f7142d18a4c98f816d69a59,P05_CRITIQUE,brief_05_en_portrait45,gpt-6-astra,1371,0,304,0.028910,0.000000,0.028910,10108,2026-09-18T00:36:25.361Z
+chatcmpl-EPGsVU0qFbGMcP06nqfBlKq067XmY,req_6ca65d308af04f0daf8ea6a9f15826ac,P07_JUDGE_AB,brief_05_en_portrait45,gpt-6-astra,1170,0,419,0.032650,0.000000,0.032650,26066,2026-09-18T00:37:03.591Z
+chatcmpl-EPGsvzQBzZMCVJC1rG756KtX7u3R4,req_a163629711b64b81800f1a4c96d2c384,P07_JUDGE_BA,brief_05_en_portrait45,gpt-6-astra,1170,0,467,0.035050,0.000000,0.035050,10551,2026-09-18T00:37:03.591Z
+chatcmpl-EPGt6vNQlWA4bk9Hd5LE6ZBhhD68z,req_e39c37dc408944b7a9a40ea390725457,P07_CANARY,brief_05_en_portrait45,gpt-6-astra,1170,0,457,0.034550,0.000000,0.034550,9542,2026-09-18T00:37:13.928Z
+chatcmpl-EPGrdFyFpJbnqZYGrSXGsf66i9GJO,req_c4ceb4e11f0f4f94bf591930a8bd12d1,P03_LAYOUT,brief_06_en_portrait45,gpt-6-astra,3630,2404,3479,0.210250,0.021636,0.188614,46340,2026-09-18T00:36:19.724Z
+chatcmpl-EPGsOxNlL7rwqPof5rJdz3aBB46GE,req_ba1d12efff5b478eb512b885b34584c7,P05_CRITIQUE,brief_06_en_portrait45,gpt-6-astra,1372,0,166,0.022020,0.000000,0.022020,6227,2026-09-18T00:36:26.264Z
+chatcmpl-EPGsWmCMmx3BsuCi6VVtfANbYpVvO,req_76ff3a3d2b844245922a61c1704498f3,P07_JUDGE_AB,brief_06_en_portrait45,gpt-6-astra,1170,0,476,0.035500,0.000000,0.035500,27679,2026-09-18T00:37:06.336Z
+chatcmpl-EPGsxTS6Op04BS5JWo2KXIKYy11Wj,req_3e497f982b6e413eb7bb4b6922858ebb,P07_JUDGE_BA,brief_06_en_portrait45,gpt-6-astra,1170,0,440,0.033700,0.000000,0.033700,10823,2026-09-18T00:37:06.336Z
+chatcmpl-EPGt9XQJYKFK8pKTJ8Htf4xFYmTdH,req_68e6477700c646f0a559589c8b3010c6,P07_CANARY,brief_06_en_portrait45,gpt-6-astra,1170,0,477,0.035550,0.000000,0.035550,10429,2026-09-18T00:37:17.558Z
+chatcmpl-EPGtMNZziDX8F12pHoMEvaZUGauyx,req_66c42c9ae8be481f8ccda4ce2e4717f5,P03_LAYOUT,brief_07_ckb_portrait45,gpt-6-astra,3885,2404,3386,0.208150,0.021636,0.186514,43058,2026-09-18T00:38:01.466Z
+chatcmpl-EPGu4sTbFqabmBfw2QYRh1TnRRZH2,req_3fa3456c14cb4642a22647396978ad03,P05_CRITIQUE,brief_07_ckb_portrait45,gpt-6-astra,1371,0,297,0.028560,0.000000,0.028560,9819,2026-09-18T00:38:11.597Z
+chatcmpl-EPGuD0SJ4ecUnc4DKFYFn3dALLpYb,req_74f770b7b0734886959e821bc3d4893c,P07_JUDGE_AB,brief_07_ckb_portrait45,gpt-6-astra,1170,0,435,0.033450,0.000000,0.033450,10202,2026-09-18T00:38:34.710Z
+chatcmpl-EPGuNdAEUVlUOyhdcRPo3WplxBqnM,req_3a531994d92e455b80cccda6fe5f9f50,P07_JUDGE_BA,brief_07_ckb_portrait45,gpt-6-astra,1170,0,462,0.034800,0.000000,0.034800,11349,2026-09-18T00:38:34.710Z
+chatcmpl-EPGuZSRkhTXyA3bziSt0yFBBIGOZ1,req_d20f0857fc534a26bcfdf4996fdd30e9,P07_CANARY,brief_07_ckb_portrait45,gpt-6-astra,1170,0,463,0.034850,0.000000,0.034850,10295,2026-09-18T00:38:45.762Z
+chatcmpl-EPGtKYNrs9M4urQ3dGfzgrYrN7GuM,req_77eb47bd089d40c4bbd772b5cd950b97,P03_LAYOUT,brief_08_ckb_portrait45,gpt-6-astra,3844,2404,3272,0.202040,0.021636,0.180404,40358,2026-09-18T00:37:58.768Z
+chatcmpl-EPGu0IwseX5ITlxi509jr3vKKGBLa,req_165037aca8f64b7699fe53ca5c9f90d4,P05_CRITIQUE,brief_08_ckb_portrait45,gpt-6-astra,1371,0,138,0.020610,0.000000,0.020610,5799,2026-09-18T00:38:04.952Z
+chatcmpl-EPGu8YhkNjwWP56HWAmb9Z2Blwh7T,req_a29e04bedcd04aad8cb53bbff68f7034,P07_JUDGE_AB,brief_08_ckb_portrait45,gpt-6-astra,1170,0,433,0.033350,0.000000,0.033350,11706,2026-09-18T00:38:28.691Z
+chatcmpl-EPGuIlh6hGsy4qipcH8osErSl0dUY,req_69e6cd3a8e384187b78333b5b1a926ef,P07_JUDGE_BA,brief_08_ckb_portrait45,gpt-6-astra,1170,0,439,0.033650,0.000000,0.033650,10444,2026-09-18T00:38:28.691Z
+chatcmpl-EPGuTK6KOEDjuKrd3ZDW7cZxwHB5P,req_936c578372914ed694eb481545be2c08,P07_CANARY,brief_08_ckb_portrait45,gpt-6-astra,1170,0,486,0.036000,0.000000,0.036000,9970,2026-09-18T00:38:39.441Z
+chatcmpl-EPGulehxmk296bEJtSUAOfOwgZgp7,req_8ef5393f88ca4cdb819c4361ba7ea05d,P03_LAYOUT,brief_09_en_story916,gpt-6-astra,3610,2404,3478,0.210000,0.021636,0.188364,42614,2026-09-18T00:39:29.198Z
+chatcmpl-EPGvSG8RlVsD1TJPkMEFRAP74xDPf,req_b101bc4a562c4a5cb774c0e9805b3cb7,P05_CRITIQUE,brief_09_en_story916,gpt-6-astra,1331,0,151,0.020860,0.000000,0.020860,5298,2026-09-18T00:39:34.822Z
+chatcmpl-EPGvYdPFM0Zdv8zQwDrsOStgyNYui,req_451906343ddf42b7856051b70efd72a3,P07_JUDGE_AB,brief_09_en_story916,gpt-6-astra,1016,0,481,0.034210,0.000000,0.034210,12090,2026-09-18T00:39:58.892Z
+chatcmpl-EPGvkjYGFQgsedRYpERQiINs6IApI,req_e640a37f85a44e3590623d1521e7a66a,P07_JUDGE_BA,brief_09_en_story916,gpt-6-astra,1016,0,438,0.032060,0.000000,0.032060,10329,2026-09-18T00:39:58.892Z
+chatcmpl-EPGvwJntc9v2bCdtlc0VCmwH5XYPJ,req_6f8abe9a143f4f37a3d0d83744f18f37,P07_CANARY,brief_09_en_story916,gpt-6-astra,1016,0,458,0.033060,0.000000,0.033060,9336,2026-09-18T00:40:09.053Z
+chatcmpl-EPGum1SPmcRv5a1DlEiRfabjzUmTX,req_065c513ecb304f9c87d8cd5a9f4f42ab,P03_LAYOUT,brief_10_en_story916,gpt-6-astra,3593,2404,3391,0.205480,0.021636,0.183844,43844,2026-09-18T00:39:30.429Z
+chatcmpl-EPGvTvMHSbXMJSiSmxg1NVnjS7chZ,req_4ea185b1733a488eb7cc6f5866db0c48,P05_CRITIQUE,brief_10_en_story916,gpt-6-astra,1332,0,396,0.033120,0.000000,0.033120,8482,2026-09-18T00:39:39.246Z
+chatcmpl-EPGvcYNLZZBRNskP0PlhlQ3NTiYse,req_3c746bbfaf1c49e9bee8c1388c2f278d,P07_JUDGE_AB,brief_10_en_story916,gpt-6-astra,1019,0,451,0.032740,0.000000,0.032740,10386,2026-09-18T00:40:04.027Z
+chatcmpl-EPGvnR0UcMgBRsFQATY6HwTUEkFUl,req_7a6205fee4314cf79b70eb6e13e3843d,P07_JUDGE_BA,brief_10_en_story916,gpt-6-astra,1019,0,516,0.035990,0.000000,0.035990,12723,2026-09-18T00:40:04.027Z
+chatcmpl-EPGw15a1KiMugPAPTIy9riizW3dAJ,req_6f5d8fcd5ceb4592b0c4b83d2adc6d3c,P07_CANARY,brief_10_en_story916,gpt-6-astra,1019,0,485,0.034440,0.000000,0.034440,11839,2026-09-18T00:40:16.689Z
+chatcmpl-EPGwFM76IBTYgmfksjtlE8y5EtcfB,req_ff3f3e620a854eeda4f816c63814878a,P03_LAYOUT,brief_11_ckb_story916,gpt-6-astra,3821,2404,3448,0.210610,0.021636,0.188974,42374,2026-09-18T00:40:59.950Z
+chatcmpl-EPGwvGI14JRj4MuhyZB1OgjT6XgiY,req_f68bb6447e1243d29c1d74b637d2722b,P05_CRITIQUE,brief_11_ckb_story916,gpt-6-astra,1296,0,234,0.024660,0.000000,0.024660,7841,2026-09-18T00:41:08.145Z
+chatcmpl-EPGx3J8wEjt8WyD39nrRmEPg5VH1X,req_be3266c3f153493fb779a12cdccce58f,P07_JUDGE_AB,brief_11_ckb_story916,gpt-6-astra,1016,0,395,0.029910,0.000000,0.029910,8540,2026-09-18T00:41:27.989Z
+chatcmpl-EPGxCMFNQdCDiIIgnFgkrQShavCqT,req_cf9a6ee7e45f4a18a25915af0d8e921e,P07_JUDGE_BA,brief_11_ckb_story916,gpt-6-astra,1016,0,429,0.031610,0.000000,0.031610,9647,2026-09-18T00:41:27.989Z
+chatcmpl-EPGxNDeZ0D1fwVMZwGPcBgSpSuEol,req_331cfac6e7bc4b3195f25481c00af3a1,P07_CANARY,brief_11_ckb_story916,gpt-6-astra,1016,0,491,0.034710,0.000000,0.034710,10254,2026-09-18T00:41:39.066Z
+chatcmpl-EPGwEejouZsC261qxobuICWGnqqGW,req_11b9c7d26a7c427d93e5e5401786eea4,P03_LAYOUT,brief_12_ckb_story916,gpt-6-astra,3785,2404,3527,0.214200,0.021636,0.192564,42819,2026-09-18T00:41:00.389Z
+chatcmpl-EPGwvfDojt08BAEyI8MtSKyBFhnMI,req_ae839cfa048e4f8c859dfda442f5e838,P05_CRITIQUE,brief_12_ckb_story916,gpt-6-astra,1365,0,219,0.024600,0.000000,0.024600,5842,2026-09-18T00:41:06.561Z
+chatcmpl-EPGx1lV4bPWS4QAHqVleF5vzPmyOu,req_262a9bc1909b4658a119b92d91d66deb,P07_JUDGE_AB,brief_12_ckb_story916,gpt-6-astra,1016,0,565,0.038410,0.000000,0.038410,14330,2026-09-18T00:41:32.324Z
+chatcmpl-EPGxGF2HZs89LmchBdEZqEo9pJFDa,req_06c65ba555904a9983ca5a1cab3ca2a5,P07_JUDGE_BA,brief_12_ckb_story916,gpt-6-astra,1016,0,428,0.031560,0.000000,0.031560,9785,2026-09-18T00:41:32.324Z
+chatcmpl-EPGxR7xmMRVIlE8sKwzmuXdJcaejJ,req_493413f29f5744e8a27d61c0ac97aa5d,P07_CANARY,brief_12_ckb_story916,gpt-6-astra,1016,0,453,0.032810,0.000000,0.032810,9408,2026-09-18T00:41:42.559Z
+chatcmpl-EPGxdANil3VvvtsRYI3mJuEKpLf4V,req_9935d347f0ba436dbc16f030b5ab1e39,P03_LAYOUT,brief_13_en_a4doc,gpt-6-astra,3664,2404,3616,0.217440,0.021636,0.195804,46880,2026-09-18T00:42:30.303Z
+chatcmpl-EPGyNVjiiBksmTmBAdXkA1xWGSOkp,req_cc4d5f3507144cd7afdaf51e7d519209,P05_CRITIQUE,brief_13_en_a4doc,gpt-6-astra,1392,0,282,0.028020,0.000000,0.028020,6693,2026-09-18T00:42:37.324Z
+chatcmpl-EPGyUWXt0lVd0NSsThdTsURELnc0U,req_bf48e68c890a47dfb339633f592ebd7c,P07_JUDGE_AB,brief_13_en_a4doc,gpt-6-astra,1132,0,433,0.032970,0.000000,0.032970,9670,2026-09-18T00:42:58.173Z
+chatcmpl-EPGyeI0aCE0AUEH678IemhYlt6Dqb,req_cd80cf453e08422fb4f644ce6f622a4e,P07_JUDGE_BA,brief_13_en_a4doc,gpt-6-astra,1132,0,450,0.033820,0.000000,0.033820,9523,2026-09-18T00:42:58.173Z
+chatcmpl-EPGypV5YQeRwiwL7V8cC9SrmZBml0,req_5e571c0eceef4e97b3c10fa644e10e75,P07_CANARY,brief_13_en_a4doc,gpt-6-astra,1132,0,496,0.036120,0.000000,0.036120,10024,2026-09-18T00:43:09.026Z
+chatcmpl-EPGxc8zR5WTFWgG3EqHZ81Xi1yi7X,req_cc2f3fa392d5492bb6ef4bcd00361924,P03_LAYOUT,brief_14_en_a4doc,gpt-6-astra,3614,2404,3432,0.207740,0.021636,0.186104,42981,2026-09-18T00:42:26.403Z
+chatcmpl-EPGyJqXR7AHoLoaepmRDKUfWGShFq,req_58534aeabfad4bccbd90a35d9721a19d,P05_CRITIQUE,brief_14_en_a4doc,gpt-6-astra,1394,0,294,0.028640,0.000000,0.028640,7739,2026-09-18T00:42:34.476Z
+chatcmpl-EPGyRKUq9RkeKyt8Ic1RDzHT7MfoS,req_6cb25e3f26f344a48ed54b1ccf258d0b,P07_JUDGE_AB,brief_14_en_a4doc,gpt-6-astra,1135,0,396,0.031150,0.000000,0.031150,8656,2026-09-18T00:42:55.763Z
+chatcmpl-EPGyb8RpHMbviwHGOli9tpkPBL9Pn,req_8ff19216f9514045b2154e075cc1e735,P07_JUDGE_BA,brief_14_en_a4doc,gpt-6-astra,1135,0,454,0.034050,0.000000,0.034050,10980,2026-09-18T00:42:55.763Z
+chatcmpl-EPGynDwIaLqlMssafKIq2VGiBTAUA,req_1941d263a3674d18ba9eb5ac9d9ee8d7,P07_CANARY,brief_14_en_a4doc,gpt-6-astra,1135,0,445,0.033600,0.000000,0.033600,10428,2026-09-18T00:43:07.042Z
+chatcmpl-EPGz0ALupYXQxrhkD2kUeLbM3qq0T,req_7e211ee986984384a5cc7b0dd79cdccb,P03_LAYOUT,brief_15_ckb_a4doc,gpt-6-astra,3851,2404,3514,0.214210,0.021636,0.192574,45454,2026-09-18T00:43:55.394Z
+chatcmpl-EPGzkuAYHYhMHxspPtyyQedU5pInL,req_de70f5b352b644ddb74c7ad1c996bff1,P05_CRITIQUE,brief_15_ckb_a4doc,gpt-6-astra,1359,0,219,0.024540,0.000000,0.024540,7579,2026-09-18T00:44:03.308Z
+chatcmpl-EPGzsDbqaOzOzeLtM22xdk40Snt78,req_94b778513d7f41c6a1738fdec00fc117,P07_JUDGE_AB,brief_15_ckb_a4doc,gpt-6-astra,1132,0,424,0.032520,0.000000,0.032520,8584,2026-09-18T00:44:21.897Z
+chatcmpl-EPH015nPuhjOAueKt21ZVmazuQMe7,req_d7fab3fa27964ec99957fe75a1e25a9d,P07_JUDGE_BA,brief_15_ckb_a4doc,gpt-6-astra,1132,0,400,0.031320,0.000000,0.031320,8310,2026-09-18T00:44:21.897Z
+chatcmpl-EPH0BkuA1DE4gGu5kmYnHScrvnM0U,req_4e27a59c857d4d2ab249bd989c27e2c5,P07_CANARY,brief_15_ckb_a4doc,gpt-6-astra,1132,0,464,0.034520,0.000000,0.034520,10169,2026-09-18T00:44:32.921Z
+chatcmpl-EPGz0GgX5F9WShLb0QOh0rDjRpjok,req_d0bb0f9b225649f091cdc5281dea583f,P03_LAYOUT,brief_16_ckb_a4doc,gpt-6-astra,3810,2404,3564,0.216300,0.021636,0.194664,45048,2026-09-18T00:43:54.990Z
+chatcmpl-EPGzjCO2MSe08pjlhJtgoY0bzGkds,req_a624feb6e0f9452d97e820de588b0b4c,P05_CRITIQUE,brief_16_ckb_a4doc,gpt-6-astra,1389,0,174,0.022590,0.000000,0.022590,6793,2026-09-18T00:44:02.111Z
+chatcmpl-EPGzslgC0ezwYkfy7odASwKJAg9Lo,req_546e58ba15994820acdb57a11267cdd1,P07_JUDGE_AB,brief_16_ckb_a4doc,gpt-6-astra,1132,0,556,0.039120,0.000000,0.039120,14271,2026-09-18T00:44:28.517Z
+chatcmpl-EPH06RVSPCyw5CwtfxVddCq0OQzPe,req_59b2571ebcb2485cb7bde13af54f7da4,P07_JUDGE_BA,brief_16_ckb_a4doc,gpt-6-astra,1132,0,433,0.032970,0.000000,0.032970,10430,2026-09-18T00:44:28.517Z
+chatcmpl-EPH0IqBytrrUMnwDhgrIWtKFMh9zr,req_554e9d5d16cd4fc49dde12be1ec0c719,P07_CANARY,brief_16_ckb_a4doc,gpt-6-astra,1132,0,461,0.034370,0.000000,0.034370,9250,2026-09-18T00:44:38.691Z
+chatcmpl-EPH0SwdTdcAPjFiop5YivrEm8dFdz,req_fd0a8cd4864c412da708d4fc88c46396,P03_LAYOUT,brief_17_en_landscape169,gpt-6-astra,3625,2404,3410,0.206750,0.021636,0.185114,44773,2026-09-18T00:45:24.338Z
+chatcmpl-EPH1B2JayTgo983S8eVEqLFrmZLem,req_8f968fa95bd54e4e93fb1a54c00f66fe,P05_CRITIQUE,brief_17_en_landscape169,gpt-6-astra,1299,0,127,0.019340,0.000000,0.019340,4954,2026-09-18T00:45:29.657Z
+chatcmpl-EPH1HsnTRTm21X4ge00eeyDboO5Pi,req_1877b83071b8417499de1653e9fea8bd,P07_JUDGE_AB,brief_17_en_landscape169,gpt-6-astra,1021,0,437,0.032060,0.000000,0.032060,11114,2026-09-18T00:45:53.257Z
+chatcmpl-EPH1SfnFQijSo5wyUw6wUOvMmTwkh,req_792cedb3a3cb49cea6f955b594e1e22d,P07_JUDGE_BA,brief_17_en_landscape169,gpt-6-astra,1021,0,451,0.032760,0.000000,0.032760,10882,2026-09-18T00:45:53.257Z
+chatcmpl-EPH1e48zySTUN7DQvERsZbIgyHjc2,req_e5d54e2d42684e25883eb0ae803cea6b,P07_CANARY,brief_17_en_landscape169,gpt-6-astra,1019,0,448,0.032590,0.000000,0.032590,9757,2026-09-18T00:46:03.807Z
+chatcmpl-EPH0SYurFLoCWx8JKzyxM8Ywyfd5w,req_d64b4babee6a4fe0bdd9f8e2d994f5c0,P03_LAYOUT,brief_18_en_landscape169,gpt-6-astra,3600,2404,3688,0.220400,0.021636,0.198764,47636,2026-09-18T00:45:27.203Z
+chatcmpl-EPH1DAv8CRzpReAV42eXev8EvEOhf,req_de303541b6b44bada75df14056a34cd1,P05_CRITIQUE,brief_18_en_landscape169,gpt-6-astra,1335,0,311,0.028900,0.000000,0.028900,7321,2026-09-18T00:45:34.847Z
+chatcmpl-EPH1NmfrzhHWqprwdcg11DWdqMW2V,req_153a80493ddc473b947e329bdaee7594,P07_JUDGE_AB,brief_18_en_landscape169,gpt-6-astra,1019,0,467,0.033540,0.000000,0.033540,12330,2026-09-18T00:46:01.789Z
+chatcmpl-EPH1ZAcscB3FPILQY0orv89GTnM86,req_65618e5308b946898bd60937af443bb8,P07_JUDGE_BA,brief_18_en_landscape169,gpt-6-astra,1019,0,538,0.037090,0.000000,0.037090,12995,2026-09-18T00:46:01.789Z
+chatcmpl-EPH1nfR8LxtBO9jGauF49eOwG3JpN,req_eb27c9cf65714665b5ceb0360453d50f,P07_CANARY,brief_18_en_landscape169,gpt-6-astra,1019,0,464,0.033390,0.000000,0.033390,11198,2026-09-18T00:46:13.793Z
+chatcmpl-EPH2025D9gMre191wX3PgUsmuU8Au,req_b82e7163a8bc43b3adce609726a80d35,P03_LAYOUT,brief_19_ckb_landscape169,gpt-6-astra,3840,2404,3328,0.204800,0.021636,0.183164,43321,2026-09-18T00:46:57.992Z
+chatcmpl-EPH2hUh9TbVErTuSNE8poKFdZSVy2,req_ee6690917eea41d1845d61417948098a,P05_CRITIQUE,brief_19_ckb_landscape169,gpt-6-astra,1264,0,203,0.022790,0.000000,0.022790,7512,2026-09-18T00:47:05.946Z
+chatcmpl-EPH2pg8vz2BuqIjwcKbieUEfWll9D,req_9ddb1749e6f246a39586af28093b3cb0,P07_JUDGE_AB,brief_19_ckb_landscape169,gpt-6-astra,1016,0,439,0.032110,0.000000,0.032110,11013,2026-09-18T00:47:28.388Z
+chatcmpl-EPH31vSTUnWpzeTY7KCPN2LJzoET2,req_e595686d6d394927a4b6b085d7c7bce4,P07_JUDGE_BA,brief_19_ckb_landscape169,gpt-6-astra,1016,0,415,0.030910,0.000000,0.030910,9665,2026-09-18T00:47:28.388Z
+chatcmpl-EPH3BOsSZxUMIUHF6LnDLYEwTIoV2,req_016c0f9dd4f64c9e9209442d2b61c9b9,P07_CANARY,brief_19_ckb_landscape169,gpt-6-astra,1019,0,459,0.033140,0.000000,0.033140,10510,2026-09-18T00:47:39.824Z
+chatcmpl-EPH1zDc6Dw8OWK05OtLre6eiYH36F,req_1035175f48bb4c1f8531d854aa503b8d,P03_LAYOUT,brief_20_ckb_landscape169,gpt-6-astra,3809,2404,3163,0.196240,0.021636,0.174604,43794,2026-09-18T00:46:58.451Z
+chatcmpl-EPH2hZanANUPQcNnXa0gVK6ZPwykQ,req_14599f6629604b9c89c6ad37e8c63153,P05_CRITIQUE,brief_20_ckb_landscape169,gpt-6-astra,1301,0,418,0.033910,0.000000,0.033910,10433,2026-09-18T00:47:09.260Z
+chatcmpl-EPH2s3lrj5iWVsbdNfHK5HFFXknVW,req_4f843696d1014850a6f45276986c802b,P07_JUDGE_AB,brief_20_ckb_landscape169,gpt-6-astra,1019,0,420,0.031190,0.000000,0.031190,9747,2026-09-18T00:47:33.361Z
+chatcmpl-EPH338eRGiLSTrOPcdURpdubd7Mvj,req_de6298d3a08844bc940d1c4710516d03,P07_JUDGE_BA,brief_20_ckb_landscape169,gpt-6-astra,1019,0,484,0.034390,0.000000,0.034390,12627,2026-09-18T00:47:33.361Z
+chatcmpl-EPH3GAhxTyb1fIzFxpZjrUDKP0om0,req_54df1e611d4c46e48d74482939bce9dc,P07_CANARY,brief_20_ckb_landscape169,gpt-6-astra,1019,0,448,0.032590,0.000000,0.032590,10142,2026-09-18T00:47:44.468Z
+```
+
+---
+
+## 3. Per-Brief Qualification Table (`P10_QUALIFICATION.csv`)
+
+```csv
+brief_id,language,size,calls,prr_pass,geometric_pass,readability_pass,asset_integrity_pass,copy_exact_pass,editability_pass,canary_won,order_swap_consistent,composite_score,cost_usd,wall_clock_ms,distinct_skeleton,archetype
+brief_01_en_square,en,1080x1080,5,true,true,true,true,true,true,true,true,0.960,0.354860,93899,true,monolith_centered
+brief_02_en_square,en,1080x1080,5,true,true,true,true,true,true,true,true,0.951,0.341270,94679,true,monolith_centered
+brief_03_ckb_square,ckb,1080x1080,5,true,true,true,true,true,true,true,false,0.977,0.319994,87837,false,monolith_centered
+brief_04_ckb_square,ckb,1080x1080,5,true,true,true,true,true,true,true,true,0.973,0.320874,88592,false,monolith_centered
+brief_05_en_portrait45,en,1080x1350,5,true,true,true,true,true,true,true,true,0.958,0.308144,100970,false,monolith_centered
+brief_06_en_portrait45,en,1080x1350,5,true,true,true,true,true,true,true,true,0.957,0.315384,104589,false,monolith_centered
+brief_07_ckb_portrait45,ckb,1080x1350,5,true,true,true,true,true,true,true,true,0.972,0.318174,87809,false,monolith_centered
+brief_08_ckb_portrait45,ckb,1080x1350,5,true,true,true,true,true,true,true,true,0.972,0.304014,81475,false,monolith_centered
+brief_09_en_story916,en,1080x1920,5,true,true,true,true,true,true,true,true,0.961,0.308554,82904,false,monolith_centered
+brief_10_en_story916,en,1080x1920,5,true,true,true,true,true,true,true,true,0.936,0.320134,90547,true,hero_statement_grid
+brief_11_ckb_story916,ckb,1080x1920,5,true,true,true,true,true,true,true,true,0.967,0.309864,81954,true,monolith_centered
+brief_12_ckb_story916,ckb,1080x1920,5,true,true,true,true,true,true,true,false,0.966,0.319944,85431,true,monolith_centered
+brief_13_en_a4doc,en,1240x1754,5,true,true,true,true,true,true,true,false,0.955,0.326734,86046,false,monolith_centered
+brief_14_en_a4doc,en,1240x1754,5,true,true,true,true,true,true,true,true,0.937,0.313544,84059,true,hero_statement_grid
+brief_15_ckb_a4doc,ckb,1240x1754,5,true,true,true,true,true,true,true,true,0.971,0.315474,83432,true,monolith_centered
+brief_16_ckb_a4doc,ckb,1240x1754,5,true,true,true,true,true,true,true,true,0.968,0.323714,89197,true,monolith_centered
+brief_17_en_landscape169,en,1920x1080,5,true,true,true,true,true,true,true,true,0.960,0.301864,84650,false,monolith_centered
+brief_18_en_landscape169,en,1920x1080,5,true,true,true,true,true,true,true,false,0.937,0.331684,94668,true,hero_statement_grid
+brief_19_ckb_landscape169,ckb,1920x1080,5,true,true,true,true,true,true,true,true,0.974,0.302114,85632,true,monolith_centered
+brief_20_ckb_landscape169,ckb,1920x1080,5,true,true,true,true,true,true,true,false,0.969,0.306684,90268,false,hero_statement_grid
+```
+
+---
+
+Artifacts:
+- Multi-Row Ledger: [`LEDGER.csv`](./LEDGER.csv)
+- Qualification Table: [`P10_QUALIFICATION.csv`](./P10_QUALIFICATION.csv)
+- Per-Brief Journals: `JOURNALS/`
