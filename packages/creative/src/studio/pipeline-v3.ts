@@ -257,6 +257,24 @@ export function conformToHouseRules(
     for (const t of layout.text) if (t.role === 'title' && t.fontSize < minTitle) t.fontSize = minTitle;
   }
 
+  // The rest of the ladder QA enforces (title > subtitle >= date/venue >= body >= footer), settled
+  // the same way from the body up: the cheap tier set the date at 16px under 20px body copy (task
+  // 1f392e16, 2026-09-18), a defect QA reported only once the overlap hiding it was fixed.
+  const sizeOf = (...roles: string[]) =>
+    Math.max(0, ...layout.text.filter((t) => roles.includes(t.role)).map((t) => t.fontSize));
+  if (bodySize > 0) {
+    for (const t of layout.text) {
+      if ((t.role === 'date' || t.role === 'venue') && t.fontSize < bodySize) t.fontSize = bodySize;
+      if (t.role === 'footer' && t.fontSize > bodySize) t.fontSize = bodySize;
+    }
+  }
+  const dateVenueSize = sizeOf('date', 'venue');
+  for (const t of layout.text) if (t.role === 'subtitle' && t.fontSize < dateVenueSize) t.fontSize = dateVenueSize;
+  const subtitleSize = sizeOf('subtitle');
+  for (const t of layout.text) {
+    if (t.role === 'title' && subtitleSize > 0 && t.fontSize <= subtitleSize) t.fontSize = Math.ceil(subtitleSize * 1.25);
+  }
+
   const safe: Rect = { x: m, y: m, width: W - 2 * m, height: H - 2 * m };
   for (const t of layout.text) fitInside(t, safe);
   for (const s of layout.shapes || []) fitInside(s, { x: 0, y: 0, width: W, height: H });
@@ -556,24 +574,43 @@ export function conformToHouseRules(
     m0 > minMargin
       ? [[m0, 0.5], [minMargin, 0.5], [m0, 0.25], [minMargin, 0.25]]
       : [[m0, 0.5], [m0, 0.25]];
+  // Tries each arrangement from `start`; returns null once one clears, else the first attempt.
+  const arrange = (start: string): string | null => {
+    let first: string | null = null;
+    for (const [margin, minSqueeze] of attempts) {
+      Object.assign(layout, JSON.parse(start));
+      if (margin !== m0 && layout.logo) {
+        const l = layout.logo;
+        if (Math.abs(l.y - m0) <= 2) layout.logo = { ...l, y: margin };
+        else if (Math.abs(l.y + l.height - (H - m0)) <= 2) layout.logo = { ...l, y: H - margin - l.height };
+      }
+      layout.grid.margin = margin;
+      settle(minSqueeze);
+      if (!logoCrowded() && !textCollides()) return null;
+      first ??= JSON.stringify(layout);
+    }
+    return first;
+  };
   const unsettled = JSON.stringify(layout);
-  let first: string | null = null;
-  for (const [margin, minSqueeze] of attempts) {
-    if (first !== null) Object.assign(layout, JSON.parse(unsettled));
-    if (margin !== m0 && layout.logo) {
-      const l = layout.logo;
-      if (Math.abs(l.y - m0) <= 2) layout.logo = { ...l, y: margin };
-      else if (Math.abs(l.y + l.height - (H - m0)) <= 2) layout.logo = { ...l, y: H - margin - l.height };
+  const first = arrange(unsettled);
+  if (first !== null) {
+    // Last resort, only when no arrangement fits: a box taller than its copy gives back its empty
+    // space. Models size boxes in coarse steps; the cheap-tier winner of task 1f392e16 (2026-09-18)
+    // held 317px of empty box and still ran 54px past the bottom margin, its last two blocks
+    // overlapping, and no design was delivered. Each box shrinks around its centre, where the
+    // renderer sets its lines, so no line moves until settling uses the room. A layout that
+    // already fits is never trimmed, so its measures stand.
+    Object.assign(layout, JSON.parse(unsettled));
+    const needed = measureWrappedLines(layout, copy.text);
+    for (const t of layout.text) {
+      const wanted = Math.ceil((needed[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight);
+      if (t.height > wanted) {
+        t.y = Math.round(t.y + (t.height - wanted) / 2);
+        t.height = wanted;
+      }
     }
-    layout.grid.margin = margin;
-    settle(minSqueeze);
-    if (!logoCrowded() && !textCollides()) {
-      first = null;
-      break;
-    }
-    first ??= JSON.stringify(layout);
+    if (arrange(JSON.stringify(layout)) !== null) Object.assign(layout, JSON.parse(first));
   }
-  if (first !== null) Object.assign(layout, JSON.parse(first));
 
   // Text over art must sit where the art is calm: widen the calm region to cover every text box
   // that touches the art. A box straddling the art's edge is covered whole, so the region may
