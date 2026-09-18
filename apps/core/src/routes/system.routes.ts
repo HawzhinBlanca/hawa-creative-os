@@ -44,6 +44,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
   };
 
   // Telegram Adapter Status & On-Demand Polling (FR-001, FR-002, Horizon 17 & 18)
+  // The bot's name is not reported: only Telegram's getMe knows which bot a token belongs to, and
+  // this public route does not call Telegram. GET /v1/system/providers/test-telegram does.
   registerRoute('get', '/adapters/telegram/status', (c: any) => {
     const status = telegramBridge?.getStatus() || { status: 'idle', mode: 'poll', pollingActive: false };
     return c.json({
@@ -52,8 +54,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
       activeStudio: 'canva',
       botConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       secretConfigured: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET),
-      botUsername: 'hawdesign_official_bot',
-      botName: 'Hawdesign bot',
     }, 200);
   });
 
@@ -432,56 +432,37 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // System Providers
+  // Reports whether each key is set in this process, and nothing else. A GET calls no provider, so
+  // it cannot say a key works (POST verifies a key before activating it). Nothing in Core uses or
+  // checks Google Application Default Credentials, so Gemini is configured only by GEMINI_API_KEY.
+  // A missing key is reported as missing, not as a fallback: whether a caller degrades to a local
+  // path depends on that caller, not on this setting.
   app.get('/v1/system/providers', (c: any) => {
     const authHeader = c.req.header('Authorization');
     const auth = verifyRequestAuth(c);
     if (!authHeader || !auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to view system providers');
     }
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-    const wahaKey = process.env.WAHA_API_KEY;
+    const keyStatus = (name: string, envVar: string) => {
+      const key = process.env[envVar];
+      return key
+        ? { name, envVar, configured: true, mode: 'API key set', preview: maskKey(key), status: 'KEY_SET' }
+        : { name, envVar, configured: false, mode: 'Not configured', preview: 'Not configured', status: 'NOT_CONFIGURED' };
+    };
 
     return c.json({
       ok: true,
       providers: {
-        gemini: {
-          name: 'Google Gemini & Workspace ADC',
-          configured: Boolean(geminiKey) || true,
-          mode: geminiKey ? 'API Key' : 'Google Workspace ADC (Active)',
-          preview: geminiKey ? maskKey(geminiKey) : 'hawzhin88@gmail.com (ADC)',
-          status: 'READY',
-        },
-        openai: {
-          name: 'OpenAI (GPT-4o / Sol)',
-          configured: Boolean(openaiKey),
-          mode: openaiKey ? 'Live Provider' : 'Deterministic Fallback Engine',
-          preview: openaiKey ? maskKey(openaiKey) : 'Fallback Active',
-          status: openaiKey ? 'READY' : 'FALLBACK_ACTIVE',
-        },
-        anthropic: {
-          name: 'Anthropic (Claude 3.5 Sonnet / Opus)',
-          configured: Boolean(anthropicKey),
-          mode: anthropicKey ? 'Live Provider' : 'Deterministic Fallback Engine',
-          preview: anthropicKey ? maskKey(anthropicKey) : 'Fallback Active',
-          status: anthropicKey ? 'READY' : 'FALLBACK_ACTIVE',
-        },
-        telegram: {
-          name: 'Telegram Bot Adapter',
-          configured: Boolean(telegramToken),
-          preview: telegramToken ? maskKey(telegramToken) : 'Not configured',
-          status: telegramToken ? 'READY' : 'DISABLED',
-        },
+        gemini: keyStatus('Google Gemini', 'GEMINI_API_KEY'),
+        openai: keyStatus('OpenAI', 'OPENAI_API_KEY'),
+        anthropic: keyStatus('Anthropic', 'ANTHROPIC_API_KEY'),
+        telegram: keyStatus('Telegram Bot Adapter', 'TELEGRAM_BOT_TOKEN'),
         waha: {
-          name: 'WAHA WhatsApp Bridge',
-          configured: Boolean(wahaKey),
+          ...keyStatus('WAHA WhatsApp Bridge', 'WAHA_API_KEY'),
           endpoint: process.env.WAHA_ENDPOINT || 'http://127.0.0.1:3000',
-          preview: wahaKey ? maskKey(wahaKey) : 'Quarantined',
-          status: wahaKey ? 'READY' : 'QUARANTINED',
         },
       },
+      checked: 'key presence in this process only; no provider was called',
       envFile: 'infra/docker/.env.production (deploy-time; runtime overrides last until restart)',
     });
   });
