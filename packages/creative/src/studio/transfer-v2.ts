@@ -103,6 +103,7 @@ export async function encodeStudioTransferV2(
     'Lora',
     'Bodoni Moda',
     'Cairo',
+    'Amiri',
     'Plus Jakarta Sans',
     'Vazirmatn',
     'Inter',

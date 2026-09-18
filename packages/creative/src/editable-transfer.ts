@@ -39,7 +39,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new Error('Missing or excessive factual copy');
   if(plan.text.length!==copy.length || new Set(plan.text.map(t=>t.copyIndex)).size!==copy.length ||
     plan.text.some(t=>!Number.isInteger(t.copyIndex)||t.copyIndex<0||t.copyIndex>=copy.length)) throw new Error('Every exact-copy block must appear once');
-  const fonts=['Arial','Georgia','Verdana','Times New Roman','Noto Sans Arabic','Cinzel','Playfair Display','Montserrat','Lora','Bodoni Moda','Cairo','Plus Jakarta Sans','Vazirmatn','Inter',...(options.extraFonts||[]).filter(f=>typeof f==='string'&&/^[A-Za-z0-9 ]{2,40}$/.test(f))];
+  const fonts=['Arial','Georgia','Verdana','Times New Roman','Noto Sans Arabic','Cinzel','Playfair Display','Montserrat','Lora','Bodoni Moda','Cairo','Amiri','Plus Jakarta Sans','Vazirmatn','Inter',...(options.extraFonts||[]).filter(f=>typeof f==='string'&&/^[A-Za-z0-9 ]{2,40}$/.test(f))];
   const bounds=(box:{x:number;y:number;width:number;height:number})=>{
     if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.x<0||box.y<0||box.width<=0||box.height<=0||
       box.x+box.width>plan.width||box.y+box.height>plan.height)throw new Error('Layout exceeds canvas bounds');

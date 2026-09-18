@@ -681,3 +681,57 @@ describe('fonts must be able to draw the copy they are given', () => {
     expect(layout.text[0].fontFamily).toBe('Playfair Display');
   });
 });
+
+describe('the editable deck must accept the fonts the generator emits', () => {
+  it('encodes a Kurdish design set in Amiri', async () => {
+    const { encodeEditableTransfer } = await import('../src/editable-transfer.js');
+    // Amiri became the right-to-left display default because it is the only bundled font covering
+    // the Sorani letters — and it was missing from the deck's admitted font list, so every Kurdish
+    // design threw "Unsupported font or unreadable size" and produced no deliverable at all.
+    const plan = {
+      width: 1080,
+      height: 1920,
+      background: '#0A1628',
+      text: [
+        {
+          copyIndex: 0, x: 130, y: 400, width: 821, height: 200,
+          fontSize: 48, fontFamily: 'Amiri', color: '#FDF8F3',
+          align: 'right' as const, rtl: true, lineHeight: 1.3,
+        },
+        {
+          copyIndex: 1, x: 130, y: 900, width: 821, height: 160,
+          fontSize: 27, fontFamily: 'Noto Sans Arabic', color: '#FDF8F3',
+          align: 'right' as const, rtl: true, lineHeight: 1.5,
+        },
+      ],
+      shapes: [
+        { x: 130, y: 700, width: 821, height: 2, color: '#C5A059', kind: 'line' as const },
+      ],
+    };
+    const out = await encodeEditableTransfer(plan, ['کوالیتی خوێندن', 'پێویسته هەموو کۆلێژ و زانکۆکان']);
+    expect(out.bytes.length).toBeGreaterThan(1000);
+    expect(out.manifest.rtlBlocks).toEqual([0, 1]);
+  });
+
+  it('every font the generator can assign is admitted by the deck', async () => {
+    const { encodeEditableTransfer } = await import('../src/editable-transfer.js');
+    // The generator picks from these; any one of them missing downstream breaks the deliverable.
+    const families = ['Verdana', 'Cinzel', 'Playfair Display', 'Noto Sans Arabic', 'Cairo', 'Amiri'];
+    for (const fontFamily of families) {
+      const plan = {
+        width: 1080,
+        height: 1080,
+        background: '#0A1628',
+        text: [
+          {
+            copyIndex: 0, x: 100, y: 100, width: 800, height: 120,
+            fontSize: 32, fontFamily, color: '#FDF8F3', align: 'center' as const, lineHeight: 1.4,
+          },
+        ],
+        shapes: [],
+      };
+      const out = await encodeEditableTransfer(plan, ['Sample']);
+      expect(out.bytes.length, `${fontFamily} must encode`).toBeGreaterThan(1000);
+    }
+  });
+});

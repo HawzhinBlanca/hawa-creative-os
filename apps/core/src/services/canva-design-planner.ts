@@ -106,7 +106,7 @@ export class CanvaDesignPlanner {
       task.source?.studioOptions?.documentKind ||
       (/(letter|certificate|agenda|programme|decree|resolution|statement)/i.test(task.description || '') ? 'formal_document' : 'design_piece');
     const admittedFonts: string[] = reference.rules?.typography?.display?.admitted || [
-      'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana', 'Noto Sans Arabic'
+      'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Amiri', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana', 'Noto Sans Arabic'
     ];
     const formalBodyFonts = reference.rules?.typography?.formalBody || {
       latin: 'Verdana',

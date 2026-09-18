@@ -541,7 +541,22 @@ Amiri render fine under that same config. Their Kurdish text renders in an uncon
 today. Changing another brand's specified typeface is the owner's decision; the failure is no longer
 silent.
 
-## 18. What remains
+## 18. T6 closed, and one of its four requirements was wrong
+
+Measured against the fresh twenty-brief run rather than argued:
+
+| T6 | Requirement | Status |
+|---|---|---|
+| (a) | Recalibrate the metrics "so a 40%-empty canvas fails" | **Invalidated.** The six confirmed exemplars measure 0.11-0.15 block coverage — 85-89% empty. Calibrating against them makes a 40%-empty canvas pass comfortably, which is the opposite of what this asks. The premise that 40% empty is a defect does not survive contact with the owner's own references. |
+| (b) | Constrain tracking so an eyebrow can never wrap | **Done.** 0 of 18 eyebrows wrap to two lines. The autofit that shrinks an over-long eyebrow now actually applies its result — it used to compute a smaller size and emit the original. |
+| (c) | Stop the footer band defaulting to cream on a dark canvas | **Done.** 0 large light blocks on a dark canvas across 20 briefs. Six light shapes remain and are correct: thin gold rules, the device the exemplars themselves use. |
+| (d) | Raise skeleton diversity | **Done.** 20 distinct skeletons of 20 briefs. |
+
+(a) is the one worth dwelling on. It was a reasonable-sounding requirement, it was approved, and
+implementing it would have pushed every design away from the reference set it is meant to match. The
+only reason it is not in the code is that the exemplars were measured before the band was changed.
+
+## 19. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
