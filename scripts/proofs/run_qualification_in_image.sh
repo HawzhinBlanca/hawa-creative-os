@@ -23,7 +23,7 @@ IMAGE="${HAWA_QUALIFICATION_IMAGE:-hawa-core:canva-only-20260913}"
 KEY_SOURCE_CONTAINER="${HAWA_KEY_CONTAINER:-hawa-production-core-1}"
 
 if [[ "${1:-}" == "--check" ]]; then
-  echo "Checking the image can run the qualification (no model spend)..."
+  echo "Checking the image can run the qualification on the ${HAWA_MODEL_TIER:-production} tier (no model spend)..."
   # A deliberately invalid key: reaching a 401 proves imports, egress and the cost governor work.
   OUT=$(docker run --rm \
     -v "$REPO_ROOT/scripts:/app/scripts:ro" \
@@ -31,6 +31,8 @@ if [[ "${1:-}" == "--check" ]]; then
     -v "$REPO_ROOT/packages/domain/dist:/app/packages/domain/dist:ro" \
     -e OPENAI_API_KEY=sk-invalid-plumbing-check \
     -e HAWA_QUALIFICATION_OUT_DIR=/tmp/qualification-check \
+    -e HAWA_MODEL_TIER="${HAWA_MODEL_TIER:-production}" \
+    -e HAWA_QUALIFICATION_BRIEF_SET="${HAWA_QUALIFICATION_BRIEF_SET:-qualification}" \
     -e HAWA_MODEL_MAX_ATTEMPTS=1 \
     -w /app "$IMAGE" \
     sh -c './node_modules/.bin/tsx scripts/run_p10_qualification.ts 2>&1 | head -40' || true)

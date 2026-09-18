@@ -5,7 +5,10 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolveModel, isDevModelTier, activeModelTier } from '../packages/domain/dist/provider-policy.js';
 
-const PRICING = createRequire(import.meta.url)('../packages/creative/src/studio/pricing.json') as {
+// Prices come from the compiled package the runner imports its code from. Reading src/ instead
+// meant that in the image — where only dist/ is mounted — the runner priced from the image's
+// stale copy, which had no dev-tier models: every brief paid for its layout call, then failed.
+const PRICING = createRequire(import.meta.url)('../packages/creative/dist/studio/pricing.json') as {
   models: Record<string, { inputPerMillion?: number; outputPerMillion?: number; cacheReadPerMillion?: number }>;
 };
 import {
@@ -516,8 +519,18 @@ function recordingClient(
           const stage = stageFor(params?.jsonSchema?.name);
           const res = await target.createStructuredCompletion(params);
           const r = res.receipt;
-          const model = r.model || params?.model || fallbackModel;
-          const costs = computeTokenCosts(r.inputTokens, r.cacheReadTokens ?? 0, r.outputTokens, model);
+          const requested = params?.model || fallbackModel;
+          let model = r.model || requested;
+          let costs;
+          try {
+            costs = computeTokenCosts(r.inputTokens, r.cacheReadTokens ?? 0, r.outputTokens, model);
+          } catch {
+            // The call is already paid for, so it must reach the ledger. The requested model was
+            // checked against the price table before any spend; price the call at its rates.
+            console.warn(`[P10 LEDGER] No price for echoed model '${model}'; recording at '${requested}' rates.`);
+            model = requested;
+            costs = computeTokenCosts(r.inputTokens, r.cacheReadTokens ?? 0, r.outputTokens, model);
+          }
           record({
             call_id: r.responseId,
             x_request_id: r.xRequestId || '',
@@ -863,6 +876,16 @@ async function main() {
   console.log(
     `[Cost Governor] Active Caps: Per-Brief = $${perBriefCap.toFixed(2)} | Office Daily = $${dailyCap.toFixed(2)}`
   );
+
+  // Pre-flight: every model this run will call must have a price, checked before any spend. The
+  // first cheap-tier run paid for four layout calls before discovering it could not price them.
+  const unpriced = (['layout', 'critique', 'judge'] as const)
+    .map((role) => resolveModel(role))
+    .filter((model) => !resolveRatesForModel(PRICING.models as Record<string, any>, model)?.inputPerMillion);
+  if (unpriced.length) {
+    console.error(`No price for ${[...new Set(unpriced)].join(', ')} in packages/creative/dist/studio/pricing.json; refusing to spend.`);
+    process.exit(1);
+  }
 
   // Pre-flight check: can we afford at least 1 brief?
   const estimatedMinCost = 0.05;
