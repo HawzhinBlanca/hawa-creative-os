@@ -690,3 +690,20 @@ describe('the logo is lifted clear of the text below it', { timeout: 30000 }, ()
     expect(layout.text[0].y).toBe(330); // the text did not move: the logo did
   });
 });
+
+describe('inserted space moves a low logo with its content', { timeout: 30000 }, () => {
+  it('keeps a bottom logo clear of text pushed down by a growing box', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    // A tall Sorani-free title box that must grow, and a logo in the lower part of the design.
+    layout.text[1].height = 60; // two lines of 72px type need far more than 60px
+    layout.text = layout.text.filter((t) => t.role !== 'footer');
+    layout.logo = { x: 490, y: 1000, width: 100, height: 100 };
+    const before = layout.logo.y;
+    conformToHouseRules(layout, COPY);
+    const intersects = (a: any, b: any) => !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+    for (const t of layout.text) expect(intersects(t, layout.logo)).toBe(false);
+    expect(layout.logo.y).toBeGreaterThanOrEqual(before);
+  });
+});
+

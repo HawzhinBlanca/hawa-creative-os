@@ -133,6 +133,8 @@ type Rect = { x: number; y: number; width: number; height: number };
 const intersects = (a: Rect, b: Rect) =>
   !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
 
+const overlapsXRect = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
+
 /** Moves and, only if it cannot fit, shrinks a box so it lies inside `area`. */
 function fitInside(box: Rect, area: Rect): void {
   box.width = Math.min(box.width, area.width);
@@ -259,19 +261,25 @@ export function conformToHouseRules(
     }
   }
 
-  // A logo whose clear space still reaches the text below it is lifted towards the top margin —
-  // never above it, never into anything above it. The cheap tier put a 154px banner logo at
-  // y=203 with 88px free above it, and its clear space overlapped the eyebrow by 13px.
+  // A logo whose clear space still meets text moves within the gap it sits in: up when text
+  // below crowds it, down when text above does — never past a block that shares its column, and
+  // never out of the safe area. (The cheap tier put a 154px banner logo at y=203 with 88px free
+  // above it, its clear space 13px into the eyebrow; a first version searched the whole canvas
+  // and could carry a bottom logo over every block to the top.)
   if (layout.logo) {
     const l = layout.logo;
     const blockers: Rect[] = [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
     const clearAt = (y: number) => !blockers.some((b) => intersects(b, logoClearZone({ ...l, y })));
     if (!clearAt(l.y)) {
-      for (let y = l.y - 1; y >= m; y--) {
-        if (clearAt(y)) {
-          layout.logo = { ...l, y };
-          break;
-        }
+      const sameColumn = blockers.filter((b) => overlapsXRect(b, l));
+      const ceiling = Math.max(m, ...sameColumn.filter((b) => b.y + b.height <= l.y).map((b) => b.y + b.height));
+      const floor = Math.min(H - m - l.height, ...sameColumn.filter((b) => b.y >= l.y + l.height).map((b) => b.y - l.height));
+      const crowdedBelow = blockers.some((b) => b.y >= l.y && intersects(b, logoClearZone(l)));
+      let moved = false;
+      if (crowdedBelow) {
+        for (let y = l.y - 1; y >= ceiling && !moved; y--) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
+      } else {
+        for (let y = l.y + 1; y <= floor && !moved; y++) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
       }
     }
   }
@@ -293,11 +301,14 @@ export function conformToHouseRules(
     const stretching = (layout.shapes || []).filter(
       (s) => !fullBleed(s) && s.role === 'panel' && s.y < atY && s.y + s.height > atY && !keep.has(s)
     );
-    const lowest = Math.max(0, ...moving.map((o) => o.y + o.height));
-    if (moving.length && lowest + delta > safeBottom) return false;
+    // A logo below the line moves with the content around it, or text would be pushed onto it.
+    const logoMoves = !!layout.logo && layout.logo.y >= atY && !keep.has(layout.logo);
+    const lowest = Math.max(0, ...moving.map((o) => o.y + o.height), logoMoves ? layout.logo!.y + layout.logo!.height : 0);
+    if ((moving.length || logoMoves) && lowest + delta > safeBottom) return false;
     if (stretching.some((s) => s.y + s.height + delta > H)) return false;
     for (const o of moving) o.y += delta;
     for (const s of stretching) s.height += delta;
+    if (logoMoves) layout.logo = { ...layout.logo!, y: layout.logo!.y + delta };
     return true;
   };
   const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
