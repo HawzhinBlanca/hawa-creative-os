@@ -1922,6 +1922,16 @@ export function createApp(options?: CreateAppOptions) {
 
     let notification: {success:boolean;messageId?:string;error?:string} | undefined;
     // 5. Outbound Telegram Dispatch
+    if (platform === 'telegram' && (!sourceChannelId || sourceChannelId === 'tg_default')) {
+      // The task is created either way, so without this the request simply lands in the queue and
+      // the person who sent it is never acknowledged — indistinguishable, from their side, from
+      // the system ignoring them.
+      console.error(
+        `[telegram] Task accepted but the sender cannot be acknowledged: no usable source channel ` +
+          `(got ${JSON.stringify(sourceChannelId)}). Sender=${JSON.stringify(senderName)} ` +
+          `event=${JSON.stringify(sourceEventId)}.`
+      );
+    }
     if (platform === 'telegram' && sourceChannelId && sourceChannelId !== 'tg_default') {
       let clientDisplayName = isKaae ? 'KAAE (Accreditation)' : senderName;
       if (clientId === 'client-fastpay' || clientId === 'c1000000-0000-4000-8000-000000000004') clientDisplayName = 'FastPay Mobile Wallet';
@@ -3006,7 +3016,22 @@ export function createApp(options?: CreateAppOptions) {
 
       // Handle questions and general chatter without polluting task pipeline
       if (classification.kind === 'question' || classification.kind === 'other') {
-        if (sourceChannelId && sourceChannelId !== 'tg_default') {
+        if (!sourceChannelId || sourceChannelId === 'tg_default') {
+          // Returning PROCESSED here without sending anything is how a person ends up messaging
+          // the system and getting silence — the reported symptom that started this work. The
+          // reply still cannot be sent without a channel, but the drop is no longer invisible.
+          console.error(
+            `[telegram] Cannot reply to a '${classification.kind}' message: no usable source ` +
+              `channel (got ${JSON.stringify(sourceChannelId)}). Sender=${JSON.stringify(senderName)} ` +
+              `event=${JSON.stringify(sourceEventId)}. The sender received no answer.`
+          );
+          return c.json({
+            ok: true,
+            status: 'UNANSWERABLE_NO_CHANNEL',
+            kind: classification.kind,
+          });
+        }
+        {
           const isSorani = /[\u0600-\u06FF]/.test(rawText);
           const replyText = classification.kind === 'question'
             ? (isSorani
