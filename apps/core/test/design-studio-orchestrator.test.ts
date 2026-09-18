@@ -336,6 +336,19 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         height: 1350,
       })
     ).rejects.toMatchObject({ code: 'STUDIO_BUSY' });
+
+    // Production, 2026-09-18: a Desk run nobody resumed sat at 'briefing' and, with one older
+    // leftover, refused every Telegram request with STUDIO_BUSY. Runs left unadvanced for
+    // 30 minutes no longer hold a tenant slot; their own task still resumes or abandons them.
+    await withRlsContext(db, scope, async (tx) => {
+      await sql`UPDATE hawa.design_studio_runs SET updated_at = now() - interval '31 minutes'
+        WHERE id IN (${run1.run.id}::uuid, ${run2.run.id}::uuid)`.execute(tx);
+    });
+    const run3 = await service.createOrGetRun(scope, taskId3, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 });
+    expect(run3.created).toBe(true);
+    await expect(
+      service.createOrGetRun(scope, taskId1, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 })
+    ).rejects.toMatchObject({ code: 'STUDIO_RUN_IN_PROGRESS' });
   });
 
   it('3. interruption between stages resumes without a second charge (ledger count unchanged)', async () => {
