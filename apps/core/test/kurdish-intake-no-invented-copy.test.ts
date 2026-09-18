@@ -94,6 +94,30 @@ describe('Kurdish Telegram intake with no copy', () => {
   });
 });
 
+// The FastPay, Aster and Drustee templates used to fill every empty slot with their own sample
+// lines, so a Kurdish request came back with an English headline and body nobody sent.
+describe('Brand designs at intake', () => {
+  const textsOf = (ops: any[]) => ops.filter((op) => op.op === 'addText').map((op) => op.text.replace(/[\u2067\u2069]/g, ''));
+
+  it('draws only the Kurdish copy of a Kurdish FastPay request', async () => {
+    const app = createApp({ telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }) } as any });
+    const { task } = await (await telegram(app, 'تکایە پۆستێک بۆ فاستپەی دروست بکە\nدەق:\nپارە بنێرە بە چەند چرکەیەک\nبێ کرێ بۆ هەموو گواستنەوەیەک', '?generate=true')).json();
+
+    expect(task.clientId).toBe('client-fastpay');
+    expect(task.designRefusal).toBeUndefined();
+    expect(textsOf(task.generatedOps)).toEqual(['پارە بنێرە بە چەند چرکەیەک', 'بێ کرێ بۆ هەموو گواستنەوەیەک']);
+  });
+
+  it('draws only the English copy of an English FastPay request', async () => {
+    const app = createApp({ telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }) } as any });
+    const { task } = await (await telegram(app, 'Please create a FastPay post\nCopy:\nSend money in seconds\nNo fees on personal transfers', '?generate=true')).json();
+
+    expect(task.clientId).toBe('client-fastpay');
+    expect(task.designRefusal).toBeUndefined();
+    expect(textsOf(task.generatedOps)).toEqual(['Send money in seconds', 'No fees on personal transfers']);
+  });
+});
+
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 if (url && new URL(url).pathname !== '/hawa_repair') throw new Error('Only disposable hawa_repair database admitted');
 describe.skipIf(!url)('Kurdish Telegram intake with no copy, persisted', () => {

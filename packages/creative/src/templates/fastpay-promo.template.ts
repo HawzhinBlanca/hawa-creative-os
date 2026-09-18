@@ -19,13 +19,18 @@ export const FASTPAY_PRIMARY_LOGO_SHA256 = 'sha256_fastpay_fintech_verified_c89b
  */
 export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): StudioOperation[] {
   const pageId = params.pageId || 'fastpay_promo_1x1';
-  const headlineCkb = params.headlineCkb || 'گواستنەوەی خێرای پارە لە ڕێگەی فاستپەی';
-  const headlineEn = params.headlineEn || 'Instant Money Transfer Anywhere in Kurdistan';
-  const copyCkb = params.copyCkb || 'بە چەند چرکەیەک پارە بنێرە و وەربگرە بە بێ هیچ کرێیەکی زیادە';
-  const copyEn = params.copyEn || 'Zero fees on personal transfers · Licensed by the Central Bank of Iraq';
-  const badgeText = params.badgeText || '⚡ داشکاندنی تایبەت · 0% FEES';
-  const discountText = params.discountText || 'خەڵاتی بەخێرهاتن: ٥٬٠٠٠ دینار کاشباک';
-  const contactText = params.contactText || 'fast-pay.cash · 066 211 0000 · هەولێر، ئیمپایەر وۆرڵد';
+  // Only copy the client sent is drawn. An empty slot is left out, never filled with sample text.
+  const sent = (text?: string) => (text?.trim() ? text : undefined);
+  const headlineCkb = sent(params.headlineCkb);
+  const headlineEn = sent(params.headlineEn);
+  const copyCkb = sent(params.copyCkb);
+  const copyEn = sent(params.copyEn);
+  const badgeText = sent(params.badgeText);
+  const discountText = sent(params.discountText);
+  const contactText = sent(params.contactText);
+  // The card holds one body: the Kurdish one when sent, otherwise the English one. The English
+  // body sits below the card only when both were sent.
+  const cardBody = copyCkb ?? copyEn;
 
   const ops: StudioOperation[] = [
     // 1. Vector High-Energy Backdrop Gradient with Electric Glow and Outer Frame
@@ -87,8 +92,11 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
       height: 68,
       locked: true,
     },
-    // 3. Central Bank of Iraq Regulatory Authority Badge (Top-Right)
-    {
+  ];
+
+  // 3. Authority Badge (Top-Right)
+  if (badgeText) {
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_authority_badge',
       pageId,
@@ -107,9 +115,12 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
         textAlign: 'right',
       },
       locked: true,
-    },
-    // 4. Primary Headline Sorani (Kurdish)
-    {
+    });
+  }
+
+  // 4. Primary Headline Sorani (Kurdish)
+  if (headlineCkb) {
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_headline_ckb',
       pageId,
@@ -128,29 +139,32 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
         lineHeight: 1.35,
       },
       locked: false,
-    },
-    // 5. English Subheading
-    {
+    });
+  }
+
+  // 5. English headline: a subheading under the Kurdish one, or the headline itself when alone
+  if (headlineEn) {
+    const alone = !headlineCkb;
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_headline_en',
       pageId,
       text: headlineEn,
-      role: 'subheading',
+      role: alone ? 'headline' : 'subheading',
       x: 80,
-      y: 335,
+      y: alone ? 200 : 335,
       width: 920,
-      height: 48,
-      style: {
-        fontSize: 22,
-        fontWeight: '600',
-        fontFamily: 'Montserrat, Inter, sans-serif',
-        fill: '#38BDF8',
-        direction: 'ltr',
-      },
+      height: alone ? 120 : 48,
+      style: alone
+        ? { fontSize: 44, fontWeight: '800', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#FFFFFF', direction: 'ltr', lineHeight: 1.35 }
+        : { fontSize: 22, fontWeight: '600', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#38BDF8', direction: 'ltr' },
       locked: false,
-    },
-    // 6. Cashback / Zero-Fee Feature Callout Card
-    {
+    });
+  }
+
+  // 6. Feature Callout Card, drawn only around copy
+  if (discountText || cardBody) {
+    ops.push({
       op: 'addVector',
       nodeId: 'fastpay_card_accent',
       pageId,
@@ -172,9 +186,12 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
       width: 920,
       height: 220,
       locked: true,
-    },
-    // 7. Cashback Promotional Text inside Card
-    {
+    });
+  }
+
+  // 7. Promotional Text inside Card
+  if (discountText) {
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_discount_display',
       pageId,
@@ -192,30 +209,37 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
         direction: 'rtl',
       },
       locked: false,
-    },
-    // 8. Body Copy Sorani (Kurdish)
-    {
+    });
+  }
+
+  // 8. Body inside Card: Kurdish, or English when no Kurdish body was sent. It moves up into the
+  // promotional line's place when there is none.
+  if (cardBody) {
+    ops.push({
       op: 'addText',
-      nodeId: 'fastpay_body_ckb',
+      nodeId: copyCkb ? 'fastpay_body_ckb' : 'fastpay_copy_en',
       pageId,
-      text: `\u2067${copyCkb}\u2069`,
+      text: copyCkb ? `\u2067${copyCkb}\u2069` : cardBody,
       role: 'body',
       x: 120,
-      y: 535,
+      y: discountText ? 535 : 460,
       width: 680,
-      height: 65,
+      height: discountText ? 65 : 140,
       style: {
         fontSize: 20,
         fontWeight: '500',
-        fontFamily: 'Noto Sans Arabic, sans-serif',
+        fontFamily: copyCkb ? 'Noto Sans Arabic, sans-serif' : 'Inter, sans-serif',
         fill: '#E2E8F0',
-        direction: 'rtl',
+        direction: copyCkb ? 'rtl' : 'ltr',
         lineHeight: 1.45,
       },
       locked: false,
-    },
-    // 9. English Regulatory / Zero-Fees Disclaimer
-    {
+    });
+  }
+
+  // 9. English body below the card, when the Kurdish body holds the card
+  if (copyCkb && copyEn) {
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_copy_en',
       pageId,
@@ -233,9 +257,12 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
         direction: 'ltr',
       },
       locked: false,
-    },
-    // 10. Footer Security & Compliance Bar
-    {
+    });
+  }
+
+  // 10–11. Footer bar and contact line, drawn only with contact details the client sent
+  if (contactText) {
+    ops.push({
       op: 'addVector',
       nodeId: 'fastpay_footer_bg',
       pageId,
@@ -251,9 +278,8 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
       width: 920,
       height: 96,
       locked: true,
-    },
-    // 11. Official Contact / Central Bank of Iraq Note
-    {
+    });
+    ops.push({
       op: 'addText',
       nodeId: 'fastpay_contact_info',
       pageId,
@@ -271,8 +297,8 @@ export function buildFastpayPromoTemplate(params: FastpayPromoParams = {}): Stud
         direction: 'rtl',
       },
       locked: true,
-    },
-  ];
+    });
+  }
 
   return ops;
 }

@@ -182,10 +182,10 @@ export function isValidUuid(id: unknown): boolean {
 type TaskCopyFields = { headlineEn?: string | null; headlineCkb?: string | null; copyEn?: string | null; copyCkb?: string | null };
 
 /**
- * True when an inline template would have to draw copy the client never sent. The KAAE templates
- * draw only what they are given, so they need a headline. The brand templates (FastPay, Aster,
- * Drustee) put sample text in an empty headline or body, so they need both, in one language.
- * Callers refuse with COPY_REQUIRED.
+ * True when the client sent too little copy for an inline template to design around. Every
+ * inline template draws only the copy it is given and leaves an empty slot out. A KAAE design
+ * needs a headline. A brand design (FastPay, Aster, Drustee) is laid out around a headline and
+ * a body card, so it needs both, in one language. Callers refuse with COPY_REQUIRED.
  */
 export function inlineTemplateCopyMissing(template: 'kaae' | 'brand', copy: TaskCopyFields): boolean {
   const has = (text?: string | null) => Boolean(text && text.trim());
@@ -6792,9 +6792,14 @@ export function createApp(options?: CreateAppOptions) {
     const body = await c.req.json().catch(() => ({}));
     const clientId = body.clientId || 'client-drustee';
     const platform = body.platform || 'whatsapp';
-    const text = body.text || body.message || 'ئۆفەری تایبەتی جەژن بۆ کڕیارانی دەرمانخانە';
+    const message = body.text || body.message;
+    const text = typeof message === 'string' ? message : '';
     const senderName = body.senderName || 'Drustee Official';
     const phone = body.phone || '9647501234567';
+
+    // A rehearsal replays a message someone sent. Without one there is nothing to replay, and a
+    // sample message would become a client task with invented copy.
+    if (!text.trim()) return problem(c, 422, 'COPY_REQUIRED', 'Send the message text to rehearse. No sample message will be invented.');
 
     const normalizedText = normalizeKurdishIncomingText(text);
     const estimatedTokens = 450;
@@ -6833,10 +6838,11 @@ export function createApp(options?: CreateAppOptions) {
       senderName,
       kurdishText: normalizedText,
       title: body.title || `${senderName} Inbound Campaign`,
-      headlineCkb: normalizedText.split('\n')[0]?.slice(0, 40) || 'کەمپینی تایبەت',
-      headlineEn: body.headlineEn || 'Special Seasonal Campaign',
+      // Only what the message and the caller carried; an absent language stays empty.
+      headlineCkb: normalizedText.split('\n').find((line) => line.trim())?.slice(0, 40),
+      headlineEn: body.headlineEn || undefined,
       copyCkb: normalizedText,
-      copyEn: body.copyEn || 'Exclusive Office Promotion',
+      copyEn: body.copyEn || undefined,
       costReceipt,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -7629,7 +7635,6 @@ export function createApp(options?: CreateAppOptions) {
     if (!task) return problem(c, 404, 'Task Not Found');
     const clientId = task.clientId || defaultClientId;
     const client = clientDnas.get(clientId);
-    const brief = briefs.get(taskId);
 
     const body = await c.req.json().catch(() => ({}));
 
@@ -7640,74 +7645,20 @@ export function createApp(options?: CreateAppOptions) {
     const secondaryColor = client?.colors?.find((c) => c.role === 'secondary')?.hex || '#374151';
     const accentColor = client?.colors?.find((c) => c.role === 'accent')?.hex || '#D97706';
 
-    let nodes: RubricCanvasNode[] = body.nodes;
-    if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
-      const headlineText = brief?.objective || (task as any).title || 'ڕاگەیاندنی فەرمی نوێ';
-      nodes = [
-        {
-          id: 'node-headline',
-          role: 'headline',
-          text: headlineText,
-          x: 100,
-          y: dimensions.height === 1920 ? 300 : 180,
-          width: dimensions.width - 200,
-          height: 140,
-          fontSize: 48,
-          lineHeight: 1.6,
-          fontFamily: 'Noto Sans Arabic, Rabar',
-          color: primaryColor,
-          background: '#FFFFFF',
-        },
-        {
-          id: 'node-sub',
-          role: 'body',
-          text: 'داشکاندنی سەرەتای وەرز لە تەواوی لقەکانمان بەردەستە',
-          x: 100,
-          y: dimensions.height === 1920 ? 480 : 340,
-          width: dimensions.width - 200,
-          height: 80,
-          fontSize: 24,
-          lineHeight: 1.5,
-          fontFamily: 'Noto Sans Arabic, Rabar',
-          color: secondaryColor,
-          background: '#FFFFFF',
-        },
-        {
-          id: 'node-price',
-          role: 'price',
-          text: '25,000 IQD',
-          x: 100,
-          y: dimensions.height === 1920 ? 600 : 440,
-          width: 300,
-          height: 60,
-          fontSize: 32,
-          lineHeight: 1.4,
-          fontFamily: 'Outfit, sans-serif',
-          color: accentColor,
-          background: '#FFFFFF',
-        },
-        {
-          id: 'node-cta',
-          role: 'cta',
-          text: 'داوا بکە لە ڕێگەی واتسئەپەوە',
-          x: (dimensions.width - 360) / 2,
-          y: dimensions.height - (dimensions.height === 1920 ? 350 : 200),
-          width: 360,
-          height: 64,
-          fontSize: 20,
-          lineHeight: 1.5,
-          fontFamily: 'Noto Sans Arabic, Rabar',
-          color: '#FFFFFF',
-          background: primaryColor,
-        },
-      ];
+    // The rubric scores the revision the caller sends. A sample canvas scored in its place would
+    // report a grade for a design that does not exist.
+    const nodes: RubricCanvasNode[] = body.nodes;
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      return problem(c, 422, 'NODES_REQUIRED', 'Send the canvas nodes of the revision to score. No sample canvas is scored in its place.');
     }
 
-    const approvedCopy = body.approvedCopy || {
-      headlineCkb: brief?.objective || (task as any).title,
-      prices: ['25,000 IQD'],
-      phones: ['+964 750 000 0000'],
-    };
+    // Approved copy is what the client sent, never the task title and never sample prices or phones.
+    const sentCopy = Object.fromEntries(
+      (['headlineEn', 'headlineCkb', 'copyEn', 'copyCkb'] as const)
+        .map((field) => [field, (task as any)[field]])
+        .filter(([, value]) => typeof value === 'string' && value.trim())
+    );
+    const approvedCopy = body.approvedCopy || (Object.keys(sentCopy).length > 0 ? sentCopy : undefined);
 
     const brandColors = body.brandColors || [primaryColor, secondaryColor, accentColor];
 

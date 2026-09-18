@@ -21,13 +21,18 @@ export const DRUSTEE_PRIMARY_LOGO_SHA256 = 'sha256_drustee_health_verified_f93e4
  */
 export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {}): StudioOperation[] {
   const pageId = params.pageId || 'drustee_clinical_1x1';
-  const headlineCkb = params.headlineCkb || 'تەواوکەری خۆراکی سروشتی بۆ تەندروستی خێزان';
-  const headlineEn = params.headlineEn || 'Premium Organic Nutrition & Clinical Supplements';
-  const copyCkb = params.copyCkb || 'بڕوانامەپێدراوی نێودەوڵەتی GMP و تاقیگەی کۆنتڕۆڵی جۆریی هەرێمی کوردستان';
-  const copyEn = params.copyEn || 'Certified 100% Organic & Non-GMO · Laboratory Tested for Maximum Potency';
-  const badgeText = params.badgeText || '🌿 سروشتی و زانستی · CERTIFIED GMP';
-  const discountText = params.discountText || 'پاکێجی تایبەتی ڤیتامین C و زینک بە داشکاندنی ٪٣٠';
-  const contactText = params.contactText || 'drustee.krd · 0750 999 4433 · سلێمانی، شەقامی توی مەلیک';
+  // Only copy the client sent is drawn. An empty slot is left out, never filled with sample text.
+  const sent = (text?: string) => (text?.trim() ? text : undefined);
+  const headlineCkb = sent(params.headlineCkb);
+  const headlineEn = sent(params.headlineEn);
+  const copyCkb = sent(params.copyCkb);
+  const copyEn = sent(params.copyEn);
+  const badgeText = sent(params.badgeText);
+  const discountText = sent(params.discountText);
+  const contactText = sent(params.contactText);
+  // The card holds one body: the Kurdish one when sent, otherwise the English one. The English
+  // body sits below the card only when both were sent.
+  const cardBody = copyCkb ?? copyEn;
 
   const ops: StudioOperation[] = [
     // 1. Vector 1:1 Botanical Forest Backdrop with Gold Aura
@@ -74,7 +79,7 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
           <!-- Leaf & Drop Emblem -->
           <path d="M 38 20 C 38 20 48 30 48 38 C 48 44 43 49 38 49 C 33 49 28 44 28 38 C 28 30 38 20 38 20 Z" fill="#EAB308"/>
           <text x="70" y="34" fill="#FFFFFF" font-family="Montserrat, Inter, sans-serif" font-weight="900" font-size="18" letter-spacing="1">DRUSTEE</text>
-          <text x="70" y="50" fill="#EAB308" font-family="Montserrat, Inter, sans-serif" font-weight="700" font-size="11" letter-spacing="2">HEALTH & WELLNESS</text>
+          <text x="70" y="50" fill="#EAB308" font-family="Montserrat, Inter, sans-serif" font-weight="700" font-size="11" letter-spacing="2">HEALTH &amp; WELLNESS</text>
         </svg>
       `.trim(),
       x: 80,
@@ -83,8 +88,11 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
       height: 70,
       locked: true,
     },
-    // 3. Botanical Quality Badge (Top-Right)
-    {
+  ];
+
+  // 3. Quality Badge (Top-Right)
+  if (badgeText) {
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_authority_badge',
       pageId,
@@ -103,9 +111,12 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
         textAlign: 'right',
       },
       locked: true,
-    },
-    // 4. Primary Kurdish Headline (Sorani)
-    {
+    });
+  }
+
+  // 4. Primary Kurdish Headline (Sorani)
+  if (headlineCkb) {
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_headline_ckb',
       pageId,
@@ -124,29 +135,32 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
         lineHeight: 1.35,
       },
       locked: false,
-    },
-    // 5. English Subheading
-    {
+    });
+  }
+
+  // 5. English headline: a subheading under the Kurdish one, or the headline itself when alone
+  if (headlineEn) {
+    const alone = !headlineCkb;
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_headline_en',
       pageId,
       text: headlineEn,
-      role: 'subheading',
+      role: alone ? 'headline' : 'subheading',
       x: 80,
-      y: 335,
+      y: alone ? 200 : 335,
       width: 920,
-      height: 48,
-      style: {
-        fontSize: 22,
-        fontWeight: '600',
-        fontFamily: 'Montserrat, Inter, sans-serif',
-        fill: '#FDE047',
-        direction: 'ltr',
-      },
+      height: alone ? 120 : 48,
+      style: alone
+        ? { fontSize: 44, fontWeight: '800', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#FFFFFF', direction: 'ltr', lineHeight: 1.35 }
+        : { fontSize: 22, fontWeight: '600', fontFamily: 'Montserrat, Inter, sans-serif', fill: '#FDE047', direction: 'ltr' },
       locked: false,
-    },
-    // 6. Supplement Showcase Card
-    {
+    });
+  }
+
+  // 6. Showcase Card, drawn only around copy
+  if (discountText || cardBody) {
+    ops.push({
       op: 'addVector',
       nodeId: 'drustee_card_accent',
       pageId,
@@ -160,9 +174,9 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
           </defs>
           <rect width="920" height="220" rx="24" fill="url(#drusteeCardGrad)" stroke="#EAB308" stroke-width="2" stroke-opacity="0.6"/>
           <circle cx="830" cy="110" r="70" fill="#EAB308" fill-opacity="0.12"/>
-          <!-- Sun Seal / GMP Stamp -->
+          <!-- Sun Seal with the brand leaf -->
           <circle cx="830" cy="110" r="45" fill="none" stroke="#EAB308" stroke-width="2" stroke-dasharray="4 3"/>
-          <text x="830" y="116" fill="#EAB308" font-family="Inter, sans-serif" font-weight="900" font-size="14" text-anchor="middle">GMP</text>
+          <path d="M 830 88 C 830 88 845 103 845 115 C 845 124 838 131 830 131 C 822 131 815 124 815 115 C 815 103 830 88 830 88 Z" fill="#EAB308"/>
         </svg>
       `.trim(),
       x: 80,
@@ -170,9 +184,12 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
       width: 920,
       height: 220,
       locked: true,
-    },
-    // 7. Discount / Promotional Text inside Card
-    {
+    });
+  }
+
+  // 7. Promotional Text inside Card
+  if (discountText) {
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_discount_display',
       pageId,
@@ -190,30 +207,37 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
         direction: 'rtl',
       },
       locked: false,
-    },
-    // 8. Body Copy Sorani (Kurdish)
-    {
+    });
+  }
+
+  // 8. Body inside Card: Kurdish, or English when no Kurdish body was sent. It moves up into the
+  // promotional line's place when there is none.
+  if (cardBody) {
+    ops.push({
       op: 'addText',
-      nodeId: 'drustee_body_ckb',
+      nodeId: copyCkb ? 'drustee_body_ckb' : 'drustee_copy_en',
       pageId,
-      text: `\u2067${copyCkb}\u2069`,
+      text: copyCkb ? `\u2067${copyCkb}\u2069` : cardBody,
       role: 'body',
       x: 120,
-      y: 535,
+      y: discountText ? 535 : 460,
       width: 680,
-      height: 65,
+      height: discountText ? 65 : 140,
       style: {
         fontSize: 20,
         fontWeight: '500',
-        fontFamily: 'Noto Sans Arabic, sans-serif',
+        fontFamily: copyCkb ? 'Noto Sans Arabic, sans-serif' : 'Inter, sans-serif',
         fill: '#E2E8F0',
-        direction: 'rtl',
+        direction: copyCkb ? 'rtl' : 'ltr',
         lineHeight: 1.45,
       },
       locked: false,
-    },
-    // 9. English Regulatory / Laboratory Disclaimer
-    {
+    });
+  }
+
+  // 9. English body below the card, when the Kurdish body holds the card
+  if (copyCkb && copyEn) {
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_copy_en',
       pageId,
@@ -231,9 +255,12 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
         direction: 'ltr',
       },
       locked: false,
-    },
-    // 10. Footer Botanical Quality Bar
-    {
+    });
+  }
+
+  // 10–11. Footer bar and contact line, drawn only with contact details the client sent
+  if (contactText) {
+    ops.push({
       op: 'addVector',
       nodeId: 'drustee_footer_bg',
       pageId,
@@ -249,9 +276,8 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
       width: 920,
       height: 96,
       locked: true,
-    },
-    // 11. Official Contact / Pharmacy Location
-    {
+    });
+    ops.push({
       op: 'addText',
       nodeId: 'drustee_contact_info',
       pageId,
@@ -269,8 +295,8 @@ export function buildDrusteeClinicalTemplate(params: DrusteeClinicalParams = {})
         direction: 'rtl',
       },
       locked: true,
-    },
-  ];
+    });
+  }
 
   return ops;
 }
