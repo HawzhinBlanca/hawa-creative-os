@@ -491,9 +491,23 @@ export function computeNegativeSpace(
     maxSubstantiveY = Math.max(maxSubstantiveY, t.y + t.height);
   }
 
+  const sameColour = (a?: string, b?: string) => {
+    const norm = (h?: string) => {
+      const c = (h || '').trim().toLowerCase();
+      return c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c;
+    };
+    return !!a && !!b && norm(a) === norm(b);
+  };
   for (const s of layout.shapes || []) {
+    // A border around the canvas is not content. The rule used to key on the role alone, and the
+    // studio's normaliser renames frames to panels — so a background-filled border enclosing 86%
+    // of the canvas counted as 60% occupied and flipped a 76%-empty design to "29% empty". A
+    // background-filled shape that large is a border whatever it is called. Smaller outlined
+    // cards still count: the P01 calibration deliberately treats content frames as occupied.
     const isCanvasFrame =
-      (s.role === 'frame' && s.width >= layout.width * 0.85 && s.height >= layout.height * 0.85) ||
+      ((s.role === 'frame' || sameColour(s.color, layout.background?.color)) &&
+        s.width >= layout.width * 0.85 &&
+        s.height >= layout.height * 0.85) ||
       (s.width >= layout.width * 0.95 && s.height >= layout.height * 0.95);
     if (isCanvasFrame) continue;
     occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? 0.6 : 0.4);

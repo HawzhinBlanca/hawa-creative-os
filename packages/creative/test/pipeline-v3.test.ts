@@ -652,3 +652,27 @@ describe('refinement is told what production QA rejects', { timeout: 30000 }, ()
     expect(outcome.hardQa?.passed).toBe(true);
   });
 });
+
+describe('negative space and canvas borders', () => {
+  it('treats a background-filled border around the canvas as a border, whatever it is called', async () => {
+    const { evaluateDesignMetrics } = await import('../src/index.js');
+    const without = centred();
+    const border = (role: string) => {
+      const l = centred();
+      // The kind of border the studio normaliser renames from frame to panel.
+      l.shapes.push({ x: 40, y: 40, width: W - 80, height: H - 80, kind: 'rect', color: '#0A1628', strokeColor: '#C5A059', role } as any);
+      return (evaluateDesignMetrics(l).metrics.negativeSpace.details as any).occupiedArea;
+    };
+    const base = (evaluateDesignMetrics(without).metrics.negativeSpace.details as any).occupiedArea;
+    expect(border('frame')).toBe(base);
+    expect(border('panel')).toBe(base);
+  });
+
+  it('still counts an outlined content card, as the calibration does', async () => {
+    const { evaluateDesignMetrics } = await import('../src/index.js');
+    const base = (evaluateDesignMetrics(centred()).metrics.negativeSpace.details as any).occupiedArea;
+    const card = centred();
+    card.shapes.push({ x: 86, y: 689, width: 907, height: 311, kind: 'rect', color: '#0A1628', strokeColor: '#C5A059', role: 'frame' } as any);
+    expect((evaluateDesignMetrics(card).metrics.negativeSpace.details as any).occupiedArea).toBeGreaterThan(base);
+  });
+});
