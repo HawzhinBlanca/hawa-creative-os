@@ -1312,7 +1312,21 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const canvaBreakerState = globalCanvaCircuitBreaker.getSnapshot();
-    const canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'connected');
+    let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'connected');
+    // The breaker only counts failed calls. An expired authorization fails every design at the Canva
+    // transfer while the breaker stays closed: from 2026-09-17 to 2026-09-18 health said "connected"
+    // while the connection needed reconnecting. Designs transfer as the Primary Operator, so that is
+    // the connection that counts.
+    if (canvaStatus === 'connected' && db) {
+      try {
+        const connection = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, async (trx) =>
+          (await sql<{ status: string }>`SELECT status FROM hawa.canva_connections
+            WHERE tenant_id = ${DEFAULT_TENANT_ID}::uuid AND actor_id = ${PRIMARY_OPERATOR_USER_ID}`.execute(trx)).rows[0]);
+        if (connection?.status !== 'active') canvaStatus = 'reconnect_required';
+      } catch {
+        // An unreachable database is reported by the database probe above.
+      }
+    }
 
     const hasTelegram = Boolean(process.env.TELEGRAM_BOT_TOKEN) && !channelKillSwitches.telegram;
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL) && !channelKillSwitches.waha;
@@ -1336,7 +1350,7 @@ export function createApp(options?: CreateAppOptions) {
     // Restate can only register the worker once it is running.
     const restateStatus = (await probeRestate()).status;
     const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || channelKillSwitches.telegram || channelKillSwitches.waha
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable';
