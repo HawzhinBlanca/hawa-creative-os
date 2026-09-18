@@ -88,7 +88,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.ok).toBe(true);
-    expect(json.botUsername).toBe('hawdesign_official_bot');
+    expect(json.botConfigured).toBe(Boolean(process.env.TELEGRAM_BOT_TOKEN));
+    // Core never asked Telegram which bot the token belongs to, so it names none.
+    expect(json.botUsername).toBeUndefined();
+    expect(json.botName).toBeUndefined();
     expect(json.bridge).toBeDefined();
   });
 
@@ -911,15 +914,32 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       Authorization: `Bearer ${process.env.HAWA_ADMIN_KEY || 'test_admin_key'}`,
     };
 
-    // 1. Query current providers status
+    // 1. Query current providers status. With no key set, nothing is reported as configured:
+    // no Google ADC claim, no account, and no fallback engine standing in for a missing key.
+    const savedKeys = {
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    };
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
     const getRes = await app.request('/v1/system/providers', {
       headers: adminHeaders,
     });
     expect(getRes.status).toBe(200);
     const getData = await getRes.json();
     expect(getData.ok).toBe(true);
-    expect(getData.providers.gemini.configured).toBe(true);
-    expect(getData.providers.openai).toBeDefined();
+    for (const [key, envVar] of [['gemini', 'GEMINI_API_KEY'], ['openai', 'OPENAI_API_KEY'], ['anthropic', 'ANTHROPIC_API_KEY']]) {
+      expect(getData.providers[key]).toMatchObject({ envVar, configured: false, mode: 'Not configured', preview: 'Not configured', status: 'NOT_CONFIGURED' });
+    }
+    expect(JSON.stringify(getData)).not.toMatch(/ADC|@|Fallback|FALLBACK|READY/);
+
+    process.env.GEMINI_API_KEY = 'mock-test-gemini-key-1122334455';
+    const geminiRes = await app.request('/v1/system/providers', { headers: adminHeaders });
+    const geminiData = await geminiRes.json();
+    expect(geminiData.providers.gemini).toMatchObject({ configured: true, preview: 'mock...4455', status: 'KEY_SET' });
+    delete process.env.GEMINI_API_KEY;
 
     // 2. Update credentials
     const postRes = await app.request('/v1/system/providers', {
@@ -947,9 +967,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(verifyData.providers.anthropic.configured).toBe(true);
     expect(verifyData.providers.anthropic.preview).toContain('mock...4321');
 
-    // Clean up test environment
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    // Restore the environment the test found
+    for (const [envVar, value] of Object.entries(savedKeys)) {
+      if (value === undefined) delete process.env[envVar];
+      else process.env[envVar] = value;
+    }
   });
 
   it('deduplicates clients in GET /v1/clients and provides verified KAAE DNA', async () => {
