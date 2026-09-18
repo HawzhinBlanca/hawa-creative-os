@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -528,8 +528,7 @@ export function validateLayoutV2(
   // 14. CONTRAST (if evaluator provided)
   if (context.contrastEvaluator) {
     for (const t of layout.text) {
-      const isLarge = t.fontSize >= 32 || (t.fontSize >= 24 && Boolean(t.bold));
-      const minRatio = isLarge ? 3.0 : 4.5;
+      const minRatio = requiredContrast(t.fontSize, Boolean(t.bold));
       const ratio = context.contrastEvaluator(t, t.fontSize, Boolean(t.bold));
       if (ratio < minRatio) {
         return {

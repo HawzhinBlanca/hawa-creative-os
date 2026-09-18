@@ -22,6 +22,11 @@ export const HOUSE_RULES = {
   minBodyShareOfWidth: 0.016,
   /** The title is at least this multiple of the body size. */
   titleToBodyMin: 2.2,
+  /**
+   * Text against the surface behind it: WCAG AA's ratios, with the validator's size bands for
+   * large text.
+   */
+  contrast: { normal: 4.5, large: 3.0, largeMinPx: 32, largeBoldMinPx: 24 },
   logo: {
     minWidthPx: 100,
     minWidthShareOfCanvas: 0.08,
@@ -50,6 +55,12 @@ export const FORBIDDEN_ART_WORDS = [
   'people',
   'portrait',
 ] as const;
+
+/** The contrast a block of this size and weight needs against the surface behind it. */
+export function requiredContrast(fontSize: number, bold: boolean): number {
+  const c = HOUSE_RULES.contrast;
+  return fontSize >= c.largeMinPx || (bold && fontSize >= c.largeBoldMinPx) ? c.large : c.normal;
+}
 
 export function minLogoWidth(canvasWidth: number): number {
   return Math.max(HOUSE_RULES.logo.minWidthPx, Math.round(HOUSE_RULES.logo.minWidthShareOfCanvas * canvasWidth));

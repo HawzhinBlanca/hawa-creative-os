@@ -2,6 +2,8 @@ import type { StudioLayoutV2 } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
+import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
+import { requiredContrast } from './house-rules.js';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -102,6 +104,21 @@ export function evaluateHardQa(
   if (asymmetric.length > 0) {
     defectCodes.push('ASYMMETRIC_SEPARATOR');
     messages.push(`ASYMMETRIC_SEPARATOR: ${asymmetric.length} divider(s) sit much closer to one of the two blocks they separate`);
+  }
+
+  // Every block reads against the surface behind it. The validator's contrast rule runs only when
+  // given an evaluator, and no production caller ever passed one, so navy text on a navy panel
+  // passed QA: 9 of the 20 T5 designs, and 2 or 3 in every 20 on the cheap tier.
+  for (const t of checked.text) {
+    const ratio = declaredTextContrast(checked, t);
+    const required = requiredContrast(t.fontSize, Boolean(t.bold));
+    if (ratio < required) {
+      if (!defectCodes.includes('CONTRAST')) defectCodes.push('CONTRAST');
+      messages.push(
+        `CONTRAST: block ${t.copyIndex} (${t.role}) ${t.color} on ${declaredBackgroundColour(checked, t)} is ` +
+          `${ratio.toFixed(2)}:1; it needs ${required}:1`
+      );
+    }
   }
 
   return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout: checked };

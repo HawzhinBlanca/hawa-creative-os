@@ -22,6 +22,28 @@ export function calculateLuminanceContrastRatio(lum1: number, lum2: number): num
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * The colour behind a text box as the layout declares it: the topmost panel or rectangle that
+ * contains the box, within 20px, else the canvas background. The same model the textLegibility
+ * metric uses, so the gate and the metric agree.
+ */
+export function declaredBackgroundColour(layout: StudioLayoutV2, box: Box): string {
+  const shapes = layout.shapes || [];
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    const s = shapes[i];
+    if (s.role !== 'panel' && s.kind !== 'rect' && s.kind !== 'roundRect') continue;
+    const containsX = box.x >= s.x - 20 && box.x + box.width <= s.x + s.width + 20;
+    const containsY = box.y >= s.y - 20 && box.y + box.height <= s.y + s.height + 20;
+    if (containsX && containsY && s.color && s.color.startsWith('#')) return s.color;
+  }
+  return layout.background.color;
+}
+
+/** A block's contrast against the surface the layout declares behind it. */
+export function declaredTextContrast(layout: StudioLayoutV2, text: TextElement): number {
+  return calculateLuminanceContrastRatio(hexToLuminance(text.color), hexToLuminance(declaredBackgroundColour(layout, text)));
+}
+
 export interface BoxContrastEvaluation {
   copyIndex: number;
   p05: number;

@@ -15,7 +15,8 @@ import type { OpenAiStudioClient } from './openai-studio-client.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
+import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
 
 /**
@@ -616,6 +617,22 @@ export function conformToHouseRules(
         s.y = originalY;
         layout.shapes = layout.shapes.filter((x) => x !== s);
       }
+    }
+  }
+
+  // Every block reads against the surface behind it, in a brand colour: the colour the design
+  // already uses most for text that reads there, else the one with the most contrast. Models set
+  // navy text on navy panels — 9 of the 20 T5 designs, 2 or 3 in every 20 on the cheap tier — and
+  // QA never checked. Last, because settling can move a block onto or off a panel.
+  if (palette && palette.length) {
+    for (const t of layout.text) {
+      const surface = declaredBackgroundColour(layout, t);
+      const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(surface));
+      const required = requiredContrast(t.fontSize, Boolean(t.bold));
+      if (on(t.color) >= required) continue;
+      const readable = palette.filter((p) => on(p) >= required);
+      const uses = (p: string) => layout.text.filter((o) => o !== t && normalizeHex(o.color) === normalizeHex(p)).length;
+      t.color = [...(readable.length ? readable : palette)].sort((a, b) => uses(b) - uses(a) || on(b) - on(a))[0];
     }
   }
   return layout;

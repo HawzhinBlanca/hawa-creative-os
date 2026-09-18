@@ -1022,3 +1022,31 @@ describe('generated art names no lettering, marks or people', () => {
     expect(layout.art).toBeUndefined();
   });
 });
+
+describe('text reads against the surface behind it', { timeout: 30000 }, () => {
+  const KAAE_PALETTE = ['#0A1628', '#1E3A5F', '#4770A3', '#F7B500', '#FDF8F3', '#FFFFFF', '#1A1A1A'];
+  // The body, on a navy panel, set in the same navy: T5 brief_04 set every block this way.
+  const navyOnNavy = () => {
+    const layout = centred();
+    layout.shapes = [{ ...panel(MARGIN, span(6)), color: '#1E3A5F' } as any];
+    layout.text[3].color = '#1E3A5F';
+    return layout;
+  };
+
+  it('fails QA for navy text on a navy panel, which production never checked', async () => {
+    const { evaluateHardQa } = await import('../src/index.js');
+    const qa = evaluateHardQa(navyOnNavy(), {
+      width: W, height: H, copyScripts: ['latin', 'latin', 'latin', 'latin', 'latin'], latinFont: 'Verdana',
+      arabicFont: 'Noto Sans Arabic', palette: [...KAAE_PALETTE, '#C5A059'], logoAspect: 200 / 120,
+    });
+    expect(qa.defectCodes).toContain('CONTRAST');
+    expect(qa.messages.find((m) => m.startsWith('CONTRAST'))).toContain('block 3 (body) #1E3A5F on #1E3A5F');
+  });
+
+  it('recolours unreadable text in the brand colour the design already uses for text', async () => {
+    const { conformToHouseRules, declaredTextContrast, requiredContrast } = await import('../src/index.js');
+    const layout = conformToHouseRules(navyOnNavy(), COPY, KAAE_PALETTE);
+    for (const t of layout.text) expect(declaredTextContrast(layout, t)).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, t.bold));
+    expect(layout.text[3].color).toBe('#FDF8F3');
+  });
+});
