@@ -676,3 +676,17 @@ describe('negative space and canvas borders', () => {
     expect((evaluateDesignMetrics(card).metrics.negativeSpace.details as any).occupiedArea).toBeGreaterThan(base);
   });
 });
+
+describe('the logo is lifted clear of the text below it', { timeout: 30000 }, () => {
+  it('lifts a logo whose clear space reaches the eyebrow, but never above the margin', async () => {
+    const { conformToHouseRules, logoClearZone } = await import('../src/index.js');
+    const layout = centred();
+    layout.logo = { x: 490, y: 200, width: 100, height: 100 };
+    layout.text[0].y = 330; // the zone ends at 350: 20px into the eyebrow
+    conformToHouseRules(layout, COPY);
+    const zone = logoClearZone(layout.logo);
+    expect(zone.y + zone.height).toBeLessThanOrEqual(layout.text[0].y);
+    expect(layout.logo.y).toBeGreaterThanOrEqual(MARGIN);
+    expect(layout.text[0].y).toBe(330); // the text did not move: the logo did
+  });
+});

@@ -259,6 +259,23 @@ export function conformToHouseRules(
     }
   }
 
+  // A logo whose clear space still reaches the text below it is lifted towards the top margin —
+  // never above it, never into anything above it. The cheap tier put a 154px banner logo at
+  // y=203 with 88px free above it, and its clear space overlapped the eyebrow by 13px.
+  if (layout.logo) {
+    const l = layout.logo;
+    const blockers: Rect[] = [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
+    const clearAt = (y: number) => !blockers.some((b) => intersects(b, logoClearZone({ ...l, y })));
+    if (!clearAt(l.y)) {
+      for (let y = l.y - 1; y >= m; y--) {
+        if (clearAt(y)) {
+          layout.logo = { ...l, y };
+          break;
+        }
+      }
+    }
+  }
+
   // Vertical space is inserted where the layout needs it — a box whose copy no longer fits at the
   // house leading, a block that collides with the one above it or with the logo's clear space —
   // by moving everything below that line down. Order and horizontal structure are kept, and
