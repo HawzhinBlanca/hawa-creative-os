@@ -18,10 +18,23 @@ __pycache__
 output/*
 !output/audits/
 !output/memleak/
+!output/research/
+output/research/*
+!output/research/2026-09-15-model-selection/
+!output/research/2026-09-17-pipeline-research/
 !output/plans/
 output/plans/*
 !output/plans/2026-09-14-design-studio-v2/
+!output/plans/2026-09-16-concept-first/
+!output/plans/2026-09-16-flawless-system/
+!output/plans/2026-09-17-research-grade-pipeline/
 !output/proofs/
+# A qualification run's per-brief renders, journals and resume checkpoint stay local (about 2,900
+# files so far, a 2 MB SVG per brief). Its summary is what gets committed: P10_QUALIFICATION.md and
+# .csv, LEDGER.csv and RUN_MANIFEST.json.
+output/proofs/**/briefs/
+output/proofs/**/JOURNALS/
+output/proofs/**/.qualification-checkpoint.json
 hawdesign-creative-os-figma-agent-studio/
 exports/
 .hawa-state/
