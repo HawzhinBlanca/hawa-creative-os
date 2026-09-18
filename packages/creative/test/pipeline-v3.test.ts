@@ -1007,9 +1007,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
     expect(qa.messages).toEqual([]);
   });
 
-  it('raises a block that starts above the logo but reaches into its clear space, and its card with it', async () => {
+  it('leaves a block above the logo that reaches into its clear space for refinement, named', async () => {
     // Cheap tier, run 2, brief_08: an eyebrow 27px above a card's logo and 68px into its clear
-    // space. The logo had nowhere in its card to go, and nothing looked at a block above the logo.
+    // space, with the title below the logo. Raising the eyebrow passed QA with a 216px gap above the
+    // title, which failed regularity: a QA pass bought with the rhythm, which the gate rejects.
     const { layout, qa } = await prepare(
       stored([1080, 1350, 64], { x: 64, y: 284, width: 108, height: 108 }, [
         [0, 'eyebrow', 162, 257, 756, 41, 16, 1.2, 'Amiri', '#F7B500'],
@@ -1029,13 +1030,9 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'شاری سلێمانی • هۆڵی کۆنگرێس • کانوونی دووەمی ٢٠٢٦',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages).toContain('OVERLAP: 1 overlapping pair(s): block 0 (eyebrow) and the logo');
+    expect(byRole(layout, 'eyebrow').y).toBe(257);
     expect(layout.logo).toEqual({ x: 64, y: 284, width: 108, height: 108 });
-    const eyebrow = byRole(layout, 'eyebrow');
-    expect(bottom(eyebrow)).toBeLessThanOrEqual(284 - 54);
-    // The card grew upward to keep holding the eyebrow.
-    const card = layout.shapes.find((s) => s.role === 'panel')!;
-    expect(card.y).toBeLessThan(eyebrow.y);
   });
 
   it('leaves text set on the logo itself for refinement, and QA names what overlaps what', async () => {
