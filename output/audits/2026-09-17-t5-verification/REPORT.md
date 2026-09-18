@@ -795,9 +795,109 @@ should be read with them in mind:
   the qualification described any design not wholly Sorani as LTR. The prompt now takes the direction
   from the copy itself, and states "Mixed" for bilingual copy on both sides.
 
+## 25. Cheap-tier runs on real models: what they exposed and what was fixed
+
+The owner approved cheap runs "until 100% readiness". Each run put all 20 briefs through the
+shared v3 pipeline inside the production image, with o4-mini for layout, gpt-4.1-mini for
+critique and judge, and fonts exact. Each run cost about USD 1.
+
+| Run | Outcome | Production hard QA | Canary | Order-swap | Escapes | Fix it led to |
+|---|---|---|---|---|---|---|
+| 1 | stopped after 4–6 layout calls (at most USD 0.11, unrecorded) | — | — | — | — | the runner priced from the image's stale `src/pricing.json`; it now prices from `dist`, checks every price before spending, and never drops a paid call (`0c62d49`) |
+| 2 | 20/20, 0 failures, USD 1.01 | **1/20** | 85% | 65% | 1 | the house rules QA enforces were never told to the generator or applied (`8d1e08a`) |
+| 3 | 20/20, USD 0.98 | 16/20 | 100% | 90% | 1 | logo crowding on banners; lift and banner guidance (`6ce194a`, `7198ba6`) |
+| 4 | 20/20, USD 1.01 | 17/20 | 100% | 90% | 0 | box growth past the safe area; house-margin fallback (`bc6e70f`) |
+| 5 | 20/20, USD 0.94 | 18/20 | 100% | **95%** | 0 | rule left in the logo's clear space; fallback extended to text collisions (`98eb8d1`) |
+| 6 | 20/20, USD 0.92 | 19/20 | 100% | 75% | 0 | a Kurdish banner whose footer sat on the bottom margin; settling (`5fff72b`, `ec0a323`) |
+| 7 | 20/20, USD 0.90, at `5fff72b` | **20/20** | 100% | 80% | 0 | two winners with unreadable text, which QA never checked; contrast gate and recolouring (`1cbf160`) |
+| 8 | 20/20, USD 0.96, at `b8c84f6` | **20/20** | 95% | 75% | 0 | confirmation: no unreadable text left and no overflow; print-ready 25%, limited by typeScale; the one canary loss was the judge picking position B in both orders |
+
+**What run 2 exposed.** The validator stops at its first failure, so a census of every rule
+across both runs' designs showed what first-failure QA had hidden:
+- **Every Sorani design had Latin leading.** That was all ten of the production model's, against a house rule of 1.6–1.9.
+- **Most designs put text inside the logo's clear space.**
+- **Text boxes overran the safe area by a pixel of rounding.**
+
+Four changes answer that. The house rules are now defined once (`house-rules.ts`) and read by the
+validator. The generator is told them. Preparation applies them wherever the fix is unambiguous:
+- Leading, tracking and title-to-body ratio are clamped to the rules.
+- Off-palette colours snap to the nearest brand colour.
+- Boxes are fitted inside the safe area.
+- The logo is grown to its minimum and shrunk, never below it, to clear its space, moving only within its own gap.
+- Vertical space is inserted where there is room, and the house-minimum margin is used when a larger one leaves none.
+
+Refinement is now shown the QA defects that remain after preparation.
+
+Two gate faults surfaced as well. The art rule demanded that text below the art sit inside the
+art's calm region. And negativeSpace stopped treating a canvas border as a border once the studio
+normaliser renamed it from frame to panel. A first, broader fix to that metric broke the P01
+calibration, and its refinement test caught it.
+
+**Why the judge numbers rose.** Runs 3–5 are the first in which the judge saw real designs, not
+placeholder text. On the cheap judge the canary has held at 100% since. Order-swap consistency
+swings between 75% and 95% from run to run on the same code, which describes the cheap judge more
+than the pipeline.
+
+**Settling (`5fff72b`, `ec0a323`).** Re-preparing every stored design from the runs, with no model
+calls (`node scripts/proofs/reprepare_stored_runs.mjs <runDir>...`), found each mechanical QA
+failure still left. Each became a regression test built from that design's own geometry and copy.
+When a clash or a growing box needs vertical space, preparation now tries these in order:
+- push the content below down, keeping the design's spacing;
+- close the moved blocks' gaps to 3/4, then 1/2 (never under 12px, never into the logo's clear space);
+- take the house-minimum margin, moving a logo on the old margin onto the new one;
+- close the gaps to 1/4;
+- raise the block above, using the same cascade on the mirrored layout, when nothing below can move.
+
+Several rules hold throughout:
+- Blocks keep their order.
+- The inserted band moves in every column, so a body beside a title stays level with it. A logo
+  moves only with its own column.
+- What a block clashed with stays put.
+- A panel carries what sits in it, and a logo set in a panel stays in it.
+- A plan is refused if it would create a collision.
+
+Generated art no longer names text, marks or people: the generator is told the banned words, and
+preparation cuts the phrase that names one ("behind hero text"). The renders of every design the
+settling changed were opened, and two faults were caught that way rather than by any metric: a logo
+lifted out of its card, and a footer left at its band's edge.
+
+**Text QA never checked (`1cbf160`, `b8c84f6`).** Production's hard QA did not check contrast. The
+validator's rule runs only with an evaluator, and no caller ever passed one, the deployed QA stage
+included. Measured against the surface behind each block (the topmost containing panel, else the
+canvas, as the textLegibility metric does):
+- 9 of the 20 T5 designs had a block below the AA ratio, one of them navy on navy throughout.
+- 2–4 of every 20 cheap designs did too; in run 7, two winners had a footer at 1.00:1.
+- The current production-model run had none.
+
+QA now reports CONTRAST, and preparation recolours such a block in the brand colour the design
+already uses for text that reads there. QA also never checked that copy fits its box. The renderer
+centres the lines, so a two-line 84px title in a 130px box (T5 brief_17) spills onto its neighbours.
+QA now reports COPY_OVERFLOW; the studio's QA stage and the runner both pass it the copy. Both checks
+measure the layout as it ships. The validator's normalised copy forces the reference's script face
+and right alignment onto Sorani blocks (a remnant of ADR-028, superseded for display text by the
+owner's F12 policy), but the studio transfers the layout it judged. Measured on that copy, eight
+Kurdish titles in Amiri overflowed only because Noto Sans Arabic sets wider.
+
+**Measured on stored designs, no model calls.** After preparation, 157 of the 160 stored designs
+from eight runs pass production QA, which now checks contrast and fit. The production-model run
+passes design metrics and QA together on 20 of 20, against 0 before this work, and T5 passes QA on
+19 of 20, against 0. The three left are two dev-tier designs missing a copy block and T5 brief_17,
+which only refinement can repair. The gate reports no regression.
+
+**Provenance (`5e8e246`).** Run 7 measured a build that predated the last commit made while it ran:
+the image mounts `dist`, and nothing checked that `dist` matched the source. The script now builds
+before every run and records the commit, and any uncommitted source changes, in `RUN_MANIFEST.json`.
+A build rewrites the mounted `dist`, so nothing may be built while a run is in progress.
+
+**What the cheap tier cannot show.** Print-ready (the design metrics) stays at 0–15% on the cheap
+tier because o4-mini ignores its own declared type scale. typeScale fails 16–19 of 20 on o4-mini and
+0 of 20 on the production model. The "Canva Copy & Font Checks" row counts the same failure, because
+it requires typeScale too; the runner now labels that row by what it measures. That gate, and the
+design quality behind it, can only be qualified on the production model.
+
 ## Final state (2026-09-18, second pass)
 
-Branch `studio-v2`, 51 commits ahead of production. Four decisions remain, and all are the owner's:
+Branch `studio-v2`, 65 commits ahead of the deployed `4699792` (as of `b8c84f6`). Four decisions remain, and all are the owner's:
 
 1. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
 2. **The in-image qualification**, about USD 7–10: the canary now runs in both orders, and refinement adds calls when its gate opens. This is the first run that measures the decisions production makes.
