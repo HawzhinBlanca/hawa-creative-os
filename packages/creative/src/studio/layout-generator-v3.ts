@@ -1314,8 +1314,23 @@ export async function generateLayoutCandidatesV3(
     );
   }
 
-  // Degeneracy check across the surviving layouts
+  // Degeneracy check across the surviving layouts. Its result used to be returned and never read
+  // by any caller — the check ran and its answer was discarded — so a near-identical candidate set
+  // proceeded in silence. It is reported here, and the distances go out with the result so the
+  // threshold can eventually be calibrated from real runs instead of guessed.
   const degeneracy = checkCandidateSetDegeneracy(validLayouts);
+  if (degeneracy.isDegenerate) {
+    console.warn(
+      `[LayoutGeneratorV3] Candidate set is degenerate: ${degeneracy.reason}. ` +
+        `The tournament cannot separate candidates this similar, and a judge asked to will decide ` +
+        `by presentation order.`
+    );
+  } else {
+    const spread = degeneracy.pairwiseDistances.length
+      ? Math.min(...degeneracy.pairwiseDistances).toFixed(1)
+      : 'n/a';
+    console.log(`[LayoutGeneratorV3] Candidate spread: closest pair ${spread}px apart.`);
+  }
 
   return {
     layouts: validLayouts,

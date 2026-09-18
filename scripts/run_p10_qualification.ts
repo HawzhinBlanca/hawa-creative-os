@@ -827,6 +827,10 @@ async function executeBriefLive(
     orderSwapWinnerAB: matchResult.orderAB.winnerCandidateId,
     orderSwapWinnerBA: matchResult.orderBA.winnerCandidateId,
     distinctSkeleton,
+    // Recorded so the degeneracy threshold can be calibrated from real runs: it has never been
+    // consulted by any caller, and at 15px it is almost certainly too low to fire.
+    candidatePairwiseDistances: genResult.degeneracyCheck?.pairwiseDistances ?? [],
+    candidateSetDegenerate: genResult.degeneracyCheck?.isDegenerate ?? null,
     compositeScore: metrics.compositeScore,
     timestamp: new Date().toISOString(),
   };
