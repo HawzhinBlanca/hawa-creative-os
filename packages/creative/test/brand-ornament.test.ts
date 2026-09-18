@@ -40,6 +40,20 @@ describe('brand ornament', () => {
     expect(out.art).toMatchObject({ source: 'generated', opacity: 0.3 });
   });
 
+  it("replaces a motif the generator picked with the owner's texture, and still divides a gap left bare", () => {
+    // Task efb409fa: the generator chose a gradient wash that barely showed and drew one rule above
+    // the title, which used to stop every divider.
+    const own = JSON.parse(JSON.stringify(fixture.layout)) as StudioLayoutV2;
+    const title = own.text.find((t) => t.role === 'title')!;
+    own.art = { source: 'procedural', motif: 'gradient-wash', opacity: 0.25, box: { x: 0, y: 0, width: 1080, height: 1350 }, calmRegion: { x: 0, y: 0, width: 1080, height: 1350 } } as any;
+    own.shapes = [...(own.shapes || []), { kind: 'rect', role: 'rule', x: 270, y: title.y - 20, width: 540, height: 3, color: '#F7B500' } as any];
+    const out = prepareGeneratedLayoutV3(own, copy, { width: 1080, height: 1350, logoAspect: 1, palette: PALETTE, ornament: resolveOrnamentSettings({}) });
+    expect(out.art).toMatchObject({ source: 'procedural', motif: 'sun-rays' });
+    const t = out.text.find((x) => x.role === 'title')!;
+    expect(out.shapes.filter((r) => r.role === 'rule' && r.y > t.y + t.height).length).toBeGreaterThan(0);
+    expect(evaluateHardQa(out, qa).messages).toEqual([]);
+  });
+
   it("sends Canva the texture at the layer's opacity, as the render draws it", async () => {
     const rich = prepare(resolveOrnamentSettings({}));
     const art = renderMotifPng('sun-rays', { width: 1080, height: 1350, palette: PALETTE, opacity: 1 });
