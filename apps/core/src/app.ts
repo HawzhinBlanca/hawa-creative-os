@@ -34,6 +34,7 @@ import {
   kaaeClientDNA,
   isAuthorizedReviewerRole,
   resolveModel,
+  resolveImageSettings,
   activeModelTier,
 } from '@hawa/domain';
 import {
@@ -1374,14 +1375,24 @@ export function createApp(options?: CreateAppOptions) {
         detail: lastPaidProbe.detail || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
       },
-      // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier.
+      // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
+      // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
+      // the selected image provider has one.
       models: {
         tier: activeModelTier(),
         text: resolveModel('text'),
         layout: resolveModel('layout'),
         critique: resolveModel('critique'),
         judge: resolveModel('judge'),
-        image: resolveModel('image'),
+        image: (() => {
+          try {
+            const img = resolveImageSettings();
+            const key = img.provider === 'google' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
+            return { ...img, key: key ? 'present' : 'missing' };
+          } catch (err) {
+            return { error: err instanceof Error ? err.message : String(err) };
+          }
+        })(),
       },
       dependencies: {
         postgres: dbStatus,

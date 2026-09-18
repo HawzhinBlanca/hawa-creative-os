@@ -54,3 +54,14 @@ To permanently eliminate overlapping text:
 - **Positive**: Single API provider, zero token waste from redundant 20-stage tournaments, sub-30s turnaround, guaranteed non-overlapping text, and full Telegram-first lifecycle.
 - **Negative**: Requires graceful handling of account access boundaries during staged rollout.
 - **Compatibility**: Legacy outbox contracts and Canva binding repositories remain intact; external interfaces remain stable.
+
+---
+
+## Amendment, 2026-09-18: configurable models; Google allowed for artwork only
+
+At the owner's request ("we want top end flexibility"), every model parameter is configuration rather than code:
+
+- `HAWA_MODEL_TIER` (`production` | `dev`) picks the text models; `HAWA_MODEL_LAYOUT`, `HAWA_MODEL_CRITIQUE`, `HAWA_MODEL_JUDGE` and `HAWA_MODEL_TEXT` override one role. Text, layout, critique and judge calls remain OpenAI-only; the allowlist still refuses anything else at dispatch.
+- `HAWA_IMAGE_PROVIDER` (`openai` | `google`), `HAWA_IMAGE_MODEL`, `HAWA_IMAGE_SIZE`, `HAWA_IMAGE_QUALITY` and `HAWA_IMAGE_ASPECT` set image generation. Google's image models (`gemini-3.1-flash-lite-image`, `gemini-3.1-flash-image`, `gemini-3-pro-image`) are allowed for artwork only, with `GEMINI_API_KEY`, and only when the owner selects them. The default stays OpenAI.
+- Image cost is recorded from the provider's reported token usage, else its published per-image price, else an operator estimate, and says which. Every billed attempt counts, including images the checks rejected.
+- Core `/health` → `models` shows the settings in force and whether the selected image provider has a key.

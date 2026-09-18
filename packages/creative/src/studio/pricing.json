@@ -14,7 +14,10 @@
       "outputPerMillionImageTokens": 30.0,
       "image1k": 0.04,
       "image2k": 0.08,
-      "image4k": 0.16
+      "image4k": 0.16,
+      "inputPerMillionTextTokens": 5,
+      "inputPerMillionImageTokens": 8,
+      "note": "Per-token rates from developers.openai.com/api/docs/pricing (2026-09-18): image input $8, text input $5, image output $30 per 1M. image1k/2k/4k are operator estimates, used only when a response reports no usage."
     },
     "gpt-4.1-mini": {
       "inputPerMillion": 0.4,
@@ -33,6 +36,29 @@
       "outputPerMillion": 4.4,
       "cacheReadPerMillion": 0.275,
       "note": "dev tier only; list price entered by operator, not verified against an invoice"
+    },
+    "gemini-3.1-flash-lite-image": {
+      "perImage": {
+        "1K": 0.0336
+      },
+      "note": "ai.google.dev/gemini-api/docs/pricing, read 2026-09-18"
+    },
+    "gemini-3.1-flash-image": {
+      "perImage": {
+        "512px": 0.045,
+        "1K": 0.067,
+        "2K": 0.101,
+        "4K": 0.151
+      },
+      "note": "ai.google.dev/gemini-api/docs/pricing, read 2026-09-18"
+    },
+    "gemini-3-pro-image": {
+      "perImage": {
+        "1K": 0.134,
+        "2K": 0.134,
+        "4K": 0.24
+      },
+      "note": "ai.google.dev/gemini-api/docs/pricing, read 2026-09-18"
     }
   },
   "devTierPricesUnverified": true
