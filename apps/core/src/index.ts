@@ -26,6 +26,21 @@ try {
   // Gracefully continue if .env cannot be read
 }
 
+const SERVICE_NAME = 'hawa-core';
+// A long-running service that dies without saying why is the hardest kind of outage to diagnose,
+// and compose restarts it, so the only trace left is a gap in the logs. Node terminates the
+// process on an unhandled rejection by default; these handlers make the reason survive the exit.
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err.stack);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err.stack);
+  process.exit(1);
+});
+
 const app = createApp();
 const port = Number(process.env.PORT || 3001);
 const hostname = process.env.HOST || '0.0.0.0';

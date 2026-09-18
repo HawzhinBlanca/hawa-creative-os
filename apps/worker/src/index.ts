@@ -5,6 +5,21 @@ import { withRlsContext, sql, createDb } from '@hawa/db';
 import { TaskWorkflowRunner, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
+
+const SERVICE_NAME = 'hawa-worker';
+// A long-running service that dies without saying why is the hardest kind of outage to diagnose,
+// and compose restarts it, so the only trace left is a gap in the logs. Node terminates the
+// process on an unhandled rejection by default; these handlers make the reason survive the exit.
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err.stack);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err.stack);
+  process.exit(1);
+});
 export * from './workflow.js';
 export * from './outbox-consumer.js';
 export * from './durable-context.js';
