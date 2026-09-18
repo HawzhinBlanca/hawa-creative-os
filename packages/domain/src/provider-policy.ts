@@ -80,7 +80,105 @@ export type ModelRole = keyof typeof PRODUCTION_MODELS;
  * layout generation invents the composition, while critique and judge only read one back.
  */
 export function resolveModel(role: ModelRole, tier: ModelTier = activeModelTier()): string {
+  if (role === 'image') return resolveImageSettings(process.env, tier).model;
+  // HAWA_MODEL_LAYOUT, HAWA_MODEL_CRITIQUE, HAWA_MODEL_JUDGE, HAWA_MODEL_TEXT override the tier for
+  // one role. The allowlist still applies at dispatch: an override it refuses fails the call loudly.
+  const override = (process.env[`HAWA_MODEL_${role.toUpperCase()}`] || '').trim();
+  if (override) return override;
   return tier === 'dev' ? DEV_MODELS[role] : PRODUCTION_MODELS[role];
+}
+
+/**
+ * Image generation, one setting per parameter, each overridable from the environment:
+ * HAWA_IMAGE_PROVIDER (openai | google), HAWA_IMAGE_MODEL, HAWA_IMAGE_SIZE, HAWA_IMAGE_QUALITY,
+ * HAWA_IMAGE_ASPECT. Google's image models are allowed for artwork only; every text, layout,
+ * critique and judge call stays on OpenAI (ADR-030).
+ *
+ * Prices (2026-09-18, the providers' published pages): gpt-image-2.5-sunburst $30 per 1M image
+ * output tokens; gemini-3.1-flash-lite-image $0.0336 per 1K image; gemini-3.1-flash-image $0.067
+ * per 1K; gemini-3-pro-image $0.134 per 1K or 2K.
+ */
+export type ImageProvider = 'openai' | 'google';
+
+export const IMAGE_MODELS: Record<ImageProvider, readonly string[]> = {
+  openai: ['gpt-image-2.5-sunburst'],
+  google: ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'],
+};
+
+const IMAGE_SIZES: Record<ImageProvider, RegExp> = {
+  // OpenAI: WxH, each a multiple of 16 up to 3840, or auto.
+  openai: /^(auto|\d{3,4}x\d{3,4})$/,
+  google: /^(512px|1K|2K|4K)$/,
+};
+const IMAGE_QUALITIES: Record<ImageProvider, readonly string[]> = {
+  openai: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+  google: ['auto'],
+};
+const IMAGE_ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+
+export interface ImageSettings {
+  provider: ImageProvider;
+  model: string;
+  /** OpenAI: WxH. Google: 512px, 1K, 2K or 4K. */
+  size: string;
+  /** OpenAI only; Google has no quality setting. */
+  quality: string;
+  /** Google only; OpenAI takes the shape from `size`. */
+  aspectRatio: string;
+}
+
+const IMAGE_DEFAULTS: Record<ImageProvider, Omit<ImageSettings, 'provider'>> = {
+  openai: { model: 'gpt-image-2.5-sunburst', size: '1024x1024', quality: 'auto', aspectRatio: '1:1' },
+  google: { model: 'gemini-3.1-flash-lite-image', size: '1K', quality: 'auto', aspectRatio: '1:1' },
+};
+
+export class ImageSettingsError extends Error {
+  readonly code = 'IMAGE_SETTINGS_INVALID';
+}
+
+/**
+ * The image settings in force. Defaults: OpenAI's model at 1024x1024; `auto` quality on the
+ * production tier (what OpenAI picks when none is sent) and `medium` on the cheap tier, where a
+ * background texture drawn at a quarter opacity does not need more. Throws on a value the
+ * provider does not accept, so a typo fails the art call loudly instead of sending a request the
+ * provider refuses.
+ */
+export function resolveImageSettings(
+  env: Record<string, string | undefined> = process.env,
+  tier: ModelTier = activeModelTier()
+): ImageSettings {
+  const read = (name: string) => (env[name] || '').trim();
+  const provider = (read('HAWA_IMAGE_PROVIDER') || 'openai').toLowerCase();
+  if (provider !== 'openai' && provider !== 'google') {
+    throw new ImageSettingsError(`HAWA_IMAGE_PROVIDER must be openai or google, not '${provider}'`);
+  }
+  const d = IMAGE_DEFAULTS[provider];
+  const settings: ImageSettings = {
+    provider,
+    model: read('HAWA_IMAGE_MODEL') || d.model,
+    size: read('HAWA_IMAGE_SIZE') || d.size,
+    quality: read('HAWA_IMAGE_QUALITY').toLowerCase() || (provider === 'openai' && tier === 'dev' ? 'medium' : d.quality),
+    aspectRatio: read('HAWA_IMAGE_ASPECT') || d.aspectRatio,
+  };
+  if (!IMAGE_MODELS[provider].includes(settings.model)) {
+    throw new ImageSettingsError(`HAWA_IMAGE_MODEL '${settings.model}' is not a ${provider} image model: ${IMAGE_MODELS[provider].join(', ')}`);
+  }
+  if (!IMAGE_SIZES[provider].test(settings.size)) {
+    throw new ImageSettingsError(`HAWA_IMAGE_SIZE '${settings.size}' is not a ${provider} size`);
+  }
+  if (!IMAGE_QUALITIES[provider].includes(settings.quality)) {
+    throw new ImageSettingsError(`HAWA_IMAGE_QUALITY '${settings.quality}' is not one of ${IMAGE_QUALITIES[provider].join(', ')}`);
+  }
+  if (!IMAGE_ASPECTS.includes(settings.aspectRatio)) {
+    throw new ImageSettingsError(`HAWA_IMAGE_ASPECT '${settings.aspectRatio}' is not one of ${IMAGE_ASPECTS.join(', ')}`);
+  }
+  return settings;
+}
+
+/** An image model is allowed only on its own provider's list. */
+export function assertImageModelAllowed(provider: string, model: string): void {
+  const allowed = IMAGE_MODELS[provider as ImageProvider];
+  if (!allowed || !allowed.includes(model)) throw new DisallowedProviderError(`${provider}/${model}`);
 }
 
 /** Models that reject `reasoning_effort`; sending it to them is a 400. */

@@ -364,11 +364,11 @@ export const SettingsScreen: React.FC = () => {
           <h2>Model registry</h2>
           <div className="rule">
             <b>Reasoning, layout, critique & judge</b>
-            <p>gpt-6-astra · every studio stage and the Telegram planner · ADR-030</p>
+            <p>OpenAI only (ADR-030) · gpt-6-astra on the production tier, gpt-4.1-mini and o4-mini on the cheap tier (HAWA_MODEL_TIER) · HAWA_MODEL_&lt;ROLE&gt; overrides one role</p>
           </div>
           <div className="rule">
             <b>Artwork</b>
-            <p>gpt-image-2.5-sunburst · only when a concept asks for generated imagery; zero image calls otherwise</p>
+            <p>gpt-image-2.5-sunburst by default, or a Google Gemini image model when HAWA_IMAGE_PROVIDER=google · only when a concept asks for generated imagery; zero image calls otherwise · live settings in core /health → models</p>
           </div>
           <div className="rule">
             <b>Voice notes</b>

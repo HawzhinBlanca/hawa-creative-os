@@ -241,23 +241,17 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
 
     expect(result.receipt.provider).toBe('openai');
     expect(result.receipt.model).toBe('gpt-image-2.5-sunburst');
-    expect(result.receipt.synthId).toBe(true);
+    // OpenAI images carry no SynthID watermark; with no usage reported, the cost is the operator's estimate.
+    expect(result.receipt.synthId).toBe(false);
     expect(result.receipt.costUsd).toBe(0.04);
+    expect(result.receipt.costSource).toBe('estimate');
     expect(result.receipt.attempts).toBe(1);
     expect(result.receipt.verificationReport?.passed).toBe(true);
     expect(result.receipt.verificationReport?.visionCheckPassed).toBe(true);
     expect(result.receipt.verificationReport?.dominantColorsPassed).toBe(true);
   });
 
-  it('rejects disallowed models or legacy keys for art generation', async () => {
-    await expect(
-      generateArtImage({
-        artPrompt: 'Minimalist backdrop',
-        palette: PALETTE,
-        geminiApiKey: 'mock-key',
-      })
-    ).rejects.toThrow(/DisallowedProviderError|strict OpenAI-only policy/);
-
+  it('rejects Anthropic for art generation', async () => {
     await expect(
       generateArtImage({
         artPrompt: 'Minimalist backdrop',

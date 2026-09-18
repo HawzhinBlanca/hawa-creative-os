@@ -1,4 +1,7 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Hex } from './layout-v2.js';
 import {
   verifyPaletteCompliance,
@@ -6,7 +9,13 @@ import {
   type PaletteVerificationResult,
 } from './color-science.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
-import { assertModelAllowed, resolveModel } from '@hawa/domain';
+import {
+  assertModelAllowed,
+  assertImageModelAllowed,
+  resolveImageSettings,
+  resolveModel,
+  type ImageSettings,
+} from '@hawa/domain';
 
 export interface GenerateArtOptions {
   artPrompt: string;
@@ -21,6 +30,8 @@ export interface GenerateArtOptions {
   anthropicApiKey?: string;
   fetchFn?: typeof fetch;
   motifFallbackType?: ProceduralMotifType;
+  /** Provider, model, size, quality and aspect. Defaults to the environment's (resolveImageSettings). */
+  settings?: ImageSettings;
 }
 
 export interface ArtVerificationReport {
@@ -36,7 +47,7 @@ export interface ArtVerificationReport {
 }
 
 export interface ArtReceipt {
-  provider: 'openai' | 'gemini' | 'procedural';
+  provider: 'openai' | 'google' | 'procedural';
   model: string;
   responseId?: string;
   id?: string;
@@ -44,8 +55,14 @@ export interface ArtReceipt {
   bytes: number;
   sha256: string;
   mimeType: string;
+  /** Google's image models watermark every image with SynthID; OpenAI's do not. */
   synthId: boolean;
+  /** Every image billed across attempts, including images the checks rejected. */
   costUsd: number;
+  /** usage: the provider's token counts; price_list: its published per-image price; estimate: an operator figure. */
+  costSource?: 'usage' | 'price_list' | 'estimate' | 'none';
+  /** The settings the image was requested with. */
+  requested?: { size: string; quality: string; aspectRatio: string };
   attempts: number;
   artFallback?: 'procedural';
   verificationReport?: ArtVerificationReport;
@@ -214,14 +231,17 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   const aspect = options.aspect || mapDimensionsToAspect(width, height);
   const fetcher = options.fetchFn || fetch;
 
-  if (options.geminiApiKey) {
-    assertModelAllowed('gemini-3-pro-image');
-  }
   if (options.anthropicApiKey) {
     assertModelAllowed('claude-fable-5-1');
   }
 
+  const settings = options.settings || resolveImageSettings();
+  assertImageModelAllowed(settings.provider, settings.model);
   const openaiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
+  const imageKey = settings.provider === 'google' ? options.geminiApiKey || process.env.GEMINI_API_KEY : openaiKey;
+  if (!imageKey) {
+    console.warn(`[StudioArt] ${settings.provider} image generation is selected but no API key is configured; using the procedural motif`);
+  }
 
   const fullPrompt = composeArtPrompt(options.artPrompt, {
     palette: options.palette,
@@ -230,52 +250,21 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   });
 
   let lastVerificationReport: ArtVerificationReport | undefined;
+  let spentUsd = 0;
+  let costSource: ArtReceipt['costSource'] = 'none';
+  let attempts = 0;
+  const requested = { size: settings.size, quality: settings.quality, aspectRatio: settings.aspectRatio };
 
-  if (openaiKey) {
+  if (imageKey) {
     for (let attempt = 1; attempt <= 2; attempt++) {
+      attempts = attempt;
       try {
-        const model = 'gpt-image-2.5-sunburst';
-        assertModelAllowed(model);
-
-        const openAiUrl = 'https://api.openai.com/v1/images/generations';
-        const requestBody = {
-          model,
-          prompt: fullPrompt,
-          n: 1,
-          size: '1024x1024',
-        };
-
-        const res = await fetcher(openAiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openaiKey}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          console.warn(`[StudioArt] OpenAI generation attempt ${attempt} failed HTTP ${res.status}: ${errText.substring(0, 150)}`);
-          continue;
-        }
-
-        const data = (await res.json()) as any;
-        const b64Json = data.data?.[0]?.b64_json;
-        let imageBuffer: Buffer;
-        if (b64Json) {
-          imageBuffer = Buffer.from(b64Json, 'base64');
-        } else if (data.data?.[0]?.url) {
-          const urlRes = await fetcher(data.data[0].url);
-          imageBuffer = Buffer.from(await urlRes.arrayBuffer());
-        } else {
-          console.warn(`[StudioArt] OpenAI attempt ${attempt} returned no image data`);
-          continue;
-        }
-
-        const mimeType = 'image/png';
-        const xRequestId = res.headers?.get?.('x-request-id') || null;
-        const responseId = xRequestId || `openai-img-${data.created || Date.now()}`;
+        const image = await requestImage(settings, fullPrompt, imageKey, fetcher);
+        if (!image) continue;
+        const { imageBuffer, mimeType, responseId, xRequestId } = image;
+        // Billed the moment the provider returned it, whether or not the checks below keep it.
+        spentUsd += image.costUsd;
+        costSource = image.costSource;
         const sha256 = crypto.createHash('sha256').update(imageBuffer).digest('hex');
 
         // Dominant-colour check
@@ -326,16 +315,18 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           imageBuffer,
           mimeType,
           receipt: {
-            provider: 'openai',
-            model,
+            provider: settings.provider,
+            model: settings.model,
             responseId,
             id: responseId,
             xRequestId,
             bytes: imageBuffer.length,
             sha256,
             mimeType,
-            synthId: true,
-            costUsd: 0.04,
+            synthId: settings.provider === 'google',
+            costUsd: spentUsd,
+            costSource,
+            requested,
             attempts: attempt,
             verificationReport: {
               dominantColorsPassed: true,
@@ -375,8 +366,11 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
       sha256,
       mimeType: 'image/png',
       synthId: false,
-      costUsd: 0.0,
-      attempts: openaiKey ? 2 : 0,
+      // Images generated and rejected before the fallback were still billed.
+      costUsd: spentUsd,
+      costSource,
+      requested,
+      attempts,
       artFallback: 'procedural',
       verificationReport: {
         dominantColorsPassed: paletteCheck.passed,
@@ -388,6 +382,133 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
       },
     },
   };
+}
+
+interface ProviderImage {
+  imageBuffer: Buffer;
+  mimeType: string;
+  responseId: string;
+  xRequestId: string | null;
+  costUsd: number;
+  costSource: 'usage' | 'price_list' | 'estimate';
+}
+
+/** One image from the configured provider, or null when it returned none (logged). */
+async function requestImage(
+  settings: ImageSettings,
+  prompt: string,
+  key: string,
+  fetcher: typeof fetch
+): Promise<ProviderImage | null> {
+  if (settings.provider === 'google') {
+    // Gemini's Interactions API (ai.google.dev/gemini-api/docs/image-generation, 2026-09-18).
+    const res = await fetcher('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        model: settings.model,
+        input: [{ type: 'text', text: prompt }],
+        response_format: {
+          type: 'image',
+          mime_type: 'image/png',
+          aspect_ratio: settings.aspectRatio,
+          image_size: settings.size,
+        },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+      return null;
+    }
+    const data = (await res.json()) as any;
+    const parts = [
+      ...(data.steps || []).flatMap((step: any) => step?.content || []),
+      ...(data.output_image ? [{ type: 'image', ...data.output_image }] : []),
+    ];
+    const image = parts.find((c: any) => c?.type === 'image' && typeof c.data === 'string');
+    if (!image) {
+      console.warn('[StudioArt] Google returned no image data');
+      return null;
+    }
+    const price = imagePricing(settings.model)?.perImage?.[settings.size];
+    return {
+      imageBuffer: Buffer.from(image.data, 'base64'),
+      mimeType: image.mime_type || image.mimeType || 'image/png',
+      responseId: String(data.id || `google-img-${Date.now()}`),
+      xRequestId: res.headers?.get?.('x-request-id') || null,
+      costUsd: typeof price === 'number' ? price : 0,
+      costSource: 'price_list',
+    };
+  }
+
+  const res = await fetcher('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model: settings.model, prompt, n: 1, size: settings.size, quality: settings.quality }),
+  });
+  if (!res.ok) {
+    console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+    return null;
+  }
+  const data = (await res.json()) as any;
+  let imageBuffer: Buffer;
+  if (data.data?.[0]?.b64_json) imageBuffer = Buffer.from(data.data[0].b64_json, 'base64');
+  else if (data.data?.[0]?.url) imageBuffer = Buffer.from(await (await fetcher(data.data[0].url)).arrayBuffer());
+  else {
+    console.warn('[StudioArt] OpenAI returned no image data');
+    return null;
+  }
+  const xRequestId = res.headers?.get?.('x-request-id') || null;
+  return {
+    imageBuffer,
+    mimeType: 'image/png',
+    responseId: xRequestId || `openai-img-${data.created || Date.now()}`,
+    xRequestId,
+    ...openAiImageCost(settings, data.usage),
+  };
+}
+
+/** From the response's token counts when it reports them, else the operator's per-image estimate. */
+function openAiImageCost(settings: ImageSettings, usage: any): { costUsd: number; costSource: 'usage' | 'estimate' } {
+  const rates = imagePricing(settings.model) || {};
+  if (usage && typeof usage.output_tokens === 'number') {
+    const details = usage.input_tokens_details || {};
+    const textIn = typeof details.text_tokens === 'number' ? details.text_tokens : Number(usage.input_tokens || 0);
+    const imageIn = Number(details.image_tokens || 0);
+    const usd =
+      (textIn * Number(rates.inputPerMillionTextTokens || 0) +
+        imageIn * Number(rates.inputPerMillionImageTokens || 0) +
+        usage.output_tokens * Number(rates.outputPerMillionImageTokens || 0)) /
+      1_000_000;
+    return { costUsd: usd, costSource: 'usage' };
+  }
+  const longEdge = Math.max(...settings.size.split('x').map(Number).filter(Number.isFinite), 1024);
+  const estimate = longEdge > 2048 ? rates.image4k : longEdge > 1024 ? rates.image2k : rates.image1k;
+  return { costUsd: Number(estimate || 0), costSource: 'estimate' };
+}
+
+let pricingCache: any;
+/** The studio's price table, looked up beside the compiled module and beside the source. */
+function imagePricing(model: string): any {
+  if (pricingCache === undefined) {
+    pricingCache = null;
+    try {
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      for (const candidate of [
+        path.join(here, 'pricing.json'),
+        path.resolve(here, '../../src/studio/pricing.json'),
+        path.resolve(process.cwd(), 'packages/creative/src/studio/pricing.json'),
+      ]) {
+        if (fs.existsSync(candidate)) {
+          pricingCache = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+          break;
+        }
+      }
+    } catch {
+      pricingCache = null;
+    }
+  }
+  return (pricingCache?.models || pricingCache || {})[model];
 }
 
 export class OpenAiImageProvider {

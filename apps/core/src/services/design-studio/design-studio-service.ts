@@ -21,7 +21,7 @@ import {
   studioReferenceFromRaw,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel } from '@hawa/domain';
+import { resolveModel, resolveImageSettings } from '@hawa/domain';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 
 /** A run's stage record, whether the driver returned JSON or text. */
@@ -515,26 +515,30 @@ export class DesignStudioService {
           throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
         }
 
+        // The configured provider and model (HAWA_IMAGE_*), resolved once so the ledger and the
+        // request agree. An invalid setting throws here, and the art stage falls back to a motif.
+        const settings = resolveImageSettings();
         const callId = randomUUID();
         await this.repo.recordCallStart({
           id: callId,
           runId: run.id,
           tenantId: s.tenantId,
           stage: 'art',
-          provider: 'openai',
-          model: 'gpt-image-2.5-sunburst',
-          requestedModel: 'gpt-image-2.5-sunburst',
+          provider: settings.provider,
+          model: settings.model,
+          requestedModel: settings.model,
         });
         currentBudget.calls++;
 
         try {
-          const result = await baseArtProvider.generateArt(params);
-          const cost = result.receipt?.costUsd !== undefined ? result.receipt.costUsd : 0.04;
+          const result = await baseArtProvider.generateArt({ ...params, settings });
+          // What the provider billed, across every attempt; never a made-up figure.
+          const cost = Number(result.receipt?.costUsd ?? 0);
 
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
-            responseId: result.receipt?.responseId || 'openai_art',
+            responseId: result.receipt?.responseId || `${result.receipt?.provider || settings.provider}_art`,
             inputTokens: 0,
             outputTokens: 0,
             images: 1,
