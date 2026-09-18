@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, modelSupportsReasoningEffort } from '@hawa/domain';
 import {
   StudioModelHttpError,
   StudioModelTimeoutError,
@@ -278,7 +278,10 @@ export class OpenAiStudioClient {
       max_completion_tokens: options.maxTokens || 4000,
     };
 
-    if (options.reasoningEffort) {
+    // Only reasoning models accept reasoning_effort; the others reject the whole request with a
+    // 400. Callers ask for it without knowing which tier's model will answer — the dev tier's
+    // critique and judge run on gpt-4.1-mini — so the client decides, once, for all of them.
+    if (options.reasoningEffort && modelSupportsReasoningEffort(model)) {
       payload.reasoning_effort = options.reasoningEffort;
     } else if (model === 'gpt-6-astra') {
       payload.reasoning_effort = 'low';

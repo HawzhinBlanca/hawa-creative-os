@@ -1,3 +1,4 @@
+import { measureWrappedLines } from './render-layout-v2.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import {
@@ -31,12 +32,27 @@ export interface RefinementRoundRecord {
   repairedLayout: StudioLayoutV2;
   changesAttributed: Array<{ boxId: string; description: string }>;
   stopReason?: string;
+  /** The round's two calls combined. Kept for older readers; use `calls` for a ledger. */
   receipt?: {
     model: string;
     responseId: string;
     costUsd: number;
     latencyMs: number;
   };
+  /** One entry per model call in the round, with the token counts a ledger needs. */
+  calls: RefinementCallReceipt[];
+}
+
+export interface RefinementCallReceipt {
+  stage: 'critique' | 'repair';
+  model: string;
+  responseId: string;
+  xRequestId: string | null;
+  inputTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  latencyMs: number;
 }
 
 export interface RefinementCandidateResult {
@@ -60,6 +76,12 @@ export interface RefineOptions {
   maxRounds?: number;
   minDelta?: number;
   model?: string;
+  /**
+   * The copy each block will carry. Without it the critique inside each round renders
+   * "Sample copy block N" placeholders, so the critic judges text it will never see, and the
+   * metrics fall back to box area instead of the measured lines the ranking uses.
+   */
+  copyText?: Record<number, string>;
 }
 
 export const REPAIR_JSON_SCHEMA = {
@@ -328,8 +350,12 @@ export async function refineCandidate(
   const maxRounds = options.maxRounds || 2;
   const minDelta = options.minDelta !== undefined ? options.minDelta : 0.02;
 
+  const copyText = options.copyText;
+  const measure = (l: StudioLayoutV2) =>
+    evaluateDesignMetrics(l, copyText ? { wrappedLines: measureWrappedLines(l, copyText) } : {});
+
   // 1. Gating Check
-  const initialMetrics = evaluateDesignMetrics(layout);
+  const initialMetrics = measure(layout);
   const gate = checkRefinementGate(layout, initialMetrics);
 
   if (!gate.shouldRefine) {
@@ -371,6 +397,7 @@ export async function refineCandidate(
       deterministicMetrics: currentMetrics,
       model,
       detail: 'low',
+      renderOptions: copyText ? { copyText } : undefined,
     });
 
     if (critiqueResult.comments.length === 0) {
@@ -438,10 +465,11 @@ Produce the corrected layout repairing these exact flaws.`;
       art: currentLayout.art ? { ...currentLayout.art } : undefined,
     };
 
-    // A repair that is not a usable layout must not become the result. This engine returns
-    // finalLayout to its callers, and adopting a malformed repair sent one downstream that threw
-    // "layout.text is not iterable" at the caller, after the assignment had already replaced the
-    // good layout. Keep the last good one and stop refining instead.
+    // A repair that is not a usable layout must not become the result: this engine returns
+    // finalLayout to its callers. (The "layout.text is not iterable" seen live was most likely the
+    // qualification runner passing its options object as the layout — a shifted argument no build
+    // type-checked — but a model can return an unusable layout too, so the guard stays.) Keep the
+    // last good layout and stop refining instead.
     if (
       !Array.isArray(repairedLayout.text) ||
       repairedLayout.text.length === 0 ||
@@ -458,7 +486,7 @@ Produce the corrected layout repairing these exact flaws.`;
     }
 
     // d. Re-evaluate P01 deterministic metrics
-    const postMetrics = evaluateDesignMetrics(repairedLayout);
+    const postMetrics = measure(repairedLayout);
     const postScore = postMetrics.compositeScore;
     const delta = Number((postScore - currentScore).toFixed(4));
     const changesAttributed = identifyAttributedChanges(
@@ -483,6 +511,30 @@ Produce the corrected layout repairing these exact flaws.`;
         costUsd: repairResponse.receipt.costUsd + critiqueResult.receipt.costUsd,
         latencyMs: repairResponse.receipt.latencyMs + critiqueResult.receipt.latencyMs,
       },
+      calls: [
+        {
+          stage: 'critique',
+          model: critiqueResult.receipt.model,
+          responseId: critiqueResult.receipt.responseId,
+          xRequestId: critiqueResult.receipt.xRequestId ?? null,
+          inputTokens: critiqueResult.receipt.inputTokens,
+          cachedTokens: critiqueResult.receipt.cachedTokens ?? 0,
+          outputTokens: critiqueResult.receipt.outputTokens,
+          costUsd: critiqueResult.receipt.costUsd,
+          latencyMs: critiqueResult.receipt.latencyMs,
+        },
+        {
+          stage: 'repair',
+          model: repairResponse.receipt.model,
+          responseId: repairResponse.receipt.responseId,
+          xRequestId: repairResponse.receipt.xRequestId ?? null,
+          inputTokens: repairResponse.receipt.inputTokens,
+          cachedTokens: repairResponse.receipt.cacheReadTokens ?? 0,
+          outputTokens: repairResponse.receipt.outputTokens,
+          costUsd: repairResponse.receipt.costUsd,
+          latencyMs: repairResponse.receipt.latencyMs,
+        },
+      ],
     };
 
     rounds.push(roundRecord);

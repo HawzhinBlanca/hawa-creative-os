@@ -163,6 +163,8 @@ export function filterCritiqueComments(
  * Generates an annotated render and performs a box-grounded visual critique
  * using gpt-6-astra with Set-of-Mark visual prompting and deterministic facts first.
  */
+let warnedPlaceholderCritique = false;
+
 export async function generateBoxGroundedCritique(
   layout: StudioLayoutV2,
   options: GenerateBoxCritiqueOptions = {}
@@ -184,6 +186,13 @@ export async function generateBoxGroundedCritique(
   let annotatedPng = options.annotatedPng;
   let annotations: ElementBoxAnnotation[];
   if (!annotatedPng) {
+    if (!options.renderOptions?.copyText && !warnedPlaceholderCritique) {
+      warnedPlaceholderCritique = true;
+      console.warn(
+        '[box-critique-v3] Rendering without the copy: the critic will see "Sample copy block N" ' +
+          'placeholders, not the design. Pass renderOptions.copyText.'
+      );
+    }
     const rendered = renderAnnotatedLayoutV2(layout, options.renderOptions);
     annotatedPng = rendered.png;
     annotations = rendered.annotations;

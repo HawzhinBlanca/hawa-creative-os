@@ -4,7 +4,7 @@ import {
   evaluateDesignMetrics,
   type DesignMetricsReport,
 } from './design-metrics.js';
-import { renderLayoutV2 } from './render-layout-v2.js';
+import { renderLayoutV2, measureWrappedLines, type RenderLayoutOptions } from './render-layout-v2.js';
 import {
   OpenAiStudioClient,
   type OpenAiMessage,
@@ -97,7 +97,16 @@ export interface JudgeOptions {
   openaiApiKey?: string;
   fetchFn?: typeof fetch;
   model?: string;
+  /**
+   * How candidates are rendered for the judge — above all, the copy each block carries. Without
+   * it the renderer fills every block with "Sample copy block N", and the judge compares layouts
+   * with no real text in them: typography and hierarchy cannot be judged, and a Sorani design is
+   * shown Latin placeholders.
+   */
+  renderOptions?: RenderLayoutOptions;
 }
+
+let warnedPlaceholderJudging = false;
 
 export const PAIRWISE_DIMENSION_JSON_SCHEMA = {
   type: 'object',
@@ -227,13 +236,27 @@ export async function evaluatePairOrder(
       primaryModel: model,
     });
 
-  // 1. Ensure deterministic metrics
-  const metricsA = candA.deterministicMetrics || evaluateDesignMetrics(candA.layout);
-  const metricsB = candB.deterministicMetrics || evaluateDesignMetrics(candB.layout);
+  // 1. Ensure deterministic metrics, measured the way the pipeline ranks: from the lines the real
+  // copy wraps to, not from box area.
+  const copyText = options.renderOptions?.copyText;
+  const measure = (layout: StudioLayoutV2) =>
+    evaluateDesignMetrics(
+      layout,
+      copyText ? { wrappedLines: measureWrappedLines(layout, copyText, options.renderOptions) } : {}
+    );
+  const metricsA = candA.deterministicMetrics || measure(candA.layout);
+  const metricsB = candB.deterministicMetrics || measure(candB.layout);
 
-  // 2. Ensure renders
-  const pngA = candA.renderedPng || renderLayoutV2(candA.layout).png;
-  const pngB = candB.renderedPng || renderLayoutV2(candB.layout).png;
+  // 2. Ensure renders, carrying the real copy
+  if (!copyText && (!candA.renderedPng || !candB.renderedPng) && !warnedPlaceholderJudging) {
+    warnedPlaceholderJudging = true;
+    console.warn(
+      '[pairwise-judge-v3] Rendering candidates without their copy: the judge will see "Sample copy ' +
+        'block N" placeholders, not the design. Pass renderOptions.copyText.'
+    );
+  }
+  const pngA = candA.renderedPng || renderLayoutV2(candA.layout, options.renderOptions).png;
+  const pngB = candB.renderedPng || renderLayoutV2(candB.layout, options.renderOptions).png;
 
   // 3. Build Prompts
   const systemPrompt = `You are an impartial, senior design judge conducting a blind pairwise design comparison.
@@ -407,9 +430,15 @@ export async function runTournamentWithCanary(
   options: JudgeOptions = {}
 ): Promise<TournamentResult> {
   // 1. Evaluate deterministic metrics on all candidates
+  const copyText = options.renderOptions?.copyText;
+  const measure = (layout: StudioLayoutV2) =>
+    evaluateDesignMetrics(
+      layout,
+      copyText ? { wrappedLines: measureWrappedLines(layout, copyText, options.renderOptions) } : {}
+    );
   const evaluated = candidates.map((c) => ({
     ...c,
-    deterministicMetrics: c.deterministicMetrics || evaluateDesignMetrics(c.layout),
+    deterministicMetrics: c.deterministicMetrics || measure(c.layout),
   }));
 
   const survivors = evaluated.filter((c) => c.deterministicMetrics.passed);
@@ -454,24 +483,21 @@ export async function runTournamentWithCanary(
     }
   }
 
-  // Determine leader
-  let bestId = survivors[0].id;
-  let maxWins = -1;
-  for (const [id, count] of Object.entries(wins)) {
-    if (count > maxWins) {
-      maxWins = count;
-      bestId = id;
-    }
-  }
-
-  const leaderCandidate = survivors.find((s) => String(s.id) === String(bestId)) || survivors[0];
+  // Determine leader: most wins, and on equal wins the higher composite. Iterating
+  // Object.entries(wins) instead handed every tie to the first key, and integer-like ids iterate
+  // in ascending numeric order, so a discarded pair went to the lowest id whatever its score.
+  const leaderCandidate = [...survivors].sort((a, b) => {
+    const byWins = (wins[b.id] || 0) - (wins[a.id] || 0);
+    if (byWins !== 0) return byWins;
+    return b.deterministicMetrics.compositeScore - a.deterministicMetrics.compositeScore;
+  })[0];
 
   // 4. Degraded-Copy Canary Check
   const canaryLayout = createDegradedCanaryLayout(leaderCandidate.layout);
   const canaryCandidate: CandidateJudgeInput = {
     id: `${leaderCandidate.id}_canary_degraded`,
     layout: canaryLayout,
-    deterministicMetrics: evaluateDesignMetrics(canaryLayout),
+    deterministicMetrics: measure(canaryLayout),
   };
 
   const canaryMatch = await comparePairWithOrderSwap(leaderCandidate, canaryCandidate, options);
