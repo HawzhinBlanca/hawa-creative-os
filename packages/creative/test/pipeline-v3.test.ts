@@ -979,6 +979,25 @@ describe('settling a crowded design — stored designs production QA rejected', 
     expect(byRole(layout, 'eyebrow').y).toBeLessThan(648);
   });
 
+  it('never carries a logo in another column along with the band', async () => {
+    // The title overlaps the eyebrow; space is inserted at the title, and the logo in the right
+    // column starts inside that band. Moved, it would collide with nothing, so only the rule
+    // keeps it: set in its own corner, it stays.
+    const { layout, qa } = await prepare(
+      stored([1920, 1080, 96], { x: 1670, y: 230, width: 154, height: 154 }, [
+        [0, 'eyebrow', 96, 200, 900, 40, 18, 1.3, 'Cinzel', '#C5A059'],
+        [1, 'title', 96, 220, 900, 130, 76, 1.2, 'Cinzel'],
+        [2, 'subtitle', 96, 420, 900, 70, 26, 1.35, 'Playfair Display'],
+        [3, 'body', 1100, 560, 724, 250, 32, 1.5, 'Verdana'],
+        [4, 'footer', 96, 941, 1728, 43, 14, 1.35, 'Verdana'],
+      ], []),
+      SUMMIT
+    );
+    expect(qa.messages).toEqual([]);
+    expect(layout.logo!.y).toBe(230);
+    expect(byRole(layout, 'title').y).toBeGreaterThanOrEqual(bottom(byRole(layout, 'eyebrow')));
+  });
+
   it('resolves a subtitle overlapping the title with the footer already on the bottom margin', async () => {
     // The layout the refinement test used as beyond preparation, until blocks could rise.
     const crowded = centred();

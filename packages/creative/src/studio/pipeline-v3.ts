@@ -406,7 +406,9 @@ export function conformToHouseRules(
         const moved = (a: Rect) => a === growing || newY.get(a) !== a.y;
         const newBottom = (a: Rect) => (a === growing ? a.y + a.height + delta : newY.get(a)! + a.height);
         for (const b of blocks) {
-          const inBand = !growing && b.y < atY + delta && (acrossColumns || overlapsXRect(span(b), cause));
+          // Not a logo in another column: it is set on its own margin or corner, not on the text.
+          const inBand =
+            !growing && b.y < atY + delta && (overlapsXRect(span(b), cause) || (acrossColumns && b !== logo));
           let y = inBand ? b.y + delta : b.y;
           for (const a of placed) {
             if (!moved(a)) continue;
