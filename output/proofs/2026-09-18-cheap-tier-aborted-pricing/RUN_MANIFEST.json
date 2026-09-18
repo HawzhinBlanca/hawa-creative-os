@@ -1,0 +1,33 @@
+{
+  "briefSet": "qualification",
+  "briefs": [
+    "brief_01_en_square",
+    "brief_02_en_square",
+    "brief_03_ckb_square",
+    "brief_04_ckb_square",
+    "brief_05_en_portrait45",
+    "brief_06_en_portrait45",
+    "brief_07_ckb_portrait45",
+    "brief_08_ckb_portrait45",
+    "brief_09_en_story916",
+    "brief_10_en_story916",
+    "brief_11_ckb_story916",
+    "brief_12_ckb_story916",
+    "brief_13_en_a4doc",
+    "brief_14_en_a4doc",
+    "brief_15_ckb_a4doc",
+    "brief_16_ckb_a4doc",
+    "brief_17_en_landscape169",
+    "brief_18_en_landscape169",
+    "brief_19_ckb_landscape169",
+    "brief_20_ckb_landscape169"
+  ],
+  "dryRun": false,
+  "modelTier": "dev",
+  "models": {
+    "layout": "o4-mini",
+    "critique": "gpt-4.1-mini",
+    "judge": "gpt-4.1-mini"
+  },
+  "startedAt": "2026-09-18T10:10:28.399Z"
+}

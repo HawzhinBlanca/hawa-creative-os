@@ -1128,6 +1128,8 @@ async function main() {
 
   // Real Canva copy+font rate. This row previously divided by a hardcoded 20 and printed a
   // literal PASS, so it reported 80.0% against a >= 90% target and still claimed to pass.
+  // Exact copy plus readability: textLegibility and typeScale. It was labelled "Canva Copy & Font
+  // Checks", which it never measured, so a dev-tier run's typeScale failures read as font failures.
   const copyFontPassCount = results.filter((r) => r.copyExactPass && r.readabilityPass).length;
   const copyFontRate = totalBriefs > 0 ? (copyFontPassCount / totalBriefs) * 100 : 0;
 
@@ -1252,7 +1254,7 @@ Verdict: ${qualificationVerdict}
 | **Canary Win Rate (Real Judge)** | >= 95.0% of completed briefs | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/${totalBriefs}) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
 | **Order-Swap Consistency** | >= 80.0% | **${orderSwapRate.toFixed(1)}%** (${orderSwapConsistentCount}/${totalBriefs}) | **${orderSwapRate >= 80.0 ? 'PASS' : 'FAIL'}** |
 | **Mean Composite Score** | Measured Mean Score | **${avgCompositeScore.toFixed(3)}** | **${avgCompositeScore >= 0.70 ? 'PASS' : 'FAIL'}** |
-| **Canva Copy & Font Checks**| >= 90.0% of completed briefs | **${copyFontRate.toFixed(1)}%** (${copyFontPassCount}/${totalBriefs}) | **${copyFontRate >= 90.0 ? 'PASS' : 'FAIL'}** |
+| **Copy & Readability (exact copy, textLegibility, typeScale)** | >= 90.0% of completed briefs | **${copyFontRate.toFixed(1)}%** (${copyFontPassCount}/${totalBriefs}) | **${copyFontRate >= 90.0 ? 'PASS' : 'FAIL'}** |
 | **Hard-QA Escapes** | Exactly 0 | **${hardQaEscapes.length}**${hardQaEscapes.length ? ' — ' + hardQaEscapes.map((r) => r.brief.id).join(', ') : ''} | **${hardQaEscapes.length === 0 ? 'PASS' : 'FAIL'}** |
 | **Production Hard-QA Pass Rate** | 100% of completed briefs | **${hardQaPassRate.toFixed(1)}%** (${hardQaPassCount}/${totalBriefs}) | **${hardQaPassRate === 100 ? 'PASS' : 'FAIL'}** |
 | **Winners Chosen by the Judge** | Reported | ${decidedByJudge}/${totalBriefs}; the rest by composite after a tie, an unreliable judge or a single candidate | — |
