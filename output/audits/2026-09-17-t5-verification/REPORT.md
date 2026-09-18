@@ -583,14 +583,30 @@ already votes dimension-wise, the debiasing that paper measured at −31.5%. The
 Only five briefs produced a decisive split. The judge is being asked to separate candidates that are
 near-identical, and on a coin flip a positional preference is what decides it.
 
-That matches the archetype figure from the same run: **2 distinct archetypes over 20 briefs, 16 of
-them monolith_centered**. The bottleneck is candidate diversity at generation, not judgement. The
-80% threshold assumes pairs are more separable than this generator makes them.
+I first wrote that the bottleneck was candidate diversity at generation. **That was wrong, and
+measuring it refuted it.** Generating candidates for two briefs and recording what the run had not:
 
-This is worth stating plainly because it reframes what "better judging" would buy: nothing. Three
-candidates that differ only in detail cannot be told apart by any judge, and the tournament is doing
-its job by discarding the pairs it cannot separate. The work that would move this number is
-upstream — genuinely different compositional approaches per candidate.
+| brief | archetypes | distinct | pairwise distance | composite spread |
+|---|---|---|---|---|
+| brief_01_en_square | monolith_centered, asymmetric_editorial, hero_statement_grid | 3 of 3 | 228-423px | 0.115 |
+| brief_07_ckb_portrait45 | monolith_centered, asymmetric_editorial, hero_statement_grid | 3 of 3 | 123-338px | 0.196 |
+
+The candidates are genuinely different — three distinct archetypes each time, pairwise distances
+two orders of magnitude above the 15px degeneracy threshold, and composite spreads of 0.115 to
+0.196. So the 3-2 splits are not a diversity failure.
+
+The actual explanation is structural, and it is not a defect: the tournament judges the **top two**
+candidates, which after ranking are by construction the two closest in quality. Given scores of
+0.833 / 0.766 / 0.881, the pair put to the judge is 0.881 against 0.833. A narrow vote on the two
+most similar candidates is what a tournament produces by design, and an 80% order-swap threshold
+asks for decisiveness precisely where decisiveness is least available.
+
+What remains genuinely unexplained is the winner distribution — 16 of 20 production winners were
+monolith_centered. That run did not record the pairwise distances or per-candidate archetypes, so
+whether its candidates were as diverse as the dev tier's is unmeasured. It is recorded from now on.
+The two briefs measured here had hero_statement_grid scoring highest in both cases, not
+monolith_centered, but those came from the cheap tier and cannot be read across to the production
+model.
 
 ## 20. What remains
 
