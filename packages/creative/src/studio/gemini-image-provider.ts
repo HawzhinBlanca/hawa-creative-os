@@ -406,13 +406,3 @@ export class OpenAiImageProvider {
     });
   }
 }
-
-export class GeminiImageProvider extends OpenAiImageProvider {
-  constructor(
-    _geminiApiKey?: string,
-    _anthropicApiKey?: string,
-    fetchFn?: typeof fetch
-  ) {
-    super(process.env.OPENAI_API_KEY, fetchFn);
-  }
-}

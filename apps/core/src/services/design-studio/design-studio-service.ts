@@ -16,7 +16,6 @@ import {
 import {
   OpenAiStudioClient,
   OpenAiImageProvider,
-  GeminiImageProvider,
   type StudioLayoutV2,
   ExemplarRetrievalIndex,
   studioReferenceFromRaw,

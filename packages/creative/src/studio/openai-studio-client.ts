@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import {
   StudioModelHttpError,
@@ -321,8 +322,7 @@ export class OpenAiStudioClient {
           if (!res.ok) {
             const errBody = await res.text().catch(() => '');
             if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
-              const delay = computeRetryDelayMs(attempt);
-              await new Promise((r) => setTimeout(r, delay));
+              await sleep(computeRetryDelayMs(attempt));
               continue;
             }
             if (typeof this.breaker.recordFailure === 'function') {
@@ -407,8 +407,7 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw err;
         }
-        const delay = computeRetryDelayMs(attempt);
-        await new Promise((r) => setTimeout(r, delay));
+        await sleep(computeRetryDelayMs(attempt));
       } finally {
         clearTimeout(timeoutId);
       }
@@ -518,8 +517,7 @@ export class OpenAiStudioClient {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
           if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
-            const delay = computeRetryDelayMs(attempt);
-            await new Promise((r) => setTimeout(r, delay));
+            await sleep(computeRetryDelayMs(attempt));
             continue;
           }
           this.breaker.recordFailure();
@@ -573,8 +571,7 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw err;
         }
-        const delay = computeRetryDelayMs(attempt);
-        await new Promise((r) => setTimeout(r, delay));
+        await sleep(computeRetryDelayMs(attempt));
       } finally {
         // Without this an aborted or thrown attempt leaves its abort timer pending.
         clearTimeout(timeoutId);

@@ -40,7 +40,7 @@ if [[ "${1:-}" == "--check" ]]; then
     -v "$REPO_ROOT/scripts:/app/scripts:ro" \
     -v "$REPO_ROOT/packages/creative/dist:/app/packages/creative/dist:ro" \
     -v "$REPO_ROOT/packages/domain/dist:/app/packages/domain/dist:ro" \
-    -e OPENAI_API_KEY=sk-invalid-plumbing-check \
+    -e OPENAI_API_KEY=mock-invalid-plumbing-check \
     -e HAWA_QUALIFICATION_OUT_DIR=/tmp/qualification-check \
     -e HAWA_MODEL_TIER="${HAWA_MODEL_TIER:-production}" \
     -e HAWA_QUALIFICATION_BRIEF_SET="${HAWA_QUALIFICATION_BRIEF_SET:-qualification}" \

@@ -1,16 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState } from '../src/services/design-studio/types.js';
-import { StudioModelClient, GeminiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
+import { OpenAiStudioClient, OpenAiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
 import { runQAStage } from '../src/services/design-studio/stages/qa.stage.js';
 
 function createMockContext(): StageContext {
-  const client = new StudioModelClient({
+  const client = new OpenAiStudioClient({
     apiKey: 'mock-key',
-    fetchFn: vi.fn(),
-    maxRetries: 1,
+    fetcher: vi.fn() as any,
   });
-  const artProvider = new GeminiImageProvider('mock-gemini-key', 'mock-anthropic-key', vi.fn());
+  const artProvider = new OpenAiImageProvider('mock-key', vi.fn() as any);
 
   return {
     runId: randomUUID(),
