@@ -11,7 +11,8 @@
     { "path": "../../packages/retrieval" },
     { "path": "../../packages/creative" },
     { "path": "../../packages/qa" },
-    { "path": "../../packages/observability" }
+    { "path": "../../packages/observability" },
+    { "path": "../../packages/db" }
   ],
   "include": ["src/**/*"]
 }

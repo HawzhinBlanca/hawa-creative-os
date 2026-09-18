@@ -6,7 +6,8 @@
   },
   "references": [
     { "path": "../contracts" },
-    { "path": "../domain" }
+    { "path": "../domain" },
+    { "path": "../integrations" }
   ],
   "include": ["src/**/*"]
 }
