@@ -98,18 +98,37 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
     schemaName: 'CreativeBrief',
   });
 
-  const brief = response.data;
-
-  // Server check: roles must cover every copy index exactly once
-  const coveredIndices = new Set(brief.roles.map((r: { copyIndex: number }) => r.copyIndex));
-  for (let i = 0; i < ctx.copyBlocks.length; i++) {
-    if (!coveredIndices.has(i)) {
-      throw new Error(`Creative brief failed validation: missing copy index ${i}`);
-    }
+  const { brief, dropped } = normalizeBriefRoles(response.data, ctx.copyBlocks.length);
+  if (dropped.length > 0) {
+    console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }
-  if (brief.roles.length !== ctx.copyBlocks.length) {
-    throw new Error(`Creative brief failed validation: roles length ${brief.roles.length} != copy blocks ${ctx.copyBlocks.length}`);
-  }
-
   return brief;
+}
+
+/**
+ * Keeps exactly one role per copy block, in copy order, and a reading order over real blocks only.
+ *
+ * gpt-4.1-mini (the cheap tier) returned nine roles for eight blocks on 2026-09-18 (task abc59152),
+ * and the whole design failed at its first stage. A surplus role, whether a block named twice or an
+ * index past the end, is dropped: the first role given for a block is kept. A block with no role at
+ * all still fails, because the pipeline cannot know what it is.
+ */
+export function normalizeBriefRoles(brief: CreativeBrief, copyCount: number): { brief: CreativeBrief; dropped: string[] } {
+  const byIndex = new Map<number, CreativeBrief['roles'][number]>();
+  const dropped: string[] = [];
+  for (const role of brief.roles || []) {
+    const i = role.copyIndex;
+    if (!Number.isInteger(i) || i < 0 || i >= copyCount) dropped.push(`copyIndex ${i} does not exist`);
+    else if (byIndex.has(i)) dropped.push(`copyIndex ${i} listed again as ${role.role}`);
+    else byIndex.set(i, role);
+  }
+  for (let i = 0; i < copyCount; i++) {
+    if (!byIndex.has(i)) throw new Error(`Creative brief failed validation: missing copy index ${i}`);
+  }
+  const order = [...new Set((brief.readingOrder || []).filter((i) => Number.isInteger(i) && i >= 0 && i < copyCount))];
+  for (let i = 0; i < copyCount; i++) if (!order.includes(i)) order.push(i);
+  return {
+    brief: { ...brief, roles: [...byIndex.keys()].sort((a, b) => a - b).map((i) => byIndex.get(i)!), readingOrder: order },
+    dropped,
+  };
 }
