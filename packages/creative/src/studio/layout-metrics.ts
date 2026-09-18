@@ -29,6 +29,33 @@ function boxesIntersect(a: Box, b: Box): boolean {
   );
 }
 
+/**
+ * Every pair the overlap metric counts, by name: text on text, text on the logo, and text under a
+ * shape other than a panel. QA reports them by name because refinement acts on the message, which
+ * used to read "2 pair(s) of text boxes overlap" for a design whose only overlaps were two blocks
+ * on the logo (cheap run 2, brief_03).
+ */
+export function overlappingPairs(layout: StudioLayoutV2): string[] {
+  const name = (t: StudioLayoutV2['text'][number]) => `block ${t.copyIndex} (${t.role})`;
+  const pairs: string[] = [];
+  for (let i = 0; i < layout.text.length; i++) {
+    for (let j = i + 1; j < layout.text.length; j++) {
+      if (boxesIntersect(layout.text[i], layout.text[j])) pairs.push(`${name(layout.text[i])} and ${name(layout.text[j])}`);
+    }
+  }
+  for (const t of layout.text) {
+    if (boxesIntersect(t, layout.logo)) pairs.push(`${name(t)} and the logo`);
+  }
+  for (const s of layout.shapes) {
+    if (s.role !== 'panel') {
+      for (const t of layout.text) {
+        if (boxesIntersect(s, t)) pairs.push(`${name(t)} and the ${s.role} at y=${Math.round(s.y)}`);
+      }
+    }
+  }
+  return pairs;
+}
+
 export function computeLayoutMetrics(
   layout: StudioLayoutV2,
   options: MetricCalculationOptions = {}
@@ -191,22 +218,7 @@ export function computeLayoutMetrics(
   if (!Number.isFinite(marginMin)) marginMin = 0;
 
   // 6. Overlap count
-  let overlapCount = 0;
-  for (let i = 0; i < layout.text.length; i++) {
-    for (let j = i + 1; j < layout.text.length; j++) {
-      if (boxesIntersect(layout.text[i], layout.text[j])) overlapCount++;
-    }
-  }
-  for (const t of layout.text) {
-    if (boxesIntersect(t, layout.logo)) overlapCount++;
-  }
-  for (const s of layout.shapes) {
-    if (s.role !== 'panel') {
-      for (const t of layout.text) {
-        if (boxesIntersect(s, t)) overlapCount++;
-      }
-    }
-  }
+  const overlapCount = overlappingPairs(layout).length;
 
   // 7. Logo width percentage
   const logoWidthPct = parseFloat(((layout.logo.width / width) * 100).toFixed(2));

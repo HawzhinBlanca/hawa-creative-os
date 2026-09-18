@@ -1,6 +1,6 @@
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
-import { computeLayoutMetrics, type LayoutMetrics } from './layout-metrics.js';
+import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
 import { measureWrappedLines } from './render-layout-v2.js';
@@ -88,7 +88,12 @@ export function evaluateHardQa(
 
   if (metrics.overlapCount > 0) {
     defectCodes.push('OVERLAP');
-    messages.push(`OVERLAP: ${metrics.overlapCount} pair(s) of text boxes overlap`);
+    const pairs = overlappingPairs(checked);
+    messages.push(
+      pairs.length
+        ? `OVERLAP: ${pairs.length} overlapping pair(s): ${pairs.join('; ')}`
+        : `OVERLAP: ${metrics.overlapCount} overlapping pair(s) of text, logo or shapes`
+    );
   }
 
   // Calibrated against six confirmed KAAE exemplars (range 0.792 - 1.000, mean 0.949)

@@ -1006,6 +1006,65 @@ describe('settling a crowded design — stored designs production QA rejected', 
     const { qa } = await prepare(crowded, { ...COPY, scripts: { 0: 'latin', 1: 'latin', 2: 'latin', 3: 'latin', 4: 'latin' } });
     expect(qa.messages).toEqual([]);
   });
+
+  it('raises a block that starts above the logo but reaches into its clear space, and its card with it', async () => {
+    // Cheap tier, run 2, brief_08: an eyebrow 27px above a card's logo and 68px into its clear
+    // space. The logo had nowhere in its card to go, and nothing looked at a block above the logo.
+    const { layout, qa } = await prepare(
+      stored([1080, 1350, 64], { x: 64, y: 284, width: 108, height: 108 }, [
+        [0, 'eyebrow', 162, 257, 756, 41, 16, 1.2, 'Amiri', '#F7B500'],
+        [1, 'title', 162, 338, 756, 180, 44, 1.3, 'Amiri'],
+        [2, 'subtitle', 162, 459, 756, 108, 24, 1.35, 'Amiri', '#F7B500'],
+        [3, 'body', 108, 602, 864, 176, 23, 1.5, 'Noto Sans Arabic', '#1A1A1A'],
+        [4, 'footer', 108, 928, 864, 54, 15, 1.35, 'Noto Sans Arabic', '#1A1A1A'],
+      ], [
+        ['panel', 'rect', 0, 189, 1080, 338, '#1E3A5F'],
+        ['rule', 'line', 54, 579, 972, 3, '#C5A059'],
+      ], '#FFFFFF'),
+      copyOf('arabic', [
+        'فەرمانگەی دڵنیایی جۆری و متمانەبەخشین',
+        'کۆبوونەوەی باڵای سەرۆک زانکۆکان',
+        'پەسەندکردنی ڕێسای نوێی خوێندنی ئەکادیمی',
+        'گفتوگۆ لەسەر شێوازی تاقیکردنەوەکان، نوێکردنەوەی پڕۆگرامەکان و پەسەندکردنی بڕوانامە نێودەوڵەتییەکان.',
+        'شاری سلێمانی • هۆڵی کۆنگرێس • کانوونی دووەمی ٢٠٢٦',
+      ])
+    );
+    expect(qa.messages).toEqual([]);
+    expect(layout.logo).toEqual({ x: 64, y: 284, width: 108, height: 108 });
+    const eyebrow = byRole(layout, 'eyebrow');
+    expect(bottom(eyebrow)).toBeLessThanOrEqual(284 - 54);
+    // The card grew upward to keep holding the eyebrow.
+    const card = layout.shapes.find((s) => s.role === 'panel')!;
+    expect(card.y).toBeLessThan(eyebrow.y);
+  });
+
+  it('leaves text set on the logo itself for refinement, and QA names what overlaps what', async () => {
+    // Cheap tier, run 2, brief_03: eyebrow and title set across a centred logo. Clearing it would
+    // take the eyebrow off the canvas — a new arrangement, which is refinement's job. QA used to
+    // tell refinement "2 pair(s) of text boxes overlap", though no two text boxes did.
+    const { qa } = await prepare(
+      stored([1080, 1080, 64], { x: 459, y: 76, width: 162, height: 162 }, [
+        [0, 'eyebrow', 108, 64, 864, 32, 14, 1.3, 'Amiri', '#1E3A5F'],
+        [1, 'title', 108, 122, 864, 108, 41, 1.25, 'Amiri', '#1E3A5F'],
+        [2, 'subtitle', 108, 256, 864, 63, 26, 1.4, 'Amiri'],
+        [3, 'body', 108, 370, 864, 169, 18, 1.5, 'Noto Sans Arabic'],
+        [4, 'footer', 108, 784, 864, 32, 14, 1.35, 'Noto Sans Arabic'],
+      ], [
+        ['panel', 'rect', 0, 54, 1080, 194, '#FDF8F3'],
+        ['panel', 'rect', 0, 248, 1080, 832, '#1E3A5F'],
+      ], '#FFFFFF'),
+      copyOf('arabic', [
+        'دەستەی باڵای متمانەبەخشین بە پەروەردە',
+        'پێوەرە نیشتمانییەکانی کوالیتی خوێندن',
+        'بەپێی یاسای ژمارە ٦ی ساڵی ٢٠٢٢',
+        'پێویستە هەموو کۆلێژ و زانکۆکان ڕاپۆرتی بەراوردکاری متمانەبەخشین ئامادە بکەن.',
+        'هەولێر • ئەنجومەنی باڵا • kaae.gov.krd',
+      ])
+    );
+    expect(qa.messages).toContain(
+      'OVERLAP: 2 overlapping pair(s): block 0 (eyebrow) and the logo; block 1 (title) and the logo'
+    );
+  });
 });
 
 describe('generated art names no lettering, marks or people', () => {
