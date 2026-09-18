@@ -55,6 +55,9 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'MANUAL_DESIGN_REQUIRED') {
     title = '📥 <b>Request queued for manual design</b>';
     body = `This request has been queued in Hawa Desk. The art director will review the brief and create the design manually in Canva.\n`;
+  } else if (status === 'DESIGN_REJECTED' && code === 'COPY_REQUIRED') {
+    title = '📥 <b>Request saved, copy needed</b>';
+    body = `No design copy was found in your request, so no automatic draft was started and no text was made up. Please send the exact text to put on the design, for example below a divider line (---) after your instructions.\n`;
   } else if (status === 'DESIGN_REJECTED' && code === 'COPY_UNSUPPORTED') {
     title = '📥 <b>Request saved, manual design</b>';
     body = `Automatic drafting sets English and Sorani Kurdish copy. This request contains text it cannot set safely (another script, symbols or emoji), so it is saved exactly as sent and the art director will design it in Canva manually.\n`;

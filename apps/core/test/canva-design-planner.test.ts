@@ -15,6 +15,12 @@ describe('exact copy selection',()=>{
     expect(result.copy).toEqual([heading.trim(),'Unexpected third speaker: J. Example','Do not share.']);expect(result.instructions).toBe('Use navy.');
   });
   it('never invents copy for empty or ambiguous instructions',()=>{expect(()=>savedDesignCopy({},'Make something nice')).toThrow('Separate');});
+  it.each(['Make a poster in navy.\n---\n','Make a poster in navy.\n___\n   \n\n','Make a poster in navy.\n=====\n\n'])(
+    'reports a divider with nothing after it as missing copy, not unsupported copy (%j)',(raw)=>{
+      // The worker relays the code to the sender; COPY_UNSUPPORTED would tell them their text used another script.
+      let error:any;try{savedDesignCopy({payload:{rawRequestText:raw,exactCopy:[{text:'WRONG'}]}},'');}catch(e){error=e;}
+      expect(error).toMatchObject({status:422,code:'COPY_REQUIRED'});expect(error.message).toContain('Nothing follows the divider');
+    });
 });
 const url=process.env.HAWA_ISOLATED_TEST_DB;
 if(url&&new URL(url).pathname!=='/hawa_repair')throw new Error('Isolated database required');
@@ -80,6 +86,13 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
       rawText:'Use navy.\n---\nEXACT TITLE\n\n质量保证研讨会',designInstructions:'Use navy.',exactCopy:[]})).task.id;
     const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
     await expect(planner.generate(scope,id,'cjk-key-01',1200,1697)).rejects.toMatchObject({code:'COPY_UNSUPPORTED'});
+    expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
+  });
+  it('refuses a divider with nothing after it as missing copy, before any paid call',async()=>{
+    const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] No-copy plan',
+      rawText:'Make a poster in navy.\n---\n',designInstructions:'Make a poster in navy.',exactCopy:[]})).task.id;
+    const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
+    await expect(planner.generate(scope,id,'nocopy-key-01',1200,1697)).rejects.toMatchObject({status:422,code:'COPY_REQUIRED'});
     expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it.each(['wrong-model','rewritten-copy','overlap','missing-block'])('rejects %s without a Canva side effect',async(mode)=>{
