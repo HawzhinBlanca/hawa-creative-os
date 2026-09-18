@@ -22,6 +22,17 @@ cd "$REPO_ROOT"
 IMAGE="${HAWA_QUALIFICATION_IMAGE:-hawa-core:canva-only-20260913}"
 KEY_SOURCE_CONTAINER="${HAWA_KEY_CONTAINER:-hawa-production-core-1}"
 
+# The run measures the mounted dist, so build it from the source first: a run once measured a
+# build that predated its own last commit. Nothing may rebuild dist while a run is in progress.
+echo "Building @hawa/domain and @hawa/creative, which the run mounts..."
+pnpm --filter @hawa/domain --filter @hawa/creative -s build
+SOURCE_COMMIT="$(git rev-parse HEAD)"
+SOURCE_CHANGES="$(git status --porcelain -- packages scripts apps | grep -v '^??' | cut -c4- || true)"
+if [[ -n "$SOURCE_CHANGES" ]]; then
+  echo "WARNING: uncommitted source changes; they are recorded in RUN_MANIFEST.json:" >&2
+  echo "$SOURCE_CHANGES" >&2
+fi
+
 if [[ "${1:-}" == "--check" ]]; then
   echo "Checking the image can run the qualification on the ${HAWA_MODEL_TIER:-production} tier (no model spend)..."
   # A deliberately invalid key: reaching a 401 proves imports, egress and the cost governor work.
@@ -72,5 +83,7 @@ docker run --rm \
   -e HAWA_SPEND_STATE_DIR=/app/spend-ledger \
   -e HAWA_MODEL_TIER="${HAWA_MODEL_TIER:-production}" \
   -e HAWA_QUALIFICATION_BRIEF_SET="${HAWA_QUALIFICATION_BRIEF_SET:-qualification}" \
+  -e HAWA_SOURCE_COMMIT="$SOURCE_COMMIT" \
+  -e HAWA_SOURCE_CHANGES="$SOURCE_CHANGES" \
   -w /app "$IMAGE" \
   ./node_modules/.bin/tsx scripts/run_p10_qualification.ts "$@"

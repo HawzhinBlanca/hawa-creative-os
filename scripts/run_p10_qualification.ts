@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolveModel, isDevModelTier, activeModelTier } from '../packages/domain/dist/provider-policy.js';
@@ -479,6 +480,30 @@ function loadBriefSet(): { set: 'qualification' | 'compare'; briefs: Qualificati
   return { set, briefs };
 }
 
+/**
+ * The code this run measured: the commit, and any uncommitted source changes. The in-image
+ * script passes both in, since the image has no git; a host run asks git itself.
+ */
+function sourceProvenance(): { commit: string | null; uncommittedChanges: string[] } {
+  const lines = (text: string) => text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (process.env.HAWA_SOURCE_COMMIT) {
+    return { commit: process.env.HAWA_SOURCE_COMMIT, uncommittedChanges: lines(process.env.HAWA_SOURCE_CHANGES || '') };
+  }
+  try {
+    const git = (args: string[]) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return {
+      commit: git(['rev-parse', 'HEAD']).trim(),
+      // Porcelain lines are "XY path", where X may be a space: cut before trimming anything.
+      uncommittedChanges: git(['status', '--porcelain', '--', 'packages', 'scripts', 'apps'])
+        .split('\n')
+        .filter((l) => l.length > 3 && !l.startsWith('??'))
+        .map((l) => l.slice(3).trim()),
+    };
+  } catch {
+    return { commit: null, uncommittedChanges: [] };
+  }
+}
+
 /** The client's reference pack, read exactly as production's studio reads it. */
 const KAAE_REFERENCE = studioReferenceFromRaw(
   JSON.parse(fs.readFileSync(new URL('../packages/creative/assets/kaae-reference.json', import.meta.url), 'utf8'))
@@ -923,6 +948,7 @@ async function main() {
         dryRun: Boolean(DRY_RUN_URL),
         modelTier: activeModelTier(),
         models: { layout: resolveModel('layout'), critique: resolveModel('critique'), judge: resolveModel('judge') },
+        source: sourceProvenance(),
         startedAt: new Date().toISOString(),
       },
       null,
