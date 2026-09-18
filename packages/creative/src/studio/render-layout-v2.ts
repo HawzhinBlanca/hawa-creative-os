@@ -429,6 +429,56 @@ export function measureWrappedLines(
  */
 
 /**
+ * Whether the face this renderer would load for a family can draw every character of some copy.
+ *
+ * Cairo, which the generator assigned to every Kurdish display line, cannot draw five Sorani
+ * letters — ڕ ڵ ۆ ێ ە — and ە is among the most common characters in the language. fontkit returns
+ * .notdef for them, so the measured width is wrong, and pango silently falls back per character,
+ * so a Kurdish title renders in two typefaces mid-word. Nothing in the pipeline noticed, because
+ * every check asked whether the family resolved, not whether it covers the text.
+ */
+export function fontCoversText(
+  fontFamily: string,
+  text: string,
+  options: { bold?: boolean; italic?: boolean } & RenderLayoutOptions = {}
+): { covers: boolean; missing: string[] } {
+  if (!text) return { covers: true, missing: [] };
+  const fontsDir = resolveFontsDir(options);
+  let font: any;
+  try {
+    font = loadFont(fontFamily, options.bold, options.italic, fontsDir);
+  } catch {
+    return { covers: false, missing: [] };
+  }
+
+  const missing = new Set<string>();
+  for (const ch of Array.from(text)) {
+    if (/\s/.test(ch)) continue;
+    try {
+      if (font.layout(ch).glyphs.some((g: any) => g.id === 0)) missing.add(ch);
+    } catch {
+      missing.add(ch);
+    }
+  }
+  return { covers: missing.size === 0, missing: [...missing] };
+}
+
+/**
+ * The first family in `preferences` that can draw the copy, or the last one as a last resort.
+ * Used to correct a font choice the generator made without knowing what the copy contains.
+ */
+export function pickFontCovering(
+  preferences: string[],
+  text: string,
+  options: { bold?: boolean; italic?: boolean } & RenderLayoutOptions = {}
+): string {
+  for (const family of preferences) {
+    if (fontCoversText(family, text, options).covers) return family;
+  }
+  return preferences[preferences.length - 1];
+}
+
+/**
  * Measures text advance width in px using fontkit layout runs.
  */
 export function measureTextWidth(text: string, font: any, fontSize: number, letterSpacing = 0): number {

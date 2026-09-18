@@ -622,3 +622,62 @@ describe('canvas margin balance', () => {
     expect(l.shapes[0].y).toBe(0);
   });
 });
+
+describe('fonts must be able to draw the copy they are given', () => {
+  it('knows Cairo cannot draw the Sorani letters and Amiri can', async () => {
+    const { fontCoversText } = await import('../src/studio/render-layout-v2.js');
+    const sorani = 'ڕاگەیاندنی بەڕێوەبەرایەتی کوالیتی خوێندن';
+    const cairo = fontCoversText('Cairo', sorani);
+    expect(cairo.covers).toBe(false);
+    expect(cairo.missing.join('')).toMatch(/[ەۆێڕڵ]/);
+    expect(fontCoversText('Amiri', sorani).covers).toBe(true);
+    expect(fontCoversText('Noto Sans Arabic', sorani).covers).toBe(true);
+  });
+
+  it('moves a Kurdish display block off a font that cannot draw it', async () => {
+    const { correctFontsThatCannotDrawTheCopy } = await import(
+      '../src/studio/layout-generator-v3.js'
+    );
+    const layout: any = {
+      width: 1080,
+      height: 1080,
+      text: [
+        { copyIndex: 0, role: 'title', x: 100, y: 100, width: 800, height: 100, fontSize: 48, lineHeight: 1.3, fontFamily: 'Cairo', rtl: true },
+      ],
+    };
+    expect(correctFontsThatCannotDrawTheCopy(layout, { 0: 'کوالیتی خوێندن' })).toBe(1);
+    expect(layout.text[0].fontFamily).toBe('Amiri');
+  });
+
+  it('leaves a Latin run inside an Arabic block alone, since that is script fallback', async () => {
+    const { correctFontsThatCannotDrawTheCopy } = await import(
+      '../src/studio/layout-generator-v3.js'
+    );
+    // Noto Sans Arabic has no Latin glyphs, and a Kurdish footer ending in a URL is legitimately
+    // set with fallback for the Latin run. Only failure on the block's own script is a defect.
+    const layout: any = {
+      width: 1080,
+      height: 1080,
+      text: [
+        { copyIndex: 0, role: 'footer', x: 100, y: 900, width: 800, height: 40, fontSize: 16, lineHeight: 1.4, fontFamily: 'Noto Sans Arabic', rtl: true },
+      ],
+    };
+    expect(correctFontsThatCannotDrawTheCopy(layout, { 0: 'هەولێر • kaae.gov.krd' })).toBe(0);
+    expect(layout.text[0].fontFamily).toBe('Noto Sans Arabic');
+  });
+
+  it('keeps the generator choice when it works', async () => {
+    const { correctFontsThatCannotDrawTheCopy } = await import(
+      '../src/studio/layout-generator-v3.js'
+    );
+    const layout: any = {
+      width: 1080,
+      height: 1080,
+      text: [
+        { copyIndex: 0, role: 'title', x: 100, y: 100, width: 800, height: 100, fontSize: 48, lineHeight: 1.3, fontFamily: 'Playfair Display', rtl: false },
+      ],
+    };
+    expect(correctFontsThatCannotDrawTheCopy(layout, { 0: 'Mandatory Quality Standards' })).toBe(0);
+    expect(layout.text[0].fontFamily).toBe('Playfair Display');
+  });
+});

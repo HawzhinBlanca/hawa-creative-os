@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
+import { fontCoversText, pickFontCovering } from './render-layout-v2.js';
 import { evaluateDesignMetrics, checkCandidateSetDegeneracy } from './design-metrics.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
@@ -299,12 +300,10 @@ export function scaleNormalizedLayoutToV2(
     if (t.rtl) {
       if (t.role === 'body' || t.role === 'footer') {
         resolvedFont = 'Noto Sans Arabic';
-      } else {
-        if (resolvedFont === 'Amiri' || resolvedFont === 'Cairo') {
-          // Keep admitted installed font
-        } else {
-          resolvedFont = 'Cairo';
-        }
+      } else if (resolvedFont !== 'Amiri' && resolvedFont !== 'Cairo') {
+        // Amiri, not Cairo, is the display default for right-to-left copy: Cairo cannot draw the
+        // Sorani letters ڕ ڵ ۆ ێ ە, and ە is among the most common characters in Kurdish.
+        resolvedFont = 'Amiri';
       }
     } else {
       if (t.role === 'body' || t.role === 'footer') {
@@ -576,6 +575,58 @@ const MEASURE_CONSENSUS_MIN = 3;
  * shape of defect this corrects. Distance thresholds cannot separate the two cases, because the
  * drifted footer and the deliberate insets deviate by the same 27-38px.
  */
+/** Fallback order per script, most preferred first. Every entry is an admitted family. */
+const RTL_FONT_PREFERENCES = ['Amiri', 'Cairo', 'Noto Sans Arabic'];
+const LATIN_FONT_PREFERENCES = ['Cinzel', 'Playfair Display', 'Verdana'];
+
+/**
+ * Replaces any font that cannot draw the copy assigned to it with one that can.
+ *
+ * The generator picks a family from a role and a script without seeing the characters, so it
+ * cannot know that Cairo is missing five Sorani letters. This runs where the copy is known and
+ * keeps the generator's choice whenever that choice actually works.
+ */
+const ARABIC_SCRIPT_RANGE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const LATIN_SCRIPT_RANGE = /[A-Za-z\u00C0-\u024F]/;
+
+/**
+ * The characters of the block's own script. A Kurdish footer that ends in "kaae.gov.krd" is
+ * legitimately set with script fallback for the Latin run, and an Arabic face not covering Latin
+ * is normal typography rather than a defect. What is not normal is a face failing on the script it
+ * was chosen for, because then a single word renders in two typefaces.
+ */
+function charactersOfOwnScript(text: string, rtl: boolean): string {
+  const range = rtl ? ARABIC_SCRIPT_RANGE : LATIN_SCRIPT_RANGE;
+  return Array.from(text)
+    .filter((ch) => range.test(ch))
+    .join('');
+}
+
+export function correctFontsThatCannotDrawTheCopy(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string>
+): number {
+  let corrected = 0;
+  for (const t of layout.text) {
+    const copy = copyText[t.copyIndex];
+    if (!copy) continue;
+    const ownScript = charactersOfOwnScript(copy, !!t.rtl);
+    if (!ownScript) continue;
+
+    const opts = { bold: t.bold, italic: t.italic };
+    if (fontCoversText(t.fontFamily, ownScript, opts).covers) continue;
+
+    const preferences = t.rtl ? RTL_FONT_PREFERENCES : LATIN_FONT_PREFERENCES;
+    const ordered = [t.fontFamily, ...preferences.filter((f) => f !== t.fontFamily)];
+    const replacement = pickFontCovering(ordered, ownScript, opts);
+    if (replacement !== t.fontFamily) {
+      t.fontFamily = replacement;
+      corrected++;
+    }
+  }
+  return corrected;
+}
+
 /** Below this share of canvas height, a top/bottom margin difference is not worth moving for. */
 const MARGIN_IMBALANCE_MIN_SHARE = 0.02;
 /** A shape this close to covering the canvas is a background, not composed content. */
@@ -1213,9 +1264,14 @@ export async function generateLayoutCandidatesV3(
   // dropping the exemplar-calibrated negativeSpace metric from 0.95 to 0.27. The critique
   // complaints it would have answered — "a shallow line within a 130px-high box" — are readings of
   // the Set-of-Mark annotation drawn for the critique, not of anything the design shows.
-  const scaledLayouts: StudioLayoutV2[] = rawCandidates.map((c) =>
-    scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight)
-  );
+  const copyByIndex: Record<number, string> = {};
+  for (const b of options.copyBlocks) copyByIndex[b.index] = b.text;
+
+  const scaledLayouts: StudioLayoutV2[] = rawCandidates.map((c) => {
+    const layout = scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight);
+    correctFontsThatCannotDrawTheCopy(layout, copyByIndex);
+    return layout;
+  });
 
   // Validate each layout against studioLayoutV2Schema
   for (let i = 0; i < scaledLayouts.length; i++) {
