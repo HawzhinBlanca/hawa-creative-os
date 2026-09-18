@@ -1,9 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState, CreativeBrief, Concept } from '../src/services/design-studio/types.js';
 import { StudioModelClient, GeminiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { studioSentBlocks } from '../src/services/canva-connect-service.js';
+import { officialLogoPath } from '../src/services/design-studio/design-studio-service.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   runBriefStage,
   runConceptsStage,
@@ -724,5 +727,23 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(swapped.offendingObjects[0]).toMatchObject({ index: 0, expectedFont: 'Verdana', observedFont: 'Cinzel' });
     // A planner manifest carries its reference pack and keeps the single-font check.
     expect(studioSentBlocks({ ...transfer.manifest, reference: { rules: { fontFamily: 'Verdana' } } })).toBeNull();
+  });
+
+  it('13. the transfer carries the official logo, found from wherever the service runs', async () => {
+    // Both pilots of 2026-09-18 reached Canva with the logo box empty: the stage context looked for
+    // the logo at one relative path that does not exist in the image, and went on without it.
+    const path = officialLogoPath();
+    const bytes = readFileSync(path);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const reference = JSON.parse(readFileSync(resolve(path, '../../kaae-reference.json'), 'utf8'));
+    expect(sha256).toBe(reference.logoSha256);
+
+    const ctx = { ...createMockContext(vi.fn()), logo: { bytes, sha256, mimeType: 'image/png' as const } };
+    const winner: CandidateState = {
+      id: 'w1', ordinal: 0, concept: {} as any, layouts: [], currentLayout: createMockLayout(1080, 1350), critiques: [], status: 'winner',
+    };
+    const transfer = await runTransferStage(ctx, winner);
+    expect(transfer.manifest.logoSha256).toBe(sha256);
+    expect(Buffer.from(transfer.pptxBytes).includes('ppt/media/')).toBe(true);
   });
 });

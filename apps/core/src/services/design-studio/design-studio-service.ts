@@ -52,6 +52,24 @@ export type Scope = { tenantId: string; actorId: string };
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
 /**
+ * The official KAAE logo's path, from the repository in development and from /app in the image,
+ * where the compiled file sits one directory deeper than its source. The stage context used a single
+ * relative path that resolved to /app/apps/packages/... in production, found nothing there, and
+ * every studio design reached Canva with its logo box empty (both pilots of 2026-09-18).
+ */
+export function officialLogoPath(): string {
+  const candidates = [
+    resolve(process.cwd(), 'packages/creative/assets/logos/kaae-official-logo.png'),
+    resolve(process.cwd(), '../../packages/creative/assets/logos/kaae-official-logo.png'),
+    new URL('../../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
+    new URL('../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
+  ];
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) throw new Error('Could not find kaae-official-logo.png');
+  return found;
+}
+
+/**
  * Whether a run executes the v3 pipeline. The run's own record decides — it was fixed when the run
  * was created, from the chat the task came from. The global flag is honoured too, which covers runs
  * created before the decision was recorded.
@@ -166,16 +184,7 @@ export class DesignStudioService {
       );
     }
 
-    const logoCandidates = [
-      resolve(process.cwd(), 'packages/creative/assets/logos/kaae-official-logo.png'),
-      resolve(process.cwd(), '../../packages/creative/assets/logos/kaae-official-logo.png'),
-      new URL('../../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
-      new URL('../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
-    ];
-    const logoPath = logoCandidates.find((p) => existsSync(p));
-    if (!logoPath) throw new Error('Could not find kaae-official-logo.png');
-
-    const logo = await readFile(logoPath);
+    const logo = await readFile(officialLogoPath());
     if (hash(logo) !== reference.logoSha256) {
       throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo checksum changed; review the reference pack.');
     }
@@ -616,26 +625,15 @@ export class DesignStudioService {
       );
     }
 
-    let logo: { bytes: Buffer; sha256: string; mimeType: 'image/png' } | undefined;
-    try {
-      const logoPath = resolve(import.meta.dirname, '../../../../packages/creative/assets/logos/kaae-official-logo.png');
-      if (existsSync(logoPath)) {
-        const logoBytes = readFileSync(logoPath);
-        const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
-        logo = {
-          bytes: logoBytes,
-          sha256: logoSha256,
-          mimeType: 'image/png',
-        };
-      }
-    } catch (err: any) {
-      // A KAAE design without the KAAE logo is not deliverable, and this used to pass silently:
-      // the layout still declares a logo box, so the asset-integrity check sees one and passes.
-      console.error(
-        `[design-studio] Logo could not be loaded (${err?.message || err}). The design will render ` +
-          `without it while still reserving its box.`
-      );
+    // A KAAE design without the KAAE logo is not deliverable, so a missing or changed logo stops the
+    // run. It used to pass silently: the only path tried did not exist in the image, and the design
+    // went to Canva with the logo box empty.
+    const logoBytes = readFileSync(officialLogoPath());
+    const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
+    if (request.logoSha256 && logoSha256 !== request.logoSha256) {
+      throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo changed after this run started; review the reference pack.');
     }
+    const logo = { bytes: logoBytes, sha256: logoSha256, mimeType: 'image/png' as const };
 
     return {
       runId: run.id,
