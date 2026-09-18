@@ -1273,13 +1273,19 @@ export async function generateLayoutCandidatesV3(
     return layout;
   });
 
-  // Validate each layout against studioLayoutV2Schema
+  // Validate each layout against studioLayoutV2Schema. A candidate that fails is dropped rather
+  // than aborting the brief: the point of generating several is that they are independent, and one
+  // malformed candidate out of three is a reason to use the other two, not to lose the request.
+  const invalidCandidates: string[] = [];
+  const validIndices: number[] = [];
   for (let i = 0; i < scaledLayouts.length; i++) {
     const layout = scaledLayouts[i];
     const parseResult = studioLayoutV2Schema.safeParse(layout);
     if (!parseResult.success) {
-      throw new Error(`Candidate ${i + 1} failed StudioLayoutV2 schema: ${parseResult.error.message}`);
+      invalidCandidates.push(`candidate ${i + 1}: ${parseResult.error.message.slice(0, 200)}`);
+      continue;
     }
+    validIndices.push(i);
 
     // Check twin-card failure mode
     if (hasTwinCardBlock(layout)) {
@@ -1293,12 +1299,27 @@ export async function generateLayoutCandidatesV3(
     }
   }
 
-  // Degeneracy check across the 3 layouts
-  const degeneracy = checkCandidateSetDegeneracy(scaledLayouts);
+  if (invalidCandidates.length) {
+    console.warn(
+      `[LayoutGeneratorV3] Dropped ${invalidCandidates.length} of ${scaledLayouts.length} candidates ` +
+        `that failed StudioLayoutV2 schema: ${invalidCandidates.join(' | ')}`
+    );
+  }
+  const validLayouts = validIndices.map((i) => scaledLayouts[i]);
+  const validRaw = validIndices.map((i) => rawCandidates[i]);
+  if (validLayouts.length < 2) {
+    throw new Error(
+      `Only ${validLayouts.length} of ${scaledLayouts.length} layout candidates passed ` +
+        `StudioLayoutV2 schema, which is too few to choose between. ${invalidCandidates.join(' | ')}`
+    );
+  }
+
+  // Degeneracy check across the surviving layouts
+  const degeneracy = checkCandidateSetDegeneracy(validLayouts);
 
   return {
-    layouts: scaledLayouts,
-    rawCandidates,
+    layouts: validLayouts,
+    rawCandidates: validRaw,
     responseId: response.receipt.responseId,
     xRequestId: response.receipt.xRequestId || null,
     inputTokens: response.receipt.inputTokens,

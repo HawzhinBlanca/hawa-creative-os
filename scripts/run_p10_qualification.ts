@@ -15,6 +15,7 @@ import {
   evaluateDesignMetrics,
   renderLayoutV2,
   getFontFidelityManifest,
+  resolveRatesForModel,
   refineCandidate,
   generateBoxGroundedCritique,
   comparePairWithOrderSwap,
@@ -407,7 +408,7 @@ function computeTokenCosts(
 ) {
   // Rates come from the priced model, not from constants: with a cheaper dev tier active, fixed
   // production rates would overstate every row in the ledger by up to eighty times.
-  const rates = (PRICING.models as Record<string, any>)[model];
+  const rates = resolveRatesForModel(PRICING.models as Record<string, any>, model);
   if (!rates?.inputPerMillion) {
     throw new Error(
       `No price for model '${model}' in pricing.json — refusing to write a ledger with invented rates.`

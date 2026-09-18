@@ -59,6 +59,27 @@ export interface OpenAiImageResponse {
   };
 }
 
+/**
+ * Rates for a model id, matching a dated snapshot to its base model.
+ *
+ * The API echoes the snapshot it served — "o4-mini-2025-04-16" for a request for "o4-mini" — and a
+ * snapshot is the same model at the same price. Matching the longest priced prefix keeps the
+ * ledger honest without needing a row per snapshot, while an unrelated model still finds nothing
+ * and is reported rather than priced at someone else's rate.
+ */
+export function resolveRatesForModel(
+  models: Record<string, any> | undefined,
+  model: string
+): any | undefined {
+  if (!models || !model) return undefined;
+  if (models[model]) return models[model];
+  let best: string | undefined;
+  for (const known of Object.keys(models)) {
+    if (model.startsWith(known) && (!best || known.length > best.length)) best = known;
+  }
+  return best ? models[best] : undefined;
+}
+
 export class OpenAiModelHttpError extends StudioModelHttpError {
   readonly status: number;
   readonly body: string;
@@ -192,7 +213,7 @@ export class OpenAiStudioClient {
     cache_creation_input_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number };
   }): number {
-    let rates = this.pricing.models?.[model];
+    let rates = this.pricing.models?.[model] || resolveRatesForModel(this.pricing.models, model);
     if (!rates?.inputPerMillion) {
       // Never price an unknown model at another model's rates in silence: the production rates are
       // up to eighty times the cheap tier's, so a quiet fallback overstates a whole ledger.

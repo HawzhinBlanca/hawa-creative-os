@@ -242,7 +242,15 @@ export function recordOfficeDailySpend(costUsd: number, entry?: CostLedgerEntry)
   if (fs.existsSync(filePath)) {
     try {
       data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch {}
+    } catch (err: any) {
+      // Swallowing this silently reset the day's recorded spend to zero and handed the daily cap
+      // a clean slate, which is the opposite of what a budget guard should do when it loses state.
+      throw new Error(
+        `Daily office spend ledger at ${filePath} is unreadable (${err?.message || err}). ` +
+          `Refusing to continue: treating it as zero spent would disable the daily cap. ` +
+          `Inspect or remove the file deliberately.`
+      );
+    }
   }
   data.totalSpentUsd = Number((data.totalSpentUsd + costUsd).toFixed(6));
   if (entry) {
@@ -250,7 +258,14 @@ export function recordOfficeDailySpend(costUsd: number, entry?: CostLedgerEntry)
   }
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch {}
+  } catch (err: any) {
+    // A spend that is not recorded cannot be counted against the cap by the next call, so the cap
+    // silently stops working. Fail loudly instead of losing the record.
+    throw new Error(
+      `Could not record USD ${costUsd.toFixed(6)} of spend to ${filePath} (${err?.message || err}). ` +
+        `The daily cap cannot be enforced without it.`
+    );
+  }
 }
 
 export interface OfficeDailyBudgetCheckResult {
