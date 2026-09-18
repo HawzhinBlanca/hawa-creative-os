@@ -386,7 +386,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
   1. **KAAE**: Educational Accreditation (${drillOutput.clientsTested[0].tasksProcessed} tasks)
   2. **Drustee**: Clinical Supplements & Health (${drillOutput.clientsTested[1].tasksProcessed} tasks)
   3. **FastPay**: Digital Wallet & FinTech (${drillOutput.clientsTested[2].tasksProcessed} tasks)
-- **Database Engine**: PostgreSQL 17.11 + pgvector (Container: hawa-production-postgres-1)
+- **Database**: ${new URL(connectionString).host}${new URL(connectionString).pathname}
 - **RLS Multi-Tenant Context**: Verified (hawa_app unprivileged runtime role)
 `;
 

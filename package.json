@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit && tsc -p tsconfig.scripts.json",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "vitest run",
+    "test:db": "tsx packages/db/src/provision-isolated-test-db.ts",
     "test:contracts": "vitest run packages/contracts/test/contracts.test.ts",
     "test:integration": "vitest run packages/integrations/test/integrations.test.ts apps/core/test/core.test.ts",
     "test:e2e": "vitest run packages/testkit/test/e2e-office-lifecycle.test.ts",

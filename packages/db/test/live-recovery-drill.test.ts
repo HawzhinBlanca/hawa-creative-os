@@ -4,7 +4,9 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pg from 'pg';
 
-const POSTGRES_PORT = process.env.POSTGRES_PORT || '54332';
+// The container pg_dump and psql run in. It defaults to the test server; vitest.config.ts refuses a
+// production container here, and a production URL in POSTGRES_LIVE_URL or POSTGRES_OWNER_URL.
+const DRILL_CONTAINER = process.env.POSTGRES_DRILL_CONTAINER || 'hawa-test-postgres';
 // Credentials come only from the environment. The drill is opt-in (POSTGRES_DISASTER_DRILL_ENABLED)
 // and refuses to run with anything less than explicit owner and app credentials.
 const OWNER_URL = process.env.POSTGRES_OWNER_URL || '';
@@ -86,7 +88,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
     
     // Execute live pg_dump from the production container
     const liveDbName = LIVE_DB_URL.split('/').pop() || 'hawa_test';
-    const dumpCmd = `docker exec hawa-production-postgres-1 pg_dump -U hawa_owner ${liveDbName}`;
+    const dumpCmd = `docker exec ${DRILL_CONTAINER} pg_dump -U hawa_owner ${liveDbName}`;
     const backupSql = execSync(dumpCmd, { maxBuffer: 128 * 1024 * 1024, encoding: 'utf-8' });
     
     const backupEnd = performance.now();
@@ -114,7 +116,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
     const liveDbName = LIVE_DB_URL.split('/').pop() || 'hawa_test';
     
     // Pipe live backup directly into the clean-host database
-    execSync(`docker exec hawa-production-postgres-1 pg_dump -U hawa_owner ${liveDbName} | docker exec -i hawa-production-postgres-1 psql -U hawa_owner -d ${DRILL_DB_NAME} > /dev/null`, {
+    execSync(`docker exec ${DRILL_CONTAINER} pg_dump -U hawa_owner ${liveDbName} | docker exec -i ${DRILL_CONTAINER} psql -U hawa_owner -d ${DRILL_DB_NAME} > /dev/null`, {
       shell: '/bin/bash',
     });
 
@@ -230,7 +232,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
 - **Measured Backup Latency**: ${drillMetrics.backupDurationMs} ms (RPO verified < 15 min)
 - **Measured Restore Latency**: ${drillMetrics.restoreDurationMs} ms / ${drillMetrics.rtoVerifiedSeconds} s (RTO verified < 4 hours; <60s target met)
 - **Multi-Tenant RLS Isolation**: Verified (Zero leaks across tenant boundaries)
-- **Host Container**: hawa-production-postgres-1 (PostgreSQL 17.11 + pgvector)
+- **Host Container**: ${DRILL_CONTAINER}
 `;
     writeFileSync(mdPath, markdownSummary, 'utf-8');
     expect(existsSync(reportPath)).toBe(true);
