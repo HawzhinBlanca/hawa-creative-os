@@ -1,9 +1,5 @@
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
-import {
-  renderAnnotatedLayoutV2,
-  type ElementBoxAnnotation,
-  type RenderLayoutOptions,
-} from './render-layout-v2.js';
+import { renderAnnotatedLayoutV2, type ElementBoxAnnotation, type RenderLayoutOptions } from './render-layout-v2.js';
 import {
   evaluateDesignMetrics,
   type DesignMetricsReport,

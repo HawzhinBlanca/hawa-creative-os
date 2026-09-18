@@ -388,6 +388,47 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
  */
 
 /**
+ * How many lines each copy block wraps to, without rasterising anything.
+ *
+ * Exists so the design metrics can measure the area the type actually inks instead of the area of
+ * its bounding box. A text box is invisible metadata whose height the generator picks; counting it
+ * as occupied made a design look fuller than it is, and hid 6 to 26 points of emptiness on the
+ * eighteen T5 layouts.
+ */
+export function measureWrappedLines(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string>,
+  options: RenderLayoutOptions = {}
+): Record<number, number> {
+  const fontsDir = resolveFontsDir(options);
+  const out: Record<number, number> = {};
+  for (const t of layout.text) {
+    const copy = copyText[t.copyIndex];
+    if (!copy || !t.width) continue;
+    try {
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const letterSpacing =
+        t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 0 : t.letterSpacing || 0;
+      out[t.copyIndex] = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing).length;
+    } catch {
+      // unmeasurable family here; the metric falls back to the box for this block
+    }
+  }
+  return out;
+}
+
+/**
+ * There is deliberately no "scale the type up to fill the canvas" pass here.
+ *
+ * It was written and measured. It does raise coverage (one layout went from 0.18 to 0.34 occupied
+ * at a 1.81x uniform scale), but it was answering a diagnosis that did not survive checking: the
+ * owner's six confirmed exemplars measure 0.11-0.15 block coverage when their glyphs are dilated
+ * into blocks — 85-89% empty, sparser than anything this pipeline produces. Generous whitespace is
+ * the house style, not a defect, so enlarging type toward a fuller canvas would move the output
+ * away from the references it is meant to match.
+ */
+
+/**
  * Measures text advance width in px using fontkit layout runs.
  */
 export function measureTextWidth(text: string, font: any, fontSize: number, letterSpacing = 0): number {

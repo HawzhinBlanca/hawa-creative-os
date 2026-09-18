@@ -455,7 +455,26 @@ export function computeTypefacePairing(layout: StudioLayoutV2): MetricResult {
 }
 
 // 8. Negative-Space Fraction (Calibrated against 6 institutional exemplars: 0.34 - 0.57)
-export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
+/**
+ * @param wrappedLines how many lines each copy block wraps to, by copyIndex. When supplied, a text
+ * block counts the area its type inks rather than the area of its bounding box.
+ *
+ * Counting the box is wrong in principle — a box is invisible metadata whose height the generator
+ * picks, and shrinking one around its centre changes no pixel of the render while moving this
+ * score by 0.68. But the 0.30-0.60 optimal band below was calibrated with the box measure, so
+ * supplying wrappedLines against the current band produces false failures: it fails 15 of the 18
+ * T5 layouts. It should not be switched on in the scoring path until the band is re-derived.
+ *
+ * And the band itself is suspect in the other direction. The owner's six confirmed exemplars
+ * measure 0.11-0.15 block coverage when their glyphs are dilated into blocks — 85-89% empty,
+ * sparser than anything this pipeline generates. Generous whitespace is the house style, so
+ * "excessive emptiness" as defined here may not describe a defect at all. Re-derive the band from
+ * the exemplars, by the same measure, before trusting either side of this.
+ */
+export function computeNegativeSpace(
+  layout: StudioLayoutV2,
+  wrappedLines?: Record<number, number>
+): MetricResult {
   const totalArea = layout.width * layout.height;
   let occupiedArea = 0;
 
@@ -464,7 +483,10 @@ export function computeNegativeSpace(layout: StudioLayoutV2): MetricResult {
 
   let maxSubstantiveY = 0;
   for (const t of layout.text || []) {
-    occupiedArea += t.width * t.height;
+    const lines = wrappedLines?.[t.copyIndex];
+    const inkedHeight =
+      lines && lines > 0 ? Math.min(t.height, lines * t.fontSize * t.lineHeight) : t.height;
+    occupiedArea += t.width * inkedHeight;
     substantiveSpans.push({ y1: t.y, y2: t.y + t.height });
     maxSubstantiveY = Math.max(maxSubstantiveY, t.y + t.height);
   }
@@ -837,7 +859,15 @@ export function checkCandidateSetDegeneracy(candidates: StudioLayoutV2[]): Candi
 }
 
 // Composite Evaluation with LaySPA Weighting (0.80 Quality, 0.10 Compliance, 0.10 Exemplar Similarity)
-export function evaluateDesignMetrics(layout: StudioLayoutV2): DesignMetricsReport {
+export interface EvaluateDesignMetricsOptions {
+  /** Lines each copy block wraps to, by copyIndex — see computeNegativeSpace. */
+  wrappedLines?: Record<number, number>;
+}
+
+export function evaluateDesignMetrics(
+  layout: StudioLayoutV2,
+  options: EvaluateDesignMetricsOptions = {}
+): DesignMetricsReport {
   const startTime = performance.now();
 
   const legibility = computeTextLegibility(layout);
@@ -847,7 +877,7 @@ export function evaluateDesignMetrics(layout: StudioLayoutV2): DesignMetricsRepo
   const justification = computeJustification(layout);
   const regularity = computeRegularity(layout);
   const typefacePairing = computeTypefacePairing(layout);
-  const negativeSpace = computeNegativeSpace(layout);
+  const negativeSpace = computeNegativeSpace(layout, options.wrappedLines);
   const semanticLayout = computeSemanticLayout(layout);
   const semanticTypography = computeSemanticTypography(layout);
   const occlusion = computeOcclusion(layout);

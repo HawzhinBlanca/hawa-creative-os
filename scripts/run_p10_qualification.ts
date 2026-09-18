@@ -473,6 +473,12 @@ async function executeBriefLive(
   const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
   // One model name for the whole brief, recorded on every row so the ledger says what actually ran.
   const layoutModel = resolveModel('layout');
+  // Built here rather than further down: the candidate scoring below needs it, and a const
+  // declared after its use is a temporal-dead-zone ReferenceError at run time.
+  const copyMap: Record<number, string> = {};
+  for (const b of brief.copyBlocks) {
+    copyMap[b.copyIndex] = b.text;
+  }
   const isRtl = brief.language === 'ckb';
 
   console.log(`[P10 LIVE] Starting Brief ${briefIndex + 1}/20: ${brief.id} (${brief.sizeName})...`);
@@ -719,10 +725,6 @@ async function executeBriefLive(
     layout.logo.height > 0 &&
     layout.background.color.startsWith('#');
 
-  const copyMap: Record<number, string> = {};
-  for (const b of brief.copyBlocks) {
-    copyMap[b.copyIndex] = b.text;
-  }
   const copyExactPass = layout.text.every((t) => copyMap[t.copyIndex] !== undefined);
   const prrPass = geometricPass && readabilityPass && assetIntegrityPass && copyExactPass;
 
