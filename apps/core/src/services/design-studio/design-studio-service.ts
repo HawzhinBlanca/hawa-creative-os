@@ -22,6 +22,7 @@ import {
   studioReferenceFromRaw,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
+import { resolveModel } from '@hawa/domain';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
 import { runsPipelineV3 } from '../chat-intake.js';
@@ -401,7 +402,7 @@ export class DesignStudioService {
         }
 
         const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || 'gpt-6-astra';
+        const model = params.model || baseClient.primaryModel || resolveModel('text');
 
         // Ledger insert-before-dispatch
         await this.repo.recordCallStart({
@@ -454,7 +455,7 @@ export class DesignStudioService {
         }
 
         const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || 'gpt-6-astra';
+        const model = params.model || baseClient.primaryModel || resolveModel('text');
 
         await this.repo.recordCallStart({
           id: callId,
