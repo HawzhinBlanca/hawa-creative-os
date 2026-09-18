@@ -496,6 +496,17 @@ export function conformToHouseRules(
     for (const t of ordered) {
       // Clear the logo's zone and every block above that shares a column with this one.
       const zone = layout.logo ? logoClearZone(layout.logo) : null;
+      // A block that starts above the logo but reaches into its clear space rises clear of it, with
+      // what is above it: the same cascade, on the mirrored layout. Nothing looked at such a block —
+      // the cheap tier set an eyebrow 27px above a card's logo and 68px into its clear space, and
+      // the logo had nowhere in its card to go (run 2, brief_08).
+      const reach =
+        zone && layout.logo && t.y < layout.logo.y && overlapsX(zone, t) ? Math.max(0, Math.ceil(t.y + t.height - zone.y)) : 0;
+      if (reach > 0) {
+        flip();
+        insertSpace(t.y, reach, t, { fixed: [layout.logo!] });
+        flip();
+      }
       const zoneClash =
         zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? Math.max(0, Math.ceil(zone.y + zone.height - t.y)) : 0;
       const clashers = layout.text.filter((o) => o !== t && isAbove(o, t) && overlapsX(o, t) && o.y + o.height > t.y);
