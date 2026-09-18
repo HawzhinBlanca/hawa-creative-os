@@ -3,6 +3,7 @@ import { eventStream } from '../services/eventStream.js';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
+import { SubmittedCopy } from '../components/SubmittedCopy.js';
 import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { reasonOf } from '../services/statusReport.js';
@@ -1019,32 +1020,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                           <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
                         </div>
                       ) : (
-                        <>
-                          {selectedTask.headlineEn && (
-                            <div className="copy-block-card">
-                              <div className="copy-label">English headline</div>
-                              <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.headlineEn}</div>
-                            </div>
-                          )}
-                          {selectedTask.copyEn && (
-                            <div className="copy-block-card">
-                              <div className="copy-label">English body copy</div>
-                              <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.copyEn}</div>
-                            </div>
-                          )}
-                          {selectedTask.headlineCkb && (
-                            <div className="copy-block-card">
-                              <div className="copy-label">Sorani headline</div>
-                              <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl" style={{whiteSpace:'pre-wrap'}}>{selectedTask.headlineCkb}</div>
-                            </div>
-                          )}
-                          {selectedTask.copyCkb && (
-                            <div className="copy-block-card">
-                              <div className="copy-label">Sorani body copy</div>
-                              <div className="copy-value-ckb kurdish-typeset bidi-isolated" dir="rtl" style={{whiteSpace:'pre-wrap'}}>{selectedTask.copyCkb}</div>
-                            </div>
-                          )}
-                        </>
+                        <SubmittedCopy
+                          headlineEn={selectedTask.headlineEn}
+                          copyEn={selectedTask.copyEn}
+                          headlineCkb={selectedTask.headlineCkb}
+                          copyCkb={selectedTask.copyCkb}
+                        />
                       )}
                     </div>
                   )}

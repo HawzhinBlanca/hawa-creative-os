@@ -179,6 +179,22 @@ export function isValidUuid(id: unknown): boolean {
   return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
+type TaskCopyFields = { headlineEn?: string | null; headlineCkb?: string | null; copyEn?: string | null; copyCkb?: string | null };
+
+/**
+ * True when an inline template would have to draw copy the client never sent. The KAAE templates
+ * draw only what they are given, so they need a headline. The brand templates (FastPay, Aster,
+ * Drustee) put sample text in an empty headline or body, so they need both, in one language.
+ * Callers refuse with COPY_REQUIRED.
+ */
+export function inlineTemplateCopyMissing(template: 'kaae' | 'brand', copy: TaskCopyFields): boolean {
+  const has = (text?: string | null) => Boolean(text && text.trim());
+  if (template === 'kaae') return !has(copy.headlineCkb) && !has(copy.headlineEn);
+  return !(has(copy.headlineCkb) && has(copy.copyCkb)) && !(has(copy.headlineEn) && has(copy.copyEn));
+}
+
+const COPY_REQUIRED_DETAIL = 'The client has not sent the copy this design needs. No placeholder copy will be invented.';
+
 // Module-level durable task & event stores across createApp instances
 const globalSharedTasks = new Map<string, any>();
 const globalSharedEvents = new Map<string, any[]>();
@@ -1784,6 +1800,9 @@ export function createApp(options?: CreateAppOptions) {
     let title: string;
 
     const remainingPayloadText = payloadLines.slice(1).join('\n').trim();
+    // With no headline the title says so, rather than ending in an empty ellipsis.
+    const titleFor = (headline: string) =>
+      `${isKaae ? 'KAAE' : senderName}: ${headline ? `${headline.slice(0, 45)}…` : 'no copy sent'}`;
 
     if (input.isInstructionOnly) {
       headlineEn = undefined;
@@ -1795,14 +1814,13 @@ export function createApp(options?: CreateAppOptions) {
     } else if (primaryLanguage === 'en') {
       headlineEn = firstNonEmptyPayloadLine;
       copyEn = remainingPayloadText;
-      title = isKaae ? `KAAE: ${headlineEn.slice(0, 45)}…` : `${senderName}: ${headlineEn.slice(0, 45)}…`;
+      title = titleFor(headlineEn);
     } else {
+      // Client copy is never invented: what the message did not carry stays empty, as in English.
       const normalizedRemaining = remainingPayloadText ? normalizeKurdishIncomingText(remainingPayloadText) : '';
-      headlineCkb = firstNonEmptyPayloadLine.slice(0, 65) || (isKaae ? 'دەستپێکردنی باوەڕپێدانی زانکۆکان بۆ ٢٠٢٦' : 'ئۆفەری فەرمی');
-      copyCkb = (normalizedRemaining && normalizedRemaining !== headlineCkb)
-        ? normalizedRemaining
-        : (isKaae ? 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان.' : 'پۆستی تایبەت لە ئۆفیس');
-      title = isKaae ? `KAAE: ${headlineCkb.slice(0, 45)}…` : `${senderName}: ${headlineCkb.slice(0, 45)}…`;
+      headlineCkb = firstNonEmptyPayloadLine.slice(0, 65);
+      copyCkb = normalizedRemaining && normalizedRemaining !== headlineCkb ? normalizedRemaining : '';
+      title = titleFor(headlineCkb);
     }
 
     // Preserve every submitted paragraph, including unfamiliar event details. A template
@@ -1850,6 +1868,7 @@ export function createApp(options?: CreateAppOptions) {
     let latestQAReport: any = undefined;
     let finalDoc: any = null;
     let generatedOps: StudioOperation[] = [];
+    let designRefusal: 'COPY_REQUIRED' | undefined;
 
     // Canva composition needs a genuine native operation, not a synthetic manifest.
     // Keep intake available while explicitly pausing production at the studio boundary.
@@ -1857,8 +1876,12 @@ export function createApp(options?: CreateAppOptions) {
       taskStatus = 'RECEIVED';
       const effectiveRules = clientId ? globalFeedbackMiner.getPromotedRules(clientId) : [];
       const isKaaeClient = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || String(clientId).includes('kaae');
+      const isBrandClient = clientId === 'client-fastpay' || clientId === 'client-aster' || clientId === 'client-drustee';
       const kaaeLogoSha = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
-      if (isKaaeClient) {
+      const template = isKaaeClient ? 'kaae' : isBrandClient ? 'brand' : null;
+      if (template && inlineTemplateCopyMissing(template, { headlineEn, headlineCkb, copyEn, copyCkb })) {
+        designRefusal = 'COPY_REQUIRED';
+      } else if (isKaaeClient) {
         generatedOps = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
           headlineEn,
           headlineCkb,
@@ -1870,8 +1893,8 @@ export function createApp(options?: CreateAppOptions) {
           logoSha256: kaaeLogoSha,
           learnedRules: effectiveRules,
         });
-      } else if (clientId === 'client-fastpay' || clientId === 'client-aster' || clientId === 'client-drustee') {
-        generatedOps = creativeDirector.generateCommercialBrandOperations(clientId.replace('client-', ''), brief, {
+      } else if (isBrandClient) {
+        generatedOps = creativeDirector.generateCommercialBrandOperations(clientId!.replace('client-', ''), brief, {
           headlineEn,
           headlineCkb,
           copyEn,
@@ -1903,6 +1926,7 @@ export function createApp(options?: CreateAppOptions) {
       brief,
       finalDoc,
       generatedOps,
+      ...(designRefusal ? { designRefusal } : {}),
       costReceipt,
       latestRevisionId: revisionId,
       latestQAReport,
@@ -3319,9 +3343,15 @@ export function createApp(options?: CreateAppOptions) {
         ...extractedRules.map((r) => r.ruleText),
       ];
       const brief = feedbackTargetTask.brief;
-      if (brief) {
+      const isKaaeTarget = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || clientId.includes('kaae');
+      const previewTemplate = isKaaeTarget ? 'kaae' : ['client-fastpay', 'client-aster', 'client-drustee'].includes(clientId) ? 'brand' : null;
+      // No local preview is drawn around copy the client never sent. The durable revision below
+      // applies its own copy check.
+      if (brief && previewTemplate && inlineTemplateCopyMissing(previewTemplate, feedbackTargetTask)) {
+        console.warn(`[TelegramBridge] Local preview for task ${targetId} refused: COPY_REQUIRED`);
+      } else if (brief) {
         try {
-          const isKaae = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || clientId.includes('kaae');
+          const isKaae = isKaaeTarget;
           const isInvitation =
             brief.templateSuggestion?.templateId === 'kaae_invitation' ||
             brief.templateSuggestion?.templateId === 'vip_invitation' ||
@@ -4640,6 +4670,12 @@ export function createApp(options?: CreateAppOptions) {
     const variantWidth = primaryVariant?.width || 1080;
     const variantHeight = primaryVariant?.height || 1350;
 
+    const isBrandClient = currentClientId === 'client-fastpay' || currentClientId === 'client-aster' || currentClientId === 'client-drustee';
+    const template = isKaae ? 'kaae' : isBrandClient ? 'brand' : null;
+    if (template && inlineTemplateCopyMissing(template, task || dbTask || {})) {
+      return problem(c, 422, 'COPY_REQUIRED', COPY_REQUIRED_DETAIL);
+    }
+
     let ops: StudioOperation[] = [];
     if (isKaae) {
       ops = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
@@ -4653,7 +4689,7 @@ export function createApp(options?: CreateAppOptions) {
         logoSha256: kaaeLogoSha,
         learnedRules: effectiveRules,
       });
-    } else if (currentClientId === 'client-fastpay' || currentClientId === 'client-aster' || currentClientId === 'client-drustee') {
+    } else if (isBrandClient) {
       ops = creativeDirector.generateCommercialBrandOperations(currentClientId.replace('client-', ''), brief, {
         headlineEn: (task || dbTask)?.headlineEn,
         headlineCkb: (task || dbTask)?.headlineCkb,
@@ -7352,15 +7388,22 @@ export function createApp(options?: CreateAppOptions) {
     const client = clientDnas.get(task.clientId) || Array.from(clientDnas.values())[0];
     const recipientPhone = body.phone || (client as any)?.contactChannels?.phone || '+9647501234567';
 
+    // The client reviews their own copy: a line they did not send is left out of the message, and a
+    // task with no headline at all is refused rather than sent with placeholder text.
+    const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+    const headlineCkb = text(task.headlineCkb) || text(body.headlineCkb);
+    const headlineEn = text(task.headlineEn) || text(body.headlineEn);
+    if (!headlineCkb && !headlineEn) return problem(c, 422, 'COPY_REQUIRED', COPY_REQUIRED_DETAIL);
+
     const dispatch = buildOutboundReviewDispatch({
       taskId,
       clientId: task.clientId || defaultClientId,
       clientName: client?.name || 'Drustee Evidence-First Health',
       recipientPhone,
-      headlineCkb: task.headlineCkb || body.headlineCkb || 'کەمپینی نوێی وەرزی',
-      headlineEn: task.headlineEn || body.headlineEn || 'New Seasonal Campaign',
-      copyCkb: task.copyCkb || body.copyCkb || 'ئۆفەری تایبەت بۆ کڕیاران',
-      copyEn: task.copyEn || body.copyEn || 'Special Customer Offer',
+      headlineCkb,
+      headlineEn,
+      copyCkb: text(task.copyCkb) || text(body.copyCkb),
+      copyEn: text(task.copyEn) || text(body.copyEn),
       brandName: (client as any)?.brandName || client?.name || 'Drustee',
       formats: body.formats || ['feed', 'story', 'square', 'landscape'],
       callbackBaseUrl: body.callbackBaseUrl || process.env.PUBLIC_API_URL || process.env.CORE_URL || 'http://localhost:3001',
