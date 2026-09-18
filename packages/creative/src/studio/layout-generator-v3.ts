@@ -1,9 +1,10 @@
+import { fitLogoToAspect } from './studio-normalize.js';
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import { fontCoversText, pickFontCovering } from './render-layout-v2.js';
-import { evaluateDesignMetrics, checkCandidateSetDegeneracy } from './design-metrics.js';
+import { evaluateDesignMetrics, checkCandidateSetDegeneracy, type CandidateSetDegeneracyResult } from './design-metrics.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
 import type { ExemplarRetrievalMatch } from './exemplar-retrieval.js';
@@ -233,7 +234,9 @@ export function hasTwinCardBlock(layout: StudioLayoutV2): boolean {
 export function scaleNormalizedLayoutToV2(
   norm: NormalizedLayoutCandidate,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  /** The real logo's width over height. When given, the logo is fitted before geometry is settled. */
+  logoAspect?: number
 ): StudioLayoutV2 {
   const clamp = (val: number, min = 0, max = 1) => Math.min(max, Math.max(min, val));
   const scaleX = (val: number) => Math.round(clamp(val) * canvasWidth);
@@ -386,6 +389,8 @@ export function scaleNormalizedLayoutToV2(
     width: scaleDimX(norm.logo.width),
     height: scaleDimY(norm.logo.height),
   };
+  // Settle the logo at its real shape before the geometry pass below reads it.
+  if (logoAspect) Object.assign(logo, fitLogoToAspect({ logo: { ...logo } }, logoAspect).logo);
 
   let art: ArtConfig | undefined = undefined;
   if (norm.art) {
@@ -1041,6 +1046,8 @@ export interface GenerateLayoutCandidatesOptions {
   isRtl?: boolean;
   /** Override the model for this call. Defaults to the active tier's layout model. */
   model?: string;
+  /** The official logo's width over height; the model is told it and the box is fitted to it. */
+  logoAspect?: number;
 }
 
 export interface GenerateLayoutCandidatesResult {
@@ -1053,7 +1060,8 @@ export interface GenerateLayoutCandidatesResult {
   cachedTokens: number;
   costUsd: number;
   latencyMs: number;
-  degeneracyCheck: { isDegenerate: boolean; reason?: string; distances?: number[] };
+  /** The object checkCandidateSetDegeneracy returns: its field is pairwiseDistances. */
+  degeneracyCheck: CandidateSetDegeneracyResult;
 }
 
 /**
@@ -1152,6 +1160,19 @@ Adhere strictly to this specification and produce three publication-ready layout
 /**
  * Builds the user prompt detailing constraints, palette, copy blocks, capacity slots, and exemplars.
  */
+/**
+ * The canvas proportion in words. The prompt used to call every non-square canvas 4:5 — a
+ * 1920x1080 banner was described to the model as 4:5 beside its own pixel dimensions.
+ */
+export function aspectRatioLabel(width: number, height: number): string {
+  const r = width / height;
+  const known: Array<[number, string]> = [
+    [1, '1:1'], [0.8, '4:5'], [9 / 16, '9:16'], [16 / 9, '16:9'], [Math.SQRT1_2, 'A4 portrait, 1:1.414'], [Math.SQRT2, 'A4 landscape, 1.414:1'],
+  ];
+  for (const [ratio, label] of known) if (Math.abs(r - ratio) / ratio < 0.02) return label;
+  return `${r.toFixed(3)}:1`;
+}
+
 export function buildLayoutV3UserPrompt(options: {
   brief: string;
   copyBlocks: CopyBlockSlotInput[];
@@ -1160,8 +1181,9 @@ export function buildLayoutV3UserPrompt(options: {
   canvasHeight: number;
   exemplars?: ExemplarRetrievalMatch[];
   isRtl?: boolean;
+  logoAspect?: number;
 }): string {
-  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl } = options;
+  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl, logoAspect } = options;
 
   const capacitySlots = copyBlocks.map((b) => computeCapacitySlot(b, canvasWidth, canvasHeight));
 
@@ -1190,7 +1212,8 @@ export function buildLayoutV3UserPrompt(options: {
 "${brief}"
 
 CANVAS DIMENSIONS & SPECIFICATIONS:
-- Target Dimensions: ${canvasWidth}px x ${canvasHeight}px (Aspect Ratio: ${canvasWidth === canvasHeight ? '1:1' : '4:5'})
+- Target Dimensions: ${canvasWidth}px x ${canvasHeight}px (Aspect Ratio: ${aspectRatioLabel(canvasWidth, canvasHeight)})
+- Official Logo: width:height = ${(logoAspect || 1).toFixed(2)}${Math.abs((logoAspect || 1) - 1) < 0.02 ? ' (a square emblem)' : ''}. Reserve its box at exactly this proportion.
 - Primary Palette: ${palette.join(', ')}
 - Language Direction: ${isRtl ? 'RTL (Sorani Kurdish / Arabic)' : 'LTR (Latin / English)'}
 
@@ -1212,7 +1235,7 @@ Ensure wide architectural diversity: vary alignment axes (centered vs asymmetric
 CRITICAL CONSTRAINTS:
 1. No two candidates may have identical or near-identical geometry (geometric distance > 15px).
 2. NO side-by-side bilateral symmetric twin cards.
-3. Use ONLY F12 admitted fonts (Verdana or Noto Sans Arabic for body/footer; Cinzel/Lora/Cairo/Amiri for titles).
+3. Use ONLY admitted fonts: Verdana (Latin) or Noto Sans Arabic (Sorani) for body/footer; Cinzel or Playfair Display for Latin titles; Amiri for Sorani titles (Cairo cannot draw the Sorani letters ڕ ڵ ۆ ێ ە).
 4. All coordinates strictly in [0.0, 1.0].
 5. Declare typeScale (base and ratio) for each candidate.
 6. Declare calmRegion if an art layer is requested.
@@ -1241,6 +1264,7 @@ export async function generateLayoutCandidatesV3(
     canvasHeight,
     exemplars: options.exemplars,
     isRtl: options.isRtl,
+    logoAspect: options.logoAspect,
   });
 
   const response: OpenAiStructuredResponse<{ layouts: NormalizedLayoutCandidate[] }> =
@@ -1279,7 +1303,7 @@ export async function generateLayoutCandidatesV3(
   for (const b of options.copyBlocks) copyByIndex[b.index] = b.text;
 
   const scaledLayouts: StudioLayoutV2[] = rawCandidates.map((c) => {
-    const layout = scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight);
+    const layout = scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight, options.logoAspect);
     correctFontsThatCannotDrawTheCopy(layout, copyByIndex);
     return layout;
   });

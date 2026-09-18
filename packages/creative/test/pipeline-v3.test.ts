@@ -381,3 +381,71 @@ describe('OpenAI client — reasoning effort', () => {
     expect(bodies[1]).not.toHaveProperty('reasoning_effort');
   });
 });
+
+describe('production hard QA — the gate v3 is ranked and qualified against', () => {
+  it('passes every owner-confirmed exemplar on alignment and still rejects an off-grid layout', async () => {
+    const { SIX_CONFIRMED_EXEMPLARS, BAD_OFF_GRID } = await import('./fixtures/design-metrics-fixtures.js');
+    const { computeLayoutMetrics } = await import('../src/index.js');
+    // Counting edges only, three of these six scored 0.542, 0.600 and 0.667 against the 0.70 gate.
+    for (const exemplar of SIX_CONFIRMED_EXEMPLARS) {
+      expect(computeLayoutMetrics(exemplar).alignmentScore).toBeGreaterThanOrEqual(0.7);
+    }
+    expect(computeLayoutMetrics(BAD_OFF_GRID).alignmentScore).toBeLessThan(0.7);
+  });
+
+  it('ranks a candidate production would reject below one it would accept, whatever the composite', async () => {
+    const { studioReferenceFromRaw } = await import('../src/index.js');
+    const ref = studioReferenceFromRaw({ rules: { palette: ['#0A1628', '#FDF8F3', '#C5A059', '#162B48'] } });
+    const qa = {
+      width: W,
+      height: H,
+      copyScripts: ['latin', 'latin', 'latin', 'latin', 'latin'] as Array<'latin' | 'arabic'>,
+      latinFont: ref.latinFont,
+      arabicFont: ref.arabicFont,
+      palette: ref.palette,
+      logoAspect: 200 / 120,
+    };
+    const offPalette = centred();
+    offPalette.background.color = '#123456';
+    // Clean for production QA: the eyebrow clears the logo's clear space (half its height), and
+    // no divider sits off-centre in its gap.
+    const clean = asymmetric();
+    clean.text[0].y = 290;
+    clean.shapes = clean.shapes.filter((s) => s.role !== 'rule');
+    const ranked = rankCandidatesV3(
+      [
+        { sourceIndex: 0, layout: offPalette },
+        { sourceIndex: 1, layout: clean },
+      ],
+      COPY,
+      qa
+    );
+    expect(ranked[0].sourceIndex).toBe(1);
+    expect(ranked[0].hardQa?.passed).toBe(true);
+    expect(ranked[1].hardQa?.defectCodes).toContain('PALETTE');
+  });
+});
+
+describe('logo and canvas truth', () => {
+  it('fits the real logo inside its reserved box without ever growing it', async () => {
+    const { fitLogoToAspect } = await import('../src/index.js');
+    // A 2:1 box for a square emblem: the emblem becomes the box's height, centred in it.
+    expect(fitLogoToAspect({ logo: { x: 400, y: 80, width: 200, height: 100 } }, 1).logo).toEqual({ x: 450, y: 80, width: 100, height: 100 });
+    // A tall box for a square emblem: bounded by the width instead.
+    expect(fitLogoToAspect({ logo: { x: 0, y: 0, width: 100, height: 300 } }, 1).logo).toEqual({ x: 0, y: 100, width: 100, height: 100 });
+    // The production qualification's widest box, 192x124: previously grown to 192x192.
+    const fitted = fitLogoToAspect({ logo: { x: 0, y: 0, width: 192, height: 124 } }, 1).logo!;
+    expect(fitted.height).toBeLessThanOrEqual(124);
+    expect(fitted.width).toBe(fitted.height);
+  });
+
+  it('describes the canvas to the generator by its real proportion', async () => {
+    const { aspectRatioLabel } = await import('../src/index.js');
+    expect(aspectRatioLabel(1080, 1350)).toBe('4:5');
+    expect(aspectRatioLabel(1080, 1080)).toBe('1:1');
+    // These were all described as "4:5".
+    expect(aspectRatioLabel(1920, 1080)).toBe('16:9');
+    expect(aspectRatioLabel(1080, 1920)).toBe('9:16');
+    expect(aspectRatioLabel(1240, 1754)).toBe('A4 portrait, 1:1.414');
+  });
+});

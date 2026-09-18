@@ -10,3 +10,4 @@ export * from './canary.stage.js';
 export * from './qa.stage.js';
 export * from './transfer.stage.js';
 export * from './parity.stage.js';
+export * from './v3.stage.js';

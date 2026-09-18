@@ -177,8 +177,17 @@ export class ExemplarRetrievalIndex {
         cacheObj.vectors[ex.id] = vec;
       }
 
-      fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
-      fs.writeFileSync(this.cachePath, JSON.stringify(cacheObj, null, 2), 'utf8');
+      // The cache only saves recomputing six small vectors. The vectors are already in memory, so
+      // a read-only disk must not fail a production design run over it.
+      try {
+        fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
+        fs.writeFileSync(this.cachePath, JSON.stringify(cacheObj, null, 2), 'utf8');
+      } catch (err: any) {
+        console.warn(
+          `[exemplar-retrieval] Could not write the embedding cache to ${this.cachePath} ` +
+            `(${err?.message || err}); using the vectors computed in memory.`
+        );
+      }
     }
   }
 

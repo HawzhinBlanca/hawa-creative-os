@@ -626,6 +626,147 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
   }, 30000);
 
+  it('6b. a pilot chat\'s run goes through the shared v3 stages, records every judgement, and transfers', async () => {
+    const originalFlag = process.env.DESIGN_PIPELINE_V3;
+    const originalChats = process.env.DESIGN_PIPELINE_V3_CHATS;
+    const pilotChat = `isolated-pilot-${randomUUID().slice(0, 8)}`;
+    process.env.DESIGN_PIPELINE_V3 = 'off';
+    process.env.DESIGN_PIPELINE_V3_CHATS = pilotChat;
+
+    // Three distinct archetypes in the generator's normalised form (from its own tests).
+    const v3Layouts = [
+      {
+        id: 'c1', conceptTitle: 'Monolith Centered', compositionArchetype: 'monolith_centered',
+        typeScale: { base: 14, ratio: 1.25 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+        background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
+        text: [
+          { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Cinzel', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FDF8F3', align: 'center', bold: false, italic: false, rtl: false },
+        ],
+      },
+      {
+        id: 'c2', conceptTitle: 'Asymmetric Editorial', compositionArchetype: 'asymmetric_editorial',
+        typeScale: { base: 16, ratio: 1.333 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+        background: { color: '#0C2340' }, logo: { x: 0.074, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+        shapes: [{ x: 0.074, y: 0.15, width: 0.002, height: 0.75, kind: 'line', color: '#C5A059', opacity: 1, radius: null, strokeWidth: null, strokeColor: null, role: 'rule' }],
+        text: [
+          { copyIndex: 0, role: 'title', x: 0.111, y: 0.18, width: 0.815, height: 0.12, fontSize: 0.035, lineHeight: 1.25, letterSpacing: null, fontFamily: 'Lora', color: '#C5A059', align: 'left', bold: true, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
+        ],
+      },
+      {
+        id: 'c3', conceptTitle: 'Hero Statement Grid', compositionArchetype: 'hero_statement_grid',
+        typeScale: { base: 15, ratio: 1.414 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+        background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+        shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#1E3A5F', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
+        text: [
+          { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Cinzel', color: '#F7B500', align: 'center', bold: true, italic: false, rtl: false },
+          { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FDF8F3', align: 'left', bold: false, italic: false, rtl: false },
+        ],
+      },
+    ];
+
+    const baseFetch = createMockFetch();
+    const schemasSeen: string[] = [];
+    let conceptCalls = 0;
+    const fetcher = vi.fn().mockImplementation(async (url: any, init: any) => {
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+      const schema: string | undefined = body.response_format?.json_schema?.name;
+      if (schema) schemasSeen.push(schema);
+      if (JSON.stringify(body).includes('genuinely different concepts')) conceptCalls++;
+      const reply = (data: unknown) => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => `req_${randomUUID().slice(0, 8)}` },
+        json: async () => ({
+          id: `chatcmpl-${randomUUID().slice(0, 12)}`,
+          model: body.model,
+          choices: [{ message: { content: JSON.stringify(data) } }],
+          usage: { prompt_tokens: 1000, completion_tokens: 100 },
+        }),
+      });
+      if (schema === 'layout_v3_candidates') return reply({ layouts: v3Layouts });
+      if (schema === 'DesignCritiqueReport') return reply({ overallAssessment: 'Balanced and legible.', comments: [] });
+      if (schema === 'PairwiseDimensionVerdict') {
+        // A judge that only ever prefers the first position: every pair it sees is a discarded tie.
+        const dims = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility'];
+        return reply({
+          dimensions: Object.fromEntries(dims.map((d) => [d, { winner: 'A', rationale: 'position' }])),
+          majorityWinner: 'A',
+          summary: 'A',
+        });
+      }
+      return baseFetch(url, init);
+    });
+
+    try {
+      const taskId = await createTask(undefined, pilotChat);
+      const mockCanvaService = {
+        importEditableDesign: vi.fn().mockResolvedValue({ operationId: randomUUID(), status: 'submitted', designId: 'DAFV3TEST01' }),
+      } as unknown as CanvaConnectService;
+      const service = new DesignStudioService(db, mockCanvaService, {
+        apiKey: 'test-key',
+        fetcher,
+        defaultTier: 'standard',
+      });
+
+      const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, {
+        width: 1080,
+        height: 1350,
+        tier: 'standard',
+      });
+
+      let status = run.status;
+      for (let i = 0; i < 15 && !['transferred', 'failed', 'degraded'].includes(status); i++) {
+        status = (await service.resume(scope, taskId, run.id)).status;
+      }
+      const final = (await sql<any>`SELECT * FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect({ status, diagnostic: final.diagnostic }).toEqual({ status: 'transferred', diagnostic: final.diagnostic });
+
+      // No v2 concept call: v3 invents its own archetypes. And the v3 stages ran.
+      expect(conceptCalls).toBe(0);
+      expect(schemasSeen).toContain('layout_v3_candidates');
+      expect(schemasSeen).toContain('DesignCritiqueReport');
+      expect(schemasSeen.filter((x) => x === 'PairwiseDimensionVerdict')).toHaveLength(4);
+
+      const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
+      expect(stages.tournament.pipeline).toBe('v3');
+      expect(stages.tournament.decidedBy).toBe('composite_after_tie');
+      expect(stages.revise.pipeline).toBe('v3');
+      // A judge that picks by position cannot pass a two-order canary.
+      expect(final.judge_status).toBe('UNRELIABLE');
+
+      const judgments = (
+        await sql<any>`SELECT kind, order_swapped, candidate_a, candidate_b, verdict FROM hawa.design_studio_judgments WHERE run_id=${run.id}::uuid`.execute(db)
+      ).rows;
+      const kinds = judgments.map((j: any) => `${j.kind}${j.kind === 'pairwise' ? (j.order_swapped ? ':BA' : ':AB') : ''}`).sort();
+      expect(kinds).toEqual(['canary', 'critique', 'pairwise:AB', 'pairwise:BA']);
+      for (const j of judgments) {
+        const verdict = typeof j.verdict === 'string' ? JSON.parse(j.verdict) : j.verdict;
+        expect(verdict.pipeline).toBe('v3');
+      }
+
+      // Candidates carry the generator's own archetypes, and exactly one is the winner.
+      const candidates = (
+        await sql<any>`SELECT status, rank, concept FROM hawa.design_studio_candidates WHERE run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)
+      ).rows;
+      const concepts = candidates.map((c: any) => (typeof c.concept === 'string' ? JSON.parse(c.concept) : c.concept));
+      expect(concepts.map((c: any) => c.layoutIdea)).toEqual([
+        'v3 monolith_centered',
+        'v3 asymmetric_editorial',
+        'v3 hero_statement_grid',
+      ]);
+      expect(candidates.filter((c: any) => c.status === 'winner')).toHaveLength(1);
+      expect(final.winner_candidate_id).toBeTruthy();
+      expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalFlag === undefined) delete process.env.DESIGN_PIPELINE_V3;
+      else process.env.DESIGN_PIPELINE_V3 = originalFlag;
+      if (originalChats === undefined) delete process.env.DESIGN_PIPELINE_V3_CHATS;
+      else process.env.DESIGN_PIPELINE_V3_CHATS = originalChats;
+    }
+  }, 60000);
+
   it('7. abandon marks run abandoned and allows a new generation to be started', async () => {
     const taskId = await createTask();
     const fetcher = createMockFetch();

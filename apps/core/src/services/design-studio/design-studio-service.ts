@@ -19,6 +19,7 @@ import {
   GeminiImageProvider,
   type StudioLayoutV2,
   ExemplarRetrievalIndex,
+  studioReferenceFromRaw,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
@@ -38,6 +39,12 @@ import {
   runQAStage,
   runTransferStage,
   runParityStage,
+  runCritiqueStageV3,
+  runReviseStageV3,
+  runJudgeStageV3,
+  rankStudioCandidatesV3,
+  V3_CANDIDATE_SLOTS,
+  pendingV3Concept,
 } from './stages/index.js';
 
 export type Scope = { tenantId: string; actorId: string };
@@ -556,21 +563,14 @@ export class DesignStudioService {
       const refPath = refCandidates.find((p) => existsSync(p));
       if (refPath) {
         const rawRef = JSON.parse(readFileSync(refPath, 'utf8'));
-        if (rawRef.rules?.palette) {
-          referencePack.palette = rawRef.rules.palette;
-        }
+        // Read the way the qualification reads it (shared), so both design with the same rules.
+        const rules = studioReferenceFromRaw(rawRef);
+        referencePack.palette = rules.palette;
+        latinFont = rules.latinFont;
+        arabicFont = rules.arabicFont;
+        promotedRules = rules.promotedRules;
         if (rawRef.rules?.fontFamily) {
-          latinFont = rawRef.rules.fontFamily;
-          referencePack.referenceFonts = {
-            latin: rawRef.rules.fontFamily,
-            arabic: rawRef.rules.scriptFonts?.arabic || 'Noto Sans Arabic',
-          };
-        }
-        if (rawRef.rules?.scriptFonts?.arabic) {
-          arabicFont = rawRef.rules.scriptFonts.arabic;
-        }
-        if (rawRef.rules?.colorUsage) {
-          promotedRules = rawRef.rules.colorUsage;
+          referencePack.referenceFonts = { latin: rules.latinFont, arabic: rules.arabicFont };
         }
       }
     } catch (err: any) {
@@ -729,17 +729,21 @@ export class DesignStudioService {
 
         case 'conceiving': {
           const brief: CreativeBrief = stages.brief;
-          const concepts = await runConceptsStage(ctx, brief);
+          // A v3 run's layout call invents its own three archetypes and never reads these
+          // concepts, so it spends nothing here: it reserves a row per layout the generator
+          // returns, and each row's concept is filled from what the generator produced.
+          const concepts = ctx.pipelineV3 ? [] : await runConceptsStage(ctx, brief);
           stages.concepts = concepts;
+          const slots = ctx.pipelineV3 ? V3_CANDIDATE_SLOTS : concepts.length;
 
           // Create candidates in DB
-          for (let i = 0; i < concepts.length; i++) {
+          for (let i = 0; i < slots; i++) {
             await this.repo.insertCandidate({
               id: randomUUID(),
               runId: run.id,
               tenantId: s.tenantId,
               ordinal: i,
-              concept: concepts[i] as any,
+              concept: (concepts[i] ?? pendingV3Concept(i)) as any,
               status: 'draft',
             });
           }
@@ -770,6 +774,7 @@ export class DesignStudioService {
                 artPng: cand.artPng,
                 artSha256: cand.artSha256,
                 artProvenance: cand.artProvenance as any,
+                ...(ctx.pipelineV3 ? { concept: cand.concept as any } : {}),
               });
             } else {
               await this.repo.updateCandidate(row.id, s.tenantId, {
@@ -848,6 +853,42 @@ export class DesignStudioService {
             };
           });
 
+          if (ctx.pipelineV3) {
+            // P05, as the qualification runs it: one box-grounded critique of the top-ranked
+            // candidate, rendered with its copy. Every candidate's score becomes its composite,
+            // the measure v3 ranks on.
+            try {
+              const { candidate, critique, compositeScores } = await runCritiqueStageV3(ctx, candidateStates);
+              const { annotatedPng, ...critiqueRecord } = critique;
+              await this.repo.insertJudgment({
+                id: randomUUID(),
+                runId: run.id,
+                tenantId: s.tenantId,
+                kind: 'critique',
+                candidateA: candidate.id,
+                verdict: { pipeline: 'v3', ...critiqueRecord, annotatedSha256: hash(annotatedPng) } as any,
+              });
+              for (const cand of candidateStates) {
+                await this.repo.updateCandidate(cand.id, s.tenantId, { score: compositeScores.get(cand.id) ?? null });
+              }
+              stages.critique = { completed: true, pipeline: 'v3', candidateId: candidate.id };
+            } catch (err) {
+              if (err instanceof StudioBudgetExhaustedError) throw err;
+              // The critique informs the Desk; refinement critiques for itself. A missing one is
+              // recorded, not fatal.
+              const message = err instanceof Error ? err.message : String(err);
+              stages.critique = { completed: false, pipeline: 'v3', error: message };
+              await this.repo.updateRunStatus(runId, s.tenantId, 'revising', {
+                stages,
+                budget,
+                diagnostic: `v3 critique unavailable: ${message}`,
+              });
+              return { runId, status: 'revising', stage: 'critique', spentUsd: budget.spentUsd };
+            }
+            await this.repo.updateRunStatus(runId, s.tenantId, 'revising', { stages, budget });
+            return { runId, status: 'revising', stage: 'critique', spentUsd: budget.spentUsd };
+          }
+
           let critiquedCandidates: CandidateState[];
           try {
             critiquedCandidates = await runCritiqueStage(ctx, brief, candidateStates);
@@ -910,6 +951,55 @@ export class DesignStudioService {
             };
           });
 
+          if (ctx.pipelineV3) {
+            // P06, as the qualification runs it: the engine refines the top-ranked candidate only
+            // if it fails a metric or sits below the band, and a repair is kept only if it
+            // measures better. The outcome is recorded either way.
+            try {
+              const { candidate, outcome, layout } = await runReviseStageV3(ctx, candidateStates);
+              stages.revise = {
+                completed: true,
+                pipeline: 'v3',
+                candidateId: candidate.id,
+                adopted: outcome.adopted,
+                reason: outcome.reason,
+                stopReason: outcome.result.stopReason,
+                rounds: outcome.result.rounds.map((r) => ({
+                  round: r.round,
+                  preScore: r.preScore,
+                  postScore: r.postScore,
+                  stopReason: r.stopReason,
+                  calls: r.calls.map((c) => ({ stage: c.stage, model: c.model, responseId: c.responseId, costUsd: c.costUsd })),
+                })),
+              };
+              if (outcome.adopted) {
+                const row = activeRows.find((r) => r.id === candidate.id);
+                const [rendered] = await runRenderStage(ctx, [
+                  {
+                    ...candidate,
+                    layouts: [...candidate.layouts, layout],
+                    currentLayout: layout,
+                    artPng: row?.art_png ? Buffer.from(row.art_png) : undefined,
+                  },
+                ]);
+                await this.repo.updateCandidate(candidate.id, s.tenantId, {
+                  layouts: rendered.layouts as any,
+                  previewPng: rendered.previewPng,
+                  previewSha256: rendered.previewSha256,
+                  compositePng: rendered.compositePng,
+                  metrics: rendered.metrics as any,
+                  score: outcome.metrics.compositeScore,
+                });
+              }
+            } catch (err) {
+              if (err instanceof StudioBudgetExhaustedError) throw err;
+              // The unrefined candidate still stands; the run records why it was not refined.
+              stages.revise = { completed: false, pipeline: 'v3', error: err instanceof Error ? err.message : String(err) };
+            }
+            await this.repo.updateRunStatus(runId, s.tenantId, 'judging', { stages, budget });
+            return { runId, status: 'judging', stage: 'revise', spentUsd: budget.spentUsd };
+          }
+
           const revisedCandidates = await runReviseStage(ctx, candidateStates, 1);
           for (let i = 0; i < revisedCandidates.length; i++) {
             const cand = revisedCandidates[i];
@@ -957,6 +1047,10 @@ export class DesignStudioService {
               status: row.status as DesignStudioCandidateStatus,
             };
           });
+
+          if (ctx.pipelineV3) {
+            return this.judgeV3(s, run, ctx, stages, budget, candidateStates);
+          }
 
           let tournamentResult;
           try {
@@ -1296,6 +1390,126 @@ export class DesignStudioService {
       diagnostic: 'BUDGET_EXHAUSTED',
       message: 'Budget exhausted without a valid candidate passing hard QA.',
     };
+  }
+
+  /**
+   * P07 for a v3 run, as the qualification runs it: the judge compares the top two candidates in
+   * both orders, and its pick stands only if it holds in both and the judge then beats a degraded
+   * copy of it in both. Every judgement is stored, the canary's against the candidate it tested.
+   */
+  private async judgeV3(
+    s: Scope,
+    run: any,
+    ctx: StageContext,
+    stages: Record<string, any>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    candidateStates: CandidateState[]
+  ): Promise<StudioResumeResult> {
+    let outcome: Awaited<ReturnType<typeof runJudgeStageV3>>;
+    try {
+      outcome = await runJudgeStageV3(ctx, candidateStates);
+    } catch (err) {
+      if (err instanceof StudioBudgetExhaustedError) throw err;
+      // Judge unavailable: the higher composite stands, and the run says so.
+      const message = err instanceof Error ? err.message : String(err);
+      const ranked = rankStudioCandidatesV3(ctx, candidateStates).map((r) => r.candidate);
+      const winner = ranked[0];
+      await this.recordV3Ranking(s, ranked, winner);
+      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message };
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
+        stages,
+        budget,
+        winnerCandidateId: winner.id,
+        judgeStatus: 'SKIPPED',
+        diagnostic: `v3 judge unavailable (${message}); the higher composite stands.`,
+      });
+      return { runId: run.id, status: 'qa', stage: 'judging', winnerCandidateId: winner.id, judgeStatus: 'SKIPPED', spentUsd: budget.spentUsd };
+    }
+
+    const { selection, winner, ranked } = outcome;
+    const idFor = (judgeId: string | number) =>
+      ranked.find((x) => `candidate_${x.sourceIndex}` === String(judgeId))?.candidate.id;
+
+    if (selection.match) {
+      const orders = [
+        [selection.match.orderAB, false],
+        [selection.match.orderBA, true],
+      ] as const;
+      for (const [order, swapped] of orders) {
+        await this.repo.insertJudgment({
+          id: randomUUID(),
+          runId: run.id,
+          tenantId: s.tenantId,
+          kind: 'pairwise',
+          candidateA: idFor(order.candidateAId),
+          candidateB: idFor(order.candidateBId),
+          orderSwapped: swapped,
+          verdict: {
+            pipeline: 'v3',
+            votes: order.votes,
+            rationales: order.rationales,
+            winnerVotesA: order.winnerVotesA,
+            winnerVotesB: order.winnerVotesB,
+            majorityWinner: order.majorityWinner,
+            winnerCandidateId: idFor(order.winnerCandidateId),
+            receipt: order.receipt,
+          } as any,
+        });
+      }
+    }
+    if (selection.canary) {
+      const subject = ranked.find((x) => x.sourceIndex === selection.canary!.subject.sourceIndex)!.candidate;
+      const m = selection.canary.match;
+      await this.repo.insertJudgment({
+        id: randomUUID(),
+        runId: run.id,
+        tenantId: s.tenantId,
+        kind: 'canary',
+        candidateA: subject.id,
+        verdict: {
+          pipeline: 'v3',
+          passed: selection.canary.passed,
+          consistentWinner: m.winnerId,
+          orderAB: { votes: m.orderAB.votes, majorityWinner: m.orderAB.majorityWinner, receipt: m.orderAB.receipt },
+          orderBA: { votes: m.orderBA.votes, majorityWinner: m.orderBA.majorityWinner, receipt: m.orderBA.receipt },
+        } as any,
+      });
+    }
+
+    await this.recordV3Ranking(s, [winner, ...ranked.map((r) => r.candidate).filter((c) => c.id !== winner.id)], winner);
+
+    const judgeStatus: DesignStudioJudgeStatus =
+      selection.judgeReliable === null ? 'SKIPPED' : selection.judgeReliable ? 'RELIABLE' : 'UNRELIABLE';
+    stages.tournament = {
+      pipeline: 'v3',
+      winnerId: winner.id,
+      decidedBy: selection.decidedBy,
+      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId : null,
+      consistent: selection.match?.isConsistent ?? null,
+    };
+    stages.canary = { passed: selection.canary?.passed ?? null };
+
+    await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
+      stages,
+      budget,
+      winnerCandidateId: winner.id,
+      judgeStatus,
+      diagnostic:
+        selection.judgeReliable === false
+          ? 'The judge did not beat a degraded copy of its choice in both orders; the higher composite stands.'
+          : null,
+    });
+    return { runId: run.id, status: 'qa', stage: 'judging', winnerCandidateId: winner.id, judgeStatus, spentUsd: budget.spentUsd };
+  }
+
+  /** Winner first, then the rest in the order given; every candidate keeps a rank. */
+  private async recordV3Ranking(s: Scope, ordered: CandidateState[], winner: CandidateState): Promise<void> {
+    for (let i = 0; i < ordered.length; i++) {
+      await this.repo.updateCandidate(ordered[i].id, s.tenantId, {
+        status: ordered[i].id === winner.id ? 'winner' : 'runner_up',
+        rank: i + 1,
+      });
+    }
   }
 
   /**

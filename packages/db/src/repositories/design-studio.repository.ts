@@ -268,6 +268,8 @@ export class DesignStudioRepository {
     tenantId: string,
     updates: {
       status?: DesignStudioCandidateStatus;
+      /** Set once the design exists: a v3 run learns each candidate's archetype from its layout. */
+      concept?: Record<string, unknown>;
       score?: number | null;
       rank?: number | null;
       metrics?: Record<string, unknown> | null;
@@ -287,6 +289,7 @@ export class DesignStudioRepository {
         updated_at: new Date(),
       };
       if (updates.status !== undefined) setClause.status = updates.status;
+      if (updates.concept !== undefined) setClause.concept = JSON.stringify(updates.concept);
       if (updates.score !== undefined) setClause.score = updates.score;
       if (updates.rank !== undefined) setClause.rank = updates.rank;
       if (updates.metrics !== undefined) setClause.metrics = updates.metrics ? JSON.stringify(updates.metrics) : null;

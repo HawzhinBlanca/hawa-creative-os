@@ -12,6 +12,9 @@ import {
   type PairwiseMatchResult,
 } from './pairwise-judge-v3.js';
 import type { OpenAiStudioClient } from './openai-studio-client.js';
+import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
+import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
+import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -42,6 +45,8 @@ export interface RankedCandidateV3 {
   metrics: DesignMetricsReport;
   /** A render the caller already has — with art, for instance. Rendered from the copy when absent. */
   renderedPng?: Buffer;
+  /** Production's hard QA on this layout, when the caller supplied its context. */
+  hardQa?: HardQaOutcome;
 }
 
 export interface PipelineV3CallOptions {
@@ -50,7 +55,7 @@ export interface PipelineV3CallOptions {
   model?: string;
 }
 
-const ARABIC_SCRIPT = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
+const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
 function scriptOf(copy: PipelineV3Copy, copyIndex: number): CopyScriptV3 {
   return copy.scripts?.[copyIndex] ?? (ARABIC_SCRIPT.test(copy.text[copyIndex] ?? '') ? 'arabic' : 'latin');
@@ -92,22 +97,89 @@ export function sanitizeFontsV3(layout: StudioLayoutV2, copy: PipelineV3Copy): S
   return layout;
 }
 
+/**
+ * The format label exemplar retrieval matches on. The exemplars are labelled 1:1 and 4:5, and a
+ * matching label earns a retrieval bonus; the qualification used to call every non-square canvas
+ * 4:5, which gave landscape banners and A4 documents a bonus for a format they are not.
+ */
+export function formatKeyV3(width: number, height: number): string {
+  const r = width / height;
+  if (Math.abs(r - 1) < 0.02) return '1:1';
+  if (Math.abs(r - 0.8) < 0.03) return '4:5';
+  if (Math.abs(r - 9 / 16) < 0.03) return '9:16';
+  if (Math.abs(r - 16 / 9) < 0.05) return '16:9';
+  if (Math.abs(r - Math.SQRT1_2) < 0.03) return 'A4';
+  return r < 1 ? 'portrait' : 'landscape';
+}
+
+let sharedRetrievalIndex: ExemplarRetrievalIndex | null = null;
+
+/** P02: the top owner-confirmed exemplars for a brief, by local embedding. Free. */
+export function retrieveExemplarsV3(
+  query: { text: string; width: number; height: number },
+  index?: ExemplarRetrievalIndex
+): ExemplarRetrievalMatch[] {
+  const retrieval = (index || (sharedRetrievalIndex ??= new ExemplarRetrievalIndex())).retrieveTopExemplars(
+    { text: query.text, format: formatKeyV3(query.width, query.height), category: 'standards' },
+    3
+  );
+  return retrieval.retrievedExemplars;
+}
+
+/**
+ * Everything applied to a freshly generated layout before it is scored: the real logo fitted
+ * inside its reserved box, the studio's normalisation (margin, minimum sizes, collision
+ * clean-up), then admitted fonts and direction per block. Production and the qualification both call this, so they score the same
+ * layout. Mutates and returns the layout.
+ */
+export function prepareGeneratedLayoutV3(
+  layout: StudioLayoutV2,
+  copy: PipelineV3Copy,
+  canvas: { width: number; height: number; logoAspect?: number }
+): StudioLayoutV2 {
+  const aspect = canvas.logoAspect || 1.0;
+  const normalized = normalizeStudioLayout(fitLogoToAspect(layout, aspect), canvas.width, canvas.height, aspect);
+  return sanitizeFontsV3(normalized, copy);
+}
+
 /** The pipeline's deterministic measure: from the lines the real copy wraps to, not box area. */
 export function measureDesignV3(layout: StudioLayoutV2, copy: PipelineV3Copy): DesignMetricsReport {
   return evaluateDesignMetrics(layout, { wrappedLines: measureWrappedLines(layout, copy.text) });
 }
 
-/** Passing candidates first, then by composite score. Stable for equal scores. */
+/**
+ * Orders two candidates: one that passes production's hard QA beats one that does not, then one
+ * that passes the design metrics, then the higher composite. Negative when `a` ranks first.
+ */
+function compareCandidatesV3(
+  a: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome },
+  b: { metrics: DesignMetricsReport; hardQa?: HardQaOutcome }
+): number {
+  const qaA = a.hardQa ? a.hardQa.passed : true;
+  const qaB = b.hardQa ? b.hardQa.passed : true;
+  if (qaA !== qaB) return qaA ? -1 : 1;
+  if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
+  return b.metrics.compositeScore - a.metrics.compositeScore;
+}
+
+/**
+ * Ranks candidates for the judge. With a QA context, production's hard QA is a filter, not an
+ * afterthought: a candidate that QA would reject cannot outrank one it would accept. Without it,
+ * the ranking would crown a design production then refuses, and the run would fail while a
+ * passing candidate sat unused.
+ */
 export function rankCandidatesV3(
   candidates: Array<{ sourceIndex: number; layout: StudioLayoutV2; renderedPng?: Buffer }>,
-  copy: PipelineV3Copy
+  copy: PipelineV3Copy,
+  qa?: HardQaContext
 ): RankedCandidateV3[] {
   return candidates
-    .map((c) => ({ ...c, metrics: measureDesignV3(c.layout, copy) }))
-    .sort((a, b) => {
-      if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
-      return b.metrics.compositeScore - a.metrics.compositeScore;
-    });
+    .map((c) => ({
+      ...c,
+      metrics: measureDesignV3(c.layout, copy),
+      ...(qa ? { hardQa: evaluateHardQa(c.layout, qa) } : {}),
+    }))
+    .sort(compareCandidatesV3);
 }
 
 /** P05: one box-grounded critique of a candidate, rendered with its copy. */
@@ -128,9 +200,12 @@ export interface RefinementOutcomeV3 {
   /** The layout to carry forward: the refinement when adopted, the original otherwise. */
   layout: StudioLayoutV2;
   metrics: DesignMetricsReport;
+  /** Production's hard QA on the carried-forward layout, when a QA context was given. */
+  hardQa?: HardQaOutcome;
   adopted: boolean;
   reason:
     | 'gate_passed'
+    | 'adopted_now_passes_qa'
     | 'adopted_now_passes'
     | 'adopted_higher_score'
     | 'rejected_unusable'
@@ -157,22 +232,36 @@ function isUsableLayout(layout: StudioLayoutV2 | undefined | null): layout is St
  * only if it is better: it passes where the original failed, or it scores higher without
  * starting to fail. Errors propagate, so a caller can tell a budget stop from a model outage.
  */
+export interface RefineV3Options extends PipelineV3CallOptions {
+  /**
+   * The canvas the layout will be delivered on. When given, a repair gets the same preparation as
+   * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
+   * is measured, so adoption is decided on the layout that will actually be stored.
+   */
+  canvas?: { width: number; height: number; logoAspect?: number };
+  /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
+  qa?: HardQaContext;
+}
+
 export async function refineCandidateV3(
   candidate: RankedCandidateV3,
   copy: PipelineV3Copy,
-  options: PipelineV3CallOptions = {}
+  options: RefineV3Options = {}
 ): Promise<RefinementOutcomeV3> {
+  const failsQa = candidate.hardQa ? !candidate.hardQa.passed : false;
   const result = await refineCandidate(candidate.sourceIndex, candidate.layout, {
     client: options.client,
     model: options.model || resolveModel('layout'),
     maxRounds: 2,
     minDelta: 0.01,
     copyText: copy.text,
+    force: failsQa,
   });
 
   const keep = (reason: RefinementOutcomeV3['reason']): RefinementOutcomeV3 => ({
     layout: candidate.layout,
     metrics: candidate.metrics,
+    ...(candidate.hardQa ? { hardQa: candidate.hardQa } : {}),
     adopted: false,
     reason,
     result,
@@ -181,16 +270,25 @@ export async function refineCandidateV3(
   if (result.gateDecision === 'skip') return keep('gate_passed');
   if (!isUsableLayout(result.finalLayout)) return keep('rejected_unusable');
 
-  const refined = sanitizeFontsV3(JSON.parse(JSON.stringify(result.finalLayout)) as StudioLayoutV2, copy);
+  const repaired = JSON.parse(JSON.stringify(result.finalLayout)) as StudioLayoutV2;
+  const refined = options.canvas
+    ? prepareGeneratedLayoutV3(repaired, copy, options.canvas)
+    : sanitizeFontsV3(repaired, copy);
   const metrics = measureDesignV3(refined, copy);
+  const hardQa = options.qa ? evaluateHardQa(refined, options.qa) : undefined;
 
-  if (metrics.passed && !candidate.metrics.passed) {
-    return { layout: refined, metrics, adopted: true, reason: 'adopted_now_passes', result };
+  // Adopt only a repair that strictly outranks the original, by the order the ranking uses.
+  // (Pass the same `qa` here as to rankCandidatesV3: a missing verdict counts as a pass.)
+  if (compareCandidatesV3({ metrics, hardQa }, candidate) >= 0) {
+    return keep('rejected_no_improvement');
   }
-  if (metrics.passed === candidate.metrics.passed && metrics.compositeScore > candidate.metrics.compositeScore) {
-    return { layout: refined, metrics, adopted: true, reason: 'adopted_higher_score', result };
-  }
-  return keep('rejected_no_improvement');
+  const reason: RefinementOutcomeV3['reason'] =
+    hardQa?.passed && candidate.hardQa && !candidate.hardQa.passed
+      ? 'adopted_now_passes_qa'
+      : metrics.passed && !candidate.metrics.passed
+        ? 'adopted_now_passes'
+        : 'adopted_higher_score';
+  return { layout: refined, metrics, ...(hardQa ? { hardQa } : {}), adopted: true, reason, result };
 }
 
 export interface WinnerSelectionV3 {
@@ -205,7 +303,8 @@ export interface WinnerSelectionV3 {
    */
   decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable';
   match: PairwiseMatchResult | null;
-  canary: { passed: boolean; match: PairwiseMatchResult } | null;
+  /** The canary run on `subject` — the judge's pick, or the higher composite after a tie. */
+  canary: { passed: boolean; match: PairwiseMatchResult; subject: RankedCandidateV3 } | null;
   /** Whether the judge beat the degraded canary in both orders. Null when no judge ran. */
   judgeReliable: boolean | null;
 }
@@ -272,7 +371,7 @@ export async function selectWinnerV3(
     judgeOptions
   );
   const canaryPassed = canaryMatch.winnerId === 'chosen';
-  const canary = { passed: canaryPassed, match: canaryMatch };
+  const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
   if (!judgePick) {
     return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed };

@@ -82,6 +82,11 @@ export interface RefineOptions {
    * metrics fall back to box area instead of the measured lines the ranking uses.
    */
   copyText?: Record<number, string>;
+  /**
+   * Refine even when the metric gate would skip: the caller knows of a failure the metrics do not
+   * see — a hard-QA defect, for instance.
+   */
+  force?: boolean;
 }
 
 export const REPAIR_JSON_SCHEMA = {
@@ -358,7 +363,7 @@ export async function refineCandidate(
   const initialMetrics = measure(layout);
   const gate = checkRefinementGate(layout, initialMetrics);
 
-  if (!gate.shouldRefine) {
+  if (!gate.shouldRefine && !options.force) {
     return {
       candidateId,
       initialLayout: layout,
