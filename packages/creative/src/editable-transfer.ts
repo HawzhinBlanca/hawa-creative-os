@@ -80,7 +80,7 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   }
   for(const t of plan.text)slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,
     fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),align:t.rtl?'right':t.align,bold:t.bold||false,
-    margin:0,lineSpacingMultiple:t.lineHeight||1.4,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
+    margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
   if(plan.logo&&logo)slide.addImage({data:`${logo.mimeType};base64,${logo.bytes.toString('base64')}`,x:plan.logo.x/96,y:plan.logo.y/96,w:plan.logo.width/96,h:plan.logo.height/96});
   const bytes=await pptx.write({outputType:'nodebuffer'}) as Buffer;
   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),manifest:{width:plan.width,height:plan.height,

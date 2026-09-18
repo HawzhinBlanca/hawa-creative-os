@@ -145,7 +145,7 @@ import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-
 import { registerSystemRoutes } from './routes/system.routes.js';
 import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
-import { CanvaDesignPlanner } from './services/canva-design-planner.js';
+import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -1746,6 +1746,14 @@ export function createApp(options?: CreateAppOptions) {
           }
         }
       }
+    }
+
+    // Copy wrapped in brackets or quotes, with a remark after the close: the marks are not copy, and
+    // the remark is an instruction (the same rule the design path applies).
+    const envelope = unwrapCopyEnvelope(payloadText);
+    if (envelope.copy !== payloadText.trim()) {
+      payloadText = envelope.copy;
+      if (envelope.trailing) clientInstructions = [clientInstructions, envelope.trailing].filter(Boolean).join('\n');
     }
 
     const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);

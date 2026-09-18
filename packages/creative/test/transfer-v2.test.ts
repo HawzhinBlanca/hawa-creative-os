@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { unzipSync, strFromU8 } from 'fflate';
 import { encodeStudioTransferV2, studioLayoutV2ToTransferPlan } from '../src/studio/transfer-v2.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
 
@@ -108,5 +109,16 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
   it('correctly marks Cairo font blocks as RTL in transfer plan', () => {
     const plan = studioLayoutV2ToTransferPlan(baseLayout);
     expect(plan.text[1].rtl).toBe(true);
+  });
+
+  it('writes each block\'s line pitch in exact points, never as a multiple of the font\'s own line height', async () => {
+    // A multiple is read against the font's natural line height (~1.33 em for Playfair Display), so
+    // Canva drew titles ~30% looser than rendered and clipped the last line (task b6621947).
+    const layout = { ...baseLayout, text: [{ ...baseLayout.text[0], fontFamily: 'Playfair Display', fontSize: 41, lineHeight: 1.3 }, baseLayout.text[1]] };
+    const res = await encodeStudioTransferV2(layout as StudioLayoutV2, copy);
+    const slide = strFromU8(unzipSync(new Uint8Array(res.bytes))['ppt/slides/slide1.xml']);
+    expect(slide).not.toContain('<a:spcPct');
+    // 41px x 1.3 = 53.3px = 39.98pt, written in hundredths of a point.
+    expect(slide).toContain('<a:lnSpc><a:spcPts val="3998"/></a:lnSpc>');
   });
 });
