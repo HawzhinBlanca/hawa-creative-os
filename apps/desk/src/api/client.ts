@@ -179,6 +179,60 @@ class HawaApiClient {
       this.request<any>('/system/providers', { method: 'POST', body: JSON.stringify(keys) }),
   };
 
+  // Client DNA, snapshots, candidate rules and budgets. Core keeps all of these in memory, so a
+  // Core restart discards what is written here.
+  public readonly clients = {
+    list: () => this.request<any[]>('/clients'),
+    dna: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`),
+    saveDna: (clientId: string, dna: unknown) =>
+      this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),
+    snapshots: (clientId: string) => this.request<any[]>(`/clients/${encodeURIComponent(clientId)}/snapshots`),
+    commitSnapshot: (clientId: string, body: { commitMessage: string; createdBy: string }) =>
+      this.request<any>(`/clients/${encodeURIComponent(clientId)}/snapshots`, { method: 'POST', body: JSON.stringify(body) }),
+    candidateRules: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/candidate-rules`),
+    // No role in the body: Core takes the role from the signed-in session.
+    promoteCandidate: (clientId: string, ruleId: string) =>
+      this.request<any>(
+        `/clients/${encodeURIComponent(clientId)}/candidate-rules/${encodeURIComponent(ruleId)}/promote`,
+        { method: 'POST', body: JSON.stringify({}) }
+      ),
+    dismissCandidate: (clientId: string, ruleId: string, reason: string) =>
+      this.request<{ dismissed: boolean }>(
+        `/clients/${encodeURIComponent(clientId)}/candidate-rules/${encodeURIComponent(ruleId)}/dismiss`,
+        { method: 'POST', body: JSON.stringify({ reason }) }
+      ),
+    budgets: () => this.request<any>('/clients/budgets'),
+    // Core reads `capUsd`; under any other name the cap silently becomes its USD 10 default.
+    allocateBudget: (clientId: string, capUsd: number) =>
+      this.request<any>(`/clients/${encodeURIComponent(clientId)}/budget/allocate`, {
+        method: 'POST',
+        body: JSON.stringify({ capUsd }),
+      }),
+  };
+
+  public readonly operations = {
+    integrationsHealth: () => this.request<any>('/integrations/health'),
+    failures: () => this.request<any>('/operations/failures'),
+    slo: () => this.request<any>('/operations/slo'),
+    reconciliation: () => this.request<any>('/operations/reconciliation'),
+    // Audit only. Core's auto-repair uploads nothing: it records invented Drive files and Sheet rows
+    // as publication receipts, so the Desk never asks for it.
+    auditReconciliation: () =>
+      this.request<any>('/operations/reconciliation/run', { method: 'POST', body: JSON.stringify({ autoRepair: false }) }),
+  };
+
+  public readonly evaluations = {
+    datasets: () => this.request<any[]>('/evaluations/datasets'),
+    runs: () => this.request<any[]>('/evaluations/runs'),
+    cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
+    run: (name: string) => this.request<any>('/evaluations/runs', { method: 'POST', body: JSON.stringify({ name }) }),
+  };
+
+  public readonly fonts = {
+    inspect: (body: { fontBase64: string; fontName: string }) =>
+      this.request<any>('/fonts/inspect', { method: 'POST', body: JSON.stringify(body) }),
+  };
+
   public readonly canva = {
     status: () => this.request<any>('/integrations/canva/status'),
     disconnect: () => this.request<any>('/integrations/canva/disconnect',{method:'POST'}),

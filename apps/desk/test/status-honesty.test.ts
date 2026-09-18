@@ -3,9 +3,9 @@ import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apiClient } from '../src/api/client.js';
 import {
   read,
-  fetchJson,
   describeTelegramBridge,
   describeWebhookMode,
   describeWebhookDelivery,
@@ -36,21 +36,25 @@ describe('a status the Desk cannot read stays unknown', () => {
     expect(await read(async () => { throw 'no message'; })).toEqual({ state: 'unknown', reason: 'the server did not answer' });
   });
 
-  it('fetchJson() throws on a network error and on every non-2xx answer, with what the server said', async () => {
+  it('apiClient throws on a network error and on every non-2xx answer, with what the server said', async () => {
+    const json = (body: unknown, status: number) =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
-    await expect(fetchJson('/v1/operations/failures')).rejects.toThrow('fetch failed');
+    await expect(apiClient.operations.failures()).rejects.toThrow('Network error: fetch failed');
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ title: 'Authentication Required', detail: 'Sign in to Hawa first' }), { status: 401 })));
-    await expect(fetchJson('/v1/operations/failures')).rejects.toThrow('HTTP 401: Sign in to Hawa first');
+    vi.stubGlobal('fetch', vi.fn(async () => json({ title: 'Authentication Required', detail: 'Sign in to Hawa first' }, 401)));
+    await expect(apiClient.operations.failures()).rejects.toMatchObject({ status: 401, message: 'Sign in to Hawa first' });
+    expect(await read(() => apiClient.operations.failures())).toEqual({ state: 'unknown', reason: 'Sign in to Hawa first' });
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, description: 'Bad Gateway from Telegram' }), { status: 502 })));
-    await expect(fetchJson('/v1/x')).rejects.toThrow('HTTP 502: Bad Gateway from Telegram');
+    vi.stubGlobal('fetch', vi.fn(async () => json({ ok: false, description: 'Bad Gateway from Telegram' }, 502)));
+    await expect(apiClient.telegram.status()).rejects.toMatchObject({ status: 502, message: 'Bad Gateway from Telegram' });
 
     vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream down', { status: 503 })));
-    await expect(fetchJson('/v1/x')).rejects.toThrow('HTTP 503');
+    await expect(apiClient.operations.slo()).rejects.toMatchObject({ status: 503, message: 'upstream down' });
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 })));
-    await expect(fetchJson('/v1/x')).resolves.toEqual({ items: [] });
+    vi.stubGlobal('fetch', vi.fn(async () => json({ items: [] }, 200)));
+    await expect(apiClient.operations.failures()).resolves.toEqual({ items: [] });
   });
 
   it('the Telegram row says unknown on error and never names a bot or a healthy state it did not read', () => {
