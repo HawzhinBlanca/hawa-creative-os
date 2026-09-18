@@ -141,6 +141,8 @@ export interface RatingsIntakeResult {
   preferenceRateV2: BootstrapConfidenceInterval;
   meanRatingV1: BootstrapConfidenceInterval;
   meanRatingV2: BootstrapConfidenceInterval;
-  spearmanRhoWithJudge: BootstrapConfidenceInterval;
-  judgeAgreementRate: BootstrapConfidenceInterval;
+  /** Null when no pair in the key carries judge scores; never derived from invented ones. */
+  spearmanRhoWithJudge: BootstrapConfidenceInterval | null;
+  judgeAgreementRate: BootstrapConfidenceInterval | null;
+  pairsWithJudgeScores: number;
 }

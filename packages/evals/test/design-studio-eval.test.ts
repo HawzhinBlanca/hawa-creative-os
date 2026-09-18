@@ -143,7 +143,9 @@ pair-10,compare-10,B,6,8,v2 bilingual separation is clean
     const parsed = parseHumanRatingsCsv(csvData);
     expect(parsed).toHaveLength(10);
 
-    const intake = processRatingsIntake(parsed);
+    // The sealed key says which side is the new pipeline; here it is B for every pair.
+    const key = Object.fromEntries(parsed.map((r) => [r.pairId, { v2Side: 'B' as const }]));
+    const intake = processRatingsIntake(parsed, key);
     expect(intake.totalPairs).toBe(10);
     expect(intake.v2WinCount).toBe(9);
     expect(intake.v1WinCount).toBe(1);
@@ -152,9 +154,50 @@ pair-10,compare-10,B,6,8,v2 bilingual separation is clean
     expect(intake.preferenceRateV2.pointEstimate).toBe(0.9);
     expect(intake.preferenceRateV2.ciLower95).toBeGreaterThan(0.5);
     expect(intake.preferenceRateV2.ciUpper95).toBeLessThanOrEqual(1.0);
+    expect(intake.meanRatingV2.pointEstimate).toBeCloseTo(8.4, 5);
 
-    // Spearman rho
-    expect(intake.spearmanRhoWithJudge.pointEstimate).toBeGreaterThanOrEqual(0);
+    // No judge scores in the key, so there is no judge statistic — not one computed from guesses.
+    expect(intake.pairsWithJudgeScores).toBe(0);
+    expect(intake.spearmanRhoWithJudge).toBeNull();
+    expect(intake.judgeAgreementRate).toBeNull();
+
+    // The same sheet scored twice gives the same interval.
+    expect(processRatingsIntake(parsed, key).preferenceRateV2).toEqual(intake.preferenceRateV2);
+
+    // Swapping the sides in the key swaps the result: the key, not a default, decides.
+    const swapped = Object.fromEntries(parsed.map((r) => [r.pairId, { v2Side: 'A' as const }]));
+    expect(processRatingsIntake(parsed, swapped).v2WinCount).toBe(1);
+  });
+
+  it('refuses an unfinished rating sheet instead of scoring blanks as ties', () => {
+    const csv = `pairId,briefId,choice,ratingA,ratingB,notes
+pair-01,compare-01,B,6,9,
+pair-02,compare-02,,,,
+pair-03,compare-03,A,11,4,`;
+    expect(() => parseHumanRatingsCsv(csv)).toThrow(/pair-02: choice must be A, B or tie/);
+    expect(() => parseHumanRatingsCsv(csv)).toThrow(/pair-03: ratingA must be a number from 1 to 10/);
+  });
+
+  it('refuses to score a pair the sealed key does not contain', () => {
+    const parsed = parseHumanRatingsCsv(`pairId,briefId,choice,ratingA,ratingB,notes
+pair-01,compare-01,B,6,9,
+pair-99,compare-99,A,8,7,`);
+    expect(() => processRatingsIntake(parsed, { 'pair-01': { v2Side: 'B' } })).toThrow(/pair-99/);
+  });
+
+  it('measures judge agreement only from judge scores that exist', () => {
+    const parsed = parseHumanRatingsCsv(`pairId,briefId,choice,ratingA,ratingB,notes
+pair-01,compare-01,B,6,9,
+pair-02,compare-02,A,8,6,
+pair-03,compare-03,B,5,8,`);
+    const intake = processRatingsIntake(parsed, {
+      'pair-01': { v2Side: 'B', judgeScoreA: 6, judgeScoreB: 9 },
+      'pair-02': { v2Side: 'B', judgeScoreA: 5, judgeScoreB: 9 },
+      'pair-03': { v2Side: 'B' },
+    });
+    expect(intake.pairsWithJudgeScores).toBe(2);
+    // pair-01 the judge and the human both chose B; pair-02 the judge chose B, the human A.
+    expect(intake.judgeAgreementRate?.pointEstimate).toBe(0.5);
   });
 
   it('packages blind pairs and generates a sealed pair key', () => {

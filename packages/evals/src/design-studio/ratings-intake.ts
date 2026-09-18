@@ -5,6 +5,14 @@ import type {
   BootstrapConfidenceInterval,
 } from './types.js';
 
+/**
+ * Parses the owner's blind-rating sheet.
+ *
+ * Every data row must carry an explicit choice (A, B or tie) and both ratings. A blank or
+ * unrecognised choice used to be read as a tie and a missing rating as 5, so a half-finished sheet
+ * scored as if it were complete. It now refuses, naming the row, because this result decides
+ * whether the pipeline ships.
+ */
 export function parseHumanRatingsCsv(csvContent: string): HumanRatingRow[] {
   const lines = csvContent
     .split('\n')
@@ -17,34 +25,72 @@ export function parseHumanRatingsCsv(csvContent: string): HumanRatingRow[] {
 
   const header = lines[0].split(',').map((c) => c.trim().toLowerCase());
   const rows: HumanRatingRow[] = [];
+  const problems: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(',').map((c) => c.trim());
-    if (parts.length < 4) continue;
-
-    const rowObj: any = {};
+    const rowObj: Record<string, string> = {};
     for (let j = 0; j < header.length; j++) {
-      rowObj[header[j]] = parts[j];
+      rowObj[header[j]] = parts[j] ?? '';
     }
 
-    const choice = (rowObj.choice || rowObj.winner || rowObj.humanchoice || 'tie').toUpperCase();
-    rows.push({
-      pairId: rowObj.pairid || rowObj.id || `pair-${i}`,
-      briefId: rowObj.briefid || rowObj.brief || '',
-      choice: choice === 'A' ? 'A' : choice === 'B' ? 'B' : 'tie',
-      ratingA: Number(rowObj.ratinga || rowObj.scorea || 5),
-      ratingB: Number(rowObj.ratingb || rowObj.scoreb || 5),
-      notes: rowObj.notes || '',
-    });
+    const pairId = rowObj.pairid || rowObj.id || '';
+    const label = pairId || `data row ${i}`;
+    if (!pairId) problems.push(`${label}: no pairId`);
+
+    const rawChoice = (rowObj.choice || rowObj.winner || rowObj.humanchoice || '').toUpperCase();
+    const choice = rawChoice === 'A' ? 'A' : rawChoice === 'B' ? 'B' : rawChoice === 'TIE' ? 'tie' : null;
+    if (!choice) problems.push(`${label}: choice must be A, B or tie (found "${rawChoice}")`);
+
+    const ratingA = parseRating(rowObj.ratinga ?? rowObj.scorea);
+    const ratingB = parseRating(rowObj.ratingb ?? rowObj.scoreb);
+    if (ratingA === null) problems.push(`${label}: ratingA must be a number from 1 to 10`);
+    if (ratingB === null) problems.push(`${label}: ratingB must be a number from 1 to 10`);
+
+    if (pairId && choice && ratingA !== null && ratingB !== null) {
+      rows.push({
+        pairId,
+        briefId: rowObj.briefid || rowObj.brief || '',
+        choice,
+        ratingA,
+        ratingB,
+        notes: rowObj.notes || '',
+      });
+    }
   }
 
+  if (problems.length > 0) {
+    throw new Error(`The rating sheet is not complete:\n  ${problems.join('\n  ')}`);
+  }
   return rows;
+}
+
+function parseRating(raw: string | undefined): number | null {
+  if (raw === undefined || raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+}
+
+/**
+ * Seeded generator so a bootstrap interval is the same every time the same ratings are scored.
+ * Math.random made the reported interval move between runs of an unchanged sheet.
+ */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 export function computeBootstrapCi(
   values: number[],
   evalFn: (sample: number[]) => number,
-  iterations = 10000
+  iterations = 10000,
+  seed = 20260917
 ): BootstrapConfidenceInterval {
   const n = values.length;
   if (n === 0) {
@@ -54,11 +100,11 @@ export function computeBootstrapCi(
   const pointEstimate = evalFn(values);
   const bootstrapEstimates: number[] = [];
 
-  // Deterministic seed / standard pseudo-random
+  const random = mulberry32(seed);
   for (let iter = 0; iter < iterations; iter++) {
     const resample: number[] = [];
     for (let i = 0; i < n; i++) {
-      const idx = Math.floor(Math.random() * n);
+      const idx = Math.floor(random() * n);
       resample.push(values[idx]);
     }
     bootstrapEstimates.push(evalFn(resample));
@@ -117,93 +163,78 @@ export function computeSpearmanRho(x: number[], y: number[]): number {
   return Math.max(-1, Math.min(1, rho));
 }
 
-export function processRatingsIntake(
-  ratings: HumanRatingRow[],
-  pairKey?: Record<string, { v2Side: 'A' | 'B'; judgeScoreA: number; judgeScoreB: number }>
-): RatingsIntakeResult {
-  const total = ratings.length;
+/** Which side each pair's new-pipeline design sits on, and the judge's scores where they exist. */
+export type RatingsPairKey = Record<string, { v2Side: 'A' | 'B'; judgeScoreA?: number; judgeScoreB?: number }>;
+
+/**
+ * Scores a completed blind-rating sheet against the sealed pair key.
+ *
+ * The key is required. A pair missing from it used to be scored as if the new pipeline sat on
+ * side B, which silently mis-assigns sides; it now throws. Judge statistics are computed only from
+ * pairs whose key carries real judge scores, and are null when none do — they used to be derived
+ * from invented scores that always favoured the new pipeline.
+ */
+export function processRatingsIntake(ratings: HumanRatingRow[], pairKey: RatingsPairKey): RatingsIntakeResult {
+  const missing = ratings.filter((r) => !pairKey[r.pairId]).map((r) => r.pairId);
+  if (missing.length > 0) {
+    throw new Error(`These rated pairs are not in the sealed key: ${missing.join(', ')}`);
+  }
+
   let v2Wins = 0;
   let v1Wins = 0;
   let ties = 0;
-
   const humanScoresV2: number[] = [];
   const humanScoresV1: number[] = [];
-  const judgeScores: number[] = [];
-  const humanScores: number[] = [];
-  let agreementCount = 0;
+  const prefValues: number[] = [];
+  const judged: Array<{ humanV2: number; judgeV2: number; agreed: number }> = [];
 
   for (const r of ratings) {
-    const key = pairKey?.[r.pairId] || { v2Side: 'B', judgeScoreA: 7.0, judgeScoreB: 8.8 };
+    const key = pairKey[r.pairId];
     const isV2SideA = key.v2Side === 'A';
-
     const v2Rating = isV2SideA ? r.ratingA : r.ratingB;
-    const v1Rating = isV2SideA ? r.ratingB : r.ratingA;
     humanScoresV2.push(v2Rating);
-    humanScoresV1.push(v1Rating);
+    humanScoresV1.push(isV2SideA ? r.ratingB : r.ratingA);
 
-    let isV2Win = false;
-    let isV1Win = false;
+    const isV2Win = (r.choice === 'A' && isV2SideA) || (r.choice === 'B' && !isV2SideA);
+    const isV1Win = r.choice !== 'tie' && !isV2Win;
+    if (r.choice === 'tie') ties++;
+    else if (isV2Win) v2Wins++;
+    else v1Wins++;
+    prefValues.push(r.choice === 'tie' ? 0.5 : isV2Win ? 1.0 : 0.0);
 
-    if (r.choice === 'tie') {
-      ties++;
-    } else if ((r.choice === 'A' && isV2SideA) || (r.choice === 'B' && !isV2SideA)) {
-      v2Wins++;
-      isV2Win = true;
-    } else {
-      v1Wins++;
-      isV1Win = true;
+    if (typeof key.judgeScoreA === 'number' && typeof key.judgeScoreB === 'number') {
+      const judgeTie = Math.abs(key.judgeScoreA - key.judgeScoreB) < 0.2;
+      const judgeWinV2 = key.judgeScoreB > key.judgeScoreA ? !isV2SideA : isV2SideA;
+      const agreed =
+        (r.choice === 'tie' && judgeTie) || (!judgeTie && ((isV2Win && judgeWinV2) || (isV1Win && !judgeWinV2)));
+      judged.push({
+        humanV2: v2Rating,
+        judgeV2: isV2SideA ? key.judgeScoreA : key.judgeScoreB,
+        agreed: agreed ? 1.0 : 0.0,
+      });
     }
-
-    // Compare with judge choice
-    const judgeWinV2 = key.judgeScoreB > key.judgeScoreA ? !isV2SideA : isV2SideA;
-    if (
-      (isV2Win && judgeWinV2) ||
-      (isV1Win && !judgeWinV2) ||
-      (r.choice === 'tie' && Math.abs(key.judgeScoreA - key.judgeScoreB) < 0.2)
-    ) {
-      agreementCount++;
-    }
-
-    judgeScores.push(isV2SideA ? key.judgeScoreA : key.judgeScoreB);
-    humanScores.push(v2Rating);
   }
 
-  // Preference rate array: 1 for v2 win, 0.5 for tie, 0 for v1 win
-  const prefValues = ratings.map((r) => {
-    const key = pairKey?.[r.pairId] || { v2Side: 'B', judgeScoreA: 7.0, judgeScoreB: 8.8 };
-    const isV2SideA = key.v2Side === 'A';
-    if (r.choice === 'tie') return 0.5;
-    if ((r.choice === 'A' && isV2SideA) || (r.choice === 'B' && !isV2SideA)) return 1.0;
-    return 0.0;
-  });
+  const mean = (s: number[]) => s.reduce((a, b) => a + b, 0) / s.length;
+  const preferenceRateV2 = computeBootstrapCi(prefValues, mean);
+  const meanRatingV1 = computeBootstrapCi(humanScoresV1, mean);
+  const meanRatingV2 = computeBootstrapCi(humanScoresV2, mean);
 
-  const preferenceRateV2 = computeBootstrapCi(prefValues, (s) => s.reduce((a, b) => a + b, 0) / s.length);
-  const meanRatingV1 = computeBootstrapCi(humanScoresV1, (s) => s.reduce((a, b) => a + b, 0) / s.length);
-  const meanRatingV2 = computeBootstrapCi(humanScoresV2, (s) => s.reduce((a, b) => a + b, 0) / s.length);
-
-  // Agreement rate
-  const agreementValues = ratings.map((r, idx) => {
-    const key = pairKey?.[r.pairId] || { v2Side: 'B', judgeScoreA: 7.0, judgeScoreB: 8.8 };
-    const isV2SideA = key.v2Side === 'A';
-    const judgeWinV2 = key.judgeScoreB > key.judgeScoreA ? !isV2SideA : isV2SideA;
-    const isV2Win = (r.choice === 'A' && isV2SideA) || (r.choice === 'B' && !isV2SideA);
-    const isV1Win = (r.choice === 'A' && !isV2SideA) || (r.choice === 'B' && isV2SideA);
-    return (isV2Win && judgeWinV2) || (isV1Win && !judgeWinV2) || (r.choice === 'tie' && Math.abs(key.judgeScoreA - key.judgeScoreB) < 0.2) ? 1.0 : 0.0;
-  });
-
-  const judgeAgreementRate = computeBootstrapCi(agreementValues, (s) => s.reduce((a, b) => a + b, 0) / s.length);
-
-  // Spearman correlation
-  const spearmanEstimate = computeSpearmanRho(humanScores, judgeScores);
-  const spearmanIndices = humanScores.map((_, i) => i);
-  const spearmanRhoWithJudge = computeBootstrapCi(spearmanIndices, (indices) => {
-    const xSample = indices.map((i) => humanScores[i]);
-    const ySample = indices.map((i) => judgeScores[i]);
-    return computeSpearmanRho(xSample, ySample);
-  });
+  let judgeAgreementRate: BootstrapConfidenceInterval | null = null;
+  let spearmanRhoWithJudge: BootstrapConfidenceInterval | null = null;
+  if (judged.length >= 2) {
+    judgeAgreementRate = computeBootstrapCi(judged.map((j) => j.agreed), mean);
+    const indices = judged.map((_, i) => i);
+    spearmanRhoWithJudge = computeBootstrapCi(indices, (sample) =>
+      computeSpearmanRho(
+        sample.map((i) => judged[i].humanV2),
+        sample.map((i) => judged[i].judgeV2)
+      )
+    );
+  }
 
   return {
-    totalPairs: total,
+    totalPairs: ratings.length,
     v2WinCount: v2Wins,
     v1WinCount: v1Wins,
     tieCount: ties,
@@ -212,5 +243,6 @@ export function processRatingsIntake(
     meanRatingV2,
     spearmanRhoWithJudge,
     judgeAgreementRate,
+    pairsWithJudgeScores: judged.length,
   };
 }

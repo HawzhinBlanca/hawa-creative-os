@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { parseHumanRatingsCsv, processRatingsIntake } from '../packages/evals/src/design-studio/ratings-intake.js';
+import {
+  parseHumanRatingsCsv,
+  processRatingsIntake,
+  type RatingsPairKey,
+} from '../packages/evals/src/design-studio/ratings-intake.js';
 
 async function main() {
   const t8Dir = path.resolve('output/proofs/2026-09-17-research-grade-pipeline/T8_BLIND');
@@ -59,28 +63,36 @@ async function main() {
     return;
   }
 
+  // Refuses an unfinished sheet: a blank choice is not a tie and a blank rating is not a 5.
   const ratings = parseHumanRatingsCsv(csvContent);
   const pairKeyData = JSON.parse(keyContent);
-  const keyMap: Record<string, { v2Side: 'A' | 'B'; judgeScoreA: number; judgeScoreB: number }> = {};
 
+  // Only the side assignment comes from the key. It carries no judge scores, so none are invented:
+  // this script used to fill in 8.8 for the new pipeline and 7.0 for the old on every pair.
+  const keyMap: RatingsPairKey = {};
   for (const p of pairKeyData.pairs) {
-    keyMap[p.pairId] = {
-      v2Side: p.newPipelineSide,
-      judgeScoreA: p.newPipelineSide === 'A' ? 8.8 : 7.0,
-      judgeScoreB: p.newPipelineSide === 'B' ? 8.8 : 7.0,
-    };
+    keyMap[p.pairId] = { v2Side: p.newPipelineSide };
+  }
+
+  const expected = pairKeyData.pairs.length;
+  if (ratings.length !== expected) {
+    console.error(`The sheet rates ${ratings.length} pairs; the sealed key has ${expected}. Rate every pair before scoring.`);
+    process.exit(1);
   }
 
   const result = processRatingsIntake(ratings, keyMap);
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const ci = (c: { pointEstimate: number; ciLower95: number; ciUpper95: number }, f: (v: number) => string) =>
+    `${f(c.pointEstimate)} (95% CI ${f(c.ciLower95)}–${f(c.ciUpper95)})`;
 
   console.log('\n=== T8 Blind Preference Results ===');
   console.log(`Total Pairs Evaluated: ${result.totalPairs}`);
   console.log(`New Pipeline (v3) Wins: ${result.v2WinCount}`);
   console.log(`Legacy Planner (v1) Wins: ${result.v1WinCount}`);
   console.log(`Ties: ${result.tieCount}`);
-  console.log(`New Pipeline Win Rate: ${(result.preferenceRateV2.pointEstimate * 100).toFixed(1)}% (95% CI: [${(result.preferenceRateV2.ciLower95 * 100).toFixed(1)}%, ${(result.preferenceRateV2.ciUpper95 * 100).toFixed(1)}%])`);
-  console.log(`Mean Score v3: ${result.meanRatingV2.toFixed(2)}/10`);
-  console.log(`Mean Score v1: ${result.meanRatingV1.toFixed(2)}/10`);
+  console.log(`New Pipeline Win Rate: ${ci(result.preferenceRateV2, pct)}`);
+  console.log(`Mean Score v3: ${ci(result.meanRatingV2, (v) => v.toFixed(2))} out of 10`);
+  console.log(`Mean Score v1: ${ci(result.meanRatingV1, (v) => v.toFixed(2))} out of 10`);
 
   const passed = result.v2WinCount >= 8;
   console.log(`\nThreshold (>= 8/10): ${passed ? 'PASSED' : 'NOT_MET'}`);
