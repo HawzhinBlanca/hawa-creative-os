@@ -388,24 +388,38 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(runBody.summary.p99DurationMs).toBeGreaterThan(0);
   });
 
-  it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audits and repairs storage drift (FR-049, FR-050)', async () => {
-    // 1. Get initial reconciliation report
+  it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050)', async () => {
+    // 1. Before any audit there is no report, not an invented clean one
     const getRes = await app.request('/v1/operations/reconciliation');
     expect(getRes.status).toBe(200);
-    const report = await getRes.json();
-    expect(report.totalTasksAudited).toBeGreaterThanOrEqual(0);
+    expect(await getRes.json()).toBeNull();
 
-    // 2. Trigger active reconciliation audit
-    const runRes = await app.request('/v1/operations/reconciliation/run', {
+    // 2. Auto-repair is refused: Core cannot upload to Drive or write Sheets from here
+    const repairRes = await app.request('/v1/operations/reconciliation/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ autoRepair: true }),
     });
+    expect(repairRes.status).toBe(422);
+    expect((await repairRes.json()).title).toBe('Auto-Repair Not Available');
+
+    // 3. The audit runs and says what it compared
+    const runRes = await app.request('/v1/operations/reconciliation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
     expect(runRes.status).toBe(201);
     const runReport = await runRes.json();
     expect(runReport.auditId).toBeDefined();
-    expect(['clean', 'repaired']).toContain(runReport.status);
+    expect(['clean', 'divergent']).toContain(runReport.status);
+    expect(runReport.simulated).toBe(false);
+    expect(runReport.basis).toContain('Google Drive and Google Sheets were not read');
+    expect(runReport).not.toHaveProperty('repairedCount');
     expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
+
+    const latest = await (await app.request('/v1/operations/reconciliation')).json();
+    expect(latest.auditId).toBe(runReport.auditId);
   });
 
   it('GET /v1/clients lists seeded client tenants with color & rule metrics', async () => {

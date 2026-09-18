@@ -158,7 +158,7 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
   });
 
   describe('3. Storage Drift & Network Partition Recovery Chaos', () => {
-    it('detects simulated Google Drive network drop and idempotently repairs missing assets', async () => {
+    it('detects a simulated Google Drive network drop and keeps reporting it: nothing is repaired by invention', async () => {
       const reconciliation = new ReconciliationService();
 
       const tasks = [
@@ -181,21 +181,20 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
         },
       ];
 
-      // Run audit with auto-repair
-      const report = reconciliation.auditAndReconcile(tasks, driveFiles, sheetRows, true);
+      const report = reconciliation.audit(tasks, driveFiles, sheetRows);
       expect(report.totalTasksAudited).toBe(1);
       expect(report.driftCount).toBe(1);
-      expect(report.repairedCount).toBe(1);
+      expect(report.status).toBe('divergent');
 
       const missingDriveDrift = report.anomalies.find((d) => d.kind === 'MISSING_DRIVE_ASSET');
       expect(missingDriveDrift).toBeDefined();
       expect(missingDriveDrift?.taskId).toBe('task-chaos-01');
-      expect(driveFiles.length).toBe(1);
+      // The former auto-repair appended an invented Drive row here, so the next audit read "clean".
+      expect(driveFiles.length).toBe(0);
 
-      // Post-repair audit
-      const postReport = reconciliation.auditAndReconcile(tasks, driveFiles, sheetRows, false);
-      expect(postReport.status).toBe('clean');
-      expect(postReport.driftCount).toBe(0);
+      const secondReport = reconciliation.audit(tasks, driveFiles, sheetRows);
+      expect(secondReport.status).toBe('divergent');
+      expect(secondReport.driftCount).toBe(1);
     });
   });
 });

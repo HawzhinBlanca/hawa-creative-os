@@ -297,49 +297,44 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 201);
   });
 
-  // Operations Reconciliation & Drift Audit (FR-049, FR-050)
+  // Operations Reconciliation & Drift Audit (FR-049, FR-050). Audit only: see ReconciliationService.
   registerRoute('get', '/operations/reconciliation', (c: any) => {
-    const report = reconciliationService.getLastReport();
-    return c.json(report);
+    // null until an audit of Core's own state has run; no report is invented in its place.
+    return c.json(reconciliationService.getLastReport());
   });
 
   registerRoute('post', '/operations/reconciliation/run', async (c: any) => {
     const body = await c.req.json().catch(() => ({}));
-    const autoRepair = body.autoRepair !== false;
+    if (body.autoRepair === true) {
+      return problem(
+        c,
+        422,
+        'Auto-Repair Not Available',
+        'Core cannot upload to Google Drive or write Google Sheets from reconciliation, so it repairs nothing. Run the audit without autoRepair and republish the tasks it reports.'
+      );
+    }
 
-    // Pull tasks from memory
     const allTasks = Array.from(tasks.values()).map((t) => ({
       id: t.id,
       status: t.status,
       clientId: t.clientId || undefined,
       latestRevisionId: t.latestRevisionId || undefined,
-      packageHash: t.latestRevisionId ? `pkg_${t.id.slice(0, 8)}_hash` : undefined,
       updatedAt: t.updatedAt || new Date().toISOString(),
     }));
 
-    // Existing drive deliverables and sheet rows from omnichannelReceipts
-    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [
-      { taskId: 'task-pre-1', fileId: 'f_drive_1', folderId: 'folder_drive_1', sha256: 'sha256_d1', byteSize: 14520 },
-    ];
-    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [
-      { taskId: 'task-pre-1', rowNumber: 1, status: 'COMPLETE', packageHash: 'sha256_d1', syncedAt: new Date().toISOString() },
-    ];
-
-    for (const [tId, data] of omnichannelReceipts.entries()) {
-      if (data.files && Array.isArray(data.files)) {
-        driveFiles.push(...data.files);
-      }
-      if (data.sheetRow) {
-        sheetRows.push(data.sheetRow);
-      }
+    // Delivery records are the receipts Core kept when it published.
+    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [];
+    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [];
+    for (const data of omnichannelReceipts.values()) {
+      if (data.files && Array.isArray(data.files)) driveFiles.push(...data.files.map((f: any) => ({ ...f })));
+      if (data.sheetRow) sheetRows.push({ ...data.sheetRow });
     }
 
-    if (body.driveFiles && Array.isArray(body.driveFiles)) {
-      driveFiles.push(...body.driveFiles);
-    }
-    if (body.sheetRows && Array.isArray(body.sheetRows)) {
-      sheetRows.push(...body.sheetRows);
-    }
+    // Rows supplied or altered by the caller make the report a simulation, which is returned but
+    // never kept as the latest audit the Desk shows.
+    const simulated = Boolean(body.simulateDrift) || Array.isArray(body.driveFiles) || Array.isArray(body.sheetRows);
+    if (Array.isArray(body.driveFiles)) driveFiles.push(...body.driveFiles);
+    if (Array.isArray(body.sheetRows)) sheetRows.push(...body.sheetRows);
 
     if (body.simulateDrift) {
       if (body.simulateDrift.missingDriveTaskId) {
@@ -362,29 +357,14 @@ export function registerSystemRoutes(ctx: RouteContext) {
       }
     }
 
-    const report = reconciliationService.auditAndReconcile(allTasks, driveFiles, sheetRows, autoRepair);
-
-    if (autoRepair) {
-      for (const anomaly of report.anomalies) {
-        if (anomaly.repaired) {
-          const matchingFiles = driveFiles.filter((d) => d.taskId === anomaly.taskId);
-          const matchingSheet = sheetRows.find((s) => s.taskId === anomaly.taskId);
-          const existing = omnichannelReceipts.get(anomaly.taskId) || {};
-          omnichannelReceipts.set(anomaly.taskId, {
-            ...existing,
-            files: matchingFiles.length > 0 ? matchingFiles : existing.files,
-            sheetRow: matchingSheet || existing.sheetRow,
-          });
-        }
-      }
-    }
+    const report = reconciliationService.audit(allTasks, driveFiles, sheetRows, { simulated });
 
     broadcastEvent('reconciliation:completed', {
       auditId: report.auditId,
       status: report.status,
       driftCount: report.driftCount,
-      repairedCount: report.repairedCount,
       inSyncCount: report.inSyncCount,
+      simulated: report.simulated,
     });
 
     return c.json(report, 201);

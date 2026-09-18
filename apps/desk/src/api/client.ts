@@ -215,8 +215,7 @@ class HawaApiClient {
     failures: () => this.request<any>('/operations/failures'),
     slo: () => this.request<any>('/operations/slo'),
     reconciliation: () => this.request<any>('/operations/reconciliation'),
-    // Audit only. Core's auto-repair uploads nothing: it records invented Drive files and Sheet rows
-    // as publication receipts, so the Desk never asks for it.
+    // Audit only. Core refuses auto-repair (422): it cannot upload to Drive or write Sheets.
     auditReconciliation: () =>
       this.request<any>('/operations/reconciliation/run', { method: 'POST', body: JSON.stringify({ autoRepair: false }) }),
   };

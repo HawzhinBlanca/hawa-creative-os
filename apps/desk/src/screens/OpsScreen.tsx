@@ -70,13 +70,13 @@ interface SloProbeResult {
 export interface ReconciliationReport {
   auditId: string;
   timestamp: string;
+  basis: string;
   totalTasksAudited: number;
   totalDriveDeliverablesChecked: number;
   totalSheetRowsAudited: number;
   inSyncCount: number;
   driftCount: number;
-  repairedCount: number;
-  status: 'clean' | 'repaired' | 'divergent';
+  status: 'clean' | 'divergent';
 }
 
 export interface ClientBudgetReport {
@@ -388,7 +388,13 @@ export const OpsScreen: React.FC = () => {
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
               <span>🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger</span>
               <span className={`pill ${!reconciliation ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
-                {!reconciliation ? 'No audit read' : reconciliation.status === 'clean' ? '100% In Sync' : reconciliation.status === 'repaired' ? 'Auto-Reconciled' : 'Drift found'}
+                {!reconciliation
+                  ? lastCheck && !unreadable.reconciliation
+                    ? 'No audit since Core started'
+                    : 'No audit read'
+                  : reconciliation.status === 'clean'
+                    ? '100% In Sync'
+                    : 'Drift found'}
               </span>
             </h2>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>

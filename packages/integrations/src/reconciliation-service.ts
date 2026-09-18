@@ -37,31 +37,41 @@ export interface DriftAnomaly {
   severity: 'high' | 'medium';
   description: string;
   detectedAt: string;
-  repaired: boolean;
-  repairAction?: string;
 }
+
+/** What an audit compares. Core has no Drive or Sheets read path, so it never claims to have read them. */
+export const RECONCILIATION_BASIS =
+  "Core's in-memory task list against the publication receipts Core recorded when it published. Google Drive and Google Sheets were not read, and nothing was repaired.";
 
 export interface ReconciliationReport {
   auditId: string;
   timestamp: string;
+  basis: string;
+  /** True when the caller supplied or altered the rows being compared; such a report is never kept as the latest audit. */
+  simulated: boolean;
   totalTasksAudited: number;
   totalDriveDeliverablesChecked: number;
   totalSheetRowsAudited: number;
   inSyncCount: number;
   driftCount: number;
-  repairedCount: number;
   anomalies: DriftAnomaly[];
-  status: 'clean' | 'repaired' | 'divergent';
+  status: 'clean' | 'divergent';
 }
 
+/**
+ * Audits task state against the delivery records it is given and reports drift. It repairs
+ * nothing: Core has no path that uploads to Drive or writes Sheets from here, and the former
+ * "auto-repair" only appended invented rows (drive_repaired_*, sha256_auto_reconciled) that Core
+ * then served as publication receipts.
+ */
 export class ReconciliationService {
-  private lastReport?: ReconciliationReport;
+  private lastReport: ReconciliationReport | null = null;
 
-  auditAndReconcile(
+  audit(
     tasks: TaskRecord[],
-    driveFiles: DriveRecord[],
-    sheetRows: SheetRowRecord[],
-    autoRepair = true
+    driveFiles: readonly DriveRecord[],
+    sheetRows: readonly SheetRowRecord[],
+    options: { simulated?: boolean } = {}
   ): ReconciliationReport {
     const auditId = `audit_${crypto.randomUUID().slice(0, 8)}_${Date.now()}`;
     const timestamp = new Date().toISOString();
@@ -79,84 +89,47 @@ export class ReconciliationService {
     }
 
     let inSyncCount = 0;
-    let repairedCount = 0;
 
     for (const task of tasks) {
-      // Invariant 2: PostgreSQL is operational truth. Check completed/published tasks
+      // Only tasks that should already have been delivered can drift.
       if (['COMPLETE', 'APPROVED', 'PUBLISHING'].includes(task.status)) {
         const driveEntries = driveByTask.get(task.id) || [];
         const sheetEntry = sheetByTask.get(task.id);
 
         let taskHasDrift = false;
 
-        // Check 1: Missing Drive deliverable
+        // Check 1: no Drive delivery recorded
         if (task.status === 'COMPLETE' && driveEntries.length === 0) {
           taskHasDrift = true;
-          const anomaly: DriftAnomaly = {
+          anomalies.push({
             taskId: task.id,
             kind: 'MISSING_DRIVE_ASSET',
             severity: 'high',
-            description: `Task ${task.id} marked COMPLETE in PostgreSQL but no deliverables found in Google Drive`,
+            description: `Task ${task.id} is COMPLETE but no Drive delivery is recorded for it`,
             detectedAt: timestamp,
-            repaired: autoRepair,
-            repairAction: autoRepair ? 'Idempotently uploaded verified .hyc and export package to Drive destination' : undefined,
-          };
-          anomalies.push(anomaly);
-          if (autoRepair) {
-            driveFiles.push({
-              taskId: task.id,
-              fileId: `drive_repaired_${task.id.slice(0, 8)}`,
-              folderId: 'folder_drive_client_approved_001',
-              sha256: task.packageHash || 'sha256_auto_reconciled',
-              byteSize: 14520,
-            });
-            repairedCount++;
-          }
+          });
         }
 
-        // Check 2: Missing Sheet reporting row (FR-049: keyed by immutable taskId)
+        // Check 2: no Sheets reporting row recorded (FR-049: keyed by immutable taskId)
         if (!sheetEntry) {
           taskHasDrift = true;
-          const anomaly: DriftAnomaly = {
+          anomalies.push({
             taskId: task.id,
             kind: 'MISSING_SHEET_ROW',
             severity: 'medium',
-            description: `Task ${task.id} missing mirror reporting row in Google Sheets`,
+            description: `Task ${task.id} has no Sheets reporting row recorded`,
             detectedAt: timestamp,
-            repaired: autoRepair,
-            repairAction: autoRepair ? `Inserted row in Google Sheets keyed by immutable taskId ${task.id}` : undefined,
-          };
-          anomalies.push(anomaly);
-          if (autoRepair) {
-            sheetRows.push({
-              taskId: task.id,
-              rowNumber: sheetRows.length + 1,
-              status: task.status,
-              packageHash: task.packageHash || 'sha256_package_verified',
-              syncedAt: timestamp,
-            });
-            repairedCount++;
-          }
-        } else {
-          // Check 3: Status or Hash Divergence
-          if (sheetEntry.status !== task.status) {
-            taskHasDrift = true;
-            const anomaly: DriftAnomaly = {
-              taskId: task.id,
-              kind: 'STATUS_DIVERGENCE',
-              severity: 'medium',
-              description: `PostgreSQL status (${task.status}) disagrees with Google Sheets mirror (${sheetEntry.status})`,
-              detectedAt: timestamp,
-              repaired: autoRepair,
-              repairAction: autoRepair ? `Updated Sheet row ${sheetEntry.rowNumber} to match PostgreSQL authoritative status ${task.status}` : undefined,
-            };
-            anomalies.push(anomaly);
-            if (autoRepair) {
-              sheetEntry.status = task.status;
-              sheetEntry.syncedAt = timestamp;
-              repairedCount++;
-            }
-          }
+          });
+        } else if (sheetEntry.status !== task.status) {
+          // Check 3: status divergence
+          taskHasDrift = true;
+          anomalies.push({
+            taskId: task.id,
+            kind: 'STATUS_DIVERGENCE',
+            severity: 'medium',
+            description: `Task status (${task.status}) disagrees with the recorded Sheets row ${sheetEntry.rowNumber} (${sheetEntry.status})`,
+            detectedAt: timestamp,
+          });
         }
 
         if (!taskHasDrift) {
@@ -167,36 +140,27 @@ export class ReconciliationService {
       }
     }
 
+    const simulated = options.simulated === true;
     const report: ReconciliationReport = {
       auditId,
       timestamp,
+      basis: simulated ? `${RECONCILIATION_BASIS} Rows supplied or altered by the caller were included.` : RECONCILIATION_BASIS,
+      simulated,
       totalTasksAudited: tasks.length,
       totalDriveDeliverablesChecked: driveFiles.length,
       totalSheetRowsAudited: sheetRows.length,
       inSyncCount,
       driftCount: anomalies.length,
-      repairedCount,
       anomalies,
-      status: anomalies.length === 0 ? 'clean' : autoRepair ? 'repaired' : 'divergent',
+      status: anomalies.length === 0 ? 'clean' : 'divergent',
     };
 
-    this.lastReport = report;
+    if (!simulated) this.lastReport = report;
     return report;
   }
 
-  getLastReport(): ReconciliationReport {
-    if (this.lastReport) return this.lastReport;
-    return {
-      auditId: 'audit_init',
-      timestamp: new Date().toISOString(),
-      totalTasksAudited: 12,
-      totalDriveDeliverablesChecked: 24,
-      totalSheetRowsAudited: 12,
-      inSyncCount: 12,
-      driftCount: 0,
-      repairedCount: 0,
-      anomalies: [],
-      status: 'clean',
-    };
+  /** The latest audit of Core's own state, or null when none has run since Core started. */
+  getLastReport(): ReconciliationReport | null {
+    return this.lastReport;
   }
 }

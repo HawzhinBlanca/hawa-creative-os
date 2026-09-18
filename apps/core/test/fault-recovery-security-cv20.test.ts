@@ -121,7 +121,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     });
   });
 
-  it('4. Reconciles unknown delivery outcomes and repairs drift automatically (FR-061)', async () => {
+  it('4. Reports drift from unknown delivery outcomes and repairs nothing it cannot perform (FR-061)', async () => {
     const reconService = new ReconciliationService();
 
     const tasks = [
@@ -139,13 +139,16 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
       { taskId: 't_recon_2', rowNumber: 3, status: 'IN_PROGRESS', packageHash: 'h2', syncedAt: new Date().toISOString() }, // status divergence
     ];
 
-    const report = reconService.auditAndReconcile(tasks, driveFiles, sheetRows, true);
+    const before = JSON.stringify({ driveFiles, sheetRows });
+    const report = reconService.audit(tasks, driveFiles, sheetRows);
 
     expect(report.anomalies.length).toBeGreaterThanOrEqual(2);
     expect(report.anomalies.some((a) => a.kind === 'MISSING_DRIVE_ASSET')).toBe(true);
     expect(report.anomalies.some((a) => a.kind === 'STATUS_DIVERGENCE')).toBe(true);
     expect(report.driftCount).toBeGreaterThan(0);
-    expect(report.repairedCount).toBeGreaterThan(0);
+    // Drift stays reported until a real delivery fixes it; the audit writes nothing.
+    expect(report.status).toBe('divergent');
+    expect(JSON.stringify({ driveFiles, sheetRows })).toBe(before);
   });
 
   it('5. Proves acknowledged tasks survive application reload (RPO = 0s, RTO < 5s) (FR-059, FR-060)', async () => {
