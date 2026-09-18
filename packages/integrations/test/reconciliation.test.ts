@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ReconciliationService,
+  RECONCILIATION_BASIS,
   type TaskRecord,
   type DriveRecord,
   type SheetRowRecord,
@@ -21,13 +22,13 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
       { taskId: 'task-1', rowNumber: 1, status: 'COMPLETE', packageHash: 'hash-1', syncedAt: new Date().toISOString() },
     ];
 
-    const report = service.auditAndReconcile(tasks, drive, sheets, false);
+    const report = service.audit(tasks, drive, sheets);
     expect(report.status).toBe('clean');
     expect(report.driftCount).toBe(0);
     expect(report.inSyncCount).toBe(2);
   });
 
-  it('detects missing Drive deliverable and automatically repairs it idempotently', () => {
+  it('reports a missing Drive delivery and repairs nothing: no row is invented', () => {
     const service = new ReconciliationService();
     const tasks: TaskRecord[] = [
       { id: 'task-drift-1', status: 'COMPLETE', packageHash: 'hash-drift-1', updatedAt: new Date().toISOString() },
@@ -37,20 +38,25 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
       { taskId: 'task-drift-1', rowNumber: 1, status: 'COMPLETE', packageHash: 'hash-drift-1', syncedAt: new Date().toISOString() },
     ];
 
-    // Audit with autoRepair
-    const report = service.auditAndReconcile(tasks, drive, sheets, true);
-    expect(report.status).toBe('repaired');
+    const report = service.audit(tasks, drive, sheets);
+    expect(report.status).toBe('divergent');
     expect(report.driftCount).toBe(1);
-    expect(report.repairedCount).toBe(1);
-    expect(report.anomalies[0].kind).toBe('MISSING_DRIVE_ASSET');
-    expect(report.anomalies[0].repaired).toBe(true);
+    expect(report.anomalies[0]).toMatchObject({ taskId: 'task-drift-1', kind: 'MISSING_DRIVE_ASSET', severity: 'high' });
+    expect(report.basis).toBe(RECONCILIATION_BASIS);
+    expect(report.basis).toContain('Google Drive and Google Sheets were not read, and nothing was repaired');
 
-    // Verify Drive deliverable was created idempotently
-    expect(drive.length).toBe(1);
-    expect(drive[0].taskId).toBe('task-drift-1');
+    // The former auto-repair pushed drive_repaired_* / sha256_auto_reconciled here and reported it as uploaded.
+    expect(drive).toEqual([]);
+    expect(report).not.toHaveProperty('repairedCount');
+    expect(report.anomalies[0]).not.toHaveProperty('repaired');
+    expect(report.anomalies[0]).not.toHaveProperty('repairAction');
+    expect(JSON.stringify(report.anomalies)).not.toMatch(/drive_repaired|sha256_auto_reconciled|uploaded/i);
+
+    // A second audit still sees the drift: nothing was papered over.
+    expect(service.audit(tasks, drive, sheets).status).toBe('divergent');
   });
 
-  it('detects status divergence and updates Sheet row by immutable task ID', () => {
+  it('reports a status divergence and leaves the recorded Sheet row as it was', () => {
     const service = new ReconciliationService();
     const tasks: TaskRecord[] = [
       { id: 'task-diverged', status: 'COMPLETE', packageHash: 'hash-div', updatedAt: new Date().toISOString() },
@@ -62,15 +68,31 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
       { taskId: 'task-diverged', rowNumber: 42, status: 'AWAITING_APPROVAL', packageHash: 'hash-div', syncedAt: '2026-09-01T00:00:00Z' },
     ];
 
-    const report = service.auditAndReconcile(tasks, drive, sheets, true);
-    expect(report.status).toBe('repaired');
+    const report = service.audit(tasks, drive, sheets);
+    expect(report.status).toBe('divergent');
     expect(report.anomalies[0].kind).toBe('STATUS_DIVERGENCE');
-    expect(report.anomalies[0].repaired).toBe(true);
+    expect(report.anomalies[0].description).toBe(
+      'Task status (COMPLETE) disagrees with the recorded Sheets row 42 (AWAITING_APPROVAL)'
+    );
+    expect(sheets).toEqual([
+      { taskId: 'task-diverged', rowNumber: 42, status: 'AWAITING_APPROVAL', packageHash: 'hash-div', syncedAt: '2026-09-01T00:00:00Z' },
+    ]);
+  });
 
-    // Verify Sheet row status was updated without creating duplicate rows (FR-049)
-    expect(sheets.length).toBe(1);
-    expect(sheets[0].status).toBe('COMPLETE');
-    expect(sheets[0].rowNumber).toBe(42);
+  it('has no latest audit until one runs, and never keeps a simulated audit as the latest', () => {
+    const service = new ReconciliationService();
+    // Formerly an invented clean report (12 tasks, 24 Drive files, all in sync) before any audit ran.
+    expect(service.getLastReport()).toBeNull();
+
+    const tasks: TaskRecord[] = [{ id: 'task-1', status: 'COMPLETE', updatedAt: new Date().toISOString() }];
+    const simulated = service.audit(tasks, [], [], { simulated: true });
+    expect(simulated.simulated).toBe(true);
+    expect(simulated.basis).toContain('Rows supplied or altered by the caller were included.');
+    expect(service.getLastReport()).toBeNull();
+
+    const real = service.audit(tasks, [], []);
+    expect(real.simulated).toBe(false);
+    expect(service.getLastReport()).toBe(real);
   });
 
   it('handles GooglePublisher reconciliation without throwing unhandled exceptions', async () => {

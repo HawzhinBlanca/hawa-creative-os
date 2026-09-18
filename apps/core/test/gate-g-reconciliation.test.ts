@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
 
-describe('Gate G: Google Drive & Sheets Self-Healing Reconciliation Daemon (FR-048, FR-049, FR-050, Invariant #12)', () => {
+describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12)', () => {
   const app = createApp();
 
   async function createPublishedTask(clientName: string = 'Aster Hotel') {
@@ -57,21 +57,32 @@ describe('Gate G: Google Drive & Sheets Self-Healing Reconciliation Daemon (FR-0
     return taskId;
   }
 
-  it('runs baseline reconciliation and reports in-sync status when storage matches authoritative PostgreSQL state', async () => {
-    const taskId = await createPublishedTask('Erbil Citadel Holdings');
-
-    const res = await app.request('/operations/reconciliation/run', {
+  async function runAudit(body: Record<string, unknown> = {}) {
+    return app.request('/operations/reconciliation/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ autoRepair: true }),
+      body: JSON.stringify(body),
     });
+  }
 
+  async function storedReceipt(taskId: string) {
+    const res = await app.request(`/tasks/${taskId}/publication-receipt`);
+    expect(res.status).toBe(200);
+    return (await res.json()).receipt;
+  }
+
+  it('reports in-sync status when every published task has its recorded deliveries', async () => {
+    await createPublishedTask('Erbil Citadel Holdings');
+
+    const res = await runAudit();
     expect(res.status).toBe(201);
     const report = await res.json();
     expect(report.auditId).toBeDefined();
     expect(report.totalTasksAudited).toBeGreaterThan(0);
     expect(report.driftCount).toBe(0);
     expect(report.status).toBe('clean');
+    expect(report.simulated).toBe(false);
+    expect(report.basis).toContain('Google Drive and Google Sheets were not read, and nothing was repaired');
 
     // GET /operations/reconciliation retrieves the latest report
     const getRes = await app.request('/operations/reconciliation');
@@ -81,141 +92,65 @@ describe('Gate G: Google Drive & Sheets Self-Healing Reconciliation Daemon (FR-0
     expect(latest.status).toBe('clean');
   });
 
-  it('detects MISSING_DRIVE_ASSET anomaly and self-heals by idempotently uploading package to Drive destination', async () => {
+  it('reports a missing Drive delivery, refuses auto-repair, and invents no receipt', async () => {
     const taskId = await createPublishedTask('Cihan Bank Erbil');
+    const baseline = await (await runAudit()).json();
+    const filesBefore = (await storedReceipt(taskId)).files;
 
-    // 1. Audit with simulateDrift (missing Google Drive deliverable) and autoRepair = false
-    const auditRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: false,
-        simulateDrift: {
-          missingDriveTaskId: taskId,
-        },
-      }),
-    });
-
+    // 1. Simulated drift is reported
+    const auditRes = await runAudit({ simulateDrift: { missingDriveTaskId: taskId } });
     expect(auditRes.status).toBe(201);
     const auditReport = await auditRes.json();
     expect(auditReport.status).toBe('divergent');
-    expect(auditReport.driftCount).toBeGreaterThanOrEqual(1);
-
+    expect(auditReport.simulated).toBe(true);
     const driveAnomaly = auditReport.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_DRIVE_ASSET');
-    expect(driveAnomaly).toBeDefined();
-    expect(driveAnomaly.severity).toBe('high');
-    expect(driveAnomaly.repaired).toBe(false);
+    expect(driveAnomaly).toMatchObject({ severity: 'high', description: `Task ${taskId} is COMPLETE but no Drive delivery is recorded for it` });
+    expect(driveAnomaly).not.toHaveProperty('repaired');
 
-    // 2. Audit with autoRepair = true to self-heal
-    const repairRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: true,
-        simulateDrift: {
-          missingDriveTaskId: taskId,
-        },
-      }),
-    });
+    // 2. A simulation is never kept as the latest audit the Desk shows
+    const latest = await (await app.request('/operations/reconciliation')).json();
+    expect(latest.auditId).toBe(baseline.auditId);
 
-    expect(repairRes.status).toBe(201);
-    const repairReport = await repairRes.json();
-    expect(repairReport.status).toBe('repaired');
-    expect(repairReport.repairedCount).toBeGreaterThanOrEqual(1);
+    // 3. Auto-repair is refused, and the stored receipt is untouched (it used to gain drive_repaired_* rows)
+    const repairRes = await runAudit({ autoRepair: true, simulateDrift: { missingDriveTaskId: taskId } });
+    expect(repairRes.status).toBe(422);
+    expect((await repairRes.json()).title).toBe('Auto-Repair Not Available');
+    const filesAfter = (await storedReceipt(taskId)).files;
+    expect(filesAfter).toEqual(filesBefore);
+    expect(JSON.stringify(filesAfter)).not.toMatch(/drive_repaired|sha256_auto_reconciled/);
 
-    const repairedAnomaly = repairReport.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_DRIVE_ASSET');
-    expect(repairedAnomaly).toBeDefined();
-    expect(repairedAnomaly.repaired).toBe(true);
-    expect(repairedAnomaly.repairAction).toContain('Drive destination');
-
-    // 3. Subsequent audit confirms system is cleanly back in sync
-    const cleanRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ autoRepair: true }),
-    });
-    const cleanReport = await cleanRes.json();
-    expect(cleanReport.status).toBe('clean');
-    expect(cleanReport.driftCount).toBe(0);
+    // 4. The real state was never missing the delivery
+    expect((await (await runAudit()).json()).status).toBe('clean');
   });
 
-  it('detects MISSING_SHEET_ROW anomaly and auto-heals by appending reporting row keyed by immutable taskId', async () => {
+  it('reports a missing Sheets row and refuses to invent one', async () => {
     const taskId = await createPublishedTask('Korek Telecom');
 
-    // 1. Audit with missing Google Sheets ledger row
-    const auditRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: false,
-        simulateDrift: {
-          missingSheetTaskId: taskId,
-        },
-      }),
-    });
-
-    const report = await auditRes.json();
+    const report = await (await runAudit({ simulateDrift: { missingSheetTaskId: taskId } })).json();
     const sheetAnomaly = report.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_SHEET_ROW');
-    expect(sheetAnomaly).toBeDefined();
-    expect(sheetAnomaly.severity).toBe('medium');
-    expect(sheetAnomaly.repaired).toBe(false);
+    expect(sheetAnomaly).toMatchObject({ severity: 'medium', description: `Task ${taskId} has no Sheets reporting row recorded` });
+    expect(sheetAnomaly).not.toHaveProperty('repaired');
 
-    // 2. Self-heal
-    const repairRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: true,
-        simulateDrift: {
-          missingSheetTaskId: taskId,
-        },
-      }),
-    });
-
-    const repairReport = await repairRes.json();
-    const fixedAnomaly = repairReport.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_SHEET_ROW');
-    expect(fixedAnomaly.repaired).toBe(true);
-    expect(fixedAnomaly.repairAction).toContain(taskId);
+    const repairRes = await runAudit({ autoRepair: true, simulateDrift: { missingSheetTaskId: taskId } });
+    expect(repairRes.status).toBe(422);
   });
 
-  it('detects STATUS_DIVERGENCE and restores PostgreSQL authoritative state to mirror spreadsheet', async () => {
+  it('reports a status divergence without changing the recorded Sheets row', async () => {
     const taskId = await createPublishedTask('FastPay Kurdistan');
 
-    // 1. Simulate desynchronized status in Sheet ('IN_PROGRESS' vs PostgreSQL authoritative 'COMPLETE')
-    const auditRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: false,
-        simulateDrift: {
-          divergentTaskId: taskId,
-          divergentStatus: 'IN_PROGRESS',
-        },
-      }),
-    });
-
-    const report = await auditRes.json();
+    const report = await (
+      await runAudit({ simulateDrift: { divergentTaskId: taskId, divergentStatus: 'IN_PROGRESS' } })
+    ).json();
     const divAnomaly = report.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'STATUS_DIVERGENCE');
     expect(divAnomaly).toBeDefined();
-    expect(divAnomaly.description).toContain('PostgreSQL status (COMPLETE) disagrees with Google Sheets mirror (IN_PROGRESS)');
-    expect(divAnomaly.repaired).toBe(false);
+    expect(divAnomaly.description).toMatch(/^Task status \(COMPLETE\) disagrees with the recorded Sheets row \d+ \(IN_PROGRESS\)$/);
+    expect(divAnomaly).not.toHaveProperty('repaired');
 
-    // 2. Auto-heal restores authority
-    const repairRes = await app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        autoRepair: true,
-        simulateDrift: {
-          divergentTaskId: taskId,
-          divergentStatus: 'IN_PROGRESS',
-        },
-      }),
-    });
+    // The simulation used to overwrite the stored receipt's row status in place.
+    expect((await storedReceipt(taskId)).sheetRow.status).toBe('COMPLETE');
+    expect((await (await runAudit()).json()).status).toBe('clean');
 
-    const repairReport = await repairRes.json();
-    const fixedDiv = repairReport.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'STATUS_DIVERGENCE');
-    expect(fixedDiv.repaired).toBe(true);
-    expect(fixedDiv.repairAction).toContain('PostgreSQL authoritative status COMPLETE');
+    const repairRes = await runAudit({ autoRepair: true, simulateDrift: { divergentTaskId: taskId, divergentStatus: 'IN_PROGRESS' } });
+    expect(repairRes.status).toBe(422);
   });
 });
