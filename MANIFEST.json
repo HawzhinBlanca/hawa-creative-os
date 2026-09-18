@@ -3,20 +3,15 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-17T22:34:23Z",
+  "generatedAt": "2026-09-18T19:44:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 215,
+  "fileCount": 221,
   "files": [
-    {
-      "path": ".claude/settings.local.json",
-      "sha256": "05a36c1c7bea612783179b25dd3837a79752203c5386ed333d6a03b30183929c",
-      "bytes": 76
-    },
     {
       "path": ".dockerignore",
       "sha256": "ddc69d2503eb8cc2dd38192163e440a2b4ddc6a1f1f9fdffad7372c7a3bdf889",
@@ -29,8 +24,8 @@
     },
     {
       "path": ".env.test.example",
-      "sha256": "b3b288c876c30ddaf3e8663d30cb9c1895eb3b166cf4af2dad4b44036002425f",
-      "bytes": 884
+      "sha256": "f88ee51cad17a0b2d6cd6b10dd872b0ab55033e04044a91b5946a61f569e57bb",
+      "bytes": 1086
     },
     {
       "path": "AGENTS.md",
@@ -321,6 +316,11 @@
       "path": "db/seed.sql",
       "sha256": "ce1e69edd713e979e4b73a24325ba26f6b72a9f451b88869f6d32aadd53125cd",
       "bytes": 5494
+    },
+    {
+      "path": "db/test-fixtures.sql",
+      "sha256": "18b9777e94f306484ffc69e173ae872b693dca7e6e13f9445ef36a86d14e04c8",
+      "bytes": 2322
     },
     {
       "path": "deployment/Caddyfile",
@@ -904,8 +904,8 @@
     },
     {
       "path": "scripts/package_t8_blind_eval.ts",
-      "sha256": "13b401ea4b1a7790b39a9cf13a518420b7b4e69c816a229671050572422a005a",
-      "bytes": 7493
+      "sha256": "9965b06960638d4242b4b2b3ea26d9ae4e11eda0598f75bb7f2e3a56ac4be76a",
+      "bytes": 9563
     },
     {
       "path": "scripts/populate_ledger.ts",
@@ -918,6 +918,31 @@
       "bytes": 2964
     },
     {
+      "path": "scripts/proofs/compare_layout_models.ts",
+      "sha256": "ce6f9b601d843e29c8c081d34c98124989db48e2f6c6afc33284d65521153fc8",
+      "bytes": 7846
+    },
+    {
+      "path": "scripts/proofs/measure_candidate_diversity.ts",
+      "sha256": "586ebc4c767239a6b6f9affaa2bebc75367ca50a95c6eefc81a6662efa2b20e0",
+      "bytes": 2551
+    },
+    {
+      "path": "scripts/proofs/measure_composition_bias.mjs",
+      "sha256": "0e62150ce747be208ff2ba5531420370b0fa5cc604f402ceff6e2bf89094ba87",
+      "bytes": 5926
+    },
+    {
+      "path": "scripts/proofs/qualification_dry_run_server.mjs",
+      "sha256": "c1427830b7ecbfd9d0aef5fc3ea605ca470176fd3a074a57a260f408d94ce61c",
+      "bytes": 7984
+    },
+    {
+      "path": "scripts/proofs/reprepare_stored_runs.mjs",
+      "sha256": "503d63f88d0b81c6a0e187469a918d38b2060448997ecfef6945bb8eb421525e",
+      "bytes": 4537
+    },
+    {
       "path": "scripts/proofs/rerender_with_production_fonts.mjs",
       "sha256": "5e1e67fe4d394cab1b5e3e40bc94f0341b0732af7defc73937a8a6a80d534126",
       "bytes": 3374
@@ -928,14 +953,14 @@
       "bytes": 7951
     },
     {
-      "path": "scripts/proofs/verify_spacing_fixes.mjs",
-      "sha256": "14f7382bbcd6038f0640b3530fd4b06d3b46eafc94c2850f7bf4c3639a701853",
-      "bytes": 4570
+      "path": "scripts/proofs/run_qualification_in_image.sh",
+      "sha256": "c878332ecd8cdb3e0aa5fed338612ae26db278abfc0bf601deec666d5d217c8e",
+      "bytes": 4340
     },
     {
-      "path": "scripts/propose_exemplars.ts",
-      "sha256": "4268bbde980ae3c23823957149d3b8ecf3e3c8afe015f872eb90e7128fd0aa97",
-      "bytes": 17788
+      "path": "scripts/proofs/verify_spacing_fixes.mjs",
+      "sha256": "2fd7e5234ac4e97941076b1c8c2ff6ff5a278328341648084d12701b87557d39",
+      "bytes": 5585
     },
     {
       "path": "scripts/publish_kaae_omnichannel.ts",
@@ -994,8 +1019,8 @@
     },
     {
       "path": "scripts/run_p10_qualification.ts",
-      "sha256": "364f65298f2f18395e960afa28b08945c71dbef8290b7c353b42d1da90109201",
-      "bytes": 56457
+      "sha256": "659cfafc75151d9fe0c6f360bf76e96db23acf6469d2ee69faf4a8761728a7e9",
+      "bytes": 69269
     },
     {
       "path": "scripts/run_studio_qualification.ts",
@@ -1049,8 +1074,8 @@
     },
     {
       "path": "scripts/validate_pack.py",
-      "sha256": "5a1932e455631b690672df8df7709ecf722244842116d60e6f8bc0cb1b0cde71",
-      "bytes": 23810
+      "sha256": "323a8475b657c0cbd9cc0c98fe2c8dbb7c8d94294fbbb26bd7faeda6dab6bddc",
+      "bytes": 23821
     },
     {
       "path": "scripts/verify_all_h01_h14.ts",
@@ -1069,8 +1094,13 @@
     },
     {
       "path": "scripts/verify_t8_ratings.ts",
-      "sha256": "52c7a2623086c6c77377cb419a7c971ef714b2d0ec18d2b08796ac38048f6f49",
-      "bytes": 3587
+      "sha256": "19e90f897111dad88a02556972cf4ddf440cd45b5582fd896b103bac5803d9a7",
+      "bytes": 4287
+    },
+    {
+      "path": "tsconfig.scripts.json",
+      "sha256": "1cd9520eec6389219a1422796c8498f3f069d5fc20e4504da5d4d2a8b0fe3165",
+      "bytes": 1712
     },
     {
       "path": "ui/design-system.md",

@@ -1,7 +1,7 @@
 import type { StudioLayoutV2 } from '@hawa/creative';
 import type { LayoutMetrics } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
-import type { GeminiImageProvider, OpenAiImageProvider } from '@hawa/creative';
+import type { OpenAiImageProvider } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
 
 export class StudioBudgetExhaustedError extends Error {
@@ -139,7 +139,7 @@ export interface StageContext {
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
   exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
   client: OpenAiStudioClient;
-  artProvider?: OpenAiImageProvider | GeminiImageProvider;
+  artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;
   /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
   pipelineV3?: boolean;

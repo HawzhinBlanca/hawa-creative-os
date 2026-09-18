@@ -49,7 +49,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts', '**/*.spec.ts'],
-    exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**'],
+    exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**'],
     fileParallelism: false,
     setupFiles: ['./packages/db/src/test-connection-guard.ts'],
     coverage: {

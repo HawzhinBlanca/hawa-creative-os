@@ -27,7 +27,7 @@ WARNINGS: list[str] = []
 PASSES: list[str] = []
 
 IGNORED_TOP_LEVEL = {
-    ".git", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
+    ".git", ".claude", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
     ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output",
     "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma",
     "scratch", ".hawa-state", "data", "archive"

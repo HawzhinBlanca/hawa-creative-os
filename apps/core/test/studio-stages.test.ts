@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState, CreativeBrief, Concept } from '../src/services/design-studio/types.js';
-import { StudioModelClient, GeminiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
+import { OpenAiStudioClient, OpenAiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { studioSentBlocks } from '../src/services/canva-connect-service.js';
 import { officialLogoPath } from '../src/services/design-studio/design-studio-service.js';
@@ -124,13 +124,12 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
 }
 
 function createMockContext(fetchFn: typeof fetch): StageContext {
-  const client = new StudioModelClient({
+  const client = new OpenAiStudioClient({
     apiKey: 'mock-key',
-    fetchFn,
-    maxRetries: 1,
+    fetcher: fetchFn,
   });
 
-  const artProvider = new GeminiImageProvider('mock-gemini-key', 'mock-anthropic-key', fetchFn);
+  const artProvider = new OpenAiImageProvider('mock-key', fetchFn);
 
   return {
     runId: randomUUID(),
