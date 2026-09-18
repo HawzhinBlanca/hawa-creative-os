@@ -720,7 +720,7 @@ an automated check asking for them does not make them mine.
 3. **T8**, about USD 3.20 to generate v3 designs for the ten baseline briefs so the pairs compare like with like, and then the owner's ratings. The blind test is a judgement that cannot be delegated.
 4. **`DESIGN_PIPELINE_V3_CHATS`** in the production environment file, which the operating rules of this project reserve to the owner.
 
-## Final state
+## State after the first pass (superseded by section 24)
 
 Typecheck clean, build clean, **1102 tests passing, 12 skipped, 0 failing** across 148 files, tracked
 tree clean. The pipeline completes 20 of 20 briefs on the production models. Inside the image, the
@@ -730,3 +730,62 @@ Four passes were built, measured, and deliberately not shipped: box-to-content f
 scaling, frame-internal balancing, and — until its band could be derived honestly — the type-based
 negativeSpace measure. Three stayed out. The fourth went in once the band question was framed
 correctly, and it is what stops the pipeline preferring one composition.
+
+## 24. Second pass: the qualification did not measure production
+
+Asked whether everything was done, I re-verified instead of recalling, and found that production's
+v3 path and the qualification were different programs, and that several of the instruments were
+broken. Everything below is fixed, tested and committed (`7970ac1`..`3fe5df3`). Nothing was
+deployed and nothing was spent.
+
+### What each side ran
+
+| Stage | Qualification runner, before | Production v3 run, before | Both, now |
+|---|---|---|---|
+| Generation | v3 generator; palette with `#C5A059`, a gold KAAE does not use; logo shape unknown | v3 generator; no exemplars; silent fallback to the v2 generator | shared: exemplars, the client's palette, the logo's real aspect, no fallback |
+| Preparation | its own font mapping | studio normaliser, logo grown to its aspect | shared `prepareGeneratedLayoutV3`: logo fitted inside its box, the normaliser, fonts and direction per block |
+| Ranking | composite | — | composite, with production's hard QA as a filter |
+| Critique (P05) | library, rendered as "Sample copy block N" | the v2 P4 prompt | shared, with the real copy |
+| Refinement (P06) | library, called with shifted arguments: it never worked | the v2 P5 prompt | shared, with the copy, the ink measure, and forced by a QA failure |
+| Judge (P07) | library, on placeholder renders; its verdict was never used | the v2 P6 prompt | shared: the pick stands only if it holds in both orders and beats the canary in both |
+| QA | its own print-ready checks; "hard-QA escapes" tautologically 0 | studio hard QA | shared hard QA; escapes = print-ready but rejected by production |
+
+### Findings, each measured
+
+1. **The pilot switch ran v2.** `DESIGN_PIPELINE_V3_CHATS` routed a chat into the studio, whose v3 branches read only the global flag. The run now records its pipeline at creation (`7970ac1`).
+2. **The judge and critic were shown placeholder text.** Without copy, the renderer draws "Sample copy block N". The qualification's P05, both P07 orderings and the canary were made on those renders. Sorani designs were shown Latin placeholders.
+3. **Production's hard QA would have rejected all 20 qualified designs.** All 20 failed PALETTE (the runner's palette), 13 failed POOR_GRID_ALIGNMENT and 1 failed OVERLAP. Once prepared the way production prepares them, the overlap goes and only PALETTE remains.
+4. **The alignment gate was miscalibrated.** It rejected three of the owner's six confirmed exemplars (0.542, 0.600, 0.667 against 0.70). Its threshold was justified with the v3 metric's exemplar scores, which is a different measure. Counting centre-axis alignment fixes it: all six exemplars pass, `BAD_OFF_GRID` still fails (0.600), and the qualified rejections fall from 13 to 0 (`5aff5dd`).
+5. **The generator was never told the logo's shape.** Five of the 20 winners reserved boxes 1.15–1.55 wide for a square emblem, and production grew each box downward to square. The logo is now fitted inside the box, and the prompt states the aspect.
+6. **The generator prompt had three errors.** It called every non-square canvas "4:5", recommended Lora (not admitted), and recommended Cairo for titles (it cannot draw Sorani).
+7. **The refinement engine scored on box area while ranking used ink**, and its receipt merged two calls without token counts.
+8. **The client sent `reasoning_effort` to every model it was asked to.** The dev tier's judge and critique model rejects the whole request.
+9. **The office's daily spend ledger held only test spend.** 2026-09-17 held $19.76 and 2026-09-18 held $32.93, all simulated calls from the governor's tests; real runs never recorded. Today's fake $32.93 would have made the qualification refuse to start (`2d88553`).
+10. **T8 could not have produced a result.** The scorer crashed on its last line, invented a judge that always preferred v3, assumed v3 was on side B for unknown pairs, and read blank rows as ties. Its pairs set each v1 design against an image of an unrelated brief, some from a harness that made no model calls. Its seed was a fixed string in the source (`9e15cac`, `3fe5df3`).
+11. **No build had ever type-checked a script.** The runner had 10 errors, the T8 scorer 2 and my proofs 3. `pnpm typecheck` now covers the scripts (`57f4579`).
+
+### Corrections to my own earlier statements
+
+- I told the owner that production could not produce any Kurdish design. **Wrong.** Production runs with the new pipeline off, and its planner forces Noto Sans Arabic onto Sorani text. The deck bug was real, but only in the new pipeline.
+- Section 19 attributed the order-swap failures to the tournament judging its two closest candidates. The judge was shown placeholder text, so **that explanation is untested**. The 75% needs re-measuring on real renders.
+- Section 22 said T7 was verifiable before being set. The test proved the list parsing, not the routing.
+- I said the candidate distances were never recorded. The runtime object has the field and would have recorded them; only the declared type was wrong.
+- Section 23 said nothing left was code I could write. This section is that code.
+
+### Verified in this pass
+
+- A pilot chat's v3 run goes end to end through the real studio service against the isolated database. It makes no concept call, stores the critique, both orderings and the canary, labels candidates with the generator's archetypes, and transfers.
+- The qualification dry run against a local stand-in completed 20 of 20 briefs with 140 calls, every stage recorded once per brief, and the office ledger untouched. The compare-set dry run completed 10 of 10. The in-image `--check` passes, and the deploy pre-flight exits 0.
+- T8 from end to end on scratch material: package, rate, score. The four refusals work, and the seal catches a tampered key.
+
+## Final state (2026-09-18, second pass)
+
+Branch `studio-v2`, 51 commits ahead of production. Four decisions remain, and all are the owner's:
+
+1. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
+2. **The in-image qualification**, about USD 7–10: the canary now runs in both orders, and refinement adds calls when its gate opens. This is the first run that measures the decisions production makes.
+3. **T8**, about USD 3.5–5 for the ten compare briefs, then the owner's ratings:
+   `HAWA_QUALIFICATION_BRIEF_SET=compare bash scripts/proofs/run_qualification_in_image.sh <dir>`,
+   then `npx tsx scripts/package_t8_blind_eval.ts --v3-run <dir>`.
+4. **`DESIGN_PIPELINE_V3_CHATS`**, which now actually pilots v3 for the listed chat.
+
