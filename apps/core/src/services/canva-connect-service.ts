@@ -31,6 +31,18 @@ export interface CanvaServiceOptions {
   clientId?: string; clientSecret?: string; redirectUri?: string; encryptionKey?: string;
   fetcher?: typeof fetch;
 }
+/**
+ * The blocks of a studio design in shape order, each with the face it was sent in: a manifest with
+ * no reference pack whose plan names a font for every copy block. Null for a planner design, which
+ * is checked against its single brand font.
+ */
+export function studioSentBlocks(manifest: any): Array<{ fontFamily: string; role?: string }> | null {
+  if (!manifest || manifest.reference || !Array.isArray(manifest.copy) || !Array.isArray(manifest.plan?.text)) return null;
+  const blocks = [...manifest.plan.text].sort((a: any, b: any) => a.copyIndex - b.copyIndex);
+  if (blocks.length !== manifest.copy.length) return null;
+  return blocks.every((t: any) => typeof t.fontFamily === 'string' && t.fontFamily) ? blocks : null;
+}
+
 export class CanvaConnectService {
   private options: CanvaServiceOptions;
   constructor(private db: Kysely<Database>, options: CanvaServiceOptions = {}) {
@@ -316,8 +328,17 @@ export class CanvaConnectService {
         let contentCheck:any=null;
         if(row.metadata.format==='pptx'){
           const source=await this.tx(s,async db=>(await sql<any>`SELECT manifest FROM hawa.canva_editable_sources WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND client_id=${row.client_id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
-          if(!source?.manifest?.copy||!source.manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-          contentCheck=checkCanvaPptx(bytes,source.manifest.copy,source.manifest.reference.rules.fontFamily,{scriptFonts:source.manifest.reference.rules.scriptFonts});
+          // A studio design carries no reference pack: it chooses a face per block, recorded in its plan,
+          // and Canva must keep each one. Every studio transfer failed SOURCE_REQUIRED here until
+          // 2026-09-18, the first live pilot, because only the planner's single-font check existed.
+          const manifest=source?.manifest;
+          const sentBlocks=studioSentBlocks(manifest);
+          if(sentBlocks){
+            contentCheck=checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')});
+          }else{
+            if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
+            contentCheck=checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts});
+          }
         }else{
           const validated=validator.validateArtifactBytes(bytes,row.metadata.format==='png'?'png':'pdf_standard');
           if(!validated.ok)fail(422,validated.error.code,'Canva export failed byte validation; no capture was accepted');

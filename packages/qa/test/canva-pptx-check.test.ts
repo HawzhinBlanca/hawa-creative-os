@@ -26,6 +26,29 @@ describe('Canva native round-trip inspection', () => {
     expect(r.offendingObjects[0].observedFont).toBe('Arimo');
   });
 
+  it('checks each block of a studio design against the face it was sent in', () => {
+    const two = (titleFont: string, soraniFont: string) =>
+      zipSync({
+        'ppt/presentation.xml': strToU8('<p:presentation/>'),
+        'ppt/slides/slide1.xml': strToU8(
+          '<p:sld>' +
+            `<p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${titleFont}"/></a:rPr><a:t>KAAE Summit</a:t></a:r></a:p></p:txBody></p:sp>` +
+            `<p:sp><p:txBody><a:p><a:pPr rtl="1"/><a:r><a:rPr><a:cs typeface="${soraniFont}"/></a:rPr><a:t>کۆنفرانسی نیشتمانی</a:t></a:r></a:p></p:txBody></p:sp>` +
+            '</p:sld>'
+        ),
+      });
+    const copy = ['KAAE Summit', 'کۆنفرانسی نیشتمانی'];
+    const sent = { fontsByIndex: ['Cinzel', 'Amiri'] };
+    expect(checkCanvaPptx(two('Cinzel', 'Amiri'), copy, sent).fontPass).toBe(true);
+    const substituted = checkCanvaPptx(two('Cinzel', 'Arimo'), copy, sent);
+    expect(substituted.fontPass).toBe(false);
+    expect(substituted.offendingObjects).toEqual([
+      expect.objectContaining({ index: 1, expectedFont: 'Amiri', observedFont: 'Arimo' }),
+    ]);
+    // A text object Canva returns that was never sent fails too.
+    expect(checkCanvaPptx(two('Cinzel', 'Amiri'), copy, { fontsByIndex: ['Cinzel'] }).fontPass).toBe(false);
+  });
+
   it('fails changed punctuation, omitted copy, and missing font evidence', () => {
     expect(checkCanvaPptx(make('Exact copy and facts'), ['Exact copy & facts'], 'Verdana').copyPass).toBe(false);
     expect(checkCanvaPptx(make(), ['Exact copy & facts', 'Another block'], 'Verdana').copyPass).toBe(false);

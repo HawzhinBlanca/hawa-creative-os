@@ -35,6 +35,12 @@ export interface PptxCheckOptions {
   admittedFonts?: string[];
   /** Role-based body fonts for formal documents */
   formalBodyFonts?: { latin?: string; arabic?: string };
+  /**
+   * The typeface each text object was sent in, in shape order. A studio design chooses a face per
+   * block (Cinzel, Playfair Display, Amiri, Noto Sans Arabic, Verdana), so after a Canva round-trip
+   * the question is whether Canva kept each one, not whether they all match one brand font.
+   */
+  fontsByIndex?: string[];
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -216,7 +222,24 @@ export function checkCanvaPptx(
         const role = options.roles?.[textIdx] || 'body';
         const isFormal = options.documentKind === 'formal_document';
 
-        if (isFormal && role === 'body') {
+        if (options.fontsByIndex) {
+          const expectedFont = options.fontsByIndex[textIdx];
+          fontExpectations.push(expectedFont || 'none sent');
+          const sent = (expectedFont || '').toLowerCase();
+          const kept = Boolean(sent) && runFaces.some((f) => f.toLowerCase() === sent || f.toLowerCase().startsWith(sent + ' '));
+          if (!kept) {
+            offendingObjects.push({
+              index: textIdx,
+              text: text.trim().slice(0, 50),
+              role,
+              observedFont: observedFace,
+              expectedFont,
+              reason: expectedFont
+                ? `Sent in '${expectedFont}', returned by Canva in '${observedFace}'`
+                : 'Canva returned a text object that was not sent',
+            });
+          }
+        } else if (isFormal && role === 'body') {
           const expected = isArabic ? formalBodyArabic : formalBodyLatin;
           fontExpectations.push(expected);
           const matches = observedFace.toLowerCase() === expected || observedFace.toLowerCase().startsWith(expected + ' ');
@@ -286,6 +309,7 @@ export function checkCanvaPptx(
     rtlNote,
     requiredFont,
     scriptFonts: options.scriptFonts || null,
+    fontsByIndex: options.fontsByIndex || null,
     admittedFonts: options.admittedFonts || DEFAULT_ADMITTED_FONTS,
     arabicTextObjectCount: arabicObjects,
     rtlTextObjectCount: rtlObjects,
