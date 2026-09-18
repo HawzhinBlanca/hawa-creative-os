@@ -987,6 +987,20 @@ After preparation, 203 of 208 stored designs pass production QA, 47 of 48 from t
 model. The five left need rearranging, which only refinement does: two with text on the logo
 (cheap run 2), two missing a copy block (dev tier), and T5 brief_17's title with no room.
 
+## Update (2026-09-18 evening): deployed, piloted, and two production incidents
+
+On the owner's instruction, `582bec7` and then `ba628d5` were deployed (tag `deployed-2026-09-18`),
+and the owner's chat `7191500129` was enrolled in `DESIGN_PIPELINE_V3_CHATS`. A live pilot request
+ran v3 and its workflow completed in about 3 minutes.
+
+- **Restate had held no worker registration since 2026-09-17 15:28Z,** when its volume was recreated
+  along with Postgres's. Every Telegram task was dead-lettered, while health reported "connected"
+  from an env var. The worker was registered over HTTP/1.1; `ba628d5` makes health probe the
+  registration and every deploy register the worker.
+- **Postgres crashed twice** (15:01Z, 15:46Z) because this Mac, the production host, was deep in
+  swap and the Docker VM stalled. It recovered without data loss, and a Docker Desktop restart fixed
+  it. A dedicated production host is the durable fix, and the owner's decision.
+
 ## Final state (2026-09-18, after the production-tier qualification passed)
 
 The v3 pipeline is qualified on the production tier. It is not live: production runs `4699792`
