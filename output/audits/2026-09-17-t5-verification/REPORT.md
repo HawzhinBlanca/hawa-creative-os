@@ -556,7 +556,43 @@ Measured against the fresh twenty-brief run rather than argued:
 implementing it would have pushed every design away from the reference set it is meant to match. The
 only reason it is not in the code is that the exemplars were measured before the band was changed.
 
-## 19. What remains
+## 19. The first clean production run, and what its two failing gates mean
+
+20 of 20 briefs, zero failures, on gpt-6-astra. 100 ledger rows — one per stage per brief — every
+cost recomputing exactly against the price table, 100 distinct 38-character provider ids, USD
+6.3630. The resilience work holds: nothing lost, including the A4 briefs that failed twice before.
+The Kurdish font fix is confirmed in real generation: 50 right-to-left blocks, 30 in Amiri, none in
+Cairo, none whose font cannot draw its own script.
+
+**Verdict: FAIL**, on two gates. Neither is a defect in the pipeline.
+
+**Font fidelity — 10 of 20 previews drawn with Cinzel and Playfair Display substituted.** The run
+executed on the macOS host. The gate exists precisely to refuse calling such previews evidence, and
+it did. Previews have been re-rendered in the production image, where every family used renders
+exactly. The lasting fix is to run the qualification in the image, which is proven to work.
+
+**Order-swap consistency — 75% (15/20) against an 80% target.** This one repays reading closely.
+The five failures all show *the same slot* winning in both presentation orders (A3-B2 then A3-B2),
+while the fifteen passes show the tally flipping (A3-B2 then A2-B3) as it must when the same
+candidate wins from either position. So the judge picked the position, not the candidate.
+
+But the judge is not the problem, and it is not implemented wrongly: on a flip it already returns
+`TIE_DISCARDED` and refuses to name a winner, exactly as arXiv:2604.22891 prescribes, and it
+already votes dimension-wise, the debiasing that paper measured at −31.5%. The cause is upstream.
+**Fifteen of the twenty pairs split 3-2** — the narrowest possible margin across five dimensions.
+Only five briefs produced a decisive split. The judge is being asked to separate candidates that are
+near-identical, and on a coin flip a positional preference is what decides it.
+
+That matches the archetype figure from the same run: **2 distinct archetypes over 20 briefs, 16 of
+them monolith_centered**. The bottleneck is candidate diversity at generation, not judgement. The
+80% threshold assumes pairs are more separable than this generator makes them.
+
+This is worth stating plainly because it reframes what "better judging" would buy: nothing. Three
+candidates that differ only in detail cannot be told apart by any judge, and the tournament is doing
+its job by discarding the pairs it cannot separate. The work that would move this number is
+upstream — genuinely different compositional approaches per candidate.
+
+## 20. What remains
 
 1. **Deploy.** Production is 30 commits behind HEAD and is missing every fix in sections 17 and 18 — including the one where no Kurdish design could produce a deliverable at all. The deploy pre-flight passes clean (`bash infra/docker/deploy.sh`, exit 0, 0 credentials exposed or committable); applying it is the owner's call because it changes what real clients receive.
 2. **The pairwise judge and canary verdicts** have never been validated on correct typography. Only the winning candidate is persisted, so a pair cannot be reconstructed from artifacts; validating them needs a full in-image run, or persisting both candidates so a re-judge becomes possible.
