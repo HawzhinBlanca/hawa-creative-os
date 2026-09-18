@@ -32,6 +32,25 @@ export const HOUSE_RULES = {
   },
 } as const;
 
+/**
+ * Words a generated art prompt may not contain. Image models draw what a prompt names, even in
+ * "no text" or "behind the hero text", and the brand's generated art carries no lettering, marks or
+ * people.
+ */
+export const FORBIDDEN_ART_WORDS = [
+  'text',
+  'letters',
+  'numbers',
+  'logo',
+  'emblem',
+  'flag',
+  'seal',
+  'face',
+  'person',
+  'people',
+  'portrait',
+] as const;
+
 export function minLogoWidth(canvasWidth: number): number {
   return Math.max(HOUSE_RULES.logo.minWidthPx, Math.round(HOUSE_RULES.logo.minWidthShareOfCanvas * canvasWidth));
 }

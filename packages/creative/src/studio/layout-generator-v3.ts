@@ -1,4 +1,4 @@
-import { HOUSE_RULES } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
 import { fitLogoToAspect } from './studio-normalize.js';
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
@@ -1154,6 +1154,7 @@ If a layout candidate requests an art layer (art.source = "generated" or "proced
 - The calmRegion defines the canvas area occupied by headline and body text.
 - The calmRegion MUST stay dark, low-frequency, and low-contrast so that foreground text renders with pristine legibility.
 - Background art opacity must be moderate (0.15 to 0.40) to prevent text occlusion.
+- art.prompt describes the imagery alone, in a few words. It must not contain the words ${FORBIDDEN_ART_WORDS.map((w) => `"${w}"`).join(', ')} — not even to say where the copy sits ("behind the hero text") or what to leave out ("no text"): image models draw what a prompt names, and a prompt with one of these words is rejected.
 
 Adhere strictly to this specification and produce three publication-ready layouts.`;
 }

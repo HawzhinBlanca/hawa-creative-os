@@ -626,14 +626,14 @@ describe('refinement is told what production QA rejects', { timeout: 30000 }, ()
       latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette: ['#0A1628', '#FDF8F3', '#C5A059', '#162B48'], logoAspect: 1,
     };
     const canvas = { width: W, height: H, logoAspect: 1, palette: qa.palette };
-    // The subtitle overlaps the title, and the footer already sits on the bottom margin, so there is
-    // no room to insert space: preparation cannot fix it, and QA rejects it.
-    const crowded = centred();
-    crowded.text[2].y = 500;
-    crowded.text[4].y = H - MARGIN - crowded.text[4].height;
-    const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: prepareGeneratedLayoutV3(crowded, COPY, canvas) }], COPY, qa);
+    // The generator dropped the subtitle, as the cheap tier did in 2 of 20 designs: no preparation
+    // can put copy back, so QA rejects it. (A crowded layout used to serve here; preparation now
+    // resolves those — see the settling tests below.)
+    const missing = centred();
+    missing.text = missing.text.filter((t) => t.role !== 'subtitle');
+    const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: prepareGeneratedLayoutV3(missing, COPY, canvas) }], COPY, qa);
     expect(top.hardQa?.passed).toBe(false);
-    expect(top.hardQa?.defectCodes).toContain('OVERLAP');
+    expect(top.hardQa?.defectCodes).toContain('COPY_PLACEMENT');
 
     const prompts: string[] = [];
     const { client } = mockClient({ repairLayout: centred() });
@@ -646,7 +646,7 @@ describe('refinement is told what production QA rejects', { timeout: 30000 }, ()
     const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas });
     expect(prompts.length).toBeGreaterThan(0);
     expect(prompts[0]).toContain('HARD QA DEFECTS');
-    expect(prompts[0]).toContain('OVERLAP');
+    expect(prompts[0]).toContain('COPY_PLACEMENT');
     expect(outcome.adopted).toBe(true);
     expect(outcome.reason).toBe('adopted_now_passes_qa');
     expect(outcome.hardQa?.passed).toBe(true);
@@ -734,3 +734,272 @@ describe('a rule never ends up in the logo clear space', { timeout: 30000 }, () 
   });
 });
 
+describe('settling a crowded design — stored designs production QA rejected', { timeout: 30000 }, () => {
+  const KAAE_PALETTE = ['#0A1628', '#1E3A5F', '#4770A3', '#F7B500', '#FDF8F3', '#FFFFFF', '#1A1A1A'];
+  /** [copyIndex, role, x, y, width, height, fontSize, lineHeight, face, colour] */
+  type Row = [number, string, number, number, number, number, number, number, string, string?];
+  /** [role, kind, x, y, width, height, colour] */
+  type ShapeRow = [string, string, number, number, number, number, string];
+  /** A design as a qualification run stored it. */
+  const stored = (
+    [width, height, margin]: [number, number, number],
+    logo: { x: number; y: number; width: number; height: number },
+    rows: Row[],
+    shapes: ShapeRow[],
+    background = '#0A1628'
+  ): StudioLayoutV2 =>
+    ({
+      version: 2,
+      width,
+      height,
+      genre: 'poster',
+      grid: { margin, columns: 6, gutter: 38, baseline: 8 },
+      background: { color: background },
+      logo,
+      text: rows.map(([copyIndex, role, x, y, w, h, fontSize, lineHeight, fontFamily, color]) => ({
+        copyIndex, role, x, y, width: w, height: h, fontSize, lineHeight, fontFamily,
+        color: color || '#FDF8F3', align: 'center', bold: role === 'title', italic: false, rtl: false,
+      })),
+      shapes: shapes.map(([role, kind, x, y, w, h, color]) => ({ role, kind, x, y, width: w, height: h, color })),
+    }) as StudioLayoutV2;
+  const copyOf = (script: 'latin' | 'arabic', texts: string[]): PipelineV3Copy => ({
+    text: Object.fromEntries(texts.map((t, i) => [i, t])),
+    scripts: Object.fromEntries(texts.map((_, i) => [i, script])),
+  });
+  /** Production's preparation, then production's hard QA, as the studio and the qualification run them. */
+  const prepare = async (raw: StudioLayoutV2, copy: PipelineV3Copy) => {
+    const { prepareGeneratedLayoutV3, evaluateHardQa } = await import('../src/index.js');
+    const layout = prepareGeneratedLayoutV3(raw, copy, { width: raw.width, height: raw.height, logoAspect: 1, palette: KAAE_PALETTE });
+    const qa = evaluateHardQa(layout, {
+      width: raw.width, height: raw.height, copyScripts: Object.values(copy.scripts!), latinFont: 'Verdana',
+      arabicFont: 'Noto Sans Arabic', palette: KAAE_PALETTE, logoAspect: 1,
+    });
+    return { layout, qa };
+  };
+  const byRole = (l: StudioLayoutV2, role: string) => l.text.find((t) => t.role === role)!;
+  const bottom = (b: { y: number; height: number }) => b.y + b.height;
+  const SUMMIT = copyOf('latin', [
+    'Executive Directorate for Higher Education',
+    'Kurdistan Chancellor Summit 2026',
+    'Strategic Convergence on Global Academic Recognition',
+    'Uniting leadership to pioneer internationally recognized degree validation and regional research clusters.',
+    'KAAE Plenary Hall • October 2026 • Live Broadcast kaae.gov.krd',
+  ]);
+
+  it('closes up the gaps under a logo on the top margin of a full banner, rather than fail QA', async () => {
+    // Production model, brief_17: a 154px logo, its clear space and five blocks do not fit a 1080px
+    // banner at a 115px margin with the design's own spacing.
+    const { layout, qa } = await prepare(
+      stored([1920, 1080, 115], { x: 864, y: 70, width: 192, height: 124 }, [
+        [0, 'eyebrow', 192, 232, 1536, 38, 16, 1.3, 'Cinzel', '#C5A059'],
+        [1, 'title', 115, 346, 1690, 124, 81, 1.25, 'Playfair Display'],
+        [2, 'subtitle', 192, 502, 1536, 65, 24, 1.4, 'Playfair Display', '#C5A059'],
+        [3, 'body', 230, 637, 1459, 162, 36, 1.5, 'Verdana'],
+        [4, 'footer', 192, 924, 1536, 38, 16, 1.4, 'Verdana'],
+      ], [
+        ['rule', 'line', 845, 307, 230, 2, '#C5A059'],
+        ['panel', 'rect', 115, 886, 1690, 113, '#1E3A5F'],
+        ['rule', 'line', 115, 886, 1690, 2, '#C5A059'],
+      ]),
+      SUMMIT
+    );
+    expect(qa.messages).toEqual([]);
+    expect(layout.grid.margin).toBe(115);
+    // The footer band stayed; the blocks above it closed up, never tighter than 12px.
+    expect(layout.shapes.find((s) => s.role === 'panel')!.y).toBe(886);
+    const stack = [...layout.text].sort((a, b) => a.y - b.y);
+    for (let i = 1; i < stack.length; i++) expect(stack[i].y - bottom(stack[i - 1])).toBeGreaterThanOrEqual(12);
+  });
+
+  it('takes the house-minimum margin when closing up is not enough, and the band carries its footer', async () => {
+    // Production model, brief_19 (Sorani): even half the design's spacing does not fit at 115px.
+    // At the house minimum the logo moves onto the new margin, and the footer band moves with its
+    // footer instead of leaving it 9px from the band's top edge.
+    const { layout, qa } = await prepare(
+      stored([1920, 1080, 115], { x: 874, y: 65, width: 173, height: 151 }, [
+        [0, 'eyebrow', 192, 246, 1536, 49, 24, 1.35, 'Amiri', '#C5A059'],
+        [1, 'title', 115, 351, 1690, 162, 81, 1.3, 'Amiri'],
+        [2, 'subtitle', 192, 529, 1536, 81, 36, 1.4, 'Amiri', '#C5A059'],
+        [3, 'body', 230, 664, 1459, 167, 36, 1.5, 'Noto Sans Arabic'],
+        [4, 'footer', 192, 919, 1536, 54, 24, 1.4, 'Noto Sans Arabic'],
+      ], [
+        ['rule', 'line', 672, 322, 576, 2, '#C5A059'],
+        ['panel', 'rect', 115, 886, 1690, 119, '#1E3A5F'],
+      ]),
+      copyOf('arabic', [
+        'فەرمانگەی باڵای خوێندنی ئەکادیمی',
+        'دیداری لوتکەی سەرۆک زانکۆکان ٢٠٢٦',
+        'هەنگاوەکانی بەدەستهێنانی دانپێدانانی نێودەوڵەتی',
+        'کۆکردنەوەی تواناکان بۆ داڕشتنی ڕوانگەیەکی هاوبەش بەرەو پێشەنگی پەروەردەیی و زانستی لە ناوچەکەدا.',
+        'هۆڵی کۆبوونەوەکانی KAAE • هەولێر • پەخشی ڕاستەوخۆ',
+      ])
+    );
+    expect(qa.messages).toEqual([]);
+    expect(layout.grid.margin).toBe(64);
+    expect(layout.logo!.y).toBe(64);
+    const band = layout.shapes.find((s) => s.role === 'panel')!;
+    const footer = byRole(layout, 'footer');
+    expect(footer.y - band.y).toBeGreaterThanOrEqual(20);
+    expect(bottom(band) - bottom(footer)).toBeGreaterThanOrEqual(20);
+  });
+
+  it('keeps the order of two blocks that already overlapped when space is inserted above them', async () => {
+    // T5, brief_07: the eyebrow overlapped the title by 20px and both lay in the logo's clear space;
+    // the inserted space used to put both on the same line.
+    const { layout, qa } = await prepare(
+      stored([1080, 1350, 65], { x: 65, y: 81, width: 76, height: 81 }, [
+        [0, 'eyebrow', 130, 182, 821, 41, 14, 1.3, 'Cairo'],
+        [1, 'title', 130, 203, 821, 135, 40, 1.3, 'Amiri', '#C5A059'],
+        [2, 'subtitle', 130, 378, 821, 81, 20, 1.4, 'Cairo'],
+        [3, 'body', 130, 486, 821, 162, 19, 1.5, 'Noto Sans Arabic'],
+        [4, 'footer', 130, 1168, 821, 41, 12, 1.3, 'Noto Sans Arabic', '#0A1628'],
+      ], [
+        ['panel', 'rect', 65, 81, 950, 243, '#0A1628'],
+        ['panel', 'rect', 65, 1107, 950, 162, '#C5A059'],
+      ], '#1E3A5F'),
+      copyOf('arabic', [
+        'دەستەی متمانەبەخشین بە دامەزراوەکانی پەروەردە',
+        'کۆنفرانسی نیشتمانیی دڵنیایی جۆری ٢٠٢٦',
+        'بەرەو بەرزکردنەوەی ئاستی زانستی لە زانکۆکانی کوردستان',
+        'بانگهێشتی سەرجەم سەرۆک زانکۆکان و پسپۆڕانی پەروەردەیی دەکرێت بۆ بەشداریکردن لە شیکاری پێوەرە نێودەوڵەتییەکان.',
+        'هۆڵی سەعد عەبدوڵڵا، هەولێر • ٢٨ی تشرینی یەکەمی ٢٠٢٦',
+      ])
+    );
+    expect(qa.messages).toEqual([]);
+    expect(bottom(byRole(layout, 'eyebrow'))).toBeLessThanOrEqual(byRole(layout, 'title').y);
+  });
+
+  it('leaves the logo in place when text starts in its own clear space, and cleans the art prompt', async () => {
+    // T5, brief_13: the eyebrow started at the logo's top edge, and the space inserted to clear the
+    // logo moved the logo along with it. Its art was placed "behind focal text", which QA rejects.
+    const raw = stored([1240, 1754, 87], { x: 87, y: 123, width: 124, height: 88 }, [
+      [0, 'eyebrow', 87, 123, 1066, 61, 16, 1.3, 'Cinzel', '#C5A059'],
+      [1, 'title', 87, 193, 1066, 246, 54, 1.2, 'Playfair Display'],
+      [2, 'subtitle', 87, 456, 1066, 123, 26, 1.35, 'Playfair Display'],
+      [3, 'body', 149, 1000, 942, 210, 20, 1.5, 'Verdana', '#1E3A5F'],
+      [4, 'footer', 149, 1245, 942, 88, 14, 1.35, 'Verdana', '#1E3A5F'],
+    ], [['panel', 'roundRect', 87, 965, 1066, 667, '#162B48']], '#1E3A5F');
+    (raw as any).art = {
+      source: 'generated', prompt: 'subtle sun-ray gradient in navy behind focal text', motif: 'sun-rays',
+      box: { x: 87, y: 123, width: 1066, height: 789 }, opacity: 0.2, calmRegion: { x: 87, y: 123, width: 1066, height: 789 },
+    };
+    const { layout, qa } = await prepare(
+      raw,
+      copyOf('latin', [
+        'Kurdistan Regional Government • KAAE High Council',
+        'Statutory Accreditation Order No. 4',
+        'Mandatory Governance Criteria for Higher Education Institutions',
+        'Pursuant to powers vested under Law No. 6 of 2022, all degree-granting bodies must comply with institutional auditing standards.',
+        'Published in the Official Gazette • Erbil, Kurdistan Region • 2026',
+      ])
+    );
+    const { logoClearZone } = await import('../src/index.js');
+    expect(qa.messages).toEqual([]);
+    expect(layout.logo!.y).toBe(123);
+    expect(byRole(layout, 'eyebrow').y).toBeGreaterThanOrEqual(bottom(logoClearZone(layout.logo!)));
+    expect(layout.art!.prompt).toBe('subtle sun-ray gradient in navy');
+  });
+
+  it('orders two blocks the model put at the same height, and a card keeps its logo and the title overhanging it', async () => {
+    // Dev tier, brief_16: eyebrow and title both at y=588, the title overhanging its card by 17px,
+    // and the logo in the card's corner — lifted to clear its zone, it used to straddle the edge.
+    const { layout, qa } = await prepare(
+      stored([1240, 1754, 62], { x: 992, y: 483, width: 186, height: 88 }, [
+        [0, 'eyebrow', 87, 588, 1066, 53, 16, 1.3, 'Amiri'],
+        [1, 'title', 87, 588, 1066, 175, 46, 1.25, 'Amiri'],
+        [2, 'subtitle', 87, 772, 1066, 123, 24, 1.4, 'Amiri', '#0A1628'],
+        [3, 'body', 87, 921, 1066, 228, 24, 1.5, 'Noto Sans Arabic', '#0A1628'],
+        [4, 'footer', 87, 1219, 1066, 53, 14, 1.35, 'Noto Sans Arabic', '#0A1628'],
+      ], [
+        ['panel', 'rect', 62, 483, 1116, 263, '#1E3A5F'],
+        ['rule', 'line', 62, 746, 1116, 4, '#C5A059'],
+      ], '#FDF8F3'),
+      copyOf('arabic', [
+        'پەیماننامەی سەروەریی ئەکادیمی',
+        'بەڵگەنامەی نیشتمانیی دڵنیایی جۆری',
+        'بنەما سەرەکییەکانی پەروەردە و فێرکردن',
+        'زانکۆ واژۆکارەکان پابەند دەبن بە ڕەچاوکردنی شەفافیەت، سەربەخۆیی زانستی، و پاراستنی مافی خوێندکاران.',
+        'دەستەی باڵای متمانەبەخشین • شاری هەولێر • ٢٠٢٦',
+      ])
+    );
+    const { logoClearZone } = await import('../src/index.js');
+    expect(qa.messages).toEqual([]);
+    const eyebrow = byRole(layout, 'eyebrow');
+    const title = byRole(layout, 'title');
+    const card = layout.shapes.find((s) => s.role === 'panel')!;
+    expect(title.y).toBeGreaterThanOrEqual(bottom(eyebrow));
+    expect(bottom(card)).toBeGreaterThanOrEqual(bottom(title));
+    expect(layout.logo!.y).toBeGreaterThanOrEqual(card.y);
+    expect(eyebrow.y).toBeGreaterThanOrEqual(bottom(logoClearZone(layout.logo!)));
+  });
+
+  it('moves the block beside a column pushed under the logo level with it', async () => {
+    // Dev tier, brief_17: a two-column banner whose square logo needed 154px where the model had
+    // reserved a 76px band. The left column moved down; the body beside it stayed at the top and
+    // read as coming before the title (semantic layout 1.0 -> 0.6).
+    const { layout, qa } = await prepare(
+      stored([1920, 1080, 96], { x: 134, y: 76, width: 576, height: 76 }, [
+        [0, 'eyebrow', 134, 173, 595, 32, 13, 1.3, 'Cinzel', '#C5A059'],
+        [1, 'title', 134, 227, 595, 130, 76, 1.2, 'Cinzel'],
+        [2, 'subtitle', 134, 378, 595, 65, 22, 1.35, 'Playfair Display'],
+        [3, 'body', 960, 216, 864, 216, 32, 1.5, 'Verdana', '#0A1628'],
+        [4, 'footer', 96, 994, 1728, 43, 13, 1.35, 'Verdana', '#0A1628'],
+      ], [
+        ['panel', 'rect', 96, 54, 672, 972, '#1E3A5F'],
+        ['rule', 'rect', 826, 54, 10, 972, '#C5A059'],
+      ], '#FDF8F3'),
+      SUMMIT
+    );
+    expect(qa.messages).toEqual([]);
+    expect(measureDesignV3(layout, SUMMIT).metrics.semanticLayout.passed).toBe(true);
+    expect(byRole(layout, 'title').y - byRole(layout, 'body').y).toBe(227 - 216);
+  });
+
+  it('raises what is above a block clamped onto the bottom margin instead of leaving them overlapping', async () => {
+    // Dev tier, brief_20: the body and footer ran past the safe area. Pulled back inside it they
+    // overlapped the blocks above them, and nothing below could move.
+    const { layout, qa } = await prepare(
+      stored([1920, 1080, 96], { x: 864, y: 54, width: 192, height: 54 }, [
+        [0, 'eyebrow', 192, 648, 1536, 32, 14, 1.3, 'Amiri', '#C5A059'],
+        [1, 'title', 192, 688, 1536, 103, 76, 1.3, 'Amiri'],
+        [2, 'subtitle', 192, 805, 1536, 65, 22, 1.4, 'Amiri'],
+        [3, 'body', 192, 869, 1536, 130, 32, 1.5, 'Noto Sans Arabic'],
+        [4, 'footer', 192, 1015, 1536, 32, 13, 1.35, 'Noto Sans Arabic', '#C5A059'],
+      ], [['panel', 'rect', 96, 594, 1728, 432, '#1E3A5F']], '#FDF8F3'),
+      copyOf('arabic', [
+        'پەیمانگەی نێودەوڵەتیی کوالیتی پەروەردە',
+        'فۆڕمی نێودەوڵەتیی متمانەبەخشین',
+        'پەرەپێدانی هاوبەشییە زانستییەکان',
+        'بەشداریی شارەزایانی بیانی لە تاوتوێکردنی سیستەمی دڵنیایی جۆری زانکۆکانی هەرێمی کوردستان.',
+        'هەولێر • تشرینی دووەمی ٢٠٢٦ • kaae.gov.krd',
+      ])
+    );
+    expect(qa.messages).toEqual([]);
+    expect(layout.grid.margin).toBe(96);
+    expect(byRole(layout, 'eyebrow').y).toBeLessThan(648);
+  });
+
+  it('resolves a subtitle overlapping the title with the footer already on the bottom margin', async () => {
+    // The layout the refinement test used as beyond preparation, until blocks could rise.
+    const crowded = centred();
+    crowded.text[2].y = 500;
+    crowded.text[4].y = H - MARGIN - crowded.text[4].height;
+    const { qa } = await prepare(crowded, { ...COPY, scripts: { 0: 'latin', 1: 'latin', 2: 'latin', 3: 'latin', 4: 'latin' } });
+    expect(qa.messages).toEqual([]);
+  });
+});
+
+describe('generated art names no lettering, marks or people', () => {
+  it('cuts the phrase naming a banned word, and drops art that is nothing but', async () => {
+    const { sanitizeArtPrompt, conformToHouseRules } = await import('../src/index.js');
+    expect(sanitizeArtPrompt('subtle sun-ray motif behind hero text')).toBe('subtle sun-ray motif');
+    expect(sanitizeArtPrompt('abstract geometric pattern, no text or letters')).toBe('abstract geometric pattern');
+    expect(sanitizeArtPrompt('navy waves framing the logo area, gold dust')).toBe('navy waves, gold dust');
+    expect(sanitizeArtPrompt('textured paper grain')).toBe('textured paper grain');
+    expect(sanitizeArtPrompt('portrait of a graduate in cap and gown')).toBeNull();
+    const layout = centred();
+    (layout as any).art = { source: 'generated', prompt: 'portrait of a graduate', box: { x: 0, y: 0, width: W, height: 400 }, opacity: 0.2 };
+    conformToHouseRules(layout, COPY);
+    expect(layout.art).toBeUndefined();
+  });
+});

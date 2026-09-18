@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
-import { HOUSE_RULES, minLogoWidth as houseMinLogoWidth, logoClearZone } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -77,20 +77,6 @@ export function normalizeHex(hex: string): string {
   }
   return clean;
 }
-
-const FORBIDDEN_ART_WORDS = [
-  'text',
-  'letters',
-  'numbers',
-  'logo',
-  'emblem',
-  'flag',
-  'seal',
-  'face',
-  'person',
-  'people',
-  'portrait',
-];
 
 const FORBIDDEN_ART_REGEX = new RegExp(`\\b(${FORBIDDEN_ART_WORDS.join('|')})\\b`, 'i');
 

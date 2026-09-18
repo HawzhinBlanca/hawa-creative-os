@@ -15,7 +15,7 @@ import type { OpenAiStudioClient } from './openai-studio-client.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
-import { HOUSE_RULES, minLogoWidth, logoClearZone } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone } from './house-rules.js';
 import { normalizeHex } from './validate-layout-v2.js';
 
 /**
@@ -172,6 +172,31 @@ export function nearestPaletteColour(colour: string, palette: string[]): string 
   return best;
 }
 
+const BANNED_ART_WORD = new RegExp(`\\b(?:${FORBIDDEN_ART_WORDS.join('|')})\\b`, 'i');
+/** Words that open a phrase placing or excluding something: "behind hero text", "no text". */
+const ART_PHRASE_OPENER = /\b(?:behind|under|beneath|below|above|over|around|near|beside|framing|for|with|without|no|avoiding|excluding|free of)\b/gi;
+
+/**
+ * An art prompt the validator accepts, or null if nothing of it survives. Each comma-separated
+ * clause naming a banned word loses the phrase that names it — from the nearest "behind", "no",
+ * "without" and the like before the word — and is dropped if that leaves nothing clean. The
+ * production model placed its art "behind hero text" in 2 of 20 T5 designs, and QA rejected both.
+ */
+export function sanitizeArtPrompt(prompt: string): string | null {
+  const clauses: string[] = [];
+  for (const raw of prompt.split(/[,;]/)) {
+    let clause = raw.trim();
+    const banned = clause.match(BANNED_ART_WORD);
+    if (banned && banned.index !== undefined) {
+      const openers = [...clause.slice(0, banned.index).matchAll(ART_PHRASE_OPENER)];
+      const cut = openers.length ? openers[openers.length - 1].index! : 0;
+      clause = clause.slice(0, cut).trim();
+    }
+    if (clause && !BANNED_ART_WORD.test(clause)) clauses.push(clause);
+  }
+  return clauses.length ? clauses.join(', ') : null;
+}
+
 /**
  * Conforms a layout to the house rules production's QA checks, wherever the fix is unambiguous:
  * leading and tracking to their allowed ranges, every text box inside the safe area and every
@@ -198,6 +223,14 @@ export function conformToHouseRules(
       if (s.strokeColor) s.strokeColor = nearestPaletteColour(s.strokeColor, palette);
     }
     for (const tx of layout.text) tx.color = nearestPaletteColour(tx.color, palette);
+  }
+
+  // Generated art names no lettering, marks or people; art that cannot be described without them
+  // is dropped — it is ornament, and a banned word means no design is delivered at all.
+  if (layout.art?.source === 'generated' && layout.art.prompt && BANNED_ART_WORD.test(layout.art.prompt)) {
+    const prompt = sanitizeArtPrompt(layout.art.prompt);
+    if (prompt) layout.art.prompt = prompt;
+    else layout.art = undefined;
   }
 
   const W = layout.width;
@@ -261,7 +294,7 @@ export function conformToHouseRules(
     }
   }
 
-  const settle = () => {
+  const settle = (minSqueeze: number) => {
     // A logo whose clear space still meets text moves within the gap it sits in: up when text
     // below crowds it, down when text above does — never past a block that shares its column, and
     // never out of the safe area. (The cheap tier put a 154px banner logo at y=203 with 88px free
@@ -274,8 +307,19 @@ export function conformToHouseRules(
       const clearAt = (y: number) => !blockers.some((b) => intersects(b, logoClearZone({ ...l, y })));
       if (!clearAt(l.y)) {
         const sameColumn = blockers.filter((b) => overlapsXRect(b, l));
-        const ceiling = Math.max(m, ...sameColumn.filter((b) => b.y + b.height <= l.y).map((b) => b.y + b.height));
-        const floor = Math.min(H - m - l.height, ...sameColumn.filter((b) => b.y >= l.y + l.height).map((b) => b.y - l.height));
+        // A logo set in a card or band stays in it: lifted 45px to clear its zone, a logo in the
+        // corner of a header card ended up straddling the card's edge (dev tier, brief_16).
+        const home = (layout.shapes || []).find(
+          (s) =>
+            s.role === 'panel' && !(s.width >= 0.98 * W && s.height >= 0.98 * H) &&
+            l.x >= s.x && l.x + l.width <= s.x + s.width && l.y >= s.y && l.y + l.height <= s.y + s.height
+        );
+        const ceiling = Math.max(m, home ? home.y : m, ...sameColumn.filter((b) => b.y + b.height <= l.y).map((b) => b.y + b.height));
+        const floor = Math.min(
+          H - m - l.height,
+          home ? home.y + home.height - l.height : H,
+          ...sameColumn.filter((b) => b.y >= l.y + l.height).map((b) => b.y - l.height)
+        );
         const crowdedBelow = blockers.some((b) => b.y >= l.y && intersects(b, logoClearZone(l)));
         let moved = false;
         if (crowdedBelow) {
@@ -293,69 +337,236 @@ export function conformToHouseRules(
     // reject and refinement to repair.
     const safeBottom = H - layout.grid.margin;
     const fullBleed = (s: Rect) => s.width >= 0.98 * W && s.height >= 0.98 * H;
-    const insertSpace = (atY: number, delta: number, keep: Set<object>): boolean => {
+    const isShape = (o: object) => (layout.shapes || []).includes(o as any);
+    const isPanel = (o: object) => isShape(o) && (o as { role?: string }).role === 'panel';
+    // The design's usual spacing between stacked blocks: moved blocks keep at least this much, and a
+    // larger gap absorbs the push instead of passing it on. Shifting everything below the line by
+    // the full amount failed whenever the footer sat on the bottom margin — even with a 321px gap
+    // above it (the Kurdish banner that failed QA in every run).
+    const rhythm = (() => {
+      const stack = [...layout.text].sort((a, b) => a.y - b.y);
+      const gaps: number[] = [];
+      for (let i = 1; i < stack.length; i++) {
+        const gap = stack[i].y - (stack[i - 1].y + stack[i - 1].height);
+        if (gap >= 0) gaps.push(gap);
+      }
+      gaps.sort((a, b) => a - b);
+      return Math.max(12, gaps.length ? gaps[Math.floor(gaps.length / 2)] : 24);
+    })();
+    /**
+     * Inserts `delta` of vertical space at the line `atY` for `cause`: a block clashing with what is
+     * above it, which moves down by `delta` with the blocks that start inside the band
+     * [atY, atY + delta) — order kept, so a pre-existing overlap stays visible to the pass that
+     * resolves it; or, with `growing`, a box heightened by `delta` at its bottom edge `atY`. Below
+     * that, a block moves only as far as a moved block above it, in its column, now forces it.
+     * `fixed` blocks never move. Returns false, changing nothing, if anything moved would leave the
+     * safe area or run into something it did not already overlap.
+     */
+    const insertSpace = (
+      atY: number,
+      delta: number,
+      cause: Rect,
+      opts: { growing?: boolean; fixed?: Rect[] } = {}
+    ): boolean => {
       if (delta <= 0) return true;
-      const moving = [
-        ...layout.text.filter((o) => o.y >= atY && !keep.has(o)),
-        ...(layout.shapes || []).filter((s) => !fullBleed(s) && s.y >= atY && !keep.has(s)),
-      ];
-      // A panel that spans the insertion line stretches with it, so the text it holds stays inside.
-      const stretching = (layout.shapes || []).filter(
-        (s) => !fullBleed(s) && s.role === 'panel' && s.y < atY && s.y + s.height > atY && !keep.has(s)
-      );
-      // A logo below the line moves with the content around it, or text would be pushed onto it.
-      const logoMoves = !!layout.logo && layout.logo.y >= atY && !keep.has(layout.logo);
-      const lowest = Math.max(0, ...moving.map((o) => o.y + o.height), logoMoves ? layout.logo!.y + layout.logo!.height : 0);
-      if ((moving.length || logoMoves) && lowest + delta > safeBottom) return false;
-      if (stretching.some((s) => s.y + s.height + delta > H)) return false;
-      for (const o of moving) o.y += delta;
-      for (const s of stretching) s.height += delta;
-      if (logoMoves) layout.logo = { ...layout.logo!, y: layout.logo!.y + delta };
-      return true;
+      const growing = opts.growing ? cause : undefined;
+      const fixed = new Set<object>(opts.fixed || []);
+      const logo = layout.logo && !fixed.has(layout.logo) ? layout.logo : undefined;
+      const cs = logo ? Math.ceil(HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height) : 0;
+      // The logo claims its clear space: moved text and rules never close up into it.
+      const span = (r: Rect): Rect => (r === logo ? { ...r, x: r.x - cs, width: r.width + 2 * cs } : r);
+      const keepsClear = (r: Rect) => layout.text.includes(r as any) || (isShape(r) && (r as { role?: string }).role === 'rule');
+      const minGap = (a: Rect, b: Rect) => ((a === logo && keepsClear(b)) || (b === logo && keepsClear(a)) ? cs : 0);
+      const panels = (layout.shapes || []).filter((s) => !fullBleed(s) && s.role === 'panel');
+      const blocks: Rect[] = [
+        ...layout.text.filter((o) => o !== growing),
+        ...(layout.shapes || []).filter((s) => !fullBleed(s)),
+        ...(logo ? [logo] : []),
+      ]
+        .filter((o) => o.y >= atY && !fixed.has(o))
+        // A panel goes before the blocks level with its top, so they can move with it.
+        .sort((a, b) => a.y - b.y || Number(isPanel(b)) - Number(isPanel(a)));
+      // A panel holds a block mostly inside it, as a footer band holds its footer — or a card holds
+      // a title overhanging its edge by 17px, which moved off the card without it (dev tier, brief_16).
+      const holds = (p: Rect, b: Rect) => {
+        if (p === b || !isPanel(p) || !overlapsXRect(b, p)) return false;
+        return Math.min(b.y + b.height, p.y + p.height) - Math.max(b.y, p.y) >= 0.5 * b.height;
+      };
+
+      // Push-down cascade: a block a panel holds moves with the panel; any other block moves only as
+      // far as a moved block above it, in its column, now forces it. A moved block keeps its gap to
+      // the one above, capped at the rhythm; `squeeze` closes those gaps further, never below 12px
+      // unless the design's own gap was tighter, and never into the logo's clear space. With
+      // `acrossColumns`, the band moves in every column, so a block beside the cause stays level
+      // with it: a two-column banner's body stayed at the top while its title moved 154px down under
+      // the logo, and read as coming before the title (dev tier, brief_17).
+      const plan = (squeeze: number, acrossColumns: boolean) => {
+        const newY = new Map<Rect, number>();
+        const placed: Rect[] = growing ? [growing] : [];
+        const moved = (a: Rect) => a === growing || newY.get(a) !== a.y;
+        const newBottom = (a: Rect) => (a === growing ? a.y + a.height + delta : newY.get(a)! + a.height);
+        for (const b of blocks) {
+          const inBand = !growing && b.y < atY + delta && (acrossColumns || overlapsXRect(span(b), cause));
+          let y = inBand ? b.y + delta : b.y;
+          for (const a of placed) {
+            if (!moved(a)) continue;
+            if (holds(a, b)) {
+              y = Math.max(y, b.y + (newY.get(a)! - a.y));
+              continue;
+            }
+            if (!overlapsXRect(span(a), span(b)) || a.y + a.height > b.y) continue;
+            const kept = Math.min(b.y - (a.y + a.height), rhythm);
+            y = Math.max(y, Math.ceil(newBottom(a) + Math.max(minGap(a, b), Math.min(kept, 12), kept * squeeze)));
+          }
+          newY.set(b, y);
+          placed.push(b);
+        }
+
+        // Nothing moved leaves the safe area (text and logo) or the canvas (shapes).
+        for (const b of blocks) {
+          const y = newY.get(b)!;
+          if (y !== b.y && y + b.height > (isShape(b) ? H : safeBottom)) return null;
+        }
+        // Nor runs into text, or into the logo's clear space, that it did not already overlap.
+        const after = (o: Rect): Rect =>
+          o === growing ? { ...o, height: o.height + delta } : newY.has(o) ? { ...o, y: newY.get(o)! } : o;
+        const texts: Rect[] = layout.text;
+        for (let i = 0; i < texts.length; i++)
+          for (let j = i + 1; j < texts.length; j++)
+            if (intersects(after(texts[i]), after(texts[j])) && !intersects(texts[i], texts[j])) return null;
+        if (layout.logo) {
+          const zoneBefore = logoClearZone(layout.logo);
+          const zoneAfter = logoClearZone(after(layout.logo));
+          for (const o of [...texts, ...(layout.shapes || []).filter((s) => s.role === 'rule')])
+            if (intersects(after(o), zoneAfter) && !intersects(o, zoneBefore)) return null;
+        }
+        // A panel stretches to keep holding what it held, with its bottom padding: one spanning
+        // the line, one whose contents were pushed further than it, one holding the growing box.
+        const stretch = new Map<Rect, number>();
+        for (const s of panels) {
+          const held = [...blocks, ...(growing ? [growing] : [])].filter((b) => holds(s, b));
+          if (!held.length) continue;
+          const top = newY.get(s) ?? s.y;
+          const pad = Math.max(0, s.y + s.height - Math.max(...held.map((b) => b.y + b.height)));
+          const needed = Math.max(...held.map(newBottom)) + pad - top;
+          if (needed > s.height) {
+            if (top + needed > H) return null;
+            stretch.set(s, needed);
+          }
+        }
+        return { newY, stretch };
+      };
+
+      // The design's own spacing first. When the content below cannot absorb the push at that
+      // spacing — a logo at its minimum size on the top margin of a 1080px banner, a footer panel on
+      // the bottom one — the moved blocks close up rather than the design failing QA outright.
+      // Level with the cause in every column first, then in its own column only.
+      const tries = [1, 0.75, 0.5, 0.25]
+        .filter((squeeze) => squeeze >= minSqueeze)
+        .flatMap((squeeze) => (growing ? [false] : [true, false]).map((across) => [squeeze, across] as const));
+      for (const [squeeze, across] of tries) {
+        const p = plan(squeeze, across);
+        if (!p) continue;
+        for (const b of blocks) {
+          const y = p.newY.get(b)!;
+          if (b === layout.logo) layout.logo = { ...layout.logo!, y };
+          else b.y = y;
+        }
+        for (const [s, h] of p.stretch) s.height = h;
+        return true;
+      }
+      return false;
+    };
+    // Mirrors the layout top to bottom, so the same cascade can push blocks up: a block on the
+    // bottom margin cannot be pushed down, but what is above it can usually rise.
+    const flip = () => {
+      for (const o of [...layout.text, ...(layout.shapes || [])]) o.y = H - o.y - o.height;
+      if (layout.logo) layout.logo = { ...layout.logo, y: H - layout.logo.y - layout.logo.height };
     };
     const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
 
     const lines = measureWrappedLines(layout, copy.text);
     const ordered = [...layout.text].sort((a, b) => a.y - b.y || a.x - b.x);
+    const rank = new Map<object, number>(ordered.map((t, i) => [t, i]));
+    // Two blocks at the same height in one column: the first in reading order is the upper one.
+    const isAbove = (o: Rect, t: Rect) => o.y < t.y || (o.y === t.y && rank.get(o)! < rank.get(t)!);
     for (const t of ordered) {
       // Clear the logo's zone and every block above that shares a column with this one.
       const zone = layout.logo ? logoClearZone(layout.logo) : null;
-      const above: Rect[] = [
-        ...(zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? [zone] : []),
-        ...layout.text.filter((o) => o !== t && o.y < t.y && overlapsX(o, t)),
-      ];
-      const clash = Math.max(0, ...above.map((o) => Math.ceil(o.y + o.height - t.y)));
-      if (clash > 0) insertSpace(t.y, clash, new Set());
+      const zoneClash =
+        zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? Math.max(0, Math.ceil(zone.y + zone.height - t.y)) : 0;
+      const clashers = layout.text.filter((o) => o !== t && isAbove(o, t) && overlapsX(o, t) && o.y + o.height > t.y);
+      const textClash = Math.max(0, ...clashers.map((o) => Math.ceil(o.y + o.height - t.y)));
+      if (zoneClash > 0 || textClash > 0) {
+        // What it clashed with stays where it is — the logo too, when it is its zone that clashed.
+        const fixed: Rect[] = [...clashers, ...(zoneClash > 0 && layout.logo ? [layout.logo] : [])];
+        const resolved = insertSpace(t.y, Math.max(zoneClash, textClash), t, { fixed });
+        if (!resolved && zoneClash === 0) {
+          // No room below — text clamped onto the bottom margin (dev tier, brief_20): the block
+          // above rises instead, and what is above it with it.
+          const o = clashers.reduce((a, b) => (a.y + a.height >= b.y + b.height ? a : b));
+          flip();
+          insertSpace(o.y, textClash, o, { fixed: [t] });
+          flip();
+        }
+      }
 
-      // Grow the box to hold its copy at the house leading — but never past the safe area's bottom:
-      // growing the lowest box used to push its own edge a pixel outside it (cheap run 4, brief_04).
-      const needed = Math.min(Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight), safeBottom - t.y);
-      if (needed > t.height) {
-        const bottom = t.y + t.height;
-        if (insertSpace(bottom, needed - t.height, new Set([t]))) t.height = needed;
+      // Grow the box to hold its copy at the house leading: downward, else upward from the bottom
+      // margin, else as far as the safe area allows — never past it (cheap run 4, brief_04).
+      const wanted = Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight);
+      if (wanted > t.height) {
+        const grow = wanted - t.height;
+        let grown = t.y + wanted <= safeBottom && insertSpace(t.y + t.height, grow, t, { growing: true });
+        if (grown) t.height = wanted;
+        else if (t.y + t.height - wanted >= layout.grid.margin) {
+          flip();
+          if (insertSpace(t.y + t.height, grow, t, { growing: true })) {
+            t.height = wanted;
+            grown = true;
+          }
+          flip();
+        }
+        if (!grown) {
+          const needed = Math.min(wanted, safeBottom - t.y);
+          if (needed > t.height && insertSpace(t.y + t.height, needed - t.height, t, { growing: true })) t.height = needed;
+        }
       }
     }
   };
-  settle();
 
-  // A larger margin than the house minimum can leave the logo no room: a 1080px-tall banner with a
-  // 115px margin cannot hold a 154px logo, its clear space and the copy. The house minimum (6% of
-  // the short edge) is then used, and kept only if it actually clears the logo.
+  // Settling may not fit at the design's own margin and spacing: a 1080px-tall banner with a 115px
+  // margin cannot hold a 154px logo, its clear space and the copy. The arrangements tried, in
+  // order: the design's margin with the moved blocks' gaps closed up to half; the house-minimum
+  // margin (6% of the short edge), with a logo on the old margin moved onto the new one; then gaps
+  // closed up to a quarter at either margin. The first that clears the logo and every collision is
+  // kept — otherwise the first, which is what QA then judges.
   const rulesAndText = () => [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
   const logoCrowded = () => !!layout.logo && rulesAndText().some((b) => intersects(b, logoClearZone(layout.logo!)));
   const textCollides = () => layout.text.some((a, i) => layout.text.some((b, j) => j > i && intersects(a, b)));
-  const unresolved = () => logoCrowded() || textCollides();
+  const m0 = layout.grid.margin;
   const minMargin = Math.floor(HOUSE_RULES.safeMarginShare * Math.min(W, H));
-  if (unresolved() && layout.grid.margin > minMargin) {
-    const before = JSON.stringify(layout);
-    const stillBefore = [logoCrowded(), textCollides()];
-    layout.grid.margin = minMargin;
-    settle();
-    // Kept only if it resolved something and broke nothing that was fine.
-    const now = [logoCrowded(), textCollides()];
-    const better = now.every((v, i) => !v || stillBefore[i]) && now.some((v, i) => !v && stillBefore[i]);
-    if (!better) Object.assign(layout, JSON.parse(before));
+  const attempts: Array<[number, number]> =
+    m0 > minMargin
+      ? [[m0, 0.5], [minMargin, 0.5], [m0, 0.25], [minMargin, 0.25]]
+      : [[m0, 0.5], [m0, 0.25]];
+  const unsettled = JSON.stringify(layout);
+  let first: string | null = null;
+  for (const [margin, minSqueeze] of attempts) {
+    if (first !== null) Object.assign(layout, JSON.parse(unsettled));
+    if (margin !== m0 && layout.logo) {
+      const l = layout.logo;
+      if (Math.abs(l.y - m0) <= 2) layout.logo = { ...l, y: margin };
+      else if (Math.abs(l.y + l.height - (H - m0)) <= 2) layout.logo = { ...l, y: H - margin - l.height };
+    }
+    layout.grid.margin = margin;
+    settle(minSqueeze);
+    if (!logoCrowded() && !textCollides()) {
+      first = null;
+      break;
+    }
+    first ??= JSON.stringify(layout);
   }
+  if (first !== null) Object.assign(layout, JSON.parse(first));
 
   // Text over art must sit where the art is calm: widen the calm region to cover every text box
   // that touches the art. A box straddling the art's edge is covered whole, so the region may

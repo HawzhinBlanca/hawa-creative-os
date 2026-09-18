@@ -89,7 +89,8 @@ export function conceptFromV3Candidate(
     archetype: ARCHETYPE_FOR_V3[v3Archetype] || 'editorial-centered',
     artStrategy: layout.art ? layout.art.source : 'none',
     ...(motif ? { motif } : {}),
-    ...(raw?.art?.prompt ? { artPrompt: raw.art.prompt } : {}),
+    // The prompt the art stage will use: preparation strips words the house bans from it.
+    ...(layout.art?.prompt ? { artPrompt: layout.art.prompt } : {}),
     typographicScale: {
       ratio: raw?.typeScale?.ratio || 1.333,
       titleSize: sizeOf('title'),
