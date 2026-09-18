@@ -84,7 +84,10 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     }
     const envelope=unwrapCopyEnvelope(raw.slice(divider.index+divider[0].length));
     if(envelope.trailing)instructions=[instructions,envelope.trailing].filter(Boolean).join('\n');
-    return {instructions,copy:envelope.copy.split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean)};
+    const copy=envelope.copy.split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean);
+    // A divider with nothing after it is a request without copy, not copy the transfer cannot set.
+    if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','Nothing follows the divider, so the request carries no design copy. Send the exact text to set; no placeholder copy will be invented.');
+    return {instructions,copy};
   }
   const blocks=body.copyBlocks||p.exactCopy;
   if(Array.isArray(blocks)&&blocks.length&&blocks.every(b=>typeof b.text==='string'&&b.text.trim()))

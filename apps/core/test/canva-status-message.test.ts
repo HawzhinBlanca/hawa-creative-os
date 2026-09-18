@@ -14,6 +14,10 @@ describe('requester-facing Canva outcome messages', () => {
   });
   it('tells the truth about each rejection reason instead of a generic "queued"', () => {
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' }).text).toContain('English and Sorani Kurdish');
+    const noCopy = composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'COPY_REQUIRED' }).text;
+    expect(noCopy).toContain('No design copy was found');
+    expect(noCopy).toContain('send the exact text');
+    expect(noCopy).not.toMatch(/another script|emoji|could not be produced/);
     expect(composeCanvaStatusMessage({ taskId, status: 'DESIGN_REJECTED', code: 'CLIENT_REFERENCE_REQUIRED' }).text).toContain('verified brand reference');
     expect(composeCanvaStatusMessage({ taskId, status: 'CLIENT_REQUIRED' }).text).toContain('No client could be identified');
     expect(composeCanvaStatusMessage({ taskId, status: 'MANUAL_DESIGN_REQUIRED' }).text).toContain('queued in Hawa Desk');
