@@ -1177,7 +1177,9 @@ export function createApp(options?: CreateAppOptions) {
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || resolveModel('text'),
           messages: [{ role: 'user', content: 'ping' }],
-          max_completion_tokens: 100,
+          // One token proves the key and the credit. A reasoning model stops at the limit, which the
+          // handler below counts as connected.
+          max_completion_tokens: 1,
         }),
         signal: AbortSignal.timeout(7000),
       });
@@ -1249,18 +1251,16 @@ export function createApp(options?: CreateAppOptions) {
       return lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected';
     }
 
-    // If probe is fresh (< 3 minutes), return cached status
-    if (lastPaidProbe.at > 0 && Date.now() - lastPaidProbe.at < 180000) {
-      return lastPaidProbe.status;
-    }
-
-    // Otherwise run real probe inline
-    const res = await executePaidModelProbe();
-    await checkAndAlertBilling(res);
-    return res.status;
+    // Health reports the scheduled probe's last result and never pays for one itself: Docker checks
+    // /health every 10 s, and an inline probe on a stale result made the 3-minute schedule a floor.
+    return lastPaidProbe.status;
   };
 
-  // Start background scheduled probe loop in non-test runtime
+  // The paid billing probe runs on a schedule only: HAWA_BILLING_PROBE_MINUTES, default 30, never
+  // under 5. It ran every 3 minutes with up to 100 output tokens on gpt-6-astra from 2026-09-16:
+  // 480 paid calls a day, up to ~$2.40, recorded nowhere. A design that hits exhausted credit
+  // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
+  const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
   if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
     setTimeout(async () => {
       try {
@@ -1277,7 +1277,7 @@ export function createApp(options?: CreateAppOptions) {
       } catch (err) {
         console.error('[HealthProbe] Scheduled probe failed:', err);
       }
-    }, 180000);
+    }, billingProbeMs);
   }
 
   // The bot credential is probed with getMe at most every five minutes: a revoked or stale token
@@ -1374,6 +1374,7 @@ export function createApp(options?: CreateAppOptions) {
         status: lastPaidProbe.status,
         detail: lastPaidProbe.detail || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
+        everyMinutes: billingProbeMs / 60_000,
       },
       // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
       // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
