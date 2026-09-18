@@ -1,0 +1,48 @@
+# The test suite's own Postgres server. It shares nothing with the production compose project
+# (docker-compose.prod.yml, project hawa-production): not the port, not the volume, not a network.
+# Until 2026-09-18 the suite's databases lived on the production server next to the live `hawa`
+# database, so every `pnpm test` loaded the office's database.
+#
+# Do not start this file by hand; `pnpm test:db` (packages/db/src/provision-isolated-test-db.ts)
+# generates the credentials in ~/.hawa/test-postgres.env, starts the container and provisions
+# hawa_test and hawa_repair. The data is disposable: `pnpm test:db --recreate` rebuilds both.
+name: hawa-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: hawa-test-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: hawa_owner
+      POSTGRES_PASSWORD: ${HAWA_TEST_POSTGRES_PASSWORD:?Run pnpm test:db, which generates ~/.hawa/test-postgres.env}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:55432:5432"
+    command:
+      - postgres
+      # Disposable data on a host that is short of memory: small buffers, no durability work.
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      # Every connection is logged, so a run's log shows which databases the suite reached.
+      - -c
+      - log_connections=on
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hawa_owner -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:

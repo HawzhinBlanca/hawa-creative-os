@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import { existsSync, readFileSync, mkdtempSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { assertTestDatabaseEnv } from './packages/db/src/test-database-guard.js';
 
 /**
  * Database credentials for the suites are never committed. They come from the process environment
@@ -9,6 +10,11 @@ import { tmpdir } from 'node:os';
  * Suites that need a database fail loudly without them; the five hawa_repair suites skip unless
  * HAWA_ISOLATED_TEST_DB is set. Only the four database variables are read from the file, so real
  * API keys in other env files can never leak into a test run.
+ *
+ * The databases live on their own server, hawa-test-postgres (127.0.0.1:55432, `pnpm test:db`).
+ * A run whose environment reaches the production server (port 54332) or the live `hawa` database
+ * is refused here, before any test file loads; the setup file refuses such connections again inside
+ * every worker, for URLs a test builds itself.
  */
 const TEST_ENV_KEYS = ['TEST_DATABASE_URL', 'TEST_DATABASE_OWNER_URL', 'HAWA_ISOLATED_TEST_DB', 'HAWA_ISOLATED_RUNTIME_DB'] as const;
 
@@ -28,6 +34,7 @@ for (const key of TEST_ENV_KEYS) {
   const value = process.env[key] ?? fileEnv[key];
   if (value) databaseEnv[key] = value;
 }
+assertTestDatabaseEnv({ ...process.env, ...databaseEnv });
 
 /**
  * The cost governor keeps the office's daily spend in a file. Every test gets a throwaway one:
@@ -44,6 +51,7 @@ export default defineConfig({
     include: ['**/*.test.ts', '**/*.spec.ts'],
     exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**'],
     fileParallelism: false,
+    setupFiles: ['./packages/db/src/test-connection-guard.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

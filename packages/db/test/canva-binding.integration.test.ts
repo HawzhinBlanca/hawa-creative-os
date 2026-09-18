@@ -5,8 +5,8 @@ import { createDb } from '../src/client.js';
 import type { Database } from '../src/types.js';
 import type { Kysely } from 'kysely';
 
-const POSTGRES_PORT = process.env.POSTGRES_PORT || '54332';
-const TEST_DB_URL = process.env.POSTGRES_LIVE_URL || process.env.TEST_DATABASE_OWNER_URL!;
+// Never POSTGRES_LIVE_URL: that is the recovery drill's live database, and this suite writes rows.
+const TEST_DB_URL = process.env.TEST_DATABASE_OWNER_URL!;
 
 describe('CanvaBindingRepository — Live Database Integration Suite (hawa_test)', () => {
   let pool: pg.Pool;
