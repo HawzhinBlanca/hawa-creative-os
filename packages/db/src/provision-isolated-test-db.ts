@@ -13,24 +13,45 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pg from 'pg';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DB_NAME = 'hawa_repair';
-const adminUrl = process.env.POSTGRES_ADMIN_URL;
-if (!adminUrl) {
-  console.error('POSTGRES_ADMIN_URL is required (owner connection to the `postgres` maintenance database).');
-  process.exit(2);
+
+/** Database names this tool is permitted to destroy. Anything else is refused. */
+const DROPPABLE_NAME = /^hawa_(repair|test|drill|isolated)[a-z0-9_]*$/;
+
+export function assertSafeToDrop(name: string): void {
+  if (!DROPPABLE_NAME.test(name)) {
+    throw new Error(
+      `Refusing to DROP DATABASE "${name}": only databases matching ${DROPPABLE_NAME} may be ` +
+        `destroyed by this tool. The production database is 'hawa'.`
+    );
+  }
 }
-const ADMIN_URL: string = adminUrl;
-const admin = new URL(ADMIN_URL);
-if (admin.pathname === `/${DB_NAME}`) {
-  console.error('POSTGRES_ADMIN_URL must point at the maintenance database, not hawa_repair itself.');
-  process.exit(2);
+/**
+ * Resolved when the tool runs, not when the module loads. At module scope this exited the process
+ * on import, so importing the file for assertSafeToDrop killed the caller.
+ */
+function resolveAdminUrl(): string {
+  const adminUrl = process.env.POSTGRES_ADMIN_URL;
+  if (!adminUrl) {
+    console.error('POSTGRES_ADMIN_URL is required (owner connection to the `postgres` maintenance database).');
+    process.exit(2);
+  }
+  if (new URL(adminUrl).pathname === `/${DB_NAME}`) {
+    console.error('POSTGRES_ADMIN_URL must point at the maintenance database, not hawa_repair itself.');
+    process.exit(2);
+  }
+  return adminUrl;
 }
+
 const recreate = process.argv.includes('--recreate');
 const root = resolve(process.cwd());
 const files = ['db/schema.sql', 'db/rls.sql', 'db/seed.sql'].map((f) => resolve(root, f));
 
 async function main() {
+  const ADMIN_URL = resolveAdminUrl();
   const maint = new pg.Client({ connectionString: ADMIN_URL, connectionTimeoutMillis: 10000 });
   await maint.connect();
   try {
@@ -40,6 +61,10 @@ async function main() {
       return;
     }
     if (exists) {
+      // This project has already lost its production database once. DB_NAME is a constant today,
+      // but nothing stopped a future edit from pointing this DROP at 'hawa', so the name is
+      // checked at the point of destruction rather than trusted.
+      assertSafeToDrop(DB_NAME);
       await maint.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`, [DB_NAME]);
       await maint.query(`DROP DATABASE ${DB_NAME}`);
       console.log(`dropped ${DB_NAME}`);
@@ -81,7 +106,22 @@ async function main() {
   console.log(`ready: ${DB_NAME}`);
 }
 
-main().catch((err) => {
-  console.error('provisioning failed:', err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Only run when this file is the entry point: it exports assertSafeToDrop, and importing it for
+// that must not attempt to provision or drop a database. The qualification runner had exactly this
+// shape, and importing it for its brief list launched a paid twenty-brief run.
+const isEntryPoint = (() => {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return path.resolve(invoked) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+})();
+
+if (isEntryPoint) {
+  main().catch((err) => {
+    console.error('provisioning failed:', err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
