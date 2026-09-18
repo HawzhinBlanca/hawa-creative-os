@@ -24,17 +24,6 @@ export async function read<T>(load: () => Promise<T>): Promise<Reading<T>> {
   }
 }
 
-/** Fetches JSON; any answer other than 2xx throws with the server's own explanation. */
-export async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body: any = await res.json().catch(() => null);
-    const said = body?.detail || body?.title || body?.description || body?.error;
-    throw new Error(said ? `HTTP ${res.status}: ${said}` : `HTTP ${res.status}`);
-  }
-  return (await res.json()) as T;
-}
-
 export interface StatusView {
   tone: 'ok' | 'warn' | 'unknown';
   label: string;

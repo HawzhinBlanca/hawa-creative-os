@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
-import { fetchJson, reasonOf } from '../services/statusReport.js';
+import { apiClient } from '../api/client.js';
+import { read, reasonOf } from '../services/statusReport.js';
 
 export interface ClientSummary {
   clientId: string;
@@ -86,142 +87,6 @@ export interface ClientDnaSnapshot {
   dna: ClientDNA;
 }
 
-// Fallback seed clients for initial render or offline resiliency
-const FALLBACK_CLIENTS: ClientSummary[] = [
-  {
-    clientId: 'c1000000-0000-4000-8000-000000000002',
-    name: 'Kurdistan Accrediting Association for Education (KAAE)',
-    code: 'KAAE',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colorsCount: 8,
-    rulesCount: 6,
-    snapshotsCount: 1,
-  },
-];
-
-
-const DRUSTEE_FALLBACK_DNA: ClientDNA = {
-  tenantId: 'tenant-drustee',
-  clientId: 'client-drustee',
-  name: 'Drustee Evidence-First Health',
-  code: 'DRUSTEE',
-  version: 1,
-  status: 'active',
-  defaultLocale: 'ckb',
-  defaultDirection: 'rtl',
-  colors: [
-    { name: 'Botanical Deep Emerald', hex: '#0D5C3A', role: 'primary' },
-    { name: 'Forest Pine', hex: '#062E1D', role: 'background' },
-    { name: 'Warm Amber Gold', hex: '#D4AF37', role: 'accent' },
-  ],
-  fonts: [
-    { family: 'Vazirmatn', style: 'ExtraBold', weight: 800, role: 'display', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
-    { family: 'Noto Sans Arabic', style: 'SemiBold', weight: 600, role: 'body', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
-  ],
-  assets: [
-    { assetId: 'asset_drustee_logo_1', name: 'Official Drustee Wordmark & Leaf Seal', role: 'logo_primary', storageKey: 'assets/drustee/logo_official.svg', sha256: 'sha256_d892a01fc348be91', mimeType: 'image/svg+xml' },
-    { assetId: 'asset_drustee_vitd3_1', name: 'Vitamin D3 + K2 Amber Dropper Bottle Vector', role: 'logo_secondary', storageKey: 'assets/drustee/vit_d3_bottle.svg', sha256: 'sha256_e1098b1c4320987a', mimeType: 'image/svg+xml' },
-    { assetId: 'asset_drustee_omega3_1', name: 'Wild Alaskan Omega-3 Softgels Bottle Vector', role: 'badge', storageKey: 'assets/drustee/omega3_bottle.svg', sha256: 'sha256_f9018237cb1092e4', mimeType: 'image/svg+xml' },
-    { assetId: 'asset_drustee_gmp_seal', name: 'GMP Certified Manufacturing Badge', role: 'badge', storageKey: 'assets/drustee/badge_gmp.svg', sha256: 'sha256_g88123490bca1123', mimeType: 'image/svg+xml' },
-    { assetId: 'asset_drustee_lab_seal', name: 'Third-Party Independent Lab Tested Badge', role: 'badge', storageKey: 'assets/drustee/badge_lab.svg', sha256: 'sha256_h77123908fca9944', mimeType: 'image/svg+xml' },
-  ],
-  guidelines: {
-    voiceAndTone: 'Evidence-first clinical rigor in Sorani Kurdish; transparent dosages and preventative wellness without medical disease cure claims.',
-    prohibitedPhrases: [
-      'معجزة',
-      'دەرمانی هەموو دەردێک',
-      'بێ وێنە لە جیهان',
-      '١٠٠٪ گەرەنتی',
-      'چارەسەری نەخۆشی',
-      'miracle cure',
-      'cure-all',
-    ],
-    requiredDisclaimers: [
-      'تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.',
-    ],
-    layoutRules: [
-      'Always preserve UAX #9 bidi isolation for Sorani Kurdish typography',
-      'Maintain minimum 10% safe zone margins on all export aspect ratios',
-      'Display Third-Party Lab Tested and GMP Certification badges prominently',
-    ],
-  },
-  destinations: {
-    googleSharedDriveId: 'drive_drustee_main',
-    productionFolderId: 'folder_drustee_prod_verified',
-    archiveFolderId: 'folder_drustee_archive',
-    spreadsheetId: 'sheet_drustee_campaigns_456',
-    sheetId: 0,
-  },
-  approvalPolicy: {
-    requiredRoles: ['art_director', 'pharmacist_reviewer'],
-    allowAutoApproval: false,
-    autoApprovalEligibleTemplates: [],
-  },
-  updatedAt: new Date().toISOString(),
-};
-
-
-const KAAE_FALLBACK_DNA: ClientDNA = {
-  tenantId: 'tenant-kaae',
-  clientId: 'c1000000-0000-4000-8000-000000000002',
-  name: 'Kurdistan Accrediting Association for Education (KAAE)',
-  code: 'KAAE',
-  version: 1,
-  status: 'active',
-  defaultLocale: 'ckb',
-  defaultDirection: 'rtl',
-  colors: [
-    { name: 'KAAE Deep Midnight Navy', hex: '#160874', role: 'primary', cmyk: '100,95,5,30', pantone: 'PANTONE 2755 C' },
-    { name: 'Parchment Cream', hex: '#FFF2DB', role: 'background', cmyk: '0,5,15,0', pantone: 'PANTONE 7527 C' },
-    { name: 'Kurdish Sun Gold', hex: '#E8B85C', role: 'accent', cmyk: '10,25,75,0', pantone: 'PANTONE 142 C' },
-    { name: 'Authority Dark Slate', hex: '#0A1628', role: 'surface' },
-  ],
-  fonts: [
-    { family: 'Cairo', style: 'Bold', weight: 700, role: 'display', license: 'OFL', supportedLocales: ['ckb', 'ar', 'en'] },
-    { family: 'Vazirmatn', style: 'Regular', weight: 400, role: 'body', license: 'OFL', supportedLocales: ['ckb', 'ar'] },
-    { family: 'Verdana', style: 'Regular', weight: 400, role: 'body', license: 'Standard', supportedLocales: ['en'] },
-  ],
-  assets: [
-    { assetId: 'kaae_logo_primary', name: 'KAAE Official 21-Ray Seal', role: 'logo_primary', storageKey: '/assets/logos/kaae-official-logo.png', sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc', mimeType: 'image/png' },
-    { assetId: 'kaae_symbol', name: 'KAAE Accreditation Symbol', role: 'logo_symbol', storageKey: '/assets/logos/kaae-symbol.svg', sha256: 'sha256_kaae_symbol_verified', mimeType: 'image/svg+xml' },
-  ],
-  guidelines: {
-    voiceAndTone: 'Official, prestigious, legalistic academic accreditation authority under national standards',
-    prohibitedPhrases: ['unofficial', 'commercial discount', 'guaranteed pass', 'cheap degree'],
-    requiredDisclaimers: ['بەپێی ستانداردە نیشتمانییەکانی دڵنیایی جۆری لە پەروەردە و خوێندنی باڵا'],
-    layoutRules: ['Always preserve the 21-ray sun seal intact', 'All diplomas must use A4 landscape vector margins'],
-  },
-  destinations: {
-    googleSharedDriveId: 'drive_kaae_root',
-    productionFolderId: 'folder_kaae_certificates',
-    archiveFolderId: 'folder_kaae_archive',
-    spreadsheetId: 'sheet_kaae_registry',
-    sheetId: 0,
-  },
-  approvalPolicy: {
-    requiredRoles: ['president', 'quality_director', 'academic_board'],
-    allowAutoApproval: false,
-    autoApprovalEligibleTemplates: [],
-  },
-  updatedAt: new Date().toISOString(),
-};
-
-const KAAE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
-  {
-    snapshotId: 'snap_init_kaae_1',
-    clientId: 'c1000000-0000-4000-8000-000000000002',
-    version: 1,
-    sha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
-    commitMessage: 'Official KAAE accreditation standards lock: Midnight Navy / Kurdistan Gold palette, Kurdish Law No. 6 citation, and 21-ray sun seal',
-    createdBy: 'academic_board',
-    createdAt: new Date().toISOString(),
-    dna: KAAE_FALLBACK_DNA,
-  },
-];
-
 // WCAG Contrast Helper
 function getLuminance(hex: string): number {
   const cleanHex = hex.replace('#', '');
@@ -249,93 +114,109 @@ function getContrastRatio(hex1: string, hex2: string): number {
   }
 }
 
+/** A candidate rule as the Desk shows it. Core's feedback miner returns CandidateRuleProposal. */
 export interface CandidateRule {
   ruleId: string;
   clientId: string;
-  proposedRule: string;
-  category: 'typography' | 'color_hierarchy' | 'layout' | 'brand_mark';
-  confidence: number;
-  evidenceOccurrences: number;
-  evidenceDigestSha256: string;
-  detectedAt: string;
+  title: string;
+  ruleText: string;
+  category: string;
+  confidence: number | null;
+  occurrences: number | null;
+  evidenceTasks: number | null;
   status: 'proposed' | 'promoted' | 'dismissed';
   rationale: string;
 }
 
+const numberOrNull = (value: unknown): number | null =>
+  value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
+
+/** Maps Core's candidate rule (`id`, `title`, `ruleText`, upper-case status) to the Desk's view. */
+export function candidateRuleFromCore(rule: any): CandidateRule {
+  const status = String(rule?.status ?? '').toLowerCase();
+  return {
+    ruleId: String(rule?.id ?? ''),
+    clientId: String(rule?.clientId ?? ''),
+    title: String(rule?.title || rule?.ruleText || ''),
+    ruleText: String(rule?.ruleText ?? ''),
+    category: String(rule?.category ?? ''),
+    confidence: numberOrNull(rule?.confidence),
+    occurrences: numberOrNull(rule?.frequency),
+    evidenceTasks: Array.isArray(rule?.evidenceTaskIds) ? rule.evidenceTaskIds.length : null,
+    status: status === 'promoted' ? 'promoted' : status === 'dismissed' ? 'dismissed' : 'proposed',
+    rationale: String(rule?.rationale ?? ''),
+  };
+}
+
+/** What Core's font inspector (packages/qa font-inspector.ts) reports about an uploaded font. */
 export interface FontInspectionResult {
   fontFamily: string;
   format: string;
-  totalGlyphsChecked: number;
-  glyphsPresent: number;
-  coverageRatio: number;
-  kurdishSoraniCompliant: boolean;
-  complianceLevel: 'AAA_COMPLIANT' | 'PASS_CORE' | 'FAIL';
-  missingGlyphs: { char: string; codePoint: string; name: string }[];
-  diacriticClearance: {
-    ascender: number;
-    descender: number;
-    unitsPerEm: number;
-    recommendedLineGap: number;
-    hasCollisionRisk: boolean;
-    clearanceStatus: 'SAFE' | 'WARNING' | 'COLLISION_RISK';
-  };
-  sampleKurdishText: string;
+  totalRequired: number;
+  presentCount: number;
+  coveragePercent: number;
+  status: string;
+  hasZwnj: boolean;
+  missingGlyphs: { char: string; hex: string; name: string }[];
+  /** Measured in the browser from the uploaded file; Core does not report it. */
   fileSizeBytes: number;
 }
 
+/** Maps Core's coverage result; an answer without coverage numbers is a failed inspection. */
+export function fontInspectionFromCore(body: any, fileSizeBytes: number): FontInspectionResult {
+  if (typeof body?.coveragePercentage !== 'number' || typeof body?.totalRequired !== 'number') {
+    throw new Error('Core answered without a coverage result');
+  }
+  return {
+    fontFamily: String(body.metadata?.family || body.fontName || 'unnamed font'),
+    format: String(body.format || body.metadata?.format || 'unknown'),
+    totalRequired: body.totalRequired,
+    presentCount: Number(body.presentCount),
+    coveragePercent: body.coveragePercentage,
+    status: String(body.status || 'unknown'),
+    hasZwnj: body.hasZwnj === true,
+    missingGlyphs: Array.isArray(body.missingGlyphs) ? body.missingGlyphs : [],
+    fileSizeBytes,
+  };
+}
+
+type DnaSection = 'clients' | 'dna' | 'snapshots' | 'rules';
+const NOT_READ_YET: Record<DnaSection, string> = {
+  clients: 'not read yet',
+  dna: 'not read yet',
+  snapshots: 'not read yet',
+  rules: 'not read yet',
+};
+
 export const DnaScreen: React.FC = () => {
-  const [clients, setClients] = useState<ClientSummary[]>(FALLBACK_CLIENTS);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('c1000000-0000-4000-8000-000000000002');
-  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(KAAE_FALLBACK_DNA);
-  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>(KAAE_FALLBACK_SNAPSHOTS);
+  const [currentDna, setCurrentDna] = useState<ClientDNA | null>(null);
+  const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  // Sections Core has not answered for, with the reason. An unread section shows as unknown, never as empty.
+  const [unread, setUnread] = useState<Partial<Record<DnaSection, string>>>(NOT_READ_YET);
+  const markRead = (section: DnaSection, reason?: string) =>
+    setUnread((prev) => {
+      const next = { ...prev };
+      if (reason) next[section] = reason;
+      else delete next[section];
+      return next;
+    });
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Modals state
-  const [showOnboardModal, setShowOnboardModal] = useState(false);
   const [showSnapshotModal, setShowSnapshotModal] = useState(false);
   const [inspectingSnapshot, setInspectingSnapshot] = useState<ClientDnaSnapshot | null>(null);
 
   // Candidate rules from governed learning loop
-  const [candidateRules, setCandidateRules] = useState<CandidateRule[]>([
-    {
-      ruleId: 'rule_kaae_sun_seal_prominence',
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      proposedRule: 'Maintain 21-ray sun seal in top center/right with clear safe margin',
-      category: 'brand_mark',
-      confidence: 0.98,
-      evidenceOccurrences: 8,
-      evidenceDigestSha256: '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc',
-      detectedAt: new Date().toISOString(),
-      status: 'proposed',
-      rationale: 'Derived from 8 verified official KAAE certificates and accreditation keynotes',
-    },
-  ]);
+  const [candidateRules, setCandidateRules] = useState<CandidateRule[]>([]);
 
   // Kurdish WebFont Ingestion & Diacritic Clearance Inspector State (Horizon 4)
-  const [inspectedFont, setInspectedFont] = useState<FontInspectionResult | null>({
-    fontFamily: 'Vazirmatn Kurdish Display',
-    format: 'woff2',
-    totalGlyphsChecked: 32,
-    glyphsPresent: 32,
-    coverageRatio: 1.0,
-    kurdishSoraniCompliant: true,
-    complianceLevel: 'AAA_COMPLIANT',
-    missingGlyphs: [],
-    diacriticClearance: {
-      ascender: 1024,
-      descender: -400,
-      unitsPerEm: 1000,
-      recommendedLineGap: 240,
-      hasCollisionRisk: false,
-      clearanceStatus: 'SAFE',
-    },
-    sampleKurdishText: 'پ چ ژ گ ڤ ڵ ڕ ێ ۆ ە — تەندروستی گەرەنتی کراوە',
-    fileSizeBytes: 38420,
-  });
+  const [inspectedFont, setInspectedFont] = useState<FontInspectionResult | null>(null);
   const [fontFileNotice, setFontFileNotice] = useState<string | null>(null);
   const [isInspectingFont, setIsInspectingFont] = useState<boolean>(false);
 
@@ -346,7 +227,6 @@ export const DnaScreen: React.FC = () => {
   const [newSwatchRole, setNewSwatchRole] = useState<BrandColor['role']>('accent');
 
   // Logo Palette Extraction State
-  const [logoExtractionNotice, setLogoExtractionNotice] = useState<string | null>(null);
   const [extractedPaletteData, setExtractedPaletteData] = useState<ExtractedPalette | null>(null);
   const [showLogoDropzone, setShowLogoDropzone] = useState(false);
 
@@ -354,29 +234,6 @@ export const DnaScreen: React.FC = () => {
   const [newPhrase, setNewPhrase] = useState('');
   const [newDisclaimer, setNewDisclaimer] = useState('');
   const [newRule, setNewRule] = useState('');
-
-  // Onboarding Form State
-  const [onboardForm, setOnboardForm] = useState({
-    name: '',
-    code: '',
-    defaultLocale: 'ckb' as 'ckb' | 'ar' | 'en',
-    defaultDirection: 'rtl' as 'rtl' | 'ltr',
-    primaryColorName: 'Imperial Bronze',
-    primaryColorHex: '#8b5a2b',
-    secondaryColorName: 'Opal Mist',
-    secondaryColorHex: '#f2ece4',
-    accentColorName: 'Solstice Gold',
-    accentColorHex: '#e5a93b',
-    backgroundColorName: 'Paper White',
-    backgroundColorHex: '#faf8f5',
-    fontFamily: 'Vazirmatn',
-    fontWeight: '700',
-    voiceAndTone: 'Authentic Kurdish craftsmanship with understated modern elegance',
-    prohibitedPhrases: 'cheap, discount, fake, generic',
-    requiredDisclaimers: 'بە گەرەنتی کوالیتی بەرز و ڕەسەنایەتی',
-    layoutRules: 'Always maintain 40px safe margins; never flatten typography',
-  });
-  const [isOnboarding, setIsOnboarding] = useState(false);
 
   // Snapshot Form State
   const [snapshotMessage, setSnapshotMessage] = useState('');
@@ -386,16 +243,13 @@ export const DnaScreen: React.FC = () => {
   // Fetch client directory
   const loadClientDirectory = async () => {
     try {
-      const res = await fetch('/v1/clients');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const kaaeOnly = data.filter((c: any) => c.clientId === 'c1000000-0000-4000-8000-000000000002' || c.code === 'KAAE');
-          setClients(kaaeOnly.length > 0 ? kaaeOnly : FALLBACK_CLIENTS);
-        }
-      }
+      const data = await apiClient.clients.list();
+      const list: ClientSummary[] = Array.isArray(data) ? data : [];
+      setClients(list.filter((c) => c.clientId === 'c1000000-0000-4000-8000-000000000002' || c.code === 'KAAE'));
+      markRead('clients');
     } catch (err) {
-      console.warn('Could not load client directory from API; using cached seeds.', err);
+      setClients([]);
+      markRead('clients', reasonOf(err));
     }
   };
 
@@ -403,44 +257,26 @@ export const DnaScreen: React.FC = () => {
   const loadClientData = async (clientId: string) => {
     setLoading(true);
     setErrorNotice(null);
-    try {
-      const [dnaRes, snapRes, rulesRes] = await Promise.all([
-        fetch(`/v1/clients/${clientId}/dna`),
-        fetch(`/v1/clients/${clientId}/snapshots`),
-        fetch(`/v1/clients/${clientId}/candidate-rules`),
-      ]);
+    // Another client's DNA is never shown under this one while it loads.
+    setCurrentDna((prev) => (prev?.clientId === clientId ? prev : null));
+    const [dnaRes, snapRes, rulesRes] = await Promise.all([
+      read(() => apiClient.clients.dna(clientId)),
+      read(() => apiClient.clients.snapshots(clientId)),
+      read(() => apiClient.clients.candidateRules(clientId)),
+    ]);
 
-      if (dnaRes.ok) {
-        const dnaData: ClientDNA = await dnaRes.json();
-        setCurrentDna(dnaData);
-      } else {
-        if (clientId === 'c1000000-0000-4000-8000-000000000002' || clientId === 'kaae') {
-          setCurrentDna(KAAE_FALLBACK_DNA);
-        } else if (clientId === 'client-drustee') {
-          setCurrentDna(DRUSTEE_FALLBACK_DNA);
-        }
-        setErrorNotice(`Notice: Operating on local baseline DNA for ${clientId}`);
-      }
+    // A DNA Core did not return is not replaced by a local copy: saving that copy would overwrite the live one.
+    setCurrentDna(dnaRes.state === 'known' ? dnaRes.value : null);
+    markRead('dna', dnaRes.state === 'unknown' ? dnaRes.reason : undefined);
 
-      if (snapRes.ok) {
-        const snapData: ClientDnaSnapshot[] = await snapRes.json();
-        setSnapshots(snapData);
-      } else {
-        setSnapshots([]);
-      }
+    setSnapshots(snapRes.state === 'known' && Array.isArray(snapRes.value) ? snapRes.value : []);
+    markRead('snapshots', snapRes.state === 'unknown' ? snapRes.reason : undefined);
 
-      if (rulesRes.ok) {
-        const rulesData = await rulesRes.json();
-        if (Array.isArray(rulesData.candidateRules) && rulesData.candidateRules.length > 0) {
-          setCandidateRules(rulesData.candidateRules);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching client data:', err);
-      setErrorNotice(`Could not reach Core, so the DNA for ${clientId} was not loaded. Nothing on this screen is confirmed current, and changes are not queued.`);
-    } finally {
-      setLoading(false);
-    }
+    const rules = rulesRes.state === 'known' ? rulesRes.value?.candidateRules : undefined;
+    setCandidateRules(Array.isArray(rules) ? rules.map(candidateRuleFromCore) : []);
+    markRead('rules', rulesRes.state === 'unknown' ? rulesRes.reason : undefined);
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -473,31 +309,17 @@ export const DnaScreen: React.FC = () => {
   const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string): Promise<boolean> => {
     setLoading(true);
     try {
-      const res = await fetch(`/v1/clients/${updatedDna.clientId}/dna`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedDna),
-      });
-
-      if (res.ok) {
-        const saved: ClientDNA = await res.json();
-        setCurrentDna(saved);
-        setSaveSuccess(successMessage);
-        loadClientDirectory();
-        // Refresh snapshots
-        const snapRes = await fetch(`/v1/clients/${saved.clientId}/snapshots`);
-        if (snapRes.ok) {
-          const snapData = await snapRes.json();
-          setSnapshots(snapData);
-        }
-        return true;
-      }
-      const errJson = await res.json().catch(() => ({}));
-      setErrorNotice(errJson.detail || errJson.message || 'Failed to save DNA to Core API');
-      return false;
+      const saved: ClientDNA = await apiClient.clients.saveDna(updatedDna.clientId, updatedDna);
+      setCurrentDna(saved);
+      setSaveSuccess(successMessage);
+      loadClientDirectory();
+      // Core records a snapshot with every save.
+      const snaps = await read(() => apiClient.clients.snapshots(saved.clientId));
+      setSnapshots(snaps.state === 'known' && Array.isArray(snaps.value) ? snaps.value : []);
+      markRead('snapshots', snaps.state === 'unknown' ? snaps.reason : undefined);
+      return true;
     } catch (err) {
-      console.error('Save error:', err);
-      setErrorNotice('Network error while saving DNA.');
+      setErrorNotice(`Core did not save the DNA: ${reasonOf(err)}`);
       return false;
     } finally {
       setLoading(false);
@@ -535,26 +357,7 @@ export const DnaScreen: React.FC = () => {
     await saveDnaChanges(updated, `Removed color swatch "${colorName}"`);
   };
 
-  // Logo Palette Extraction Handlers
-  const handleOnboardLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const pal = await extractPaletteFromFile(file);
-      setOnboardForm((prev) => ({
-        ...prev,
-        primaryColorHex: pal.primary,
-        secondaryColorHex: pal.secondary,
-        accentColorHex: pal.accent,
-        backgroundColorHex: pal.cardBg,
-      }));
-      setLogoExtractionNotice(`✓ Extracted from logo: WCAG ${pal.wcagGrade} (${pal.contrastRatioOnWhite}:1 against white)`);
-      setTimeout(() => setLogoExtractionNotice(null), 6000);
-    } catch (err: any) {
-      setLogoExtractionNotice(`⚠️ Palette extraction failed: ${err.message}`);
-    }
-  };
-
+  // Logo Palette Extraction Handler
   const handleMainTabLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -650,44 +453,30 @@ export const DnaScreen: React.FC = () => {
     setNewRule('');
   };
 
-  // Promote candidate rule
-  const handlePromoteCandidate = async (ruleTitle: string, ruleId?: string) => {
-    if (!currentDna) return;
-    const updated: ClientDNA = {
-      ...currentDna,
-      guidelines: {
-        ...currentDna.guidelines,
-        layoutRules: [...currentDna.guidelines.layoutRules, ruleTitle],
-      },
-    };
-    if (!(await saveDnaChanges(updated, `Candidate rule "${ruleTitle}" promoted to active brand law`))) return;
-
-    // The candidate is shown as promoted only once Core has recorded the promotion.
-    if (ruleId) {
-      try {
-        await fetchJson(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/promote`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ operatorRole: 'art_director' }),
-        });
-      } catch (err) {
-        setErrorNotice(`The rule was added to the DNA, but Core did not record the candidate as promoted: ${reasonOf(err)}`);
-        return;
-      }
+  // Promote candidate rule. Core's promote adds the rule to the DNA and records the snapshot itself,
+  // so the Desk does not save the DNA first: that would add the rule and bump the version twice.
+  const handlePromoteCandidate = async (ruleId: string) => {
+    const rule = candidateRules.find((r) => r.ruleId === ruleId);
+    try {
+      await apiClient.clients.promoteCandidate(selectedClientId, ruleId);
+    } catch (err) {
+      setErrorNotice(`Core did not promote the candidate rule, so the DNA is unchanged: ${reasonOf(err)}`);
+      return;
     }
-    setCandidateRules((prev) =>
-      prev.map((r) => (r.proposedRule === ruleTitle || r.ruleId === ruleId ? { ...r, status: 'promoted' } : r))
-    );
+    setSaveSuccess(`Candidate rule "${rule?.title ?? ruleId}" promoted; Core added it to the DNA`);
+    // The DNA version, its snapshots and the rule's status all changed on Core.
+    await loadClientData(selectedClientId);
   };
 
   // Dismiss candidate rule
   const handleDismissCandidate = async (ruleId: string) => {
     try {
-      await fetchJson(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/dismiss`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Dismissed by art director' }),
-      });
+      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed by art director');
+      // Core answers 200 with dismissed: false when it has no such rule.
+      if (res?.dismissed !== true) {
+        setErrorNotice(`Core has no candidate rule ${ruleId} to dismiss, so it stays open.`);
+        return;
+      }
     } catch (err) {
       setErrorNotice(`Core did not record the dismissal, so the candidate stays open: ${reasonOf(err)}`);
       return;
@@ -708,22 +497,11 @@ export const DnaScreen: React.FC = () => {
       }
       const base64 = btoa(binary);
 
-      const res = await fetch('/v1/fonts/inspect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fontBase64: base64,
-          fontFileName: file.name,
-        }),
-      });
-
-      if (res.ok) {
-        const data: FontInspectionResult = await res.json();
-        setInspectedFont(data);
-        setFontFileNotice(`✓ Inspected ${file.name}: ${data.complianceLevel} (${Math.round(data.coverageRatio * 100)}% Sorani coverage)`);
-      } else {
-        throw new Error(`the font inspector answered HTTP ${res.status}`);
-      }
+      // Core names the font from its own name table; the file name is only the fallback.
+      const body = await apiClient.fonts.inspect({ fontBase64: base64, fontName: file.name.replace(/\.[^.]+$/, '') });
+      const data = fontInspectionFromCore(body, file.size);
+      setInspectedFont(data);
+      setFontFileNotice(`Inspected ${file.name}: ${data.status} (${data.coveragePercent}% Sorani coverage)`);
     } catch (err) {
       // No inspection happened, so there is no coverage or compliance result to show.
       setInspectedFont(null);
@@ -741,12 +519,13 @@ export const DnaScreen: React.FC = () => {
       style: 'Normal',
       weight: 700,
       role: 'display',
-      license: 'OFL-1.1 (Verified Open Font)',
+      // Nothing here checks the licence, so the DNA does not claim one.
+      license: 'not verified',
       supportedLocales: ['ckb', 'ar', 'en'],
     };
     const updatedFonts = [...(currentDna.fonts || []).filter((f) => f.family !== newFont.family), newFont];
     const updated = { ...currentDna, fonts: updatedFonts };
-    await saveDnaChanges(updated, `✓ Added certified font ${inspectedFont.fontFamily} to Client DNA!`);
+    await saveDnaChanges(updated, `Added font ${inspectedFont.fontFamily} to the client DNA; its licence is not verified`);
   };
 
   const handleCopyFontCdnSnippet = () => {
@@ -790,100 +569,6 @@ export const DnaScreen: React.FC = () => {
     setTimeout(() => setFontFileNotice(null), 4000);
   };
 
-  // Onboard New Client Tenant Handler
-  const handleOnboardSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onboardForm.name.trim() || !onboardForm.code.trim()) {
-      setErrorNotice('Client Name and Short Code are required.');
-      return;
-    }
-
-    setIsOnboarding(true);
-    setErrorNotice(null);
-
-    const newClientId = `client-${onboardForm.code.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Date.now().toString(36)}`;
-    const newTenantId = `tenant-${onboardForm.code.toLowerCase()}`;
-
-    const newDnaPayload: ClientDNA = {
-      tenantId: newTenantId,
-      clientId: newClientId,
-      name: onboardForm.name.trim(),
-      code: onboardForm.code.trim().toUpperCase(),
-      version: 1,
-      status: 'active',
-      defaultLocale: onboardForm.defaultLocale,
-      defaultDirection: onboardForm.defaultDirection,
-      colors: [
-        { name: onboardForm.primaryColorName || 'Primary Brand', hex: onboardForm.primaryColorHex, role: 'primary' },
-        { name: onboardForm.secondaryColorName || 'Secondary Brand', hex: onboardForm.secondaryColorHex, role: 'secondary' },
-        { name: onboardForm.accentColorName || 'Accent Gold', hex: onboardForm.accentColorHex, role: 'accent' },
-        { name: onboardForm.backgroundColorName || 'Canvas Background', hex: onboardForm.backgroundColorHex, role: 'background' },
-      ],
-      fonts: [
-        {
-          family: onboardForm.fontFamily,
-          style: onboardForm.fontWeight === '700' ? 'Bold' : 'Regular',
-          weight: parseInt(onboardForm.fontWeight, 10) || 700,
-          role: 'display',
-          license: 'OFL',
-          supportedLocales: ['ckb', 'ar', 'en'],
-        },
-      ],
-      assets: [
-        {
-          assetId: `asset_${newClientId}_logo_1`,
-          name: `${onboardForm.name} Primary Crest`,
-          role: 'logo_primary',
-          storageKey: `assets/${onboardForm.code.toLowerCase()}/logo_primary.svg`,
-          sha256: 'sha256_' + Math.random().toString(16).substring(2) + Math.random().toString(16).substring(2),
-          mimeType: 'image/svg+xml',
-        },
-      ],
-      guidelines: {
-        voiceAndTone: onboardForm.voiceAndTone || 'Professional Kurdish visual communications',
-        prohibitedPhrases: onboardForm.prohibitedPhrases.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
-        requiredDisclaimers: onboardForm.requiredDisclaimers ? [onboardForm.requiredDisclaimers.trim()] : [],
-        layoutRules: onboardForm.layoutRules.split(';').map((s) => s.trim()).filter(Boolean),
-      },
-      destinations: {
-        googleSharedDriveId: `drive_${onboardForm.code.toLowerCase()}_creative`,
-        productionFolderId: `folder_${onboardForm.code.toLowerCase()}_prod`,
-        archiveFolderId: `folder_${onboardForm.code.toLowerCase()}_archive`,
-        spreadsheetId: `sheet_${onboardForm.code.toLowerCase()}_deliverables`,
-        sheetId: 0,
-      },
-      approvalPolicy: {
-        requiredRoles: ['art_director'],
-        allowAutoApproval: false,
-        autoApprovalEligibleTemplates: [],
-      },
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      const res = await fetch(`/v1/clients/${newClientId}/dna`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newDnaPayload),
-      });
-
-      if (res.ok) {
-        await loadClientDirectory();
-        setSelectedClientId(newClientId);
-        setShowOnboardModal(false);
-        setSaveSuccess(`Tenant "${onboardForm.name}" successfully onboarded with isolated schema & verified cryptographic DNA.`);
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        setErrorNotice(errJson.detail || errJson.message || 'Onboarding failed at validation stage.');
-      }
-    } catch (err) {
-      console.error('Onboarding request error:', err);
-      setErrorNotice('Network communication error during tenant onboarding.');
-    } finally {
-      setIsOnboarding(false);
-    }
-  };
-
   // Commit Immutable Snapshot Handler
   const handleCommitSnapshot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -893,37 +578,25 @@ export const DnaScreen: React.FC = () => {
     setErrorNotice(null);
 
     try {
-      const res = await fetch(`/v1/clients/${currentDna.clientId}/snapshots`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          commitMessage: snapshotMessage.trim() || `Manual governance snapshot v${currentDna.version + 1}`,
-          createdBy: snapshotAuthor,
-        }),
+      const snap: ClientDnaSnapshot = await apiClient.clients.commitSnapshot(currentDna.clientId, {
+        commitMessage: snapshotMessage.trim() || `Manual governance snapshot v${currentDna.version + 1}`,
+        createdBy: snapshotAuthor,
       });
-
-      if (res.ok) {
-        const snap: ClientDnaSnapshot = await res.json();
-        setSnapshots((prev) => [snap, ...prev]);
-        setCurrentDna((prev) => (prev ? { ...prev, version: snap.version } : null));
-        setShowSnapshotModal(false);
-        setSnapshotMessage('');
-        setSaveSuccess(`Immutable snapshot v${snap.version} committed with verified SHA-256 fingerprint.`);
-        loadClientDirectory();
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        setErrorNotice(errJson.detail || errJson.message || 'Snapshot commit rejected.');
-      }
+      setSnapshots((prev) => [snap, ...prev]);
+      setCurrentDna((prev) => (prev ? { ...prev, version: snap.version } : null));
+      setShowSnapshotModal(false);
+      setSnapshotMessage('');
+      setSaveSuccess(`Snapshot v${snap.version} recorded by Core (sha256 ${String(snap.sha256).slice(0, 12)}…)`);
+      loadClientDirectory();
     } catch (err) {
-      console.error('Snapshot error:', err);
-      setErrorNotice('Network error while committing snapshot.');
+      setErrorNotice(`Core did not record the snapshot: ${reasonOf(err)}`);
     } finally {
       setIsCommittingSnapshot(false);
     }
   };
 
   // Active client summary
-  const selectedSummary = clients.find((c) => c.clientId === selectedClientId) || clients[0];
+  const selectedSummary = clients.find((c) => c.clientId === selectedClientId);
 
   return (
     <section id="dna" className="screen active">
@@ -955,7 +628,7 @@ export const DnaScreen: React.FC = () => {
         <div className="panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ margin: 0, fontSize: 16 }}>Clients & Tenants</h2>
-            <span className="pill ok">{clients.length} Registered</span>
+            <span className="pill ok">{unread.clients ? '—' : clients.length} Registered</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1000,16 +673,25 @@ export const DnaScreen: React.FC = () => {
             })}
           </div>
 
+          {unread.clients && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Client list unknown: {unread.clients}</div>
+          )}
+
           <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '16px 0' }} />
 
+          {/* Not enabled (owner decision, 2026-09-19): the form sent made-up Drive and Sheet IDs and a
+              random logo hash, and publishing reads its destinations from the DNA. */}
           <button
-            className="btn primary"
+            className="btn"
             style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            onClick={() => setShowOnboardModal(true)}
+            disabled
           >
             <span>+</span>
-            <span>Onboard Client Tenant</span>
+            <span>Onboard Client Tenant (not enabled)</span>
           </button>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+            Onboarding is not enabled: it would create a client with placeholder Drive and Sheet destinations.
+          </div>
 
           <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--soft)', fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
             <b style={{ color: 'var(--text)' }}>Invariant #4 Strict Isolation:</b> Each client scope is immutable and bounded in PostgreSQL before retrieval commences. Zero cross-tenant leakage.
@@ -1037,16 +719,18 @@ export const DnaScreen: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 20 }}>{currentDna ? currentDna.name : selectedSummary.name}</h2>
+                <h2 style={{ margin: 0, fontSize: 20 }}>{currentDna?.name ?? selectedSummary?.name ?? selectedClientId}</h2>
                 <span className="pill ok" style={{ fontSize: 12 }}>
-                  v{currentDna ? currentDna.version : selectedSummary.version} active
+                  {currentDna ? `v${currentDna.version} active` : 'DNA not read'}
                 </span>
-                <span className="pill blue" style={{ fontSize: 11 }}>
-                  LIVE API
-                </span>
+                {currentDna && (
+                  <span className="pill blue" style={{ fontSize: 11 }}>
+                    Read from Core
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                Tenant ID: <code>{currentDna?.tenantId || 'tenant-isolated'}</code> · Client ID: <code>{selectedClientId}</code>
+                Tenant ID: <code>{currentDna?.tenantId ?? '—'}</code> · Client ID: <code>{selectedClientId}</code>
               </div>
             </div>
 
@@ -1063,6 +747,7 @@ export const DnaScreen: React.FC = () => {
                 className="btn primary"
                 style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
                 onClick={() => setShowSnapshotModal(true)}
+                disabled={!currentDna}
               >
                 <span>🛡️</span>
                 <span>Commit Snapshot</span>
@@ -1091,8 +776,18 @@ export const DnaScreen: React.FC = () => {
             </div>
           )}
 
+          {!currentDna && !loading && (
+            <div className="finding" style={{ marginBottom: 16 }}>
+              <b>DNA not read</b>
+              <p style={{ margin: '2px 0 0', fontSize: 12 }}>
+                Core has not returned the DNA for {selectedClientId}
+                {unread.dna ? `: ${unread.dna}` : ''}. Nothing is shown and nothing can be saved until it is read.
+              </p>
+            </div>
+          )}
+
           {/* TAB 1: Brand & Palette */}
-          {activeTab === 'brand' && (
+          {currentDna && activeTab === 'brand' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <h3 style={{ margin: 0 }}>Approved Brand Palette</h3>
@@ -1348,7 +1043,7 @@ export const DnaScreen: React.FC = () => {
           )}
 
           {/* TAB 2: Tenant Identity */}
-          {activeTab === 'identity' && (
+          {currentDna && activeTab === 'identity' && (
             <div>
               <h3>Tenant Isolation & Scope Settings (Invariant #4)</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginTop: 12 }}>
@@ -1398,7 +1093,7 @@ export const DnaScreen: React.FC = () => {
           )}
 
           {/* TAB 3: Language & RTL Typography */}
-          {activeTab === 'language' && (
+          {currentDna && activeTab === 'language' && (
             <div>
               <h3>Kurdish Typography Registry (Invariant #8)</h3>
               <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
@@ -1480,7 +1175,7 @@ export const DnaScreen: React.FC = () => {
                       <div>
                         <b style={{ fontSize: 14 }}>{inspectedFont.fontFamily}</b>
                         <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>
-                          Format: <code>.{inspectedFont.format}</code> · Size: {Math.round(inspectedFont.fileSizeBytes / 1024)} KB
+                          Format: <code>{inspectedFont.format}</code> · Size: {Math.round(inspectedFont.fileSizeBytes / 1024)} KB
                         </span>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -1489,33 +1184,34 @@ export const DnaScreen: React.FC = () => {
                           style={{
                             fontSize: 10,
                             fontWeight: 700,
-                            background: inspectedFont.complianceLevel === 'AAA_COMPLIANT' ? '#10B981' : '#F59E0B',
+                            background: inspectedFont.status === 'AAA_COMPLIANT' ? '#10B981' : '#F59E0B',
                             color: '#fff',
                           }}
                         >
-                          {inspectedFont.complianceLevel}
+                          {inspectedFont.status}
                         </span>
-                        <span className="pill ok" style={{ fontSize: 10 }}>
-                          {inspectedFont.glyphsPresent}/{inspectedFont.totalGlyphsChecked} Sorani Glyphs (100%)
+                        <span className={`pill ${inspectedFont.coveragePercent === 100 ? 'ok' : 'warn'}`} style={{ fontSize: 10 }}>
+                          {inspectedFont.presentCount}/{inspectedFont.totalRequired} Sorani glyphs ({inspectedFont.coveragePercent}%)
                         </span>
                       </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
                       <div style={{ background: 'var(--panel)', padding: '8px 10px', borderRadius: 6, fontSize: 11 }}>
-                        <div style={{ color: 'var(--muted)' }}>Diacritic Headroom</div>
-                        <b style={{ color: '#10B981', fontSize: 13 }}>+{inspectedFont.diacriticClearance.recommendedLineGap}m</b>
-                        <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>SAFE</span>
-                      </div>
-                      <div style={{ background: 'var(--panel)', padding: '8px 10px', borderRadius: 6, fontSize: 11 }}>
-                        <div style={{ color: 'var(--muted)' }}>Ascender / Descender</div>
-                        <b style={{ fontSize: 13 }}>{inspectedFont.diacriticClearance.ascender} / {inspectedFont.diacriticClearance.descender}</b>
-                      </div>
-                      <div style={{ background: 'var(--panel)', padding: '8px 10px', borderRadius: 6, fontSize: 11 }}>
-                        <div style={{ color: 'var(--muted)' }}>Collision Risk</div>
-                        <b style={{ color: inspectedFont.diacriticClearance.hasCollisionRisk ? '#EF4444' : '#10B981', fontSize: 13 }}>
-                          {inspectedFont.diacriticClearance.hasCollisionRisk ? 'DETECTED' : 'NONE (PASSED)'}
+                        <div style={{ color: 'var(--muted)' }}>Missing Sorani glyphs</div>
+                        <b style={{ color: inspectedFont.missingGlyphs.length ? '#EF4444' : '#10B981', fontSize: 13 }}>
+                          {inspectedFont.missingGlyphs.length}
                         </b>
+                      </div>
+                      <div style={{ background: 'var(--panel)', padding: '8px 10px', borderRadius: 6, fontSize: 11 }}>
+                        <div style={{ color: 'var(--muted)' }}>ZWNJ (U+200C)</div>
+                        <b style={{ color: inspectedFont.hasZwnj ? '#10B981' : '#EF4444', fontSize: 13 }}>
+                          {inspectedFont.hasZwnj ? 'present' : 'missing'}
+                        </b>
+                      </div>
+                      <div style={{ background: 'var(--panel)', padding: '8px 10px', borderRadius: 6, fontSize: 11 }}>
+                        <div style={{ color: 'var(--muted)' }}>Diacritic clearance</div>
+                        <b style={{ fontSize: 13 }}>not measured</b>
                       </div>
                     </div>
 
@@ -1534,7 +1230,11 @@ export const DnaScreen: React.FC = () => {
                     >
                       <span style={{ color: '#38BDF8', fontWeight: 700 }}>پ چ ژ گ ڤ ڵ ڕ ێ ۆ ە</span>
                       <span style={{ color: 'var(--muted)', margin: '0 8px' }}>·</span>
-                      <span>سەرجەم دەنگە کوردییە تایبەتەکان بە دروستی جێگیرکراون و هیچ داپۆشینێک نییە.</span>
+                      <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>
+                        {inspectedFont.missingGlyphs.length
+                          ? `Missing: ${inspectedFont.missingGlyphs.map((g) => `${g.char} ${g.hex}`).join(', ')}`
+                          : 'No required Sorani glyph is missing.'}
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1684,7 +1384,7 @@ export const DnaScreen: React.FC = () => {
           )}
 
           {/* TAB 4: Rules & Guidelines */}
-          {activeTab === 'rules' && (
+          {currentDna && activeTab === 'rules' && (
             <div>
               <h3>Voice & Tone Guideline</h3>
               <div style={{ padding: 14, background: 'var(--soft)', borderRadius: 10, border: '1px solid var(--line)', marginBottom: 20 }}>
@@ -1788,18 +1488,19 @@ export const DnaScreen: React.FC = () => {
         <div className="panel" style={{ minWidth: 320 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ margin: 0, fontSize: 16 }}>Governance & Audit</h2>
-            <span className="pill ok">{snapshots.length} Snapshots</span>
+            <span className="pill ok">{unread.snapshots ? '—' : snapshots.length} Snapshots</span>
           </div>
 
           <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, marginBottom: 16 }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>Current Revision</div>
             <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>
-              v{currentDna?.version || 1} Active
+              {currentDna ? `v${currentDna.version} Active` : 'DNA not read'}
             </div>
             <button
               className="btn primary"
               style={{ width: '100%', marginTop: 10, fontSize: 12 }}
               onClick={() => setShowSnapshotModal(true)}
+                disabled={!currentDna}
             >
               🛡️ Create Immutable Version
             </button>
@@ -1811,7 +1512,11 @@ export const DnaScreen: React.FC = () => {
             <span className="pill blue" style={{ fontSize: 9 }}>Client reference rules</span>
           </div>
 
-          {candidateRules.filter((r) => r.status !== 'dismissed').length === 0 ? (
+          {unread.rules ? (
+            <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, fontSize: 12, color: 'var(--muted)' }}>
+              Candidate rules unknown: {unread.rules}
+            </div>
+          ) : candidateRules.filter((r) => r.status !== 'dismissed').length === 0 ? (
             <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, fontSize: 12, color: 'var(--muted)' }}>
               No pending candidate rules for this client.
             </div>
@@ -1830,7 +1535,7 @@ export const DnaScreen: React.FC = () => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <b style={{ color: rule.status === 'promoted' ? '#166534' : 'var(--text)', fontSize: 12 }}>
-                      {rule.proposedRule}
+                      {rule.title}
                     </b>
                     <span
                       className="pill"
@@ -1840,16 +1545,17 @@ export const DnaScreen: React.FC = () => {
                         color: rule.status === 'promoted' ? '#ffffff' : 'var(--accent-text, #0369a1)',
                       }}
                     >
-                      {rule.status === 'promoted' ? '✓ PROMOTED' : `${Math.round(rule.confidence * 100)}% CONFIDENCE`}
+                      {rule.status === 'promoted' ? '✓ PROMOTED' : rule.confidence === null ? 'confidence not reported' : `${Math.round(rule.confidence * 100)}% CONFIDENCE`}
                     </span>
                   </div>
                   <p style={{ margin: '4px 0', fontSize: 11, color: rule.status === 'promoted' ? '#166534' : 'var(--muted)' }}>
-                    {rule.rationale}
+                    {rule.ruleText}
+                    {rule.rationale ? ` — ${rule.rationale}` : ''}
                   </p>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>Occurrences: <b>{rule.evidenceOccurrences}</b></span>
+                    <span>Occurrences: <b>{rule.occurrences ?? '—'}</b></span>
                     <span>·</span>
-                    <span>SHA-256: <code>{rule.evidenceDigestSha256.slice(0, 10)}…</code></span>
+                    <span>Evidence tasks: <b>{rule.evidenceTasks ?? '—'}</b></span>
                   </div>
 
                   {rule.status !== 'promoted' && (
@@ -1857,7 +1563,7 @@ export const DnaScreen: React.FC = () => {
                       <button
                         className="btn primary"
                         style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}
-                        onClick={() => handlePromoteCandidate(rule.proposedRule, rule.ruleId)}
+                        onClick={() => handlePromoteCandidate(rule.ruleId)}
                       >
                         Approve & Promote to Active DNA
                       </button>
@@ -1877,6 +1583,9 @@ export const DnaScreen: React.FC = () => {
 
           {/* Immutable Snapshot Timeline */}
           <h3 style={{ margin: '20px 0 10px', fontSize: 13 }}>Immutable Snapshot Timeline</h3>
+          {unread.snapshots && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Snapshots unknown: {unread.snapshots}</div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {snapshots.map((snap) => (
               <div
@@ -1923,247 +1632,6 @@ export const DnaScreen: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* MODAL 1: Onboard Client Tenant */}
-      {showOnboardModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            className="panel"
-            style={{
-              width: 620,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              padding: 28,
-              boxShadow: '0 25px 60px rgba(0,0,0,0.3)',
-              borderRadius: 14,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18 }}>Onboard Client Tenant</h2>
-                <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
-                  Initialize isolated tenant workspace schema & verified cryptographic DNA.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowOnboardModal(false)}
-                style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleOnboardSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label htmlFor="onboard-client-name" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                    Client Name *
-                  </label>
-                  <input
-                    id="onboard-client-name"
-                    name="onboardClientName"
-                    aria-label="Client Name"
-                    type="text"
-                    required
-                    className="search"
-                    style={{ width: '100%' }}
-                    placeholder="e.g. Erbil Grand Bazaar"
-                    value={onboardForm.name}
-                    onChange={(e) => setOnboardForm({ ...onboardForm, name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="onboard-client-code" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                    Code (Uppercase) *
-                  </label>
-                  <input
-                    id="onboard-client-code"
-                    name="onboardClientCode"
-                    aria-label="Client Code"
-                    type="text"
-                    required
-                    maxLength={8}
-                    className="search"
-                    style={{ width: '100%', textTransform: 'uppercase' }}
-                    placeholder="EGB"
-                    value={onboardForm.code}
-                    onChange={(e) => setOnboardForm({ ...onboardForm, code: e.target.value.toUpperCase() })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                <div>
-                  <label htmlFor="onboard-default-locale" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                    Default Locale
-                  </label>
-                  <select
-                    id="onboard-default-locale"
-                    name="onboardDefaultLocale"
-                    aria-label="Default Locale"
-                    className="search"
-                    style={{ width: '100%', height: 36 }}
-                    value={onboardForm.defaultLocale}
-                    onChange={(e) => setOnboardForm({ ...onboardForm, defaultLocale: e.target.value as any })}
-                  >
-                    <option value="ckb">Kurdish Sorani (ckb)</option>
-                    <option value="ar">Arabic (ar)</option>
-                    <option value="en">English (en)</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="onboard-default-direction" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                    Default Direction
-                  </label>
-                  <select
-                    id="onboard-default-direction"
-                    name="onboardDefaultDirection"
-                    aria-label="Default Direction"
-                    className="search"
-                    style={{ width: '100%', height: 36 }}
-                    value={onboardForm.defaultDirection}
-                    onChange={(e) => setOnboardForm({ ...onboardForm, defaultDirection: e.target.value as any })}
-                  >
-                    <option value="rtl">Right-to-Left (RTL)</option>
-                    <option value="ltr">Left-to-Right (LTR)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Logo Upload & Auto-Extraction Zone */}
-              <div style={{ marginBottom: 16, padding: 12, border: '1px dashed var(--line)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label htmlFor="onboard-logo-upload" style={{ fontSize: 12, fontWeight: 650 }}>
-                    🎨 Auto-Extract Palette from Client Logo (.svg, .png)
-                  </label>
-                  {logoExtractionNotice && (
-                    <span style={{ fontSize: 11, color: '#047857', fontWeight: 600 }}>
-                      {logoExtractionNotice}
-                    </span>
-                  )}
-                </div>
-                <input
-                  id="onboard-logo-upload"
-                  name="onboardLogoUpload"
-                  aria-label="Client Logo Image or SVG"
-                  type="file"
-                  accept="image/*,.svg"
-                  onChange={handleOnboardLogoUpload}
-                  style={{ fontSize: 11 }}
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 6 }}>
-                  Initial Brand Colors
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  <div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>Primary</span>
-                    <input
-                      id="onboard-primary-color"
-                      name="onboardPrimaryColor"
-                      aria-label="Primary Brand Color"
-                      type="color"
-                      value={onboardForm.primaryColorHex}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, primaryColorHex: e.target.value })}
-                      style={{ width: '100%', height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', marginTop: 2 }}
-                    />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>Secondary</span>
-                    <input
-                      id="onboard-secondary-color"
-                      name="onboardSecondaryColor"
-                      aria-label="Secondary Brand Color"
-                      type="color"
-                      value={onboardForm.secondaryColorHex}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, secondaryColorHex: e.target.value })}
-                      style={{ width: '100%', height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', marginTop: 2 }}
-                    />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>Accent</span>
-                    <input
-                      id="onboard-accent-color"
-                      name="onboardAccentColor"
-                      aria-label="Accent Brand Color"
-                      type="color"
-                      value={onboardForm.accentColorHex}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, accentColorHex: e.target.value })}
-                      style={{ width: '100%', height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', marginTop: 2 }}
-                    />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>Background</span>
-                    <input
-                      id="onboard-bg-color"
-                      name="onboardBgColor"
-                      aria-label="Background Brand Color"
-                      type="color"
-                      value={onboardForm.backgroundColorHex}
-                      onChange={(e) => setOnboardForm({ ...onboardForm, backgroundColorHex: e.target.value })}
-                      style={{ width: '100%', height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', marginTop: 2 }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label htmlFor="onboard-voice-tone" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                  Voice & Tone Mandate
-                </label>
-                <input
-                  id="onboard-voice-tone"
-                  name="onboardVoiceTone"
-                  aria-label="Voice & Tone Mandate"
-                  type="text"
-                  className="search"
-                  style={{ width: '100%' }}
-                  value={onboardForm.voiceAndTone}
-                  onChange={(e) => setOnboardForm({ ...onboardForm, voiceAndTone: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: 20 }}>
-                <label htmlFor="onboard-prohibited-phrases" style={{ display: 'block', fontSize: 12, fontWeight: 650, marginBottom: 4 }}>
-                  Prohibited Lexicon (Comma separated)
-                </label>
-                <input
-                  id="onboard-prohibited-phrases"
-                  name="onboardProhibitedPhrases"
-                  aria-label="Prohibited Lexicon (Comma separated)"
-                  type="text"
-                  className="search"
-                  style={{ width: '100%' }}
-                  value={onboardForm.prohibitedPhrases}
-                  onChange={(e) => setOnboardForm({ ...onboardForm, prohibitedPhrases: e.target.value })}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="btn" onClick={() => setShowOnboardModal(false)} disabled={isOnboarding}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn primary" disabled={isOnboarding}>
-                  {isOnboarding ? 'Provisioning Tenant…' : 'Complete Tenant Onboarding'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 2: Commit Immutable Snapshot */}
       {showSnapshotModal && (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { eventStream } from '../services/eventStream';
-import { fetchJson, read, reasonOf } from '../services/statusReport.js';
+import { apiClient } from '../api/client.js';
+import { read, reasonOf } from '../services/statusReport.js';
 
 interface IntegrationHealth {
   integrationId: string;
@@ -104,10 +105,8 @@ export const OpsScreen: React.FC = () => {
   const [newAllocatedCap, setNewAllocatedCap] = useState<number>(300);
 
   const [loading, setLoading] = useState(false);
-  const [runningBenchmark, setRunningBenchmark] = useState(false);
   const [runningReconciliation, setRunningReconciliation] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
-  const [benchmarkToast, setBenchmarkToast] = useState<string | null>(null);
   const [reconcileToast, setReconcileToast] = useState<string | null>(null);
   const [opsToast, setOpsToast] = useState<string | null>(null);
   const showOpsToast = (text: string) => {
@@ -119,11 +118,11 @@ export const OpsScreen: React.FC = () => {
   const fetchOpsData = async () => {
     setLoading(true);
     const [healthRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
-      read(() => fetchJson('/v1/integrations/health')),
-      read(() => fetchJson('/v1/operations/failures')),
-      read(() => fetchJson('/v1/operations/slo')),
-      read(() => fetchJson('/v1/operations/reconciliation')),
-      read(() => fetchJson('/v1/clients/budgets')),
+      read(() => apiClient.operations.integrationsHealth()),
+      read(() => apiClient.operations.failures()),
+      read(() => apiClient.operations.slo()),
+      read(() => apiClient.operations.reconciliation()),
+      read(() => apiClient.clients.budgets()),
     ]);
     const gaps: Record<string, string> = {};
     const note = (name: string, r: { state: string; reason?: string }) => {
@@ -169,39 +168,14 @@ export const OpsScreen: React.FC = () => {
     setLoading(false);
   };
 
-  const runBenchmark = async () => {
-    setRunningBenchmark(true);
-    setBenchmarkToast(null);
-    try {
-      const data = await fetchJson('/v1/operations/slo/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario: 'nawroz_spring' }),
-      });
-      setSloSummary(data.summary);
-      if (data.result) {
-        setRecentProbes((prev) => [data.result, ...prev.slice(0, 9)]);
-      }
-      setBenchmarkToast(`Benchmark probe completed in ${data.result?.totalDurationMs ?? '?'}ms`);
-      setTimeout(() => setBenchmarkToast(null), 5000);
-    } catch (err) {
-      showOpsToast(`✗ Benchmark did not run: ${reasonOf(err)}`);
-    } finally {
-      setRunningBenchmark(false);
-    }
-  };
-
+  // Audit only: the Desk never asks Core to auto-repair (see apiClient.operations.auditReconciliation).
   const runReconciliation = async () => {
     setRunningReconciliation(true);
     setReconcileToast(null);
     try {
-      const data = await fetchJson('/v1/operations/reconciliation/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoRepair: true }),
-      });
+      const data = await apiClient.operations.auditReconciliation();
       setReconciliation(data);
-      setReconcileToast(`✓ Storage Audit: ${data.inSyncCount} in-sync, ${data.driftCount} drifts detected, ${data.repairedCount} auto-repaired`);
+      setReconcileToast(`✓ Storage audit: ${data.inSyncCount} in sync, ${data.driftCount} drift(s) found, none repaired`);
       setTimeout(() => setReconcileToast(null), 6000);
     } catch (err) {
       showOpsToast(`✗ Reconciliation audit did not run: ${reasonOf(err)}`);
@@ -228,12 +202,14 @@ export const OpsScreen: React.FC = () => {
 
   const handleAllocateBudget = async (clientId: string, newCap: number) => {
     try {
-      await fetchJson(`/v1/clients/${clientId}/budget/allocate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monthlyCapUsd: newCap, resetSpend: false }),
-      });
-      showOpsToast(`✓ Updated monthly budget cap for ${clientId} to $${newCap.toFixed(2)}`);
+      const updated = await apiClient.clients.allocateBudget(clientId, newCap);
+      // Core clamps the cap, so the toast reports the cap it stored, not the one typed.
+      const stored = Number(updated?.capUsd);
+      showOpsToast(
+        Number.isFinite(stored)
+          ? `✓ Core set the monthly budget cap for ${clientId} to $${stored.toFixed(2)}`
+          : `✓ Core accepted the budget change for ${clientId} but did not report the cap it stored`
+      );
       setEditingBudgetClient(null);
       fetchOpsData();
     } catch (err) {
@@ -261,13 +237,15 @@ export const OpsScreen: React.FC = () => {
                 : `Telemetry read · last checked ${lastCheck}`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* Not enabled (owner decision, 2026-09-19): Core's probe runs a fake design studio, so its
+              timings describe no real pipeline. */}
           <button
             className="btn"
-            style={{ fontSize: 12, padding: '4px 10px', background: 'var(--accent)', color: '#000', fontWeight: 600 }}
-            onClick={runBenchmark}
-            disabled={runningBenchmark}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            disabled
+            title="Not enabled: Core's SLO probe runs against a fake design studio, so its timings would not describe the real pipeline."
           >
-            {runningBenchmark ? '⚡ Executing E2E Pipeline…' : '⚡ Run Synthetic Benchmark'}
+            ⚡ Run Synthetic Benchmark (not enabled)
           </button>
           <button
             className="btn"
@@ -279,24 +257,6 @@ export const OpsScreen: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {benchmarkToast && (
-        <div style={{
-          background: 'rgba(56, 189, 248, 0.15)',
-          border: '1px solid var(--accent)',
-          borderRadius: 8,
-          padding: '8px 12px',
-          marginBottom: 12,
-          fontSize: 12,
-          color: 'var(--accent)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          <span>🟢</span>
-          <span>{benchmarkToast}</span>
-        </div>
-      )}
 
       {/* Primary Ops Metrics */}
       <h1 className="sr-only">Operations & Telemetry Overview</h1>
@@ -427,12 +387,12 @@ export const OpsScreen: React.FC = () => {
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
               <span>🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger</span>
-              <span className={`pill ${reconciliation?.status === 'divergent' ? 'bad' : 'ok'}`} style={{ fontSize: 11 }}>
-                {reconciliation?.status === 'clean' ? '100% In Sync' : reconciliation?.status === 'repaired' ? 'Auto-Reconciled' : 'Audit Active'}
+              <span className={`pill ${!reconciliation ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
+                {!reconciliation ? 'No audit read' : reconciliation.status === 'clean' ? '100% In Sync' : reconciliation.status === 'repaired' ? 'Auto-Reconciled' : 'Drift found'}
               </span>
             </h2>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Deterministic audit of PostgreSQL operational truth against Google Drive asset hashes and Google Sheets reporting mirror (FR-049, FR-050)
+              Compares Core's task list with the publication receipts Core holds in memory. It does not read Google Drive or Google Sheets, and repairs nothing.
             </div>
           </div>
           <button
@@ -453,24 +413,24 @@ export const OpsScreen: React.FC = () => {
 
         <div className="stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited || 0}</b>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited ?? '—'}</b>
             <span style={{ fontSize: 11 }}>Tasks Audited</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalDriveDeliverablesChecked || 0}</b>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalDriveDeliverablesChecked ?? '—'}</b>
             <span style={{ fontSize: 11 }}>Drive Files</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalSheetRowsAudited || 0}</b>
+            <b style={{ fontSize: 18 }}>{reconciliation?.totalSheetRowsAudited ?? '—'}</b>
             <span style={{ fontSize: 11 }}>Sheet Rows</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18, color: 'var(--ok-text, #166534)' }}>{reconciliation?.inSyncCount || 0}</b>
+            <b style={{ fontSize: 18, color: 'var(--ok-text, #166534)' }}>{reconciliation?.inSyncCount ?? '—'}</b>
             <span style={{ fontSize: 11 }}>In Sync</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? 'var(--warn-text, #854d0e)' : 'var(--ok-text, #166534)' }}>
-              {reconciliation?.driftCount || 0}
+              {reconciliation?.driftCount ?? '—'}
             </b>
             <span style={{ fontSize: 11 }}>Drifts Repaired</span>
           </div>

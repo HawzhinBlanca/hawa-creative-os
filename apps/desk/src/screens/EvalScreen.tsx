@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchJson, reasonOf } from '../services/statusReport.js';
+import { apiClient } from '../api/client.js';
+import { reasonOf } from '../services/statusReport.js';
 
 interface DatasetInfo {
   id: string;
@@ -64,7 +65,7 @@ export const EvalScreen: React.FC = () => {
 
   // Fetch Dataset List & Historical Runs
   useEffect(() => {
-    fetchJson('/v1/evaluations/datasets')
+    apiClient.evaluations.datasets()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setDatasets(
@@ -80,7 +81,7 @@ export const EvalScreen: React.FC = () => {
       })
       .catch((err) => addEvalNotice(`Could not read the dataset list: ${reasonOf(err)}. Case counts are unknown.`));
 
-    fetchJson('/v1/evaluations/runs')
+    apiClient.evaluations.runs()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setPastRuns(data);
@@ -102,7 +103,7 @@ export const EvalScreen: React.FC = () => {
   useEffect(() => {
     setLoadingCases(true);
     setCasesNotice(null);
-    fetchJson(`/v1/evaluations/datasets/${selectedDataset}/cases`)
+    apiClient.evaluations.cases(selectedDataset)
       .then((data) => {
         if (Array.isArray(data.cases)) {
           setCases(data.cases);
@@ -137,11 +138,7 @@ export const EvalScreen: React.FC = () => {
   const handleRunTournament = async () => {
     setRunningTournament(true);
     try {
-      const data = await fetchJson('/v1/evaluations/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `${currentDataset?.name ?? 'Evaluation'} Automated Tournament` }),
-      });
+      const data = await apiClient.evaluations.run(`${currentDataset?.name ?? 'Evaluation'} Automated Tournament`);
       const now = new Date();
       setLastRunTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
       setLastRunId(data.runId);
