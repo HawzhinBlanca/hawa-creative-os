@@ -83,6 +83,7 @@ import {
   diffDocumentManifests,
   renderOperationsToPng,
   parseInvitationContent,
+  resolveOrnamentSettings,
 } from '@hawa/creative';
 import {
   DeterministicQAEngine,
@@ -1385,6 +1386,13 @@ export function createApp(options?: CreateAppOptions) {
         layout: resolveModel('layout'),
         critique: resolveModel('critique'),
         judge: resolveModel('judge'),
+        ornament: (() => {
+          try {
+            return resolveOrnamentSettings();
+          } catch (err) {
+            return { error: err instanceof Error ? err.message : String(err) };
+          }
+        })(),
         image: (() => {
           try {
             const img = resolveImageSettings();

@@ -62,7 +62,8 @@ export async function runArtStage(
           width,
           height,
           palette: ctx.referencePack.palette,
-          opacity: artConfig.opacity ?? 0.5,
+          // Drawn at full strength: the layer's opacity is applied once, by the render and the deck.
+        opacity: 1,
         });
         cand.artPng = pngBytes;
         cand.artSha256 = createHash('sha256').update(pngBytes).digest('hex');
@@ -78,7 +79,8 @@ export async function runArtStage(
         width,
         height,
         palette: ctx.referencePack.palette,
-        opacity: artConfig.opacity ?? 0.5,
+        // Drawn at full strength: the layer's opacity is applied once, by the render and the deck.
+        opacity: 1,
       });
       cand.artPng = pngBytes;
       cand.artSha256 = createHash('sha256').update(pngBytes).digest('hex');

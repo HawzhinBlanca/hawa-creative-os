@@ -178,12 +178,16 @@ export async function encodeStudioTransferV2(
   // 1. Art layer (if provided)
   if (layout.art && options.artBuffer) {
     const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
+    // The layer's opacity travels with the image, as the render applies it. Without it Canva drew
+    // generated art at full strength and procedural textures twice as strong as judged.
+    const opacity = typeof layout.art.opacity === 'number' ? layout.art.opacity : 1;
     slide.addImage({
       data: `image/png;base64,${options.artBuffer.toString('base64')}`,
       x: artBox.x / 96,
       y: artBox.y / 96,
       w: artBox.width / 96,
       h: artBox.height / 96,
+      ...(opacity < 1 ? { transparency: Math.round((1 - opacity) * 100) } : {}),
     });
   }
 
