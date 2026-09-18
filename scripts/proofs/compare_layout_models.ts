@@ -17,6 +17,7 @@ import {
   normalizeLayoutGeometry,
   evaluateDesignMetrics,
   ExemplarRetrievalIndex,
+  retrieveExemplarsV3,
   OpenAiStudioClient,
   renderLayoutV2,
   type StudioLayoutV2,
@@ -73,11 +74,9 @@ for (const brief of briefs) {
     role: c.role as any,
     script: c.script as 'latin' | 'arabic',
   }));
-  const retrieval = retrievalIndex.retrieveTopExemplars(
-    `${brief.name} ${brief.copyBlocks.map((c) => c.text).join(' ')}`,
-    brief.width,
-    brief.height
-  );
+  // The index takes a query object; this used to pass (text, width, height), so the text
+  // was dropped and every brief retrieved the same exemplars.
+  const retrieval = { retrievedExemplars: retrieveExemplarsV3({ text: `${brief.name} ${brief.copyBlocks.map((c) => c.text).join(' ')}`, width: brief.width, height: brief.height }, retrievalIndex) };
   const copyText = Object.fromEntries(brief.copyBlocks.map((c) => [c.copyIndex, c.text]));
 
   for (const model of CANDIDATE_MODELS) {

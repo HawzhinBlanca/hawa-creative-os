@@ -12,26 +12,28 @@ import {
   OpenAiStudioClient,
   ExemplarRetrievalIndex,
   generateLayoutCandidatesV3,
-  evaluateDesignMetrics,
   renderLayoutV2,
   getFontFidelityManifest,
-  measureWrappedLines,
   resolveRatesForModel,
-  correctFontsThatCannotDrawTheCopy,
-  refineCandidate,
-  generateBoxGroundedCritique,
-  comparePairWithOrderSwap,
-  evaluatePairOrder,
+  retrieveExemplarsV3,
+  prepareGeneratedLayoutV3,
+  rankCandidatesV3,
+  critiqueCandidateV3,
+  refineCandidateV3,
+  selectWinnerV3,
+  evaluateHardQa,
+  studioReferenceFromRaw,
+  recordOfficeDailySpend,
   type StudioLayoutV2,
   type DesignMetricsReport,
   type BoxCritiqueResult,
   type PairwiseMatchResult,
-  createDegradedCanaryLayout,
-  JUDGE_DIMENSIONS,
   type CopyBlockSlotInput,
-  type CandidateJudgeInput,
+  type PipelineV3Copy,
+  type HardQaContext,
+  type RefinementOutcomeV3,
+  type WinnerSelectionV3,
   checkOfficeDailyBudget,
-  PipelineCostGovernorV3,
   getOfficeDailyCapUsd,
   getPerBriefCapUsd,
 } from '../packages/creative/dist/index.js';
@@ -367,7 +369,15 @@ export const QUALIFICATION_BRIEFS: QualificationBrief[] = [
 export interface LedgerRow {
   call_id: string;
   x_request_id: string;
-  stage: 'P03_LAYOUT' | 'P05_CRITIQUE' | 'P06_REFINE' | 'P07_JUDGE_AB' | 'P07_JUDGE_BA' | 'P07_CANARY';
+  stage:
+    | 'P03_LAYOUT'
+    | 'P05_CRITIQUE'
+    | 'P06_REFINE_CRITIQUE'
+    | 'P06_REFINE'
+    | 'P07_JUDGE_AB'
+    | 'P07_JUDGE_BA'
+    | 'P07_CANARY_AB'
+    | 'P07_CANARY_BA';
   brief_id: string;
   model: string;
   input_tokens: number;
@@ -387,7 +397,7 @@ export interface BriefResult {
   metrics: DesignMetricsReport;
   critique: BoxCritiqueResult;
   pairwiseMatch?: PairwiseMatchResult;
-  canaryMatch: any;
+  canaryMatch: WinnerSelectionV3['canary'];
   ledgerRows: LedgerRow[];
   totalNetCostUsd: number;
   totalLatencyMs: number;
@@ -397,9 +407,16 @@ export interface BriefResult {
   assetIntegrityPass: boolean;
   copyExactPass: boolean;
   editabilityPass: boolean;
+  /** Production's hard QA on the delivered design — whether production would ship it. */
+  hardQaPassed: boolean;
+  hardQaDefects: string[];
+  decidedBy: WinnerSelectionV3['decidedBy'];
+  judgeReliable: boolean | null;
   canaryWon: boolean;
   orderSwapConsistent: boolean;
   distinctSkeleton: boolean;
+  rawArchetype: string;
+  fontStandIns: string[];
 }
 
 function computeTokenCosts(
@@ -429,24 +446,78 @@ function computeTokenCosts(
   return { grossCostUsd, cacheDiscountUsd, netCostUsd };
 }
 
-function sanitizeFont(font: string, isRtl: boolean, role?: string): string {
-  if (role === 'body' || role === 'footer') {
-    return isRtl ? 'Noto Sans Arabic' : 'Verdana';
-  }
-  if (isRtl) {
-    if (font === 'Cairo' || font === 'Amiri') return font;
-    // Amiri, not Cairo: Cairo cannot draw the Sorani letters ڕ ڵ ۆ ێ ە. Defaulting to Cairo here
-    // would have quietly reintroduced that after refinement, undoing the generator's correction.
-    return 'Amiri';
-  } else {
-    if (font === 'Cinzel' || font === 'Playfair Display') return font;
-    if (font === 'Lora') return 'Playfair Display';
-    if (font === 'Cormorant Garamond' || font === 'Montserrat') return 'Cinzel';
-    if (font === 'Verdana') return font;
-    return 'Cinzel';
-  }
+/** The client's reference pack, read exactly as production's studio reads it. */
+const KAAE_REFERENCE = studioReferenceFromRaw(
+  JSON.parse(fs.readFileSync(new URL('../packages/creative/assets/kaae-reference.json', import.meta.url), 'utf8'))
+);
+
+/** The official logo's width over height, from its PNG header, as the studio computes it. */
+const KAAE_LOGO_ASPECT = (() => {
+  const png = fs.readFileSync(new URL('../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url));
+  return png.readUInt32BE(16) / (png.readUInt32BE(20) || 1);
+})();
+
+/**
+ * Wraps the client so every model call lands in the ledger as it completes — including calls made
+ * inside refinement, the judge and the canary, and calls that succeed before a later one throws.
+ * Recording per stage at the call sites missed those, and the refinement receipt merged two calls
+ * with no token counts.
+ */
+function recordingClient(
+  client: OpenAiStudioClient,
+  briefId: string,
+  fallbackModel: string,
+  phase: () => 'P05' | 'P06' | 'P07',
+  record: (row: LedgerRow) => void
+): OpenAiStudioClient {
+  const judgeStages: LedgerRow['stage'][] = ['P07_JUDGE_AB', 'P07_JUDGE_BA', 'P07_CANARY_AB', 'P07_CANARY_BA'];
+  let judgeCalls = 0;
+  const stageFor = (schema: string | undefined): LedgerRow['stage'] => {
+    if (schema === 'layout_v3_candidates') return 'P03_LAYOUT';
+    if (schema === 'layout_v3_repair') return 'P06_REFINE';
+    if (schema === 'DesignCritiqueReport') return phase() === 'P05' ? 'P05_CRITIQUE' : 'P06_REFINE_CRITIQUE';
+    if (schema === 'PairwiseDimensionVerdict') return judgeStages[Math.min(judgeCalls++, judgeStages.length - 1)];
+    throw new Error(`Unrecorded model call with schema '${schema}': add it to the ledger before spending on it.`);
+  };
+  return new Proxy(client, {
+    get(target, prop) {
+      if (prop === 'createStructuredCompletion') {
+        return async (params: any) => {
+          const stage = stageFor(params?.jsonSchema?.name);
+          const res = await target.createStructuredCompletion(params);
+          const r = res.receipt;
+          const model = r.model || params?.model || fallbackModel;
+          const costs = computeTokenCosts(r.inputTokens, r.cacheReadTokens ?? 0, r.outputTokens, model);
+          record({
+            call_id: r.responseId,
+            x_request_id: r.xRequestId || '',
+            stage,
+            brief_id: briefId,
+            model,
+            input_tokens: r.inputTokens,
+            cached_tokens: r.cacheReadTokens ?? 0,
+            output_tokens: r.outputTokens,
+            gross_cost_usd: costs.grossCostUsd,
+            cache_discount_usd: costs.cacheDiscountUsd,
+            net_cost_usd: costs.netCostUsd,
+            latency_ms: r.latencyMs,
+            timestamp: new Date().toISOString(),
+          });
+          return res;
+        };
+      }
+      const value = (target as any)[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
+/**
+ * One brief through the v3 pipeline — the same shared functions production's studio calls, in
+ * the same order: generate, prepare, rank with production's hard QA, critique the top candidate,
+ * refine it if it fails a gate, then judge the top two with the canary. The design delivered is
+ * the pipeline's winner, and production's hard QA is applied to it.
+ */
 async function executeBriefLive(
   brief: QualificationBrief,
   briefIndex: number,
@@ -459,336 +530,155 @@ async function executeBriefLive(
   fs.mkdirSync(briefFolder, { recursive: true });
 
   const startTime = Date.now();
-  const formatKey = brief.width === brief.height ? '1:1' : '4:5';
   const briefLedgerRows: LedgerRow[] = [];
+  const record = (row: LedgerRow) => {
+    briefLedgerRows.push(row);
+    // The office's daily cap counts real spend. It used to be fed only by tests.
+    recordOfficeDailySpend(row.net_cost_usd, {
+      callId: row.call_id,
+      stage: row.stage,
+      model: row.model,
+      inputTokens: row.input_tokens,
+      cachedTokens: row.cached_tokens,
+      outputTokens: row.output_tokens,
+      grossCostUsd: row.gross_cost_usd,
+      cacheDiscountUsd: row.cache_discount_usd,
+      netCostUsd: row.net_cost_usd,
+      timestamp: row.timestamp,
+    } as any);
+  };
 
-  // 1. P02 Exemplar Retrieval
-  const retrieval = retrievalIndex.retrieveTopExemplars(
-    { text: brief.name, format: formatKey, category: 'standards' },
-    3
-  );
+  // One model per stage role, so the cheap tier spends where the design is decided.
+  const layoutModel = resolveModel('layout');
+  const critiqueModel = resolveModel('critique');
+  const judgeModel = resolveModel('judge');
 
+  let phase: 'P05' | 'P06' | 'P07' = 'P05';
+  const recording = recordingClient(client, brief.id, layoutModel, () => phase, record);
+
+  const copy: PipelineV3Copy = { text: {}, scripts: {} };
+  for (const b of brief.copyBlocks) {
+    copy.text[b.copyIndex] = b.text;
+    copy.scripts![b.copyIndex] = b.script;
+  }
+  const copyMap = copy.text;
+  const isRtl = brief.language === 'ckb';
+  const canvas = { width: brief.width, height: brief.height, logoAspect: KAAE_LOGO_ASPECT };
+  const copyScripts: Array<'latin' | 'arabic'> = [];
+  for (const b of brief.copyBlocks) copyScripts[b.copyIndex] = b.script;
+  const qa: HardQaContext = {
+    width: brief.width,
+    height: brief.height,
+    copyScripts,
+    latinFont: KAAE_REFERENCE.latinFont,
+    arabicFont: KAAE_REFERENCE.arabicFont,
+    palette: KAAE_REFERENCE.palette,
+    logoAspect: KAAE_LOGO_ASPECT,
+  };
+
+  console.log(`[P10 LIVE] Starting Brief ${briefIndex + 1}/20: ${brief.id} (${brief.sizeName})...`);
+
+  // 1. P02 exemplar retrieval (free)
+  const exemplars = retrieveExemplarsV3({ text: brief.name, width: brief.width, height: brief.height }, retrievalIndex);
+
+  // 2. P03 generation: the client's own palette and the logo's real shape, as production passes them
   const slotInputs: CopyBlockSlotInput[] = brief.copyBlocks.map((b) => ({
     index: b.copyIndex,
     text: b.text,
     role: b.role,
     script: b.script,
   }));
-
-  const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
-  // One model name for the whole brief, recorded on every row so the ledger says what actually ran.
-  const layoutModel = resolveModel('layout');
-  // One model per stage role, so the cheap tier can spend where the design is decided and save
-  // where it is only scored. A single model for all five stages defeats the point of the tiers.
-  const critiqueModel = resolveModel('critique');
-  const judgeModel = resolveModel('judge');
-  // Built here rather than further down: the candidate scoring below needs it, and a const
-  // declared after its use is a temporal-dead-zone ReferenceError at run time.
-  const copyMap: Record<number, string> = {};
-  for (const b of brief.copyBlocks) {
-    copyMap[b.copyIndex] = b.text;
-  }
-  const isRtl = brief.language === 'ckb';
-
-  console.log(`[P10 LIVE] Starting Brief ${briefIndex + 1}/20: ${brief.id} (${brief.sizeName})...`);
-
-  // 2. P03 Multi-Candidate Layout Generation
   const genResult = await generateLayoutCandidatesV3({
-    client,
+    client: recording,
     brief: `${brief.name}: ${brief.copyBlocks.map((c) => c.text).join(' - ')}`,
     copyBlocks: slotInputs,
-    palette,
+    palette: KAAE_REFERENCE.palette,
     canvasWidth: brief.width,
     canvasHeight: brief.height,
-    exemplars: retrieval.retrievedExemplars,
+    exemplars,
     isRtl,
-  });
-
-  const layoutCosts = computeTokenCosts(genResult.inputTokens, genResult.cachedTokens, genResult.outputTokens, layoutModel);
-  briefLedgerRows.push({
-    call_id: genResult.responseId,
-    x_request_id: genResult.xRequestId || '',
-    stage: 'P03_LAYOUT',
-    brief_id: brief.id,
+    logoAspect: KAAE_LOGO_ASPECT,
     model: layoutModel,
-    input_tokens: genResult.inputTokens,
-    cached_tokens: genResult.cachedTokens,
-    output_tokens: genResult.outputTokens,
-    gross_cost_usd: layoutCosts.grossCostUsd,
-    cache_discount_usd: layoutCosts.cacheDiscountUsd,
-    net_cost_usd: layoutCosts.netCostUsd,
-    latency_ms: genResult.latencyMs,
-    timestamp: new Date().toISOString(),
   });
 
-  // Ensure fonts resolve against installed fontconfig assets
-  for (const cand of genResult.layouts) {
-    for (const t of cand.text) {
-      t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
-    }
-  }
-
-  // Evaluate candidate layouts with deterministic P01 metrics
-  const evaluatedCandidates = genResult.layouts.map((cand, idx) => ({
-    cand,
-    metrics: evaluateDesignMetrics(cand, { wrappedLines: measureWrappedLines(cand, copyMap) }),
-    rawCandidate: genResult.rawCandidates[idx],
+  // 3. Production's preparation, then ranking with production's hard QA as a filter
+  const candidates = genResult.layouts.map((layout, i) => ({
+    sourceIndex: i,
+    layout: prepareGeneratedLayoutV3(layout, copy, canvas),
   }));
+  let ranked = rankCandidatesV3(candidates, copy, qa);
 
-  // Sort candidates by passing status, then by composite score descending
-  evaluatedCandidates.sort((a, b) => {
-    if (a.metrics.passed !== b.metrics.passed) return a.metrics.passed ? -1 : 1;
-    return b.metrics.compositeScore - a.metrics.compositeScore;
-  });
+  // 4. P05 critique of the top-ranked candidate
+  phase = 'P05';
+  const critiqueResult = await critiqueCandidateV3(ranked[0], copy, { client: recording, model: critiqueModel });
 
-  const best = evaluatedCandidates[0];
-  let layout = best.cand;
-  let metrics = best.metrics;
-
-  // 3. P05 Vision Critique Stage (Set-of-Mark Grounded)
-  console.log(`[P10 LIVE] Brief ${brief.id}: Invoking P05 vision critique on top candidate...`);
-  const critiqueResult = await generateBoxGroundedCritique(best.cand, {
-    client,
-    model: critiqueModel,
-    deterministicMetrics: best.metrics,
-  });
-
-  const critiqueReceipt = critiqueResult.receipt;
-  const critiqueCosts = computeTokenCosts(
-    critiqueReceipt.inputTokens,
-    critiqueReceipt.cachedTokens ?? 0,
-    critiqueReceipt.outputTokens,
-    critiqueReceipt.model || layoutModel
-  );
-  briefLedgerRows.push({
-    call_id: critiqueReceipt.responseId,
-    x_request_id: critiqueReceipt.xRequestId || '',
-    stage: 'P05_CRITIQUE',
-    brief_id: brief.id,
-    model: critiqueReceipt.model,
-    input_tokens: critiqueReceipt.inputTokens,
-    cached_tokens: critiqueReceipt.cachedTokens ?? 0,
-    output_tokens: critiqueReceipt.outputTokens,
-    gross_cost_usd: critiqueCosts.grossCostUsd,
-    cache_discount_usd: critiqueCosts.cacheDiscountUsd,
-    net_cost_usd: critiqueCosts.netCostUsd,
-    latency_ms: critiqueReceipt.latencyMs,
-    timestamp: new Date().toISOString(),
-  });
-
-  // 4. P06 Gated Visual Refinement Loop if needed
-  if (!best.metrics.passed) {
-    console.log(
-      `[P10 LIVE] Brief ${brief.id}: 1-shot failed metrics [${best.metrics.failingMetrics.join(
-        ', '
-      )}]. Invoking P06 gated refinement...`
-    );
-    try {
-      const refineResult = await refineCandidate(best.cand, {
-        client,
-        maxRounds: 2,
-        minDelta: 0.01,
-        model: layoutModel,
-      });
-      for (const r of refineResult.rounds) {
-        if (r.receipt) {
-          const rCosts = computeTokenCosts(r.receipt.inputTokens, r.receipt.cachedTokens ?? 0, r.receipt.outputTokens, r.receipt.model || layoutModel);
-          briefLedgerRows.push({
-            call_id: r.receipt.responseId,
-            x_request_id: r.receipt.xRequestId || '',
-            stage: 'P06_REFINE',
-            brief_id: brief.id,
-            model: r.receipt.model,
-            input_tokens: r.receipt.inputTokens,
-            cached_tokens: r.receipt.cachedTokens ?? 0,
-            output_tokens: r.receipt.outputTokens,
-            gross_cost_usd: rCosts.grossCostUsd,
-            cache_discount_usd: rCosts.cacheDiscountUsd,
-            net_cost_usd: rCosts.netCostUsd,
-            latency_ms: r.receipt.latencyMs,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
-      // Adopt the refinement only once it is known to be a usable layout. Assigning first and
-      // validating later meant a malformed refinement replaced the winning layout and then threw,
-      // and the catch below swallowed the throw — leaving every downstream stage working on the
-      // broken object. Seen live: "layout.text is not iterable".
-      const refined: any = refineResult.finalLayout;
-      const refinedIsUsable =
-        !!refined &&
-        Array.isArray(refined.text) &&
-        refined.text.length > 0 &&
-        Array.isArray(refined.shapes) &&
-        Number.isFinite(refined.width) &&
-        Number.isFinite(refined.height);
-
-      if (!refinedIsUsable) {
-        console.warn(
-          `[P10 LIVE] Brief ${brief.id}: refinement returned an unusable layout; keeping the winner.`
-        );
-      } else if (refineResult.finalScore > best.metrics.compositeScore || refineResult.passed) {
-        layout = refined;
-        for (const t of layout.text) {
-          t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
-        }
-        // Sanitisation maps by role and script, not by what the copy contains, so verify coverage
-        // afterwards: a block whose font cannot draw its own script is corrected here too.
-        correctFontsThatCannotDrawTheCopy(layout, copyMap);
-        metrics = evaluateDesignMetrics(layout, { wrappedLines: measureWrappedLines(layout, copyMap) });
-      }
-    } catch (err: any) {
-      console.warn(`[P10 LIVE] Brief ${brief.id}: refinement error:`, err?.message);
+  // 5. P06 gated refinement of the top-ranked candidate
+  phase = 'P06';
+  let refinement: RefinementOutcomeV3 | null = null;
+  let refinementError: string | null = null;
+  try {
+    refinement = await refineCandidateV3(ranked[0], copy, { client: recording, model: layoutModel, canvas, qa });
+    if (refinement.adopted) {
+      const refinedIndex = ranked[0].sourceIndex;
+      const slot = candidates.find((c) => c.sourceIndex === refinedIndex)!;
+      slot.layout = refinement.layout;
+      ranked = rankCandidatesV3(candidates, copy, qa);
     }
+  } catch (err: any) {
+    // Production keeps the unrefined candidate and records why; so does the qualification.
+    refinementError = err?.message || String(err);
+    console.warn(`[P10 LIVE] Brief ${brief.id}: refinement failed (${refinementError}); keeping the unrefined candidate.`);
   }
 
-  // 5. P07 Real Pairwise Dimension-Wise Judge with Order Swap
-  console.log(`[P10 LIVE] Brief ${brief.id}: Invoking P07 pairwise LLM judge with order swap...`);
-  const cand1Input: CandidateJudgeInput = { id: `${brief.id}_c1`, layout };
-  const cand2Layout = evaluatedCandidates[1]?.cand || evaluatedCandidates[0].cand;
-  const cand2Input: CandidateJudgeInput = { id: `${brief.id}_c2`, layout: cand2Layout };
+  // 6. P07 judge of the top two, with the canary
+  phase = 'P07';
+  const selection = await selectWinnerV3(ranked, copy, { client: recording, model: judgeModel });
+  const winner = selection.winner;
+  const layout = winner.layout;
+  const metrics = winner.metrics;
+  const hardQa = winner.hardQa ?? evaluateHardQa(layout, qa);
+  const matchResult = selection.match;
+  const orderSwapConsistent = matchResult ? matchResult.isConsistent : false;
+  const canaryWon = selection.canary?.passed ?? false;
 
-  const matchResult = await comparePairWithOrderSwap(cand1Input, cand2Input, {
-    client,
-    model: judgeModel,
-  });
-
-  const abCosts = computeTokenCosts(
-    matchResult.orderAB.receipt.inputTokens,
-    matchResult.orderAB.receipt.cachedTokens ?? 0,
-    matchResult.orderAB.receipt.outputTokens,
-    matchResult.orderAB.receipt.model || layoutModel
-  );
-  briefLedgerRows.push({
-    call_id: matchResult.orderAB.receipt.responseId,
-    x_request_id: matchResult.orderAB.receipt.xRequestId || '',
-    stage: 'P07_JUDGE_AB',
-    brief_id: brief.id,
-    model: matchResult.orderAB.receipt.model,
-    input_tokens: matchResult.orderAB.receipt.inputTokens,
-    cached_tokens: matchResult.orderAB.receipt.cachedTokens ?? 0,
-    output_tokens: matchResult.orderAB.receipt.outputTokens,
-    gross_cost_usd: abCosts.grossCostUsd,
-    cache_discount_usd: abCosts.cacheDiscountUsd,
-    net_cost_usd: abCosts.netCostUsd,
-    latency_ms: matchResult.orderAB.receipt.latencyMs,
-    timestamp: new Date().toISOString(),
-  });
-
-  const baCosts = computeTokenCosts(
-    matchResult.orderBA.receipt.inputTokens,
-    matchResult.orderBA.receipt.cachedTokens ?? 0,
-    matchResult.orderBA.receipt.outputTokens,
-    matchResult.orderBA.receipt.model || layoutModel
-  );
-  briefLedgerRows.push({
-    call_id: matchResult.orderBA.receipt.responseId,
-    x_request_id: matchResult.orderBA.receipt.xRequestId || '',
-    stage: 'P07_JUDGE_BA',
-    brief_id: brief.id,
-    model: matchResult.orderBA.receipt.model,
-    input_tokens: matchResult.orderBA.receipt.inputTokens,
-    cached_tokens: matchResult.orderBA.receipt.cachedTokens ?? 0,
-    output_tokens: matchResult.orderBA.receipt.outputTokens,
-    gross_cost_usd: baCosts.grossCostUsd,
-    cache_discount_usd: baCosts.cacheDiscountUsd,
-    net_cost_usd: baCosts.netCostUsd,
-    latency_ms: matchResult.orderBA.receipt.latencyMs,
-    timestamp: new Date().toISOString(),
-  });
-
-  const orderSwapConsistent = matchResult.isConsistent;
-
-  // 6. P07 Real Degraded-Copy Canary Defeat by LLM Judge
-  console.log(`[P10 LIVE] Brief ${brief.id}: Evaluating real degraded canary against winner with LLM judge...`);
-  const canaryLayout = createDegradedCanaryLayout(layout);
-  const canaryCandidate: CandidateJudgeInput = {
-    id: `${brief.id}_canary_degraded`,
-    layout: canaryLayout,
-  };
-
-  const canaryMatch = await evaluatePairOrder(cand1Input, canaryCandidate, 'AB', {
-    client,
-    model: judgeModel,
-  });
-
-  const canaryCosts = computeTokenCosts(
-    canaryMatch.receipt.inputTokens,
-    canaryMatch.receipt.cachedTokens ?? 0,
-    canaryMatch.receipt.outputTokens,
-    canaryMatch.receipt.model || layoutModel
-  );
-  briefLedgerRows.push({
-    call_id: canaryMatch.receipt.responseId,
-    x_request_id: canaryMatch.receipt.xRequestId || '',
-    stage: 'P07_CANARY',
-    brief_id: brief.id,
-    model: canaryMatch.receipt.model,
-    input_tokens: canaryMatch.receipt.inputTokens,
-    cached_tokens: canaryMatch.receipt.cachedTokens ?? 0,
-    output_tokens: canaryMatch.receipt.outputTokens,
-    gross_cost_usd: canaryCosts.grossCostUsd,
-    cache_discount_usd: canaryCosts.cacheDiscountUsd,
-    net_cost_usd: canaryCosts.netCostUsd,
-    latency_ms: canaryMatch.receipt.latencyMs,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Genuine LLM Judge Canary Defeat Condition:
-  // Leader must win the majority of 5 dimensions against the degraded canary!
-  const canaryWon = canaryMatch.majorityWinner === 'A';
-
-  // 7. PosterMELD PRR 4 Structural Checks:
+  // 7. PosterMELD PRR 4 structural checks, on the design the pipeline delivers
   const geometricPass =
     metrics.metrics.occlusion.passed &&
     metrics.metrics.balance.passed &&
     metrics.metrics.alignment.passed &&
     metrics.metrics.negativeSpace.passed;
-
-  const readabilityPass =
-    metrics.metrics.textLegibility.passed &&
-    metrics.metrics.typeScale.passed;
-
+  const readabilityPass = metrics.metrics.textLegibility.passed && metrics.metrics.typeScale.passed;
   const assetIntegrityPass =
-    layout.logo.width > 0 &&
-    layout.logo.height > 0 &&
-    layout.background.color.startsWith('#');
-
+    layout.logo.width > 0 && layout.logo.height > 0 && layout.background.color.startsWith('#');
   const copyExactPass = layout.text.every((t) => copyMap[t.copyIndex] !== undefined);
   const prrPass = geometricPass && readabilityPass && assetIntegrityPass && copyExactPass;
 
-  // 8. Measured Editability Check:
+  // 8. Measured editability: the layout re-renders with every block's copy changed
   const editabilityPass = (() => {
     if (!layout.text || layout.text.length === 0) return false;
-    const validNodes = layout.text.every(
-      (t) => t.width > 0 && t.height > 0 && t.fontSize > 0 && Boolean(t.fontFamily)
-    );
+    const validNodes = layout.text.every((t) => t.width > 0 && t.height > 0 && t.fontSize > 0 && Boolean(t.fontFamily));
     if (!validNodes) return false;
     try {
       const mutatedCopyMap: Record<number, string> = {};
-      for (const b of brief.copyBlocks) {
-        mutatedCopyMap[b.copyIndex] = b.text + ' [EDITED]';
-      }
+      for (const b of brief.copyBlocks) mutatedCopyMap[b.copyIndex] = b.text + ' [EDITED]';
       const mutatedRender = renderLayoutV2(layout, { copyText: mutatedCopyMap });
       return Boolean(mutatedRender && mutatedRender.png && mutatedRender.png.length > 0);
-    } catch {
+    } catch (err: any) {
+      console.warn(`[P10 LIVE] Brief ${brief.id}: editability re-render threw (${err?.message || err}).`);
       return false;
     }
   })();
 
-  // 9. Distinct Skeleton Check:
-  const currentArchetype = best.rawCandidate?.compositionArchetype || 'monolith_centered';
+  // 9. The delivered design's archetype
+  const currentArchetype = genResult.rawCandidates[winner.sourceIndex]?.compositionArchetype || 'unknown';
   const distinctSkeleton = previousArchetype === null || currentArchetype !== previousArchetype;
 
-  const totalNetCostUsd = Number(
-    briefLedgerRows.reduce((acc, row) => acc + row.net_cost_usd, 0).toFixed(6)
-  );
+  const totalNetCostUsd = Number(briefLedgerRows.reduce((acc, row) => acc + row.net_cost_usd, 0).toFixed(6));
   const totalLatencyMs = Date.now() - startTime;
 
-  // Render preview PNG & SVG
   const rendered = renderLayoutV2(layout, { copyText: copyMap });
   // Measured, not assumed: families this layout uses that the renderer silently substituted.
-  const familiesUsed = [...new Set(layout.text.map((t: any) => t.fontFamily).filter(Boolean))];
+  const familiesUsed = [...new Set(layout.text.map((t: any) => t.fontFamily).filter(Boolean))] as string[];
   const fontStandIns = familiesUsed.filter((f) => rendered.fontFidelity?.[f] === 'stand-in');
   if (fontStandIns.length) {
     console.warn(
@@ -798,13 +688,26 @@ async function executeBriefLive(
   fs.writeFileSync(path.join(briefFolder, 'preview.png'), rendered.png);
   fs.writeFileSync(path.join(briefFolder, 'preview.svg'), rendered.svg, 'utf8');
 
-  // Save per-brief artifacts
+  const { annotatedPng, ...critiqueRecord } = critiqueResult;
+  fs.writeFileSync(path.join(briefFolder, 'critique.annotated.png'), annotatedPng);
   fs.writeFileSync(path.join(briefFolder, 'brief.json'), JSON.stringify(brief, null, 2), 'utf8');
   fs.writeFileSync(path.join(briefFolder, 'layout.json'), JSON.stringify(layout, null, 2), 'utf8');
   fs.writeFileSync(path.join(briefFolder, 'metrics.json'), JSON.stringify(metrics, null, 2), 'utf8');
-  fs.writeFileSync(path.join(briefFolder, 'critique.json'), JSON.stringify(critiqueResult, null, 2), 'utf8');
+  fs.writeFileSync(path.join(briefFolder, 'hard_qa.json'), JSON.stringify({ passed: hardQa.passed, defectCodes: hardQa.defectCodes, metrics: hardQa.metrics }, null, 2), 'utf8');
+  fs.writeFileSync(path.join(briefFolder, 'critique.json'), JSON.stringify(critiqueRecord, null, 2), 'utf8');
   fs.writeFileSync(path.join(briefFolder, 'judge_match.json'), JSON.stringify(matchResult, null, 2), 'utf8');
-  fs.writeFileSync(path.join(briefFolder, 'canary_match.json'), JSON.stringify(canaryMatch, null, 2), 'utf8');
+  fs.writeFileSync(path.join(briefFolder, 'canary_match.json'), JSON.stringify(selection.canary, null, 2), 'utf8');
+
+  const refinementRecord = refinement
+    ? {
+        candidate: refinement.result.candidateId,
+        gate: refinement.result.gateDecision,
+        adopted: refinement.adopted,
+        reason: refinement.reason,
+        stopReason: refinement.result.stopReason,
+        rounds: refinement.result.rounds.length,
+      }
+    : { error: refinementError };
 
   const journalData = {
     briefId: brief.id,
@@ -820,30 +723,36 @@ async function executeBriefLive(
     assetIntegrityPass,
     copyExactPass,
     editabilityPass,
+    hardQaPassed: hardQa.passed,
+    hardQaDefects: hardQa.defectCodes,
+    decidedBy: selection.decidedBy,
+    judgeReliable: selection.judgeReliable,
+    winnerSourceIndex: winner.sourceIndex,
     canaryWon,
-    canaryWinnerCandidate: canaryMatch.winnerCandidateId,
-    canaryVotesA: canaryMatch.winnerVotesA,
-    canaryVotesB: canaryMatch.winnerVotesB,
     orderSwapConsistent,
-    orderSwapWinnerAB: matchResult.orderAB.winnerCandidateId,
-    orderSwapWinnerBA: matchResult.orderBA.winnerCandidateId,
+    orderSwapWinnerAB: matchResult?.orderAB.winnerCandidateId ?? null,
+    orderSwapWinnerBA: matchResult?.orderBA.winnerCandidateId ?? null,
+    refinement: refinementRecord,
     distinctSkeleton,
-    // Recorded so the degeneracy threshold can be calibrated from real runs: it has never been
-    // consulted by any caller, and at 15px it is almost certainly too low to fire.
+    archetypes: genResult.rawCandidates.map((c) => c.compositionArchetype),
+    // Recorded so the degeneracy threshold can be calibrated from real runs.
     candidatePairwiseDistances: genResult.degeneracyCheck?.pairwiseDistances ?? [],
     candidateSetDegenerate: genResult.degeneracyCheck?.isDegenerate ?? null,
     compositeScore: metrics.compositeScore,
     timestamp: new Date().toISOString(),
   };
-
   fs.writeFileSync(path.join(briefFolder, 'journal.json'), JSON.stringify(journalData, null, 2), 'utf8');
 
+  const orderLine = (o: PairwiseMatchResult['orderAB'] | undefined) =>
+    o ? `${o.winnerCandidateId} (${o.winnerVotesA}-${o.winnerVotesB})` : 'not run';
   const journalMd = `# Brief Journal: ${brief.id} (${brief.name})
 - **Dimensions**: ${brief.width}x${brief.height} (${brief.sizeName})
 - **Language**: ${brief.language}
 - **Total Model Calls**: ${briefLedgerRows.length} calls
 - **Total Net Cost**: $${totalNetCostUsd.toFixed(6)} | **Total Latency**: ${totalLatencyMs}ms
 - **Composite Score**: ${metrics.compositeScore.toFixed(3)} (Passed: ${metrics.passed})
+- **Production hard QA**: ${hardQa.passed ? 'PASS' : `FAIL — ${hardQa.defectCodes.join(', ')}`}
+- **Winner**: candidate ${winner.sourceIndex} (${currentArchetype}), decided by ${selection.decidedBy}
 
 ## 1. Multi-Stage Receipts
 | Stage | Call ID | Model | In / Out Tokens | Cached | Net Cost |
@@ -855,18 +764,17 @@ ${briefLedgerRows.map((r) => `| ${r.stage} | \`${r.call_id}\` | ${r.model} | ${r
 - **Overall Assessment**: ${critiqueResult.overallAssessment}
 - **Comments**: ${critiqueResult.comments.length} accepted comments
 
-## 3. Pairwise LLM Judge (P07)
+## 3. Refinement (P06)
+- ${refinement ? `Gate ${refinement.result.gateDecision}; ${refinement.adopted ? 'adopted' : 'not adopted'} (${refinement.reason}); ${refinement.result.rounds.length} round(s)` : `Failed: ${refinementError}`}
+
+## 4. Pairwise LLM Judge (P07)
 - **Consistency**: ${orderSwapConsistent ? 'ORDER_CONSISTENT' : 'ORDER_FLIPPED'}
-- **Order AB Winner**: ${matchResult.orderAB.winnerCandidateId} (${matchResult.orderAB.winnerVotesA}-${matchResult.orderAB.winnerVotesB})
-- **Order BA Winner**: ${matchResult.orderBA.winnerCandidateId} (${matchResult.orderBA.winnerVotesA}-${matchResult.orderBA.winnerVotesB})
+- **Order AB Winner**: ${orderLine(matchResult?.orderAB)}
+- **Order BA Winner**: ${orderLine(matchResult?.orderBA)}
 
-## 4. Real Degraded Canary Defeat (P07)
-- **Canary Defeated by Judge**: **${canaryWon ? 'YES (BEATEN)' : 'NO (FAILED)'}**
-- **Votes**: Winner=${canaryMatch.winnerVotesA} vs Canary=${canaryMatch.winnerVotesB}
-- **Judge Rationales**:
-${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${rat}`).join('\n')}
+## 5. Degraded Canary, both orders (P07)
+- **Canary Defeated by Judge**: **${canaryWon ? 'YES (BEATEN IN BOTH ORDERS)' : 'NO (FAILED)'}**
 `;
-
   fs.writeFileSync(path.join(briefFolder, 'journal.md'), journalMd, 'utf8');
 
   return {
@@ -875,8 +783,8 @@ ${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${
     layout,
     metrics,
     critique: critiqueResult,
-    pairwiseMatch: matchResult,
-    canaryMatch,
+    pairwiseMatch: matchResult ?? undefined,
+    canaryMatch: selection.canary,
     ledgerRows: briefLedgerRows,
     totalNetCostUsd,
     totalLatencyMs,
@@ -886,6 +794,10 @@ ${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${
     assetIntegrityPass,
     copyExactPass,
     editabilityPass,
+    hardQaPassed: hardQa.passed,
+    hardQaDefects: hardQa.defectCodes,
+    decidedBy: selection.decidedBy,
+    judgeReliable: selection.judgeReliable,
     canaryWon,
     orderSwapConsistent,
     distinctSkeleton,
@@ -894,8 +806,25 @@ ${Object.entries(canaryMatch.rationales).map(([dim, rat]) => `  - **${dim}**: ${
   };
 }
 
+/**
+ * A dry run points the runner at a local stand-in for the model API, so the whole flow — every
+ * stage, the ledger, the report — can be exercised before any money is spent. Only a localhost
+ * URL is accepted and the real key is never sent: the key is replaced, so a mistyped URL cannot
+ * carry it anywhere. A dry run keeps its spend ledger apart from the office's.
+ */
+const DRY_RUN_URL = process.env.HAWA_QUALIFICATION_DRY_RUN_URL;
+if (DRY_RUN_URL !== undefined) {
+  if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/.test(DRY_RUN_URL)) {
+    throw new Error(`HAWA_QUALIFICATION_DRY_RUN_URL must be a localhost http URL, not '${DRY_RUN_URL}'.`);
+  }
+  if (!process.env.HAWA_SPEND_STATE_DIR) {
+    throw new Error('A dry run needs HAWA_SPEND_STATE_DIR, so its pretend spend stays out of the office ledger.');
+  }
+}
+
 async function main() {
   console.log('=== Starting P10 Genuine Live Qualification Run (20 Held-Out Briefs) ===');
+  if (DRY_RUN_URL) console.log(`[P10 DRY RUN] Model calls go to ${DRY_RUN_URL}; nothing is spent and nothing here is evidence.`);
 
   const dailyCap = getOfficeDailyCapUsd();
   const perBriefCap = getPerBriefCapUsd();
@@ -931,7 +860,10 @@ async function main() {
   fs.mkdirSync(briefsDir, { recursive: true });
   fs.mkdirSync(journalsDir, { recursive: true });
 
-  const client = new OpenAiStudioClient({ timeoutMs: 180000 });
+  const client = new OpenAiStudioClient({
+    timeoutMs: 180000,
+    ...(DRY_RUN_URL ? { baseUrl: DRY_RUN_URL.replace(/\/$/, ''), apiKey: 'dry-run-no-key' } : {}),
+  });
   const retrievalIndex = new ExemplarRetrievalIndex();
 
   const results: BriefResult[] = [];
@@ -1054,6 +986,10 @@ async function main() {
             orderSwapConsistent: r.orderSwapConsistent,
             distinctSkeleton: r.distinctSkeleton,
             rawArchetype: r.rawArchetype,
+            hardQaPassed: r.hardQaPassed,
+            hardQaDefects: r.hardQaDefects,
+            decidedBy: r.decidedBy,
+            judgeReliable: r.judgeReliable,
           })),
         },
         null,
@@ -1096,12 +1032,13 @@ async function main() {
   const copyFontPassCount = results.filter((r) => r.copyExactPass && r.readabilityPass).length;
   const copyFontRate = totalBriefs > 0 ? (copyFontPassCount / totalBriefs) * 100 : 0;
 
-  // Real hard-QA escape count: a brief the pipeline declared print-ready while a hard
-  // deterministic check failed. This row previously printed a literal 0 and a literal PASS,
-  // measuring nothing at all.
-  const hardQaEscapes = results.filter(
-    (r) => r.prrPass && !(r.geometricPass && r.readabilityPass && r.assetIntegrityPass && r.copyExactPass)
-  );
+  // Hard-QA escapes: briefs the qualification declared print-ready that production's own hard QA
+  // rejects — the designs a client would not have received. Before, this compared print-ready
+  // against the four checks that define print-ready, which is always zero.
+  const hardQaEscapes = results.filter((r) => r.prrPass && r.hardQaPassed === false);
+  const hardQaPassCount = results.filter((r) => r.hardQaPassed === true).length;
+  const hardQaPassRate = totalBriefs > 0 ? (hardQaPassCount / totalBriefs) * 100 : 0;
+  const decidedByJudge = results.filter((r) => r.decidedBy === 'judge').length;
 
   // Real skeleton diversity: the size of the archetype set over completed briefs, with a
   // histogram so it can be audited. The per-brief distinct_skeleton flag only compares a brief
@@ -1144,7 +1081,9 @@ async function main() {
   }
   const standInFamilies = [...new Set(briefsWithStandIns.flatMap((b) => b.families))].sort();
 
-  const expectedCalls = totalBriefs * 5;
+  // Per brief at least: layout, critique, both judge orderings and both canary orderings.
+  // Refinement adds two calls a round when its gate opens.
+  const expectedCalls = totalBriefs * 6;
   const allGatesPass =
     prrRate >= 81.3 &&
     medianCostUsd < 0.38 &&
@@ -1152,11 +1091,14 @@ async function main() {
     orderSwapRate >= 80.0 &&
     copyFontRate >= 90.0 &&
     hardQaEscapes.length === 0 &&
+    hardQaPassRate === 100 &&
     editabilityRate === 100.0 &&
     briefsWithStandIns.length === 0 &&
     allLedgerRows.length >= expectedCalls;
   const devTier = isDevModelTier();
-  const qualificationVerdict = devTier
+  const qualificationVerdict = DRY_RUN_URL
+    ? `**DRY RUN — NOT A QUALIFICATION RUN.** Every model call went to a local stand-in at ${DRY_RUN_URL}. This proves the runner's plumbing, not the pipeline's quality.`
+    : devTier
     ? `**NOT A QUALIFICATION RUN.** This ran on the ${activeModelTier()} model tier (${resolveModel('layout')}), not the production model. Its scores describe the cheap tier and cannot be read as production evidence.`
     : failures.length > 0
       ? `**PARTIAL — NOT A QUALIFICATION PASS.** ${failures.length} of ${QUALIFICATION_BRIEFS.length} briefs never ran.`
@@ -1203,7 +1145,7 @@ Verdict: ${qualificationVerdict}
 
 | Metric | Target / Published Benchmark | Pipeline Result (Multi-Stage Live Run) | Status |
 | :--- | :--- | :--- | :--- |
-| **Total Model Calls Recorded** | 5 calls x ${totalBriefs} completed briefs = ${expectedCalls} | **${allLedgerRows.length} calls** | **${allLedgerRows.length >= expectedCalls ? 'PASS' : 'FAIL'}** |
+| **Total Model Calls Recorded** | at least 6 calls x ${totalBriefs} completed briefs = ${expectedCalls} | **${allLedgerRows.length} calls** | **${allLedgerRows.length >= expectedCalls ? 'PASS' : 'FAIL'}** |
 | **Print-Ready Rate (PRR)** | 81.3% (PosterMELD, arXiv:2608.02218) | **${prrRate.toFixed(1)}%** (${prrPassCount}/${totalBriefs}) | **${prrRate >= 81.3 ? 'PASS' : 'FAIL'}** |
 | **Median Cost per Brief** | USD 0.380 (Published Comparison) | **$${medianCostUsd.toFixed(6)}** | **${medianCostUsd < 0.38 ? 'PASS' : 'FAIL'}** |
 | **Canary Win Rate (Real Judge)** | >= 95.0% of completed briefs | **${canaryWinRate.toFixed(1)}%** (${canaryWinCount}/${totalBriefs}) | **${canaryWinRate >= 95.0 ? 'PASS' : 'FAIL'}** |
@@ -1211,12 +1153,14 @@ Verdict: ${qualificationVerdict}
 | **Mean Composite Score** | Measured Mean Score | **${avgCompositeScore.toFixed(3)}** | **${avgCompositeScore >= 0.70 ? 'PASS' : 'FAIL'}** |
 | **Canva Copy & Font Checks**| >= 90.0% of completed briefs | **${copyFontRate.toFixed(1)}%** (${copyFontPassCount}/${totalBriefs}) | **${copyFontRate >= 90.0 ? 'PASS' : 'FAIL'}** |
 | **Hard-QA Escapes** | Exactly 0 | **${hardQaEscapes.length}**${hardQaEscapes.length ? ' — ' + hardQaEscapes.map((r) => r.brief.id).join(', ') : ''} | **${hardQaEscapes.length === 0 ? 'PASS' : 'FAIL'}** |
+| **Production Hard-QA Pass Rate** | 100% of completed briefs | **${hardQaPassRate.toFixed(1)}%** (${hardQaPassCount}/${totalBriefs}) | **${hardQaPassRate === 100 ? 'PASS' : 'FAIL'}** |
+| **Winners Chosen by the Judge** | Reported | ${decidedByJudge}/${totalBriefs}; the rest by composite after a tie, an unreliable judge or a single candidate | — |
 | **Distinct Skeletons** | No published threshold | **${distinctArchetypeCount} distinct archetypes** over ${totalBriefs} briefs (${archetypeHistogram}) | **MEASURED** |
 | **Editability Rate** | 100.0% Verified Mutation Test | **${editabilityRate.toFixed(1)}%** (${editabilityCount}/${totalBriefs}) | **${editabilityRate === 100.0 ? 'PASS' : 'FAIL'}** |
 | **Font Fidelity (measured at render)** | Every specified family renders exactly | **${briefsWithStandIns.length === 0 ? 'every family used renders exactly on this host' : `${briefsWithStandIns.length}/${totalBriefs} briefs rendered with a substituted face — ${standInFamilies.join(', ')}`}** | **${briefsWithStandIns.length === 0 ? 'PASS' : 'FAIL'}** |
 
 > The **Distinct Skeletons** row has no numeric target in the published literature, so it is reported as measured rather than scored. The per-brief \`distinct_skeleton\` column in the CSV compares a brief only against the one dispatched immediately before it and is order-dependent under parallel batches; the archetype set size above is the diversity figure to read.
-> **Hard-QA escapes** are counted as briefs marked print-ready while any of the geometric, readability, asset-integrity or copy-exactness checks failed.
+> **Hard-QA escapes** are briefs this report marks print-ready that production's own hard QA (the studio's QA stage, shared code) rejects. The design measured is the pipeline's winner, produced by the same shared functions production's studio calls.
 > This run exercises the layout, critique and judge stages. No image-generation call is made, so the cost figures above are text-model costs only and do not include the art lane.
 > **Font fidelity** is measured by rasterising a probe in each family and in a family that cannot exist: identical output means the renderer substituted a fallback face. \`fc-match\` is not a valid check, because it resolves a family name that the rasteriser then fails to use. When this row fails, the preview images are not evidence about the typography of the design.
 

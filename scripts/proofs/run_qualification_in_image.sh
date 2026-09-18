@@ -11,6 +11,7 @@
 #   bash scripts/proofs/run_qualification_in_image.sh <outDir> [args] # real run
 #
 # The API key is read from the running core container and never printed or written to disk.
+# The daily spend ledger is mounted from the host, so the office cap counts every run, host or image.
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -48,7 +49,7 @@ if [[ -z "$OUT_DIR" ]]; then
 fi
 shift
 
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$REPO_ROOT/.hawa-state/spend"
 KEY="$(docker exec "$KEY_SOURCE_CONTAINER" printenv OPENAI_API_KEY)"
 if [[ -z "$KEY" ]]; then
   echo "ERROR: no OPENAI_API_KEY in $KEY_SOURCE_CONTAINER." >&2
@@ -61,8 +62,10 @@ docker run --rm \
   -v "$REPO_ROOT/packages/creative/dist:/app/packages/creative/dist:ro" \
   -v "$REPO_ROOT/packages/domain/dist:/app/packages/domain/dist:ro" \
   -v "$REPO_ROOT/$OUT_DIR:/app/qualification-out" \
+  -v "$REPO_ROOT/.hawa-state/spend:/app/spend-ledger" \
   -e OPENAI_API_KEY="$KEY" \
   -e HAWA_QUALIFICATION_OUT_DIR=/app/qualification-out \
+  -e HAWA_SPEND_STATE_DIR=/app/spend-ledger \
   -e HAWA_MODEL_TIER="${HAWA_MODEL_TIER:-production}" \
   -w /app "$IMAGE" \
   ./node_modules/.bin/tsx scripts/run_p10_qualification.ts "$@"

@@ -9,6 +9,7 @@
 import {
   generateLayoutCandidatesV3,
   ExemplarRetrievalIndex,
+  retrieveExemplarsV3,
   OpenAiStudioClient,
   evaluateDesignMetrics,
 } from '../../packages/creative/dist/index.js';
@@ -23,11 +24,9 @@ const client = new OpenAiStudioClient({ timeoutMs: 240000 });
 const index = new ExemplarRetrievalIndex();
 
 for (const brief of briefs) {
-  const retrieval = index.retrieveTopExemplars(
-    `${brief.name} ${brief.copyBlocks.map((c) => c.text).join(' ')}`,
-    brief.width,
-    brief.height
-  );
+  // The index takes a query object; this used to pass (text, width, height), so the text
+  // was dropped and every brief retrieved the same exemplars.
+  const retrieval = { retrievedExemplars: retrieveExemplarsV3({ text: `${brief.name} ${brief.copyBlocks.map((c) => c.text).join(' ')}`, width: brief.width, height: brief.height }, index) };
   const gen = await generateLayoutCandidatesV3({
     client,
     brief: `${brief.name}: ${brief.copyBlocks.map((c) => c.text).join(' - ')}`,

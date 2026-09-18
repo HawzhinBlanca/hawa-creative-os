@@ -1,0 +1,46 @@
+{
+  "//": [
+    "Type-checks the scripts. No build ever did, and they drifted from the code they call: the",
+    "qualification runner passed its options object as refineCandidate's layout, the T8 scorer",
+    "called toFixed on a confidence interval, and two proofs sent exemplar retrieval (text, width,",
+    "height) where it takes a query object. Scripts run through tsx, which type-checks nothing.",
+    "",
+    "Excluded: scripts written against interfaces that no longer exist (the Anthropic-era studio",
+    "client, the desk canvas exporter, the vertical-slice adapters) and not part of the current",
+    "pipeline. Each fails to compile today; delete or repair one before removing it from this list."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "scripts/**/*.ts"
+  ],
+  "exclude": [
+    "scripts/execute_independent_live_vertical_slice.ts",
+    "scripts/execute_live_vertical_slice.ts",
+    "scripts/export_kaae_deliverables.ts",
+    "scripts/generate-p01-proof.ts",
+    "scripts/generate-p04-proof.ts",
+    "scripts/generate-p05-proof.ts",
+    "scripts/generate-p08-proof.ts",
+    "scripts/publish_kaae_omnichannel.ts",
+    "scripts/render_10_out_of_10_designs.ts",
+    "scripts/run_independent_completion_audit.ts",
+    "scripts/studio_fault_injection.ts",
+    "scripts/test_gateway_models.ts",
+    "scripts/verify_all_h01_h14.ts",
+    "scripts/verify_live_h01_h03.ts",
+    "scripts/verify_live_h04_h05_h10.ts"
+  ]
+}
