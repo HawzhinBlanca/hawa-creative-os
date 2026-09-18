@@ -2,7 +2,7 @@ import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines } from './render-layout-v2.js';
-import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps } from './layout-generator-v3.js';
+import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
 import {
@@ -343,12 +343,18 @@ export function conformToHouseRules(
   // the short edge) is then used, and kept only if it actually clears the logo.
   const rulesAndText = () => [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
   const logoCrowded = () => !!layout.logo && rulesAndText().some((b) => intersects(b, logoClearZone(layout.logo!)));
+  const textCollides = () => layout.text.some((a, i) => layout.text.some((b, j) => j > i && intersects(a, b)));
+  const unresolved = () => logoCrowded() || textCollides();
   const minMargin = Math.floor(HOUSE_RULES.safeMarginShare * Math.min(W, H));
-  if (logoCrowded() && layout.grid.margin > minMargin) {
+  if (unresolved() && layout.grid.margin > minMargin) {
     const before = JSON.stringify(layout);
+    const stillBefore = [logoCrowded(), textCollides()];
     layout.grid.margin = minMargin;
     settle();
-    if (logoCrowded()) Object.assign(layout, JSON.parse(before));
+    // Kept only if it resolved something and broke nothing that was fine.
+    const now = [logoCrowded(), textCollides()];
+    const better = now.every((v, i) => !v || stillBefore[i]) && now.some((v, i) => !v && stillBefore[i]);
+    if (!better) Object.assign(layout, JSON.parse(before));
   }
 
   // Text over art must sit where the art is calm: widen the calm region to cover every text box
@@ -369,6 +375,36 @@ export function conformToHouseRules(
 
   // Boxes may have moved or grown: put each divider back in the middle of its gap.
   centerSeparatorsInGaps(layout.shapes || [], layout.text);
+
+  // A rule inside the logo's clear space moves just outside it — above if there is room, else
+  // below — and is dropped as a last resort: it is ornament, and the clear space is a brand rule
+  // whose breach means no design is delivered at all. (Separator centring does not see the logo,
+  // so it could put a rule back into the zone: cheap run 5, brief_10.)
+  if (layout.logo && layout.shapes?.length) {
+    const zone = logoClearZone(layout.logo);
+    const m2 = layout.grid.margin;
+    const hitsText = (r: Rect) => layout.text.some((tx) => intersects(tx, r));
+    // A moved rule must also sit evenly in its gap: an off-centre divider is itself a QA defect.
+    const lopsided = (s: object) =>
+      findAsymmetricSeparators(layout.shapes, layout.text).some((g) => layout.shapes[g.shapeIndex] === s);
+    for (const s of [...layout.shapes]) {
+      if (s.role !== 'rule' || !intersects(s, zone)) continue;
+      const originalY = s.y;
+      let placed = false;
+      for (const y of [Math.floor(zone.y - s.height - 2), Math.ceil(zone.y + zone.height + 2)]) {
+        if (y < m2 || y + s.height > H - m2) continue;
+        s.y = y;
+        if (!hitsText(s) && !lopsided(s)) {
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        s.y = originalY;
+        layout.shapes = layout.shapes.filter((x) => x !== s);
+      }
+    }
+  }
   return layout;
 }
 

@@ -719,3 +719,18 @@ describe('a growing box stays inside the safe area', { timeout: 30000 }, () => {
   });
 });
 
+describe('a rule never ends up in the logo clear space', { timeout: 30000 }, () => {
+  it('moves a rule out of the logo zone, or drops it when there is no room either side', async () => {
+    const { conformToHouseRules, logoClearZone } = await import('../src/index.js');
+    const intersects = (a: any, b: any) => !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+    // cheap run 5, brief_10: a full-width rule 36px above a 100px logo whose zone needs 50px.
+    const layout = centred();
+    layout.logo = { x: 490, y: 568, width: 100, height: 100 };
+    layout.shapes = [{ x: MARGIN, y: 528, width: W - 2 * MARGIN, height: 4, kind: 'line', color: '#C5A059', role: 'rule' } as any];
+    layout.text[0].y = 718;
+    conformToHouseRules(layout, COPY);
+    const zone = logoClearZone(layout.logo);
+    for (const s of layout.shapes) expect(intersects(s, zone)).toBe(false);
+  });
+});
+
