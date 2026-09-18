@@ -33,5 +33,28 @@
     "commit": "910a6a6926c6186dd24f84bd2ed41a2bdfffb96c",
     "uncommittedChanges": []
   },
-  "startedAt": "2026-09-18T13:02:22.906Z"
+  "startedAt": "2026-09-18T13:02:22.906Z",
+  "resumes": [
+    {
+      "source": {
+        "commit": "4822e0113d5d3ea3a97150df97e9a0cf71c01fee",
+        "uncommittedChanges": []
+      },
+      "startedAt": "2026-09-18T13:48:49.218Z",
+      "briefs": [
+        "brief_09_en_story916",
+        "brief_10_en_story916",
+        "brief_11_ckb_story916",
+        "brief_12_ckb_story916",
+        "brief_13_en_a4doc",
+        "brief_14_en_a4doc",
+        "brief_15_ckb_a4doc",
+        "brief_16_ckb_a4doc",
+        "brief_17_en_landscape169",
+        "brief_18_en_landscape169",
+        "brief_19_ckb_landscape169",
+        "brief_20_ckb_landscape169"
+      ]
+    }
+  ]
 }
