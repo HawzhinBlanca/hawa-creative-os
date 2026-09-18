@@ -988,6 +988,7 @@ async function main() {
   const concurrency = 2; // Controlled concurrency to respect rate limits
   let lastArchetype: string | null = null;
   const failures: Array<{ briefId: string; reason: string }> = [];
+  let outOfCredits = false;
 
   // T9: checkpoint + resume. --resume reuses ledger rows from completed briefs instead of repaying.
   const checkpointPath = path.join(outputDir, '.qualification-checkpoint.json');
@@ -1079,6 +1080,7 @@ async function main() {
         const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
         console.error(`[P10 FAILED] Brief ${brief.id}: ${reason}`);
         failures.push({ briefId: brief.id, reason });
+        if ((outcome.reason as { code?: string })?.code === 'INSUFFICIENT_QUOTA' || /no credits remaining|insufficient_quota/i.test(reason)) outOfCredits = true;
         continue;
       }
       const res: any = outcome.value;
@@ -1131,6 +1133,17 @@ async function main() {
       ),
       'utf8'
     );
+
+    // An account out of credits refuses every later brief, and it billed some of their calls before
+    // refusing: the 2026-09-18 production run paid USD 1.21 for briefs it could not finish before it
+    // was stopped by hand. The checkpoint above lets --resume finish once credits are added.
+    if (outOfCredits) {
+      console.error(
+        `\n[P10 STOPPED] The model account has no credits, so every later brief would be refused. ` +
+          `${results.length} of ${BRIEFS.length} briefs are complete. Add credits, then run again with --resume on ${outputDir}.`
+      );
+      break;
+    }
   }
 
   // Sort results by briefIndex to maintain canonical order 1..20
@@ -1280,7 +1293,7 @@ async function main() {
     (manifest.resumes || []).map((r) => `; resumed at ${measured(r.source)} for ${r.briefs.join(', ')}`).join('');
   const mdReport = `# P10 Full Qualification Report: ${BRIEFS.length} Held-Out Briefs (Multi-Stage Live Run)
 
-**Briefs attempted:** ${BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
+**Briefs:** ${BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${BRIEFS.length - results.length - failures.length > 0 ? ` · **not run:** ${BRIEFS.length - results.length - failures.length}` : ''}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
 
 ${measuredAt}
 

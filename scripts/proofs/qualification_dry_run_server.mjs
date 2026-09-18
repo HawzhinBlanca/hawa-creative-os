@@ -12,7 +12,7 @@
  *   PairwiseDimensionVerdict a judge with a consistent, arbitrary preference (by image hash), so
  *                            the same design wins from either position
  *
- *   node scripts/proofs/qualification_dry_run_server.mjs [port]
+ *   node scripts/proofs/qualification_dry_run_server.mjs [port] [--credits <calls answered before refusing>]
  *   HAWA_QUALIFICATION_DRY_RUN_URL=http://127.0.0.1:<port> HAWA_SPEND_STATE_DIR=<tmp> \
  *     HAWA_QUALIFICATION_OUT_DIR=<tmp> npx tsx scripts/run_p10_qualification.ts
  */
@@ -20,6 +20,10 @@ import http from 'node:http';
 import { createHash } from 'node:crypto';
 
 const PORT = Number(process.argv[2] || 18765);
+// --credits <n>: answer the first n calls, then refuse every later one as an account out of credits
+// does, so a runner's handling of that failure can be exercised without spending anything.
+const creditsAt = process.argv.indexOf('--credits');
+const CREDITS = creditsAt > 0 ? Number(process.argv[creditsAt + 1]) : Infinity;
 const DIMENSIONS = ['hierarchy', 'composition', 'typographic_craft', 'brand_fit', 'legibility'];
 
 function candidatesFor(prompt) {
@@ -126,6 +130,17 @@ const server = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
+    if (calls >= CREDITS) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: {
+          message: 'You have no credits remaining. Add credits to continue using the API.',
+          type: 'insufficient_quota',
+          code: 'insufficient_quota',
+        },
+      }));
+      return;
+    }
     try {
       const body = JSON.parse(raw);
       const data = answer(body);
