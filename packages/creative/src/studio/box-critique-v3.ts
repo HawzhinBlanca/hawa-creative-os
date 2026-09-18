@@ -1,5 +1,5 @@
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
-import { renderAnnotatedLayoutV2, type ElementBoxAnnotation, type RenderLayoutOptions } from './render-layout-v2.js';
+import { renderAnnotatedLayoutV2, type ElementBoxAnnotation, type RenderLayoutOptions, measureWrappedLines } from './render-layout-v2.js';
 import {
   evaluateDesignMetrics,
   type DesignMetricsReport,
@@ -172,7 +172,13 @@ export async function generateBoxGroundedCritique(
 
   // 1. Evaluate deterministic design metrics (Facts First)
   const deterministicMetrics =
-    options.deterministicMetrics || evaluateDesignMetrics(layout);
+    options.deterministicMetrics ||
+    evaluateDesignMetrics(layout, {
+      // Score the type, not the boxes — and the band travels with the measure.
+      wrappedLines: options.renderOptions?.copyText
+        ? measureWrappedLines(layout, options.renderOptions.copyText, options.renderOptions)
+        : undefined,
+    });
 
   // 2. Generate annotated debug render (Set-of-Mark style)
   let annotatedPng = options.annotatedPng;

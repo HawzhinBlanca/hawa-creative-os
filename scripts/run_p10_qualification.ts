@@ -15,6 +15,7 @@ import {
   evaluateDesignMetrics,
   renderLayoutV2,
   getFontFidelityManifest,
+  measureWrappedLines,
   resolveRatesForModel,
   correctFontsThatCannotDrawTheCopy,
   refineCandidate,
@@ -530,7 +531,7 @@ async function executeBriefLive(
   // Evaluate candidate layouts with deterministic P01 metrics
   const evaluatedCandidates = genResult.layouts.map((cand, idx) => ({
     cand,
-    metrics: evaluateDesignMetrics(cand),
+    metrics: evaluateDesignMetrics(cand, { wrappedLines: measureWrappedLines(cand, copyMap) }),
     rawCandidate: genResult.rawCandidates[idx],
   }));
 
@@ -634,7 +635,7 @@ async function executeBriefLive(
         // Sanitisation maps by role and script, not by what the copy contains, so verify coverage
         // afterwards: a block whose font cannot draw its own script is corrected here too.
         correctFontsThatCannotDrawTheCopy(layout, copyMap);
-        metrics = evaluateDesignMetrics(layout);
+        metrics = evaluateDesignMetrics(layout, { wrappedLines: measureWrappedLines(layout, copyMap) });
       }
     } catch (err: any) {
       console.warn(`[P10 LIVE] Brief ${brief.id}: refinement error:`, err?.message);

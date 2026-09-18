@@ -735,3 +735,70 @@ describe('the editable deck must accept the fonts the generator emits', () => {
     }
   });
 });
+
+describe('negativeSpace: the band travels with the measure', () => {
+  const W = 1080, H = 1350, MARGIN = 76, COLS = 6, GUT = 26;
+  const colW = (W - 2 * MARGIN - (COLS - 1) * GUT) / COLS;
+  const span = (n: number) => Math.round(n * colW + (n - 1) * GUT);
+  const COPY: Record<number, string> = {
+    0: 'Kurdistan Accrediting Agency for Education',
+    1: 'Mandatory Quality Standards 2026',
+    2: 'Institutional Excellence Under Law No. 6',
+    3: 'All universities must publish audited accreditation reports by the end of Q3.',
+    4: 'Erbil • September 2026 • kaae.gov.krd',
+  };
+  const T = (i: number, role: string, x: number, y: number, w: number, h: number, size: number, align: string, font = 'Verdana') => ({
+    copyIndex: i, role, x, y, width: w, height: h, fontSize: size, lineHeight: 1.35,
+    fontFamily: font, color: '#FDF8F3', align, bold: false, italic: false, rtl: false,
+  });
+  const layout = (widths: number[], align: string) => ({
+    version: 2, width: W, height: H, genre: 'poster',
+    grid: { margin: MARGIN, columns: COLS, gutter: GUT, baseline: 14 },
+    background: { color: '#0A1628' },
+    logo: { x: MARGIN, y: 90, width: 200, height: 120 },
+    shapes: [{ x: MARGIN, y: 730, width: span(widths[3]), height: 260, kind: 'rect', color: '#162B48', role: 'panel' }],
+    text: [
+      T(0, 'eyebrow', MARGIN, 260, span(widths[0]), 40, 18, align, 'Cinzel'),
+      T(1, 'title', MARGIN, 360, span(widths[1]), 180, 54, align, 'Playfair Display'),
+      T(2, 'subtitle', MARGIN, 580, span(widths[2]), 70, 26, align, 'Playfair Display'),
+      T(3, 'body', MARGIN, 760, span(widths[3]), 200, 22, align),
+      T(4, 'footer', MARGIN, 1180, span(widths[4]), 44, 16, align),
+    ],
+  }) as any;
+
+  it('stops preferring a full-width centred composition over an asymmetric one', async () => {
+    const { evaluateDesignMetrics } = await import('../src/studio/design-metrics.js');
+    const { measureWrappedLines } = await import('../src/studio/render-layout-v2.js');
+    const centred = layout([6, 6, 6, 6, 6], 'center');
+    const asym = layout([4, 5, 4, 4, 4], 'left');
+
+    const boxGap =
+      evaluateDesignMetrics(centred).compositeScore - evaluateDesignMetrics(asym).compositeScore;
+    const inkGap =
+      evaluateDesignMetrics(centred, { wrappedLines: measureWrappedLines(centred, COPY) }).compositeScore -
+      evaluateDesignMetrics(asym, { wrappedLines: measureWrappedLines(asym, COPY) }).compositeScore;
+
+    // Counting boxes gives the centred layout a large unearned advantage; counting type does not.
+    expect(boxGap).toBeGreaterThan(0.04);
+    expect(Math.abs(inkGap)).toBeLessThan(0.02);
+  });
+
+  it('still rejects a crammed layout and a bare one', async () => {
+    const { evaluateDesignMetrics } = await import('../src/studio/design-metrics.js');
+    const { measureWrappedLines } = await import('../src/studio/render-layout-v2.js');
+    const LONG = 'All accredited institutions must publish audited accreditation reports covering governance, curriculum, staffing, facilities and student outcomes before the end of the third quarter.';
+
+    const crammed = layout([6, 6, 6, 6, 6], 'center');
+    crammed.text.forEach((t: any) => { t.fontSize = 64; t.height = 300; });
+    const crammedCopy = { 0: LONG, 1: LONG, 2: LONG, 3: LONG, 4: LONG };
+    const crammedReport = evaluateDesignMetrics(crammed, { wrappedLines: measureWrappedLines(crammed, crammedCopy) });
+    expect(crammedReport.metrics.negativeSpace.score).toBeLessThan(0.7);
+
+    const bare = layout([6, 6, 6, 6, 6], 'center');
+    bare.text = [bare.text[1]];
+    bare.shapes = [];
+    delete bare.logo;
+    const bareReport = evaluateDesignMetrics(bare, { wrappedLines: measureWrappedLines(bare, { 1: 'Notice' }) });
+    expect(bareReport.metrics.negativeSpace.score).toBeLessThan(0.7);
+  });
+});

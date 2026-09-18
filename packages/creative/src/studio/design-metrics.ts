@@ -511,19 +511,30 @@ export function computeNegativeSpace(
 
   const fraction = Math.max(0, Math.min(1, 1 - occupiedArea / totalArea));
 
-  // Optimal band: 0.30 to 0.60 calibrated against 6 confirmed exemplars (range 0.340 - 0.568)
+  // The band belongs to the measure, so it moves with it. Counting boxes and counting type give
+  // different emptiness for the same design — measured across 20 production layouts, the box
+  // measure spans 0.412-0.637 and the type measure 0.553-0.827 — so one band cannot serve both.
+  //
+  // The type band is placed so this corpus sits where it sat under the box band: comfortably
+  // inside the plateau, median just below its upper edge, the emptiest design just past it into
+  // the taper. That preserves every accept/reject decision the metric already makes on real work
+  // while removing the reason it preferred one composition, which is the whole point of switching.
+  const band = wrappedLines
+    ? { floor: 0.36, rampEnd: 0.44, plateauEnd: 0.78, taperEnd: 0.84 }
+    : { floor: 0.25, rampEnd: 0.30, plateauEnd: 0.60, taperEnd: 0.65 };
+
   let score = 1.0;
-  if (fraction < 0.25) {
-    score = Math.max(0, (fraction / 0.25) * 0.5);
-  } else if (fraction < 0.30) {
-    score = 0.75 + (fraction - 0.25) * 4.0;
-  } else if (fraction <= 0.60) {
+  if (fraction < band.floor) {
+    score = Math.max(0, (fraction / band.floor) * 0.5);
+  } else if (fraction < band.rampEnd) {
+    score = 0.75 + ((fraction - band.floor) / (band.rampEnd - band.floor)) * 0.2;
+  } else if (fraction <= band.plateauEnd) {
     score = 0.95;
-  } else if (fraction <= 0.65) {
-    score = 0.95 - ((fraction - 0.60) / 0.05) * 0.25; // Linear drop from 0.95 down to 0.70
+  } else if (fraction <= band.taperEnd) {
+    score = 0.95 - ((fraction - band.plateauEnd) / (band.taperEnd - band.plateauEnd)) * 0.25;
   } else {
-    // Fraction > 0.65: excessive emptiness fails gate (< 0.70)
-    score = Math.max(0, 0.68 - ((fraction - 0.65) / 0.15) * 0.68);
+    // Past the taper: excessive emptiness fails the gate (< 0.70).
+    score = Math.max(0, 0.68 - ((fraction - band.taperEnd) / 0.15) * 0.68);
   }
 
   // Detect largest internal dead gap between consecutive substantive content blocks
