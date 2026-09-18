@@ -663,6 +663,20 @@ function renderTextElementToSvg(
     tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}">${escapeXml(lines[i])}</tspan>`);
   }
 
+  // A family this renderer cannot draw must not be handed to the rasteriser to guess at. Vazirmatn
+  // is the live case: it has the glyphs, fontconfig resolves it, and pango still draws something
+  // else — so the client's Kurdish text rendered in whatever face happened to win, differing by
+  // host. Substituting a declared face instead makes the outcome deterministic and inspectable,
+  // and the fontFidelity map still reports that the requested family was not used.
+  let drawFamily = t.fontFamily;
+  if (probeFontFidelity(t.fontFamily, { fontsDir }) === 'stand-in') {
+    const fallback =
+      t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
+    if (probeFontFidelity(fallback, { fontsDir }) === 'exact') {
+      drawFamily = fallback;
+    }
+  }
+
   // Ask the rasteriser for exactly the face fontkit measured with — see fontFaceSupports.
   const faceAxes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
   const fontWeight = faceAxes.bold ? 'bold' : 'normal';
@@ -675,7 +689,7 @@ function renderTextElementToSvg(
     ? ` letter-spacing="${(letterSpacingVal * renderFontSize).toFixed(2)}px"`
     : '';
 
-  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(t.fontFamily)}" font-size="${renderFontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
+  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(drawFamily)}" font-size="${renderFontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
     ${tspans.join('\n    ')}
   </text>`;
 
