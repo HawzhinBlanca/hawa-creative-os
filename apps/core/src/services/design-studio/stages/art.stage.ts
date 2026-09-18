@@ -49,8 +49,14 @@ export async function runArtStage(
           synthId: artResult.receipt.synthId,
           prompt: basePrompt,
         };
-      } catch (err) {
-        // Degradation ladder rung 2: fallback to procedural motif
+      } catch (err: any) {
+        // Degradation ladder rung 2: fallback to procedural motif. Logged because the ladder is
+        // otherwise invisible — a design quietly shipping a procedural motif instead of generated
+        // art looks like a design decision rather than a failed image call.
+        console.warn(
+          `[art.stage] Image generation failed (${err?.message || err}); falling back to a ` +
+            `procedural motif for this candidate.`
+        );
         const fallbackMotif: ProceduralMotifType = (cand.concept.motif as ProceduralMotifType) || 'thin-rules';
         const pngBytes = renderMotifPng(fallbackMotif, {
           width,

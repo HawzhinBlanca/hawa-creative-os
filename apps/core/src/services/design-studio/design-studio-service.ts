@@ -556,8 +556,14 @@ export class DesignStudioService {
           promotedRules = rawRef.rules.colorUsage;
         }
       }
-    } catch {
-      // Fallback defaults preserved
+    } catch (err: any) {
+      // Silently falling back meant a client's own script font and colour rules could stop
+      // applying with nothing in the logs to say so, and the design would look generic for a
+      // reason no one could trace.
+      console.warn(
+        `[design-studio] Reference pack could not be read (${err?.message || err}); ` +
+          `falling back to default typography and colour rules for this design.`
+      );
     }
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
@@ -586,8 +592,11 @@ export class DesignStudioService {
           });
         }
       }
-    } catch {
-      // Optional fallback
+    } catch (err: any) {
+      console.warn(
+        `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
+          `this design is being generated without exemplar conditioning.`
+      );
     }
 
     let logo: { bytes: Buffer; sha256: string; mimeType: 'image/png' } | undefined;
@@ -602,8 +611,13 @@ export class DesignStudioService {
           mimeType: 'image/png',
         };
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      // A KAAE design without the KAAE logo is not deliverable, and this used to pass silently:
+      // the layout still declares a logo box, so the asset-integrity check sees one and passes.
+      console.error(
+        `[design-studio] Logo could not be loaded (${err?.message || err}). The design will render ` +
+          `without it while still reserving its box.`
+      );
     }
 
     return {

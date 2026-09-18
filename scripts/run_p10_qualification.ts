@@ -602,8 +602,25 @@ async function executeBriefLive(
           });
         }
       }
-      if (refineResult.finalScore > best.metrics.compositeScore || refineResult.passed) {
-        layout = refineResult.finalLayout;
+      // Adopt the refinement only once it is known to be a usable layout. Assigning first and
+      // validating later meant a malformed refinement replaced the winning layout and then threw,
+      // and the catch below swallowed the throw — leaving every downstream stage working on the
+      // broken object. Seen live: "layout.text is not iterable".
+      const refined: any = refineResult.finalLayout;
+      const refinedIsUsable =
+        !!refined &&
+        Array.isArray(refined.text) &&
+        refined.text.length > 0 &&
+        Array.isArray(refined.shapes) &&
+        Number.isFinite(refined.width) &&
+        Number.isFinite(refined.height);
+
+      if (!refinedIsUsable) {
+        console.warn(
+          `[P10 LIVE] Brief ${brief.id}: refinement returned an unusable layout; keeping the winner.`
+        );
+      } else if (refineResult.finalScore > best.metrics.compositeScore || refineResult.passed) {
+        layout = refined;
         for (const t of layout.text) {
           t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
         }

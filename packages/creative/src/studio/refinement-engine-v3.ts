@@ -438,6 +438,25 @@ Produce the corrected layout repairing these exact flaws.`;
       art: currentLayout.art ? { ...currentLayout.art } : undefined,
     };
 
+    // A repair that is not a usable layout must not become the result. This engine returns
+    // finalLayout to its callers, and adopting a malformed repair sent one downstream that threw
+    // "layout.text is not iterable" at the caller, after the assignment had already replaced the
+    // good layout. Keep the last good one and stop refining instead.
+    if (
+      !Array.isArray(repairedLayout.text) ||
+      repairedLayout.text.length === 0 ||
+      !Array.isArray(repairedLayout.shapes) ||
+      !Number.isFinite(repairedLayout.width) ||
+      !Number.isFinite(repairedLayout.height)
+    ) {
+      console.warn(
+        `[refinement-engine-v3] Round ${r} returned a layout without usable text or geometry; ` +
+          `keeping the last good layout and stopping refinement.`
+      );
+      stopReason = 'repair_returned_unusable_layout';
+      break;
+    }
+
     // d. Re-evaluate P01 deterministic metrics
     const postMetrics = evaluateDesignMetrics(repairedLayout);
     const postScore = postMetrics.compositeScore;
