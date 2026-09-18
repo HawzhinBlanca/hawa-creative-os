@@ -608,7 +608,54 @@ The two briefs measured here had hero_statement_grid scoring highest in both cas
 monolith_centered, but those came from the cheap tier and cannot be read across to the production
 model.
 
-## 20. What remains
+## 20. Why 16 of 20 winners were the same archetype
+
+This was the one thing left unexplained, and it is now measured. It is not the generator and it is
+not the judge. It is `negativeSpace` again, and it is a first-order cause of "all the designs look
+the same".
+
+Two layouts holding identical copy, both on-grid with every block spanning a whole number of
+columns — one full-width centred, one asymmetric on a left axis:
+
+| metric | centred | asymmetric | favours |
+|---|---|---|---|
+| gridAppropriateness | 1.000 | 1.000 | — |
+| alignment | 1.000 | 0.992 | centred, marginally |
+| balance | 0.949 | 0.901 | centred, arguably fairly |
+| **negativeSpace** | **0.950** | **0.566** | **centred, by 0.384** |
+| **composite** | **0.955** | **0.895** | **centred, by 0.060** |
+
+A 0.060 composite advantage for no reason a reader could see — and larger than the gap between
+candidates the tournament actually has to separate. Given three distinct archetypes per brief, the
+ranking stage will pick the full-width centred one nearly every time. That is the monoculture.
+
+The cause is the same defect as section 17.6: a block spanning four columns is scored as *emptier*
+than the same copy spanning six, because the measure counts box area rather than type. Supplying
+real line counts narrows the gap from **0.060 to 0.010** — the fix direction is confirmed.
+
+I was wrong twice on the way here and both corrections are worth keeping. First I blamed candidate
+diversity; measuring it showed three distinct archetypes with pairwise distances of 123-423px
+against a 15px threshold. Then I blamed `gridAppropriateness`, on a test where I had given the
+asymmetric layout arbitrary widths — it was genuinely off-grid, and the metric was right to
+penalise it. With column-exact widths that metric scores 1.000 for both.
+
+### Why this is not simply fixed here
+
+Switching to the ink measure drops both layouts below the current band, so the band must move with
+it, and the band cannot be honestly derived from what I have. Measuring the confirmed exemplars'
+coverage by dilating their glyphs into blocks gives **0.078 to 0.169 depending only on the dilation
+radius** — a two-fold range driven by an arbitrary parameter, moving the answer as much as the
+signal does. Three of the six exemplars are also only available as images.
+
+A sound recalibration needs the exemplars' text-block geometry, not their pixels — which means
+annotating the six references once, by hand or with vision, and deriving the band from that. That is
+an owner-sized decision about the house style, not a threshold to guess at, and guessing is exactly
+what produced the band that is causing this.
+
+`scripts/proofs/measure_composition_bias.mjs` quantifies the preference on demand and prints the
+number a recalibration has to drive to roughly zero. It takes no model calls.
+
+## 21. What remains
 
 1. **Deploy.** Production is 30 commits behind HEAD and is missing every fix in sections 17 and 18 — including the one where no Kurdish design could produce a deliverable at all. The deploy pre-flight passes clean (`bash infra/docker/deploy.sh`, exit 0, 0 credentials exposed or committable); applying it is the owner's call because it changes what real clients receive.
 2. **The pairwise judge and canary verdicts** have never been validated on correct typography. Only the winning candidate is persisted, so a pair cannot be reconstructed from artifacts; validating them needs a full in-image run, or persisting both candidates so a re-judge becomes possible.
