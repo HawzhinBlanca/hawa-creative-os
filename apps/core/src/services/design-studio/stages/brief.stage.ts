@@ -1,4 +1,5 @@
 import type { StageContext, CreativeBrief } from '../types.js';
+import { nearestPaletteColour } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP1Prompt } from '../prompts.js';
 
 export const CREATIVE_BRIEF_SCHEMA = {
@@ -51,6 +52,11 @@ export const CREATIVE_BRIEF_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
     },
+    requestedBackground: {
+      type: 'string',
+      description:
+        "The brand-palette hex the client explicitly asked to use as the background (for example they wrote 'navy background'); an empty string when they did not ask for one.",
+    },
   },
   required: [
     'occasion',
@@ -65,6 +71,7 @@ export const CREATIVE_BRIEF_SCHEMA = {
     'imageryRationale',
     'kurdishLeads',
     'riskFlags',
+    'requestedBackground',
   ],
   additionalProperties: false,
 };
@@ -125,10 +132,26 @@ export function normalizeBriefRoles(brief: CreativeBrief, copyCount: number): { 
   for (let i = 0; i < copyCount; i++) {
     if (!byIndex.has(i)) throw new Error(`Creative brief failed validation: missing copy index ${i}`);
   }
+  // An eyebrow is the short line above a title. A block the client wrote after the title cannot be
+  // one: labelled so, the layout sets it above the title (the guest's name, task 3c3a422b).
+  const title = [...byIndex.values()].find((r) => r.role === 'title');
+  for (const [i, r] of byIndex) {
+    if (title && r.role === 'eyebrow' && i > title.copyIndex) byIndex.set(i, { ...r, role: 'subtitle' });
+  }
   const order = [...new Set((brief.readingOrder || []).filter((i) => Number.isInteger(i) && i >= 0 && i < copyCount))];
   for (let i = 0; i < copyCount; i++) if (!order.includes(i)) order.push(i);
   return {
     brief: { ...brief, roles: [...byIndex.keys()].sort((a, b) => a - b).map((i) => byIndex.get(i)!), readingOrder: order },
     dropped,
   };
+}
+
+/**
+ * The background colour the client asked for, as a colour of the brand palette, or undefined.
+ * A hex outside the palette resolves to the nearest brand colour; anything else is ignored.
+ */
+export function requestedBackgroundFor(brief: Partial<CreativeBrief> | undefined, palette: string[]): string | undefined {
+  const hex = String(brief?.requestedBackground || '').trim();
+  if (!/^#[0-9a-f]{6}$/i.test(hex) || !palette.length) return undefined;
+  return palette.find((p) => p.toLowerCase() === hex.toLowerCase()) || nearestPaletteColour(hex, palette);
 }

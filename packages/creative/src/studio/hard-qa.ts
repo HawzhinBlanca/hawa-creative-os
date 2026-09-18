@@ -151,7 +151,34 @@ export function evaluateHardQa(
     }
   }
 
+  // The client's copy reads in the order they wrote it. A block set above one that precedes it in
+  // the same column changes their content: on the cheap tier all three candidates of task 3c3a422b
+  // (2026-09-18) put the guest's name above the title the client wrote first.
+  const reordered = copyOrderViolations(layout);
+  if (reordered.length > 0) {
+    defectCodes.push('COPY_ORDER');
+    messages.push(`COPY_ORDER: ${reordered.join('; ')}; stack blocks top to bottom in copyIndex order, as the client wrote them`);
+  }
+
   return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout: checked };
+}
+
+/**
+ * Blocks set above a block that precedes them in the copy, within the same column. Blocks side by
+ * side (a date beside a venue) share no column and are never compared; a few pixels of offset
+ * between blocks on one baseline are allowed.
+ */
+export function copyOrderViolations(layout: Pick<StudioLayoutV2, 'text'>): string[] {
+  const blocks = [...(layout.text || [])].sort((a, b) => a.copyIndex - b.copyIndex);
+  const sameColumn = (a: { x: number; width: number }, b: { x: number; width: number }) =>
+    Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0.25 * Math.min(a.width, b.width);
+  const found: string[] = [];
+  for (let j = 1; j < blocks.length; j++) {
+    const later = blocks[j];
+    const earlier = blocks.slice(0, j).find((b) => b.copyIndex < later.copyIndex && sameColumn(b, later) && later.y + 4 < b.y);
+    if (earlier) found.push(`block ${later.copyIndex} (${later.role}) sits above block ${earlier.copyIndex} (${earlier.role})`);
+  }
+  return found;
 }
 
 export interface StudioReferenceRules {

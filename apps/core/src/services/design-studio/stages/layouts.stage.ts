@@ -181,10 +181,7 @@ export async function runLayoutsStage(
       };
     });
 
-    const briefSummary =
-      [brief.occasion, brief.audience, (brief.toneWords || []).join(', ')].filter(Boolean).join(' - ') ||
-      ctx.instructions ||
-      'Official Institutional Communication';
+    const briefSummary = layoutBriefV3(brief, ctx);
 
     const v3Result = await generateLayoutCandidatesV3({
       client: ctx.client as any,
@@ -204,6 +201,7 @@ export async function runLayoutsStage(
         height: ctx.height,
         logoAspect: ctx.logoAspect,
         palette: ctx.referencePack.palette,
+        background: ctx.requestedBackground,
       });
       const existing = existingCandidates?.find((c) => c.ordinal === i);
       return {
@@ -321,4 +319,25 @@ export async function runLayoutsStage(
   }
 
   return candidates;
+}
+
+/**
+ * The design brief the v3 generator reads. The client's own words and the brief's musts reach it:
+ * it used to get only the occasion, audience and tone, so "dark blue navy as a background" never
+ * did, and two of three cheap-tier candidates came back cream and white (task 3c3a422b, 2026-09-18).
+ */
+export function layoutBriefV3(
+  brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'>,
+  ctx: Pick<StageContext, 'instructions' | 'requestedBackground'>
+): string {
+  return (
+    [
+      [brief.occasion, brief.audience, (brief.toneWords || []).join(', ')].filter(Boolean).join(' - '),
+      ctx.instructions ? `Client instructions: ${ctx.instructions.replace(/"/g, "'")}` : '',
+      brief.must?.length ? `Must: ${brief.must.join('; ')}` : '',
+      ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
+    ]
+      .filter(Boolean)
+      .join('\n') || 'Official Institutional Communication'
+  );
 }

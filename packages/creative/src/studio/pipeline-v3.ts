@@ -651,8 +651,19 @@ export function conformToHouseRules(
 export function prepareGeneratedLayoutV3(
   layout: StudioLayoutV2,
   copy: PipelineV3Copy,
-  canvas: { width: number; height: number; logoAspect?: number; palette?: string[] }
+  canvas: {
+    width: number;
+    height: number;
+    logoAspect?: number;
+    palette?: string[];
+    /** The brand colour the client asked for as the background. Applied before contrast repair. */
+    background?: string;
+  }
 ): StudioLayoutV2 {
+  // A background the client named is theirs, not the generator's choice: on the cheap tier two of
+  // three candidates for "dark blue navy as a background" came back cream and white, and one won
+  // (task 3c3a422b, 2026-09-18). Set first, so preparation recolours any text it leaves unreadable.
+  if (canvas.background) layout.background = { ...(layout.background || {}), color: canvas.background };
   const aspect = canvas.logoAspect || 1.0;
   const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
   const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
@@ -760,7 +771,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[] };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }
