@@ -98,6 +98,8 @@ export interface DesignStudioServiceOptions {
   defaultImagery?: 'auto' | 'none' | 'generated';
   planner?: CanvaDesignPlanner;
   maxRetries?: number;
+  /** Minutes without a write after which an unfinished run no longer holds a studio slot. */
+  staleRunMinutes?: number;
 }
 
 export interface StudioResumeResult {
@@ -267,7 +269,9 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, 'CLIENT_CHANGED', 'Client changed while references were retrieved.');
       }
 
-      // 3. Check for existing run by request_key OR in-flight active run for this task
+      // 3. Check for existing run by request_key OR in-flight active run for this task.
+      // A task keeps at most one unfinished run however old (unique index design_studio_one_active_run):
+      // it is resumed or abandoned, never silently replaced.
       const prior = (
         await sql<any>`SELECT * FROM hawa.design_studio_runs 
         WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid 
@@ -299,10 +303,14 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, 'CANVA_ALREADY_BOUND', 'Edit the existing Canva design; studio generation never overwrites it.');
       }
 
-      // 5. Concurrency check: max 2 active studio runs per tenant
+      // 5. Concurrency check: max 2 active studio runs per tenant.
+      // A whole run takes minutes and writes on every stage. One left unadvanced (a Desk run nobody
+      // resumed, a run cut off by a crash) stops holding a tenant slot, so it cannot block other tasks.
+      const staleMinutes = this.options.staleRunMinutes ?? 30;
       const activeRuns = (
         await sql<any>`SELECT count(*) AS n FROM hawa.design_studio_runs 
-        WHERE tenant_id=${s.tenantId}::uuid AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')`.execute(db)
+        WHERE tenant_id=${s.tenantId}::uuid AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')
+          AND updated_at > now() - make_interval(mins => ${staleMinutes})`.execute(db)
       ).rows[0];
 
       if (Number(activeRuns.n) >= 2) {

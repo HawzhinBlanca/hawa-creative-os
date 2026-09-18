@@ -136,6 +136,7 @@ import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
 import { type DesignStudioServiceOptions, DesignStudioService } from './services/design-studio/index.js';
+import { studioStatusNote } from './services/design-studio/studio-status-note.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
@@ -5144,7 +5145,7 @@ export function createApp(options?: CreateAppOptions) {
       }
     } catch { /* the note is a courtesy; the status message must still go out */ }
 
-    // Studio v2 notes: concepts, revisions, judge score, imagery, typeface, and ladder rung notes
+    // Studio summary: only what the run recorded (concepts, revisions, score, imagery, typeface, ladder, parity).
     let studioRun: any = null;
     let studioCandidates: any[] = [];
     try {
@@ -5158,38 +5159,6 @@ export function createApp(options?: CreateAppOptions) {
             WHERE tenant_id = ${auth.tenantId}::uuid AND run_id = ${studioRun.id}::uuid
             ORDER BY ordinal ASC`.execute(trx)).rows);
 
-        const winner = studioCandidates.find(c => c.id === studioRun.winner_candidate_id) || studioCandidates[0];
-        const conceptsCount = studioCandidates.length || 5;
-        const stages = typeof studioRun.stages === 'string' ? JSON.parse(studioRun.stages || '{}') : (studioRun.stages || {});
-        const revisionRounds = stages.revise?.completed ? 2 : (stages.critique?.completed ? 1 : (winner?.layouts?.length ? Math.max(1, winner.layouts.length - 1) : 2));
-        const judgeScore = typeof winner?.score === 'number' ? (winner.score % 1 === 0 ? winner.score.toFixed(1) : winner.score.toString()) : '8.7';
-
-        const artProv = typeof winner?.art_provenance === 'string' ? JSON.parse(winner.art_provenance) : winner?.art_provenance;
-        const concept = typeof winner?.concept === 'string' ? JSON.parse(winner.concept) : winner?.concept;
-        let imageryStr = 'none';
-        if (artProv?.synthId || artProv?.generator === 'imagen' || concept?.artStrategy === 'generated') {
-          imageryStr = 'generated (SynthID)';
-        } else if (concept?.artStrategy === 'procedural') {
-          imageryStr = `procedural (${concept.motif || 'thin-rules'})`;
-        }
-
-        const winnerLayout = typeof winner?.layout === 'string' ? JSON.parse(winner.layout) : winner?.layout;
-        const fontFaces = new Set<string>();
-        if (winnerLayout?.text) {
-          for (const t of winnerLayout.text) {
-            if (t.fontFamily) fontFaces.add(t.fontFamily);
-          }
-        }
-        const typefaceStr = fontFaces.size > 0
-          ? [...fontFaces].join(', ')
-          : (concept?.displayFont ? `${concept.displayFont} (Canva native)` : 'Verdana / Noto Sans Arabic');
-        let rungNotes = '';
-        if (stages.ladderRung && stages.ladderRung > 1) {
-          rungNotes = stages.ladderNotes ? ` · ${stages.ladderNotes}` : ` · Rung ${stages.ladderRung} fallback`;
-        } else if (studioRun.diagnostic?.includes('Rung')) {
-          rungNotes = ` · ${studioRun.diagnostic}`;
-        }
-
         let parityNote = '';
         if (body.parity === 'unavailable') {
           parityNote = ` · parity: unavailable (${body.parityError || 'error'})`;
@@ -5201,7 +5170,7 @@ export function createApp(options?: CreateAppOptions) {
           } catch { /* courtesy record */ }
         }
 
-        const studioNote = `Studio v2 · ${conceptsCount} concepts · ${revisionRounds} revision rounds · judge ${judgeScore}/10 · imagery: ${imageryStr} · typeface: ${typefaceStr}${rungNotes}${parityNote}`;
+        const studioNote = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote });
         notes.push(studioNote);
       }
     } catch { /* courtesy note; do not fail status */ }
