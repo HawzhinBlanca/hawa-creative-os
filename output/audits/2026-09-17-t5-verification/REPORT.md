@@ -895,7 +895,38 @@ tier because o4-mini ignores its own declared type scale. typeScale fails 16–1
 it requires typeScale too; the runner now labels that row by what it measures. That gate, and the
 design quality behind it, can only be qualified on the production model.
 
-## 26. The production-tier qualification: 8 of 20, stopped when the API account ran out of credits
+## 26. The production-tier qualification: PASS, 20 of 20
+
+**Final result.** The run passed every gate (`P10_QUALIFICATION.md`). Briefs 1–8 were measured at
+`910a6a6`. Credits ran out mid-run, as described below; the owner added more, and briefs 9–20 were
+measured at `4822e01` by `--resume`. Preparation is identical at both commits; `RUN_MANIFEST.json`
+records both sessions.
+
+| Gate | Target | Result |
+|---|---|---|
+| Print-ready | ≥ 81.3% | 95% (19/20); brief_07 fails negativeSpace |
+| Canary, both orders | ≥ 95% | 100% (20/20) |
+| Order-swap consistency | ≥ 80% | 90% (18/20); the Kurdish stories 11 and 12 were decided by composite |
+| Production hard QA / escapes | 100% / 0 | 20/20 / 0 |
+| Copy and readability, editability | ≥ 90%, 100% | 20/20, 20/20 |
+| Font fidelity, in the image | exact | every family exact |
+| Median cost per brief | ≤ USD 0.38 | USD 0.358 |
+
+The 20 briefs cost USD 7.31 over 122 calls. The qualification cost USD 8.52 in all, including the
+USD 1.21 lost to the refusals.
+
+Verified outside the runner:
+- Re-preparing the 20 stored designs gives production QA 20/20 and QA with metrics 19/20, with no
+  regression over any stored run.
+- The renders of all twelve resumed briefs (story, A4, landscape; English and Sorani) show exact
+  faces, no collision, no overflow and correct right-to-left order. brief_17's landscape title fits
+  on one line; T5's did not.
+
+Two notes on taste:
+- The Sorani story titles are set far smaller than the English ones, so those 9:16 canvases stay
+  mostly empty.
+- 17 of 20 winners are the centred monolith of section 20. The A4 briefs show the most range: two
+  light grounds and one asymmetric layout.
 
 The owner approved the production-tier run (about USD 7–10) on the evening of 2026-09-18. It ran in
 the production image at `910a6a6`, with `gpt-6-astra` for layout, critique and judge
@@ -956,17 +987,20 @@ After preparation, 203 of 208 stored designs pass production QA, 47 of 48 from t
 model. The five left need rearranging, which only refinement does: two with text on the logo
 (cheap run 2), two missing a copy block (dev tier), and T5 brief_17's title with no room.
 
-## Final state (2026-09-18, after the production run stopped)
+## Final state (2026-09-18, after the production-tier qualification passed)
 
-Branch `studio-v2`, 71 commits ahead of the deployed `4699792` (as of `d364e8b`). The decisions
-remaining are all the owner's:
+The v3 pipeline is qualified on the production tier. It is not live: production runs `4699792`
+(tag `deployed-2026-09-17`) with both pipeline flags off. There, a Telegram request goes through
+the legacy planner: `gpt-6-astra` classifies and plans, `whisper-1` transcribes voice, and nothing
+generates images. The decisions remaining are all the owner's:
 
-1. **Add API credits.** The account ran out during the qualification, and the live service shares
-   the key.
-2. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
-3. **Finish the in-image qualification**, about USD 4.5–5.5 for the 12 briefs left (section 26).
-4. **T8**, about USD 3.5–5 for the ten compare briefs, then the owner's ratings:
+1. **Deploy** `studio-v2`. Both pipeline flags stay off, so clients see only the robustness fixes
+   until a chat is enrolled.
+2. **`DESIGN_PIPELINE_V3_CHATS`**: enrol the owner's own chat first, for real-world testing of v3.
+3. **T8**, about USD 3.5–5 for the ten compare briefs, then the owner's ratings:
    `HAWA_QUALIFICATION_BRIEF_SET=compare bash scripts/proofs/run_qualification_in_image.sh <dir>`,
    then `npx tsx scripts/package_t8_blind_eval.ts --v3-run <dir>`.
-5. **`DESIGN_PIPELINE_V3_CHATS`**, which now actually pilots v3 for the listed chat.
+4. **API credits.** Auto-recharge would stop the live service from sharing another outage.
+5. **Pushing the repository**, which has no remote. Its history holds an old Telegram bot token
+   (not the live one, checked by hash), added in `99f5d14` and removed in `e6cd139`.
 
