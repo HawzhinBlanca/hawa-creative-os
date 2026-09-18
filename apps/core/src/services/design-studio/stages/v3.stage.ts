@@ -174,6 +174,7 @@ export async function runReviseStageV3(
       logoAspect: ctx.logoAspect,
       palette: ctx.referencePack.palette,
       background: ctx.requestedBackground,
+      ornament: ctx.ornament,
     },
     qa: hardQaContextFor(ctx),
   });

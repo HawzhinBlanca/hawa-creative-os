@@ -22,7 +22,18 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
+import { resolveOrnamentSettings, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
+
+/** The owner's ornament settings; an invalid one is reported and the defaults stand. */
+const ornamentSettings = (): OrnamentSettings => {
+  try {
+    return resolveOrnamentSettings();
+  } catch (err) {
+    console.error('[studio] ornament settings invalid, using the defaults:', err instanceof Error ? err.message : err);
+    return resolveOrnamentSettings({});
+  }
+};
 
 /** A run's stage record, whether the driver returned JSON or text. */
 const runStages = (run: { stages?: unknown }): Record<string, any> => {
@@ -676,6 +687,7 @@ export class DesignStudioService {
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
+      ornament: ornamentSettings(),
     };
   }
 

@@ -202,6 +202,7 @@ export async function runLayoutsStage(
         logoAspect: ctx.logoAspect,
         palette: ctx.referencePack.palette,
         background: ctx.requestedBackground,
+        ornament: ctx.ornament,
       });
       const existing = existingCandidates?.find((c) => c.ordinal === i);
       return {

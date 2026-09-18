@@ -15,6 +15,7 @@ import type { OpenAiStudioClient } from './openai-studio-client.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
+import { computeLayoutMetrics } from './layout-metrics.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
@@ -695,6 +696,8 @@ export function prepareGeneratedLayoutV3(
     palette?: string[];
     /** The brand colour the client asked for as the background. Applied before contrast repair. */
     background?: string;
+    /** Brand ornament added when the generator left it out: a texture and gold dividers. */
+    ornament?: OrnamentSettings;
   }
 ): StudioLayoutV2 {
   // A background the client named is theirs, not the generator's choice: on the cheap tier two of
@@ -704,7 +707,124 @@ export function prepareGeneratedLayoutV3(
   const aspect = canvas.logoAspect || 1.0;
   const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
   const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
-  return conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
+  const conformed = conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
+  if (!canvas.ornament) return conformed;
+  // Ornament may never make a design worse by the pipeline's own measures. The texture changes no
+  // measure; dividers and the box fitting they need can (over the 160 stored designs, one fell below
+  // the alignment gate and one gained an off-centre divider). Those keep the texture alone.
+  const plain = JSON.parse(JSON.stringify(conformed)) as StudioLayoutV2;
+  const ornamented = addBrandOrnament(conformed, copy, canvas.ornament, canvas.palette || []);
+  if (!ornamentAddsDefect(plain, ornamented, copy)) return ornamented;
+  return addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []);
+}
+
+function ornamentAddsDefect(plain: StudioLayoutV2, ornamented: StudioLayoutV2, copy: PipelineV3Copy): boolean {
+  const before = computeLayoutMetrics(plain);
+  const after = computeLayoutMetrics(ornamented);
+  if (after.overlapCount > before.overlapCount) return true;
+  if (after.alignmentScore < 0.7 && before.alignmentScore >= 0.7) return true;
+  const skewed = (l: StudioLayoutV2) => findAsymmetricSeparators(l.shapes || [], l.text || []).length;
+  if (skewed(ornamented) > skewed(plain)) return true;
+  const failing = new Set(measureDesignV3(plain, copy).failingMetrics);
+  return measureDesignV3(ornamented, copy).failingMetrics.some((m) => !failing.has(m));
+}
+
+const MOTIFS = ['sun-rays', 'guilloche', 'thin-rules', 'gradient-wash'] as const;
+
+export interface OrnamentSettings {
+  /** Gold rules under the title and above the date block, where the gap allows one. */
+  dividers: boolean;
+  /** A procedural brand texture behind a design that has no artwork, or none. */
+  texture: (typeof MOTIFS)[number] | 'none';
+  /** The texture layer's opacity, applied once: in the render and in the Canva deck alike. */
+  textureOpacity: number;
+}
+
+/**
+ * The owner asked for richer designs (2026-09-19): gold dividers and texture on every design.
+ * HAWA_DESIGN_DIVIDERS (on | off), HAWA_DESIGN_TEXTURE (sun-rays | guilloche | thin-rules |
+ * gradient-wash | none), HAWA_DESIGN_TEXTURE_OPACITY (0.05-0.6). Sun rays echo the rays of the KAAE
+ * emblem; guilloche's loops ran through body copy in the preview, and thin-rules' frame crossed a
+ * title wider than the margin. Throws on a value it does not know.
+ */
+export function resolveOrnamentSettings(env: Record<string, string | undefined> = process.env): OrnamentSettings {
+  const read = (name: string) => (env[name] || '').trim().toLowerCase();
+  const dividers = read('HAWA_DESIGN_DIVIDERS') || 'on';
+  if (dividers !== 'on' && dividers !== 'off') throw new Error(`HAWA_DESIGN_DIVIDERS must be on or off, not '${dividers}'`);
+  const texture = (read('HAWA_DESIGN_TEXTURE') || 'sun-rays') as OrnamentSettings['texture'];
+  if (texture !== 'none' && !MOTIFS.includes(texture as any)) {
+    throw new Error(`HAWA_DESIGN_TEXTURE must be one of ${MOTIFS.join(', ')} or none, not '${texture}'`);
+  }
+  const opacity = read('HAWA_DESIGN_TEXTURE_OPACITY') ? Number(read('HAWA_DESIGN_TEXTURE_OPACITY')) : 0.25;
+  if (!(opacity >= 0.05 && opacity <= 0.6)) throw new Error(`HAWA_DESIGN_TEXTURE_OPACITY must be between 0.05 and 0.6`);
+  return { dividers: dividers === 'on', texture, textureOpacity: opacity };
+}
+
+/**
+ * Adds the brand ornament a layout lacks. Texture: a procedural motif over the whole canvas, only
+ * when the layout has no artwork of its own. Dividers: only when it has no rule. Boxes are first
+ * fitted to their copy (centred, where the renderer sets the lines, with a quarter-line of headroom
+ * so Canva cannot clip), because generated boxes are several lines taller than their text and a
+ * rule in the visible gap would otherwise sit inside a box and fail QA. A divider goes only where
+ * the gap holds it clear of text and of the logo's clear space.
+ */
+export function addBrandOrnament(
+  layout: StudioLayoutV2,
+  copy: PipelineV3Copy,
+  ornament: OrnamentSettings,
+  palette: string[]
+): StudioLayoutV2 {
+  const W = layout.width;
+  const H = layout.height;
+  if (ornament.texture !== 'none' && !layout.art && layout.text.length) {
+    const x0 = Math.min(...layout.text.map((t) => t.x));
+    const y0 = Math.min(...layout.text.map((t) => t.y));
+    const x1 = Math.max(...layout.text.map((t) => t.x + t.width));
+    const y1 = Math.max(...layout.text.map((t) => t.y + t.height));
+    layout.art = {
+      source: 'procedural',
+      motif: ornament.texture,
+      opacity: ornament.textureOpacity,
+      box: { x: 0, y: 0, width: W, height: H },
+      calmRegion: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+    } as StudioLayoutV2['art'];
+  }
+  if (!ornament.dividers || (layout.shapes || []).some((sh) => sh.role === 'rule')) return layout;
+
+  const lines = measureWrappedLines(layout, copy.text);
+  for (const t of layout.text) {
+    const wanted = Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight) + Math.ceil(0.25 * t.fontSize);
+    if (t.height > wanted) {
+      t.y = Math.round(t.y + (t.height - wanted) / 2);
+      t.height = wanted;
+    }
+  }
+  const gold = palette.length ? nearestPaletteColour('#F7B500', palette) : '#F7B500';
+  const sameColumn = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
+  const below = (b: Rect) =>
+    layout.text.filter((t) => t !== b && t.y >= b.y + b.height - 1 && sameColumn(t, b)).sort((p, q) => p.y - q.y)[0];
+  const above = (b: Rect) =>
+    layout.text.filter((t) => t !== b && t.y + t.height <= b.y + 1 && sameColumn(t, b)).sort((p, q) => q.y - p.y)[0];
+  const place = (upper: StudioLayoutV2['text'][number] | undefined, lower: StudioLayoutV2['text'][number] | undefined, width: number) => {
+    if (!upper || !lower) return;
+    const top = upper.y + upper.height;
+    const gap = lower.y - top;
+    if (gap < 26) return;
+    const align = lower.align === upper.align ? lower.align : 'center';
+    const x =
+      align === 'left' ? upper.x : align === 'right' ? upper.x + upper.width - width : Math.round(upper.x + upper.width / 2 - width / 2);
+    const rule = { kind: 'rect', role: 'rule', x, y: Math.round(top + (gap - 2) / 2), width, height: 2, color: gold } as StudioLayoutV2['shapes'][number];
+    if (layout.logo && intersects(rule, logoClearZone(layout.logo))) return;
+    if (layout.text.some((t) => intersects(t, rule))) return;
+    layout.shapes = [...(layout.shapes || []), rule];
+  };
+  const title = layout.text.find((t) => t.role === 'title');
+  if (title) place(title, below(title), Math.round(Math.min(160, 0.15 * W)));
+  const date = layout.text.filter((t) => t.role === 'date' || t.role === 'venue').sort((p, q) => p.y - q.y)[0];
+  if (date && date !== (title && below(title))) place(above(date), date, Math.round(Math.min(120, 0.11 * W)));
+  // Centred in their gaps as QA measures them, which may pair a rule with other blocks than above.
+  centerSeparatorsInGaps(layout.shapes || [], layout.text);
+  return layout;
 }
 
 /** Production's hard QA, told the copy so it can check that every block's copy fits its box. */
@@ -808,7 +928,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }

@@ -147,6 +147,8 @@ export interface StageContext {
   pipelineV3?: boolean;
   /** The palette colour the client asked for as the background, applied to every layout in code. */
   requestedBackground?: string;
+  /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
+  ornament?: import('@hawa/creative').OrnamentSettings;
 }
 
 export interface StageExecutionReceipt {
