@@ -480,11 +480,25 @@ function loadBriefSet(): { set: 'qualification' | 'compare'; briefs: Qualificati
   return { set, briefs };
 }
 
+type SourceProvenance = { commit: string | null; uncommittedChanges: string[] };
+
+/** RUN_MANIFEST.json: what a run measured, the code that measured it, and each resumed session's. */
+interface RunManifest {
+  briefSet: string;
+  briefs: string[];
+  dryRun: boolean;
+  modelTier: string;
+  models: { layout: string; critique: string; judge: string };
+  source: SourceProvenance;
+  startedAt: string;
+  resumes?: Array<{ source: SourceProvenance; startedAt: string; briefs: string[] }>;
+}
+
 /**
  * The code this run measured: the commit, and any uncommitted source changes. The in-image
  * script passes both in, since the image has no git; a host run asks git itself.
  */
-function sourceProvenance(): { commit: string | null; uncommittedChanges: string[] } {
+function sourceProvenance(): SourceProvenance {
   const lines = (text: string) => text.split('\n').map((l) => l.trim()).filter(Boolean);
   if (process.env.HAWA_SOURCE_COMMIT) {
     return { commit: process.env.HAWA_SOURCE_COMMIT, uncommittedChanges: lines(process.env.HAWA_SOURCE_CHANGES || '') };
@@ -939,24 +953,28 @@ async function main() {
   const briefsDir = path.join(outputDir, 'briefs');
   const journalsDir = path.join(outputDir, 'JOURNALS');
   fs.mkdirSync(briefsDir, { recursive: true });
-  // What produced this directory, for anyone — or any tool, like the T8 packager — reading it later.
-  fs.writeFileSync(
-    path.join(outputDir, 'RUN_MANIFEST.json'),
-    JSON.stringify(
-      {
-        briefSet,
-        briefs: BRIEFS.map((b) => b.id),
-        dryRun: Boolean(DRY_RUN_URL),
-        modelTier: activeModelTier(),
-        models: { layout: resolveModel('layout'), critique: resolveModel('critique'), judge: resolveModel('judge') },
-        source: sourceProvenance(),
-        startedAt: new Date().toISOString(),
-      },
-      null,
-      2
-    ),
-    'utf8'
-  );
+  const manifestPath = path.join(outputDir, 'RUN_MANIFEST.json');
+  const configuration = {
+    briefSet,
+    briefs: BRIEFS.map((b) => b.id),
+    dryRun: Boolean(DRY_RUN_URL),
+    modelTier: activeModelTier(),
+    models: { layout: resolveModel('layout'), critique: resolveModel('critique'), judge: resolveModel('judge') },
+  };
+  const session = { source: sourceProvenance(), startedAt: new Date().toISOString() };
+  const previousManifest: RunManifest | null =
+    process.argv.includes('--resume') && fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : null;
+  if (previousManifest) {
+    // A resume continues one qualification. On another tier, model or brief set, its report would
+    // average two configurations as if they were one run.
+    const changed = (Object.keys(configuration) as Array<keyof typeof configuration>).filter(
+      (key) => JSON.stringify(previousManifest[key]) !== JSON.stringify(configuration[key])
+    );
+    if (changed.length) {
+      console.error(`Cannot resume ${outputDir}: its ${changed.join(', ')} differ from this run's. Use a fresh directory.`);
+      process.exit(2);
+    }
+  }
   fs.mkdirSync(journalsDir, { recursive: true });
 
   const client = new OpenAiStudioClient({
@@ -1017,6 +1035,23 @@ async function main() {
       console.warn('[P10 RESUME] Checkpoint unreadable, starting fresh');
     }
   }
+
+  // What produced this directory, for anyone — or any tool, like the T8 packager — reading it later.
+  // A resume keeps the record of the run it continues and adds its own session: the briefs it runs
+  // are measured at the commit checked out now, and rewriting `source` would claim every brief for
+  // that commit. (The 2026-09-18 production run stopped at 8 of 20 when the API account ran out of
+  // credits, after a commit had landed; a resume would have erased that briefs 1-8 measured 910a6a6.)
+  const manifest: RunManifest =
+    previousManifest && completedIds.size
+      ? {
+          ...previousManifest,
+          resumes: [
+            ...(previousManifest.resumes || []),
+            { ...session, briefs: BRIEFS.filter((b) => !completedIds.has(b.id)).map((b) => b.id) },
+          ],
+        }
+      : { ...configuration, ...session };
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 
   for (let i = 0; i < BRIEFS.length; i += concurrency) {
     const batch = BRIEFS.slice(i, i + concurrency);
@@ -1236,9 +1271,18 @@ async function main() {
   fs.writeFileSync(csvPath, csvHeader + csvBody, 'utf8');
 
   // 3. Generate P10_QUALIFICATION.md
+  const measured = (s: SourceProvenance) =>
+    s.commit
+      ? `\`${s.commit.slice(0, 7)}\`${s.uncommittedChanges.length ? ` with uncommitted changes to ${s.uncommittedChanges.join(', ')}` : ''}`
+      : 'an unrecorded commit';
+  const measuredAt =
+    `**Measured at:** ${measured(manifest.source)}, ${manifest.modelTier} tier` +
+    (manifest.resumes || []).map((r) => `; resumed at ${measured(r.source)} for ${r.briefs.join(', ')}`).join('');
   const mdReport = `# P10 Full Qualification Report: ${BRIEFS.length} Held-Out Briefs (Multi-Stage Live Run)
 
 **Briefs attempted:** ${BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
+
+${measuredAt}
 
 Verdict: ${qualificationVerdict}
 
