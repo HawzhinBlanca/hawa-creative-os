@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState, CreativeBrief, Concept } from '../src/services/design-studio/types.js';
 import { StudioModelClient, GeminiImageProvider, type StudioLayoutV2 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
+import { studioSentBlocks } from '../src/services/canva-connect-service.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -694,5 +695,34 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     );
     expect(pptxCheck.copyPass).toBe(true);
     expect(pptxCheck.fontPass).toBe(true);
+  });
+
+  it('12. a studio design is checked block by block against the faces it was sent in', async () => {
+    // The first live pilot (2026-09-18) reached Canva, then failed SOURCE_REQUIRED: the post-import
+    // check knew only the planner's single brand font, and a studio manifest carries none.
+    const ctx = createMockContext(vi.fn());
+    const layout = createMockLayout(1080, 1350);
+    const faces = ['Cinzel', 'Playfair Display', 'Verdana', 'Verdana'];
+    [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex).forEach((t, i) => { t.fontFamily = faces[i]; });
+    const winner: CandidateState = {
+      id: 'w1', ordinal: 0, concept: {} as any, layouts: [], currentLayout: layout, critiques: [], status: 'winner',
+    };
+    const transfer = await runTransferStage(ctx, winner);
+    const copy = transfer.manifest.copy as string[];
+
+    const blocks = studioSentBlocks(transfer.manifest);
+    expect(blocks?.map((b) => b.fontFamily)).toEqual(faces);
+    const bytes = new Uint8Array(transfer.pptxBytes);
+    const kept = checkCanvaPptx(bytes, copy, { fontsByIndex: blocks!.map((b) => b.fontFamily) });
+    expect(kept.copyPass).toBe(true);
+    expect(kept.fontPass).toBe(true);
+    // The planner's single-font check would call this design a mismatch.
+    expect(checkCanvaPptx(bytes, copy, 'Verdana').fontPass).toBe(false);
+    // A face Canva did not keep is caught at its block.
+    const swapped = checkCanvaPptx(bytes, copy, { fontsByIndex: ['Verdana', 'Playfair Display', 'Verdana', 'Verdana'] });
+    expect(swapped.fontPass).toBe(false);
+    expect(swapped.offendingObjects[0]).toMatchObject({ index: 0, expectedFont: 'Verdana', observedFont: 'Cinzel' });
+    // A planner manifest carries its reference pack and keeps the single-font check.
+    expect(studioSentBlocks({ ...transfer.manifest, reference: { rules: { fontFamily: 'Verdana' } } })).toBeNull();
   });
 });
