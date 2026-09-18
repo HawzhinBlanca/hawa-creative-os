@@ -40,6 +40,9 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("long_credential_assignment", re.compile(r"(?i)\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[:=]\s*['\"][A-Za-z0-9_\-]{32,}['\"]")),
     # e.g. `process.env.X || 'literal'` — an environment lookup with a hardcoded fallback credential
     ("env_fallback_literal", re.compile(r"process\.env\.[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*\s*\|\|\s*['\"][A-Za-z0-9_\-]{16,}['\"]")),
+    # e.g. `CREATE ROLE app LOGIN PASSWORD '<literal>'` — SQL puts no `=` or `:` before the value, so the
+    # assignment patterns above miss it. Template (`'${…}'`) and placeholder values are not credentials.
+    ("sql_password_literal", re.compile(r"(?i)\bPASSWORD\s+E?'(?!\$\{|REPLACE_|<)[^'\s]{8,}'")),
 ]
 
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".zip", ".gz", ".pdf", ".woff", ".woff2", ".ttf", ".otf", ".pptx", ".lock"}
@@ -140,8 +143,14 @@ def self_test() -> int:
         "compose_default_secret": "TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-office_secret_production_entropy}",
         "long_credential_assignment": "const ADMIN_KEY = 'hawa_admin_" + "Q" * 40 + "';",
         "env_fallback_literal": "const k = process.env.HAWA_ADMIN_KEY || 'hawa_admin_fallback_value_123';",
+        "sql_password_literal": "    CREATE ROLE hawa_test_app WITH LOGIN PASSWORD 'n0tARealRoleSecret4fixture';",
     }
-    benign = "const url = process.env.DATABASE_URL; // postgresql://user@host/db\nTOKEN = os.environ['TOKEN']\nvalue: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}\n"
+    benign = (
+        "const url = process.env.DATABASE_URL; // postgresql://user@host/db\nTOKEN = os.environ['TOKEN']\nvalue: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}\n"
+        "ALTER ROLE ${APP_ROLE} WITH LOGIN PASSWORD '${credentials.appPassword}';\n"
+        "SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'hawa_user', :'hawa_password') \\gexec\n"
+        "ALTER ROLE hawa_app PASSWORD '<new-password>';\n"
+    )
     failures = 0
     for name, pattern in SECRET_PATTERNS:
         if not pattern.search(fixtures[name]):
