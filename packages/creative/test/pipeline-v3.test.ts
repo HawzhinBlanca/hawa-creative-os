@@ -449,3 +449,23 @@ describe('logo and canvas truth', () => {
     expect(aspectRatioLabel(1240, 1754)).toBe('A4 portrait, 1:1.414');
   });
 });
+
+describe('bilingual direction', () => {
+  it('describes a bilingual design as mixed, whatever flag a caller passes', async () => {
+    const { languageDirectionLabel, buildLayoutV3UserPrompt } = await import('../src/index.js');
+    const mixed = [
+      { index: 0, text: 'Annual Report', role: 'title' as const, script: 'latin' as const },
+      { index: 1, text: 'ڕاپۆرتی ساڵانە', role: 'title' as const, script: 'arabic' as const },
+    ];
+    // Production passed true for this copy and the qualification passed false; both now get the same line.
+    for (const flag of [true, false]) {
+      expect(languageDirectionLabel(mixed, flag)).toMatch(/^Mixed/);
+      expect(
+        buildLayoutV3UserPrompt({ brief: 'b', copyBlocks: mixed, palette: ['#0A1628'], canvasWidth: 1080, canvasHeight: 1350, isRtl: flag })
+      ).toContain('Language Direction: Mixed');
+    }
+    expect(languageDirectionLabel([mixed[1]])).toMatch(/^RTL/);
+    expect(languageDirectionLabel([mixed[0]])).toMatch(/^LTR/);
+  });
+});
+

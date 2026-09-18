@@ -1173,6 +1173,22 @@ export function aspectRatioLabel(width: number, height: number): string {
   return `${r.toFixed(3)}:1`;
 }
 
+/**
+ * The direction line of the prompt, from the scripts of the copy itself. Callers used to pass a
+ * single flag and disagreed about bilingual copy: production called any design with a Sorani block
+ * RTL, the qualification called any design not wholly Sorani LTR, so a bilingual KAAE post was
+ * described one way in production and the other way when qualified — and wrongly both times.
+ */
+export function languageDirectionLabel(copyBlocks: Array<{ script: 'latin' | 'arabic' }>, isRtl?: boolean): string {
+  const scripts = new Set(copyBlocks.map((b) => b.script));
+  if (scripts.has('arabic') && scripts.has('latin')) {
+    return 'Mixed — each block follows its own script: Sorani (script "arabic") blocks read right-to-left, English (script "latin") blocks left-to-right';
+  }
+  if (scripts.has('arabic')) return 'RTL (Sorani Kurdish / Arabic)';
+  if (scripts.has('latin')) return 'LTR (Latin / English)';
+  return isRtl ? 'RTL (Sorani Kurdish / Arabic)' : 'LTR (Latin / English)';
+}
+
 export function buildLayoutV3UserPrompt(options: {
   brief: string;
   copyBlocks: CopyBlockSlotInput[];
@@ -1215,7 +1231,7 @@ CANVAS DIMENSIONS & SPECIFICATIONS:
 - Target Dimensions: ${canvasWidth}px x ${canvasHeight}px (Aspect Ratio: ${aspectRatioLabel(canvasWidth, canvasHeight)})
 - Official Logo: width:height = ${(logoAspect || 1).toFixed(2)}${Math.abs((logoAspect || 1) - 1) < 0.02 ? ' (a square emblem)' : ''}. Reserve its box at exactly this proportion.
 - Primary Palette: ${palette.join(', ')}
-- Language Direction: ${isRtl ? 'RTL (Sorani Kurdish / Arabic)' : 'LTR (Latin / English)'}
+- Language Direction: ${languageDirectionLabel(copyBlocks, isRtl)}
 
 OWNER-CONFIRMED REFERENCE EXEMPLARS (Inspiration for layout architecture and negative space distribution):
 ${exemplarsFormatted}

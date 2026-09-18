@@ -778,6 +778,23 @@ deployed and nothing was spent.
 - The qualification dry run against a local stand-in completed 20 of 20 briefs with 140 calls, every stage recorded once per brief, and the office ledger untouched. The compare-set dry run completed 10 of 10. The in-image `--check` passes, and the deploy pre-flight exits 0.
 - T8 from end to end on scratch material: package, rate, score. The four refusals work, and the seal catches a tampered key.
 
+### What the qualification still does not mirror
+
+The decision code is now shared. Four inputs and stages cannot be, and a qualification result
+should be read with them in mind:
+
+- **The brief text.** Production derives the generator's brief line and the exemplar query from its
+  brief stage (a model reading the Telegram request). The qualification's briefs are already
+  structured, so it uses the brief's name and copy directly.
+- **Art.** The qualification runs no art stage. None of the production-model winners in the last run
+  requested art, while the cheap tier's sometimes did.
+- **Transfer and parity.** The qualification stops at the design. The Canva import, the deck
+  encoding and the parity check are covered by the studio's end-to-end test (6b) with Canva mocked,
+  not by a live run.
+- **Bilingual direction** was a fifth: production described any design containing Sorani as RTL, and
+  the qualification described any design not wholly Sorani as LTR. The prompt now takes the direction
+  from the copy itself, and states "Mixed" for bilingual copy on both sides.
+
 ## Final state (2026-09-18, second pass)
 
 Branch `studio-v2`, 51 commits ahead of production. Four decisions remain, and all are the owner's:
