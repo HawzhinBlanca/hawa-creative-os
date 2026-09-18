@@ -20,8 +20,19 @@ export class CoreBoundaryError extends Error {
   }
 }
 
-const boundaryOf = (error: unknown): CoreBoundaryError | null =>
-  error instanceof CoreBoundaryError ? error : (error as any)?.cause instanceof CoreBoundaryError ? (error as any).cause : null;
+const BOUNDARY_MESSAGE = /^Canva workflow Core boundary HTTP (\d{3})(?: ([A-Z0-9_]+))?$/;
+/**
+ * The Core refusal behind an error. A step's failure comes back from Restate's journal as a new
+ * TerminalError carrying only the message, so neither the CoreBoundaryError nor the cause set on it
+ * survives: on 2026-09-18 a refused copy and font check ended the pilot's workflow as a failure,
+ * and the requester was never told. The message carries the status and code, so it is rebuilt.
+ */
+const boundaryOf = (error: unknown): CoreBoundaryError | null => {
+  if (error instanceof CoreBoundaryError) return error;
+  if ((error as any)?.cause instanceof CoreBoundaryError) return (error as any).cause;
+  const match = BOUNDARY_MESSAGE.exec(String((error as any)?.message ?? ''));
+  return match ? new CoreBoundaryError(Number(match[1]), match[2]) : null;
+};
 
 /** Historical tasks carried no requested size; the print-oriented portrait default stays for them. */
 export const DEFAULT_CANVA_VARIANT = { width: 1200, height: 1697 } as const;

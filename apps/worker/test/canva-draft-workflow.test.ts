@@ -134,6 +134,44 @@ describe('native Canva workflow',()=>{
     expect(result.status).toBe('CANVA_CHECK_REQUIRED');
     expect(result.documentId).toBe('DA_test');
   });
+  it('reports a refusal to the requester even when Restate hands back only the journaled message', async () => {
+    // Production, 2026-09-18: a step's failure comes back from Restate's journal as a new error that
+    // carries only its message, so the CoreBoundaryError and the cause set on it are gone. The pilot's
+    // copy and font check was refused (422) and the workflow ended as a failure: no message was sent.
+    const journaled = {
+      key: 'k',
+      run: async <T,>(_name: string, action: () => Promise<T>): Promise<T> => {
+        try {
+          return await action();
+        } catch (error: any) {
+          const replayed = new Error(error?.message);
+          replayed.name = 'TerminalError';
+          throw replayed;
+        }
+      },
+      sleep: async () => {},
+    };
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const checkRefused = [
+      Response.json({ tenantId: 'tenant', clientId: 'client' }),
+      Response.json({ status: 'retrieved', planId: 'plan', designId: 'DA_test' }),
+      Response.json({ binding: { designId: 'DA_test', version: 1 } }),
+      Response.json({ status: 'retrieved', artifact: { id: 'art1' } }),
+      Response.json({ title: 'SOURCE_REQUIRED' }, { status: 422 }),
+      Response.json({ ok: true }),
+    ];
+    const remote = vi.fn(async () => checkRefused.shift()!);
+    const result = await runCanvaDraft(input, journaled as any, remote);
+    expect(result).toMatchObject({ status: 'CANVA_CHECK_REQUIRED', documentId: 'DA_test' });
+    expect(JSON.parse((remote.mock.calls.at(-1) as any)[1].body)).toMatchObject({ status: 'CANVA_CHECK_REQUIRED', designId: 'DA_test' });
+
+    // The refusal code survives too: the requester is told why.
+    const generationRefused = [Response.json({ tenantId: 'tenant', clientId: 'client' }), Response.json({ title: 'COPY_UNSUPPORTED' }, { status: 422 }), Response.json({ ok: true })];
+    const remote2 = vi.fn(async () => generationRefused.shift()!);
+    expect((await runCanvaDraft(input, journaled as any, remote2)).status).toBe('DESIGN_REJECTED');
+    expect(JSON.parse((remote2.mock.calls[2] as any)[1].body)).toMatchObject({ status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' });
+  });
+
   it('gracefully transitions to CANVA_PREVIEW_FAILED when preview export fails with 4xx terminal error', async () => {
     vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
     const responses = [
