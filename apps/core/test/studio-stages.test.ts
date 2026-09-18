@@ -69,10 +69,11 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
         align: 'center',
       },
       {
+        // Two lines of 48px Verdana bold at 1.2 need 116px: the copy wraps at this width.
         x: margin,
         y: 310,
         width: width - 2 * margin,
-        height: 80,
+        height: 120,
         copyIndex: 1,
         role: 'title',
         fontSize: 48,
@@ -84,7 +85,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
       },
       {
         x: margin,
-        y: 410,
+        y: 450,
         width: width - 2 * margin,
         height: 50,
         copyIndex: 2,
@@ -97,7 +98,7 @@ function createMockLayout(width = 1080, height = 1350): StudioLayoutV2 {
       },
       {
         x: margin,
-        y: 480,
+        y: 520,
         width: width - 2 * margin,
         height: 90,
         copyIndex: 3,

@@ -3,6 +3,7 @@ import { validateLayoutV2, type LayoutValidationContext } from './validate-layou
 import { computeLayoutMetrics, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
+import { measureWrappedLines } from './render-layout-v2.js';
 import { requiredContrast } from './house-rules.js';
 
 /**
@@ -20,6 +21,8 @@ export interface HardQaContext {
   arabicFont: string;
   palette: string[];
   logoAspect: number;
+  /** The copy of each block, by copyIndex. With it, a block whose copy wraps taller than its box fails. */
+  copyText?: Record<number, string>;
 }
 
 export interface HardQaOutcome {
@@ -106,18 +109,40 @@ export function evaluateHardQa(
     messages.push(`ASYMMETRIC_SEPARATOR: ${asymmetric.length} divider(s) sit much closer to one of the two blocks they separate`);
   }
 
+  // The next two checks measure the layout as it ships. The validator's normalised copy (`checked`)
+  // sets every Sorani block in the reference's script face, right-aligned (ADR-028), but the studio
+  // transfers the layout it judged: measured on that copy, 8 Kurdish titles in Amiri "overflowed"
+  // only because Noto Sans Arabic sets wider.
+
   // Every block reads against the surface behind it. The validator's contrast rule runs only when
   // given an evaluator, and no production caller ever passed one, so navy text on a navy panel
   // passed QA: 9 of the 20 T5 designs, and 2 or 3 in every 20 on the cheap tier.
-  for (const t of checked.text) {
-    const ratio = declaredTextContrast(checked, t);
+  for (const t of layout.text) {
+    const ratio = declaredTextContrast(layout, t);
     const required = requiredContrast(t.fontSize, Boolean(t.bold));
     if (ratio < required) {
       if (!defectCodes.includes('CONTRAST')) defectCodes.push('CONTRAST');
       messages.push(
-        `CONTRAST: block ${t.copyIndex} (${t.role}) ${t.color} on ${declaredBackgroundColour(checked, t)} is ` +
+        `CONTRAST: block ${t.copyIndex} (${t.role}) ${t.color} on ${declaredBackgroundColour(layout, t)} is ` +
           `${ratio.toFixed(2)}:1; it needs ${required}:1`
       );
+    }
+  }
+
+  // A block's copy must fit its box at its own leading. The renderer centres the lines in the box,
+  // so copy taller than its box spills onto the blocks above and below. Preparation grows boxes,
+  // but not when no arrangement has room: T5 brief_17 kept a 210px title in a 130px box.
+  if (ctx.copyText) {
+    const lines = measureWrappedLines(layout, ctx.copyText);
+    for (const t of layout.text) {
+      const count = lines[t.copyIndex] ?? 1;
+      const needed = Math.ceil(count * t.fontSize * t.lineHeight);
+      if (needed > t.height + 1) {
+        if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
+        messages.push(
+          `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) wraps to ${count} line(s) needing ${needed}px; its box is ${t.height}px tall`
+        );
+      }
     }
   }
 

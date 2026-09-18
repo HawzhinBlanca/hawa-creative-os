@@ -642,6 +642,7 @@ async function executeBriefLive(
     arabicFont: KAAE_REFERENCE.arabicFont,
     palette: KAAE_REFERENCE.palette,
     logoAspect: KAAE_LOGO_ASPECT,
+    copyText: copy.text,
   };
 
   console.log(`[P10 LIVE] Starting Brief ${briefIndex + 1}/20: ${brief.id} (${brief.sizeName})...`);

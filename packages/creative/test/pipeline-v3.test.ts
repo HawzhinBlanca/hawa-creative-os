@@ -1050,3 +1050,31 @@ describe('text reads against the surface behind it', { timeout: 30000 }, () => {
     expect(layout.text[3].color).toBe('#FDF8F3');
   });
 });
+
+describe('copy fits its box', { timeout: 30000 }, () => {
+  const qaContext = {
+    width: W, height: H, copyScripts: ['latin', 'latin', 'latin', 'latin', 'latin'] as Array<'latin' | 'arabic'>,
+    latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette: ['#0A1628', '#FDF8F3', '#C5A059', '#162B48'], logoAspect: 200 / 120,
+  };
+  // The 72px title wraps to two lines and needs about 195px; the renderer centres the lines, so they
+  // would spill onto the eyebrow and subtitle.
+  const overflowing = () => {
+    const layout = centred();
+    layout.text[1].height = 60;
+    return layout;
+  };
+
+  it('fails QA when a block wraps taller than its box, and does not guess without the copy', async () => {
+    const { evaluateHardQa } = await import('../src/index.js');
+    const qa = evaluateHardQa(overflowing(), { ...qaContext, copyText: COPY.text });
+    expect(qa.defectCodes).toContain('COPY_OVERFLOW');
+    expect(qa.messages.find((m) => m.startsWith('COPY_OVERFLOW'))).toContain('block 1 (title) wraps to 2 line(s)');
+    expect(evaluateHardQa(overflowing(), qaContext).defectCodes).not.toContain('COPY_OVERFLOW');
+  });
+
+  it('checks it when ranking, from the copy the pipeline already has', async () => {
+    const { rankCandidatesV3 } = await import('../src/index.js');
+    const [ranked] = rankCandidatesV3([{ sourceIndex: 0, layout: overflowing() }], COPY, qaContext);
+    expect(ranked.hardQa?.defectCodes).toContain('COPY_OVERFLOW');
+  });
+});

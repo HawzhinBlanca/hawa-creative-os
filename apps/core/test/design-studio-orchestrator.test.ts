@@ -39,10 +39,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     ],
     text: [
       {
+        // One line of 48px type at 1.2 needs 58px; a shorter box fails QA's COPY_OVERFLOW.
         x: 86,
         y: 260,
         width: 908,
-        height: 35,
+        height: 60,
         copyIndex: 0,
         role: 'title',
         fontSize: 48,

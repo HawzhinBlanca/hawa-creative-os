@@ -120,6 +120,7 @@ export function hardQaContextFor(
     arabicFont: ctx.arabicFont,
     palette: ctx.referencePack.palette,
     logoAspect: ctx.logoAspect || 1.0,
+    copyText: copyForStageV3(ctx).text,
   };
 }
 

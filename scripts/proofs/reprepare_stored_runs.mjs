@@ -65,6 +65,7 @@ for (const run of runs) {
       arabicFont: reference.arabicFont,
       palette: reference.palette,
       logoAspect,
+      copyText: text,
     };
     const judge = (layout) => ({ metrics: c.measureDesignV3(layout, copy), qa: c.evaluateHardQa(layout, qaContext) });
     const before = judge(JSON.parse(JSON.stringify(raw)));

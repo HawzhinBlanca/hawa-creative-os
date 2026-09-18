@@ -655,6 +655,11 @@ export function prepareGeneratedLayoutV3(
   return conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
 }
 
+/** Production's hard QA, told the copy so it can check that every block's copy fits its box. */
+function withCopy(qa: HardQaContext, copy: PipelineV3Copy): HardQaContext {
+  return qa.copyText ? qa : { ...qa, copyText: copy.text };
+}
+
 /** The pipeline's deterministic measure: from the lines the real copy wraps to, not box area. */
 export function measureDesignV3(layout: StudioLayoutV2, copy: PipelineV3Copy): DesignMetricsReport {
   return evaluateDesignMetrics(layout, { wrappedLines: measureWrappedLines(layout, copy.text) });
@@ -690,7 +695,7 @@ export function rankCandidatesV3(
     .map((c) => ({
       ...c,
       metrics: measureDesignV3(c.layout, copy),
-      ...(qa ? { hardQa: evaluateHardQa(c.layout, qa) } : {}),
+      ...(qa ? { hardQa: evaluateHardQa(c.layout, withCopy(qa, copy)) } : {}),
     }))
     .sort(compareCandidatesV3);
 }
@@ -775,7 +780,7 @@ export async function refineCandidateV3(
           issuesFor: (l: StudioLayoutV2) => {
             const clone = JSON.parse(JSON.stringify(l)) as StudioLayoutV2;
             const prepared = options.canvas ? prepareGeneratedLayoutV3(clone, copy, options.canvas) : sanitizeFontsV3(clone, copy);
-            return evaluateHardQa(prepared, options.qa!).messages;
+            return evaluateHardQa(prepared, withCopy(options.qa!, copy)).messages;
           },
         }
       : {}),
@@ -798,7 +803,7 @@ export async function refineCandidateV3(
     ? prepareGeneratedLayoutV3(repaired, copy, options.canvas)
     : sanitizeFontsV3(repaired, copy);
   const metrics = measureDesignV3(refined, copy);
-  const hardQa = options.qa ? evaluateHardQa(refined, options.qa) : undefined;
+  const hardQa = options.qa ? evaluateHardQa(refined, withCopy(options.qa, copy)) : undefined;
 
   // Adopt only a repair that strictly outranks the original, by the order the ranking uses.
   // (Pass the same `qa` here as to rankCandidatesV3: a missing verdict counts as a pass.)
