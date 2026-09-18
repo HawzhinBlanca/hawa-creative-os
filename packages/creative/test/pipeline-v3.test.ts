@@ -707,3 +707,15 @@ describe('inserted space moves a low logo with its content', { timeout: 30000 },
   });
 });
 
+describe('a growing box stays inside the safe area', { timeout: 30000 }, () => {
+  it('never grows the lowest box past the safe bottom', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    const footer = layout.text[4];
+    footer.y = H - MARGIN - footer.height; // on the bottom margin
+    footer.fontSize = 30; // now needs more height than it has
+    conformToHouseRules(layout, COPY);
+    expect(footer.y + footer.height).toBeLessThanOrEqual(H - MARGIN);
+  });
+});
+

@@ -261,76 +261,94 @@ export function conformToHouseRules(
     }
   }
 
-  // A logo whose clear space still meets text moves within the gap it sits in: up when text
-  // below crowds it, down when text above does — never past a block that shares its column, and
-  // never out of the safe area. (The cheap tier put a 154px banner logo at y=203 with 88px free
-  // above it, its clear space 13px into the eyebrow; a first version searched the whole canvas
-  // and could carry a bottom logo over every block to the top.)
-  if (layout.logo) {
-    const l = layout.logo;
-    const blockers: Rect[] = [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
-    const clearAt = (y: number) => !blockers.some((b) => intersects(b, logoClearZone({ ...l, y })));
-    if (!clearAt(l.y)) {
-      const sameColumn = blockers.filter((b) => overlapsXRect(b, l));
-      const ceiling = Math.max(m, ...sameColumn.filter((b) => b.y + b.height <= l.y).map((b) => b.y + b.height));
-      const floor = Math.min(H - m - l.height, ...sameColumn.filter((b) => b.y >= l.y + l.height).map((b) => b.y - l.height));
-      const crowdedBelow = blockers.some((b) => b.y >= l.y && intersects(b, logoClearZone(l)));
-      let moved = false;
-      if (crowdedBelow) {
-        for (let y = l.y - 1; y >= ceiling && !moved; y--) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
-      } else {
-        for (let y = l.y + 1; y <= floor && !moved; y++) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
+  const settle = () => {
+    // A logo whose clear space still meets text moves within the gap it sits in: up when text
+    // below crowds it, down when text above does — never past a block that shares its column, and
+    // never out of the safe area. (The cheap tier put a 154px banner logo at y=203 with 88px free
+    // above it, its clear space 13px into the eyebrow; a first version searched the whole canvas
+    // and could carry a bottom logo over every block to the top.)
+    if (layout.logo) {
+      const m = layout.grid.margin;
+      const l = layout.logo;
+      const blockers: Rect[] = [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
+      const clearAt = (y: number) => !blockers.some((b) => intersects(b, logoClearZone({ ...l, y })));
+      if (!clearAt(l.y)) {
+        const sameColumn = blockers.filter((b) => overlapsXRect(b, l));
+        const ceiling = Math.max(m, ...sameColumn.filter((b) => b.y + b.height <= l.y).map((b) => b.y + b.height));
+        const floor = Math.min(H - m - l.height, ...sameColumn.filter((b) => b.y >= l.y + l.height).map((b) => b.y - l.height));
+        const crowdedBelow = blockers.some((b) => b.y >= l.y && intersects(b, logoClearZone(l)));
+        let moved = false;
+        if (crowdedBelow) {
+          for (let y = l.y - 1; y >= ceiling && !moved; y--) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
+        } else {
+          for (let y = l.y + 1; y <= floor && !moved; y++) if (clearAt(y)) { layout.logo = { ...l, y }; moved = true; }
+        }
       }
     }
-  }
 
-  // Vertical space is inserted where the layout needs it — a box whose copy no longer fits at the
-  // house leading, a block that collides with the one above it or with the logo's clear space —
-  // by moving everything below that line down. Order and horizontal structure are kept, and
-  // nothing is moved if the content would leave the safe area; such layouts are left for QA to
-  // reject and refinement to repair.
-  const safeBottom = safe.y + safe.height;
-  const fullBleed = (s: Rect) => s.width >= 0.98 * W && s.height >= 0.98 * H;
-  const insertSpace = (atY: number, delta: number, keep: Set<object>): boolean => {
-    if (delta <= 0) return true;
-    const moving = [
-      ...layout.text.filter((o) => o.y >= atY && !keep.has(o)),
-      ...(layout.shapes || []).filter((s) => !fullBleed(s) && s.y >= atY && !keep.has(s)),
-    ];
-    // A panel that spans the insertion line stretches with it, so the text it holds stays inside.
-    const stretching = (layout.shapes || []).filter(
-      (s) => !fullBleed(s) && s.role === 'panel' && s.y < atY && s.y + s.height > atY && !keep.has(s)
-    );
-    // A logo below the line moves with the content around it, or text would be pushed onto it.
-    const logoMoves = !!layout.logo && layout.logo.y >= atY && !keep.has(layout.logo);
-    const lowest = Math.max(0, ...moving.map((o) => o.y + o.height), logoMoves ? layout.logo!.y + layout.logo!.height : 0);
-    if ((moving.length || logoMoves) && lowest + delta > safeBottom) return false;
-    if (stretching.some((s) => s.y + s.height + delta > H)) return false;
-    for (const o of moving) o.y += delta;
-    for (const s of stretching) s.height += delta;
-    if (logoMoves) layout.logo = { ...layout.logo!, y: layout.logo!.y + delta };
-    return true;
-  };
-  const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
+    // Vertical space is inserted where the layout needs it — a box whose copy no longer fits at the
+    // house leading, a block that collides with the one above it or with the logo's clear space —
+    // by moving everything below that line down. Order and horizontal structure are kept, and
+    // nothing is moved if the content would leave the safe area; such layouts are left for QA to
+    // reject and refinement to repair.
+    const safeBottom = H - layout.grid.margin;
+    const fullBleed = (s: Rect) => s.width >= 0.98 * W && s.height >= 0.98 * H;
+    const insertSpace = (atY: number, delta: number, keep: Set<object>): boolean => {
+      if (delta <= 0) return true;
+      const moving = [
+        ...layout.text.filter((o) => o.y >= atY && !keep.has(o)),
+        ...(layout.shapes || []).filter((s) => !fullBleed(s) && s.y >= atY && !keep.has(s)),
+      ];
+      // A panel that spans the insertion line stretches with it, so the text it holds stays inside.
+      const stretching = (layout.shapes || []).filter(
+        (s) => !fullBleed(s) && s.role === 'panel' && s.y < atY && s.y + s.height > atY && !keep.has(s)
+      );
+      // A logo below the line moves with the content around it, or text would be pushed onto it.
+      const logoMoves = !!layout.logo && layout.logo.y >= atY && !keep.has(layout.logo);
+      const lowest = Math.max(0, ...moving.map((o) => o.y + o.height), logoMoves ? layout.logo!.y + layout.logo!.height : 0);
+      if ((moving.length || logoMoves) && lowest + delta > safeBottom) return false;
+      if (stretching.some((s) => s.y + s.height + delta > H)) return false;
+      for (const o of moving) o.y += delta;
+      for (const s of stretching) s.height += delta;
+      if (logoMoves) layout.logo = { ...layout.logo!, y: layout.logo!.y + delta };
+      return true;
+    };
+    const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
 
-  const lines = measureWrappedLines(layout, copy.text);
-  const ordered = [...layout.text].sort((a, b) => a.y - b.y || a.x - b.x);
-  for (const t of ordered) {
-    // Clear the logo's zone and every block above that shares a column with this one.
-    const zone = layout.logo ? logoClearZone(layout.logo) : null;
-    const above: Rect[] = [
-      ...(zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? [zone] : []),
-      ...layout.text.filter((o) => o !== t && o.y < t.y && overlapsX(o, t)),
-    ];
-    const clash = Math.max(0, ...above.map((o) => Math.ceil(o.y + o.height - t.y)));
-    if (clash > 0) insertSpace(t.y, clash, new Set());
+    const lines = measureWrappedLines(layout, copy.text);
+    const ordered = [...layout.text].sort((a, b) => a.y - b.y || a.x - b.x);
+    for (const t of ordered) {
+      // Clear the logo's zone and every block above that shares a column with this one.
+      const zone = layout.logo ? logoClearZone(layout.logo) : null;
+      const above: Rect[] = [
+        ...(zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? [zone] : []),
+        ...layout.text.filter((o) => o !== t && o.y < t.y && overlapsX(o, t)),
+      ];
+      const clash = Math.max(0, ...above.map((o) => Math.ceil(o.y + o.height - t.y)));
+      if (clash > 0) insertSpace(t.y, clash, new Set());
 
-    // Grow the box to hold its copy at the house leading.
-    const needed = Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight);
-    if (needed > t.height) {
-      const bottom = t.y + t.height;
-      if (insertSpace(bottom, needed - t.height, new Set([t]))) t.height = needed;
+      // Grow the box to hold its copy at the house leading — but never past the safe area's bottom:
+      // growing the lowest box used to push its own edge a pixel outside it (cheap run 4, brief_04).
+      const needed = Math.min(Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight), safeBottom - t.y);
+      if (needed > t.height) {
+        const bottom = t.y + t.height;
+        if (insertSpace(bottom, needed - t.height, new Set([t]))) t.height = needed;
+      }
     }
+  };
+  settle();
+
+  // A larger margin than the house minimum can leave the logo no room: a 1080px-tall banner with a
+  // 115px margin cannot hold a 154px logo, its clear space and the copy. The house minimum (6% of
+  // the short edge) is then used, and kept only if it actually clears the logo.
+  const rulesAndText = () => [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
+  const logoCrowded = () => !!layout.logo && rulesAndText().some((b) => intersects(b, logoClearZone(layout.logo!)));
+  const minMargin = Math.floor(HOUSE_RULES.safeMarginShare * Math.min(W, H));
+  if (logoCrowded() && layout.grid.margin > minMargin) {
+    const before = JSON.stringify(layout);
+    layout.grid.margin = minMargin;
+    settle();
+    if (logoCrowded()) Object.assign(layout, JSON.parse(before));
   }
 
   // Text over art must sit where the art is calm: widen the calm region to cover every text box
