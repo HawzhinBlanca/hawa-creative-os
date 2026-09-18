@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
 import {
   STABLE_SYSTEM_PROMPT_PREFIX,
   validateStablePrefix,
@@ -6,9 +8,21 @@ import {
   PipelineCostGovernorV3,
   PER_BRIEF_CAP_USD,
   OFFICE_DAILY_CAP_USD,
+  getDailyOfficeSpend,
+  resetDailyOfficeSpend,
 } from '../src/studio/cost-architecture-v3.js';
 
 describe('P09 — Cost Architecture & Token Discipline', () => {
+  beforeEach(() => {
+    // These tests record simulated spend and reset the ledger. Against the real ledger they
+    // filled it with spend that never happened and could delete what did, so refuse outright
+    // unless the ledger is a throwaway one (vitest.config.ts provides it).
+    const dir = process.env.HAWA_SPEND_STATE_DIR;
+    expect(dir && path.resolve(dir).startsWith(path.resolve(os.tmpdir()))).toBe(true);
+    resetDailyOfficeSpend();
+    expect(getDailyOfficeSpend()).toBe(0);
+  });
+
   it('enforces a byte-stable cached prefix of at least 1,024 tokens without dynamic leaks', () => {
     const check = validateStablePrefix(STABLE_SYSTEM_PROMPT_PREFIX);
 

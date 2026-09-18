@@ -207,7 +207,11 @@ export function getLowBalanceWarningThresholdUsd(): number {
 
 function getDailySpendFilePath(dateStr?: string): string {
   const today = dateStr || new Date().toISOString().slice(0, 10);
-  const stateDir = path.resolve(process.cwd(), '.hawa-state', 'spend');
+  // HAWA_SPEND_STATE_DIR moves the ledger: tests point it at a throwaway directory, and the
+  // in-image qualification points it at a mounted one so the cap persists between containers.
+  const stateDir = process.env.HAWA_SPEND_STATE_DIR
+    ? path.resolve(process.env.HAWA_SPEND_STATE_DIR)
+    : path.resolve(process.cwd(), '.hawa-state', 'spend');
   try {
     fs.mkdirSync(stateDir, { recursive: true });
   } catch {}
@@ -279,6 +283,8 @@ export interface OfficeDailyBudgetCheckResult {
 }
 
 export async function sendOperatorAlert(text: string): Promise<boolean> {
+  // A test must never message the office, whatever happens to be in its environment.
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return false;
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0];
   if (!token || !chat) return false;

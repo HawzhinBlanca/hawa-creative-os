@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, mkdtempSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 /**
  * Database credentials for the suites are never committed. They come from the process environment
@@ -28,6 +29,14 @@ for (const key of TEST_ENV_KEYS) {
   if (value) databaseEnv[key] = value;
 }
 
+/**
+ * The cost governor keeps the office's daily spend in a file. Every test gets a throwaway one:
+ * the governor's tests record simulated calls, and pointed at the real ledger they filled it with
+ * USD 19.76 and USD 32.93 of spend that never happened — enough to breach the USD 30 cap and make
+ * the qualification refuse to start, while real runs were never recorded at all.
+ */
+const spendStateDir = mkdtempSync(join(tmpdir(), 'hawa-test-spend-'));
+
 export default defineConfig({
   test: {
     globals: true,
@@ -46,6 +55,7 @@ export default defineConfig({
       HAWA_ART_DIRECTOR_KEY: 'test_art_director_bearer',
       HAWA_ACTION_HMAC_SECRET: 'test_hmac_sec',
       TELEGRAM_WEBHOOK_SECRET: ['expected', 'office', 'secret'].join('_'),
+      HAWA_SPEND_STATE_DIR: spendStateDir,
       ...databaseEnv,
     },
   },
