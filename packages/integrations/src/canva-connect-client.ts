@@ -8,6 +8,8 @@ export interface CanvaConnectClientOptions {
   clientSecret?: string;
   baseUrl?: string;
   customFetch?: typeof fetch;
+  /** Waits between attempts of a status read (GET) that failed with 429, 5xx or a network error. */
+  readRetryDelaysMs?: number[];
 }
 
 export interface CanvaDesignResponse {
@@ -76,6 +78,7 @@ export class CanvaConnectClient {
   private readonly clientSecret?: string;
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch;
+  private readonly readRetryDelaysMs: number[];
   private accessToken?: string;
   private refreshToken?: string;
   private tokenExpiresAt = 0;
@@ -93,6 +96,25 @@ export class CanvaConnectClient {
     this.baseUrl = options.baseUrl || process.env.CANVA_BASE_URL || 'https://api.canva.com/rest/v1';
     const transport = options.customFetch || globalThis.fetch;
     this.fetcher = (input, init) => transport(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000) });
+    this.readRetryDelaysMs = options.readRetryDelaysMs ?? [1000, 3000];
+  }
+
+  /**
+   * A status read is safe to repeat, so a transient failure is asked again rather than failing the
+   * design: one HTTP 500 from GET /imports/{id} failed task e8da3cec (2026-09-18) although Canva had
+   * finished the import. Retries 429, 5xx and network errors; anything else returns at once.
+   */
+  private async readWithRetry(url: string): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      const last = attempt >= this.readRetryDelaysMs.length;
+      try {
+        const res = await this.fetcher(url, { method: 'GET', headers: { Authorization: await this.getAuthHeader() } });
+        if (res.ok || !(res.status === 429 || res.status >= 500) || last) return res;
+      } catch (err) {
+        if (last) throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.readRetryDelaysMs[attempt]));
+    }
   }
 
   public isConfigured(): boolean {
@@ -329,13 +351,7 @@ export class CanvaConnectClient {
   }
 
   public async getDesign(designId: string): Promise<CanvaDesignResponse> {
-    const authHeader = await this.getAuthHeader();
-    const res = await this.fetcher(`${this.baseUrl}/designs/${encodeURIComponent(designId)}`, {
-      method: 'GET',
-      headers: {
-        Authorization: authHeader,
-      },
-    });
+    const res = await this.readWithRetry(`${this.baseUrl}/designs/${encodeURIComponent(designId)}`);
 
     if (!res.ok) {
       throw new Error(`Canva getDesign failed (HTTP ${res.status})`);
@@ -356,9 +372,7 @@ export class CanvaConnectClient {
   }
 
   public async getImportJob(id: string) {
-    const response = await this.fetcher(`${this.baseUrl}/imports/${encodeURIComponent(id)}`, {
-      headers: { Authorization: await this.getAuthHeader() },
-    });
+    const response = await this.readWithRetry(`${this.baseUrl}/imports/${encodeURIComponent(id)}`);
     if (!response.ok) throw new Error(`Canva import status failed (HTTP ${response.status})`);
     return this.validateImport(await response.json());
   }
@@ -394,13 +408,7 @@ export class CanvaConnectClient {
   }
 
   public async getExportJob(exportId: string): Promise<CanvaExportJobResponse> {
-    const authHeader = await this.getAuthHeader();
-    const res = await this.fetcher(`${this.baseUrl}/exports/${encodeURIComponent(exportId)}`, {
-      method: 'GET',
-      headers: {
-        Authorization: authHeader,
-      },
-    });
+    const res = await this.readWithRetry(`${this.baseUrl}/exports/${encodeURIComponent(exportId)}`);
 
     if (!res.ok) {
       throw new Error(`Canva getExportJob failed (HTTP ${res.status})`);
