@@ -655,30 +655,40 @@ what produced the band that is causing this.
 `scripts/proofs/measure_composition_bias.mjs` quantifies the preference on demand and prints the
 number a recalibration has to drive to roughly zero. It takes no model calls.
 
-## 21. What remains
+## 21. What remains, and who it belongs to
 
-1. **Deploy.** Production is 30 commits behind HEAD and is missing every fix in sections 17 and 18 — including the one where no Kurdish design could produce a deliverable at all. The deploy pre-flight passes clean (`bash infra/docker/deploy.sh`, exit 0, 0 credentials exposed or committable); applying it is the owner's call because it changes what real clients receive.
-2. **The pairwise judge and canary verdicts** have never been validated on correct typography. Only the winning candidate is persisted, so a pair cannot be reconstructed from artifacts; validating them needs a full in-image run, or persisting both candidates so a re-judge becomes possible.
-3. **`negativeSpace` scores invisible box geometry.** The honest measure is available and deliberately unwired, because the band was calibrated against the box measure. Re-derive the band from the six confirmed exemplars, by the same measure, then switch. Until then the composite is 8% built on a number that moves 0.68 without changing a pixel — and ranked three cheap models above production when their output was visibly worse.
-4. **T8 stays rejected.** Its blind pairs were rendered with substituted fonts and must be regenerated in the image.
-5. **T7 is blocked on the owner**: `DESIGN_PIPELINE_V3_CHATS` in the production env file, which only the owner writes.
-6. **Vazirmatn** still cannot be drawn, in the other clients' brand kits. Their Kurdish text renders in an uncontrolled fallback. Changing another brand's specified typeface is the owner's decision; the failure is no longer silent.
-7. **Frame-internal padding (2 instances)** and **an accent longer than the box it marks (1)** were left alone deliberately — the first is the same class one reference level down, the second is a design decision rather than a centring one.
+Nothing on this list is code I can write. Each item is blocked on a decision or a judgement that is
+the owner's, and I have taken each as far as it goes without one.
 
-## A note on how the remaining list got this short
+**Needs your go-ahead**
 
-Most of what was fixed in this pass was not found by reading the task sheet. It was found by
-running the thing until it broke, and by checking claims against ground truth rather than against
-other claims. Three of the most consequential findings inverted what the plan said:
+1. **Deploy.** Production is 37 commits behind and missing every fix here, including the one where no Kurdish design could produce a deliverable. Pre-flight passes clean: `bash infra/docker/deploy.sh` exits 0 with 0 credentials exposed and 0 committable. Applying it changes what real clients receive.
+2. **The negativeSpace band.** Section 20 proves this metric gives full-width centred compositions a 0.060 composite advantage over an equally-gridded asymmetric one holding the same copy, which is why 16 of 20 winners were `monolith_centered`. The ink measure that fixes it is built and unwired, because the band must move with it and the band cannot be honestly derived from the exemplars as pixels — dilation gives 0.078 to 0.169 on radius alone. It needs the six references' text blocks annotated once. That is a decision about house style.
+3. **T8's blind test.** Preparing it fairly needs Studio v3 designs for the same ten briefs the v1 baselines used, so the pairs compare like with like — roughly USD 3.20 of production generation — and then your ratings. The packaging and sealing tooling already exists and takes no model calls.
 
-- the designs were not too empty; the owner's own references are emptier still, and a metric said
-  otherwise because it was counting invisible boxes
-- the cheap models did not produce better designs; a metric ranked them above production while the
-  renders showed the opposite
-- T6(a) asked for a calibration that would have pushed every design away from the reference set
+**Needs something only you can write**
 
-The general lesson is the one the font substitution taught first: **a guard that has never been seen
-to fail is not evidence that it works.** `fc-match` resolved every font name while the renderer drew
-Helvetica; `negativeSpace` scored 0.95 while measuring nothing visible; the daily cap counted spend
-into a file whose write failure was swallowed. Each was found by measuring the thing itself rather
-than trusting the check that was supposed to be measuring it.
+4. **T7**: `DESIGN_PIPELINE_V3_CHATS` in the production env file.
+5. **Vazirmatn** in the other clients' brand kits. It cannot be drawn — a request for it is byte-identical to a request for a family that does not exist — so their Kurdish text renders in an uncontrolled fallback. Replacing it changes another brand's specified typeface.
+
+**Needs a run in the image**
+
+6. **The pairwise judge and canary verdicts** have never been scored on correct typography. Only winning candidates are persisted, so a pair cannot be rebuilt from artifacts. Either run the qualification inside the production image, which is proven to work, or persist both candidates so a re-judge becomes possible from disk.
+
+**Closed by measurement rather than by code**
+
+Three things on earlier versions of this list are not defects and should not be worked on. T6(a)'s
+"make a 40%-empty canvas fail" contradicts references that are 85-89% empty. The order-swap gate at
+80% asks for decisiveness on the two closest candidates, which is what a tournament hands its judge
+by construction. And frame-internal balancing fires once in twenty layouts and makes that one worse.
+
+## Final state
+
+Typecheck clean, build clean, **1096 tests passing, 12 skipped, 0 failing** across 147 files, tracked
+tree clean. The pipeline completes 20 of 20 briefs on the production models with every cost
+recomputed, every provider id distinct, and Kurdish typography correct in real generation.
+
+Four things were built, measured, and deliberately not shipped: box-to-content fitting, uniform type
+scaling, frame-internal balancing, and the honest negativeSpace measure. Each is recorded where it
+would have stood, with the numbers that rejected it. That list is as much of the work as the fixes
+are — every one of them would have looked like an improvement without the measurement.
