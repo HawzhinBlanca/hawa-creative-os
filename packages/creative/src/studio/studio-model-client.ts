@@ -369,10 +369,11 @@ export class StudioModelClient {
       } catch (err: any) {
         lastError = err;
 
-        // Never retry on 4xx client errors (except 408/429)
+        // Never retry on 4xx client errors, except 408 and a rate-limit 429: an account out of
+        // credits also answers 429, and no wait can fix it.
         if (err instanceof StudioModelHttpError) {
           const status = err.status;
-          if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+          if ((status >= 400 && status < 500 && status !== 408 && status !== 429) || err.code === 'INSUFFICIENT_QUOTA') {
             this.circuitBreaker.recordFailure();
             throw err;
           }

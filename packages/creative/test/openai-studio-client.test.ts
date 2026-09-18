@@ -179,4 +179,49 @@ describe('OpenAiStudioClient (ADR-030, G01, G02)', () => {
     expect(callCount).toBe(2);
     expect(res.data.headline).toBe('OK');
   });
+
+  it('never retries an account out of credits, and names it rather than calling it a rate limit', async () => {
+    // The 2026-09-18 qualification retried "You have no credits remaining" for about a minute a
+    // call, then reported it as RATE_LIMIT_EXCEEDED.
+    const outOfCredits = () =>
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              message: 'You have no credits remaining. Add credits to continue using the API.',
+              type: 'insufficient_quota',
+              code: 'insufficient_quota',
+            },
+          }),
+      });
+
+    const textFetcher = outOfCredits();
+    const text = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: textFetcher as any });
+    await expect(
+      text.createStructuredCompletion({ model: 'gpt-6-astra', messages: [{ role: 'user', content: 'test' }], jsonSchema: TEST_SCHEMA })
+    ).rejects.toMatchObject({ status: 429, code: 'INSUFFICIENT_QUOTA' });
+    expect(textFetcher).toHaveBeenCalledTimes(1);
+
+    const imageFetcher = outOfCredits();
+    const image = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: imageFetcher as any });
+    await expect(
+      image.generateImage({ model: 'gpt-image-2.5-sunburst', prompt: 'Minimal navy background texture', size: '1024x1024' })
+    ).rejects.toMatchObject({ status: 429, code: 'INSUFFICIENT_QUOTA' });
+    expect(imageFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries a rate limit, and names it one when it persists', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => JSON.stringify({ error: { message: 'Rate limit reached for requests', type: 'requests', code: 'rate_limit_exceeded' } }),
+    });
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as any });
+    await expect(
+      client.createStructuredCompletion({ model: 'gpt-6-astra', messages: [{ role: 'user', content: 'test' }], jsonSchema: TEST_SCHEMA })
+    ).rejects.toMatchObject({ status: 429, code: 'RATE_LIMIT_EXCEEDED' });
+    expect(fetcher.mock.calls.length).toBeGreaterThan(1);
+  });
 });

@@ -7,6 +7,8 @@ import {
   StudioModelHttpError,
   StudioModelTimeoutError,
   StudioCircuitBreakerOpenError,
+  httpErrorCode,
+  isQuotaExhausted,
 } from './studio-errors.js';
 
 export interface OpenAiStudioClientOptions {
@@ -90,7 +92,7 @@ export class OpenAiModelHttpError extends StudioModelHttpError {
     this.name = 'OpenAiModelHttpError';
     this.status = status;
     this.body = body;
-    this.code = status === 429 ? 'RATE_LIMIT_EXCEEDED' : `HTTP_${status}`;
+    this.code = httpErrorCode(status, body);
   }
 }
 
@@ -318,7 +320,7 @@ export class OpenAiStudioClient {
 
           if (!res.ok) {
             const errBody = await res.text().catch(() => '');
-            if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
+            if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
               const delay = computeRetryDelayMs(attempt);
               await new Promise((r) => setTimeout(r, delay));
               continue;
@@ -515,7 +517,7 @@ export class OpenAiStudioClient {
 
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts) {
+          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
             const delay = computeRetryDelayMs(attempt);
             await new Promise((r) => setTimeout(r, delay));
             continue;
