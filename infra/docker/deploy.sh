@@ -119,6 +119,30 @@ echo "✓ schema upgrades applied or verified"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null 2>&1 && echo "✓ nginx configuration reloaded" || echo "! nginx reload skipped (container not running yet?)"
 echo "✓ containers started"
 
+# 7b. Register the worker's services with Restate. Its registry lives in the restate_data volume, and
+# nothing else creates it: after that volume was recreated on 2026-09-17, every task failed with
+# "service 'TaskWorkflow' not found" for 23 hours. The worker serves HTTP/1.1. Registering the same
+# endpoint again changes nothing; if its handlers changed, the forced retry records a new revision.
+REGISTER_WORKER='
+const post = (force) => fetch("http://restate:9070/deployments", { method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ uri: "http://worker:9080", use_http_11: true, force }) });
+(async () => {
+  for (let i = 0; i < 30; i++) {
+    try {
+      let r = await post(false);
+      if (!r.ok) r = await post(true);
+      if (r.ok) {
+        const names = ((await (await fetch("http://restate:9070/services")).json()).services || []).map((s) => s.name);
+        if (names.includes("TaskWorkflow") && names.includes("TaskService")) { console.log("✓ restate holds the worker services: " + names.join(", ")); process.exit(0); }
+      }
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  console.error("ERROR: the worker could not be registered with Restate; tasks would fail with service not found");
+  process.exit(1);
+})();'
+docker exec hawa-production-core-1 node -e "$REGISTER_WORKER" || exit 1
+
 # 8. Verify health truthfully (dependencies, not just HTTP 200)
 for i in $(seq 1 30); do
   if HEALTH="$(curl -fsS -m 5 http://127.0.0.1:8080/v1/health 2>/dev/null)"; then break; fi
@@ -128,7 +152,7 @@ done
 echo "$HEALTH" | python3 -c '
 import json,sys
 h=json.load(sys.stdin); d=h.get("dependencies",{})
-bad=[k for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage")]
+bad=[k for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","unregistered")]
 print("health:", h.get("status"), json.dumps(d))
 if bad: print("ERROR: unhealthy dependencies:", bad); sys.exit(1)
 '

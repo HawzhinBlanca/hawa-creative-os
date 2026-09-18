@@ -1,4 +1,5 @@
 import { persistChatIntake } from './services/chat-intake.js';
+import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1331,10 +1332,14 @@ export function createApp(options?: CreateAppOptions) {
 
     const modelProviderStatus = await probeModelProvider();
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
+    // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
+    // Restate can only register the worker once it is running.
+    const restateStatus = (await probeRestate()).status;
     const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
-      || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded';
+      || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
+      || restateStatus === 'unregistered' || restateStatus === 'unreachable';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -1359,7 +1364,7 @@ export function createApp(options?: CreateAppOptions) {
         telegram: telegramStatus,
         waha: wahaStatus,
         disk: diskStatus,
-        restate: Boolean(process.env.RESTATE_INGRESS_URL) ? 'connected' : 'unconfigured',
+        restate: restateStatus,
         modelProvider: modelProviderStatus,
         telegramApi: telegramApiStatus,
         ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
