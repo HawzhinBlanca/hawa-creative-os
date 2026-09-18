@@ -16,6 +16,7 @@ import {
   renderLayoutV2,
   getFontFidelityManifest,
   resolveRatesForModel,
+  correctFontsThatCannotDrawTheCopy,
   refineCandidate,
   generateBoxGroundedCritique,
   comparePairWithOrderSwap,
@@ -433,7 +434,9 @@ function sanitizeFont(font: string, isRtl: boolean, role?: string): string {
   }
   if (isRtl) {
     if (font === 'Cairo' || font === 'Amiri') return font;
-    return 'Cairo';
+    // Amiri, not Cairo: Cairo cannot draw the Sorani letters ڕ ڵ ۆ ێ ە. Defaulting to Cairo here
+    // would have quietly reintroduced that after refinement, undoing the generator's correction.
+    return 'Amiri';
   } else {
     if (font === 'Cinzel' || font === 'Playfair Display') return font;
     if (font === 'Lora') return 'Playfair Display';
@@ -628,6 +631,9 @@ async function executeBriefLive(
         for (const t of layout.text) {
           t.fontFamily = sanitizeFont(t.fontFamily, isRtl, t.role) as any;
         }
+        // Sanitisation maps by role and script, not by what the copy contains, so verify coverage
+        // afterwards: a block whose font cannot draw its own script is corrected here too.
+        correctFontsThatCannotDrawTheCopy(layout, copyMap);
         metrics = evaluateDesignMetrics(layout);
       }
     } catch (err: any) {

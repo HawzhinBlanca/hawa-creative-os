@@ -460,7 +460,88 @@ asymmetric separators**, slot capacity intact on every layout, and every metric 
 
 Full suite: **1090 passed, 12 skipped, 0 failed** across 147 files.
 
-## 17. What remains
+## 17. Bug sweep — what a systematic hunt turned up
+
+Twelve defects, found by reading the code for known-bad patterns and by running the pipeline until
+it broke. Grouped by what they would have cost.
+
+### 17.1 Kurdish display text was set in a font that cannot draw Kurdish
+
+**Cairo cannot draw five Sorani letters — ڕ ڵ ۆ ێ ە — and ە is among the most common characters in
+the language.** The v3 generator made Cairo the default for every right-to-left display role, so
+17 blocks across all 9 Kurdish designs were set in a face that fails on their own script: fontkit
+measured .notdef widths, pango fell back per character, and a Kurdish title rendered in two
+typefaces mid-word. Every existing check asked whether the family *resolved*, never whether it
+*covers the text*.
+
+Amiri is now the right-to-left display default, and `fontCoversText` / `pickFontCovering` let any
+stage verify a family against the copy it is given. The correction is scoped to the block's own
+script, because a Kurdish footer ending in "kaae.gov.krd" is legitimately set with script fallback
+for its Latin run — that scoping takes it from 25 flagged blocks to the 17 real ones.
+
+### 17.2 A failed refinement replaced the winning layout with a broken one
+
+Caught live: `refinement error: layout.text is not iterable`. The cause was worse than the message.
+The caller assigned `layout = refineResult.finalLayout` and iterated afterwards, so a malformed
+refinement had already replaced the winning layout before the throw — and the catch swallowed the
+throw, leaving render, transfer and metrics all working on the broken object. Fixed at the root:
+the engine keeps the last good layout and stops, so no caller can receive a malformed result.
+
+### 17.3 Silent failures that disabled the guards meant to catch them
+
+| Where | What it silently did |
+|---|---|
+| Daily office-spend ledger | A corrupt read reset the day's spend to zero and handed the cap a clean slate; a failed write lost the record, so the next call could not count it. The USD 30 daily cap quietly stopped working. |
+| Reference pack load | A client's script font and colour rules stopped applying; the design looked generic for an untraceable reason. |
+| Logo load | A KAAE design rendered without the KAAE logo, while the layout still reserved its box so asset-integrity saw one and passed. |
+| Exemplar load | Generation proceeded with no exemplar conditioning. |
+| Art stage | A failed image call fell back to a procedural motif, indistinguishable from an intentional one. |
+| Composite contrast (render + revise) | Fell back to the declared background colour, which is how text illegible over its real backdrop passes a legibility gate — the 1.20:1 class rejected in T6. |
+| Both service entrypoints | No unhandledRejection or uncaughtException handler. Node exits, compose restarts, and the only trace is a gap in the logs. |
+
+All now report. The budget ones fail loudly, because a guard that cannot keep its state must say so
+rather than carry on.
+
+### 17.4 Cost and candidate handling
+
+The API echoes the snapshot it served — `o4-mini-2025-04-16` for a request for `o4-mini` — and the
+strict cost guard rejected every one, failing each brief *after* its layout call was paid for.
+Rates now resolve by longest priced prefix. A single malformed candidate also aborted a whole
+brief; it is now dropped with a warning and the brief fails only if fewer than two survive, which
+matters on the production model too.
+
+### 17.5 First clean run, end to end
+
+**20 of 20 briefs, 100 ledger rows, zero failures.** Every cost recomputes exactly against the
+per-model table, 100 distinct provider ids, USD 1.02 on the cheap tier. The report leads with "NOT
+A QUALIFICATION RUN" naming the tier, so these numbers cannot be mistaken for production evidence.
+
+That run also exposed that the per-stage tier was collapsing to one model — an earlier bulk
+replacement had given critique, judge and canary the layout model. Per brief that is USD 0.4750 on
+production against USD 0.0216 on dev once each call resolves its own role.
+
+The **image lane is proven for the first time**: one live call to gpt-image-2.5-sunburst returned a
+2.37MB PNG with a genuine req_ id in 15.5s for USD 0.04.
+
+### 17.6 Two things deliberately not done
+
+`negativeSpace` counts each text box's full area as occupied, and a box shrunk around its centre
+changes no pixel while moving the score by 0.68 — so it scores invisible geometry. `measureWrappedLines`
+now makes the honest measure available, but it is **not** wired in: the 0.30-0.60 band was calibrated
+with the box measure, and switching without re-deriving the band fails 15 of 18 layouts. Checking the
+band against ground truth reversed the diagnosis — the owner's six confirmed exemplars measure
+0.11-0.15 block coverage, **85-89% empty**, sparser than anything this pipeline generates. Generous
+whitespace is the house style. A uniform type-scaling pass built against the wrong diagnosis was
+measured and removed rather than shipped.
+
+Vazirmatn stays in the other clients' brand kits. It has the glyphs and a structure identical to
+Amiri's, yet the renderer will not draw it — a request for it is byte-identical to a request for a
+family that does not exist, under a fontconfig containing only the bundled fonts, while Cairo and
+Amiri render fine under that same config. Their Kurdish text renders in an uncontrolled fallback
+today. Changing another brand's specified typeface is the owner's decision; the failure is no longer
+silent.
+
+## 18. What remains
 
 1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
 2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
