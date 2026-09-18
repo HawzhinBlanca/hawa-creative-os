@@ -776,7 +776,9 @@ export function addBrandOrnament(
 ): StudioLayoutV2 {
   const W = layout.width;
   const H = layout.height;
-  if (ornament.texture !== 'none' && !layout.art && layout.text.length) {
+  // The owner's texture replaces a procedural motif the generator picked (task efb409fa chose a
+  // gradient wash that barely showed); artwork it asked to have generated stays.
+  if (ornament.texture !== 'none' && (!layout.art || layout.art.source === 'procedural') && layout.text.length) {
     const x0 = Math.min(...layout.text.map((t) => t.x));
     const y0 = Math.min(...layout.text.map((t) => t.y));
     const x1 = Math.max(...layout.text.map((t) => t.x + t.width));
@@ -789,7 +791,7 @@ export function addBrandOrnament(
       calmRegion: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
     } as StudioLayoutV2['art'];
   }
-  if (!ornament.dividers || (layout.shapes || []).some((sh) => sh.role === 'rule')) return layout;
+  if (!ornament.dividers) return layout;
 
   const lines = measureWrappedLines(layout, copy.text);
   for (const t of layout.text) {
@@ -813,6 +815,10 @@ export function addBrandOrnament(
     const align = lower.align === upper.align ? lower.align : 'center';
     const x =
       align === 'left' ? upper.x : align === 'right' ? upper.x + upper.width - width : Math.round(upper.x + upper.width / 2 - width / 2);
+    // Each place is judged alone: a rule the generator drew above the title leaves the gap below
+    // it bare (task efb409fa), but one already in this gap is enough.
+    const gapBox = { x: Math.min(upper.x, lower.x), y: top, width: Math.max(upper.x + upper.width, lower.x + lower.width) - Math.min(upper.x, lower.x), height: gap };
+    if ((layout.shapes || []).some((sh) => intersects(sh, gapBox))) return;
     const rule = { kind: 'rect', role: 'rule', x, y: Math.round(top + (gap - 2) / 2), width, height: 2, color: gold } as StudioLayoutV2['shapes'][number];
     if (layout.logo && intersects(rule, logoClearZone(layout.logo))) return;
     if (layout.text.some((t) => intersects(t, rule))) return;
