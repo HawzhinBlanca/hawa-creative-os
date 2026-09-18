@@ -897,7 +897,7 @@ design quality behind it, can only be qualified on the production model.
 
 ## Final state (2026-09-18, second pass)
 
-Branch `studio-v2`, 65 commits ahead of the deployed `4699792` (as of `b8c84f6`). Four decisions remain, and all are the owner's:
+Branch `studio-v2`, 66 commits ahead of the deployed `4699792` (as of `b8c84f6`). Four decisions remain, and all are the owner's:
 
 1. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
 2. **The in-image qualification**, about USD 7–10: the canary now runs in both orders, and refinement adds calls when its gate opens. This is the first run that measures the decisions production makes.
