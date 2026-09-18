@@ -109,7 +109,9 @@ class HawaApiClient {
       if (isJson) {
         try {
           problem = await response.json();
-          errorMsg = problem?.detail || problem?.title || errorMsg;
+          // Adapter routes answer { ok: false, description | error } rather than a problem document.
+          const body = problem as any;
+          errorMsg = problem?.detail || problem?.title || body?.description || body?.error || errorMsg;
         } catch {}
       } else {
         try {
@@ -157,6 +159,24 @@ class HawaApiClient {
     logout: (): void => {
       clearAuthToken();
     },
+  };
+
+  // Telegram adapter. Every call goes through the signed-in session; the webhook secret never
+  // leaves the server, so the Desk inspects delivery through Core instead of posting to the webhook.
+  public readonly telegram = {
+    status: () => this.request<any>('/adapters/telegram/status'),
+    pollNow: () => this.request<any>('/adapters/telegram/poll-now', { method: 'POST' }),
+    webhookInfo: () => this.request<any>('/adapters/telegram/webhook/info'),
+    registerWebhook: (url: string) =>
+      this.request<any>('/adapters/telegram/webhook/register', { method: 'POST', body: JSON.stringify({ url }) }),
+    deleteWebhook: () =>
+      this.request<any>('/adapters/telegram/webhook/delete', { method: 'POST', body: JSON.stringify({ dropPendingUpdates: true }) }),
+  };
+
+  public readonly system = {
+    providers: () => this.request<any>('/system/providers'),
+    saveProviders: (keys: Record<string, string>) =>
+      this.request<any>('/system/providers', { method: 'POST', body: JSON.stringify(keys) }),
   };
 
   public readonly canva = {

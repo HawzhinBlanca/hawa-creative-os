@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
+import { fetchJson, reasonOf } from '../services/statusReport.js';
 
 export interface ClientSummary {
   clientId: string;
@@ -225,7 +226,7 @@ const KAAE_FALLBACK_SNAPSHOTS: ClientDnaSnapshot[] = [
 function getLuminance(hex: string): number {
   const cleanHex = hex.replace('#', '');
   const rgb = parseInt(cleanHex.length === 3 ? cleanHex.split('').map((c) => c + c).join('') : cleanHex, 16);
-  if (isNaN(rgb)) return 0.5;
+  if (isNaN(rgb)) return NaN;
   const r = (rgb >> 16) & 0xff;
   const g = (rgb >> 8) & 0xff;
   const b = (rgb >> 0) & 0xff;
@@ -243,7 +244,8 @@ function getContrastRatio(hex1: string, hex2: string): number {
     const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
     return Math.round(ratio * 10) / 10;
   } catch {
-    return 4.5;
+    // An unreadable colour has no measurable contrast; NaN renders as unknown, never as a pass.
+    return NaN;
   }
 }
 
@@ -435,7 +437,7 @@ export const DnaScreen: React.FC = () => {
       }
     } catch (err) {
       console.error('Error fetching client data:', err);
-      setErrorNotice('Operating in offline mode. Changes will sync when network is restored.');
+      setErrorNotice(`Could not reach Core, so the DNA for ${clientId} was not loaded. Nothing on this screen is confirmed current, and changes are not queued.`);
     } finally {
       setLoading(false);
     }
@@ -467,7 +469,8 @@ export const DnaScreen: React.FC = () => {
   }, [currentDna]);
 
   // Save DNA modifications to Core API
-  const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string) => {
+  // Resolves true only when Core confirmed the save.
+  const saveDnaChanges = async (updatedDna: ClientDNA, successMessage: string): Promise<boolean> => {
     setLoading(true);
     try {
       const res = await fetch(`/v1/clients/${updatedDna.clientId}/dna`, {
@@ -487,13 +490,15 @@ export const DnaScreen: React.FC = () => {
           const snapData = await snapRes.json();
           setSnapshots(snapData);
         }
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        setErrorNotice(errJson.detail || errJson.message || 'Failed to save DNA to Core API');
+        return true;
       }
+      const errJson = await res.json().catch(() => ({}));
+      setErrorNotice(errJson.detail || errJson.message || 'Failed to save DNA to Core API');
+      return false;
     } catch (err) {
       console.error('Save error:', err);
       setErrorNotice('Network error while saving DNA.');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -655,14 +660,20 @@ export const DnaScreen: React.FC = () => {
         layoutRules: [...currentDna.guidelines.layoutRules, ruleTitle],
       },
     };
-    await saveDnaChanges(updated, `Candidate rule "${ruleTitle}" promoted to active brand law`);
+    if (!(await saveDnaChanges(updated, `Candidate rule "${ruleTitle}" promoted to active brand law`))) return;
 
+    // The candidate is shown as promoted only once Core has recorded the promotion.
     if (ruleId) {
-      fetch(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/promote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operatorRole: 'art_director' }),
-      }).catch((e) => console.warn('Candidate rule promotion API notice:', e));
+      try {
+        await fetchJson(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/promote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operatorRole: 'art_director' }),
+        });
+      } catch (err) {
+        setErrorNotice(`The rule was added to the DNA, but Core did not record the candidate as promoted: ${reasonOf(err)}`);
+        return;
+      }
     }
     setCandidateRules((prev) =>
       prev.map((r) => (r.proposedRule === ruleTitle || r.ruleId === ruleId ? { ...r, status: 'promoted' } : r))
@@ -671,11 +682,16 @@ export const DnaScreen: React.FC = () => {
 
   // Dismiss candidate rule
   const handleDismissCandidate = async (ruleId: string) => {
-    fetch(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/dismiss`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: 'Dismissed by art director' }),
-    }).catch((e) => console.warn('Candidate rule dismissal API notice:', e));
+    try {
+      await fetchJson(`/v1/clients/${selectedClientId}/candidate-rules/${ruleId}/dismiss`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Dismissed by art director' }),
+      });
+    } catch (err) {
+      setErrorNotice(`Core did not record the dismissal, so the candidate stays open: ${reasonOf(err)}`);
+      return;
+    }
     setCandidateRules((prev) => prev.map((r) => (r.ruleId === ruleId ? { ...r, status: 'dismissed' } : r)));
   };
 
@@ -706,32 +722,12 @@ export const DnaScreen: React.FC = () => {
         setInspectedFont(data);
         setFontFileNotice(`✓ Inspected ${file.name}: ${data.complianceLevel} (${Math.round(data.coverageRatio * 100)}% Sorani coverage)`);
       } else {
-        throw new Error('Font inspector returned non-200');
+        throw new Error(`the font inspector answered HTTP ${res.status}`);
       }
-    } catch {
-      // Local fallback inspector simulation
-      const fallbackResult: FontInspectionResult = {
-        fontFamily: file.name.replace(/\.[^/.]+$/, ''),
-        format: file.name.endsWith('.woff2') ? 'woff2' : 'ttf',
-        totalGlyphsChecked: 32,
-        glyphsPresent: 32,
-        coverageRatio: 1.0,
-        kurdishSoraniCompliant: true,
-        complianceLevel: 'AAA_COMPLIANT',
-        missingGlyphs: [],
-        diacriticClearance: {
-          ascender: 1024,
-          descender: -400,
-          unitsPerEm: 1000,
-          recommendedLineGap: 240,
-          hasCollisionRisk: false,
-          clearanceStatus: 'SAFE',
-        },
-        sampleKurdishText: 'پ چ ژ گ ڤ ڵ ڕ ێ ۆ ە — تەندروستی گەرەنتی کراوە',
-        fileSizeBytes: file.size,
-      };
-      setInspectedFont(fallbackResult);
-      setFontFileNotice(`✓ Inspected ${file.name}: AAA_COMPLIANT (100% Kurdish Sorani coverage)`);
+    } catch (err) {
+      // No inspection happened, so there is no coverage or compliance result to show.
+      setInspectedFont(null);
+      setErrorNotice(`Could not inspect ${file.name}: ${reasonOf(err)}. Its Sorani coverage is unknown.`);
     } finally {
       setIsInspectingFont(false);
     }
@@ -1288,13 +1284,19 @@ export const DnaScreen: React.FC = () => {
                           >
                             {color.hex}
                           </code>
-                          <span
-                            className={`pill ${isWcagAaa ? 'ok' : isWcagAa ? 'blue' : 'warn'}`}
-                            style={{ fontSize: 10 }}
-                            title={`Contrast ratio against canvas: ${contrast}:1`}
-                          >
-                            {isWcagAaa ? 'AAA' : isWcagAa ? 'AA' : 'Fail'} {contrast}:1
-                          </span>
+                          {Number.isNaN(contrast) ? (
+                            <span className="pill" style={{ fontSize: 10 }} title="This colour could not be read, so its contrast is unknown">
+                              Contrast unknown
+                            </span>
+                          ) : (
+                            <span
+                              className={`pill ${isWcagAaa ? 'ok' : isWcagAa ? 'blue' : 'warn'}`}
+                              style={{ fontSize: 10 }}
+                              title={`Contrast ratio against canvas: ${contrast}:1`}
+                            >
+                              {isWcagAaa ? 'AAA' : isWcagAa ? 'AA' : 'Fail'} {contrast}:1
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
