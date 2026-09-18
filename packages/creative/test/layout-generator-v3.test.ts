@@ -8,7 +8,7 @@ import {
   type NormalizedLayoutCandidate,
   type CopyBlockSlotInput,
 } from '../src/studio/layout-generator-v3.js';
-import { studioLayoutV2Schema } from '../src/studio/layout-v2.js';
+import { studioLayoutV2Schema, type StudioLayoutV2 } from '../src/studio/layout-v2.js';
 import { checkCandidateSetDegeneracy, evaluateDesignMetrics } from '../src/studio/design-metrics.js';
 
 describe('P03 — Layout-First Candidate Generation (PosterLLaVa & PosterMELD)', () => {
@@ -310,6 +310,37 @@ describe('P03 — Layout-First Candidate Generation (PosterLLaVa & PosterMELD)',
     const capCheck = verifySlotCapacity(scaled, sampleCopyBlocks);
     expect(capCheck.ok).toBe(false);
     expect(capCheck.overflowIssues.some((s) => s.includes('overflow'))).toBe(true);
+  });
+
+  it('measures capacity in the box\'s own face, so a title box a little under one line is not "~1 chars"', () => {
+    // Every run logged "capacity is only ~1 chars" for title boxes a little shorter than one line:
+    // the estimate floored their lines to none. This copy fits one line, and preparation grows the box.
+    const layout = {
+      version: 2,
+      width: 1080,
+      height: 1350,
+      genre: 'poster',
+      grid: { margin: 80, columns: 6, gutter: 24, baseline: 8 },
+      background: { color: '#0A1628' },
+      logo: { x: 490, y: 80, width: 100, height: 100 },
+      text: [
+        {
+          copyIndex: 0, role: 'title', x: 90, y: 300, width: 900, height: 50, fontSize: 48, lineHeight: 1.2,
+          letterSpacing: null, fontFamily: 'Cinzel', color: '#FDF8F3', align: 'center', bold: true, italic: false, rtl: false,
+        },
+      ],
+      shapes: [],
+    } as unknown as StudioLayoutV2;
+    const title = (text: string): CopyBlockSlotInput[] => [{ index: 0, text, role: 'title', script: 'latin' }];
+    expect(verifySlotCapacity(layout, title('Annual Symposium'))).toEqual({ ok: true, overflowIssues: [] });
+
+    // Copy that needs far more than its box is still reported, in lines and pixels.
+    const narrow = { ...layout, text: [{ ...layout.text[0], width: 300 }] } as StudioLayoutV2;
+    const { overflowIssues } = verifySlotCapacity(narrow, title('Kurdistan Chancellor Summit 2026'));
+    expect(overflowIssues).toHaveLength(1);
+    expect(overflowIssues[0]).toMatch(
+      /^Slot overflow on copyIndex 0 \(title\): its copy wraps to \d+ line\(s\) needing \d+px; the box is 50px tall$/
+    );
   });
 
   it('confirms 3 distinct layout archetypes pass degeneracy check with geometric distance > 15px', () => {

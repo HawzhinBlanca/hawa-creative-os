@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
-import { fontCoversText, pickFontCovering } from './render-layout-v2.js';
+import { fontCoversText, measureWrappedLines, pickFontCovering } from './render-layout-v2.js';
 import { evaluateDesignMetrics, checkCandidateSetDegeneracy, type CandidateSetDegeneracyResult } from './design-metrics.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
@@ -170,13 +170,18 @@ export function computeCapacitySlot(
 }
 
 /**
- * Verifies that text elements in the scaled layout have sufficient capacity to render copy.
+ * Flags a candidate whose boxes are far too small for their copy, measured as preparation and QA
+ * measure it: the copy wrapped in the box's own face. Preparation grows a box to hold its copy when
+ * the layout has room, so only a box whose copy needs more than 1.6 times its height is reported.
+ * The estimate this replaces counted 0.52em a character and floored the lines, so a title box a
+ * little shorter than one line reported a capacity of "~1 chars" in every run.
  */
 export function verifySlotCapacity(
   layout: StudioLayoutV2,
   copyBlocks: CopyBlockSlotInput[]
 ): { ok: boolean; overflowIssues: string[] } {
   const issues: string[] = [];
+  const lines = measureWrappedLines(layout, Object.fromEntries(copyBlocks.map((b) => [b.index, b.text])));
 
   for (const block of copyBlocks) {
     const textEl = layout.text.find((t) => t.copyIndex === block.index);
@@ -184,16 +189,13 @@ export function verifySlotCapacity(
       issues.push(`Missing text element for copyIndex ${block.index} (${block.role})`);
       continue;
     }
-
-    const charWidth = 0.52 * textEl.fontSize;
-    const charsPerLine = Math.floor(textEl.width / charWidth);
-    const lineSpacing = textEl.lineHeight * textEl.fontSize;
-    const numLines = Math.floor(textEl.height / lineSpacing);
-    const capacity = Math.max(1, charsPerLine * numLines);
-
-    if (block.text.trim().length > capacity * 1.6) {
+    // A face this renderer cannot load is left to QA, which judges the box as it ships.
+    const wrapped = lines[block.index];
+    if (wrapped === undefined) continue;
+    const needed = Math.ceil(wrapped * textEl.fontSize * textEl.lineHeight);
+    if (needed > textEl.height * 1.6) {
       issues.push(
-        `Slot overflow on copyIndex ${block.index} (${block.role}): text has ${block.text.length} chars, capacity is only ~${capacity} chars`
+        `Slot overflow on copyIndex ${block.index} (${block.role}): its copy wraps to ${wrapped} line(s) needing ${needed}px; the box is ${Math.round(textEl.height)}px tall`
       );
     }
   }
