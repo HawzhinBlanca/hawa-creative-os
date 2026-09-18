@@ -474,6 +474,10 @@ async function executeBriefLive(
   const palette = ['#0A1628', '#C5A059', '#1E3A5F', '#FDF8F3'];
   // One model name for the whole brief, recorded on every row so the ledger says what actually ran.
   const layoutModel = resolveModel('layout');
+  // One model per stage role, so the cheap tier can spend where the design is decided and save
+  // where it is only scored. A single model for all five stages defeats the point of the tiers.
+  const critiqueModel = resolveModel('critique');
+  const judgeModel = resolveModel('judge');
   // Built here rather than further down: the candidate scoring below needs it, and a const
   // declared after its use is a temporal-dead-zone ReferenceError at run time.
   const copyMap: Record<number, string> = {};
@@ -541,7 +545,7 @@ async function executeBriefLive(
   console.log(`[P10 LIVE] Brief ${brief.id}: Invoking P05 vision critique on top candidate...`);
   const critiqueResult = await generateBoxGroundedCritique(best.cand, {
     client,
-    model: layoutModel,
+    model: critiqueModel,
     deterministicMetrics: best.metrics,
   });
 
@@ -639,7 +643,7 @@ async function executeBriefLive(
 
   const matchResult = await comparePairWithOrderSwap(cand1Input, cand2Input, {
     client,
-    model: layoutModel,
+    model: judgeModel,
   });
 
   const abCosts = computeTokenCosts(
@@ -698,7 +702,7 @@ async function executeBriefLive(
 
   const canaryMatch = await evaluatePairOrder(cand1Input, canaryCandidate, 'AB', {
     client,
-    model: layoutModel,
+    model: judgeModel,
   });
 
   const canaryCosts = computeTokenCosts(

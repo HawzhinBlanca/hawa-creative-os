@@ -35,8 +35,13 @@ export async function runRenderStage(
       try {
         const contrastResult = evaluateCompositeContrast(renderResult.noTextPng, cand.currentLayout);
         contrastValues = contrastResult.p05PerBox;
-      } catch {
-        // Fallback to direct background calculation in computeLayoutMetrics
+      } catch (err: any) {
+        // Falling back from measured contrast to the declared background colour can let text that is
+        // genuinely illegible over its actual backdrop pass the legibility gate, so say when it happens.
+        console.warn(
+          `[render.stage] Composite contrast could not be measured (${err?.message || err}); ` +
+            `falling back to the declared background colour for legibility scoring.`
+        );
       }
     }
 
