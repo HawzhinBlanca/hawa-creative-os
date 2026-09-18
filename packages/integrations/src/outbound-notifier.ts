@@ -132,19 +132,20 @@ export function buildOutboundReviewDispatch(
     return '🖥️ Landscape (16:9)';
   }).join(' · ');
 
+  // Only copy the client sent is shown: an empty line, or a section with nothing in it, is left out.
+  const pair = (ckb: string, en: string) => [ckb, en && `_${en}_`].filter(Boolean).join('\n');
+  const headline = pair(payload.headlineCkb, payload.headlineEn);
+  const copy = pair(payload.copyCkb, payload.copyEn);
+  const copySections = [
+    headline && `📢 *سەردێڕی پەسەندکراو / Headline:*\n${headline}\n\n`,
+    copy && `📝 *دەقی ڕیکلام / Copy:*\n${copy}\n\n`,
+  ].filter(Boolean).join('');
+
   const messageText = `✨ *کەمپینی نوێ ئامادەیە بۆ پێداچوونەوە*
 🏢 *کڕیار / Client:* ${payload.brandName} (${payload.clientName})
 📋 *ناسنامەی کار / Task ID:* \`${payload.taskId}\`
 
-📢 *سەردێڕی پەسەندکراو / Headline:*
-${payload.headlineCkb}
-_${payload.headlineEn}_
-
-📝 *دەقی ڕیکلام / Copy:*
-${payload.copyCkb}
-_${payload.copyEn}_
-
-📐 *فۆرماتە ئامادەکراوەکان / Generated Formats (4-in-1):*
+${copySections}📐 *فۆرماتە ئامادەکراوەکان / Generated Formats (4-in-1):*
 ${formatList}
 
 ───────────────────────────────

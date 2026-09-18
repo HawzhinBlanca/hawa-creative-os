@@ -55,9 +55,13 @@ describe('CV-17: Lean Hawa Work Desk Architecture & Contract Tests', () => {
 
     expect(content).toContain('exact-copy-notice');
     expect(content).toContain('Exact Copy Invariant (#1)');
-    expect(content).toContain('kurdish-typeset');
-    expect(content).toContain('bidi-isolated');
-    expect(content).toContain('dir="rtl"');
+    expect(content).toContain('<SubmittedCopy');
+
+    // The copy blocks themselves are drawn by SubmittedCopy.
+    const copyPanel = fs.readFileSync(path.join(deskSrc, 'components/SubmittedCopy.tsx'), 'utf8');
+    expect(copyPanel).toContain('kurdish-typeset');
+    expect(copyPanel).toContain('bidi-isolated');
+    expect(copyPanel).toContain('dir="rtl"');
   });
 
   it('verifies route and navigation replacement matrix (FR-064)', () => {

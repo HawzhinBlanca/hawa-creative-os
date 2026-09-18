@@ -827,7 +827,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Omnichannel Publishing Test', clientId: 'client-drustee' }),
+      // The Drustee template needs a headline and body; it refuses (COPY_REQUIRED) rather than drawing sample text.
+      body: JSON.stringify({ title: 'Omnichannel Publishing Test', clientId: 'client-drustee', headlineEn: 'Omnichannel Publishing Test', copyEn: 'Vitamin D3 + K2, laboratory tested.' }),
     });
     const { id: taskId } = await createRes.json();
 
