@@ -184,17 +184,9 @@ export async function computeDocumentHash(content: string): Promise<string> {
     const nodeCrypto = await import('node:crypto');
     return 'sha256_' + nodeCrypto.createHash('sha256').update(content).digest('hex');
   } catch {
-    // Deterministic fallback for environments without webcrypto or node:crypto
-    let hash1 = 5381;
-    let hash2 = 52711;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash1 = (hash1 * 33) ^ char;
-      hash2 = (hash2 * 33) ^ char;
-    }
-    const p1 = (hash1 >>> 0).toString(16).padStart(8, '0');
-    const p2 = (hash2 >>> 0).toString(16).padStart(8, '0');
-    return `sha256_canonical_${p1}${p2}`;
+    // Without SubtleCrypto (for example a page served over plain http) there is no SHA-256 here.
+    // A weaker checksum labelled sha256_ would be a false integrity proof, so the save fails instead.
+    throw new Error('SHA-256 is unavailable in this browser context; the draft cannot be integrity-stamped');
   }
 }
 

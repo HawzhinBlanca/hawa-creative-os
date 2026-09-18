@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { eventStream } from '../services/eventStream';
+import { fetchJson, read, reasonOf } from '../services/statusReport.js';
 
 interface IntegrationHealth {
   integrationId: string;
@@ -95,52 +96,10 @@ export const OpsScreen: React.FC = () => {
   const [sloSummary, setSloSummary] = useState<SloSummary | null>(null);
   const [recentProbes, setRecentProbes] = useState<SloProbeResult[]>([]);
   const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
-  const [clientBudgets, setClientBudgets] = useState<ClientBudgetReport[]>([
-    {
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      clientName: 'KAAE (Accreditation Agency)',
-      monthlyCapUsd: 1000.0,
-      currentSpendUsd: 124.8,
-      remainingUsd: 875.2,
-      percentUsed: 12.48,
-      quotaStatus: 'HEALTHY',
-      currency: 'USD',
-      billingCycle: '2026-09',
-    },
-    {
-      clientId: 'client-drustee',
-      clientName: 'Drustee Evidence-First Health',
-      monthlyCapUsd: 250.0,
-      currentSpendUsd: 48.2,
-      remainingUsd: 201.8,
-      percentUsed: 19.28,
-      quotaStatus: 'HEALTHY',
-      currency: 'USD',
-      billingCycle: '2026-09',
-    },
-    {
-      clientId: 'client-office-1',
-      clientName: 'Internal Creative Office',
-      monthlyCapUsd: 500.0,
-      currentSpendUsd: 112.5,
-      remainingUsd: 387.5,
-      percentUsed: 22.5,
-      quotaStatus: 'HEALTHY',
-      currency: 'USD',
-      billingCycle: '2026-09',
-    },
-    {
-      clientId: 'client-aster',
-      clientName: 'Aster Pharmacy Network',
-      monthlyCapUsd: 200.0,
-      currentSpendUsd: 178.4,
-      remainingUsd: 21.6,
-      percentUsed: 89.2,
-      quotaStatus: 'WARNING',
-      currency: 'USD',
-      billingCycle: '2026-09',
-    },
-  ]);
+  // Budgets come only from Core. Until it answers there is nothing to show, not a sample.
+  const [clientBudgets, setClientBudgets] = useState<ClientBudgetReport[]>([]);
+  // Reads that failed on the last refresh, by name, with the reason. A failed read is never shown as zero.
+  const [unreadable, setUnreadable] = useState<Record<string, string>>({});
   const [editingBudgetClient, setEditingBudgetClient] = useState<ClientBudgetReport | null>(null);
   const [newAllocatedCap, setNewAllocatedCap] = useState<number>(300);
 
@@ -151,80 +110,82 @@ export const OpsScreen: React.FC = () => {
   const [benchmarkToast, setBenchmarkToast] = useState<string | null>(null);
   const [reconcileToast, setReconcileToast] = useState<string | null>(null);
   const [opsToast, setOpsToast] = useState<string | null>(null);
+  const showOpsToast = (text: string) => {
+    setOpsToast(text);
+    setTimeout(() => setOpsToast(null), 6000);
+  };
   const [inspectingFailure, setInspectingFailure] = useState<FailureItem | null>(null);
 
   const fetchOpsData = async () => {
     setLoading(true);
-    try {
-      const [healthRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
-        fetch('/v1/integrations/health').then((r) => (r.ok ? r.json() : { items: [] })),
-        fetch('/v1/operations/failures').then((r) => (r.ok ? r.json() : { items: [] })),
-        fetch('/v1/operations/slo').then((r) => (r.ok ? r.json() : null)),
-        fetch('/v1/operations/reconciliation').then((r) => (r.ok ? r.json() : null)),
-        fetch('/v1/clients/budgets').then((r) => (r.ok ? r.json() : { budgets: [] })),
-      ]);
+    const [healthRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
+      read(() => fetchJson('/v1/integrations/health')),
+      read(() => fetchJson('/v1/operations/failures')),
+      read(() => fetchJson('/v1/operations/slo')),
+      read(() => fetchJson('/v1/operations/reconciliation')),
+      read(() => fetchJson('/v1/clients/budgets')),
+    ]);
+    const gaps: Record<string, string> = {};
+    const note = (name: string, r: { state: string; reason?: string }) => {
+      if (r.state === 'unknown') gaps[name] = r.reason || 'unknown error';
+    };
+    note('integrations', healthRes);
+    note('failures', failRes);
+    note('slo', sloRes);
+    note('reconciliation', reconRes);
+    note('budgets', budgetsRes);
+    setUnreadable(gaps);
 
-      if (healthRes.items) {
-        setIntegrations(healthRes.items);
-      }
-      if (failRes.items) {
-        setFailures(failRes.items);
-      }
-      if (sloRes?.summary) {
-        setSloSummary(sloRes.summary);
-        setRecentProbes(sloRes.recentProbes || []);
-      }
-      if (reconRes?.auditId) {
-        setReconciliation(reconRes);
-      }
-      if (budgetsRes?.budgets && Array.isArray(budgetsRes.budgets) && budgetsRes.budgets.length > 0) {
-        const mappedBudgets: ClientBudgetReport[] = budgetsRes.budgets.map((b: any) => {
-          const cap = Number(b.monthlyCapUsd ?? b.capUsd ?? 250);
-          const spent = Number(b.currentSpendUsd ?? b.spentUsd ?? 0);
-          const remaining = Number(b.remainingUsd ?? Math.max(0, cap - spent));
-          const pct = Number(b.percentUsed ?? (cap > 0 ? (spent / cap) * 100 : 0));
-          return {
-            clientId: b.clientId || 'client-unknown',
-            clientName: b.clientName || b.clientId || 'Client Brand',
-            monthlyCapUsd: cap,
-            currentSpendUsd: spent,
-            remainingUsd: remaining,
-            percentUsed: pct,
-            quotaStatus: b.quotaStatus || b.status || (pct >= 100 ? 'EXCEEDED' : pct >= 80 ? 'WARNING' : 'HEALTHY'),
-            currency: b.currency || 'USD',
-            billingCycle: b.billingCycle || b.month || '2026-09',
-          };
-        });
-        setClientBudgets(mappedBudgets);
-      }
-      setLastCheck(new Date().toLocaleTimeString());
-    } catch (err) {
-      console.error('Failed to fetch ops telemetry:', err);
-    } finally {
-      setLoading(false);
+    setIntegrations(healthRes.state === 'known' && Array.isArray(healthRes.value?.items) ? healthRes.value.items : []);
+    setFailures(failRes.state === 'known' && Array.isArray(failRes.value?.items) ? failRes.value.items : []);
+    if (sloRes.state === 'known' && sloRes.value?.summary) {
+      setSloSummary(sloRes.value.summary);
+      setRecentProbes(sloRes.value.recentProbes || []);
     }
+    if (reconRes.state === 'known' && reconRes.value?.auditId) {
+      setReconciliation(reconRes.value);
+    }
+    const budgets = budgetsRes.state === 'known' && Array.isArray(budgetsRes.value?.budgets) ? budgetsRes.value.budgets : [];
+    setClientBudgets(
+      budgets.map((b: any): ClientBudgetReport => {
+        const cap = Number(b.monthlyCapUsd ?? b.capUsd ?? 250);
+        const spent = Number(b.currentSpendUsd ?? b.spentUsd ?? 0);
+        const remaining = Number(b.remainingUsd ?? Math.max(0, cap - spent));
+        const pct = Number(b.percentUsed ?? (cap > 0 ? (spent / cap) * 100 : 0));
+        return {
+          clientId: b.clientId || 'client-unknown',
+          clientName: b.clientName || b.clientId || 'Client Brand',
+          monthlyCapUsd: cap,
+          currentSpendUsd: spent,
+          remainingUsd: remaining,
+          percentUsed: pct,
+          quotaStatus: b.quotaStatus || b.status || (pct >= 100 ? 'EXCEEDED' : pct >= 80 ? 'WARNING' : 'HEALTHY'),
+          currency: b.currency || 'USD',
+          billingCycle: b.billingCycle || b.month || '2026-09',
+        };
+      })
+    );
+    setLastCheck(new Date().toLocaleTimeString());
+    setLoading(false);
   };
 
   const runBenchmark = async () => {
     setRunningBenchmark(true);
     setBenchmarkToast(null);
     try {
-      const res = await fetch('/v1/operations/slo/run', {
+      const data = await fetchJson('/v1/operations/slo/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenario: 'nawroz_spring' }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setSloSummary(data.summary);
-        if (data.result) {
-          setRecentProbes((prev) => [data.result, ...prev.slice(0, 9)]);
-        }
-        setBenchmarkToast(`Benchmark probe completed in ${data.result?.totalDurationMs}ms (100% Invariants Verified)`);
-        setTimeout(() => setBenchmarkToast(null), 5000);
+      setSloSummary(data.summary);
+      if (data.result) {
+        setRecentProbes((prev) => [data.result, ...prev.slice(0, 9)]);
       }
+      setBenchmarkToast(`Benchmark probe completed in ${data.result?.totalDurationMs ?? '?'}ms`);
+      setTimeout(() => setBenchmarkToast(null), 5000);
     } catch (err) {
-      console.error('Benchmark execution error:', err);
+      showOpsToast(`✗ Benchmark did not run: ${reasonOf(err)}`);
     } finally {
       setRunningBenchmark(false);
     }
@@ -234,19 +195,16 @@ export const OpsScreen: React.FC = () => {
     setRunningReconciliation(true);
     setReconcileToast(null);
     try {
-      const res = await fetch('/v1/operations/reconciliation/run', {
+      const data = await fetchJson('/v1/operations/reconciliation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoRepair: true }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setReconciliation(data);
-        setReconcileToast(`✓ Storage Audit: ${data.inSyncCount} in-sync, ${data.driftCount} drifts detected, ${data.repairedCount} auto-repaired`);
-        setTimeout(() => setReconcileToast(null), 6000);
-      }
+      setReconciliation(data);
+      setReconcileToast(`✓ Storage Audit: ${data.inSyncCount} in-sync, ${data.driftCount} drifts detected, ${data.repairedCount} auto-repaired`);
+      setTimeout(() => setReconcileToast(null), 6000);
     } catch (err) {
-      console.error('Reconciliation error:', err);
+      showOpsToast(`✗ Reconciliation audit did not run: ${reasonOf(err)}`);
     } finally {
       setRunningReconciliation(false);
     }
@@ -270,43 +228,37 @@ export const OpsScreen: React.FC = () => {
 
   const handleAllocateBudget = async (clientId: string, newCap: number) => {
     try {
-      const res = await fetch(`/v1/clients/${clientId}/budget/allocate`, {
+      await fetchJson(`/v1/clients/${clientId}/budget/allocate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monthlyCapUsd: newCap, resetSpend: false }),
       });
-      if (res.ok) {
-        setOpsToast(`✓ Updated monthly budget cap for ${clientId} to $${newCap.toFixed(2)}`);
-        setTimeout(() => setOpsToast(null), 4000);
-        setEditingBudgetClient(null);
-        fetchOpsData();
-      }
-    } catch {
-      setClientBudgets((prev) =>
-        prev.map((b) =>
-          b.clientId === clientId
-            ? {
-                ...b,
-                monthlyCapUsd: newCap,
-                remainingUsd: Math.max(0, newCap - b.currentSpendUsd),
-                percentUsed: Math.round((b.currentSpendUsd / newCap) * 10000) / 100,
-              }
-            : b
-        )
-      );
+      showOpsToast(`✓ Updated monthly budget cap for ${clientId} to $${newCap.toFixed(2)}`);
       setEditingBudgetClient(null);
+      fetchOpsData();
+    } catch (err) {
+      // Core did not change the cap, so the screen keeps showing the one it has.
+      showOpsToast(`✗ Budget cap for ${clientId} was not changed: ${reasonOf(err)}`);
     }
   };
 
   const degradedCount = integrations.filter((i) => i.state !== 'healthy').length;
   const criticalCount = failures.filter((f) => f.status === 'OPERATOR_REQUIRED').length;
   const recoverableCount = failures.length;
+  const failuresKnown = Boolean(lastCheck) && !unreadable.failures;
+  const integrationsKnown = Boolean(lastCheck) && !unreadable.integrations;
 
   return (
     <section id="ops" className="screen active">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-          {loading ? 'Polling infrastructure telemetry…' : lastCheck ? `Live telemetry active · Last checked ${lastCheck}` : 'Connected to Core Telemetry'}
+          {loading
+            ? 'Polling infrastructure telemetry…'
+            : !lastCheck
+              ? 'Telemetry not read yet'
+              : Object.keys(unreadable).length > 0
+                ? `Telemetry incomplete · last checked ${lastCheck} · could not read ${Object.entries(unreadable).map(([name, why]) => `${name} (${why})`).join('; ')}`
+                : `Telemetry read · last checked ${lastCheck}`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -349,10 +301,11 @@ export const OpsScreen: React.FC = () => {
       {/* Primary Ops Metrics */}
       <h1 className="sr-only">Operations & Telemetry Overview</h1>
       <div className="grid4">
-        <div className="stat"><b>{criticalCount}</b><span>critical incidents</span></div>
-        <div className="stat"><b>{recoverableCount}</b><span>recoverable failures</span></div>
-        <div className="stat"><b>{degradedCount}</b><span>adapter degraded</span></div>
-        <div className="stat"><b>14m</b><span>last backup age</span></div>
+        {/* A count Core could not supply is shown as —, never as 0. */}
+        <div className="stat"><b>{failuresKnown ? criticalCount : '—'}</b><span>critical incidents</span></div>
+        <div className="stat"><b>{failuresKnown ? recoverableCount : '—'}</b><span>recoverable failures</span></div>
+        <div className="stat"><b>{integrationsKnown ? degradedCount : '—'}</b><span>adapter degraded</span></div>
+        <div className="stat"><b>—</b><span>last backup age (not reported to the Desk)</span></div>
       </div>
 
       {/* SLO Latency & Synthetic Heartbeat Dashboard */}
@@ -547,6 +500,9 @@ export const OpsScreen: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {unreadable.budgets && (
+            <div className="rule"><b>Budgets unknown</b><p>Could not read client budgets: {unreadable.budgets}</p></div>
+          )}
           {clientBudgets.map((b) => {
             const isExceeded = b.quotaStatus === 'EXCEEDED';
             const isWarning = b.quotaStatus === 'WARNING';
@@ -651,6 +607,11 @@ export const OpsScreen: React.FC = () => {
                   </td>
                 </tr>
               ))}
+              {unreadable.failures && (
+                <tr>
+                  <td colSpan={4}>Could not read task failures, so this list may be incomplete: {unreadable.failures}</td>
+                </tr>
+              )}
 
               <tr>
                 <td>WAHA (WhatsApp)</td>
@@ -718,26 +679,11 @@ export const OpsScreen: React.FC = () => {
               </div>
             ))
           ) : (
-            <>
-              <div className="rule">
-                <span className="dot"></span><b>PostgreSQL 17</b>
-                <p>PITR WAL archiving current · RLS tenant & client context active</p>
-              </div>
-              <div className="rule">
-                <span className="dot"></span><b>Restate 1.7.x</b>
-                <p>18 active durable invocations · 4 waiting on human approval</p>
-              </div>
-            </>
+            <div className="rule">
+              <b>{unreadable.integrations ? 'Component health unknown' : integrationsKnown ? 'No components reported' : 'Not read yet'}</b>
+              {unreadable.integrations && <p>Could not read component health: {unreadable.integrations}</p>}
+            </div>
           )}
-
-          <div className="rule">
-            <span className="dot"></span><b>PostgreSQL 17</b>
-            <p>PITR WAL archiving current · RLS tenant & client context active</p>
-          </div>
-          <div className="rule">
-            <span className="dot"></span><b>Restate 1.7.x</b>
-            <p>18 active durable invocations · deterministic replay verified</p>
-          </div>
         </div>
       </div>
 

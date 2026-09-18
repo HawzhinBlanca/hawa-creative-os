@@ -1,14 +1,34 @@
 import { CanvaConnectionPanel } from '../components/CanvaConnectionPanel.js';
 import React, { useState, useEffect } from 'react';
+import { apiClient } from '../api/client.js';
+import {
+  read,
+  reasonOf,
+  describeTelegramBridge,
+  describeWebhookMode,
+  describeWebhookDelivery,
+  describeProvider,
+  type Reading,
+  type TelegramAdapterStatus,
+  type ProviderStatusMap,
+  type CheckResult,
+} from '../services/statusReport.js';
+
+const PILL_CLASS = { ok: 'pill ok', warn: 'pill warn', unknown: 'pill' } as const;
+const CHECK_COLORS = {
+  ok: { border: '#1d733c', background: '#ecfdf5', title: '#065f46', text: '#047857' },
+  warn: { border: '#d97706', background: '#fffbeb', title: '#92400e', text: '#b45309' },
+  error: { border: '#dc2626', background: '#fef2f2', title: '#991b1b', text: '#b91c1c' },
+} as const;
 
 export const SettingsScreen: React.FC = () => {
-  const [testingWebhook, setTestingWebhook] = useState(false);
-  const [webhookResult, setWebhookResult] = useState<string | null>(null);
-  const [telegramStatus, setTelegramStatus] = useState<any>(null);
+  const [checkingWebhook, setCheckingWebhook] = useState(false);
+  const [webhookResult, setWebhookResult] = useState<CheckResult | null>(null);
+  const [telegramStatus, setTelegramStatus] = useState<Reading<TelegramAdapterStatus>>({ state: 'loading' });
   const [pollingTelegram, setPollingTelegram] = useState(false);
   const [pollResult, setPollResult] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<'admission' | 'proof' | 'credentials' | null>(null);
-  const [providerStatus, setProviderStatus] = useState<any>(null);
+  const [providerStatus, setProviderStatus] = useState<Reading<ProviderStatusMap>>({ state: 'loading' });
   const [savingKeys, setSavingKeys] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [keysForm, setKeysForm] = useState({
@@ -22,41 +42,19 @@ export const SettingsScreen: React.FC = () => {
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
   const [registerWebhookResult, setRegisterWebhookResult] = useState<string | null>(null);
 
+  // A status that cannot be read is shown as unknown, with the reason. It is never guessed.
   const fetchTelegramStatus = async () => {
-    try {
-      const res = await fetch('/v1/adapters/telegram/status');
-      if (res.ok) {
-        const data = await res.json();
-        setTelegramStatus(data);
-      }
-    } catch {
-      // Fallback
-      setTelegramStatus({
-        ok: true,
-        botConfigured: true,
-        botUsername: 'hawdesign_official_bot',
-        botName: 'Hawdesign bot',
-        bridge: { isPolling: false, messageCount: 0 },
-      });
-    }
+    setTelegramStatus(await read(() => apiClient.telegram.status()));
   };
 
   const fetchProviderStatus = async () => {
-    try {
-      const res = await fetch('/v1/system/providers');
-      if (res.ok) {
-        const data = await res.json();
-        setProviderStatus(data.providers);
-      }
-    } catch {
-      // Fallback
-      setProviderStatus({
-        gemini: { configured: true },
-        openai: { configured: false },
-        anthropic: { configured: false },
-        telegram: { configured: false },
-      });
-    }
+    setProviderStatus(
+      await read(async () => {
+        const data = await apiClient.system.providers();
+        if (!data?.providers) throw new Error('the server returned no provider status');
+        return data.providers as ProviderStatusMap;
+      })
+    );
   };
 
   useEffect(() => {
@@ -69,21 +67,12 @@ export const SettingsScreen: React.FC = () => {
     setSavingKeys(true);
     setSaveStatus(null);
     try {
-      const res = await fetch('/v1/system/providers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(keysForm),
-      });
-      if (res.ok) {
-        setSaveStatus('✓ Verified and active until the next restart. To keep it, run infra/docker/rotate_external_secrets.sh on the server.');
-        await fetchProviderStatus();
-        setTimeout(() => setActiveModal(null), 2200);
-      } else {
-        const detail = await res.json().then((p: any) => p?.detail).catch(() => null);
-        setSaveStatus(`✗ ${detail || 'Failed to save credentials. Check server connection.'}`);
-      }
-    } catch (err: any) {
-      setSaveStatus(`✗ Error: ${err.message}`);
+      await apiClient.system.saveProviders(keysForm);
+      setSaveStatus('✓ Verified and active until the next restart. To keep it, run infra/docker/rotate_external_secrets.sh on the server.');
+      await fetchProviderStatus();
+      setTimeout(() => setActiveModal(null), 2200);
+    } catch (err) {
+      setSaveStatus(`✗ ${reasonOf(err)}`);
     } finally {
       setSavingKeys(false);
     }
@@ -93,84 +82,34 @@ export const SettingsScreen: React.FC = () => {
     setPollingTelegram(true);
     setPollResult(null);
     try {
-      const res = await fetch('/v1/adapters/telegram/poll-now', {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPollResult(`✓ Telegram poll complete: processed ${data.updatesProcessed ?? 0} update(s).`);
-        await fetchTelegramStatus();
-      } else {
-        setPollResult('✗ Failed to poll Telegram updates.');
-      }
-    } catch (err: any) {
-      setPollResult(`✗ Poll error: ${err.message}`);
+      const data = await apiClient.telegram.pollNow();
+      setPollResult(`✓ Telegram poll complete: processed ${data?.updatesProcessed ?? 0} update(s).`);
+      await fetchTelegramStatus();
+    } catch (err) {
+      setPollResult(`✗ Poll failed: ${reasonOf(err)}`);
     } finally {
       setPollingTelegram(false);
     }
   };
 
-  const handleTestWebhook = async () => {
-    setTestingWebhook(true);
+  // The webhook secret stays on the server. Core asks Telegram how delivery to our webhook is going
+  // (getWebhookInfo) and relays the answer; the Desk never posts to the webhook itself.
+  const handleCheckWebhook = async () => {
+    setCheckingWebhook(true);
     setWebhookResult(null);
-
-    try {
-      const msgId = Date.now();
-      const webhookAuthHeader = ['kaae', 'office', 'secret', 'production', 'entropy', '99f3b817'].join('_');
-      const res = await fetch('/api/webhooks/telegram?generate=true', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': webhookAuthHeader,
-        },
-        body: JSON.stringify({
-          update_id: msgId,
-          message: {
-            message_id: msgId,
-            chat: { id: -100123456 },
-            from: { id: 998877, first_name: 'Hawzhin', username: 'hawzhin_operator' },
-            text: 'پۆستێکی بەپەلە بۆ ئۆفیسی سەرەکی - هەڵمەتی فەرمی کۆمپانیای KAAE بۆ دڵنیایی کوالێتی و خزمەتگوزاری نوێ',
-          },
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.generated && data.task) {
-          setWebhookResult(`✓ Webhook accepted: Task ${data.task.id.substring(0, 8)}… generated in '${data.task.status}' (QA: ${data.task.qaStatus || 'PASSED'}) and broadcast to Desk.`);
-        } else {
-          setWebhookResult(`✓ Webhook accepted: Inbound task ${data.task?.id?.substring(0, 8) || 'unknown'}… captured in Inbox with 'RECEIVED' status`);
-        }
-      } else {
-        setWebhookResult('✗ Webhook rejected: Check secret token or endpoint authorization.');
-      }
-    } catch (err: any) {
-      setWebhookResult(`✗ Webhook error: ${err.message}`);
-    } finally {
-      setTestingWebhook(false);
-    }
+    setWebhookResult(describeWebhookDelivery(await read(() => apiClient.telegram.webhookInfo())));
+    setCheckingWebhook(false);
   };
 
   const handleRegisterWebhook = async () => {
     setRegisteringWebhook(true);
     setRegisterWebhookResult(null);
     try {
-      const res = await fetch('/v1/adapters/telegram/webhook/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: webhookUrlInput.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setRegisterWebhookResult(`✓ Webhook registered with Telegram Bot API: ${webhookUrlInput}`);
-        await fetchTelegramStatus();
-      } else {
-        setRegisterWebhookResult(`✗ Failed: ${data.description || 'Check domain and bot token'}`);
-      }
-    } catch (err: any) {
-      setRegisterWebhookResult(`✗ Error: ${err.message}`);
+      await apiClient.telegram.registerWebhook(webhookUrlInput.trim());
+      setRegisterWebhookResult(`✓ Webhook registered with Telegram Bot API: ${webhookUrlInput}`);
+      await fetchTelegramStatus();
+    } catch (err) {
+      setRegisterWebhookResult(`✗ Failed: ${reasonOf(err)}`);
     } finally {
       setRegisteringWebhook(false);
     }
@@ -180,24 +119,27 @@ export const SettingsScreen: React.FC = () => {
     setRegisteringWebhook(true);
     setRegisterWebhookResult(null);
     try {
-      const res = await fetch('/v1/adapters/telegram/webhook/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dropPendingUpdates: true }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setRegisterWebhookResult('✓ Webhook removed. Telegram reverted to on-demand polling mode.');
-        await fetchTelegramStatus();
-      } else {
-        setRegisterWebhookResult(`✗ Failed: ${data.description}`);
-      }
-    } catch (err: any) {
-      setRegisterWebhookResult(`✗ Error: ${err.message}`);
+      await apiClient.telegram.deleteWebhook();
+      setRegisterWebhookResult('✓ Webhook removed. Telegram reverted to on-demand polling mode.');
+      await fetchTelegramStatus();
+    } catch (err) {
+      setRegisterWebhookResult(`✗ Failed: ${reasonOf(err)}`);
     } finally {
       setRegisteringWebhook(false);
     }
   };
+
+  const bridgeView = describeTelegramBridge(telegramStatus);
+  const webhookModeView = describeWebhookMode(telegramStatus);
+  const providerTile = (key: string, name: string) => {
+    const view = describeProvider(providerStatus, key);
+    return (
+      <div style={{ padding: '6px 8px', background: view.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
+        <span style={{ fontWeight: 600 }}>{name}</span>: {view.text}
+      </div>
+    );
+  };
+  const keyIsSet = (key: string) => describeProvider(providerStatus, key).configured;
 
   return (
     <section id="settings" className="screen active">
@@ -225,13 +167,13 @@ export const SettingsScreen: React.FC = () => {
                 <td>
                   <b>Telegram Bridge</b>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                    @{telegramStatus?.botUsername || 'hawdesign_official_bot'} · {telegramStatus?.bridge?.isPolling ? 'live daemon polling' : 'webhook / polling idle'}
+                    {bridgeView.detail}
                   </div>
                 </td>
                 <td>capture & card dispatch</td>
                 <td>
-                  <span className={`pill ${telegramStatus?.botConfigured ? 'ok' : 'warn'}`}>
-                    {telegramStatus?.botConfigured ? 'healthy' : 'token missing'}
+                  <span className={PILL_CLASS[bridgeView.tone]}>
+                    {bridgeView.label}
                   </span>
                 </td>
                 <td>
@@ -239,10 +181,11 @@ export const SettingsScreen: React.FC = () => {
                     <button
                       className="btn"
                       style={{ fontSize: 11 }}
-                      disabled={testingWebhook}
-                      onClick={handleTestWebhook}
+                      disabled={checkingWebhook}
+                      onClick={handleCheckWebhook}
+                      title="Ask Telegram, through Core, how delivery to the registered webhook is going"
                     >
-                      {testingWebhook ? 'Generating…' : 'Test webhook'}
+                      {checkingWebhook ? 'Checking…' : 'Check webhook'}
                     </button>
                     <button
                       className="btn secondary"
@@ -287,9 +230,9 @@ export const SettingsScreen: React.FC = () => {
           </table>
 
           {webhookResult && (
-            <div className="finding" style={{ borderColor: webhookResult.startsWith('✓') ? '#1d733c' : '#dc2626', background: webhookResult.startsWith('✓') ? '#ecfdf5' : '#fef2f2', marginTop: 14 }}>
-              <b style={{ color: webhookResult.startsWith('✓') ? '#065f46' : '#991b1b' }}>Live Ingress Webhook Test Result</b>
-              <p style={{ margin: '4px 0', fontSize: 12, color: webhookResult.startsWith('✓') ? '#047857' : '#b91c1c' }}>{webhookResult}</p>
+            <div className="finding" style={{ borderColor: CHECK_COLORS[webhookResult.tone].border, background: CHECK_COLORS[webhookResult.tone].background, marginTop: 14 }}>
+              <b style={{ color: CHECK_COLORS[webhookResult.tone].title }}>Telegram webhook delivery (as reported by Telegram)</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: CHECK_COLORS[webhookResult.tone].text }}>{webhookResult.text}</p>
             </div>
           )}
 
@@ -307,12 +250,11 @@ export const SettingsScreen: React.FC = () => {
               <div>
                 <b>Instant Push Ingress (&lt;50ms)</b>
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
-                  Current Mode: <b>{telegramStatus?.bridge?.webhookActive ? '⚡ Instant Webhook Push' : '🔄 On-Demand Long Polling'}</b>
-                  {telegramStatus?.bridge?.webhookUrl && <span> · Target: <code>{telegramStatus?.bridge?.webhookUrl}</code></span>}
+                  Current Mode: <b>{webhookModeView.detail}</b>
                 </p>
               </div>
-              <span className={`pill ${telegramStatus?.bridge?.webhookActive ? 'ok' : 'warn'}`}>
-                {telegramStatus?.bridge?.webhookActive ? 'Webhook Live' : 'Polling Fallback'}
+              <span className={PILL_CLASS[webhookModeView.tone]}>
+                {webhookModeView.label}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -390,7 +332,7 @@ export const SettingsScreen: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <b>Local & Cloud Provider Keys</b>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>Stored securely in <code>.env.local</code> / Hawa Core Memory</p>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>Deploy-time configuration; a key pasted here lasts until the next restart</p>
               </div>
               <button
                 className="btn primary"
@@ -404,19 +346,14 @@ export const SettingsScreen: React.FC = () => {
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: 11, marginTop: 4 }}>
-              <div style={{ padding: '6px 8px', background: 'rgba(29,115,60,0.08)', borderRadius: 6, border: '1px solid rgba(29,115,60,0.2)' }}>
-                <span style={{ color: '#065f46', fontWeight: 600 }}>✓ Google Workspace ADC</span>: Active
-              </div>
-              <div style={{ padding: '6px 8px', background: providerStatus?.openai?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 600 }}>OpenAI</span>: {providerStatus?.openai?.configured ? '✓ Active' : 'Fallback Engine'}
-              </div>
-              <div style={{ padding: '6px 8px', background: providerStatus?.anthropic?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 600 }}>Anthropic</span>: {providerStatus?.anthropic?.configured ? '✓ Active' : 'Fallback Engine'}
-              </div>
-              <div style={{ padding: '6px 8px', background: providerStatus?.telegram?.configured ? 'rgba(29,115,60,0.08)' : 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 600 }}>Telegram</span>: {providerStatus?.telegram?.configured ? '✓ Configured' : 'Disabled'}
-              </div>
+              {providerTile('gemini', 'Google Gemini')}
+              {providerTile('openai', 'OpenAI')}
+              {providerTile('anthropic', 'Anthropic')}
+              {providerTile('telegram', 'Telegram')}
             </div>
+            {providerStatus.state === 'unknown' && (
+              <p style={{ margin: 0, fontSize: 11, color: '#b91c1c' }}>Provider status unknown: {providerStatus.reason}</p>
+            )}
           </div>
         </div>
       </div>
@@ -494,7 +431,7 @@ export const SettingsScreen: React.FC = () => {
               <button className="btn" style={{ fontSize: 11 }} onClick={() => setActiveModal(null)}>✕</button>
             </div>
             <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 0, marginBottom: 16 }}>
-              Paste your API keys below to activate live model providers. Changes are applied immediately in-memory and synchronized to local <code>.env.local</code>.
+              Paste your API keys below to activate live model providers. Core verifies each key with its provider and keeps it in memory until the next restart; nothing is written to a file.
             </p>
 
             <form onSubmit={handleSaveCredentials} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -509,7 +446,7 @@ export const SettingsScreen: React.FC = () => {
                   type="password"
                   className="input"
                   style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder={providerStatus?.openai?.configured ? '••••••••••••••••••••• (Active)' : 'sk-proj-... or sk-...'}
+                  placeholder={keyIsSet('openai') ? '••••••••••••••••••••• (configured)' : 'sk-proj-... or sk-...'}
                   value={keysForm.openaiApiKey}
                   onChange={(e) => setKeysForm({ ...keysForm, openaiApiKey: e.target.value })}
                 />
@@ -526,7 +463,7 @@ export const SettingsScreen: React.FC = () => {
                   type="password"
                   className="input"
                   style={{ width: '100%', fontFamily: 'monospace', fontSize: 12, padding: '8px 10px' }}
-                  placeholder={providerStatus?.anthropic?.configured ? '••••••••••••••••••••• (Active)' : 'sk-ant-api03-...'}
+                  placeholder={keyIsSet('anthropic') ? '••••••••••••••••••••• (configured)' : 'sk-ant-api03-...'}
                   value={keysForm.anthropicApiKey}
                   onChange={(e) => setKeysForm({ ...keysForm, anthropicApiKey: e.target.value })}
                 />
@@ -547,9 +484,6 @@ export const SettingsScreen: React.FC = () => {
                   value={keysForm.geminiApiKey}
                   onChange={(e) => setKeysForm({ ...keysForm, geminiApiKey: e.target.value })}
                 />
-                <span style={{ fontSize: 11, color: '#065f46', marginTop: 2, display: 'block' }}>
-                  ✓ Google Workspace ADC (hawzhin88@gmail.com) is currently active.
-                </span>
               </div>
 
               <div>
@@ -594,7 +528,7 @@ export const SettingsScreen: React.FC = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  File fallback: <code>.env.local</code>
+                  To keep a key across restarts: <code>infra/docker/rotate_external_secrets.sh</code>
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="button" className="btn" onClick={() => setActiveModal(null)}>Cancel</button>

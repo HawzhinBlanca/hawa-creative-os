@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { fetchJson, reasonOf } from '../services/statusReport.js';
 
 interface DatasetInfo {
   id: string;
@@ -8,13 +9,38 @@ interface DatasetInfo {
   description: string;
 }
 
+// Names only, so the screen can be navigated before Core answers. Case counts are unknown until
+// Core reports them; a count shown here would be invented.
 const FALLBACK_DATASETS: DatasetInfo[] = [
-  { id: 'brief', name: 'Brief Builder', cases: '60 cases', status: 'ok', description: 'Blind holdout · exact versions · no production state mutation' },
-  { id: 'rtl', name: 'RTL Golden Suite', cases: '40 cases', status: 'ok', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
-  { id: 'retrieval', name: 'Retrieval & Leakage', cases: '20 cases', status: 'ok', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
-  { id: 'defects', name: 'Visual Quality Rubric', cases: '10 cases', status: 'ok', description: 'Artifact detection, safe-zone violations, and model hallucinations' },
-  { id: 'copyguard', name: 'Copy Guard Benchmark', cases: '4 cases', status: 'ok', description: 'Zero-loss token preservation, exact price and phone locking' },
+  { id: 'brief', name: 'Brief Builder', cases: 'count unknown', status: 'normal', description: 'Blind holdout · exact versions · no production state mutation' },
+  { id: 'rtl', name: 'RTL Golden Suite', cases: 'count unknown', status: 'normal', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
+  { id: 'retrieval', name: 'Retrieval & Leakage', cases: 'count unknown', status: 'normal', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
 ];
+
+interface RunStats {
+  copyGuard: string;
+  recall: string;
+  overall: string;
+  testsPassed: number | null;
+  totalTests: number | null;
+}
+
+const SUITES = ['routing', 'retrieval', 'copyGuard', 'visualJudge', 'adversarialSafety'] as const;
+const percent = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}%` : '—');
+
+/** Reads the stat cards from a tournament report. A field the report does not carry stays unknown. */
+export function statsFromReport(report: any): RunStats {
+  const suites = SUITES.map((key) => report?.[key]).filter((suite) => typeof suite?.totalCases === 'number');
+  const totalTests = suites.reduce((sum, suite) => sum + suite.totalCases, 0);
+  const testsPassed = suites.reduce((sum, suite) => sum + (suite.passedCases || 0), 0);
+  return {
+    copyGuard: percent(report?.copyGuard?.passRate),
+    recall: percent(report?.retrieval?.passRate),
+    overall: percent(report?.overallPassRate),
+    testsPassed: totalTests > 0 ? testsPassed : null,
+    totalTests: totalTests > 0 ? totalTests : null,
+  };
+}
 
 export const EvalScreen: React.FC = () => {
   const [datasets, setDatasets] = useState<DatasetInfo[]>(FALLBACK_DATASETS);
@@ -30,36 +56,31 @@ export const EvalScreen: React.FC = () => {
   const [lastRunTime, setLastRunTime] = useState<string | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [pastRuns, setPastRuns] = useState<any[]>([]);
-  const [runStats, setRunStats] = useState({
-    protectedTokens: '100%',
-    recall: '100%',
-    cost: '$0.012',
-    overallPassRate: 100,
-    testsPassed: 134,
-    totalTests: 134,
-  });
+  // No run loaded means no numbers: the cards show — until Core returns a report.
+  const [runStats, setRunStats] = useState<RunStats | null>(null);
+  const [evalNotice, setEvalNotice] = useState<string | null>(null);
+  const addEvalNotice = (text: string) => setEvalNotice((prev) => (prev ? `${prev} ${text}` : text));
+  const [casesNotice, setCasesNotice] = useState<string | null>(null);
 
   // Fetch Dataset List & Historical Runs
   useEffect(() => {
-    fetch('/v1/evaluations/datasets')
-      .then((res) => (res.ok ? res.json() : []))
+    fetchJson('/v1/evaluations/datasets')
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setDatasets(
             data.map((d: any) => ({
               id: d.id,
               name: d.name,
-              cases: `${d.casesCount || d.count || 20} cases`,
+              cases: typeof (d.casesCount ?? d.count) === 'number' ? `${d.casesCount ?? d.count} cases` : 'count unknown',
               status: d.status || 'ok',
               description: d.description || '',
             }))
           );
         }
       })
-      .catch((err) => console.warn('Using fallback dataset list:', err));
+      .catch((err) => addEvalNotice(`Could not read the dataset list: ${reasonOf(err)}. Case counts are unknown.`));
 
-    fetch('/v1/evaluations/runs')
-      .then((res) => (res.ok ? res.json() : []))
+    fetchJson('/v1/evaluations/runs')
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setPastRuns(data);
@@ -70,41 +91,18 @@ export const EvalScreen: React.FC = () => {
               const dt = latest.createdAt || latest.timestamp;
               setLastRunTime(dt.replace('T', ' ').substring(0, 19) + ' UTC');
             }
-            if (latest.report) {
-              const r = latest.report;
-              const totalPassed =
-                (r.routing?.passedCases || 0) +
-                (r.retrieval?.passedCases || 0) +
-                (r.copyGuard?.passedCases || 0) +
-                (r.visualJudge?.passedCases || 0) +
-                (r.adversarialSafety?.passedCases || 0);
-              const totalCases =
-                (r.routing?.totalCases || 0) +
-                (r.retrieval?.totalCases || 0) +
-                (r.copyGuard?.totalCases || 0) +
-                (r.visualJudge?.totalCases || 0) +
-                (r.adversarialSafety?.totalCases || 0);
-
-              setRunStats({
-                protectedTokens: '100%',
-                recall: `${r.retrieval?.passRate || 100}%`,
-                cost: '$0.012',
-                overallPassRate: Math.round(r.overallPassRate || 100),
-                testsPassed: totalPassed > 0 ? totalPassed : 134,
-                totalTests: totalCases > 0 ? totalCases : 134,
-              });
-            }
+            if (latest.report) setRunStats(statsFromReport(latest.report));
           }
         }
       })
-      .catch((err) => console.warn('Failed to fetch past eval runs:', err));
+      .catch((err) => addEvalNotice(`Could not read past evaluation runs: ${reasonOf(err)}. No results are shown.`));
   }, []);
 
   // Fetch Cases for currently selected dataset
   useEffect(() => {
     setLoadingCases(true);
-    fetch(`/v1/evaluations/datasets/${selectedDataset}/cases`)
-      .then((res) => (res.ok ? res.json() : { cases: [] }))
+    setCasesNotice(null);
+    fetchJson(`/v1/evaluations/datasets/${selectedDataset}/cases`)
       .then((data) => {
         if (Array.isArray(data.cases)) {
           setCases(data.cases);
@@ -113,8 +111,8 @@ export const EvalScreen: React.FC = () => {
         }
       })
       .catch((err) => {
-        console.warn(`Could not load cases for ${selectedDataset}:`, err);
         setCases([]);
+        setCasesNotice(`Could not read the cases for ${selectedDataset}: ${reasonOf(err)}`);
       })
       .finally(() => setLoadingCases(false));
   }, [selectedDataset]);
@@ -139,44 +137,18 @@ export const EvalScreen: React.FC = () => {
   const handleRunTournament = async () => {
     setRunningTournament(true);
     try {
-      const res = await fetch('/v1/evaluations/runs', {
+      const data = await fetchJson('/v1/evaluations/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `${currentDataset.name} Automated Tournament` }),
+        body: JSON.stringify({ name: `${currentDataset?.name ?? 'Evaluation'} Automated Tournament` }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        const report = data.report || {};
-        const now = new Date();
-        setLastRunTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
-        setLastRunId(data.runId);
-        setPastRuns((prev) => [...prev, data]);
-
-        const totalPassed =
-          (report.routing?.passedCases || 0) +
-          (report.retrieval?.passedCases || 0) +
-          (report.copyGuard?.passedCases || 0) +
-          (report.visualJudge?.passedCases || 0) +
-          (report.adversarialSafety?.passedCases || 0);
-        const totalCases =
-          (report.routing?.totalCases || 0) +
-          (report.retrieval?.totalCases || 0) +
-          (report.copyGuard?.totalCases || 0) +
-          (report.visualJudge?.totalCases || 0) +
-          (report.adversarialSafety?.totalCases || 0);
-
-        setRunStats({
-          protectedTokens: '100%',
-          recall: `${report.retrieval?.passRate || 100}%`,
-          cost: '$0.012',
-          overallPassRate: Math.round(report.overallPassRate || 100),
-          testsPassed: totalPassed > 0 ? totalPassed : 134,
-          totalTests: totalCases > 0 ? totalCases : 134,
-        });
-      }
+      const now = new Date();
+      setLastRunTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
+      setLastRunId(data.runId);
+      setPastRuns((prev) => [...prev, data]);
+      setRunStats(statsFromReport(data.report));
     } catch (err) {
-      console.error('Eval tournament run error:', err);
+      addEvalNotice(`The tournament did not run: ${reasonOf(err)}.`);
     } finally {
       setRunningTournament(false);
     }
@@ -254,7 +226,7 @@ export const EvalScreen: React.FC = () => {
                   >
                     <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{run.runId.substring(0, 8)}</span>
                     <span className="pill ok" style={{ fontSize: 10 }}>
-                      {Math.round(run.report?.overallPassRate || 100)}% pass
+                      {percent(run.report?.overallPassRate)} pass
                     </span>
                   </div>
                 ))}
@@ -269,10 +241,10 @@ export const EvalScreen: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 18 }}>{currentDataset.name}</h2>
+                <h2 style={{ margin: 0, fontSize: 18 }}>{currentDataset?.name}</h2>
                 <span className="pill ok" style={{ fontSize: 10 }}>Holdout v2026.09</span>
               </div>
-              <p style={{ color: 'var(--muted)', fontSize: 12, margin: '4px 0 0' }}>{currentDataset.description}</p>
+              <p style={{ color: 'var(--muted)', fontSize: 12, margin: '4px 0 0' }}>{currentDataset?.description}</p>
             </div>
 
             {/* View Switcher Tabs */}
@@ -305,17 +277,24 @@ export const EvalScreen: React.FC = () => {
             <div className="finding" style={{ background: '#eff6ff', borderColor: '#3b82f6', marginBottom: 16 }}>
               <b style={{ color: '#1d4ed8' }}>Running Multi-Pass Tournament Suite…</b>
               <p style={{ margin: '4px 0', fontSize: 12, color: '#2563eb' }}>
-                Executing deterministic checks: Routing & Brief (60/60) → Retrieval Isolation (20/20) → Copy Guard (4/4) → Visual Rubric (10/10)…
+                Executing deterministic checks: Routing & Brief → Retrieval Isolation → Copy Guard → Visual Rubric → Adversarial Safety. Results appear when Core returns the report.
               </p>
             </div>
           )}
 
           {/* KPI Score Cards */}
+          {evalNotice && (
+            <div className="finding" style={{ background: '#fef2f2', borderColor: '#dc2626', marginBottom: 16 }}>
+              <b style={{ color: '#991b1b' }}>Evaluation data unavailable</b>
+              <p style={{ margin: '4px 0', fontSize: 12, color: '#b91c1c' }}>{evalNotice}</p>
+            </div>
+          )}
+
           <div className="score" style={{ marginBottom: 16 }}>
-            <div className="stat"><b>{runStats.protectedTokens}</b><span>protected tokens</span></div>
-            <div className="stat"><b>{runStats.recall}</b><span>requirement recall</span></div>
-            <div className="stat"><b>{runStats.cost}</b><span>median case cost</span></div>
-            <div className="stat"><b>{runStats.testsPassed} / {runStats.totalTests}</b><span>cases passed</span></div>
+            <div className="stat"><b>{runStats?.copyGuard ?? '—'}</b><span>copy guard pass rate</span></div>
+            <div className="stat"><b>{runStats?.recall ?? '—'}</b><span>retrieval pass rate</span></div>
+            <div className="stat"><b>{runStats?.overall ?? '—'}</b><span>overall pass rate</span></div>
+            <div className="stat"><b>{runStats?.totalTests != null ? `${runStats.testsPassed} / ${runStats.totalTests}` : '—'}</b><span>cases passed</span></div>
           </div>
 
           {/* TAB 1: Real Interactive Cases Browser */}
@@ -359,6 +338,10 @@ export const EvalScreen: React.FC = () => {
               {loadingCases ? (
                 <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                   Loading {selectedDataset} cases...
+                </div>
+              ) : casesNotice ? (
+                <div style={{ padding: 30, textAlign: 'center', color: '#b91c1c', fontSize: 13, border: '1px dashed var(--line)', borderRadius: 8 }}>
+                  {casesNotice}
                 </div>
               ) : filteredCases.length === 0 ? (
                 <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13, border: '1px dashed var(--line)', borderRadius: 8 }}>
