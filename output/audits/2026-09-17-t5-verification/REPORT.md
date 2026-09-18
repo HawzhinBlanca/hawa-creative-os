@@ -558,15 +558,28 @@ only reason it is not in the code is that the exemplars were measured before the
 
 ## 19. What remains
 
-1. **The pairwise judge and canary verdicts are still unvalidated.** The re-critique validated the P05 stage only; the judge needs both candidates of each pair and only winners were persisted, so those scores remain measured on substituted typography. A full in-image run (~$6.30) is the only way to validate them, or persist both candidates so a re-judge becomes possible from artifacts.
-2. **A clean 20/20.** Two A4 briefs still fail on tunnel outages longer than the retry budget.
-3. **The art lane is unproven.** No image call in the qualification; cost and print-ready figures exclude it.
-4. **Visual defaults.** Flat-colour backgrounds on 18 of 18 and a centred stack on 13 of 18 are the live quality ceiling.
-5. **The critique has not been re-run since the last four fixes** — the ellipse accent, drifted blocks, canvas margins, and the removal of box fitting. Of the 13 it last reported, 3 were the margin complaints, 1 the drifted footer, 1 the ellipse, and 2-3 were the annotation-driven box remarks that are not output defects. What survives it has never seen.
-6. **Frame-internal padding (2 instances).** `balanceCanvasMargins` balances against the canvas; content inside a large frame shape is not balanced against the frame. Same class, one reference level down.
-7. **A vertical accent longer than the box it marks (1).** Changing an accent's length is a design decision rather than a centring one, so it is deliberately untouched.
-8. **negativeSpace measures box geometry, not visible whitespace** (16.3). It is 8% of the composite and can be moved 0.68 without changing a pixel. Fixing it means re-weighting, which moves every threshold in the proof chain.
-5. **T6 still rejected.** A 40%-empty canvas must fail; the 1.20:1 panel contrast must be fixed; before/after must use real copy, not `Sample copy block N`.
-6. **T8 still rejected.** Its blind pairs were drawn with substituted fonts and must be regenerated in the image.
-7. **T7 blocked on the owner.** `DESIGN_PIPELINE_V3_CHATS` must be set in the production env file, which only the owner writes.
-8. **Deployed build is behind HEAD.** Redeploy after a valid run, with flags owner-controlled.
+1. **Deploy.** Production is 30 commits behind HEAD and is missing every fix in sections 17 and 18 — including the one where no Kurdish design could produce a deliverable at all. The deploy pre-flight passes clean (`bash infra/docker/deploy.sh`, exit 0, 0 credentials exposed or committable); applying it is the owner's call because it changes what real clients receive.
+2. **The pairwise judge and canary verdicts** have never been validated on correct typography. Only the winning candidate is persisted, so a pair cannot be reconstructed from artifacts; validating them needs a full in-image run, or persisting both candidates so a re-judge becomes possible.
+3. **`negativeSpace` scores invisible box geometry.** The honest measure is available and deliberately unwired, because the band was calibrated against the box measure. Re-derive the band from the six confirmed exemplars, by the same measure, then switch. Until then the composite is 8% built on a number that moves 0.68 without changing a pixel — and ranked three cheap models above production when their output was visibly worse.
+4. **T8 stays rejected.** Its blind pairs were rendered with substituted fonts and must be regenerated in the image.
+5. **T7 is blocked on the owner**: `DESIGN_PIPELINE_V3_CHATS` in the production env file, which only the owner writes.
+6. **Vazirmatn** still cannot be drawn, in the other clients' brand kits. Their Kurdish text renders in an uncontrolled fallback. Changing another brand's specified typeface is the owner's decision; the failure is no longer silent.
+7. **Frame-internal padding (2 instances)** and **an accent longer than the box it marks (1)** were left alone deliberately — the first is the same class one reference level down, the second is a design decision rather than a centring one.
+
+## A note on how the remaining list got this short
+
+Most of what was fixed in this pass was not found by reading the task sheet. It was found by
+running the thing until it broke, and by checking claims against ground truth rather than against
+other claims. Three of the most consequential findings inverted what the plan said:
+
+- the designs were not too empty; the owner's own references are emptier still, and a metric said
+  otherwise because it was counting invisible boxes
+- the cheap models did not produce better designs; a metric ranked them above production while the
+  renders showed the opposite
+- T6(a) asked for a calibration that would have pushed every design away from the reference set
+
+The general lesson is the one the font substitution taught first: **a guard that has never been seen
+to fail is not evidence that it works.** `fc-match` resolved every font name while the renderer drew
+Helvetica; `negativeSpace` scored 0.95 while measuring nothing visible; the daily cap counted spend
+into a file whose write failure was swallowed. Each was found by measuring the thing itself rather
+than trusting the check that was supposed to be measuring it.
