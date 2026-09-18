@@ -1,4 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
+import { HOUSE_RULES, minLogoWidth as houseMinLogoWidth, logoClearZone } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -69,7 +70,7 @@ function boxContains(outer: Box, inner: Box): boolean {
   );
 }
 
-function normalizeHex(hex: string): string {
+export function normalizeHex(hex: string): string {
   let clean = hex.trim().toLowerCase();
   if (clean.length === 4) {
     clean = `#${clean[1]}${clean[1]}${clean[2]}${clean[2]}${clean[3]}${clean[3]}`;
@@ -237,7 +238,7 @@ export function validateLayoutV2(
 
   // 6. BOUNDS & Safe Margin
   const shortEdge = Math.min(layout.width, layout.height);
-  const minSafeMargin = Math.floor(0.06 * shortEdge);
+  const minSafeMargin = Math.floor(HOUSE_RULES.safeMarginShare * shortEdge);
   if (layout.grid.margin < minSafeMargin) {
     return {
       ok: false,
@@ -334,12 +335,12 @@ export function validateLayoutV2(
   }
 
   // 8. MIN_SIZE
-  const minBodySize = 0.016 * layout.width; // 17.28 px at 1080
+  const minBodySize = HOUSE_RULES.minBodyShareOfWidth * layout.width; // 17.28 px at 1080
   let bodyFontSize: number | null = null;
   let titleFontSize: number | null = null;
 
   for (const t of layout.text) {
-    if (t.fontSize < 12) {
+    if (t.fontSize < HOUSE_RULES.minFontPx) {
       return {
         ok: false,
         code: 'MIN_SIZE',
@@ -362,7 +363,7 @@ export function validateLayoutV2(
   }
 
   if (titleFontSize !== null && bodyFontSize !== null) {
-    if (titleFontSize < 2.2 * bodyFontSize) {
+    if (titleFontSize < HOUSE_RULES.titleToBodyMin * bodyFontSize) {
       return {
         ok: false,
         code: 'MIN_SIZE',
@@ -375,7 +376,7 @@ export function validateLayoutV2(
   for (const t of layout.text) {
     const script = context.copyScripts[t.copyIndex] || 'latin';
     if (script === 'arabic') {
-      if (t.lineHeight < 1.6 || t.lineHeight > 1.9) {
+      if (t.lineHeight < HOUSE_RULES.lineHeight.arabic.min || t.lineHeight > HOUSE_RULES.lineHeight.arabic.max) {
         return {
           ok: false,
           code: 'LINE_HEIGHT',
@@ -383,7 +384,7 @@ export function validateLayoutV2(
         };
       }
     } else {
-      if (t.lineHeight < 1.2 || t.lineHeight > 1.5) {
+      if (t.lineHeight < HOUSE_RULES.lineHeight.latin.min || t.lineHeight > HOUSE_RULES.lineHeight.latin.max) {
         return {
           ok: false,
           code: 'LINE_HEIGHT',
@@ -405,7 +406,7 @@ export function validateLayoutV2(
         };
       }
     } else {
-      if (t.letterSpacing !== undefined && Math.abs(t.letterSpacing) > 0.1) {
+      if (t.letterSpacing !== undefined && Math.abs(t.letterSpacing) > HOUSE_RULES.letterSpacingMaxEm) {
         return {
           ok: false,
           code: 'LETTER_SPACING',
@@ -467,7 +468,7 @@ export function validateLayoutV2(
   }
 
   // 12. LOGO
-  const minLogoWidth = Math.max(100, Math.round(0.08 * layout.width));
+  const minLogoWidth = houseMinLogoWidth(layout.width);
   if (layout.logo.width < minLogoWidth) {
     return {
       ok: false,
@@ -477,7 +478,7 @@ export function validateLayoutV2(
   }
   const actualAspect = layout.logo.width / layout.logo.height;
   const aspectDeviation = Math.abs(actualAspect - context.reference.logoAspect) / context.reference.logoAspect;
-  if (aspectDeviation > 0.01) {
+  if (aspectDeviation > HOUSE_RULES.logo.aspectTolerance) {
     return {
       ok: false,
       code: 'LOGO',
@@ -486,13 +487,8 @@ export function validateLayoutV2(
   }
 
   // Clear space: 0.5 * logo.height free of text and rules
-  const cs = 0.5 * layout.logo.height;
-  const logoClearSpace: Box = {
-    x: layout.logo.x - cs,
-    y: layout.logo.y - cs,
-    width: layout.logo.width + 2 * cs,
-    height: layout.logo.height + 2 * cs,
-  };
+  const cs = HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height;
+  const logoClearSpace: Box = logoClearZone(layout.logo);
 
   for (const t of layout.text) {
     if (boxesIntersect(t, logoClearSpace)) {
@@ -526,10 +522,13 @@ export function validateLayoutV2(
         };
       }
     }
-    // calmRegion must cover every text box if present
+    // Text over the art must sit where the art is calm. Text that does not touch the art box at
+    // all cannot be disturbed by it: this used to require even a footer below a top art band to
+    // lie inside a calm region that, bounded by the art, could never reach it.
     if (layout.art.calmRegion) {
+      const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
       for (const t of layout.text) {
-        if (!boxContains(layout.art.calmRegion, t)) {
+        if (boxesIntersect(t, artBox) && !boxContains(layout.art.calmRegion, t)) {
           return {
             ok: false,
             code: 'ART_SAFETY',

@@ -87,6 +87,12 @@ export interface RefineOptions {
    * see — a hard-QA defect, for instance.
    */
   force?: boolean;
+  /**
+   * The defects production's hard QA reports for a layout. The repair is shown them, refinement
+   * continues while any remain, and a round cannot end as "repaired" until there are none —
+   * before this, a design refined because QA rejected it was repaired without being told why.
+   */
+  issuesFor?: (layout: StudioLayoutV2) => string[];
 }
 
 export const REPAIR_JSON_SCHEMA = {
@@ -405,7 +411,8 @@ export async function refineCandidate(
       renderOptions: copyText ? { copyText } : undefined,
     });
 
-    if (critiqueResult.comments.length === 0) {
+    const issues = options.issuesFor ? options.issuesFor(currentLayout) : [];
+    if (critiqueResult.comments.length === 0 && issues.length === 0) {
       stopReason = 'no_critique_comments_to_address';
       break;
     }
@@ -437,6 +444,10 @@ ${critiqueResult.comments
   )
   .join('\n')}
 
+${issues.length ? `
+HARD QA DEFECTS (production rejects the design until every one is fixed):
+${issues.map((i) => `- ${i}`).join('\n')}
+` : ''}
 TASK:
 Produce the corrected layout repairing these exact flaws.`;
 
@@ -549,7 +560,7 @@ Produce the corrected layout repairing these exact flaws.`;
     currentScore = postScore;
 
     // e. Stop Condition 1: Repaired and passed everything
-    if (postMetrics.passed && postScore >= CALIBRATED_BAND_MIN) {
+    if (postMetrics.passed && postScore >= CALIBRATED_BAND_MIN && (!options.issuesFor || options.issuesFor(repairedLayout).length === 0)) {
       stopReason = 'repaired_and_passed';
       roundRecord.stopReason = stopReason;
       break;

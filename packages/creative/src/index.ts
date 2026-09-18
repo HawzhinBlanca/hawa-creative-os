@@ -34,5 +34,6 @@ export * from './studio/pairwise-judge-v3.js';
 export * from './studio/pipeline-v3.js';
 export * from './studio/studio-normalize.js';
 export * from './studio/hard-qa.js';
+export * from './studio/house-rules.js';
 export * from './studio/cost-architecture-v3.js';
 export * from './studio/reference-manager.js';

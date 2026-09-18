@@ -119,14 +119,24 @@ export function normalizeStudioLayout(
  */
 export function fitLogoToAspect<T extends { logo?: { x: number; y: number; width: number; height: number } }>(
   layout: T,
-  aspect: number
+  aspect: number,
+  /** When given, a box attached to the left or right margin keeps that edge instead of centring. */
+  canvas?: { width: number; margin: number }
 ): T {
   const box = layout.logo;
   if (!box || !(aspect > 0) || !(box.width > 0) || !(box.height > 0)) return layout;
   const width = Math.min(box.width, box.height * aspect);
   const height = width / aspect;
+  const attached = canvas
+    ? Math.abs(box.x - canvas.margin) <= 2
+      ? 'left'
+      : Math.abs(box.x + box.width - (canvas.width - canvas.margin)) <= 2
+        ? 'right'
+        : null
+    : null;
+  const x = attached === 'left' ? box.x : attached === 'right' ? box.x + box.width - width : box.x + (box.width - width) / 2;
   layout.logo = {
-    x: Math.round(box.x + (box.width - width) / 2),
+    x: Math.round(x),
     y: Math.round(box.y + (box.height - height) / 2),
     width: Math.round(width),
     height: Math.round(height),

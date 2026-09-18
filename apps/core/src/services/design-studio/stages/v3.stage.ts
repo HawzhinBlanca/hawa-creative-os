@@ -166,7 +166,7 @@ export async function runReviseStageV3(
   const ranked = rankStudioCandidatesV3(ctx, candidates);
   const outcome = await refineCandidateV3(ranked[0], copyForStageV3(ctx), {
     client: ctx.client,
-    canvas: { width: ctx.width, height: ctx.height, logoAspect: ctx.logoAspect },
+    canvas: { width: ctx.width, height: ctx.height, logoAspect: ctx.logoAspect, palette: ctx.referencePack.palette },
     qa: hardQaContextFor(ctx),
   });
   return { candidate: ranked[0].candidate, outcome, layout: outcome.layout };

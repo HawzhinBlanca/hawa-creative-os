@@ -2,7 +2,7 @@ import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
 import { renderLayoutV2, measureWrappedLines } from './render-layout-v2.js';
-import { correctFontsThatCannotDrawTheCopy } from './layout-generator-v3.js';
+import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
 import {
@@ -15,6 +15,8 @@ import type { OpenAiStudioClient } from './openai-studio-client.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
+import { HOUSE_RULES, minLogoWidth, logoClearZone } from './house-rules.js';
+import { normalizeHex } from './validate-layout-v2.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -126,20 +128,219 @@ export function retrieveExemplarsV3(
   return retrieval.retrievedExemplars;
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+
+const intersects = (a: Rect, b: Rect) =>
+  !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+
+/** Moves and, only if it cannot fit, shrinks a box so it lies inside `area`. */
+function fitInside(box: Rect, area: Rect): void {
+  box.width = Math.min(box.width, area.width);
+  box.height = Math.min(box.height, area.height);
+  box.x = Math.min(Math.max(box.x, area.x), area.x + area.width - box.width);
+  box.y = Math.min(Math.max(box.y, area.y), area.y + area.height - box.height);
+}
+
+/**
+ * The brand colour nearest to `colour`, by the "redmean" weighted distance — or `colour` itself if
+ * it is already a brand colour. A slightly-off gold becomes the brand gold; light stays light and
+ * dark stays dark, so contrast relationships survive the snap.
+ */
+export function nearestPaletteColour(colour: string, palette: string[]): string {
+  if (!colour || palette.length === 0) return colour;
+  const wanted = normalizeHex(colour);
+  if (palette.some((p) => normalizeHex(p) === wanted)) return colour;
+  const rgb = (hex: string) => {
+    const h = normalizeHex(hex).replace('#', '');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  };
+  const [r1, g1, b1] = rgb(wanted);
+  if ([r1, g1, b1].some((c) => Number.isNaN(c))) return palette[0];
+  let best = palette[0];
+  let bestDistance = Infinity;
+  for (const p of palette) {
+    const [r2, g2, b2] = rgb(p);
+    const rMean = (r1 + r2) / 2;
+    const d = (2 + rMean / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rMean) / 256) * (b1 - b2) ** 2;
+    if (d < bestDistance) {
+      bestDistance = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/**
+ * Conforms a layout to the house rules production's QA checks, wherever the fix is unambiguous:
+ * leading and tracking to their allowed ranges, every text box inside the safe area and every
+ * shape inside the canvas, a box grown when its copy no longer fits at the new leading (never into
+ * another element), and the logo shrunk — never below its minimum — until its clear space holds no
+ * text or rule. What cannot be fixed without redesigning is left for QA to reject and refinement
+ * to repair. Mutates and returns the layout.
+ *
+ * Measured before this existed: every Sorani design the production model made had Latin leading
+ * (all ten), 12 of 20 designs had text inside the logo's clear space, and 6 had a text box
+ * outside the safe area — often by a single pixel of rounding.
+ */
+export function conformToHouseRules(
+  layout: StudioLayoutV2,
+  copy: PipelineV3Copy,
+  palette?: string[]
+): StudioLayoutV2 {
+  // Brand colours only: every colour QA checks is snapped to the nearest one in the palette.
+  if (palette && palette.length) {
+    layout.background.color = nearestPaletteColour(layout.background.color, palette);
+    if (layout.art?.scrim) layout.art.scrim.color = nearestPaletteColour(layout.art.scrim.color, palette);
+    for (const s of layout.shapes || []) {
+      s.color = nearestPaletteColour(s.color, palette);
+      if (s.strokeColor) s.strokeColor = nearestPaletteColour(s.strokeColor, palette);
+    }
+    for (const tx of layout.text) tx.color = nearestPaletteColour(tx.color, palette);
+  }
+
+  const W = layout.width;
+  const H = layout.height;
+  const m = layout.grid.margin;
+
+  for (const t of layout.text) {
+    const script = scriptOf(copy, t.copyIndex);
+    const range = HOUSE_RULES.lineHeight[script];
+    t.lineHeight = Math.min(Math.max(t.lineHeight || range.min, range.min), range.max);
+    if (script === 'arabic' || t.role === 'body') {
+      t.letterSpacing = 0;
+    } else if (typeof t.letterSpacing === 'number') {
+      t.letterSpacing = Math.min(Math.max(t.letterSpacing, -HOUSE_RULES.letterSpacingMaxEm), HOUSE_RULES.letterSpacingMaxEm);
+    }
+  }
+
+  // The title is at least 2.2x the body size. Models miss it by fractions of a pixel (48px against
+  // a required 48.4px), so the title is raised to the rule; the box is resized for it below.
+  const bodySize = Math.max(0, ...layout.text.filter((t) => t.role === 'body').map((t) => t.fontSize));
+  if (bodySize > 0) {
+    const minTitle = Math.ceil(HOUSE_RULES.titleToBodyMin * bodySize);
+    for (const t of layout.text) if (t.role === 'title' && t.fontSize < minTitle) t.fontSize = minTitle;
+  }
+
+  const safe: Rect = { x: m, y: m, width: W - 2 * m, height: H - 2 * m };
+  for (const t of layout.text) fitInside(t, safe);
+  for (const s of layout.shapes || []) fitInside(s, { x: 0, y: 0, width: W, height: H });
+
+  // The logo is at least its minimum width: 8% of the canvas, never under 100px. The studio's
+  // normaliser enforced only the 100px, so on a 1920px banner a 146px logo passed preparation and
+  // failed QA. Grown in place, keeping its top edge and the side it is attached to.
+  if (layout.logo && layout.logo.width > 0 && layout.logo.height > 0 && layout.logo.width < minLogoWidth(W)) {
+    const l = layout.logo;
+    const aspect = l.width / l.height;
+    const w = minLogoWidth(W);
+    const anchor = Math.abs(l.x - m) <= 2 ? 'left' : Math.abs(l.x + l.width - (W - m)) <= 2 ? 'right' : 'centre';
+    const x = anchor === 'left' ? l.x : anchor === 'right' ? l.x + l.width - w : l.x + l.width / 2 - w / 2;
+    layout.logo = { x: Math.round(x), y: l.y, width: w, height: Math.round(w / aspect) };
+    fitInside(layout.logo, safe);
+  }
+
+  // The logo's clear space: shrink the emblem, keeping the edge it is attached to.
+  const logo = layout.logo;
+  if (logo && logo.width > 0 && logo.height > 0) {
+    const blockers: Rect[] = [...layout.text, ...(layout.shapes || []).filter((s) => s.role === 'rule')];
+    const crowded = (l: Rect) => blockers.some((b) => intersects(b, logoClearZone(l)));
+    if (crowded(logo)) {
+      const aspect = logo.width / logo.height;
+      const anchor =
+        Math.abs(logo.x - m) <= 2 ? 'left' : Math.abs(logo.x + logo.width - (W - m)) <= 2 ? 'right' : 'centre';
+      const centreX = logo.x + logo.width / 2;
+      for (let w = Math.floor(logo.width) - 1; w >= minLogoWidth(W); w -= 1) {
+        const x = anchor === 'left' ? logo.x : anchor === 'right' ? logo.x + logo.width - w : centreX - w / 2;
+        const candidate = { x: Math.round(x), y: logo.y, width: w, height: Math.round(w / aspect) };
+        if (!crowded(candidate)) {
+          layout.logo = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  // Vertical space is inserted where the layout needs it — a box whose copy no longer fits at the
+  // house leading, a block that collides with the one above it or with the logo's clear space —
+  // by moving everything below that line down. Order and horizontal structure are kept, and
+  // nothing is moved if the content would leave the safe area; such layouts are left for QA to
+  // reject and refinement to repair.
+  const safeBottom = safe.y + safe.height;
+  const fullBleed = (s: Rect) => s.width >= 0.98 * W && s.height >= 0.98 * H;
+  const insertSpace = (atY: number, delta: number, keep: Set<object>): boolean => {
+    if (delta <= 0) return true;
+    const moving = [
+      ...layout.text.filter((o) => o.y >= atY && !keep.has(o)),
+      ...(layout.shapes || []).filter((s) => !fullBleed(s) && s.y >= atY && !keep.has(s)),
+    ];
+    // A panel that spans the insertion line stretches with it, so the text it holds stays inside.
+    const stretching = (layout.shapes || []).filter(
+      (s) => !fullBleed(s) && s.role === 'panel' && s.y < atY && s.y + s.height > atY && !keep.has(s)
+    );
+    const lowest = Math.max(0, ...moving.map((o) => o.y + o.height));
+    if (moving.length && lowest + delta > safeBottom) return false;
+    if (stretching.some((s) => s.y + s.height + delta > H)) return false;
+    for (const o of moving) o.y += delta;
+    for (const s of stretching) s.height += delta;
+    return true;
+  };
+  const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
+
+  const lines = measureWrappedLines(layout, copy.text);
+  const ordered = [...layout.text].sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const t of ordered) {
+    // Clear the logo's zone and every block above that shares a column with this one.
+    const zone = layout.logo ? logoClearZone(layout.logo) : null;
+    const above: Rect[] = [
+      ...(zone && layout.logo && t.y >= layout.logo.y && overlapsX(zone, t) ? [zone] : []),
+      ...layout.text.filter((o) => o !== t && o.y < t.y && overlapsX(o, t)),
+    ];
+    const clash = Math.max(0, ...above.map((o) => Math.ceil(o.y + o.height - t.y)));
+    if (clash > 0) insertSpace(t.y, clash, new Set());
+
+    // Grow the box to hold its copy at the house leading.
+    const needed = Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight);
+    if (needed > t.height) {
+      const bottom = t.y + t.height;
+      if (insertSpace(bottom, needed - t.height, new Set([t]))) t.height = needed;
+    }
+  }
+
+  // Text over art must sit where the art is calm: widen the calm region to cover every text box
+  // that touches the art. A box straddling the art's edge is covered whole, so the region may
+  // reach past the art box — harmless, since the art stage only uses it to say where to be quiet.
+  if (layout.art?.calmRegion) {
+    const c = layout.art.calmRegion;
+    const box = layout.art.box || { x: 0, y: 0, width: W, height: H };
+    const over = layout.text.filter((t) => intersects(t, box));
+    if (over.length) {
+      const x0 = Math.max(0, Math.min(c.x, ...over.map((t) => t.x)));
+      const y0 = Math.max(0, Math.min(c.y, ...over.map((t) => t.y)));
+      const x1 = Math.min(W, Math.max(c.x + c.width, ...over.map((t) => t.x + t.width)));
+      const y1 = Math.min(H, Math.max(c.y + c.height, ...over.map((t) => t.y + t.height)));
+      layout.art.calmRegion = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    }
+  }
+
+  // Boxes may have moved or grown: put each divider back in the middle of its gap.
+  centerSeparatorsInGaps(layout.shapes || [], layout.text);
+  return layout;
+}
+
 /**
  * Everything applied to a freshly generated layout before it is scored: the real logo fitted
  * inside its reserved box, the studio's normalisation (margin, minimum sizes, collision
- * clean-up), then admitted fonts and direction per block. Production and the qualification both call this, so they score the same
+ * clean-up), admitted fonts and direction per block, then the house rules QA checks. Production and the qualification both call this, so they score the same
  * layout. Mutates and returns the layout.
  */
 export function prepareGeneratedLayoutV3(
   layout: StudioLayoutV2,
   copy: PipelineV3Copy,
-  canvas: { width: number; height: number; logoAspect?: number }
+  canvas: { width: number; height: number; logoAspect?: number; palette?: string[] }
 ): StudioLayoutV2 {
   const aspect = canvas.logoAspect || 1.0;
-  const normalized = normalizeStudioLayout(fitLogoToAspect(layout, aspect), canvas.width, canvas.height, aspect);
-  return sanitizeFontsV3(normalized, copy);
+  const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
+  const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
+  return conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
 }
 
 /** The pipeline's deterministic measure: from the lines the real copy wraps to, not box area. */
@@ -238,7 +439,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[] };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }
@@ -256,6 +457,16 @@ export async function refineCandidateV3(
     minDelta: 0.01,
     copyText: copy.text,
     force: failsQa,
+    // What production's QA would say once the layout is prepared the way it will be stored.
+    ...(options.qa
+      ? {
+          issuesFor: (l: StudioLayoutV2) => {
+            const clone = JSON.parse(JSON.stringify(l)) as StudioLayoutV2;
+            const prepared = options.canvas ? prepareGeneratedLayoutV3(clone, copy, options.canvas) : sanitizeFontsV3(clone, copy);
+            return evaluateHardQa(prepared, options.qa!).messages;
+          },
+        }
+      : {}),
   });
 
   const keep = (reason: RefinementOutcomeV3['reason']): RefinementOutcomeV3 => ({

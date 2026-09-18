@@ -221,7 +221,8 @@ describe('pipeline v3 — ranking', () => {
   });
 });
 
-describe('pipeline v3 — winner selection', () => {
+// Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
+describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   const named = () => {
     const a = centred();
     const b = asymmetric();
@@ -313,7 +314,8 @@ describe('pipeline v3 — winner selection', () => {
   });
 });
 
-describe('pipeline v3 — refinement', () => {
+// Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
+describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
   it('spends nothing on a candidate that already passes the gate', async () => {
     const { client, calls } = mockClient({});
     const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
@@ -382,7 +384,8 @@ describe('OpenAI client — reasoning effort', () => {
   });
 });
 
-describe('production hard QA — the gate v3 is ranked and qualified against', () => {
+// Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
+describe('production hard QA — the gate v3 is ranked and qualified against', { timeout: 30000 }, () => {
   it('passes every owner-confirmed exemplar on alignment and still rejects an off-grid layout', async () => {
     const { SIX_CONFIRMED_EXEMPLARS, BAD_OFF_GRID } = await import('./fixtures/design-metrics-fixtures.js');
     const { computeLayoutMetrics } = await import('../src/index.js');
@@ -469,3 +472,183 @@ describe('bilingual direction', () => {
   });
 });
 
+
+// Render-heavy (wrapped-line measurement): generous timeout for loaded machines.
+describe('house rules — preparation conforms what QA would reject for a mechanical reason', { timeout: 30000 }, () => {
+  const kurdish: PipelineV3Copy = {
+    text: { 0: 'دەستەی متمانەپێدانی کوردستان', 1: 'ستانداردە نوێیەکانی کوالیتی', 2: 'هەموو زانکۆکان دەبێت ڕاپۆرتی ساڵانە بڵاو بکەنەوە.' },
+  };
+  const kurdishLayout = () =>
+    base({
+      logo: { x: 490, y: 76, width: 100, height: 100 },
+      text: [
+        T({ i: 0, role: 'eyebrow', x: MARGIN, y: 260, w: span(6), h: 40, size: 18, align: 'center', font: 'Cairo' }),
+        T({ i: 1, role: 'title', x: MARGIN, y: 340, w: span(6), h: 90, size: 52, align: 'center', font: 'Amiri', bold: true }),
+        T({ i: 2, role: 'body', x: MARGIN, y: 470, w: span(6), h: 60, size: 22, align: 'center' }),
+      ] as any,
+    });
+  const qaFor = (copyScripts: Array<'latin' | 'arabic'>, palette = ['#0A1628', '#FDF8F3', '#F7B500', '#162B48', '#1E3A5F']) => ({
+    width: W, height: H, copyScripts, latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette, logoAspect: 1,
+  });
+
+  it('gives Sorani its leading and no tracking, and grows boxes so the copy still fits', async () => {
+    const { conformToHouseRules, measureWrappedLines, evaluateHardQa } = await import('../src/index.js');
+    const layout = kurdishLayout();
+    for (const t of layout.text) {
+      t.lineHeight = 1.3;
+      t.letterSpacing = 0.05;
+    }
+    conformToHouseRules(layout, kurdish);
+    const lines = measureWrappedLines(layout, kurdish.text);
+    for (const t of layout.text) {
+      expect(t.lineHeight).toBeGreaterThanOrEqual(1.6);
+      expect(t.lineHeight).toBeLessThanOrEqual(1.9);
+      expect(t.letterSpacing).toBe(0);
+      expect(t.height).toBeGreaterThanOrEqual(Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight));
+    }
+    // Boxes grew by inserting space, so nothing now overlaps.
+    const qa = evaluateHardQa(layout, qaFor(['arabic', 'arabic', 'arabic']));
+    expect(qa.defectCodes).not.toContain('LINE_HEIGHT');
+    expect(qa.defectCodes).not.toContain('OVERLAP');
+  });
+
+  it('keeps body copy untracked and Latin display tracking within 0.1', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    layout.text[0].letterSpacing = 0.3;
+    layout.text[3].letterSpacing = 0.02;
+    conformToHouseRules(layout, COPY);
+    expect(layout.text[0].letterSpacing).toBe(0.1);
+    expect(layout.text[3].letterSpacing).toBe(0);
+  });
+
+  it('pulls a box that overruns the safe area by rounding back inside it', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    layout.text[0].width = W - 2 * MARGIN + 1;
+    conformToHouseRules(layout, COPY);
+    const t = layout.text[0];
+    expect(t.x).toBeGreaterThanOrEqual(MARGIN);
+    expect(t.x + t.width).toBeLessThanOrEqual(W - MARGIN);
+  });
+
+  it('snaps an off-palette colour to the nearest brand colour', async () => {
+    const { conformToHouseRules, nearestPaletteColour } = await import('../src/index.js');
+    // The qualification's old gold snaps to the brand gold; navy stays navy.
+    expect(nearestPaletteColour('#C5A059', ['#0A1628', '#F7B500', '#FDF8F3'])).toBe('#F7B500');
+    expect(nearestPaletteColour('#0a1628', ['#0A1628', '#F7B500'])).toBe('#0a1628');
+    const layout = centred();
+    conformToHouseRules(layout, COPY, ['#0A1628', '#F7B500', '#FDF8F3', '#162B48']);
+    expect(layout.shapes.find((s) => s.role === 'rule')!.color).toBe('#F7B500');
+  });
+
+  it('raises a title that misses 2.2x the body by a fraction of a pixel', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    layout.text[3].fontSize = 22;
+    layout.text[1].fontSize = 48;
+    conformToHouseRules(layout, COPY);
+    expect(layout.text[1].fontSize).toBe(49);
+  });
+
+  it('shrinks a crowding logo down to exactly its minimum, and grows one below it', async () => {
+    const { conformToHouseRules, logoClearZone } = await import('../src/index.js');
+    // 119px logo at y=94: its clear zone reaches 272.5, the eyebrow starts at 245. At 100px the
+    // zone ends at 244 — the one size that clears it, which a 2px step from 117 never tried.
+    const crowded = centred();
+    crowded.logo = { x: 481, y: 94, width: 119, height: 119 };
+    crowded.text[0].y = 245;
+    conformToHouseRules(crowded, COPY);
+    expect(crowded.logo.width).toBe(100);
+    const zone = logoClearZone(crowded.logo);
+    expect(zone.y + zone.height).toBeLessThanOrEqual(crowded.text[0].y);
+
+    const small = { ...centred(), width: 1920, height: 1080 } as StudioLayoutV2;
+    small.logo = { x: 76, y: 76, width: 120, height: 120 };
+    conformToHouseRules(small, COPY);
+    expect(small.logo.width).toBe(154);
+  });
+
+  it('moves a block out of the logo clear zone when the canvas has room, and leaves it when it has none', async () => {
+    const { conformToHouseRules, logoClearZone } = await import('../src/index.js');
+    const roomy = centred();
+    roomy.logo = { x: 490, y: 76, width: 100, height: 100 };
+    roomy.text[0].y = 190; // inside the 50px clear space below the logo
+    conformToHouseRules(roomy, COPY);
+    expect(roomy.text[0].y).toBeGreaterThanOrEqual(logoClearZone(roomy.logo).y + logoClearZone(roomy.logo).height);
+
+    const full = centred();
+    full.logo = { x: 490, y: 76, width: 100, height: 100 };
+    full.text[0].y = 190;
+    full.text[4].y = H - MARGIN - full.text[4].height; // the footer already sits on the bottom margin
+    const before = full.text.map((t) => t.y);
+    conformToHouseRules(full, COPY);
+    // No room: nothing below is pushed out of the safe area.
+    for (const t of full.text) expect(t.y + t.height).toBeLessThanOrEqual(H - MARGIN);
+    expect(full.text[4].y).toBe(before[4]);
+  });
+
+  it('never stretches a panel past the canvas when it inserts space', async () => {
+    const { conformToHouseRules } = await import('../src/index.js');
+    const layout = centred();
+    layout.shapes = [{ x: 0, y: 200, width: W, height: H - 200, kind: 'rect', color: '#162B48', role: 'panel' } as any];
+    layout.logo = { x: 490, y: 76, width: 100, height: 100 };
+    layout.text[0].y = 190;
+    conformToHouseRules(layout, COPY);
+    for (const s of layout.shapes) expect(s.y + s.height).toBeLessThanOrEqual(H);
+  });
+
+  it('asks the art to be calm only where text is over it', async () => {
+    const { conformToHouseRules, validateLayoutV2 } = await import('../src/index.js');
+    const layout = centred();
+    layout.shapes = [];
+    // Art over the top 60% of the canvas; the footer sits below it.
+    (layout as any).art = { source: 'procedural', motif: 'thin-rules', box: { x: 0, y: 0, width: W, height: 810 }, opacity: 0.2, calmRegion: { x: 108, y: 135, width: 864, height: 400 } };
+    conformToHouseRules(layout, COPY);
+    const c = (layout as any).art.calmRegion;
+    // Every block that touches the art — including the body straddling its lower edge — is covered.
+    for (const t of layout.text.filter((t) => t.y < 810)) {
+      expect(c.x <= t.x && c.y <= t.y && c.x + c.width >= t.x + t.width && c.y + c.height >= t.y + t.height).toBe(true);
+    }
+    const result = validateLayoutV2(layout, {
+      expectedWidth: W, expectedHeight: H, copyCount: 5, copyScripts: ['latin', 'latin', 'latin', 'latin', 'latin'],
+      reference: { rules: { fontFamily: 'Verdana', palette: ['#0A1628', '#FDF8F3', '#C5A059', '#162B48'] }, logoAspect: 200 / 120 },
+    } as any);
+    expect(result.ok || result.code !== 'ART_SAFETY').toBe(true);
+  });
+});
+
+describe('refinement is told what production QA rejects', { timeout: 30000 }, () => {
+  it('shows the repair model the defects preparation cannot fix, and adopts a repair QA accepts', async () => {
+    const { refineCandidateV3, rankCandidatesV3, prepareGeneratedLayoutV3 } = await import('../src/index.js');
+    const qa = {
+      width: W, height: H, copyScripts: ['latin', 'latin', 'latin', 'latin', 'latin'] as Array<'latin' | 'arabic'>,
+      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', palette: ['#0A1628', '#FDF8F3', '#C5A059', '#162B48'], logoAspect: 1,
+    };
+    const canvas = { width: W, height: H, logoAspect: 1, palette: qa.palette };
+    // The subtitle overlaps the title, and the footer already sits on the bottom margin, so there is
+    // no room to insert space: preparation cannot fix it, and QA rejects it.
+    const crowded = centred();
+    crowded.text[2].y = 500;
+    crowded.text[4].y = H - MARGIN - crowded.text[4].height;
+    const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: prepareGeneratedLayoutV3(crowded, COPY, canvas) }], COPY, qa);
+    expect(top.hardQa?.passed).toBe(false);
+    expect(top.hardQa?.defectCodes).toContain('OVERLAP');
+
+    const prompts: string[] = [];
+    const { client } = mockClient({ repairLayout: centred() });
+    const spying = {
+      createStructuredCompletion: async (params: any) => {
+        if (params.jsonSchema?.name === 'layout_v3_repair') prompts.push(String(params.messages[1].content));
+        return (client as any).createStructuredCompletion(params);
+      },
+    } as unknown as OpenAiStudioClient;
+    const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas });
+    expect(prompts.length).toBeGreaterThan(0);
+    expect(prompts[0]).toContain('HARD QA DEFECTS');
+    expect(prompts[0]).toContain('OVERLAP');
+    expect(outcome.adopted).toBe(true);
+    expect(outcome.reason).toBe('adopted_now_passes_qa');
+    expect(outcome.hardQa?.passed).toBe(true);
+  });
+});

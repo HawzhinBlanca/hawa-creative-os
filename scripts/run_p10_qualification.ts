@@ -606,7 +606,7 @@ async function executeBriefLive(
   }
   const copyMap = copy.text;
   const isRtl = brief.language === 'ckb';
-  const canvas = { width: brief.width, height: brief.height, logoAspect: KAAE_LOGO_ASPECT };
+  const canvas = { width: brief.width, height: brief.height, logoAspect: KAAE_LOGO_ASPECT, palette: KAAE_REFERENCE.palette };
   const copyScripts: Array<'latin' | 'arabic'> = [];
   for (const b of brief.copyBlocks) copyScripts[b.copyIndex] = b.script;
   const qa: HardQaContext = {

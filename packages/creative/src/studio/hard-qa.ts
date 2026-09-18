@@ -23,6 +23,8 @@ export interface HardQaContext {
 export interface HardQaOutcome {
   passed: boolean;
   defectCodes: string[];
+  /** One readable line per defect, for a repair model or a person. */
+  messages: string[];
   metrics: LayoutMetrics;
   /** The layout as validated — validation may normalise it, e.g. a script font. */
   layout: StudioLayoutV2;
@@ -34,6 +36,7 @@ export function evaluateHardQa(
   existingMetrics?: LayoutMetrics | null
 ): HardQaOutcome {
   const defectCodes: string[] = [];
+  const messages: string[] = [];
   let checked = layout;
 
   const validationContext: LayoutValidationContext = {
@@ -60,6 +63,7 @@ export function evaluateHardQa(
     if (t.fontSize < 12 || (t.role === 'body' && t.fontSize < minBodyPx)) {
       if (!defectCodes.includes('MIN_SIZE')) defectCodes.push('MIN_SIZE');
       if (!defectCodes.includes('UNREADABLE_FONT_SIZE')) defectCodes.push('UNREADABLE_FONT_SIZE');
+      messages.push(`MIN_SIZE: block ${t.copyIndex} (${t.role}) is ${t.fontSize}px; minimum 12px, body at least ${minBodyPx}px`);
     }
   }
 
@@ -68,6 +72,7 @@ export function evaluateHardQa(
     if (!defectCodes.includes(validation.code)) {
       defectCodes.push(validation.code);
     }
+    messages.push(`${validation.code}: ${validation.message}`);
   } else if (validation.layout) {
     // Preserve layout normalization (e.g. script font) only if validated OK
     checked = validation.layout;
@@ -78,12 +83,14 @@ export function evaluateHardQa(
 
   if (metrics.overlapCount > 0) {
     defectCodes.push('OVERLAP');
+    messages.push(`OVERLAP: ${metrics.overlapCount} pair(s) of text boxes overlap`);
   }
 
   // Calibrated against six confirmed KAAE exemplars (range 0.792 - 1.000, mean 0.949)
   // An alignment score < 0.70 represents severe raggedness / off-grid drift that violates institutional dignity
   if (metrics.alignmentScore < 0.70) {
     defectCodes.push('POOR_GRID_ALIGNMENT');
+    messages.push(`POOR_GRID_ALIGNMENT: alignment ${metrics.alignmentScore} below 0.70 — element edges and centres do not line up on the grid or with each other`);
   }
 
   // A divider that sits far closer to one of the two blocks it separates. The v3 generator centres
@@ -91,11 +98,13 @@ export function evaluateHardQa(
   // normalisation. It is a hard gate rather than a weighted metric because no deterministic metric
   // responds to separator position at all: recentring all 31 separators across the eighteen T5
   // layouts changed every one of the thirteen metric scores by exactly 0.0000.
-  if (findAsymmetricSeparators(checked.shapes || [], checked.text || []).length > 0) {
+  const asymmetric = findAsymmetricSeparators(checked.shapes || [], checked.text || []);
+  if (asymmetric.length > 0) {
     defectCodes.push('ASYMMETRIC_SEPARATOR');
+    messages.push(`ASYMMETRIC_SEPARATOR: ${asymmetric.length} divider(s) sit much closer to one of the two blocks they separate`);
   }
 
-  return { passed: defectCodes.length === 0, defectCodes, metrics, layout: checked };
+  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout: checked };
 }
 
 export interface StudioReferenceRules {

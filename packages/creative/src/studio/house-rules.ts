@@ -1,0 +1,43 @@
+/**
+ * The house typography and layout rules production's hard QA enforces, defined once.
+ *
+ * The validator rejects a design that breaks them; the pipeline's preparation conforms a
+ * generated design to them. They used to live only as literals inside the validator, and the
+ * generator was never told them: every Sorani design the production model made set its leading
+ * like Latin, which the validator requires to be 1.6–1.9, so every Kurdish v3 design would have
+ * failed production QA.
+ */
+export const HOUSE_RULES = {
+  /** Every text box and the logo sit inside a margin of this share of the canvas's short edge. */
+  safeMarginShare: 0.06,
+  lineHeight: {
+    latin: { min: 1.2, max: 1.5 },
+    /** Sorani needs the extra leading for its marks above and below the line. */
+    arabic: { min: 1.6, max: 1.9 },
+  },
+  /** Latin display tracking, in em. Sorani and body copy take none. */
+  letterSpacingMaxEm: 0.1,
+  minFontPx: 12,
+  /** Body copy is at least this share of the canvas width. */
+  minBodyShareOfWidth: 0.016,
+  /** The title is at least this multiple of the body size. */
+  titleToBodyMin: 2.2,
+  logo: {
+    minWidthPx: 100,
+    minWidthShareOfCanvas: 0.08,
+    /** Free space around the logo, as a share of its height, with no text or rule inside. */
+    clearSpaceShareOfHeight: 0.5,
+    /** Largest relative deviation from the official aspect. */
+    aspectTolerance: 0.01,
+  },
+} as const;
+
+export function minLogoWidth(canvasWidth: number): number {
+  return Math.max(HOUSE_RULES.logo.minWidthPx, Math.round(HOUSE_RULES.logo.minWidthShareOfCanvas * canvasWidth));
+}
+
+/** The box around the logo that must hold no text and no rule. */
+export function logoClearZone(logo: { x: number; y: number; width: number; height: number }) {
+  const cs = HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height;
+  return { x: logo.x - cs, y: logo.y - cs, width: logo.width + 2 * cs, height: logo.height + 2 * cs };
+}

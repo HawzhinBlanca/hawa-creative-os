@@ -1,3 +1,4 @@
+import { HOUSE_RULES } from './house-rules.js';
 import { fitLogoToAspect } from './studio-normalize.js';
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
@@ -1258,8 +1259,12 @@ CRITICAL CONSTRAINTS:
 7. MINIMUM FONT SIZES (STRICT ENFORCEMENT):
    - Absolute minimum font size for ANY text: 12px (normalized: ${(12 / canvasHeight).toFixed(4)}).
    - Body copy (role: "body") minimum font size: ${Math.ceil(0.016 * canvasWidth)}px (1.6% of canvas width ${canvasWidth}px; normalized: ${(Math.ceil(0.016 * canvasWidth) / canvasHeight).toFixed(4)}).
-   - Title copy (role: "title") minimum font size: ${Math.max(36, Math.round(Math.ceil(0.016 * canvasWidth) * 2.2))}px (>= 2.2x body font size).
-   - NEVER generate font sizes below these minimums (e.g. 9px body text is strictly rejected by QA).`;
+   - Title copy (role: "title") minimum font size: ${Math.max(36, Math.round(Math.ceil(0.016 * canvasWidth) * 2.2))}px, and at least ${HOUSE_RULES.titleToBodyMin}x the body size you actually choose (a 22px body needs a title of at least 49px).
+   - NEVER generate font sizes below these minimums (e.g. 9px body text is strictly rejected by QA).
+8. LINE HEIGHT (QA rejects anything outside): Latin (script "latin") ${HOUSE_RULES.lineHeight.latin.min}–${HOUSE_RULES.lineHeight.latin.max}; Sorani (script "arabic") ${HOUSE_RULES.lineHeight.arabic.min}–${HOUSE_RULES.lineHeight.arabic.max}, for the marks above and below the line. Size every box's height for its lines at that leading.
+9. TRACKING: letterSpacing 0 for Sorani blocks and for body copy; Latin display blocks at most ${HOUSE_RULES.letterSpacingMaxEm}.
+10. LOGO: at least ${Math.max(HOUSE_RULES.logo.minWidthPx, Math.round(HOUSE_RULES.logo.minWidthShareOfCanvas * canvasWidth))}px wide on this canvas, and keep ${HOUSE_RULES.logo.clearSpaceShareOfHeight} x the logo's height free of any text box or rule on every side of it. Plan the eyebrow and title below that clear space.
+11. SAFE AREA: every text box and the logo lie entirely inside the margin (${Math.round(HOUSE_RULES.safeMarginShare * 100)}% of the canvas's short edge).`;
 }
 
 /**
