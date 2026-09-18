@@ -1,4 +1,5 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
+import { resolveModel } from '@hawa/domain';
 
 export type DocumentKind = 'formal_document' | 'design_piece';
 export type MessageKind = 'new_brief' | 'feedback' | 'question' | 'other';
@@ -272,7 +273,7 @@ Decide the exact kind of message:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-6-astra',
+        model: resolveModel('text'),
         messages: [
           {
             role: 'system',
@@ -377,7 +378,7 @@ Decide the exact kind of message:
       clarifyingQuestion,
       callReceipt: {
         id: data.id || `chatcmpl_${Date.now()}`,
-        model: data.model || 'gpt-6-astra',
+        model: data.model || resolveModel('text'),
         inputTokens: data.usage?.prompt_tokens,
         outputTokens: data.usage?.completion_tokens,
         cachedTokens: data.usage?.prompt_tokens_details?.cached_tokens,

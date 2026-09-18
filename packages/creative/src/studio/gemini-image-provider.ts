@@ -6,7 +6,7 @@ import {
   type PaletteVerificationResult,
 } from './color-science.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 
 export interface GenerateArtOptions {
   artPrompt: string;
@@ -128,7 +128,7 @@ export async function runVisionCheck(
     assertModelAllowed(options.model || 'claude-fable-5-1');
   }
 
-  const model = options.model || 'gpt-6-astra';
+  const model = options.model || resolveModel('critique');
   assertModelAllowed(model);
 
   const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
@@ -297,12 +297,12 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           continue;
         }
 
-        // Vision check with gpt-6-astra
+        // Vision check with the active tier's critique model
         let visionCheck = { passed: true, containsForbidden: false, what: 'clean' };
         try {
           visionCheck = await runVisionCheck(imageBuffer, mimeType, {
             openaiApiKey: openaiKey,
-            model: 'gpt-6-astra',
+            model: resolveModel('critique'),
             fetchFn: fetcher,
           });
         } catch (vErr: any) {

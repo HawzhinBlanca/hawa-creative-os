@@ -19,6 +19,11 @@ describe('exact copy selection',()=>{
 const url=process.env.HAWA_ISOLATED_TEST_DB;
 if(url&&new URL(url).pathname!=='/hawa_repair')throw new Error('Isolated database required');
 describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/Canva',()=>{
+  // The mocked provider answers as the production model, and the planner rejects a receipt for any
+  // model it did not request; so this suite runs the planner on the production tier.
+  const priorTier=process.env.HAWA_MODEL_TIER;
+  beforeAll(()=>{process.env.HAWA_MODEL_TIER='production';});
+  afterAll(()=>{if(priorTier===undefined)delete process.env.HAWA_MODEL_TIER;else process.env.HAWA_MODEL_TIER=priorTier;});
   const db=createDb(url||'postgres://localhost/hawa_repair');
   const scope={tenantId:'00000000-0000-4000-a000-000000000001',actorId:'00000000-0000-4000-b000-000000000001'};
   const clientId='c1000000-0000-4000-8000-000000000002';

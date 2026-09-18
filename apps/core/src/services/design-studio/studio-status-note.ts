@@ -10,13 +10,16 @@ export interface StudioStatusNoteInput {
   run: { stages?: unknown; diagnostic?: string | null; winner_candidate_id?: string | null };
   candidates: Array<{ id: string; score?: unknown; layouts?: unknown; concept?: unknown; art_provenance?: unknown }>;
   parityNote?: string;
+  /** Models that answered the run's calls, from its call ledger, most used first. */
+  models?: string[];
 }
 
-export function studioStatusNote({ run, candidates, parityNote = '' }: StudioStatusNoteInput): string {
+export function studioStatusNote({ run, candidates, parityNote = '', models = [] }: StudioStatusNoteInput): string {
   const stages = parse(run.stages) || {};
   const v3 = Object.values(stages).some((stage: any) => stage?.pipeline === 'v3');
   const winner = candidates.find(c => c.id === run.winner_candidate_id) || candidates[0];
   const parts = [v3 ? 'Studio v3' : 'Studio v2'];
+  if (models.length > 0) parts.push(`models: ${models.join(', ')}`);
 
   if (candidates.length > 0) parts.push(`${candidates.length} concept${candidates.length === 1 ? '' : 's'}`);
 

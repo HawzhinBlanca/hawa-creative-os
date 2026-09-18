@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { encodeEditableTransfer, type EditableTransferPlan } from '@hawa/creative';
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
 
@@ -129,7 +129,7 @@ export class CanvaDesignPlanner {
         reference,
         referenceHash: hash(JSON.stringify(reference)),
         logoAspect: logo.readUInt32BE(16) / logo.readUInt32BE(20),
-        model: 'gpt-6-astra'
+        model: resolveModel('text')
       },
       logo
     };

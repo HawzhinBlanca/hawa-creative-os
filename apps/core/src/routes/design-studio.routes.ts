@@ -192,6 +192,13 @@ export function registerDesignStudioRoutes(
         })),
         callsCount: calls.length,
         totalUsdEstimate: calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
+        // Which model answered each call, as the provider reported it (the ledger's `model`).
+        calls: calls.map((call) => ({
+          stage: call.stage,
+          model: call.model,
+          status: call.status,
+          usdEstimate: Number(call.usd_estimate ?? 0),
+        })),
       });
     })
   );

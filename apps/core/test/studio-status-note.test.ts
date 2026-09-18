@@ -25,6 +25,12 @@ describe('studio summary line sent with the Canva result', () => {
     );
   });
 
+  it('names the models the call ledger recorded, most used first', () => {
+    expect(studioStatusNote({ run: v3Run, candidates: v3Candidates, models: ['gpt-4.1-mini', 'o4-mini'] })).toBe(
+      'Studio v3 · models: gpt-4.1-mini, o4-mini · 3 concepts · no revision needed · layout score 0.98/1 · imagery: none · typeface: Cinzel, Verdana'
+    );
+  });
+
   it('never invents a count, a revision round or a judge score the run did not record', () => {
     const note = studioStatusNote({ run: { stages: {} }, candidates: [] });
     expect(note).toBe('Studio v2');

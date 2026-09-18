@@ -33,6 +33,8 @@ import {
   type WorkflowCheckpoint,
   kaaeClientDNA,
   isAuthorizedReviewerRole,
+  resolveModel,
+  activeModelTier,
 } from '@hawa/domain';
 import {
   createDb,
@@ -1172,7 +1174,7 @@ export function createApp(options?: CreateAppOptions) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-6-astra',
+          model: process.env.OPENAI_MODEL || resolveModel('text'),
           messages: [{ role: 'user', content: 'ping' }],
           max_completion_tokens: 100,
         }),
@@ -1371,6 +1373,15 @@ export function createApp(options?: CreateAppOptions) {
         status: lastPaidProbe.status,
         detail: lastPaidProbe.detail || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
+      },
+      // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier.
+      models: {
+        tier: activeModelTier(),
+        text: resolveModel('text'),
+        layout: resolveModel('layout'),
+        critique: resolveModel('critique'),
+        judge: resolveModel('judge'),
+        image: resolveModel('image'),
       },
       dependencies: {
         postgres: dbStatus,
@@ -5170,7 +5181,11 @@ export function createApp(options?: CreateAppOptions) {
           } catch { /* courtesy record */ }
         }
 
-        const studioNote = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote });
+        const models = (await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
+          (await sql<any>`SELECT model, count(*)::int AS n FROM hawa.design_studio_calls
+            WHERE tenant_id = ${auth.tenantId}::uuid AND run_id = ${studioRun.id}::uuid AND status = 'ok'
+            GROUP BY model ORDER BY n DESC, model`.execute(trx)).rows)).map((row: any) => String(row.model));
+        const studioNote = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote, models });
         notes.push(studioNote);
       }
     } catch { /* courtesy note; do not fail status */ }
@@ -6719,7 +6734,7 @@ export function createApp(options?: CreateAppOptions) {
 
     const normalizedText = normalizeKurdishIncomingText(text);
     const estimatedTokens = 450;
-    const preFlight = globalCostGovernor.checkPreFlight(clientId, estimatedTokens, 'gpt-6-astra', 'openai');
+    const preFlight = globalCostGovernor.checkPreFlight(clientId, estimatedTokens, resolveModel('text'), 'openai');
 
     if (!preFlight.allowed) {
       return c.json({
@@ -6736,7 +6751,7 @@ export function createApp(options?: CreateAppOptions) {
       taskId,
       role: 'rehearsal_brief_generation',
       provider: 'openai',
-      model: 'gpt-6-astra',
+      model: resolveModel('text'),
       inputTokens: 280,
       outputTokens: 180,
     });

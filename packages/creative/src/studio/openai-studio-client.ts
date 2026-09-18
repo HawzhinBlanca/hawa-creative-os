@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { assertModelAllowed, modelSupportsReasoningEffort } from '@hawa/domain';
+import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import {
   StudioModelHttpError,
   StudioModelTimeoutError,
@@ -173,8 +173,8 @@ export class OpenAiStudioClient {
     this.timeoutMs = options.timeoutMs || 240000;
     this.breaker = options.circuitBreaker || new OpenAiCircuitBreaker();
     this.pricing = this.loadPricing();
-    this.primaryModel = options.primaryModel || 'gpt-6-astra';
-    this.fallbackModel = options.fallbackModel || 'gpt-6-astra';
+    this.primaryModel = options.primaryModel || resolveModel('text');
+    this.fallbackModel = options.fallbackModel || resolveModel('text');
   }
 
   get circuitBreaker() { return this.breaker; }
@@ -254,7 +254,7 @@ export class OpenAiStudioClient {
     maxTokens?: number;
     reasoningEffort?: 'low' | 'medium' | 'high';
   }): Promise<OpenAiStructuredResponse<T>> {
-    const model = options.model || 'gpt-6-astra';
+    const model = options.model || resolveModel('text');
     assertModelAllowed(model);
 
     const isBreakerOpen = typeof this.breaker.isOpen === 'function'
@@ -428,7 +428,7 @@ export class OpenAiStudioClient {
     temperature?: number;
     maxTokens?: number;
   }): Promise<{ data: T; rawText: string; receipt: any }> {
-    const model = params.model || 'gpt-6-astra';
+    const model = params.model || this.primaryModel;
     assertModelAllowed(model);
     const messages: OpenAiMessage[] = [];
     if (params.system) {

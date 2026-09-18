@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertModelAllowed } from '@hawa/domain';
+import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { OpenAiStudioClient } from './openai-studio-client.js';
 import {
   StudioModelError,
@@ -207,8 +207,8 @@ export interface StudioModelClientOptions {
   maxRetries?: number; // default 3
   retryDelaysMs?: number[]; // default [1000, 3000, 9000]
   defaultTimeoutMs?: number; // default 120000 (120s)
-  primaryModel?: string; // default 'gpt-6-astra'
-  fallbackModel?: string; // default 'gpt-6-astra'
+  primaryModel?: string; // default: the active tier's text model
+  fallbackModel?: string; // default: the active tier's text model
 }
 
 /**
@@ -235,8 +235,8 @@ export class StudioModelClient {
     this.maxRetries = options?.maxRetries ?? 3;
     this.retryDelaysMs = options?.retryDelaysMs ?? [1000, 3000, 9000];
     this.defaultTimeoutMs = options?.defaultTimeoutMs ?? 120000;
-    this.primaryModel = options?.primaryModel || 'gpt-6-astra';
-    this.fallbackModel = options?.fallbackModel || 'gpt-6-astra';
+    this.primaryModel = options?.primaryModel || resolveModel('text');
+    this.fallbackModel = options?.fallbackModel || resolveModel('text');
   }
 
   /**
