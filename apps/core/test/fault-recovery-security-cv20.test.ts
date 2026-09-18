@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createApp } from '../src/app.js';
-import { createDb } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
+import { PRIMARY_OPERATOR_USER_ID } from '@hawa/contracts';
 import { CircuitBreaker, ReconciliationService } from '@hawa/integrations';
 
 describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
@@ -9,6 +10,24 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
   const app = createApp({ db });
 
   const testBearer = process.env.HAWA_BEARER_TOKEN!;
+  const TENANT = '00000000-0000-4000-a000-000000000001';
+  const asOperator = <T>(f: (trx: any) => Promise<T>) =>
+    withRlsContext(db, { tenantId: TENANT, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, f);
+  /** Runs `check` with the Primary Operator's Canva connection in `status`, then restores what was there. */
+  const withCanvaConnection = async (status: string, check: () => Promise<void>) => {
+    const prior = await asOperator(async (trx) =>
+      (await sql<any>`SELECT * FROM hawa.canva_connections WHERE tenant_id = ${TENANT}::uuid AND actor_id = ${PRIMARY_OPERATOR_USER_ID}`.execute(trx)).rows[0]);
+    await asOperator((trx) => sql`INSERT INTO hawa.canva_connections(tenant_id, actor_id, encrypted_tokens, expires_at, status, generation)
+      VALUES (${TENANT}::uuid, ${PRIMARY_OPERATOR_USER_ID}, 'health-test-placeholder', now() + interval '1 hour', ${status}, gen_random_uuid())
+      ON CONFLICT (tenant_id, actor_id) DO UPDATE SET status = excluded.status`.execute(trx));
+    try {
+      await check();
+    } finally {
+      await asOperator((trx) => prior
+        ? sql`UPDATE hawa.canva_connections SET status = ${prior.status} WHERE tenant_id = ${TENANT}::uuid AND actor_id = ${PRIMARY_OPERATOR_USER_ID}`.execute(trx)
+        : sql`DELETE FROM hawa.canva_connections WHERE tenant_id = ${TENANT}::uuid AND actor_id = ${PRIMARY_OPERATOR_USER_ID}`.execute(trx));
+    }
+  };
   const authHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,
@@ -24,7 +43,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     expect(healthJson.lastVerifiedProgressAt).toBeDefined();
     expect(healthJson.dependencies).toBeDefined();
     expect(healthJson.dependencies.postgres).toMatch(/^(connected|uninitialized)$/);
-    expect(healthJson.dependencies.canva).toMatch(/^(connected|degraded|outage)$/);
+    expect(healthJson.dependencies.canva).toMatch(/^(connected|degraded|outage|reconnect_required)$/);
     expect(healthJson.dependencies.disk).toBe('writable');
   });
 
@@ -82,11 +101,24 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     const recoveryJson = await recoveryRes.json();
     expect(recoveryJson.circuitBreaker.state).toBe('CLOSED');
 
-    // 5. Health restored
-    const restoredRes = await app.request('/v1/health');
-    const restoredJson = await restoredRes.json();
-    expect(restoredJson.dependencies.canva).toBe('connected');
-    expect(restoredJson.dependencies.canvaCircuitBreaker).toBe('CLOSED');
+    // 5. Health restored: the breaker is closed, and with the Primary Operator's Canva authorization
+    // active, Canva is connected.
+    await withCanvaConnection('active', async () => {
+      const restoredJson = await (await app.request('/v1/health')).json();
+      expect(restoredJson.dependencies.canva).toBe('connected');
+      expect(restoredJson.dependencies.canvaCircuitBreaker).toBe('CLOSED');
+    });
+  });
+
+  it('reports an expired Canva authorization, which the breaker never sees, as reconnect_required', async () => {
+    // 2026-09-17 to 2026-09-18: every design failed at the Canva transfer with "Connect Canva" while
+    // health said connected, because it only read the circuit breaker.
+    await withCanvaConnection('reconnect_required', async () => {
+      const json = await (await app.request('/v1/health')).json();
+      expect(json.dependencies.canvaCircuitBreaker).toBe('CLOSED');
+      expect(json.dependencies.canva).toBe('reconnect_required');
+      expect(json.status).not.toBe('healthy');
+    });
   });
 
   it('4. Reconciles unknown delivery outcomes and repairs drift automatically (FR-061)', async () => {
