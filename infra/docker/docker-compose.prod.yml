@@ -116,6 +116,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-hawa}
       POSTGRES_USER: ${POSTGRES_USER:-hawa_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/docker/.env (see infra/docker/.env.example)}
+      # 00-init-roles.sql creates hawa_app on an empty data directory with the password core connects with.
+      HAWA_APP_DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:54332:5432"
