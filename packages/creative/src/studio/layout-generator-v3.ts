@@ -673,6 +673,17 @@ export function balanceCanvasMargins(
 }
 
 /**
+ * There is deliberately no frame-internal balancing pass.
+ *
+ * The critique raised two designs whose content sat unevenly inside a large frame, and balancing it
+ * against the frame is the obvious analogue of balanceCanvasMargins one reference level in. It was
+ * written and measured: it fires on 1 of the 20 production layouts, drops that layout's composite
+ * from 0.968 to 0.964, and the render is worse — the composition sits high with a dead band along
+ * the bottom. With no evidence of benefit on the single case it touches, it is not worth the risk
+ * of a pass that moves whole compositions.
+ */
+
+/**
  * Runs the geometry normalisations in dependency order and is safe to run again: each pass is
  * idempotent, and a later pass needs the earlier ones to have settled. Drifted blocks move first
  * because their position defines the panels and gaps; a text block centred in its panel then
