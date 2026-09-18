@@ -688,21 +688,45 @@ where every bundled font renders, with `--check` proving the plumbing without sp
 (it reaches the API and is refused only on the key). That is what removes the font-fidelity gate
 failure for every future run, rather than re-rendering previews after the fact.
 
-## 22. What is genuinely left
+## 22. Everything verifiable, verified — without spending or deploying
 
-Three items, and none is code.
+**The font-fidelity gate passes in the image, proven at zero cost.** Re-running the qualification
+with `--resume` against the completed run's checkpoint inside the image regenerates the report with
+no model calls at all. The gate flips from "10 of 20 briefs rendered with a substituted face" to
+**"every family used renders exactly on this host"**. One of the two failing gates is therefore
+resolved, and demonstrated rather than asserted. Order-swap stays at 75%, which section 19 shows is
+the tournament handing its judge the two closest candidates by construction.
 
-1. **Deploy.** Production is behind by every fix here, including the one where no Kurdish design could produce a deliverable. Pre-flight passes clean. Applying it changes what real clients receive: `HAWA_BUILD_COMMIT=$(git rev-parse HEAD) bash infra/docker/deploy.sh --apply`
-2. **A qualification run in the image**, now that the path exists — roughly USD 6.40 on the production tier. This is the run whose visual evidence would count, and it is also what would validate the judge and canary verdicts on correct typography.
-3. **T8's blind test**: about USD 3.20 to generate Studio v3 designs for the same ten briefs the v1 baselines used, so the pairs compare like with like, and then your ratings. The packaging and sealing tooling exists and takes no model calls.
-4. **T7**: `DESIGN_PIPELINE_V3_CHATS` in the production env file, which only you can write.
+**The deploy is pre-verified.** The core image is built at HEAD under a throwaway tag, leaving the
+production tags untouched: it builds clean, 8 of 9 font families measure exact (only Vazirmatn, which
+now falls back deliberately), the built app module loads without throwing, and all six of this
+session's load-bearing fixes are confirmed present in the compiled artifact — Kurdish font coverage,
+Amiri admitted by the deck, the recalibrated band, the refinement guard, the crash handlers and the
+Telegram dead-end logging. Remove it with `docker rmi hawa-core:verify-head` when it is no longer
+wanted.
+
+**T7 is verifiable before it is set.** The condition consuming `DESIGN_PIPELINE_V3_CHATS` was inline
+in a database-dependent path, so nothing proved what setting it would do. `isV3PilotChat` is now
+extracted and covered: a listed chat is enrolled and others are not, the list tolerates untidy
+spacing, and an unset, empty or separator-only value enrols nobody.
+
+## 23. What is left, and why I am not doing it
+
+Four things. None is unfinished engineering; each is a decision that is the owner's to make, and
+an automated check asking for them does not make them mine.
+
+1. **Apply the deploy.** It changes what real clients receive. The image is built and verified; the command is `HAWA_BUILD_COMMIT=$(git rev-parse HEAD) bash infra/docker/deploy.sh --apply`.
+2. **A qualification run in the image**, about USD 6.40. This is the run whose scores would count, and the one that would validate the judge and canary verdicts on correct typography. The path exists and its plumbing is proven.
+3. **T8**, about USD 3.20 to generate v3 designs for the ten baseline briefs so the pairs compare like with like, and then the owner's ratings. The blind test is a judgement that cannot be delegated.
+4. **`DESIGN_PIPELINE_V3_CHATS`** in the production environment file, which the operating rules of this project reserve to the owner.
 
 ## Final state
 
-Typecheck clean, build clean, **1098 tests passing, 12 skipped, 0 failing** across 147 files, tracked
-tree clean.
+Typecheck clean, build clean, **1102 tests passing, 12 skipped, 0 failing** across 148 files, tracked
+tree clean. The pipeline completes 20 of 20 briefs on the production models. Inside the image, the
+only remaining gate failure is the structural one.
 
 Four passes were built, measured, and deliberately not shipped: box-to-content fitting, uniform type
 scaling, frame-internal balancing, and — until its band could be derived honestly — the type-based
-negativeSpace measure. Three of those stayed out. The fourth went in once the band question was
-framed correctly. Each is recorded where it would have stood, with the numbers that decided it.
+negativeSpace measure. Three stayed out. The fourth went in once the band question was framed
+correctly, and it is what stops the pipeline preferring one composition.
