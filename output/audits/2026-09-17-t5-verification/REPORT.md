@@ -895,14 +895,78 @@ tier because o4-mini ignores its own declared type scale. typeScale fails 16–1
 it requires typeScale too; the runner now labels that row by what it measures. That gate, and the
 design quality behind it, can only be qualified on the production model.
 
-## Final state (2026-09-18, second pass)
+## 26. The production-tier qualification: 8 of 20, stopped when the API account ran out of credits
 
-Branch `studio-v2`, 66 commits ahead of the deployed `4699792` (as of `b8c84f6`). Four decisions remain, and all are the owner's:
+The owner approved the production-tier run (about USD 7–10) on the evening of 2026-09-18. It ran in
+the production image at `910a6a6`, with `gpt-6-astra` for layout, critique and judge
+(`RUN_MANIFEST.json`). Before it started, the gate re-prepared all 200 stored designs with no
+regression, and `--check` passed.
 
-1. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
-2. **The in-image qualification**, about USD 7–10: the canary now runs in both orders, and refinement adds calls when its gate opens. This is the first run that measures the decisions production makes.
-3. **T8**, about USD 3.5–5 for the ten compare briefs, then the owner's ratings:
+**Stopped at 8 of 20.** In batch 5 the API began answering "You have no credits remaining" (HTTP
+429). Briefs 09–12 failed. Some of their calls were still accepted and billed before the refusals,
+so each further batch spent money and produced nothing; I stopped the run's container during
+batch 7, leaving the production containers untouched. The run spent USD 4.24 over 63 calls: USD
+3.02 on the 8 completed briefs (50 calls, USD 0.378 each) and USD 1.21 on calls for briefs 09–14
+that ended in a refusal. **The live service uses the same key, so its model calls fail too until
+credits are added.**
+
+The 8 completed briefs, four English and four Sorani, square and 4:5:
+
+| Gate | Target | 8 completed briefs |
+|---|---|---|
+| Production hard QA, now with contrast and copy fit | — | 8/8 |
+| Print-ready (QA and design metrics) | ≥ 81.3% | 7/8: brief_07 fails negativeSpace, with about 250px empty below its footer |
+| Hard-QA escapes | 0 | 0 |
+| Canary, both orders | ≥ 95% | 8/8 |
+| Order-swap consistency | ≥ 80% | 8/8, every winner chosen by the judge |
+| Copy exact / editability | ≥ 90% / 100% | 8/8 / 8/8 |
+| Median cost per brief | ≤ USD 0.38 | USD 0.363 |
+
+This is not a verdict: 12 briefs have not run, among them every story, A4 and landscape format.
+Order-swap is the gate the previous production run failed (75%); 8 of 8 is encouraging and no more.
+
+The renders opened (brief_01, 03, 05, 07) show the exact faces: Cinzel, Playfair Display, Amiri,
+Noto Sans Arabic, Verdana. They also show right-to-left order in the Sorani and mixed footers, and
+no collisions. Seven of the eight winners are the centred monolith of section 20; the negativeSpace
+calibration behind it is still the owner's call. Every design's lower divider is the brand's
+secondary navy on the navy ground, at 0.65–1 opacity: a hairline the model chose, nearly invisible.
+The house rules require contrast of text only.
+
+**Found while it ran, all committed:**
+- QA's overlap message read "N pair(s) of text boxes overlap" while counting text on the logo and
+  text under rules too, and refinement acts on that message. It now names each pair (`be17278`).
+- Two designs from cheap run 2 still fail QA after preparation, with text set on or across the
+  logo. Raising such a block clear of the logo passed QA for brief_08 but opened a 216px gap above
+  its title, which failed regularity. The gate rejected the trade and the change was withdrawn
+  (`298689f`). Both designs are left to refinement, which now reads which block is on the logo.
+- A resume rewrote `RUN_MANIFEST.json`, so resuming this run after a commit would have claimed
+  briefs 1–8 for a commit that never measured them. A resume now keeps the original record, appends
+  its own session, and refuses another tier or model; the report states its commits (`d364e8b`,
+  verified on a dry run).
+
+Preparation at `d364e8b` is the preparation `910a6a6` measured; the only package change is the
+wording of the overlap message. Once credits are added, this finishes the run for about USD 4.5–5.5,
+skipping the 8 completed briefs:
+
+```
+bash scripts/proofs/run_qualification_in_image.sh output/proofs/2026-09-18-production-qualification-2 --resume
+```
+
+After preparation, 203 of 208 stored designs pass production QA, 47 of 48 from the production
+model. The five left need rearranging, which only refinement does: two with text on the logo
+(cheap run 2), two missing a copy block (dev tier), and T5 brief_17's title with no room.
+
+## Final state (2026-09-18, after the production run stopped)
+
+Branch `studio-v2`, 71 commits ahead of the deployed `4699792` (as of `d364e8b`). The decisions
+remaining are all the owner's:
+
+1. **Add API credits.** The account ran out during the qualification, and the live service shares
+   the key.
+2. **Deploy.** Both pipeline flags stay off, so clients see only the robustness fixes until a chat is enrolled.
+3. **Finish the in-image qualification**, about USD 4.5–5.5 for the 12 briefs left (section 26).
+4. **T8**, about USD 3.5–5 for the ten compare briefs, then the owner's ratings:
    `HAWA_QUALIFICATION_BRIEF_SET=compare bash scripts/proofs/run_qualification_in_image.sh <dir>`,
    then `npx tsx scripts/package_t8_blind_eval.ts --v3-run <dir>`.
-4. **`DESIGN_PIPELINE_V3_CHATS`**, which now actually pilots v3 for the listed chat.
+5. **`DESIGN_PIPELINE_V3_CHATS`**, which now actually pilots v3 for the listed chat.
 
