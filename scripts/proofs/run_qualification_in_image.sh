@@ -9,6 +9,8 @@
 #
 #   bash scripts/proofs/run_qualification_in_image.sh --check         # plumbing only, no spend
 #   bash scripts/proofs/run_qualification_in_image.sh <outDir> [args] # real run
+#   HAWA_QUALIFICATION_BRIEF_SET=compare bash scripts/proofs/run_qualification_in_image.sh <outDir>
+#                                        # v3 designs of the ten compare briefs, for the T8 blind test
 #
 # The API key is read from the running core container and never printed or written to disk.
 # The daily spend ledger is mounted from the host, so the office cap counts every run, host or image.
@@ -67,5 +69,6 @@ docker run --rm \
   -e HAWA_QUALIFICATION_OUT_DIR=/app/qualification-out \
   -e HAWA_SPEND_STATE_DIR=/app/spend-ledger \
   -e HAWA_MODEL_TIER="${HAWA_MODEL_TIER:-production}" \
+  -e HAWA_QUALIFICATION_BRIEF_SET="${HAWA_QUALIFICATION_BRIEF_SET:-qualification}" \
   -w /app "$IMAGE" \
   ./node_modules/.bin/tsx scripts/run_p10_qualification.ts "$@"

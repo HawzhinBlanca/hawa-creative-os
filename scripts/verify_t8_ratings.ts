@@ -8,7 +8,12 @@ import {
 } from '../packages/evals/src/design-studio/ratings-intake.js';
 
 async function main() {
-  const t8Dir = path.resolve('output/proofs/2026-09-17-research-grade-pipeline/T8_BLIND');
+  const packageArg = process.argv.indexOf('--package');
+  if (packageArg < 0 || !process.argv[packageArg + 1]) {
+    console.error('usage: verify_t8_ratings.ts --package <dir written by package_t8_blind_eval.ts>');
+    process.exit(2);
+  }
+  const t8Dir = path.resolve(process.argv[packageArg + 1]);
   const keyPath = path.join(t8Dir, 'pair-key.json');
   const sealPath = path.join(t8Dir, 'SEAL.txt');
   const csvPath = path.join(t8Dir, 'human-ratings.csv');

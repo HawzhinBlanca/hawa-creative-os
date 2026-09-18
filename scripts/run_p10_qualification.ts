@@ -41,10 +41,10 @@ import {
 export interface QualificationBrief {
   id: string;
   name: string;
-  language: 'en' | 'ckb';
+  language: 'en' | 'ckb' | 'mixed';
   width: number;
   height: number;
-  sizeName: 'Square' | 'Portrait 4:5' | 'Story 9:16' | 'A4 Document' | 'Landscape 16:9';
+  sizeName: string;
   copyBlocks: Array<{
     copyIndex: number;
     text: string;
@@ -446,6 +446,36 @@ function computeTokenCosts(
   return { grossCostUsd, cacheDiscountUsd, netCostUsd };
 }
 
+/**
+ * Which briefs a run designs. The 20 held-out qualification briefs by default; with
+ * HAWA_QUALIFICATION_BRIEF_SET=compare, the ten compare briefs the owner's v1 baselines were made
+ * from, so the T8 blind test can pair each v1 design with a v3 design of the same brief.
+ */
+function loadBriefSet(): { set: 'qualification' | 'compare'; briefs: QualificationBrief[] } {
+  const set = process.env.HAWA_QUALIFICATION_BRIEF_SET || 'qualification';
+  if (set === 'qualification') return { set, briefs: QUALIFICATION_BRIEFS };
+  if (set !== 'compare') throw new Error(`HAWA_QUALIFICATION_BRIEF_SET must be 'qualification' or 'compare', not '${set}'.`);
+  const dir = new URL('../packages/evals/src/design-studio/briefs/', import.meta.url);
+  const briefs = fs
+    .readdirSync(dir)
+    .filter((f) => /^compare-\d+\.json$/.test(f))
+    .sort()
+    .map((f) => {
+      const b = JSON.parse(fs.readFileSync(new URL(f, dir), 'utf8'));
+      return {
+        id: b.id,
+        name: b.name,
+        language: b.language,
+        width: b.width,
+        height: b.height,
+        sizeName: `${b.width}x${b.height}`,
+        copyBlocks: b.copyBlocks.map((c: any) => ({ copyIndex: c.copyIndex, text: c.text, role: c.role, script: c.script })),
+      } as QualificationBrief;
+    });
+  if (briefs.length !== 10) throw new Error(`Expected the 10 compare briefs, found ${briefs.length}.`);
+  return { set, briefs };
+}
+
 /** The client's reference pack, read exactly as production's studio reads it. */
 const KAAE_REFERENCE = studioReferenceFromRaw(
   JSON.parse(fs.readFileSync(new URL('../packages/creative/assets/kaae-reference.json', import.meta.url), 'utf8'))
@@ -739,6 +769,7 @@ async function executeBriefLive(
     candidatePairwiseDistances: genResult.degeneracyCheck?.pairwiseDistances ?? [],
     candidateSetDegenerate: genResult.degeneracyCheck?.isDegenerate ?? null,
     compositeScore: metrics.compositeScore,
+    fontStandIns,
     timestamp: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(briefFolder, 'journal.json'), JSON.stringify(journalData, null, 2), 'utf8');
@@ -823,7 +854,8 @@ if (DRY_RUN_URL !== undefined) {
 }
 
 async function main() {
-  console.log('=== Starting P10 Genuine Live Qualification Run (20 Held-Out Briefs) ===');
+  const { set: briefSet, briefs: BRIEFS } = loadBriefSet();
+  console.log(`=== Starting P10 Live Run: ${BRIEFS.length} ${briefSet} briefs ===`);
   if (DRY_RUN_URL) console.log(`[P10 DRY RUN] Model calls go to ${DRY_RUN_URL}; nothing is spent and nothing here is evidence.`);
 
   const dailyCap = getOfficeDailyCapUsd();
@@ -849,15 +881,32 @@ async function main() {
   }
 
   const customOutDir = process.env.HAWA_QUALIFICATION_OUT_DIR;
-  const outputDir = customOutDir
-    ? path.resolve(process.cwd(), customOutDir)
-    : path.resolve(
-        process.cwd(),
-        'output/proofs/2026-09-17-research-grade-pipeline/T5_FULL_QUALIFICATION'
-      );
+  // Required: the old default was the 2026-09-17 T5 evidence folder, which a bare run overwrote.
+  if (!customOutDir) {
+    console.error('Set HAWA_QUALIFICATION_OUT_DIR to a fresh directory (or a checkpointed one to resume).');
+    process.exit(2);
+  }
+  const outputDir = path.resolve(process.cwd(), customOutDir);
   const briefsDir = path.join(outputDir, 'briefs');
   const journalsDir = path.join(outputDir, 'JOURNALS');
   fs.mkdirSync(briefsDir, { recursive: true });
+  // What produced this directory, for anyone — or any tool, like the T8 packager — reading it later.
+  fs.writeFileSync(
+    path.join(outputDir, 'RUN_MANIFEST.json'),
+    JSON.stringify(
+      {
+        briefSet,
+        briefs: BRIEFS.map((b) => b.id),
+        dryRun: Boolean(DRY_RUN_URL),
+        modelTier: activeModelTier(),
+        models: { layout: resolveModel('layout'), critique: resolveModel('critique'), judge: resolveModel('judge') },
+        startedAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
   fs.mkdirSync(journalsDir, { recursive: true });
 
   const client = new OpenAiStudioClient({
@@ -890,14 +939,14 @@ async function main() {
         if (!id) continue;
         // Resolve the brief definition and its canonical index from source, never from the
         // checkpoint copy, so a stale or partial checkpoint cannot misreport size or language.
-        const briefIdx = QUALIFICATION_BRIEFS.findIndex((b) => b.id === id);
+        const briefIdx = BRIEFS.findIndex((b) => b.id === id);
         if (briefIdx < 0) {
           console.warn(`[P10 RESUME] Checkpoint row ${id} is not a known brief; it will be re-run.`);
           continue;
         }
         results.push({
           ...row,
-          brief: QUALIFICATION_BRIEFS[briefIdx],
+          brief: BRIEFS[briefIdx],
           briefIndex: briefIdx,
           ledgerRows: allLedgerRows.filter((lr) => lr.brief_id === id),
         } as any);
@@ -919,11 +968,11 @@ async function main() {
     }
   }
 
-  for (let i = 0; i < QUALIFICATION_BRIEFS.length; i += concurrency) {
-    const batch = QUALIFICATION_BRIEFS.slice(i, i + concurrency);
+  for (let i = 0; i < BRIEFS.length; i += concurrency) {
+    const batch = BRIEFS.slice(i, i + concurrency);
     console.log(
       `\n--- Dispatching Batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(
-        QUALIFICATION_BRIEFS.length / concurrency
+        BRIEFS.length / concurrency
       )} (${batch.map((b) => b.id).join(', ')}) ---`
     );
 
@@ -1096,15 +1145,17 @@ async function main() {
     briefsWithStandIns.length === 0 &&
     allLedgerRows.length >= expectedCalls;
   const devTier = isDevModelTier();
-  const qualificationVerdict = DRY_RUN_URL
+  const qualificationVerdict = briefSet === 'compare'
+    ? `**T8 DESIGN RUN — NOT A QUALIFICATION RUN.** v3 designs of the ten compare briefs, for the owner's blind test. The qualification gates below do not apply to this set.${DRY_RUN_URL ? ' It was also a dry run: the designs came from a stand-in.' : ''}`
+    : DRY_RUN_URL
     ? `**DRY RUN — NOT A QUALIFICATION RUN.** Every model call went to a local stand-in at ${DRY_RUN_URL}. This proves the runner's plumbing, not the pipeline's quality.`
     : devTier
     ? `**NOT A QUALIFICATION RUN.** This ran on the ${activeModelTier()} model tier (${resolveModel('layout')}), not the production model. Its scores describe the cheap tier and cannot be read as production evidence.`
     : failures.length > 0
-      ? `**PARTIAL — NOT A QUALIFICATION PASS.** ${failures.length} of ${QUALIFICATION_BRIEFS.length} briefs never ran.`
+      ? `**PARTIAL — NOT A QUALIFICATION PASS.** ${failures.length} of ${BRIEFS.length} briefs never ran.`
       : allGatesPass
-        ? `**PASS** — all ${QUALIFICATION_BRIEFS.length} briefs completed and every gate met.`
-        : `**FAIL** — all ${QUALIFICATION_BRIEFS.length} briefs completed but at least one gate was not met.`;
+        ? `**PASS** — all ${BRIEFS.length} briefs completed and every gate met.`
+        : `**FAIL** — all ${BRIEFS.length} briefs completed but at least one gate was not met.`;
 
   // 1. Generate Multi-Row LEDGER.csv (one row per model call)
   const ledgerHeader =
@@ -1133,9 +1184,9 @@ async function main() {
   fs.writeFileSync(csvPath, csvHeader + csvBody, 'utf8');
 
   // 3. Generate P10_QUALIFICATION.md
-  const mdReport = `# P10 Full Qualification Report: ${QUALIFICATION_BRIEFS.length} Held-Out Briefs (Multi-Stage Live Run)
+  const mdReport = `# P10 Full Qualification Report: ${BRIEFS.length} Held-Out Briefs (Multi-Stage Live Run)
 
-**Briefs attempted:** ${QUALIFICATION_BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
+**Briefs attempted:** ${BRIEFS.length} · **completed:** ${results.length} · **failed:** ${failures.length}${failures.length ? ' — ' + failures.map((f) => f.briefId + ': ' + f.reason).join('; ') : ''}
 
 Verdict: ${qualificationVerdict}
 
