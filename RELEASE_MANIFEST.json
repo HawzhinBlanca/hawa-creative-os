@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-19T22:19:18.771Z",
+  "generatedAt": "2026-09-19T23:01:06.403Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,34 +19,25 @@
     ]
   },
   "build": {
-    "commit": "eb11ac63bb716f99df172f93baf8798cf871c0d2",
+    "commit": "81bb4f57506ede834a4a4e731c9957aef8bf48cb",
     "treeClean": false,
     "uncommittedFiles": [
       "M apps/core/src/app.ts",
-      "M apps/core/src/services/canva-design-planner.ts",
       "M apps/core/src/services/design-studio/design-studio-service.ts",
-      "M apps/core/src/services/design-studio/stages/v3.stage.ts",
-      "M apps/core/src/services/telegram-classifier.ts",
-      "M packages/creative/src/editable-transfer.ts",
-      "M packages/creative/src/index.ts",
-      "M packages/creative/src/studio/hard-qa.ts",
-      "M packages/creative/src/studio/layout-generator-v3.ts",
-      "M packages/creative/src/studio/render-layout-v2.ts",
-      "M packages/creative/src/studio/studio-normalize.ts",
+      "M apps/core/src/services/design-studio/stages/brief.stage.ts",
+      "M apps/worker/src/canva-draft-workflow.ts",
+      "M package.json",
+      "M packages/creative/src/studio/art-generator-v3.ts",
       "M packages/creative/src/studio/transfer-v2.ts",
-      "M packages/creative/test/r08-transfer-fidelity.test.ts",
-      "?? apps/core/test/intake-long-invitation.test.ts",
-      "?? apps/core/test/intake-unicode-routing.test.ts",
-      "?? apps/core/test/judge-input-has-text.test.ts",
-      "?? apps/core/test/studio-asset-resolution.test.ts",
-      "?? apps/core/test/telegram-classifier-unicode.test.ts",
-      "?? packages/creative/src/studio/asset-paths.ts",
-      "?? packages/creative/test/asset-paths.test.ts",
-      "?? packages/creative/test/fixtures/cheap-tier-stroke-slab-brief_08.json",
-      "?? packages/creative/test/stroke-width-slab.test.ts",
-      "?? packages/creative/test/transfer-tracking.test.ts"
+      "M scripts/proofs/reprepare_stored_runs.mjs",
+      "?? apps/core/test/late-reference-rebrief.test.ts",
+      "?? apps/core/test/terminal-notification-durability.test.ts",
+      "?? apps/worker/test/canva-draft-workflow-polling.test.ts",
+      "?? packages/creative/test/gate-modes.test.ts",
+      "?? packages/creative/test/transfer-art-scrim.test.ts",
+      "?? scripts/proofs/gate-baseline.json"
     ],
-    "commitTimestamp": "2026-09-19T23:09:03+03:00",
+    "commitTimestamp": "2026-09-20T01:39:34+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -63,7 +54,7 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "c90c3244ab703c6f430146f127106ced2f920218fd1fc37cad9cecb1312ec7ee",
+        "apps/core/src/app.ts": "7926fee664bed0b86ad020a5dc01064ba459016d5c55df6f5ef2043b31c51dc7",
         "apps/core/src/index.ts": "a51b02d6c1f4ddb6662746c6f74f79f1e4988773617079a12110815e42b36d34",
         "packages/integrations/src/google-publisher.ts": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60"
       }
@@ -116,5 +107,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "6fa67284bde100df0b6088120980c2c26ff9d9b5f16c560ebbc38e62316ecdad"
+  "sha256": "af0c01fbc13cf4ee74571e634092a42576b2d66acaa173e192e39c28c9d98b33"
 }

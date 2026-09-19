@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
-import type { StudioLayoutV2 } from './layout-v2.js';
+import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
 import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm } from './render-layout-v2.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
@@ -18,6 +18,115 @@ export function keepCompoundsWhole(text: string): string {
 
 export interface TransferV2Options extends TransferOptions {
   artBuffer?: Buffer;
+}
+
+/**
+ * The pixel size in a PNG's IHDR chunk, or null when the buffer is not a PNG. Read from the header
+ * rather than decoded, because the only thing the deck needs from the art is its aspect.
+ */
+export function pngPixelSize(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 24) return null;
+  if (buffer.readUInt32BE(0) !== 0x89504e47 || buffer.readUInt32BE(4) !== 0x0d0a1a0a) return null;
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return null;
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/** One flat piece of the scrim, in layout pixels. */
+export interface ScrimShape {
+  kind: 'rect' | 'ellipse';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: Hex;
+  opacity: number;
+}
+
+/** The alpha a single step of the scrim may span before the ramp is cut into more steps. */
+const SCRIM_OPACITY_STEP = 0.05;
+/** Every step is a layer the client has to scroll past in Canva, so the ramp is capped. */
+const SCRIM_MAX_STEPS = 12;
+/** pptx alpha is whole percent, so anything under half a percent would be written as invisible. */
+const SCRIM_MIN_VISIBLE_OPACITY = 0.005;
+
+function scrimStepCount(start: number, end: number): number {
+  const delta = Math.abs(start - end);
+  if (delta < SCRIM_MIN_VISIBLE_OPACITY) return 1;
+  return Math.min(SCRIM_MAX_STEPS, Math.max(2, Math.ceil(delta / SCRIM_OPACITY_STEP)));
+}
+
+/**
+ * The art scrim as flat shapes the deck can hold.
+ *
+ * The renderer draws it as one SVG gradient rect over the art box. PPTX has `a:gradFill`, but
+ * pptxgenjs 4.0.1 cannot write it (`ShapeFillProps.type` is only 'none' | 'solid'), so the ramp is
+ * approximated by pieces of constant alpha, each sampled at its own midpoint. Residual difference
+ * against the preview: the deck's scrim is stepped, not continuous, by at most
+ * |opacityStart - opacityEnd| / 12; and the pieces are separate objects in Canva rather than one
+ * shape with a gradient fill.
+ *
+ * Vertical and horizontal scrims tile the box, so each piece carries its target alpha directly.
+ * A radial scrim nests, and stacking the same colour gives 1 - product(1 - alpha), so each ring
+ * carries only what it has to add on top of the rings already under it.
+ */
+export function scrimShapesForBox(box: Box, scrim: NonNullable<ArtConfig['scrim']>): ScrimShape[] {
+  const { color, opacityStart: start, opacityEnd: end, direction } = scrim;
+  const steps = scrimStepCount(start, end);
+  const at = (t: number) => start + (end - start) * t;
+
+  if (steps === 1) {
+    return [{ kind: 'rect', x: box.x, y: box.y, width: box.width, height: box.height, color, opacity: at(0.5) }];
+  }
+
+  if (direction === 'radial') {
+    // Nested ellipses can only darken inward. A radial scrim that grows stronger outward has no
+    // representation here at all, so it collapses to its mean rather than being drawn inside out.
+    if (start < end) {
+      return [{ kind: 'rect', x: box.x, y: box.y, width: box.width, height: box.height, color, opacity: at(0.5) }];
+    }
+    const shapes: ScrimShape[] = [];
+    // Outside the inscribed ellipse an SVG radial gradient clamps to its last stop, so a plain
+    // rectangle at that stop sits under the rings and fills the corners.
+    if (end >= SCRIM_MIN_VISIBLE_OPACITY) {
+      shapes.push({ kind: 'rect', x: box.x, y: box.y, width: box.width, height: box.height, color, opacity: end });
+    }
+    let composited = end;
+    for (let j = steps - 1; j >= 0; j--) {
+      const own = composited >= 1 ? 0 : (at((j + 0.5) / steps) - composited) / (1 - composited);
+      if (own < SCRIM_MIN_VISIBLE_OPACITY) continue;
+      const fraction = (j + 1) / steps;
+      shapes.push({
+        kind: 'ellipse',
+        x: box.x + (box.width * (1 - fraction)) / 2,
+        y: box.y + (box.height * (1 - fraction)) / 2,
+        width: box.width * fraction,
+        height: box.height * fraction,
+        color,
+        opacity: own,
+      });
+      composited += own * (1 - composited);
+    }
+    return shapes;
+  }
+
+  const shapes: ScrimShape[] = [];
+  for (let i = 0; i < steps; i++) {
+    const opacity = at((i + 0.5) / steps);
+    if (opacity < SCRIM_MIN_VISIBLE_OPACITY) continue;
+    if (direction === 'horizontal') {
+      // Edges are rounded off the running total, not accumulated, so the pieces tile the box.
+      const x0 = box.x + Math.round((box.width * i) / steps);
+      const x1 = box.x + Math.round((box.width * (i + 1)) / steps);
+      shapes.push({ kind: 'rect', x: x0, y: box.y, width: x1 - x0, height: box.height, color, opacity });
+    } else {
+      const y0 = box.y + Math.round((box.height * i) / steps);
+      const y1 = box.y + Math.round((box.height * (i + 1)) / steps);
+      shapes.push({ kind: 'rect', x: box.x, y: y0, width: box.width, height: y1 - y0, color, opacity });
+    }
+  }
+  return shapes;
 }
 
 export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
@@ -194,19 +303,53 @@ export async function encodeStudioTransferV2(
   slide.background = { color: hex(layout.background.color) };
 
   // 1. Art layer (if provided)
-  if (layout.art && options.artBuffer) {
+  if (layout.art) {
     const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
-    // The layer's opacity travels with the image, as the render applies it. Without it Canva drew
-    // generated art at full strength and procedural textures twice as strong as judged.
-    const opacity = typeof layout.art.opacity === 'number' ? layout.art.opacity : 1;
-    slide.addImage({
-      data: `image/png;base64,${options.artBuffer.toString('base64')}`,
-      x: artBox.x / 96,
-      y: artBox.y / 96,
-      w: artBox.width / 96,
-      h: artBox.height / 96,
-      ...(opacity < 1 ? { transparency: Math.round((1 - opacity) * 100) } : {}),
-    });
+    if (![artBox.x, artBox.y, artBox.width, artBox.height].every(Number.isFinite) || artBox.width <= 0 || artBox.height <= 0) {
+      throw new Error('Invalid art box');
+    }
+
+    if (options.artBuffer) {
+      // The layer's opacity travels with the image, as the render applies it. Without it Canva drew
+      // generated art at full strength and procedural textures twice as strong as judged.
+      const opacity = typeof layout.art.opacity === 'number' ? layout.art.opacity : 1;
+      // The renderer draws the art with preserveAspectRatio="xMidYMid slice", so it covers the box
+      // and the overflow is cropped evenly. Without `sizing: cover` pptxgenjs stretches the image
+      // to the box instead: gpt-image-2.5-sunburst returns 1024x1024 on the dev tier production
+      // runs, so on a 1080x1920 story the art reached Canva horizontally squeezed by 1.78x against
+      // the preview the judge scored: the preview scales the square by max(w,h)/1024 and crops,
+      // while the stretch fits the same square to the box.
+      const pixels = pngPixelSize(options.artBuffer);
+      slide.addImage({
+        data: `image/png;base64,${options.artBuffer.toString('base64')}`,
+        x: artBox.x / 96,
+        y: artBox.y / 96,
+        // `cover` reads the image's aspect off these two, and then the sizing box sets the placed
+        // extent, so the natural pixel size goes here and the art box goes in `sizing`.
+        w: (pixels ? pixels.width : artBox.width) / 96,
+        h: (pixels ? pixels.height : artBox.height) / 96,
+        ...(pixels ? { sizing: { type: 'cover', w: artBox.width / 96, h: artBox.height / 96 } } : {}),
+        ...(opacity < 1 ? { transparency: Math.round((1 - opacity) * 100) } : {}),
+      });
+    }
+
+    // The renderer draws the scrim whether or not an art image was produced, so the deck does too.
+    // It used to carry no scrim at all, which left Canva showing text over unmuted art while the
+    // preview that QA and the judge scored had the wash over it.
+    if (layout.art.scrim) {
+      const scrim = layout.art.scrim;
+      hex(scrim.color);
+      for (const piece of scrimShapesForBox(artBox, scrim)) {
+        slide.addShape(piece.kind === 'ellipse' ? pptx.ShapeType.ellipse : pptx.ShapeType.rect, {
+          x: piece.x / 96,
+          y: piece.y / 96,
+          w: piece.width / 96,
+          h: piece.height / 96,
+          fill: { color: hex(piece.color), transparency: Math.round((1 - piece.opacity) * 100) },
+          line: { color: hex(piece.color), transparency: 100 },
+        });
+      }
+    }
   }
 
   // 2. Shapes

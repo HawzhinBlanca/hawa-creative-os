@@ -91,7 +91,19 @@ export const CREATIVE_BRIEF_SCHEMA = {
   additionalProperties: false,
 };
 
-export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
+const ATTACHED_WITH_THE_REQUEST =
+  "The client attached the image shown. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it. The client's words above say what they sent it for.";
+
+// The owner sends the request text and the reference photo as two Telegram messages, and the photo
+// carries no caption at all, so the request never mentions an image. Told the wording above, which
+// sends the model to the client's words for what the image is for, it has nothing connecting the
+// two and can answer referenceRole 'none' for a reference the client did send. How the image
+// arrived is the only evidence there is, so the brief is given it.
+const SENT_JUST_AFTER_THE_REQUEST =
+  "The client sent the image shown as a separate message moments after the request above, with no caption. That is how this office receives a reference, so judge it from the image alone: unless it is plainly the client's own logo or emblem, it is the design they want followed. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it.";
+
+/** `lateReference`: the image reached the run after this brief was first written (studio service). */
+export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: boolean }): Promise<CreativeBrief> {
   const systemPrompt = buildP0SystemPrompt({
     referencePackJson: JSON.stringify(ctx.referencePack),
     promotedRules: ctx.promotedRules || 'None',
@@ -117,7 +129,7 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
     prompt: attached
-      ? `${userPrompt}\n\nThe client attached the image shown. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it. The client's words above say what they sent it for.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
+      ? `${userPrompt}\n\n${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST}\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
       : `${userPrompt}\n\nFill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else.`,
     ...(attached ? { images: [{ mediaType: attached[1], data: attached[2] }] } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
