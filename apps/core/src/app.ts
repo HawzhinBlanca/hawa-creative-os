@@ -2286,6 +2286,9 @@ export function createApp(options?: CreateAppOptions) {
    * The approval a delivery must honour: the task's current approval, from memory or, after a
    * restart, from durable storage. Its pinned exports are what gets delivered.
    */
+  const NO_APPROVAL_TO_DELIVER =
+    'Nothing to deliver: the task has no approval. Approve in the Desk with the captured export selected.';
+
   async function findApprovalForDelivery(
     tenantId: string,
     taskId: string,
@@ -2352,18 +2355,16 @@ export function createApp(options?: CreateAppOptions) {
       approvalId: options?.approvalId,
       allowInvalidated: options?.policy === 'deliver_approved_stored',
     });
+    if (!approval) {
+      return { ok: false, status: 422, code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
+    }
     const deliverables = await loadPinnedDeliverables(
       deliverableStore,
       { tenantId: deliveryTenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
-      approval?.pinnedExports
+      approval.pinnedExports
     );
-    if (!approval || !deliverables.ok) {
-      return {
-        ok: false,
-        status: 422,
-        code: deliverables.ok ? 'NO_PINNED_EXPORTS' : deliverables.code,
-        message: deliverables.ok ? 'Nothing to deliver: the task has no approval.' : deliverables.message,
-      };
+    if (!deliverables.ok) {
+      return { ok: false, status: 422, code: deliverables.code, message: deliverables.message };
     }
 
     const isDeliverApprovedStored = options?.policy === 'deliver_approved_stored';
@@ -2642,7 +2643,13 @@ export function createApp(options?: CreateAppOptions) {
     if (isProduction && !isIntakeOpen && (!telegramIntakeUsers.length || !telegramIntakeUsers.includes(verifiedSender))) {
       return problem(c, 403, 'Forbidden', 'Sender is not in the configured office allowlist');
     }
-    if (json.callback_query || /^\/(approve|publish|revise|reject)\b/i.test(json.message?.text || '')) {
+    // Chat actions never approve or modify a design (ADR-022). The command text is read from every
+    // place the command dispatcher below reads it: checking only message.text let a channel post or a
+    // bare-text body through to /approve, which then created the named task out of nothing.
+    const commandSource = json.message || json.channel_post || json;
+    const commandText = String(commandSource?.text || commandSource?.caption || json.text || '');
+    // Prefix match, as the bridge's handleCommand uses: "/approve_now <id>" is dispatched as /approve.
+    if (json.callback_query || /^\s*\/(approve|publish|revise|reject)/i.test(commandText)) {
       if (json.callback_query?.id) {
         await telegramBridge?.answerCallbackQuery(
           json.callback_query.id,
@@ -2693,26 +2700,16 @@ export function createApp(options?: CreateAppOptions) {
         targetAction = parsed.action;
       }
 
-      let task = tasks.get(targetTaskId);
+      // A button acts only on a task Core holds; an unknown id is refused, never made up.
+      const task = await resolveTaskWithFallback(targetTaskId);
       if (!task) {
-        task = {
-          id: targetTaskId,
-          tenantId: 'tenant-default',
-          clientId: KAAE_CLIENT_ID,
-          status: 'AWAITING_APPROVAL',
-          title: 'KAAE: Kurdistan Accrediting Association for Education Invitation',
-          sourcePlatform: 'telegram',
-          sourceChannelId: String(cb.message?.chat?.id || cb.from?.id || '450405554'),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        tasks.set(targetTaskId, task);
+        await telegramBridge.answerCallbackQuery(cb.id, `❌ Task ${targetTaskId} was not found. Nothing was changed.`, true);
+        return problem(c, 404, 'Task Not Found', `Task ${targetTaskId} does not exist; nothing was approved or changed`);
       }
 
       const chatId = cb.message?.chat?.id || cb.from?.id;
 
       if (targetAction === 'approve') {
-        await telegramBridge.answerCallbackQuery(cb.id, '✅ Campaign Approved & Publishing!');
         const publishRes = await executeOmnichannelPublish(
           targetTaskId,
           { type: 'adapter', id: String(cb.from?.id || 'telegram') },
@@ -2720,9 +2717,12 @@ export function createApp(options?: CreateAppOptions) {
           true
         );
 
+        // The answer reports the outcome; it used to announce "Approved & Publishing" before either happened.
         if (!publishRes.ok) {
+          await telegramBridge.answerCallbackQuery(cb.id, `❌ ${(publishRes as any).message || 'Publishing failed'}`, true);
           return problem(c, (publishRes as any).status || 500, (publishRes as any).message || 'Omnichannel publishing failed');
         }
+        await telegramBridge.answerCallbackQuery(cb.id, '✅ Approved and published');
 
         broadcast('task:approved', { taskId: targetTaskId, approvedBy: cb.from?.id, via: 'telegram' });
 
@@ -2862,20 +2862,14 @@ export function createApp(options?: CreateAppOptions) {
           if (telegramAllowedUsers.length > 0 && !telegramAllowedUsers.includes(senderId)) {
             return problem(c, 403, 'Forbidden', `User ${senderId} is not authorized to approve tasks`);
           }
-          let task = tasks.get(cmdReply.taskId);
+          // /approve acts only on a task Core holds; an unknown id is refused, never made up.
+          const task = await resolveTaskWithFallback(cmdReply.taskId);
           if (!task) {
-            task = {
-              id: cmdReply.taskId,
-              tenantId: 'tenant-default',
-              clientId: KAAE_CLIENT_ID,
-              status: 'AWAITING_APPROVAL',
-              title: `Task ${cmdReply.taskId}`,
-              sourcePlatform: 'telegram',
-              sourceChannelId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            tasks.set(cmdReply.taskId, task);
+            await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+              text: `⚠️ Task <code>${escapeTelegramHtml(cmdReply.taskId)}</code> was not found. Nothing was approved.`,
+              parse_mode: 'HTML',
+            });
+            return problem(c, 404, 'Task Not Found', `Task ${cmdReply.taskId} does not exist; nothing was approved`);
           }
           const publishRes = await executeOmnichannelPublish(
             cmdReply.taskId,
@@ -2884,6 +2878,10 @@ export function createApp(options?: CreateAppOptions) {
             true
           );
           if (!publishRes.ok) {
+            await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+              text: `⚠️ Not approved or published: ${escapeTelegramHtml((publishRes as any).message || 'publishing failed')}`,
+              parse_mode: 'HTML',
+            });
             return problem(c, (publishRes as any).status || 500, (publishRes as any).message || 'Omnichannel publishing failed');
           }
           broadcast('task:approved', { taskId: cmdReply.taskId, approvedBy: sourceChannelId, via: 'telegram' });
@@ -2897,20 +2895,14 @@ export function createApp(options?: CreateAppOptions) {
           await telegramBridge.dispatchOutboundMessage(sourceChannelId, notice);
           return c.json({ ok: true, command: true, action: 'approve', taskId: cmdReply.taskId, status: 'COMPLETE', publishRes });
         } else if (cmdReply.action === 'revision' && cmdReply.taskId) {
-          let task = tasks.get(cmdReply.taskId);
+          // /revise acts only on a task Core holds; an unknown id is refused, never made up.
+          const task = await resolveTaskWithFallback(cmdReply.taskId);
           if (!task) {
-            task = {
-              id: cmdReply.taskId,
-              tenantId: 'tenant-default',
-              clientId: KAAE_CLIENT_ID,
-              status: 'AWAITING_APPROVAL',
-              title: `Task ${cmdReply.taskId}`,
-              sourcePlatform: 'telegram',
-              sourceChannelId,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            tasks.set(cmdReply.taskId, task);
+            await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+              text: `⚠️ Task <code>${escapeTelegramHtml(cmdReply.taskId)}</code> was not found. No revision was logged.`,
+              parse_mode: 'HTML',
+            });
+            return problem(c, 404, 'Task Not Found', `Task ${cmdReply.taskId} does not exist; no revision was logged`);
           }
           task.status = 'IN_PROGRESS';
           events.get(cmdReply.taskId)?.push({
@@ -5004,18 +4996,16 @@ export function createApp(options?: CreateAppOptions) {
       allowInvalidated: policy === 'deliver_approved_stored',
     });
     const clientSlug = String(client.name || 'client').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    if (!approval) {
+      return problem(c, 422, 'Nothing Approved To Deliver', NO_APPROVAL_TO_DELIVER);
+    }
     const deliverables = await loadPinnedDeliverables(
       deliverableStore,
       { tenantId: auth.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
-      approval?.pinnedExports
+      approval.pinnedExports
     );
-    if (!approval || !deliverables.ok) {
-      return problem(
-        c,
-        422,
-        'Nothing Approved To Deliver',
-        deliverables.ok ? 'The task has no approval to deliver.' : deliverables.message
-      );
+    if (!deliverables.ok) {
+      return problem(c, 422, 'Nothing Approved To Deliver', deliverables.message);
     }
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
