@@ -1,3 +1,4 @@
+import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { renderAnnotatedLayoutV2, type ElementBoxAnnotation, type RenderLayoutOptions, measureWrappedLines } from './render-layout-v2.js';
 import {
@@ -48,6 +49,8 @@ export interface BoxCritiqueResult {
 }
 
 export interface GenerateBoxCritiqueOptions {
+  /** The client's style reference: the critique says where the design departs from it. */
+  reference?: ClientReference;
   client?: OpenAiStudioClient;
   openaiApiKey?: string;
   fetchFn?: typeof fetch;
@@ -266,7 +269,7 @@ Identify any spatial, alignment, margin, or hierarchy defects and return actiona
     {
       role: 'user',
       content: [
-        { type: 'text', text: factsBlock },
+        { type: 'text', text: options.reference ? `${factsBlock}\n\n${clientReferenceInstruction(options.reference)} Report where the design departs from it as comments.` : factsBlock },
         {
           type: 'image_url',
           image_url: {
@@ -274,6 +277,7 @@ Identify any spatial, alignment, margin, or hierarchy defects and return actiona
             detail: options.detail || 'low',
           },
         },
+        ...(options.reference ? [clientReferencePart(options.reference)] : []),
       ],
     },
   ];

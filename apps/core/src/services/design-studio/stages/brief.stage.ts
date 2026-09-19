@@ -52,6 +52,17 @@ export const CREATIVE_BRIEF_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
     },
+    referenceRole: {
+      type: 'string',
+      enum: ['none', 'logo', 'style_reference'],
+      description:
+        "What the attached image is: 'logo' if it is the client's logo or emblem, 'style_reference' if it shows a design, layout, colour or mood the client wants followed, 'none' if no image is attached or it is unrelated.",
+    },
+    referenceNotes: {
+      type: 'string',
+      description:
+        "For a style reference: what to take from it, concretely (composition, where colour and ornament sit, texture, type treatment, mood). Empty otherwise.",
+    },
     requestedBackground: {
       type: 'string',
       description:
@@ -72,6 +83,8 @@ export const CREATIVE_BRIEF_SCHEMA = {
     'kurdishLeads',
     'riskFlags',
     'requestedBackground',
+    'referenceRole',
+    'referenceNotes',
   ],
   additionalProperties: false,
 };
@@ -98,14 +111,23 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
     imageryOption,
   });
 
+  const attached = ctx.attachedImage?.match(/^data:([^;]+);base64,(.+)$/);
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
-    prompt: userPrompt,
+    prompt: attached
+      ? `${userPrompt}\n\nThe client attached the image shown. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it. The client's words above say what they sent it for.`
+      : userPrompt,
+    ...(attached ? { images: [{ mediaType: attached[1], data: attached[2] }] } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',
   });
 
   const { brief, dropped } = normalizeBriefRoles(response.data, ctx.copyBlocks.length);
+  // Without an image there is nothing to follow, whatever the model answered.
+  if (!attached) {
+    brief.referenceRole = 'none';
+    brief.referenceNotes = '';
+  }
   if (dropped.length > 0) {
     console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }

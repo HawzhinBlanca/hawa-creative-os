@@ -1,3 +1,4 @@
+import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import {
@@ -93,6 +94,8 @@ export interface TournamentResult {
 }
 
 export interface JudgeOptions {
+  /** The client's style reference: of two sound designs, the one closer to it wins. */
+  reference?: ClientReference;
   client?: OpenAiStudioClient;
   openaiApiKey?: string;
   fetchFn?: typeof fetch;
@@ -310,9 +313,15 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
     {
       role: 'user',
       content: [
-        { type: 'text', text: factsPrompt },
+        {
+          type: 'text',
+          text: options.reference
+            ? `${factsPrompt}\n\n${clientReferenceInstruction(options.reference)} Image 3 is that reference. Faithfulness to it and to the client's instructions weighs in every dimension.`
+            : factsPrompt,
+        },
         { type: 'image_url', image_url: { url: b64A, detail: 'low' } },
         { type: 'image_url', image_url: { url: b64B, detail: 'low' } },
+        ...(options.reference ? [clientReferencePart(options.reference)] : []),
       ],
     },
   ];
