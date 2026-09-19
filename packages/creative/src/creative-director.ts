@@ -553,12 +553,16 @@ export class CreativeDirectorRunner {
     } else if (templateType === 'certificate') {
       const recipientBlock = brief.exactCopy.find((c) => c.role === 'headline') || brief.exactCopy[0];
       const programBlock = brief.exactCopy.find((c) => c.role === 'subheadline') || brief.exactCopy[1];
+      const recipientName = customParams?.recipientName || recipientBlock?.text;
+      const programName = customParams?.programName || programBlock?.text;
+      // A certificate names a real recipient and programme. Without them there is nothing to certify,
+      // and no name is invented. Dates are drawn only when given.
+      if (!recipientName || !programName) {
+        throw new Error('COPY_REQUIRED: a certificate needs the recipient and programme names. None will be invented.');
+      }
       return buildKaaeCertificateOperations({
-        recipientName: customParams?.recipientName || recipientBlock?.text || 'د. ڕێبوار ئەحمەد محەمەد',
-        programName: customParams?.programName || programBlock?.text || 'پرۆگرامی متمانەبەخشی نیشتمانی بۆ خوێندنی باڵا',
-        startDate: customParams?.startDate || '2025-09-01',
-        endDate: customParams?.endDate || '2026-06-30',
-        issueDate: customParams?.issueDate || '2026-09-06',
+        recipientName,
+        programName,
         language: brief.primaryLanguage === 'ckb' ? 'ckb' : 'en',
         logoSha256: KAAE_PRIMARY_LOGO_SHA256,
         ...customParams,
@@ -612,17 +616,16 @@ export class CreativeDirectorRunner {
       const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
       const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
 
+      // Copy comes from the caller or the brief, in the language of its slot. When neither has it the
+      // slot stays empty and the template leaves it out; nothing is invented.
+      const firstInLanguage = (language: 'en' | 'ckb', index: number) =>
+        brief.exactCopy.filter((c) => c.language === language)[index]?.text;
       const headlineEnResolved =
-        customParams?.headlineEn || enHeadline?.text || (isEnglishOnly ? brief.exactCopy[0]?.text || 'National Standards for Quality Assurance in Education' : undefined);
-      const headlineCkbResolved = isEnglishOnly
-        ? undefined
-        : customParams?.headlineCkb || ckbHeadline?.text || (!isEnglishOnly ? brief.exactCopy[0]?.text || 'ڕاگەیاندنی فەرمی ستانداردەکانی متمانەبەخشین' : undefined);
+        customParams?.headlineEn || enHeadline?.text || (isEnglishOnly ? firstInLanguage('en', 0) : undefined);
+      const headlineCkbResolved = isEnglishOnly ? undefined : customParams?.headlineCkb || ckbHeadline?.text || firstInLanguage('ckb', 0);
 
-      const copyEnResolved =
-        customParams?.copyEn || enCopy?.text || (isEnglishOnly ? brief.exactCopy[1]?.text || 'Official accreditation framework and institutional standards.' : undefined);
-      const copyCkbResolved = isEnglishOnly
-        ? undefined
-        : customParams?.copyCkb || ckbCopy?.text || (!isEnglishOnly ? brief.exactCopy[1]?.text || 'دەستەی متمانەبەخشی بە پرۆگرامەکان و دامەزراوەکانی پەروەردە و خوێندنی باڵا بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە هەرێمی کوردستان.' : undefined);
+      const copyEnResolved = customParams?.copyEn || enCopy?.text || (isEnglishOnly ? firstInLanguage('en', 1) : undefined);
+      const copyCkbResolved = isEnglishOnly ? undefined : customParams?.copyCkb || ckbCopy?.text || firstInLanguage('ckb', 1);
 
       const primaryVariant = brief.variants?.[0];
       const width = customParams?.width || primaryVariant?.width || 1080;
