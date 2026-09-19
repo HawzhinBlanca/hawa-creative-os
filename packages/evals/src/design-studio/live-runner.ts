@@ -200,39 +200,97 @@ export class LiveRunner {
       0;
 
     const winnerCand = fullRunData.candidates?.find((c: any) => c.id === winnerId);
-    const winnerScore = winnerCand?.score || fullRunData.winnerScore || 8.5;
+    const winnerScore: number | undefined =
+      typeof winnerCand?.score === 'number'
+        ? winnerCand.score
+        : typeof fullRunData.winnerScore === 'number'
+          ? fullRunData.winnerScore
+          : undefined;
 
-    const canary: CanaryResult = {
-      winnerId: winnerId || '',
-      passed: runObj.judgeStatus !== 'UNRELIABLE',
-      scoreAgainstDegraded1Normal: 9.0,
-      scoreAgainstDegraded1Swapped: 9.0,
-      scoreAgainstDegraded2Normal: 9.0,
-      scoreAgainstDegraded2Swapped: 9.0,
-      verdict: runObj.judgeStatus === 'UNRELIABLE' ? 'UNRELIABLE' : 'RELIABLE',
-    };
+    const canaryJudgments = (fullRunData.judgments || []).filter((j: any) => j.kind === 'canary');
+    let canary: CanaryResult;
+    if (canaryJudgments.length > 0) {
+      const allCanariesPassed = canaryJudgments.every(
+        (j: any) => j.verdict?.passed === true || j.verdict === 'PASS' || (typeof j.verdict?.score === 'number' && j.verdict.score >= 7.0)
+      );
+      canary = {
+        winnerId: winnerId || '',
+        passed: allCanariesPassed && runObj.judgeStatus !== 'UNRELIABLE',
+        scoreAgainstDegraded1Normal: canaryJudgments[0]?.verdict?.scoreNormal,
+        scoreAgainstDegraded1Swapped: canaryJudgments[0]?.verdict?.scoreSwapped,
+        scoreAgainstDegraded2Normal: canaryJudgments[1]?.verdict?.scoreNormal,
+        scoreAgainstDegraded2Swapped: canaryJudgments[1]?.verdict?.scoreSwapped,
+        verdict: runObj.judgeStatus === 'UNRELIABLE' ? 'UNRELIABLE' : (allCanariesPassed ? 'RELIABLE' : 'UNRELIABLE'),
+      };
+    } else {
+      canary = {
+        winnerId: winnerId || '',
+        passed: false,
+        verdict: 'UNMEASURED',
+      };
+    }
 
-    const tournament: TournamentResult = {
-      winnerId: winnerId || '',
-      candidateScores: fullRunData.scores || {},
-      swapConsistencyRate: 1.0,
-      pairwiseRounds: 4,
-    };
+    const tournamentJudgments = (fullRunData.judgments || []).filter((j: any) => j.kind === 'pairwise');
+    let tournament: TournamentResult;
+    if (tournamentJudgments.length > 0 || fullRunData.tournament) {
+      tournament = {
+        winnerId: winnerId || '',
+        candidateScores: fullRunData.scores || {},
+        swapConsistencyRate: fullRunData.tournament?.swapConsistencyRate ?? fullRunData.swapConsistencyRate,
+        pairwiseRounds: tournamentJudgments.length || fullRunData.tournament?.pairwiseRounds,
+      };
+    } else {
+      tournament = {
+        winnerId: winnerId || '',
+        candidateScores: fullRunData.scores || {},
+        swapConsistencyRate: undefined,
+        pairwiseRounds: 0,
+      };
+    }
 
-    const parity: ParityResult = {
-      parity: runObj.stages?.parity?.parity || fullRunData.parity?.parity || 'match',
-      divergences: runObj.stages?.parity?.divergences || fullRunData.parity?.divergences || [],
-      fontSubstituted: runObj.stages?.parity?.fontSubstituted || fullRunData.parity?.fontSubstituted || false,
-      textReflowed: runObj.stages?.parity?.textReflowed || fullRunData.parity?.textReflowed || false,
-      copyVisibleIdentical: runObj.stages?.parity?.copyVisibleIdentical ?? fullRunData.parity?.copyVisibleIdentical ?? true,
-    };
+    const parityStage = runObj.stages?.parity || fullRunData.parity;
+    let parity: ParityResult | undefined = undefined;
+    if (parityStage && (parityStage.parity || parityStage.divergences)) {
+      parity = {
+        parity: parityStage.parity || 'unmeasured',
+        divergences: parityStage.divergences || [],
+        fontSubstituted: parityStage.fontSubstituted ?? false,
+        textReflowed: parityStage.textReflowed ?? false,
+        copyVisibleIdentical: parityStage.copyVisibleIdentical,
+      };
+    }
+
+    const hardQaEscapes: number | undefined =
+      typeof runObj.hardQaEscapes === 'number'
+        ? runObj.hardQaEscapes
+        : typeof runObj.stages?.hardQa?.escapes === 'number'
+          ? runObj.stages.hardQa.escapes
+          : typeof fullRunData.hardQaEscapes === 'number'
+            ? fullRunData.hardQaEscapes
+            : undefined;
+
+    let finalStatus: 'transferred' | 'degraded' | 'failed' | 'incomplete' = 'failed';
+    if (runStatus === 'transferred') {
+      if (!winnerId || !previewSha256 || winnerScore === undefined) {
+        finalStatus = 'incomplete';
+      } else {
+        finalStatus = 'transferred';
+      }
+    } else if (runStatus === 'degraded') {
+      finalStatus = 'degraded';
+    } else {
+      finalStatus = 'failed';
+    }
+
+    const fontFidelity: 'exact' | 'stand-in' | 'unmeasured' =
+      runObj.fontFidelity || fullRunData.fontFidelity || 'unmeasured';
 
     return {
       briefId: brief.id,
       briefName: brief.name,
       language: brief.language,
       dimensions: `${brief.width}x${brief.height}`,
-      status: runStatus === 'transferred' ? 'transferred' : runStatus === 'degraded' ? 'degraded' : 'failed',
+      status: finalStatus,
       ladderRung: runObj.diagnostic?.ladderRung ?? fullRunData.diagnostic?.ladderRung ?? 0,
       rungsTriggered: runObj.diagnostic?.rungsTriggered ?? fullRunData.diagnostic?.rungsTriggered ?? [],
       callsCount,
@@ -241,11 +299,11 @@ export class LiveRunner {
       winnerScore,
       canary,
       tournament,
-      hardQaEscapes: 0,
+      hardQaEscapes,
       canvaDesignId: runObj.planId || fullRunData.plan?.designId || lastResumeData.designId,
       previewSha256,
       parity,
-      fontFidelity: 'stand-in',
+      fontFidelity,
     };
   }
 
@@ -261,17 +319,28 @@ export class LiveRunner {
     const total = results.length;
     const completed = results.filter((r) => r.status === 'transferred').length;
     const degraded = results.filter((r) => r.status === 'degraded').length;
-    const failed = results.filter((r) => r.status === 'failed').length;
+    const failed = results.filter((r) => r.status === 'failed' || r.status === 'incomplete').length;
 
-    const canaryPassed = results.filter((r) => r.canary.passed).length;
+    const canaryMeasured = results.filter((r) => r.canary.verdict !== 'UNMEASURED');
+    const canaryPassed = canaryMeasured.filter((r) => r.canary.passed).length;
     const canaryPassRate = total > 0 ? canaryPassed / total : 0;
 
-    const swapRateSum = results.reduce((acc, r) => acc + r.tournament.swapConsistencyRate, 0);
-    const tournamentSwapConsistencyRate = total > 0 ? swapRateSum / total : 0;
+    const measuredSwapRates = results
+      .map((r) => r.tournament.swapConsistencyRate)
+      .filter((rate): rate is number => typeof rate === 'number');
+    const tournamentSwapConsistencyRate =
+      measuredSwapRates.length > 0
+        ? measuredSwapRates.reduce((a, b) => a + b, 0) / measuredSwapRates.length
+        : 0;
 
-    const scores = results.map((r) => r.winnerScore);
-    const meanWinnerScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    const minWinnerScore = scores.length > 0 ? Math.min(...scores) : 0;
+    const measuredScores = results
+      .map((r) => r.winnerScore)
+      .filter((s): s is number => typeof s === 'number');
+    const meanWinnerScore =
+      measuredScores.length > 0
+        ? measuredScores.reduce((a, b) => a + b, 0) / measuredScores.length
+        : 0;
+    const minWinnerScore = measuredScores.length > 0 ? Math.min(...measuredScores) : 0;
 
     const totalSpent = results.reduce((acc, r) => acc + r.spentUsd, 0);
     const meanSpentUsd = total > 0 ? totalSpent / total : 0;
@@ -279,7 +348,10 @@ export class LiveRunner {
     const totalDuration = results.reduce((acc, r) => acc + r.durationMs, 0);
     const meanDurationSeconds = total > 0 ? totalDuration / total / 1000 : 0;
 
-    const hardQaEscapeCount = results.reduce((acc, r) => acc + r.hardQaEscapes, 0);
+    const hardQaEscapeCount = results.reduce(
+      (acc, r) => acc + (typeof r.hardQaEscapes === 'number' ? r.hardQaEscapes : 0),
+      0
+    );
 
     const parityVerdicts = {
       match: results.filter((r) => r.parity?.parity === 'match').length,

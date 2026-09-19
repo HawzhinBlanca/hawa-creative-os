@@ -22,7 +22,7 @@ export function registerDesignStudioRoutes(
   const protect = (
     fn: (
       c: any,
-      s: { tenantId: string; actorId: string },
+      s: { tenantId: string; actorId: string; role?: string },
       svc: DesignStudioService,
       r: DesignStudioRepository
     ) => Promise<Response>
@@ -64,7 +64,7 @@ export function registerDesignStudioRoutes(
     }
 
     try {
-      return await fn(c, { tenantId: auth.tenantId, actorId: auth.userId }, service, repo);
+      return await fn(c, { tenantId: auth.tenantId, actorId: auth.actorId || auth.userId, role: auth.role }, service, repo);
     } catch (error: any) {
       if (error instanceof CanvaFlowError) {
         return ctx.problem(c, error.status, error.code, error.message);

@@ -4,6 +4,9 @@
  * Provides deterministic pre-flight budget checks and multi-provider token/GPU accounting.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 export interface CostReceipt {
   id: string;
   clientId: string;
@@ -73,8 +76,58 @@ export class CostGovernor {
     'comfyui:sdxl-lightning': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.0003 }
   };
 
-  constructor() {
-    this.seedDefaultClients();
+  private storagePath?: string;
+
+  constructor(options?: { storagePath?: string }) {
+    this.storagePath = options?.storagePath || process.env.HAWA_BUDGETS_FILE;
+    if (this.storagePath && fs.existsSync(this.storagePath)) {
+      try {
+        const raw = fs.readFileSync(this.storagePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        this.hydrateState(parsed);
+      } catch {
+        this.seedDefaultClients();
+      }
+    } else {
+      this.seedDefaultClients();
+    }
+  }
+
+  public exportState(): {
+    budgets: [string, ClientBudgetConfig][];
+    reservations: [string, BudgetReservation][];
+  } {
+    return {
+      budgets: Array.from(this.budgets.entries()),
+      reservations: Array.from(this.reservations.entries()),
+    };
+  }
+
+  public hydrateState(state: {
+    budgets?: [string, ClientBudgetConfig][];
+    reservations?: [string, BudgetReservation][];
+  }): void {
+    if (state.budgets) {
+      for (const [id, b] of state.budgets) {
+        this.budgets.set(id, b);
+      }
+    }
+    if (state.reservations) {
+      for (const [id, r] of state.reservations) {
+        this.reservations.set(id, r);
+      }
+    }
+  }
+
+  public persist(): void {
+    if (!this.storagePath) return;
+    try {
+      const dir = path.dirname(this.storagePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.storagePath, JSON.stringify(this.exportState(), null, 2), 'utf8');
+    } catch {
+      // Non-fatal
+    }
   }
 
   private getCurrentMonth(): string {
@@ -344,6 +397,7 @@ export class CostGovernor {
       budget.receipts.pop();
     }
 
+    this.persist();
     return receipt;
   }
 
@@ -359,6 +413,7 @@ export class CostGovernor {
     } else {
       budget.status = 'HEALTHY';
     }
+    this.persist();
     return budget;
   }
 

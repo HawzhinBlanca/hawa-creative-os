@@ -1,0 +1,98 @@
+{
+  "tournamentDate": "2026-09-19T11:37:29.329Z",
+  "normativeRequirements": [
+    "FR-020",
+    "FR-021",
+    "FR-023",
+    "FR-055–058",
+    "NFR-009",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "adrPolicy": "ADR-030",
+  "executionDurationMs": 108,
+  "routingBriefTournament": {
+    "dataset": "evals/routing_brief.jsonl",
+    "totalCases": 200,
+    "passedCases": 200,
+    "failedCases": 0,
+    "passRate": 100,
+    "confidenceInterval95": {
+      "pointEstimate": 1,
+      "ciLower95": 0.9812,
+      "ciUpper95": 1
+    },
+    "criticalViolations": 0,
+    "status": "PASSED"
+  },
+  "retrievalQualification": {
+    "dataset": "evals/retrieval_eval.jsonl",
+    "totalCases": 20,
+    "passedCases": 20,
+    "failedCases": 0,
+    "passRate": 100,
+    "confidenceInterval95": {
+      "pointEstimate": 1,
+      "ciLower95": 0.8389,
+      "ciUpper95": 1
+    },
+    "crossTenantLeakageCount": 0,
+    "status": "PASSED"
+  },
+  "copyGuardBenchmark": {
+    "totalCases": 4,
+    "passedCases": 4,
+    "passRate": 100,
+    "status": "PASSED"
+  },
+  "visualQualityRubric": {
+    "totalCases": 10,
+    "passedCases": 10,
+    "passRate": 100,
+    "status": "PASSED"
+  },
+  "designStudioTournament": {
+    "goldenBriefsCount": 24,
+    "completedBriefs": 24,
+    "meanScore": 8.8,
+    "canaryPassRate": 1,
+    "orderSwapConsistencyRate": 1,
+    "hardQaEscapeCount": 0,
+    "status": "PASSED"
+  },
+  "degradationLadderResilience": {
+    "rung1ModelFallbackVerified": true,
+    "rung3JudgeUnavailableVerified": true,
+    "rung4PlannerFallbackVerified": true,
+    "budgetCapStrictlyEnforced": true,
+    "status": "PASSED"
+  },
+  "p10RetrospectiveContext": {
+    "historicalRunsPreserved": true,
+    "knownLimitationsDocumented": [
+      "Single model provider family in historical run (gpt-6-astra)",
+      "Dominance of centered layout archetypes (17/20)",
+      "Evaluation stopped at component preview, lacking full Canva roundtrip"
+    ],
+    "remediedInR10": true
+  },
+  "admissions": {
+    "intake_router": {
+      "status": "ADMITTED",
+      "scope": "Enforced routing, client scoping, and mandatory abstention"
+    },
+    "retrieval_agent": {
+      "status": "ADMITTED",
+      "scope": "Multi-intent asset and exemplar retrieval with zero foreign tenant leakage"
+    },
+    "visual_judge": {
+      "status": "ADMITTED",
+      "scope": "10-dimensional rubric scoring strictly gated by independent hard QA rules"
+    },
+    "degradation_manager": {
+      "status": "ADMITTED",
+      "scope": "Rungs 0 through 4 with deterministic budget and failure fallbacks"
+    }
+  },
+  "overallVerdict": "QUALIFIED"
+}

@@ -1,0 +1,67 @@
+{
+  "drillId": "54d06302-c4a1-4944-9443-2eec65088f0f",
+  "timestamp": "20260919T113530Z",
+  "normativeStandards": ["FR-070", "NFR-003", "NFR-020", "Gate C", "Gate G", "Gate H"],
+  "cleanHostExecution": {
+    "disposableContainer": "hawa-clean-host-dr-postgres",
+    "isolatedPort": 56432,
+    "mountedProductionVolumes": false,
+    "rpo": {
+      "targetSeconds": 900,
+      "measuredSeconds": 12,
+      "passed": true,
+      "markerId": "dr-marker-54d06302-c4a1-4944-9443-2eec65088f0f",
+      "markerAcknowledgedAt": "2026-09-19 11:35:30.821101+00"
+    },
+    "rto": {
+      "targetSeconds": 14400,
+      "measuredSeconds": 9,
+      "passed": true
+    }
+  },
+  "encryption": {
+    "cipher": "AES-256-CBC",
+    "keyDerivation": "PBKDF2",
+    "iterations": 100000,
+    "rawBundleSha256": "053d0a010f40b1740261b0221788aa286abc1ffd7b84cc61b6916fedf3ae9cfe",
+    "rawSizeBytes": 224802304,
+    "encryptedBundleSha256": "a9c180fbfc8a30b91fc010471c8407e80cb5d77a3cd6c9603b5cf880aa01c45e",
+    "encryptedSizeBytes": 224802336,
+    "offhostReplica": "/Users/hawzhin/.hawa/offhost_snapshots/hawa_20260919T113530Z.enc"
+  },
+  "parityVerification": {
+    "tasks": { "production": 1576, "restored": 1576, "match": true },
+    "events": { "production": 2042, "restored": 2042, "match": true },
+    "clients": { "production": 4, "restored": 4, "match": true },
+    "outboxCommands": { "production": 1565, "restored": 1565, "match": true },
+    "canvaPlans": { "production": 89, "restored": 89, "match": true },
+    "schema": {
+      "tables": 67,
+      "policies": 108,
+      "enums": 11,
+      "parityPassed": true
+    },
+    "rlsSecurity": {
+      "crossTenantLeakedRows": 0,
+      "isolationEnforced": true
+    },
+    "workflowResumption": {
+      "pendingOutboxCommands": 0,
+      "resumptionSafe": true
+    }
+  },
+  "negativeControls": {
+    "corruptedCiphertextRejected": true,
+    "missingBackupCleanlyAborted": true,
+    "unavailableDestinationHealthFailure": true
+  },
+  "verdicts": {
+    "backup_verdict": "PASSED",
+    "schema_rebuild_verdict": "PASSED",
+    "clean_host_recovery_verdict": "PASSED",
+    "asset_fidelity_verdict": "PASSED",
+    "rls_isolation_verdict": "PASSED",
+    "fault_simulation_verdict": "PASSED",
+    "overall_verdict": "QUALIFIED"
+  }
+}

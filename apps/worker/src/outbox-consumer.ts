@@ -23,6 +23,20 @@ export interface OutboxCommandRecord {
   created_at?: Date | string;
 }
 
+export type DeliveryErrorCategory = 'retryable' | 'permanent' | 'uncertain';
+
+export class OutboxDeliveryError extends Error {
+  constructor(
+    message: string,
+    public readonly category: DeliveryErrorCategory = 'retryable',
+    public readonly code?: string,
+    public readonly detail?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'OutboxDeliveryError';
+  }
+}
+
 export type OutboxCommandHandler = (
   cmd: OutboxCommandRecord,
   db: Kysely<Database>
@@ -192,12 +206,25 @@ export class OutboxConsumer {
             error: errorMessage,
           });
 
+          const isPermanent =
+            (err instanceof OutboxDeliveryError && err.category === 'permanent') ||
+            /CHAT_NOT_FOUND|BOT_BLOCKED|USER_DEACTIVATED|INVALID_RECIPIENT|PERMANENT_REJECTION|CLIENT_REQUIRED|INVALID_DESTINATION/i.test(errorMessage);
+          const isUncertain =
+            (err instanceof OutboxDeliveryError && err.category === 'uncertain') ||
+            /DELIVERY_UNCERTAIN|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE/i.test(errorMessage);
+
           // 4. Retry with exponential backoff or dead-letter in a fresh clean transaction
           try {
             const updated = await withRlsContext(
               this.db,
               { tenantId: cmd.tenant_id, userId, role: 'administrator' },
               async (retryTrx) => {
+                if (isPermanent) {
+                  return await this.outboxRepo.markPermanentFailure(cmd.id, errorMessage, retryTrx);
+                }
+                if (isUncertain) {
+                  return await this.outboxRepo.markUncertain(cmd.id, errorMessage, retryTrx);
+                }
                 return await this.outboxRepo.retryOrDeadLetter(
                   cmd.id,
                   errorMessage,
@@ -210,7 +237,7 @@ export class OutboxConsumer {
             if (updated.state === 'failed') {
               aggregateSummary.deadLettered++;
               console.error(
-                `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) DEAD-LETTERED after ${updated.attempts} attempts: ${errorMessage}`
+                `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) ${isUncertain ? 'UNCERTAIN' : isPermanent ? 'PERMANENT FAILURE' : 'DEAD-LETTERED'} after ${updated.attempts} attempts: ${errorMessage}`
               );
             } else {
               aggregateSummary.retried++;

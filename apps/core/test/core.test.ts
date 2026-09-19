@@ -850,6 +850,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       body: JSON.stringify({ document: { id: 'd', pages: [{ id: 'p1', name: 'main', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'h', type: 'text', text: 'Omnichannel Publishing Test' }] } }),
     });
     const { revisionId: latestRevisionId } = await revRes.json();
+    await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/qa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
     const pinnedBytes = new TextEncoder().encode('approved Drustee export');
     const exportId = exports.add(taskId, 'png', pinnedBytes);
     await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {

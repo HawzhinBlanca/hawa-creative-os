@@ -204,8 +204,16 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
     });
 
     it('accepts access_token query parameter on studio media endpoints with valid token', async () => {
+      const sessionRes = await app.request('/v1/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: testOperatorToken, role: 'operator', displayName: 'Test Operator' }),
+      });
+      expect(sessionRes.status).toBe(201);
+      const session = await sessionRes.json();
+
       const res = await app.request(
-        `/v1/tasks/00000000-0000-0000-0000-000000000001/canva/studio/00000000-0000-0000-0000-000000000002/candidates/00000000-0000-0000-0000-000000000003/preview.png?access_token=${testOperatorToken}`
+        `/v1/tasks/00000000-0000-0000-0000-000000000001/canva/studio/00000000-0000-0000-0000-000000000002/candidates/00000000-0000-0000-0000-000000000003/preview.png?access_token=${session.token}`
       );
       // Fails authorization check if 401; passes auth if not 401 (e.g. 503/404)
       expect(res.status).not.toBe(401);

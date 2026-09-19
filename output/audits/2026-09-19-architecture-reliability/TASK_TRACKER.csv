@@ -1,0 +1,15 @@
+task_id,title,status,proof_status
+R01,"Make evidence truthful and preserve the failing baseline",NOT_STARTED,NOT_RUN
+R02,"Establish exact build, configuration and active workflow identity",NOT_STARTED,NOT_RUN
+R03,"Put authoritative configuration and policies in PostgreSQL",NOT_STARTED,NOT_RUN
+R04,"Enforce principal, tenant, client, task and run scope everywhere",NOT_STARTED,NOT_RUN
+R05,"Make approval an immutable artifact/QC contract",NOT_STARTED,NOT_RUN
+R06,"Make publication restart-safe, concurrency-safe and verifiable",NOT_STARTED,NOT_RUN
+R07,"Close the durable workflow through terminal state and notification",NOT_STARTED,NOT_RUN
+R08,"Prove editable transfer and final output fidelity",NOT_STARTED,NOT_RUN
+R09,"Implement and prove clean-host disaster recovery",NOT_STARTED,NOT_RUN
+R10,"Qualify model quality independently from workflow correctness",NOT_STARTED,NOT_RUN
+R11,"Make the release gate reproducible and non-bypassable",NOT_STARTED,NOT_RUN
+R12,"Measure operations, performance and safe failure behavior",NOT_STARTED,NOT_RUN
+R13,"Complete blinded human quality and operator usability gates",NOT_STARTED,NOT_RUN
+R14,"Controlled deployment and office pilot",NOT_STARTED,NOT_RUN

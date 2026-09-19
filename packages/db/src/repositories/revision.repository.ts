@@ -30,6 +30,7 @@ export interface RecordApprovalParams {
   decisionPayload?: Record<string, unknown>;
   nonce?: string;
   correlationId?: string;
+  expectedTaskVersion?: number;
   qaReport?: Record<string, unknown>;
 }
 
@@ -145,12 +146,23 @@ export class RevisionRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      // 5. Update task with current_design_revision_id and increment version
+      // Invalidate downstream permission on edits (FR-043, R05)
+      await dbClient
+        .updateTable('approvals')
+        .set({
+          decision_payload: sql`jsonb_set(COALESCE(decision_payload, '{}'::jsonb), '{invalidated}', 'true')` as any,
+        })
+        .where('task_id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .execute();
+
+      // 5. Update task with current_design_revision_id, reset state to in_review, increment version
       const nextTaskVersion = Number(task.version) + 1;
       await dbClient
         .updateTable('tasks')
         .set({
           current_design_revision_id: revision.id,
+          state: 'human_review',
           version: nextTaskVersion,
           updated_at: new Date(),
         })
@@ -215,10 +227,18 @@ export class RevisionRepository {
         .selectAll()
         .where('id', '=', params.taskId)
         .where('tenant_id', '=', params.tenantId)
+        .forUpdate()
         .executeTakeFirst();
 
       if (!task) {
         throw new Error(`Task ${params.taskId} not found`);
+      }
+
+      // Optimistic concurrency fencing (CV-15, R05)
+      if (params.expectedTaskVersion !== undefined && Number(task.version) !== Number(params.expectedTaskVersion)) {
+        throw new Error(
+          `Concurrent modification detected: expected task version ${params.expectedTaskVersion}, current version is ${task.version}`
+        );
       }
 
       // Check for stale revision approval
@@ -234,12 +254,14 @@ export class RevisionRepository {
       }
 
       // 2. Ensure verified passing QC run exists (NEVER manufacture fake QA rows)
+      // Earlier PASS then later FAIL cannot qualify: order by created_at desc to inspect the latest run
       let qcRun = await dbClient
         .selectFrom('qc_runs')
         .selectAll()
         .where('task_id', '=', params.taskId)
         .where('design_revision_id', '=', params.revisionId)
         .where('tenant_id', '=', params.tenantId)
+        .orderBy('started_at', 'desc')
         .executeTakeFirst();
 
       if (params.decision === 'approved') {

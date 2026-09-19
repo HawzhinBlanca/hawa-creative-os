@@ -1,0 +1,14 @@
+{
+  "networkAttempts": 0,
+  "clientDna": {
+    "evidenceType": "real HTTP handlers with disposable in-memory state; verified PostgreSQL persistence with hawa.client_dna_versions",
+    "writeStatus": 201,
+    "changed": true,
+    "snapshotAuthor": "operator_1",
+    "recreatedAppPreservedChange": true,
+    "originalVersion": 1,
+    "savedVersion": 2,
+    "recreatedVersion": 2
+  },
+  "timestamp": "2026-09-19T10:45:32Z"
+}

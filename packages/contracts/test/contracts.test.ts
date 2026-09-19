@@ -33,4 +33,33 @@ describe('Contracts: Type & Structure Validation', () => {
     expect(docRef.studio).toBe('HyCanvas');
     expect(docRef.sourceRevision).toBe(1);
   });
+
+  it('contract (R02): validates ReleaseManifest topology and strict flag invariants', async () => {
+    const { validateReleaseManifest } = await import('../src/release-manifest.js');
+
+    const validManifest = {
+      manifestVersion: '1.0.0',
+      topology: { canonical: 'infra/docker/docker-compose.prod.yml' },
+      build: { commit: '664ad55b85930b3cd29c6be170fc13f0d2876f66', treeClean: true },
+      flags: { DESIGN_PIPELINE_V3: 'off', DESIGN_STUDIO_V2: 'off' },
+    };
+
+    const valid = validateReleaseManifest(validManifest);
+    expect(valid.ok).toBe(true);
+
+    // Rejects non-canonical topology
+    const wrongTopology = validateReleaseManifest({
+      ...validManifest,
+      topology: { canonical: 'deployment/docker-compose.yml' },
+    });
+    expect(wrongTopology.ok).toBe(false);
+
+    // Rejects premature flag enabling before admission
+    const enabledFlags = validateReleaseManifest({
+      ...validManifest,
+      flags: { DESIGN_PIPELINE_V3: 'on', DESIGN_STUDIO_V2: 'off' },
+    });
+    expect(enabledFlags.ok).toBe(false);
+  });
 });
+

@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-09-19T09:54:49.700Z",
+  "artifactType": "Audit artifacts, NOT remediation or production qualification",
+  "auditedSource": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "observedProduction": "5180108b824a30551731f11eb9f677abb9f29c65",
+  "rootReplayMeasuredValuesEqualSavedEvidence": true,
+  "validationNotes": [
+    "First whole-document equality check failed because architecture evidence adds provenance fields; corrected comparison checks every raw replay field against its saved counterpart, with no measurement exclusions.",
+    "14 unique remediation tasks, all NOT_STARTED; local Markdown links checked and none missing."
+  ],
+  "files": [
+    {
+      "path": "DURABILITY_FINDINGS.md",
+      "sha256": "7787066d3b3510f16f8dc8ca37764ead0e830df516d672603b69418a50922f84"
+    },
+    {
+      "path": "LOCAL_CHECKS.json",
+      "sha256": "6ee8740e3e5673ba094dda7e0d961f7870aab0a9c1538b4ef306d58a1fdf520b"
+    },
+    {
+      "path": "OFFLINE_ARCHITECTURE_EVIDENCE.json",
+      "sha256": "377921abe89da285b8dce0caa1ccb4217aecdb3bf4d42f86d13d556eb5d8ef81"
+    },
+    {
+      "path": "PROOF_QUALITY_FINDINGS.md",
+      "sha256": "a3bc1eaedcf0c16138839ea7435cc5f67cfee6b637d1a6fd6324c3bf61043abe"
+    },
+    {
+      "path": "PROOF_REQUEST.md",
+      "sha256": "00de4d975cdc2706db0255a9d5cb4b0f5880767cb6d1ed81f3a6d12520331c7e"
+    },
+    {
+      "path": "PUBLICATION_PROBE.json",
+      "sha256": "dd16667a90bd330bb6952c81f784351ed1845875c7abccadbc9422a432f54ed6"
+    },
+    {
+      "path": "PUBLICATION_PROBE.mjs",
+      "sha256": "8bf037af54f6d9502b8d05544dec8b42d967a3d152445d97d79f5b6740e856d2"
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "d3a258aacf8007365f82210dd579c2630a79418f28cf99187b7f912abd7c8ca8"
+    },
+    {
+      "path": "ROOT_REPLAY.json",
+      "sha256": "56bedf3a4c51bf7776b46a23beecc0d39c51f03d008f68bbeae92ccdca9c591d"
+    },
+    {
+      "path": "RUNTIME_EVIDENCE.json",
+      "sha256": "9b7f423bf5c39400af929e44480792356d844f3eae7470f4e6fd811e9cfccccb"
+    },
+    {
+      "path": "SECURITY_ARCHITECTURE_FINDINGS.md",
+      "sha256": "8c0094d7f4188a12994aa4f680235ab4d42fe942c2b432bc3db3805260f1a211"
+    },
+    {
+      "path": "TASK_SHEET.md",
+      "sha256": "aed966c65cb9b7448e41438f3ec6e81cd780454f8d49ab74d871bfbfb2a22e2e"
+    },
+    {
+      "path": "TASK_TRACKER.csv",
+      "sha256": "66c6a2888ec2062e12142dc91e44c7629ec856bddcfcece933c571d4cac41132"
+    },
+    {
+      "path": "offline-architecture-probe.ts",
+      "sha256": "d6adc519ac93dc4d3e55e94bafebef72d6b043de5e69630c12fe5816d1c21d4b"
+    },
+    {
+      "path": "offline-eval-probe-results.json",
+      "sha256": "ef7daa39cc0baaaaec40467c812c11f2704d67b4c15e4677315c2b18cac43228"
+    },
+    {
+      "path": "offline-eval-probes.mjs",
+      "sha256": "d2d3a1bac67a1c54649d4de3f6348e2c90d663ea756a770278a6934378067fe9"
+    }
+  ]
+}

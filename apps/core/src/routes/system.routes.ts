@@ -169,21 +169,41 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
   // Real-time Server-Sent Events (SSE) Stream
   registerRoute('get', '/events/stream', (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) {
+      return problem(c, 401, 'Authentication Required', 'Sign in to stream system events');
+    }
+
     return streamSSE(c, async (stream) => {
       let closed = false;
 
-      const subscriber = async (ev: { id: string; event: string; data: any }) => {
+      const subscriber = (ev: { id: string; event: string; data: any }) => {
         if (closed) return;
-        try {
-          await stream.writeSSE({
-            id: ev.id,
-            event: ev.event,
-            data: JSON.stringify(ev.data),
-          });
-        } catch {
+        // Tenant isolation: discard events for other tenants
+        const evTenantId = ev.data?.tenantId;
+        const isSameTenant = (a?: string, b?: string) => {
+          if (!a || !b) return true;
+          if (a === b) return true;
+          const isDefaultA = a === 'tenant-default' || a === '00000000-0000-4000-a000-000000000001';
+          const isDefaultB = b === 'tenant-default' || b === '00000000-0000-4000-a000-000000000001';
+          return isDefaultA && isDefaultB;
+        };
+        if (!isSameTenant(evTenantId, auth.tenantId) && auth.role !== 'superadmin') {
+          return;
+        }
+        // Client isolation: discard events for other clients when user is client-scoped
+        const evClientId = ev.data?.clientId;
+        if (evClientId && (auth as any).clientId && evClientId !== (auth as any).clientId) {
+          return;
+        }
+        stream.writeSSE({
+          id: ev.id,
+          event: ev.event,
+          data: JSON.stringify(ev.data),
+        }).catch(() => {
           closed = true;
           subscribers.delete(subscriber as any);
-        }
+        });
       };
 
       subscribers.add(subscriber as any);

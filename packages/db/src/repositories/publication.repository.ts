@@ -72,6 +72,18 @@ export class PublicationRepository {
     return await query.executeTakeFirst();
   }
 
+  async findByTaskId(taskId: string, tenantId?: string, trx?: Kysely<Database>) {
+    let query = (trx || this.db)
+      .selectFrom('publications')
+      .selectAll()
+      .where('task_id', '=', taskId)
+      .orderBy('created_at', 'desc');
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.executeTakeFirst();
+  }
+
   async createPublication(params: CreatePublicationParams, trx?: Kysely<Database>) {
     const runner = async (dbClient: Kysely<Database>) => {
       // 1. Check idempotency

@@ -17,6 +17,9 @@ __pycache__
 *.tsbuildinfo
 output/*
 !output/audits/
+!output/repairs/
+output/repairs/*
+!output/repairs/2026-09-19-architecture-remediation/
 !output/memleak/
 !output/research/
 output/research/*

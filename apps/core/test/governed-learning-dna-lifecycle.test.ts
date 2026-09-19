@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createApp } from '../src/app.js';
-import { createDb } from '@hawa/db';
+import { createDb, withRlsContext } from '@hawa/db';
 
 describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollback Lifecycle', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
@@ -9,6 +9,8 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
 
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const drusteeClientId = 'c1000000-0000-4000-8000-000000000003';
+  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
+  const adminUserId = '00000000-0000-4000-b000-000000000002';
 
   const testBearer = process.env.HAWA_ART_DIRECTOR_KEY!;
   const authSessionBearer = `Bearer ${testBearer}`;
@@ -16,6 +18,25 @@ describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollbac
     'Content-Type': 'application/json',
     'Authorization': authSessionBearer,
   };
+
+  beforeAll(async () => {
+    try {
+      await withRlsContext(db, { tenantId: defaultTenantId, userId: adminUserId, role: 'administrator' }, async (trx) => {
+        await (trx as any).deleteFrom('hawa.client_dna_versions').where('client_id', 'in', [drusteeClientId, kaaeClientId]).execute();
+      });
+      // Also reset in-memory DNA version to 1 if it was previously incremented
+      const drusteeDnaRes = await app.request(`/v1/clients/${drusteeClientId}/dna`, { headers: authHeaders });
+      if (drusteeDnaRes.status === 200) {
+        const dna = await drusteeDnaRes.json();
+        if (dna.version > 1) {
+          dna.version = 1;
+          delete dna.__commitMessage;
+        }
+      }
+    } catch {
+      // ignore if table not accessible
+    }
+  });
 
   it('1. Ingests designer artboard refinements and synthesizes candidate rules with SHA-256 evidence', async () => {
     const taskId = `t-learn-${Date.now()}`;

@@ -456,12 +456,22 @@ export class OfflineRunner {
     const canaryPassed = results.filter((r) => r.canary.passed).length;
     const canaryPassRate = total > 0 ? canaryPassed / total : 0;
 
-    const swapRateSum = results.reduce((acc, r) => acc + r.tournament.swapConsistencyRate, 0);
-    const tournamentSwapConsistencyRate = total > 0 ? swapRateSum / total : 0;
+    const measuredSwapRates = results
+      .map((r) => r.tournament.swapConsistencyRate)
+      .filter((rate): rate is number => typeof rate === 'number');
+    const tournamentSwapConsistencyRate =
+      measuredSwapRates.length > 0
+        ? measuredSwapRates.reduce((a, b) => a + b, 0) / measuredSwapRates.length
+        : 0;
 
-    const scores = results.map((r) => r.winnerScore);
-    const meanWinnerScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    const minWinnerScore = scores.length > 0 ? Math.min(...scores) : 0;
+    const measuredScores = results
+      .map((r) => r.winnerScore)
+      .filter((s): s is number => typeof s === 'number');
+    const meanWinnerScore =
+      measuredScores.length > 0
+        ? measuredScores.reduce((a, b) => a + b, 0) / measuredScores.length
+        : 0;
+    const minWinnerScore = measuredScores.length > 0 ? Math.min(...measuredScores) : 0;
 
     const totalSpent = results.reduce((acc, r) => acc + r.spentUsd, 0);
     const meanSpentUsd = total > 0 ? totalSpent / total : 0;
@@ -469,7 +479,10 @@ export class OfflineRunner {
     const totalDuration = results.reduce((acc, r) => acc + r.durationMs, 0);
     const meanDurationSeconds = total > 0 ? totalDuration / total / 1000 : 0;
 
-    const hardQaEscapeCount = results.reduce((acc, r) => acc + r.hardQaEscapes, 0);
+    const hardQaEscapeCount = results.reduce(
+      (acc, r) => acc + (typeof r.hardQaEscapes === 'number' ? r.hardQaEscapes : 0),
+      0
+    );
 
     const parityVerdicts = {
       match: results.filter((r) => r.parity?.parity === 'match').length,
