@@ -6054,7 +6054,9 @@ export function createApp(options?: CreateAppOptions) {
   const canvaStatusHandler = async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Authentication Required');
-    if (!db || !taskRepo) return problem(c, 503, 'Database Required');
+    // The outbox is not optional here: a terminal notification that is not written down is the
+    // paid design run's only link, and losing it is the failure this route exists to prevent.
+    if (!db || !taskRepo || !outboxRepo) return problem(c, 503, 'Database Required');
     const taskId = c.req.param('taskId');
     if (!isValidUuid(taskId)) return problem(c, 422, 'Invalid Identifier', 'Use a valid task identifier');
     const body = await c.req.json().catch(() => ({}));
@@ -6128,11 +6130,106 @@ export function createApp(options?: CreateAppOptions) {
 
     let notificationSent = false;
     let notificationError: string | undefined;
+    let notificationCommandId: string | undefined;
     if (sourceChannelId) {
       const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes });
+      const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
+      // The worker's finish() swallows its own notification errors so a failed message cannot fail
+      // a design (canva-draft-workflow.ts), and this was a single fire-and-forget send: a Telegram
+      // rate limit, a 5xx or a restart dropped the owner's only link to work already paid for, with
+      // no record anywhere. The message is written to the outbox before it is attempted.
+      //
+      // The key is the task and its terminal status, because Restate journals finish() and re-issues
+      // the identical call on a workflow retry. The rejection code belongs in the key as well:
+      // DESIGN_REJECTED/COPY_REQUIRED and DESIGN_REJECTED/CLIENT_REFERENCE_REQUIRED are different
+      // messages, and the second must not be swallowed as a duplicate of the first.
+      // The run (or the design it produced) is part of the key. A task can legitimately be run
+      // again - the outbox requeue and redrive routes do exactly that, as happened after the
+      // 2026-09-17 Restate incident - and the second run carries a new Canva link. Keyed on task,
+      // status and code alone, that second, different message would be swallowed as a duplicate,
+      // while a Restate retry still replays an identical body and is deduplicated as intended.
+      const runKey = typeof body.runId === 'string' ? body.runId : designId || 'no-run';
+      const idempotencyKey = `notify.telegram:${taskId}:${status}${code ? `:${code}` : ''}:${runKey}`;
+      const existing = await withRlsContext(db, scope, (trx) =>
+        outboxRepo.findByIdempotencyKey(auth.tenantId!, idempotencyKey, trx));
+      if (existing) {
+        // Already written down, so nothing is sent again: whatever state it is in is the record.
+        return c.json({
+          ok: true, taskId, status, code, designId, canvaUrl,
+          notificationSent: existing.state === 'delivered',
+          notificationError: existing.state === 'delivered' ? undefined : `NOTIFICATION_${String(existing.state).toUpperCase()}`,
+          notificationCommandId: existing.id,
+          notificationDeduplicated: true,
+        });
+      }
+
+      // Held back from the worker for a minute because the inline attempt owns it first: the bridge
+      // allows two sends of 15s each (telegram-bridge.ts), 30s at worst, so nobody else leases it
+      // while it runs. A Core crash inside that minute leaves the command pending, not lost.
+      let command;
+      try {
+        command = await withRlsContext(db, scope, (trx) =>
+          outboxRepo.enqueue({
+            tenantId: auth.tenantId!,
+            aggregateType: 'task',
+            aggregateId: taskId,
+            commandType: 'notify.telegram',
+            idempotencyKey,
+            // The composed message travels with the command so a retry sends exactly what was
+            // attempted, and never recomposes it from a database that has moved on since.
+            payload: {
+              chatId: sourceChannelId,
+              message,
+              taskId,
+              status,
+              ...(code ? { code } : {}),
+              ...(designId ? { designId } : {}),
+              ...(canvaUrl ? { canvaUrl } : {}),
+            },
+            availableAt: new Date(Date.now() + 60_000),
+          }, trx));
+      } catch (enqueueErr) {
+        // outbox_commands is UNIQUE (tenant_id, idempotency_key), so two identical calls racing
+        // each other end here rather than sending the message twice.
+        const raced = await withRlsContext(db, scope, (trx) =>
+          outboxRepo.findByIdempotencyKey(auth.tenantId!, idempotencyKey, trx));
+        if (raced) {
+          return c.json({
+            ok: true, taskId, status, code, designId, canvaUrl,
+            notificationSent: raced.state === 'delivered',
+            notificationError: raced.state === 'delivered' ? undefined : `NOTIFICATION_${String(raced.state).toUpperCase()}`,
+            notificationCommandId: raced.id,
+            notificationDeduplicated: true,
+          });
+        }
+        // Nothing was written and nothing raced us. Refusing to send now would be worse than the
+        // fire-and-forget this replaced, so the message is still attempted, unrecorded and loudly.
+        console.error(`[canvaStatusHandler] Task ${taskId} status ${status} could not be written to the outbox; sending unrecorded:`, enqueueErr);
+      }
+
       const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, message);
       notificationSent = dispatchRes.success;
-      if (!dispatchRes.success) notificationError = dispatchRes.error;
+      notificationCommandId = command?.id;
+      if (!command) {
+        notificationError = dispatchRes.success ? 'NOTIFICATION_NOT_RECORDED' : dispatchRes.error;
+      } else if (dispatchRes.success) {
+        await withRlsContext(db, scope, (trx) => outboxRepo.markDelivered(command.id, trx));
+      } else {
+        notificationError = dispatchRes.error;
+        const reason = dispatchRes.error || 'TELEGRAM_SEND_FAILED';
+        await withRlsContext(db, scope, (trx) =>
+          // A lost response can follow a successful send, which is why the bridge refuses to resend
+          // an uncertain one; the outbox must refuse too, so it goes straight to the dead-letter
+          // list an operator reads instead of being retried into a second message.
+          // TELEGRAM_RECEIPT_INVALID belongs with it: the bridge returns that after Telegram has
+          // answered 200 with a receipt it cannot match, so the message may well have arrived
+          // (telegram-bridge.ts, the message_id and chat id check), and a retry would send it twice.
+          /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID/.test(reason)
+            ? outboxRepo.markUncertain(command.id, reason, trx)
+            // Same ceiling and base the worker's consumer applies to later attempts, so the schedule
+            // does not change hands halfway: delays of 5s, 10s, 20s, 40s, then a dead letter.
+            : outboxRepo.retryOrDeadLetter(command.id, reason, 5, 5, trx));
+      }
 
       // Photo Delivery via dispatchOutboundPhoto
       try {
@@ -6170,7 +6267,7 @@ export function createApp(options?: CreateAppOptions) {
     } else {
       notificationError = 'NO_TELEGRAM_SOURCE';
     }
-    return c.json({ ok: true, taskId, status, code, notificationSent, notificationError, designId, canvaUrl });
+    return c.json({ ok: true, taskId, status, code, notificationSent, notificationError, notificationCommandId, designId, canvaUrl });
   };
   registerRoute('post', '/tasks/:taskId/notifications/canva-status', canvaStatusHandler);
   registerRoute('post', '/tasks/:taskId/notifications/canva-ready', canvaStatusHandler);

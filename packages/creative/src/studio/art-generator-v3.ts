@@ -147,6 +147,39 @@ export function measureOuterLuminanceAndVariance(
 }
 
 /**
+ * The frame to ask the image model for, and the words that describe it in the prompt.
+ *
+ * gpt-image-2.5-sunburst returns one of three frames, so the art can never match an arbitrary box
+ * exactly; the renderer covers the box and crops the overflow evenly (preserveAspectRatio slice),
+ * and so does the deck. Picking the frame nearest the box keeps that crop small. The earlier rule
+ * sent every non-square box 1024x1536 and called it "4:5 vertical portrait" in the prompt: a 16:9
+ * banner was composed as a portrait and then lost most of its height to the crop, and no request
+ * was ever 4:5.
+ */
+export function artFrameForBox(box: Box): { size: string; aspectDesc: string } {
+  if (box.width === box.height) return { size: '1024x1024', aspectDesc: '1:1 square' };
+  if (box.width > box.height) return { size: '1536x1024', aspectDesc: '3:2 horizontal landscape' };
+  return { size: '1024x1536', aspectDesc: '2:3 vertical portrait' };
+}
+
+/**
+ * A canvas box expressed in the art image's own pixels, under the cover-and-crop transform both the
+ * renderer (preserveAspectRatio="xMidYMid slice") and the deck apply: the image is scaled by
+ * whichever ratio makes it cover the art box, centred, and the overflow cropped evenly.
+ */
+export function canvasBoxToArtPixels(box: Box, artBox: Box, art: { width: number; height: number }): Box {
+  const scale = Math.max(artBox.width / art.width, artBox.height / art.height);
+  const originX = artBox.x + (artBox.width - art.width * scale) / 2;
+  const originY = artBox.y + (artBox.height - art.height * scale) / 2;
+  return {
+    x: (box.x - originX) / scale,
+    y: (box.y - originY) / scale,
+    width: box.width / scale,
+    height: box.height / scale,
+  };
+}
+
+/**
  * Derives an art generation prompt conditioned on the layout architecture.
  */
 export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
@@ -155,7 +188,8 @@ export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
   }
 
   const calm = layout.art.calmRegion;
-  const aspectDesc = layout.width === layout.height ? '1:1 square' : '4:5 vertical portrait';
+  // The art fills its own box, not the canvas, so the frame is described from the box.
+  const { aspectDesc } = artFrameForBox(layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height });
 
   // Gather unique colors from background, panels, and rules
   const colorSet = new Set<string>([layout.background.color]);
@@ -199,7 +233,7 @@ export async function generateConditionedArtLayer(
 
   const fetcher = options.fetchFn || fetch;
   const prompt = deriveConditionedArtPrompt(layout);
-  const size = layout.width === layout.height ? '1024x1024' : '1024x1536';
+  const { size } = artFrameForBox(layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height });
   const quality = options.quality || 'medium';
 
   const startTime = Date.now();
@@ -251,11 +285,18 @@ export async function generateConditionedArtLayer(
     console.warn('[ArtGeneratorV3] Generation failed, degrading gracefully to procedural motif:', err);
     isDegraded = true;
     const motifType: ProceduralMotifType = layout.art.motif || 'guilloche';
+    const box = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
     artBuffer = renderMotifPng(motifType, {
-      width: layout.width,
-      height: layout.height,
+      // The motif fills the art box, so it is drawn at the box's own size: rendering it at the
+      // canvas size made the renderer's cover crop throw away part of every motif whose box was
+      // not the whole canvas.
+      width: Math.round(box.width),
+      height: Math.round(box.height),
       palette: ['#0A1628', '#C5A059', '#1E3A5F'],
-      opacity: layout.art.opacity,
+      // Drawn at full strength, the same rule the production art stage follows: the layer's
+      // opacity is applied once, by the render and by the deck. Baking it in here as well made the
+      // degraded motif twice as faint as the layout asked for, in the preview and in Canva alike.
+      opacity: 1,
     });
     responseId = `procedural_fallback_${Date.now()}`;
     imageTokens = 0;
@@ -267,16 +308,12 @@ export async function generateConditionedArtLayer(
 
   // 2. Measure Luminance and Variance over Calm Region vs Outer Canvas
   const artPng = PNG.sync.read(artBuffer!);
-  // Map calm region coordinates to art image coordinates
-  const scaleX = artPng.width / layout.width;
-  const scaleY = artPng.height / layout.height;
-  const calmRegion = layout.art?.calmRegion || layout.art?.box || { x: 0, y: 0, width: layout.width, height: layout.height };
-  const artCalmBox: Box = {
-    x: calmRegion.x * scaleX,
-    y: calmRegion.y * scaleY,
-    width: calmRegion.width * scaleX,
-    height: calmRegion.height * scaleY,
-  };
+  const artBox = layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height };
+  const calmRegion = layout.art.calmRegion || artBox;
+  // Read the art where it actually ends up under the text, which is not where a plain
+  // canvas-to-image scale puts it: a 1024x1024 image in a 1080x1350 box is scaled to cover and
+  // then cropped, so the stretched mapping sampled a region the design never shows.
+  const artCalmBox = canvasBoxToArtPixels(calmRegion, artBox, artPng);
 
   const calmMeasurements = measureBoxLuminanceAndVariance(artPng, artCalmBox);
   const outerMeasurements = measureOuterLuminanceAndVariance(artPng, artCalmBox);

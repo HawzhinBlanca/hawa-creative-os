@@ -36,6 +36,13 @@ const ornamentSettings = (): OrnamentSettings => {
   }
 };
 
+/**
+ * A stored brief, with the marker the service writes when the client's reference photo reached the
+ * run after the brief had already been written. It keeps the extra brief call to one per run and
+ * records a photo that came too late to change anything.
+ */
+type LateReferenceBrief = CreativeBrief & { referenceRebrief?: 'applied' | 'too_late' };
+
 /** A run's stage record, whether the driver returned JSON or text. */
 const runStages = (run: { stages?: unknown }): Record<string, any> => {
   if (typeof run.stages !== 'string') return (run.stages as Record<string, any>) || {};
@@ -784,11 +791,16 @@ export class DesignStudioService {
     // then reaches the layout generator, the critique and the judge. It was saved with every
     // Telegram task but only the legacy planner ever read it.
     ctx.attachedImage = await this.attachedImage(s, run.task_id);
-    const briefSoFar = runStages(run).brief as CreativeBrief | undefined;
-    // A photo that arrived after the brief ran is followed as a style reference: it came without a
-    // caption, so the synthetic instruction it carries is that one.
-    const arrivedLate = briefSoFar?.referenceSeen === false;
-    if (ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || arrivedLate)) {
+    let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+    // A photo that arrived after the brief ran came without a caption, right after the request, so
+    // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
+    const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
+    // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
+    if (ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
+      briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
+    }
+    // Only the brief calling the photo the client's own logo stops the run from following it.
+    if (ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
       ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
     }
 
@@ -1412,6 +1424,73 @@ export class DesignStudioService {
       // If failure happened during generation stages, execute Rung 4 fallback
       return this.executeRung4Fallback(s, run, err.message || 'Studio stage failed');
     }
+  }
+
+  /**
+   * Re-reads the brief with a reference photo that reached the run after the first brief, and
+   * returns the brief the rest of the resume must use.
+   *
+   * The brief is the only stage that turns the image into a StyleSpec, the values preparation
+   * enforces: title scale and weight, typeface, alignment, gold last title line, button, logo
+   * corner, texture, dividers, panels, composition. Intake joins a caption-less photo to the request
+   * it followed while the run is still at 'briefing' or 'conceiving' (chat-intake.ts, 3b4d7f2), so a
+   * photo sent as its own Telegram message routinely lands after the brief has been written:
+   * referenceSeen false and the spec neutral, leaving the design to follow the reference through
+   * prose notes alone. That is the "doesn't look like the reference" the owner reported on task
+   * 89c242f2 (2026-09-19, f80733c).
+   *
+   * One extra brief call buys those enforced values, so it is spent at most once per run and only
+   * while the layouts have not been generated: after that nothing that draws would read the new
+   * spec, so the run keeps the design it has and records why in its diagnostic. The marker is
+   * stored with the new brief under the run's current status, so a resume that replays this status
+   * does not pay for a second one.
+   */
+  private async rereadBriefWithLateReference(
+    s: Scope,
+    run: any,
+    ctx: StageContext,
+    stages: Record<string, any>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    stored: LateReferenceBrief
+  ): Promise<LateReferenceBrief> {
+    // The layouts are written into the candidates when the run leaves 'laying_out'.
+    const beforeLayouts = ['conceiving', 'laying_out'].includes(run.status) && !stages.layouts;
+    if (!beforeLayouts) {
+      const note =
+        `The client's reference image reached this run at '${run.status}', after its layouts were generated, ` +
+        `so its style values were not enforced on them; the design follows the image only through the brief's notes.`;
+      console.warn(`[studio] run ${run.id}: ${note}`);
+      const noted: LateReferenceBrief = { ...stored, referenceRebrief: 'too_late' };
+      stages.brief = noted;
+      // Whatever the run already reported still matters; this note is written once, so it is added.
+      const diagnostic = [run.diagnostic, note].filter(Boolean).join(' ');
+      await this.repo.updateRunStatus(run.id, s.tenantId, run.status, { stages, budget, diagnostic });
+      return noted;
+    }
+
+    let reread: CreativeBrief;
+    try {
+      reread = await runBriefStage(ctx, { lateReference: true });
+    } catch (err: any) {
+      // The stored brief still designs the request, so an extra call that failed must not fail the
+      // run. Nothing is recorded, which leaves one more attempt at the next stage before layouts.
+      console.error(
+        `[studio] run ${run.id}: the brief could not be re-read with the reference image that arrived after it: ${err?.message || err}`
+      );
+      return stored;
+    }
+
+    const brief: LateReferenceBrief = { ...reread, referenceRebrief: 'applied' };
+    stages.brief = brief;
+    // The context was built from the blind brief a few lines above, so the values it already
+    // carries into this same resume are the neutral ones.
+    ctx.style = brief.styleSpec;
+    ctx.requestedBackground = requestedBackgroundFor(brief, ctx.referencePack.palette);
+    await this.repo.updateRunStatus(run.id, s.tenantId, run.status, { stages, budget });
+    console.warn(
+      `[studio] run ${run.id}: brief re-read at '${run.status}' with the reference image that arrived after it (referenceRole ${brief.referenceRole}).`
+    );
+    return brief;
   }
 
   /**

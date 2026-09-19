@@ -1,0 +1,366 @@
+{
+  "recordedAt": "2026-09-20",
+  "note": "Hard QA and design metrics after preparation, per mode, over the gitignored corpus under output/proofs/. Recorded from a real run of this gate on the committed tree, not a target: on 2026-09-20 at 81bb4f5 the style mode passes hard QA on 194 of 200 designs against 195 for plain, and 20 of 200 pass QA and the design metrics together against 48. Those failures are written down so the gate can see the next change, not because they are acceptable. Re-record only for a deliberate improvement, and say in the commit which numbers moved and why.",
+  "modes": {
+    "plain": {
+      "totals": {
+        "designs": 200,
+        "qaPass": 195,
+        "qaAndMetrics": 48
+      },
+      "runs": {
+        "2026-09-17-research-grade-pipeline": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-aborted-pricing": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run3": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run4": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run5": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run6": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run7": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 3,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run8": {
+          "designs": 20,
+          "qaPass": 19,
+          "qaAndMetrics": 3,
+          "notClean": {
+            "brief_17": "COPY_ORDER"
+          }
+        },
+        "2026-09-18-cheap-tier-shared-pipeline": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_03": "OVERLAP",
+            "brief_08": "OVERLAP"
+          }
+        },
+        "2026-09-18-dev-tier-pipeline-run": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_05": "COPY_PLACEMENT metric:gridAppropriateness",
+            "brief_07": "COPY_PLACEMENT"
+          }
+        },
+        "2026-09-18-production-qualification": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 20,
+          "notClean": {}
+        },
+        "2026-09-18-production-qualification-2": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 19,
+          "notClean": {}
+        }
+      }
+    },
+    "ornament": {
+      "totals": {
+        "designs": 200,
+        "qaPass": 195,
+        "qaAndMetrics": 48
+      },
+      "runs": {
+        "2026-09-17-research-grade-pipeline": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-aborted-pricing": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run3": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run4": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run5": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run6": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run7": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 3,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run8": {
+          "designs": 20,
+          "qaPass": 19,
+          "qaAndMetrics": 3,
+          "notClean": {
+            "brief_17": "COPY_ORDER"
+          }
+        },
+        "2026-09-18-cheap-tier-shared-pipeline": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_03": "OVERLAP",
+            "brief_08": "OVERLAP"
+          }
+        },
+        "2026-09-18-dev-tier-pipeline-run": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_05": "COPY_PLACEMENT metric:gridAppropriateness",
+            "brief_07": "COPY_PLACEMENT"
+          }
+        },
+        "2026-09-18-production-qualification": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 20,
+          "notClean": {}
+        },
+        "2026-09-18-production-qualification-2": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 19,
+          "notClean": {}
+        }
+      }
+    },
+    "style:k12-89c242f2": {
+      "totals": {
+        "designs": 200,
+        "qaPass": 194,
+        "qaAndMetrics": 20
+      },
+      "runs": {
+        "2026-09-17-research-grade-pipeline": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-aborted-pricing": {
+          "designs": 0,
+          "qaPass": 0,
+          "qaAndMetrics": 0,
+          "notClean": {}
+        },
+        "2026-09-18-cheap-tier-run3": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 3,
+          "notClean": {
+            "brief_02": "metric:regularity",
+            "brief_07": "metric:regularity",
+            "brief_08": "metric:gridAppropriateness metric:regularity metric:typeScale",
+            "brief_09": "metric:typeScale",
+            "brief_10": "metric:typeScale",
+            "brief_13": "metric:regularity"
+          }
+        },
+        "2026-09-18-cheap-tier-run4": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_01": "metric:regularity",
+            "brief_02": "metric:regularity",
+            "brief_05": "metric:regularity",
+            "brief_06": "metric:regularity metric:typeScale",
+            "brief_09": "metric:regularity metric:typeScale",
+            "brief_10": "metric:typeScale",
+            "brief_15": "metric:typeScale",
+            "brief_16": "metric:typeScale",
+            "brief_18": "metric:gridAppropriateness"
+          }
+        },
+        "2026-09-18-cheap-tier-run5": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 0,
+          "notClean": {
+            "brief_01": "metric:typeScale",
+            "brief_02": "metric:gridAppropriateness",
+            "brief_03": "metric:regularity",
+            "brief_07": "metric:regularity",
+            "brief_10": "metric:regularity",
+            "brief_11": "metric:regularity",
+            "brief_12": "metric:typeScale",
+            "brief_13": "metric:regularity",
+            "brief_14": "metric:regularity metric:typeScale",
+            "brief_15": "metric:regularity metric:typeScale",
+            "brief_16": "metric:regularity metric:typeScale"
+          }
+        },
+        "2026-09-18-cheap-tier-run6": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_02": "metric:typeScale",
+            "brief_03": "metric:balance metric:gridAppropriateness",
+            "brief_05": "metric:typeScale",
+            "brief_10": "metric:typeScale",
+            "brief_12": "metric:regularity metric:typeScale",
+            "brief_13": "metric:regularity",
+            "brief_14": "metric:regularity",
+            "brief_16": "metric:regularity",
+            "brief_18": "metric:gridAppropriateness"
+          }
+        },
+        "2026-09-18-cheap-tier-run7": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_05": "metric:regularity",
+            "brief_06": "metric:regularity metric:typeScale",
+            "brief_08": "metric:regularity",
+            "brief_09": "metric:regularity",
+            "brief_11": "metric:typeScale"
+          }
+        },
+        "2026-09-18-cheap-tier-run8": {
+          "designs": 20,
+          "qaPass": 19,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_01": "metric:typeScale",
+            "brief_02": "metric:negativeSpace metric:regularity metric:typeScale",
+            "brief_03": "metric:typeScale",
+            "brief_05": "metric:regularity",
+            "brief_09": "metric:regularity",
+            "brief_10": "metric:negativeSpace",
+            "brief_11": "metric:typeScale",
+            "brief_12": "metric:typeScale",
+            "brief_15": "metric:regularity",
+            "brief_16": "metric:regularity",
+            "brief_17": "COPY_ORDER",
+            "brief_18": "metric:regularity"
+          }
+        },
+        "2026-09-18-cheap-tier-shared-pipeline": {
+          "designs": 20,
+          "qaPass": 18,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_03": "LOGO",
+            "brief_06": "metric:regularity metric:typeScale",
+            "brief_09": "COPY_ORDER worse",
+            "brief_14": "metric:regularity",
+            "brief_17": "metric:regularity"
+          }
+        },
+        "2026-09-18-dev-tier-pipeline-run": {
+          "designs": 20,
+          "qaPass": 17,
+          "qaAndMetrics": 1,
+          "notClean": {
+            "brief_05": "COPY_PLACEMENT",
+            "brief_07": "COPY_PLACEMENT",
+            "brief_12": "metric:regularity",
+            "brief_14": "metric:typeScale",
+            "brief_17": "COPY_ORDER metric:gridAppropriateness metric:semanticLayout"
+          }
+        },
+        "2026-09-18-production-qualification": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 5,
+          "notClean": {
+            "brief_01": "metric:typeScale",
+            "brief_03": "metric:typeScale",
+            "brief_04": "metric:typeScale",
+            "brief_05": "metric:typeScale",
+            "brief_06": "metric:typeScale",
+            "brief_07": "metric:typeScale",
+            "brief_08": "metric:typeScale",
+            "brief_09": "metric:typeScale",
+            "brief_10": "metric:typeScale",
+            "brief_11": "metric:typeScale",
+            "brief_12": "metric:typeScale",
+            "brief_13": "metric:typeScale",
+            "brief_15": "metric:typeScale",
+            "brief_16": "metric:typeScale",
+            "brief_20": "metric:gridAppropriateness"
+          }
+        },
+        "2026-09-18-production-qualification-2": {
+          "designs": 20,
+          "qaPass": 20,
+          "qaAndMetrics": 6,
+          "notClean": {
+            "brief_02": "metric:typeScale",
+            "brief_04": "metric:typeScale",
+            "brief_05": "metric:typeScale",
+            "brief_06": "metric:typeScale",
+            "brief_07": "metric:typeScale",
+            "brief_08": "metric:typeScale",
+            "brief_09": "metric:typeScale",
+            "brief_10": "metric:typeScale",
+            "brief_11": "metric:typeScale",
+            "brief_12": "metric:typeScale",
+            "brief_13": "metric:typeScale",
+            "brief_14": "metric:typeScale",
+            "brief_15": "metric:typeScale",
+            "brief_16": "metric:typeScale"
+          }
+        }
+      }
+    }
+  }
+}

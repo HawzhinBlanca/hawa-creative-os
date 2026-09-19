@@ -37,6 +37,47 @@ const boundaryOf = (error: unknown): CoreBoundaryError | null => {
 /** Historical tasks carried no requested size; the print-oriented portrait default stays for them. */
 export const DEFAULT_CANVA_VARIANT = { width: 1200, height: 1697 } as const;
 
+/**
+ * Statuses core's studio resume returns for a run it will not advance again. `awaiting_selection`
+ * belongs here: the run is holding for a person to choose a candidate, and polling cannot move it.
+ * The report after the loop turns it into DESIGN_AWAITING_SELECTION, as it always did.
+ */
+const STUDIO_SETTLED = ['transferred', 'degraded', 'failed', 'abandoned', 'awaiting_selection'];
+
+/**
+ * The advance loop used to wait a flat 5 s before every resume. Core's resume executes the next
+ * stage inline and returns the status it reached, so after a poll that moved the status the next
+ * stage is already runnable and the gap buys nothing: the 2026-09-19 audit measured 9 resumes and
+ * 45 000 ms of pure sleep on a design that advanced on every poll. The workflow now waits a token
+ * gap after a poll that moved the status, and backs off from 500 ms to a 5 s ceiling only while the
+ * status stands still: the same design sleeps 9 ms instead of 45 000 ms.
+ *
+ * The token gap is still a journalled sleep. Dropping the entry would change the shape of the
+ * journal, and an invocation suspended under the previous worker replays its recorded entries
+ * against the new control flow: it would meet a resume where it had recorded a sleep, and fail.
+ * The entry is what has to match, not its duration.
+ *
+ * Every gap is derived from journalled statuses alone, so a replay asks for the same timers in the
+ * same order.
+ */
+const STUDIO_POLL_ADVANCED_WAIT_MS = 1;
+const STUDIO_POLL_FIRST_WAIT_MS = 500;
+const STUDIO_POLL_MAX_WAIT_MS = 5000;
+const studioPollWaitMs = (idlePolls: number) =>
+  idlePolls <= 0
+    ? STUDIO_POLL_ADVANCED_WAIT_MS
+    : Math.min(STUDIO_POLL_FIRST_WAIT_MS * 2 ** (idlePolls - 1), STUDIO_POLL_MAX_WAIT_MS);
+
+/**
+ * A run that stops moving used to be resumed 150 times and then reported under its own stage name,
+ * which is how the audit's abandoned run cost 150 resumes and 750 000 ms of sleep while the owner
+ * was told nothing. Ten consecutive polls at the same status, or 60 000 ms of accumulated waiting
+ * across the whole loop, is treated as stuck and reported with the stage it stopped in.
+ */
+const STUDIO_MAX_RESUMES = 150;
+const STUDIO_IDLE_POLL_LIMIT = 10;
+const STUDIO_IDLE_WAIT_BUDGET_MS = 60000;
+
 export function resolveCanvaVariant(input: Pick<WorkflowInput, 'canvaVariant'>): { width: number; height: number } {
   const v = input.canvaVariant;
   const ok = (n: unknown) => Number.isInteger(n) && (n as number) >= 640 && (n as number) <= 2400;
@@ -101,8 +142,16 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
       throw error;
     }
-    for (let n = 0; n < 150 && !['transferred', 'degraded', 'failed'].includes(result.status); n++) {
-      if (ctx.sleep) await ctx.sleep(5000);
+    let idlePolls = 0;
+    let waitedMs = 0;
+    let stuckStage: string | undefined;
+    for (let n = 0; n < STUDIO_MAX_RESUMES && !STUDIO_SETTLED.includes(result.status); n++) {
+      const wait = studioPollWaitMs(idlePolls);
+      if (ctx.sleep) await ctx.sleep(wait);
+      // Counted from what was asked for, never from a clock: a replay has to reach the same budget
+      // at the same poll, and a wall-clock read would make that decision non-deterministic.
+      waitedMs += wait;
+      const before = String(result.status);
       try {
         result = await ctx.run('canva-studio-resume-' + n, () =>
           call('/canva/studio/' + encodeURIComponent(result.runId) + '/resume', {})
@@ -112,6 +161,21 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
         if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
         throw error;
       }
+      if (String(result.status) !== before) {
+        idlePolls = 0;
+        continue;
+      }
+      idlePolls++;
+      if (idlePolls >= STUDIO_IDLE_POLL_LIMIT || waitedMs >= STUDIO_IDLE_WAIT_BUDGET_MS) {
+        stuckStage = before;
+        break;
+      }
+    }
+    if (stuckStage) {
+      // The owner hears which stage stopped moving instead of waiting for a design that will never
+      // arrive. Core's status handler strips everything that is not [A-Z0-9_] from `code` and
+      // renders it in the Telegram message, so the stage travels in the code rather than in free text.
+      return finish('DESIGN_STUCK', undefined, 'STUCK_IN_' + stuckStage.toUpperCase().replace(/[^A-Z0-9_]/g, '_'));
     }
     if (result.status === 'failed') {
       const code = result.code || result.diagnostic || result.error || 'STUDIO_FAILED';

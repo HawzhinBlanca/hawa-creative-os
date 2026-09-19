@@ -20,6 +20,8 @@
     "eval": "tsx packages/evals/src/runner.ts",
     "smoke": "tsx scripts/smoke_test_10_of_10.ts",
     "propose:exemplars": "tsx scripts/propose_exemplars.ts",
+    "gate:prepare": "pnpm --filter @hawa/creative build && node scripts/proofs/reprepare_stored_runs.mjs output/proofs/*",
+    "gate:prepare:update": "pnpm --filter @hawa/creative build && node scripts/proofs/reprepare_stored_runs.mjs --update-baseline output/proofs/*",
     "db:migrate": "tsx packages/db/src/migrate.ts",
     "db:upgrade": "tsx packages/db/src/upgrade.ts",
     "db:check": "tsx packages/db/src/check.ts",
