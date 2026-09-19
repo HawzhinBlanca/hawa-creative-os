@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-19T16:02:28.535Z",
+  "generatedAt": "2026-09-19T17:47:23.113Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,66 +19,27 @@
     ]
   },
   "build": {
-    "commit": "3fd7fbaca3e1f85fa4d762d86a89d507f1ddba6d",
+    "commit": "d6574e4e5a95c585478d252d73b0fffb4536d107",
     "treeClean": false,
     "uncommittedFiles": [
-      "M .gitignore",
-      "M MANIFEST.json",
-      "M SHA256SUMS.txt",
       "M apps/core/src/app.ts",
-      "M apps/core/src/routes/design-studio.routes.ts",
-      "M apps/core/src/routes/system.routes.ts",
+      "M apps/core/src/services/chat-intake.ts",
       "M apps/core/src/services/design-studio/design-studio-service.ts",
-      "M apps/core/test/auth-negative-controls.test.ts",
-      "M apps/core/test/core.test.ts",
-      "M apps/core/test/governed-learning-dna-lifecycle.test.ts",
-      "M apps/worker/src/outbox-consumer.ts",
-      "M infra/security/secret_allowlist.txt",
-      "M packages/contracts/src/index.ts",
-      "M packages/contracts/test/contracts.test.ts",
-      "M packages/creative/src/editable-transfer.ts",
+      "M apps/core/src/services/design-studio/stages/brief.stage.ts",
+      "M apps/core/src/services/design-studio/types.ts",
+      "M packages/creative/src/studio/pipeline-v3.ts",
       "M packages/creative/src/studio/transfer-v2.ts",
-      "M packages/db/src/repositories/client.repository.ts",
+      "M packages/creative/test/brand-ornament.test.ts",
       "M packages/db/src/repositories/outbox.repository.ts",
-      "M packages/db/src/repositories/publication.repository.ts",
-      "M packages/db/src/repositories/revision.repository.ts",
-      "M packages/db/src/types.ts",
-      "M packages/evals/src/design-studio/live-runner.ts",
-      "M packages/evals/src/design-studio/offline-runner.ts",
-      "M packages/evals/src/design-studio/report-generator.ts",
-      "M packages/evals/src/design-studio/types.ts",
-      "M packages/evals/src/runner.ts",
-      "M packages/integrations/src/cost-governor.ts",
-      "M packages/integrations/src/google-publisher.ts",
+      "M packages/qa/src/canva-pptx-check.ts",
       "M packages/qa/src/copy-validator.ts",
-      "M plans/traceability.csv",
-      "M scripts/run_studio_qualification.ts",
-      "?? RELEASE_MANIFEST.json",
-      "?? apps/core/test/r03-authoritative-config-postgresql.test.ts",
-      "?? apps/core/test/r04-scope-enforcement.test.ts",
-      "?? apps/core/test/r05-immutable-approval-contract.test.ts",
-      "?? apps/core/test/r06-publication-safety.test.ts",
-      "?? apps/core/test/r07-outbox-terminal-state.test.ts",
-      "?? output/audits/2026-09-19-architecture-reliability/",
-      "?? output/repairs/",
-      "?? packages/contracts/src/release-manifest.ts",
-      "?? packages/creative/test/r08-transfer-fidelity.test.ts",
-      "?? packages/db/test/r09-disaster-recovery.test.ts",
-      "?? packages/evals/test/evidence-truthfulness.test.ts",
-      "?? packages/evals/test/r10-model-tournament.test.ts",
-      "?? packages/testkit/test/r11-release-gate.test.ts",
-      "?? packages/testkit/test/r12-operations-performance.test.ts",
-      "?? packages/testkit/test/r13-human-quality-operator-gates.test.ts",
-      "?? packages/testkit/test/r14-controlled-office-pilot.test.ts",
-      "?? scripts/disaster_recovery_drill.sh",
-      "?? scripts/enforce_release_gate.sh",
-      "?? scripts/generate_release_manifest.ts",
-      "?? scripts/measure_operations_slo.ts",
-      "?? scripts/run_model_tournament.ts",
-      "?? scripts/update_traceability_remediation.py",
-      "?? scripts/verify_release_manifest.ts"
+      "M packages/qa/test/ship-copy-regressions.test.ts",
+      "?? apps/core/test/late-reference-image.test.ts",
+      "?? apps/core/test/outbox-retire.test.ts",
+      "?? packages/creative/test/fixtures/cheap-tier-dead-band-8fb76534.json",
+      "?? packages/creative/test/vertical-balance.test.ts"
     ],
-    "commitTimestamp": "2026-09-19T14:03:56+03:00",
+    "commitTimestamp": "2026-09-19T20:21:56+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -95,7 +56,7 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "ba9d5c80f6cbec727ccd8b17f0f0756aa5137eef16e4fac4b3b5488d6de6f714",
+        "apps/core/src/app.ts": "4bf9f02c9edbae6d6e49465de1bce1d98fbdb787f8d0044357c86d419b0a1a3b",
         "apps/core/src/index.ts": "a51b02d6c1f4ddb6662746c6f74f79f1e4988773617079a12110815e42b36d34",
         "packages/integrations/src/google-publisher.ts": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60"
       }
@@ -148,5 +109,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "1f39f8a148a7212d0490699c2ded0692ce95cded78d7627a8e5c531422401285"
+  "sha256": "0311a5e6caaf9dae8634d818d54234da3e90a1066f7734c01cdb2fb1cc62d8ca"
 }

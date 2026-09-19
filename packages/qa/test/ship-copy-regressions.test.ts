@@ -42,3 +42,11 @@ describe('FR-014/015/027: bidirectional copy and visible logo proof', () => {
     expect(result.ok && result.value.findings.some(f => f.ruleId === 'OFFICIAL_LOGO_MISSING_OR_MUTATED')).toBe(true);
   });
 });
+
+describe('exact copy ignores the word joiners the Canva deck adds', () => {
+  it('matches "K-12" joined with U+2060 to the approved copy', async () => {
+    const { validateExactCopy } = await import('../src/copy-validator.js');
+    const block = { id: 'b1', text: 'پەروەردە (K-12)', role: 'headline' } as any;
+    expect(validateExactCopy([block], ['پەروەردە (K⁠-⁠12)']).filter((f) => f.ruleId === 'EXACT_COPY_MISSING')).toEqual([]);
+  });
+});

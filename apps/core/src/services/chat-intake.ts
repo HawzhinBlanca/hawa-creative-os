@@ -34,6 +34,8 @@ export interface ChatIntake {
     parentTaskId?: string;
     revisionRound?: number;
     referenceImageBase64?: string;
+    /** This task only carries a reference image for the named request; it has no design of its own. */
+    referenceFor?: string;
   };
 }
 
@@ -76,6 +78,43 @@ export function runsPipelineV3(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
   return env.DESIGN_PIPELINE_V3 === 'on' || isV3PilotChat(sourceChannelId, env.DESIGN_PIPELINE_V3_CHATS);
+}
+
+/**
+ * The request in this chat that a caption-less photo should join: the latest one saved within
+ * `withinMinutes` (HAWA_REFERENCE_MERGE_MINUTES, default 5) that goes to the v3 studio, has no image
+ * of its own, and whose design has not reached layout generation. Null when there is none, and the
+ * photo is handled as before.
+ */
+export async function findRequestAwaitingReference(
+  db: Kysely<Database>,
+  opts: { sourceChannelId: string; tenantId?: string; withinMinutes?: number; env?: NodeJS.ProcessEnv }
+): Promise<{ taskId: string; clientId: string; title: string } | null> {
+  const env = opts.env || process.env;
+  if (!runsPipelineV3(opts.sourceChannelId, env)) return null;
+  const tenantId = opts.tenantId || '00000000-0000-4000-a000-000000000001';
+  const minutes = opts.withinMinutes ?? Math.max(0, Number(env.HAWA_REFERENCE_MERGE_MINUTES || 5));
+  if (!(minutes > 0)) return null;
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    const row = (
+      await sql<any>`SELECT t.id, t.client_id, t.title, o.payload
+        FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+        WHERE o.tenant_id = ${tenantId}::uuid AND o.command_type = 'task.created'
+          AND o.payload->>'sourceChannelId' = ${opts.sourceChannelId}
+          AND o.created_at > now() - make_interval(mins => ${minutes})
+          AND COALESCE(o.payload->>'isInstructionOnly', 'false') <> 'true'
+          AND t.client_id IS NOT NULL
+        ORDER BY o.created_at DESC LIMIT 1`.execute(trx)
+    ).rows[0];
+    if (!row || row.payload?.designStudio !== true || row.payload?.studioOptions?.referenceImageBase64) return null;
+    const run = (
+      await sql<{ status: string }>`SELECT status FROM hawa.design_studio_runs
+        WHERE tenant_id = ${tenantId}::uuid AND task_id = ${row.id}::uuid
+        ORDER BY created_at DESC LIMIT 1`.execute(trx)
+    ).rows[0];
+    if (run && !['briefing', 'conceiving'].includes(run.status)) return null;
+    return { taskId: String(row.id), clientId: String(row.client_id), title: String(row.title || 'your request') };
+  });
 }
 
 /** Commit the verified original event and its task before broadcasting or acknowledging. */

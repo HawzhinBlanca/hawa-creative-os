@@ -307,5 +307,39 @@ export class OutboxRepository {
     }
     return await query.returningAll().executeTakeFirstOrThrow();
   }
+
+  /** Dead letters: commands that exhausted their retries, oldest first. They degrade worker health. */
+  async listFailed(tenantId: string, trx?: Kysely<Database>) {
+    const client = trx || this.db;
+    return await client
+      .selectFrom('outbox_commands')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('state', '=', 'failed')
+      .orderBy('created_at', 'asc')
+      .execute();
+  }
+
+  /**
+   * Retires a dead letter: 'failed' becomes 'dead', never retried or redriven again, with who
+   * retired it and why prefixed to its last error. For a command that is obsolete (its request was
+   * superseded or handled another way), not one that should still be delivered: that is `redrive`.
+   * Returns undefined when the command is not in 'failed'.
+   */
+  async retire(tenantId: string, id: string, reason: string, actorId: string, trx?: Kysely<Database>) {
+    const client = trx || this.db;
+    return await client
+      .updateTable('outbox_commands')
+      .set((eb) => ({
+        state: 'dead',
+        leased_until: null,
+        last_error: sql<string>`${`RETIRED by ${actorId} at ${new Date().toISOString()}: ${reason} | was: `} || coalesce(${eb.ref('last_error')}, '')`,
+      }))
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', id)
+      .where('state', '=', 'failed')
+      .returningAll()
+      .executeTakeFirst();
+  }
 }
 

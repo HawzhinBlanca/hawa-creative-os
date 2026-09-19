@@ -5,6 +5,17 @@ import type { StudioLayoutV2 } from './layout-v2.js';
 import { ARABIC_SCRIPT_FAMILIES } from './render-layout-v2.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
+/**
+ * Joins a hyphenated or slashed compound — "K-12", "2025/2026" — with invisible word joiners
+ * (U+2060), so Canva cannot break the line inside it. The preview breaks lines only at spaces, while
+ * Canva also breaks after a hyphen: a Kurdish title set "(K-" at the end of one line and "12)" at
+ * the start of the next (task 8fb76534, 2026-09-19). Only the Canva deck gets the joiners; the copy
+ * itself, and every check made on it, is unchanged.
+ */
+export function keepCompoundsWhole(text: string): string {
+  return (text || '').replace(/(?<=[\p{L}\p{N}])([-\u2010/])(?=[\p{L}\p{N}])/gu, '\u2060$1\u2060');
+}
+
 export interface TransferV2Options extends TransferOptions {
   artBuffer?: Buffer;
 }
@@ -247,7 +258,7 @@ export async function encodeStudioTransferV2(
   for (const t of sortedText) {
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
     const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
-    slide.addText(copy[t.copyIndex], {
+    slide.addText(keepCompoundsWhole(copy[t.copyIndex]), {
       x: t.x / 96,
       y: t.y / 96,
       w: t.width / 96,
@@ -257,7 +268,10 @@ export async function encodeStudioTransferV2(
       color: hex(t.color),
       transparency: textTransparency,
       ...(t.letterSpacing !== undefined && t.letterSpacing !== null ? { charSpacing: t.letterSpacing } : {}),
-      align: isArabic ? 'right' : t.align,
+      // The layout's own alignment, which the preview drew and the judge scored. Every Kurdish block
+      // was forced right, so a centred Kurdish title reached Canva flush right (task 8fb76534,
+      // 2026-09-19). With rtl="1" the alignment is still absolute: "ctr" centres, "r" is right.
+      align: t.align,
       bold: t.bold || false,
       italic: t.italic || false,
       margin: 0,

@@ -3,7 +3,8 @@ import type { ExactCopyBlock } from '@hawa/domain';
 
 export function normalizeForComparison(text: string): string {
   if (!text) return '';
-  return text.normalize('NFC').replace(/\s+/g, ' ').trim();
+  // Word joiners (U+2060) are invisible and added only to the Canva deck, to keep "K-12" on one line.
+  return text.normalize('NFC').replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
 }
 
 // Consume whole approved blocks, longest first: a headline repeated inside an
