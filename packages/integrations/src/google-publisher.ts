@@ -28,6 +28,7 @@ export interface GooglePublisherConfig {
 export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
   private taskRowMap = new Map<string, number>();
+  private emulatedSheets = new Map<string, Array<{ rowNumber: number; values: string[] }>>();
   private driveApiBaseUrl: string;
   private driveUploadBaseUrl: string;
   private sheetsApiBaseUrl: string;
@@ -426,15 +427,6 @@ export class GooglePublisher implements Publisher {
     let rowNumber = this.taskRowMap.get(request.taskId);
     const spreadsheetId = request.destination.spreadsheetId;
     if (!spreadsheetId) return { rowNumber, synced: false, problem: 'No spreadsheet is configured for this client' };
-    if (this.config.emulateNetworkForTesting) {
-      // Emulated row, marked by receipt.emulated.
-      if (rowNumber === undefined) {
-        rowNumber = this.taskRowMap.size + 2;
-        this.taskRowMap.set(request.taskId, rowNumber);
-      }
-      return { rowNumber, synced: true };
-    }
-    if (!token) return { rowNumber, synced: false, problem: 'Google Workspace credentials are not configured' };
 
     const rowValues = [
       request.taskId,
@@ -445,10 +437,56 @@ export class GooglePublisher implements Publisher {
       driveFiles[0]?.webViewLink || '',
       request.packageHash,
     ];
+
+    if (this.config.emulateNetworkForTesting) {
+      // Emulated row with immutable task identity guarantee across row inserts/moves/sorts
+      let sheet = this.emulatedSheets.get(spreadsheetId);
+      if (!sheet) {
+        sheet = [];
+        this.emulatedSheets.set(spreadsheetId, sheet);
+      }
+      const existing = sheet.find((r) => r.values && r.values[0] === request.taskId);
+      if (existing) {
+        existing.values = rowValues;
+        this.taskRowMap.set(request.taskId, existing.rowNumber);
+        return { rowNumber: existing.rowNumber, synced: true };
+      }
+      const newRowNumber = sheet.length > 0 ? Math.max(...sheet.map((r) => r.rowNumber)) + 1 : (this.taskRowMap.size + 2);
+      sheet.push({ rowNumber: newRowNumber, values: rowValues });
+      this.taskRowMap.set(request.taskId, newRowNumber);
+      return { rowNumber: newRowNumber, synced: true };
+    }
+    if (!token) return { rowNumber, synced: false, problem: 'Google Workspace credentials are not configured' };
+
     try {
       let sheetRes: Response;
       if (rowNumber !== undefined) {
-        // Idempotent upsert: update this task's existing row
+        // Step 1: Verify immutable task identity at rowNumber before overwriting
+        try {
+          const verifyRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:A${rowNumber}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (verifyRes.ok) {
+            const verifyData = (await verifyRes.json()) as any;
+            const readTaskId = verifyData.values?.[0]?.[0];
+            if (readTaskId && readTaskId !== request.taskId) {
+              // Row position drifted (e.g. rows were moved, inserted, or sorted)! Find actual row by immutable taskId
+              const foundRow = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
+              if (foundRow !== undefined) {
+                rowNumber = foundRow;
+                this.taskRowMap.set(request.taskId, rowNumber);
+              } else {
+                rowNumber = undefined; // Need to append a new row
+              }
+            }
+          }
+        } catch {
+          // Fall back to current rowNumber
+        }
+      }
+
+      if (rowNumber !== undefined) {
+        // Idempotent upsert: update this task's verified existing row
         sheetRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:G${rowNumber}?valueInputOption=USER_ENTERED`, {
           method: 'PUT',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -489,6 +527,37 @@ export class GooglePublisher implements Publisher {
     } catch (err: any) {
       return { rowNumber, synced: false, problem: `Sheets could not be reached: ${err?.message || String(err)}` };
     }
+  }
+
+  /**
+   * Scans column A of a Google Sheet to locate the row containing a given taskId.
+   * Ensures immutable task identity even when rows are moved, sorted, or inserted externally.
+   */
+  async findRowByTaskId(spreadsheetId: string, token: string, taskId: string): Promise<number | undefined> {
+    try {
+      const res = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A:A`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as any;
+      const rows = data.values || [];
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i]?.[0] === taskId) {
+          return i + 1; // 1-indexed row number in Google Sheets
+        }
+      }
+    } catch {
+      // Ignore network errors during row lookup
+    }
+    return undefined;
+  }
+
+  getEmulatedSheet(spreadsheetId: string): Array<{ rowNumber: number; values: string[] }> {
+    return this.emulatedSheets.get(spreadsheetId) || [];
+  }
+
+  setEmulatedSheet(spreadsheetId: string, rows: Array<{ rowNumber: number; values: string[] }>): void {
+    this.emulatedSheets.set(spreadsheetId, rows);
   }
 
   async reconcile(_ctx: RequestContext, publicationId: UUID): Promise<Result<PublicationReceipt>> {

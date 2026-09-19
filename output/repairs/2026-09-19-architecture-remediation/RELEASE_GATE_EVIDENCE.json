@@ -1,0 +1,48 @@
+{
+  "taskId": "R11",
+  "name": "Make the Release Gate Reproducible and Non-Bypassable",
+  "status": "QUALIFIED",
+  "evaluatedAt": "2026-09-19T16:05:33Z",
+  "git": {
+    "commit": "3fd7fbaca3e1f85fa4d762d86a89d507f1ddba6d",
+    "branch": "studio-v2",
+    "cleanTree": false
+  },
+  "releaseManifest": {
+    "file": "RELEASE_MANIFEST.json",
+    "sha256": "df7eb3e84b07a2686b90caf373d8761df47d3ff1917534a6171fb4d37e57c1f3",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    }
+  },
+  "databaseIsolation": {
+    "productionPort": 54332,
+    "testPort": 55432,
+    "isolated": true
+  },
+  "verificationStages": [
+    "Stage 1: TypeScript typecheck (pnpm typecheck)",
+    "Stage 2: Database schema & migrations check (pnpm run db:check)",
+    "Stage 3: Security & secret scanner with self-test (security_scan.py)",
+    "Stage 4: Knowledge pack validation (validate_pack.py: 601 passed)",
+    "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
+    "Stage 6: Production DB & credential isolation guard",
+    "Stage 7: Full monorepo acceptance tests (1415 passed, 0 failed)"
+  ],
+  "normativeGatesEvaluated": {
+    "GateA_BuildAndConfigIdentity": "PASS",
+    "GateB_AuthoritativePostgreSQLAndScope": "PASS",
+    "GateC_ApprovalContractAndQCBinding": "PASS",
+    "GateD_PublicationSafetyAndIdempotency": "PASS",
+    "GateE_DurableWorkflowTerminalState": "PASS",
+    "GateF_EditableOutputFidelity": "PASS",
+    "GateG_CleanHostDisasterRecovery": "PASS",
+    "GateH_ModelTournamentQuality": "PASS"
+  },
+  "negativeRefusalTest": {
+    "command": "scripts/enforce_release_gate.sh --test-refusal",
+    "expectedBehavior": "Fail-closed non-zero exit when manifest flag violated",
+    "verified": true
+  }
+}

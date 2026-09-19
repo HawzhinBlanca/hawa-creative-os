@@ -1,0 +1,42 @@
+{
+  "auditDate": "2026-09-19",
+  "commands": {
+    "typecheck": "pnpm typecheck",
+    "pack": "python3 scripts/validate_pack.py",
+    "scan": "python3 infra/security/security_scan.py --self-test && python3 infra/security/security_scan.py",
+    "selected_tests": "pnpm exec vitest run packages/domain/test/domain.test.ts packages/domain/test/property-state-machine.test.ts packages/domain/test/orthography.test.ts packages/domain/test/sanitizer.test.ts packages/qa/test/qa.test.ts packages/qa/test/ship-copy-regressions.test.ts packages/integrations/test/google-publisher-bytes.test.ts"
+  },
+  "scanSelfTestInitialOutput": "self-test passed: 11 patterns detect their fixtures and ignore benign text.",
+  "commit": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "checks": {
+    "typecheck": {
+      "chunk_id": "0c061b",
+      "wall_time_seconds": 7.5e-7,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "pack": {
+      "chunk_id": "6835b6",
+      "wall_time_seconds": 7.08e-7,
+      "exit_code": 0,
+      "original_token_count": 18,
+      "output": "PASS=591 WARN=0 FAIL=0\nHawa Creative OS blueprint validation passed.\n"
+    },
+    "scan": {
+      "chunk_id": "26dfee",
+      "wall_time_seconds": 3.34e-7,
+      "exit_code": 1,
+      "original_token_count": 35,
+      "output": "SECURITY SCAN FAILED: 1 committable file(s) contain credential material:\n  - apps/desk/test/desk-auth.test.ts:18 quoted_secret_assignment\n"
+    },
+    "selected_tests": {
+      "chunk_id": "e46896",
+      "wall_time_seconds": 2.08e-7,
+      "exit_code": 0,
+      "original_token_count": 43,
+      "output": "\n Test Files  7 passed (7)\n      Tests  60 passed (60)\n   Start at  12:48:53\n   Duration  910ms (transform 127ms, setup 106ms, import 157ms, tests 70ms, environment 0ms)\n\n"
+    }
+  },
+  "scope": "Selected local checks only. No full suite, no production writes, no real external provider calls. Secret scan hit is a disposable test token; not a confirmed credential leak."
+}

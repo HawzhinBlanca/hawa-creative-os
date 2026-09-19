@@ -1,0 +1,53 @@
+{
+  "auditDate": "2026-09-19",
+  "sourceCommit": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "command": "node --import tsx output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts",
+  "exitCode": 0,
+  "meaningOfExitCode": "Probe ran successfully; this is NOT an acceptance pass. It reproduced defects.",
+  "networkAttempts": 0,
+  "transfer": {
+    "evidenceType": "real encoder, in-memory PPTX ZIP/XML inspection",
+    "expectedShape": {
+      "kind": "ellipse", "x": 100, "y": 100, "width": 120, "height": 120,
+      "color": "#FF0000", "opacity": 0.2, "rotation": 45,
+      "strokeWidth": 5, "strokeColor": "#0000FF", "role": "accent"
+    },
+    "manifestShape": {
+      "x": 100, "y": 100, "width": 120, "height": 120, "color": "#FF0000",
+      "kind": "ellipse", "opacity": 0.2, "strokeWidth": 5, "strokeColor": "#0000FF"
+    },
+    "actualShapeTypes": ["rect", "rect"],
+    "ellipsePreserved": false,
+    "rotationPreserved": false,
+    "shapeOpacityPreserved": false,
+    "blueStrokePreserved": false,
+    "textOpacityPreserved": false,
+    "textSpacingPreserved": false
+  },
+  "clientDna": {
+    "evidenceType": "real HTTP handlers with disposable in-memory state; no database",
+    "writeStatus": 201,
+    "changed": true,
+    "snapshotAuthor": "fabricated-author",
+    "recreatedAppPreservedChange": false,
+    "originalVersion": 1,
+    "savedVersion": 2,
+    "recreatedVersion": 1
+  },
+  "taskBinding": {
+    "evidenceType": "real service method with fake repository; not a live RLS exploit",
+    "suppliedTaskMatchesRun": false,
+    "suppliedActorMatchesRun": false,
+    "result": {
+      "runId": "33333333-3333-4333-8333-333333333333",
+      "status": "abandoned",
+      "message": "Studio run abandoned. A new generation may now be started."
+    },
+    "writesToFakeRepository": [[
+      "33333333-3333-4333-8333-333333333333",
+      "tenant-fixture",
+      "abandoned",
+      {"diagnostic": "Abandoned by different-actor: Read-only in-memory audit"}
+    ]]
+  }
+}

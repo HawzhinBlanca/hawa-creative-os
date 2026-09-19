@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-18T21:42:37Z",
+  "generatedAt": "2026-09-19T16:03:26Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 221,
+  "fileCount": 229,
   "files": [
     {
       "path": ".dockerignore",
@@ -61,6 +61,11 @@
       "path": "README.md",
       "sha256": "0b2520a7e15158fbc4aef64b671d90152983c4f7a83a49e71fd2963bc6a3b437",
       "bytes": 2858
+    },
+    {
+      "path": "RELEASE_MANIFEST.json",
+      "sha256": "df7eb3e84b07a2686b90caf373d8761df47d3ff1917534a6171fb4d37e57c1f3",
+      "bytes": 5808
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -629,8 +634,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "d12d0a5bfd8dabe1e2d8944ca60430cdb98bdc29a3a1471eed9b5cd31fc4ee77",
-      "bytes": 82272
+      "sha256": "a9c11ae05802ec2a98854cdb5ca7f5a32c2ba53a9b02cfb4c2ce9479932a0ab7",
+      "bytes": 61233
     },
     {
       "path": "plans/user-stories.csv",
@@ -788,6 +793,11 @@
       "bytes": 4120
     },
     {
+      "path": "scripts/disaster_recovery_drill.sh",
+      "sha256": "1be2548d1072e5628cb19ba40401b3e0d92c0dccea6cc1c13669110ed5b773a4",
+      "bytes": 23805
+    },
+    {
       "path": "scripts/dispatch_authentic_kaae_telegram.ts",
       "sha256": "0426fe429a4a0777af3d8b2d16b913c8b52a519f15b39a732ecd9ef72a289488",
       "bytes": 2563
@@ -796,6 +806,11 @@
       "path": "scripts/drain_outbox.ts",
       "sha256": "68ffd82ae2e003c4676cb43bcc4f90528bca4add8e614bd751b86a991239ac4e",
       "bytes": 2054
+    },
+    {
+      "path": "scripts/enforce_release_gate.sh",
+      "sha256": "67192fea9be9b43aeb47a7a4895a8dcaca1396da65de8fa35da4d42c1fcbb039",
+      "bytes": 9825
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -888,6 +903,11 @@
       "bytes": 8325
     },
     {
+      "path": "scripts/generate_release_manifest.ts",
+      "sha256": "63cdf919311f84dd8f0ad30d95750db9079c74157c079c9b69fbce78954d7d0b",
+      "bytes": 5153
+    },
+    {
       "path": "scripts/generate_t06_motifs.ts",
       "sha256": "24fe320707b0e8f004a783f83ec9e54b42ca35d925740d16612157ee6b0f10ad",
       "bytes": 1934
@@ -901,6 +921,11 @@
       "path": "scripts/launch_hawa_os.sh",
       "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362",
       "bytes": 6006
+    },
+    {
+      "path": "scripts/measure_operations_slo.ts",
+      "sha256": "6dc309e5f2880014ee3578cd5fdb5a1371a003b86a7926e2d82483794a5e3376",
+      "bytes": 15772
     },
     {
       "path": "scripts/package_t8_blind_eval.ts",
@@ -1018,14 +1043,19 @@
       "bytes": 75127
     },
     {
+      "path": "scripts/run_model_tournament.ts",
+      "sha256": "06da5e3d5b8e6834eac9ee6ecac131a0f37ab3a6c11cad80190edc9fbd719909",
+      "bytes": 10549
+    },
+    {
       "path": "scripts/run_p10_qualification.ts",
       "sha256": "659cfafc75151d9fe0c6f360bf76e96db23acf6469d2ee69faf4a8761728a7e9",
       "bytes": 69269
     },
     {
       "path": "scripts/run_studio_qualification.ts",
-      "sha256": "c1b9c01992532d7a6cf8dfdc7908d77a4f1e19375999d5777619b34c6260d588",
-      "bytes": 7880
+      "sha256": "825129414245085118966fdcde841d8a1eb60c45df01ec77e38e88ca18821d2b",
+      "bytes": 8276
     },
     {
       "path": "scripts/run_v1_baseline.ts",
@@ -1073,6 +1103,11 @@
       "bytes": 3345
     },
     {
+      "path": "scripts/update_traceability_remediation.py",
+      "sha256": "3369fa0c50c6f1ef8f4835f3e4b7e91c72bc0b717db13e896e8b52f394ac8eb7",
+      "bytes": 20369
+    },
+    {
       "path": "scripts/validate_pack.py",
       "sha256": "323a8475b657c0cbd9cc0c98fe2c8dbb7c8d94294fbbb26bd7faeda6dab6bddc",
       "bytes": 23821
@@ -1091,6 +1126,11 @@
       "path": "scripts/verify_live_h04_h05_h10.ts",
       "sha256": "1a82c0e6124450372c915da9578f7472dbe5569e2872a9de881c72e163bca504",
       "bytes": 6915
+    },
+    {
+      "path": "scripts/verify_release_manifest.ts",
+      "sha256": "69331ea908af8419c35c7dba8d7bb0216c6b2d014ffa311d6837a9a2331a825d",
+      "bytes": 3961
     },
     {
       "path": "scripts/verify_t8_ratings.ts",

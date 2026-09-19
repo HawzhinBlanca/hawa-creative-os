@@ -1,4 +1,4 @@
-import type { Generated } from 'kysely';
+import type { Generated, ColumnType } from 'kysely';
 
 export interface TenantsTable {
   id: Generated<string>;
@@ -605,10 +605,26 @@ export interface DesignFeedbackTable {
   created_at: Generated<Date>;
 }
 
+export interface ClientDnaVersionsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  client_id: string;
+  version: number;
+  status: 'draft' | 'active' | 'inactive' | 'superseded' | 'deleted';
+  dna: ColumnType<unknown, string | object, string | object>;
+  content_hash: string;
+  effective_from: Date | null;
+  effective_until: Date | null;
+  created_by: string | null;
+  approved_by: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   tenants: TenantsTable;
   users: UsersTable;
   clients: ClientsTable;
+  client_dna_versions: ClientDnaVersionsTable;
   projects: ProjectsTable;
   client_channels: ClientChannelsTable;
   tasks: TasksTable;

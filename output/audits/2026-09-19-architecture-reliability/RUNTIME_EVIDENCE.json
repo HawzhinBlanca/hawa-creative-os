@@ -1,0 +1,46 @@
+{
+  "observedAt": "2026-09-19, approximately 09:45–09:49 UTC",
+  "operation": "Read-only Docker inspect/exec and PostgreSQL SHOW; no application or database writes",
+  "sourceHead": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "core": {
+    "declaredBuild": "5180108b824a30551731f11eb9f677abb9f29c65",
+    "image": "sha256:ae8be41d5d41fae9459f5534b6ee7594fba3f100bc76869542afd25af8e86010",
+    "created": "2026-09-18T22:18:18.294557925Z",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "files": [
+      {
+        "path": "/app/apps/core/src/app.ts",
+        "sha256": "83ef0ed0badeb016bc3f6469d4a25230452df7f61c24e1387fe9abb86f44f4c8",
+        "matchesCommit": "5180108",
+        "headSha256": "345783410d9594ebdc81b81b7edb09231a8c23d5b60e416ae6b5700b432b868d"
+      },
+      {
+        "path": "/app/packages/integrations/src/google-publisher.ts",
+        "sha256": "dd5102b67f16d27bc7020af62b28c79ce443e1963344531a9fedeecf6936a482",
+        "matchesCommit": "5180108",
+        "headSha256": "799cee39b4f9b2a66a835f75233edb2df67218492b62a73e9e2e0f9aa1e31f18"
+      }
+    ],
+    "limit": "Two included source files verified. Full compiled-build attestation not performed."
+  },
+  "postgres": {
+    "container": "hawa-production-postgres-1",
+    "query": "SHOW archive_mode; SHOW archive_command; SHOW wal_level;",
+    "result": [
+      "off",
+      "(disabled)",
+      "replica"
+    ]
+  },
+  "notRun": [
+    "production crash injection",
+    "provider publication",
+    "backup/restore",
+    "deployment",
+    "full-suite",
+    "paid model calls"
+  ]
+}

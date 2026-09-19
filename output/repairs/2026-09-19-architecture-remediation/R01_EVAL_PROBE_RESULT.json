@@ -1,0 +1,40 @@
+{
+  "auditDate": "2026-09-19",
+  "commit": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "scope": "Offline counterexamples only; no claim about deployed runtime or live providers",
+  "missingEvidence": {
+    "stimulus": "API returns transferred status but no winner, image, QA, canary, tournament, or parity evidence",
+    "expected": "Missing evidence must be unknown/failed and cannot constitute qualification",
+    "interceptedCalls": 3,
+    "observed": {
+      "status": "incomplete",
+      "canary": {
+        "winnerId": "",
+        "passed": false,
+        "verdict": "UNMEASURED"
+      },
+      "tournament": {
+        "winnerId": "",
+        "candidateScores": {},
+        "pairwiseRounds": 0
+      },
+      "previewSha256": ""
+    },
+    "defectReproduced": false
+  },
+  "alwaysAbstain": {
+    "stimulus": "Every case gets only decision=abstain and confidence=1; no client, project, brief, or exact copy",
+    "expected": "This response cannot demonstrate correct routing/brief generation for all cases",
+    "datasetCases": 200,
+    "casesNotRequiringAbstention": 195,
+    "observed": {
+      "dataset": "routing_brief.jsonl",
+      "totalCases": 200,
+      "passedCases": 5,
+      "failedCases": 195,
+      "passRate": 2.5,
+      "criticalViolations": 0
+    },
+    "defectReproduced": false
+  }
+}

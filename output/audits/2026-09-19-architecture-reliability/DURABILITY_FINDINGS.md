@@ -1,0 +1,73 @@
+# Independent durability and publication audit — 19 September 2026
+
+Audited source: `664ad55b85930b3cd29c6be170fc13f0d2876f66`, initially clean worktree. The only writes from this audit are these evidence artifacts. No production database, provider service, credentials, or environment file was accessed by this auditor. The root auditor separately reports deployed stamp `5180108`, with both design flags off: this report's executable results qualify the current checkout, not that deployment.
+
+The architecture's durable-workflow and exact-approval principles are sensible, but the implemented publication boundary does not provide the documented logical exactly-once or complete verification guarantees. These are demonstrated defects, not a conclusion inferred from test counts. The 19 September fixes genuinely improve truthfulness, pinned bytes, and incomplete Sheets status; they do not close the crash/replay boundary.
+
+## Executed evidence
+
+Run from repository root:
+
+```sh
+node output/audits/2026-09-19-architecture-reliability/PUBLICATION_PROBE.mjs
+```
+
+The probe transpiles the current `google-publisher.ts` source and replaces all HTTP transport with deterministic synthetic responses. It neither starts the app nor contacts a database/provider. Its exit code 0 means execution succeeded, not system correctness. The emitted source hash and observations are preserved in [PUBLICATION_PROBE.json](PUBLICATION_PROBE.json). The first saved script invocation had a relative-path error and made no provider calls; that path was corrected and the saved script executed successfully.
+
+| Fault injected | Observed result | Required result |
+|---|---|---|
+| Same publication through a fresh publisher instance | 2 Drive files, 2 Sheet rows | 1 logical file and 1 row |
+| Drive accepted upload, response lost | First call throws; retry leaves 2 files | Find/reuse existing file or require reconciliation |
+| Sheet accepted append, response lost | `drive_complete` then `complete`, but 2 rows | Resolve existing immutable task row |
+| Wrong remote SHA-256, same name/type/size | Publication `complete`, file `verified`; later explicit verify reports inconsistent | Initial completion refused |
+| Row inserted above task after append and readback failure | Retry overwrites another task's row and leaves two copies of publishing task | Preserve unrelated row; locate row by immutable task identity |
+| Two concurrent calls using same key | 2 Drive files, 2 Sheet rows | One effective publication |
+
+## D1 — P1: Publication idempotency is process-local and journaled after external effects
+
+**Confirmed by isolated execution.** The publisher stores completed receipts and row positions only in Maps ([google-publisher.ts:29](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:29)); its idempotency lookup is not a lock or durable reservation ([123](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:123)). It issues a new Drive `POST` without reconciliation ([293](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:293)) and stores the receipt only after every upload and Sheets action ([413](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:413)). The Core route calls the provider at [app.ts:5117](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5117), then first creates its publication DB row at [5153](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5153). A crash, timeout, concurrent request, or later-file failure therefore leaves effects outside the durable transaction. The ordinary route and omnichannel route also derive different publication keys for the same approval: [5070](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5070) versus [2444](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:2444).
+
+Scope: FR-047, FR-049, FR-060, NFR-020; `docs/10_WORKFLOW_RELIABILITY.md` §§3–4, 9, 12. Existing `packages/integrations/test/google-publisher-bytes.test.ts:152` checks a same-instance retry after an explicit HTTP500; it does not simulate remote success before response loss, a new instance, or concurrency.
+
+**Required implementation and proof:** unify both routes behind one durable publication command and stable identity; reserve immutable request/destination hashes before external work; persist per-artifact progress; use a provider-supported identity/reconciliation strategy for ambiguous creates; resume from durable records. Kill the worker/Core before and after each remote effect and before/after each receipt commit, including the second file in a multi-file package. Restart the real processes, replay both entry routes and concurrent requests, independently list remote files/rows, and show exactly one logical set with the approved hashes. A new-process mock test is necessary but not sufficient for live qualification.
+
+## D2 — P1: Sheets identifies rows by cached position and can overwrite unrelated work
+
+**Confirmed by isolated execution.** [google-publisher.ts:426](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:426) caches a row by task ID only. The retry blindly writes to that position at [452](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:452), before reading the immutable task identity. First/restarted calls append at [459](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:459). All ranges omit a sheet tab; `destination.sheetId` is recorded in the receipt but not used to select the write target. Moved rows, inserted rows, a destination-sheet change, and ambiguous append responses are therefore unsafe.
+
+Scope: FR-049, FR-050, NFR-020. **Proof:** use a dedicated test spreadsheet with two tabs and unrelated sentinel rows. Move, delete, duplicate and insert rows; change tab order; inject append/update success followed by lost response; restart. Reconcile by immutable task identity, flag ambiguous duplicates, target the configured sheet, and prove no unrelated cell changed. Include before/after exports and independent row enumeration, not just the publisher receipt.
+
+## D3 — P1: Initial completion does not verify remote content, parent folder or permissions
+
+**Checksum failure confirmed by isolated execution; missing destination/permission checks confirmed by source inspection.** Initial readback requests only `id,name,size,mimeType,webViewLink` ([google-publisher.ts:327](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:327)). `verified` is derived from ID/name/size/type alone ([346](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:346)); the receipt's `expectedSha256` remains the locally supplied hash, not a measured remote digest. The separate `verify()` added on 19 September can detect a reported remote checksum mismatch ([580](/Users/hawzhin/Hawdesign/packages/integrations/src/google-publisher.ts:580)), but neither Core publication route calls it before completion. It also does not request parents/permissions.
+
+Scope: FR-046, FR-048; `AI_BUILD_PROMPT.md` publication invariants. **Proof:** fail initial completion for equal-length wrong content, missing digest without an admitted alternative content readback, wrong parent/shared-drive destination, trashed files, and incorrect sharing permissions. Observe the approved package hash, independently downloaded remote hashes, actual parents and permitted access. Metadata-only success must not be represented as verified content.
+
+## D4 — P1: Partial publication cannot resume normally after a Core restart; remote reconciliation is absent
+
+**Source-confirmed path; no live crash exercised.** The partial state is retained as `PUBLISH_RECONCILIATION` in memory but `publishing` in PostgreSQL ([app.ts:2501](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:2501), [5137](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5137)). Hydration produces `PUBLISHING` ([1479](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:1479)); the normal publish route accepts only approved or publish_reconciliation ([5029](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5029)). The omnichannel route records receipts only in its Map ([2541](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:2541)); it does not create durable publication/Drive/Sheet records like the ordinary route.
+
+The operations reconciliation endpoint only compares Maps ([system.routes.ts:317](/Users/hawzhin/Hawdesign/apps/core/src/routes/system.routes.ts:317), [328](/Users/hawzhin/Hawdesign/apps/core/src/routes/system.routes.ts:328)). It now honestly discloses this and refuses invented repairs ([313](/Users/hawzhin/Hawdesign/apps/core/src/routes/system.routes.ts:313)); this is a real improvement, but FR-050 still lacks scheduled PostgreSQL-versus-remote reconciliation. The production workflow ends at visual review ([canva-draft-workflow.ts:227](/Users/hawzhin/Hawdesign/apps/worker/src/canva-draft-workflow.ts:227)); the default `publish.drive` outbox handler is explicitly unregistered ([outbox-consumer.ts:107](/Users/hawzhin/Hawdesign/apps/worker/src/outbox-consumer.ts:107)).
+
+Scope: FR-050, FR-060, FR-061. **Proof:** Drive completes while Sheets is unavailable; terminate Core; restart; use normal operator retry, without manually editing state or rerunning the whole design. Preserve original remote files, repair only the Sheet row, write durable receipts, and reach COMPLETE. Then delete/move/tamper a remote file/row and prove scheduled reconciliation detects it from an independently fresh process. Historical map-only simulation cannot satisfy this gate.
+
+## D5 — P1: Approval pins bytes, but does not bind those bytes to the reviewed revision and QA evidence
+
+**Missing binding confirmed by source; rejection behavior requires new integration tests.** Pinning selects any retrieved export belonging to the task ([app.ts:5872](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5872); [canva-connect-service.ts:375](/Users/hawzhin/Hawdesign/apps/core/src/services/canva-connect-service.ts:375)). That query does not constrain design ID, binding version, source revision, QA run or content-check result. Mapping to pins discards operation/version fields ([pinned-deliverables.ts:29](/Users/hawzhin/Hawdesign/apps/core/src/services/pinned-deliverables.ts:29)). The DB approval correctly checks a passing QC row for the revision, but selects an arbitrary matching run rather than an explicit reviewed/latest run ([revision.repository.ts:237](/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:237)); the schema permits multiple attempts ([schema.sql:674](/Users/hawzhin/Hawdesign/db/schema.sql:674)). Exact bytes alone do not prove those were the bytes checked by that QA run.
+
+Scope: FR-041, FR-044, FR-045; `docs/12_HUMAN_REVIEW.md` §§3, 5. **Proof:** capture A, edit/rebind to B, run passing QA only for B, then attempt to pin A under B's approval; attempt to pin a retrieved but failed-content-check export. Both must be rejected unless an explicit, fully evidenced historical-approval policy covers the exact package. Also test earlier PASS/later FAIL on one revision, changing QC hash, concurrent edit/approval, and fresh-process replay. Persist source, capture-set, artifact-set and QA identities atomically, and require expected revision/version at the server boundary.
+
+## D6 — P1: Terminal notifications can be silently lost or duplicated across the Core boundary
+
+**Source-confirmed path; no real Telegram sends performed.** The durable worker wraps its notification call in `.catch(() => ({}))` inside `ctx.run` ([canva-draft-workflow.ts:70](/Users/hawzhin/Hawdesign/apps/worker/src/canva-draft-workflow.ts:70)), so a Core outage before notification creation is journaled as a successful step and cannot be retried. Core directly sends Telegram status ([app.ts:5381](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5381)) and returns HTTP200 even when `notificationSent:false` ([5421](/Users/hawzhin/Hawdesign/apps/core/src/app.ts:5421)). The handler creates no durable notification intent/receipt; the default `notify.telegram` outbox handler is also unregistered ([outbox-consumer.ts:114](/Users/hawzhin/Hawdesign/apps/worker/src/outbox-consumer.ts:114)). A crash after send but before the worker journal records success permits duplicate sends. `TelegramBridge` distinguishes delivery uncertainty ([telegram-bridge.ts:597](/Users/hawzhin/Hawdesign/packages/integrations/src/telegram-bridge.ts:597)), but the overall workflow discards it.
+
+Scope: FR-051, FR-060. **Proof:** save notification intent before sending, independent of publication rollback. Crash before intent creation, after intent commit, during send, after Telegram accepts but before local acknowledgment, and during photo sends. Confirm durable pending/sent/uncertain records and an actionable operator view. Because Telegram delivery ambiguity cannot simply be solved by blind retries, demonstrate the agreed deduplication/uncertainty policy rather than claim physical exactly-once internet delivery.
+
+## Additional lower-priority evidence contracts
+
+- `TaskWorkflowDispatcher` synthesizes an invocation receipt on every HTTP409 without reading an actual invocation ID or verifying the stored payload ([workflow-dispatcher.ts:84](/Users/hawzhin/Hawdesign/apps/worker/src/workflow-dispatcher.ts:84)). Require a real engine receipt and payload match; test arbitrary/conflicting 409 separately from a genuine duplicate. This branch was source-inspected, not exercised against Restate.
+- `reconcileTasksFromEvents` promotes a task to approved if *any historical approval* exists ([task-reconciliation.ts:99](/Users/hawzhin/Hawdesign/packages/db/src/task-reconciliation.ts:99)), without matching current revision/invalidation. This helper is called by `scripts/reconcile_production_tasks.ts`; it is not shown to run automatically in the production app. Before using that repair command, prove rejected/revised tasks are not resurrected from historical approvals.
+
+## Admission standard
+
+Treat the six executable probe observations as reproduced defects. Treat the crash, DB, real provider, latest-QA and notification scenarios as explicit NOT_RUN acceptance gates until independently executed. Preserve raw command/output, exact commit/image/config stamps, start/end timestamps, injected fault points, provider request IDs, sanitized event/receipt records, artifact hashes and independent remote listings. Reject evidence based only on Map counts, mocks presented as live, hand-written successful receipts, a happy-path screenshot, or test-count totals. Accept robustness only for a stated deployment configuration and bounded service objective; no software earns an absolute failure-free 10/10 guarantee.

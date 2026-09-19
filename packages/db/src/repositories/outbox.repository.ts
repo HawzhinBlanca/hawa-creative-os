@@ -192,5 +192,120 @@ export class OutboxRepository {
         .executeTakeFirstOrThrow();
     }
   }
+
+  async findByAggregateId(
+    tenantId: string,
+    aggregateTypeOrId: string,
+    aggregateIdOrTrx?: string | Kysely<Database>,
+    trx?: Kysely<Database>
+  ) {
+    let aggregateType: string | undefined;
+    let aggregateId: string;
+    let clientTrx: Kysely<Database> | undefined;
+
+    if (typeof aggregateIdOrTrx === 'string') {
+      aggregateType = aggregateTypeOrId;
+      aggregateId = aggregateIdOrTrx;
+      clientTrx = trx;
+    } else {
+      aggregateId = aggregateTypeOrId;
+      clientTrx = aggregateIdOrTrx as Kysely<Database> | undefined;
+    }
+
+    const client = clientTrx || this.db;
+    let query = client
+      .selectFrom('outbox_commands')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('aggregate_id', '=', aggregateId);
+    if (aggregateType) {
+      query = query.where('aggregate_type', '=', aggregateType);
+    }
+    return await query.orderBy('created_at', 'desc').execute();
+  }
+
+  async findById(idOrTenantId: string, idOrTrx?: string | Kysely<Database>, trx?: Kysely<Database>) {
+    let id: string;
+    let tenantId: string | undefined;
+    let clientTrx: Kysely<Database> | undefined;
+
+    if (typeof idOrTrx === 'string') {
+      tenantId = idOrTenantId;
+      id = idOrTrx;
+      clientTrx = trx;
+    } else {
+      id = idOrTenantId;
+      clientTrx = idOrTrx as Kysely<Database> | undefined;
+    }
+
+    const client = clientTrx || this.db;
+    let query = client.selectFrom('outbox_commands').selectAll().where('id', '=', id);
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.executeTakeFirst();
+  }
+
+  async markPermanentFailure(id: string, error: string, trx?: Kysely<Database>) {
+    const client = trx || this.db;
+    return await client
+      .updateTable('outbox_commands')
+      .set((eb) => ({
+        state: 'failed',
+        attempts: eb('attempts', '+', 1),
+        last_error: error,
+        leased_until: null,
+      }))
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async markUncertain(id: string, error: string, trx?: Kysely<Database>) {
+    const client = trx || this.db;
+    const prefix = error.startsWith('DELIVERY_UNCERTAIN:') ? error : `DELIVERY_UNCERTAIN: ${error}`;
+    return await client
+      .updateTable('outbox_commands')
+      .set((eb) => ({
+        state: 'failed',
+        attempts: eb('attempts', '+', 1),
+        last_error: prefix,
+        leased_until: null,
+      }))
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async redrive(idOrTenantId: string, idOrTrx?: string | Kysely<Database>, trx?: Kysely<Database>) {
+    let id: string;
+    let tenantId: string | undefined;
+    let clientTrx: Kysely<Database> | undefined;
+
+    if (typeof idOrTrx === 'string') {
+      tenantId = idOrTenantId;
+      id = idOrTrx;
+      clientTrx = trx;
+    } else {
+      id = idOrTenantId;
+      clientTrx = idOrTrx as Kysely<Database> | undefined;
+    }
+
+    const client = clientTrx || this.db;
+    let query = client
+      .updateTable('outbox_commands')
+      .set({
+        state: 'pending',
+        attempts: 0,
+        available_at: new Date(),
+        last_error: null,
+        leased_until: null,
+      })
+      .where('id', '=', id);
+    if (tenantId) {
+      query = query.where('tenant_id', '=', tenantId);
+    }
+    return await query.returningAll().executeTakeFirstOrThrow();
+  }
 }
 

@@ -2,17 +2,18 @@ import type { QAFinding } from '@hawa/contracts';
 import type { ExactCopyBlock } from '@hawa/domain';
 
 export function normalizeForComparison(text: string): string {
+  if (!text) return '';
   return text.normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
 // Consume whole approved blocks, longest first: a headline repeated inside an
 // approved paragraph is not an extra headline. Text may wrap across live nodes.
 function consumeApproved(texts: string[], blocks: ExactCopyBlock[]) {
-  let remaining = texts.map(normalizeForComparison).join(' ');
+  let remaining = (texts || []).map(normalizeForComparison).join(' ');
   const missing: ExactCopyBlock[] = [];
-  const ordered = [...blocks].sort((a, b) => b.text.length - a.text.length);
+  const ordered = [...(blocks || [])].sort((a, b) => (b.text || '').length - (a.text || '').length);
   for (const block of ordered) {
-    const target = normalizeForComparison(block.text);
+    const target = normalizeForComparison(block?.text || '');
     if (!target) continue;
     const index = findBlock(remaining, target);
     if (index < 0) missing.push(block);

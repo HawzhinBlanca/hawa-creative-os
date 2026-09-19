@@ -86,11 +86,38 @@ export class EvaluationRunner {
         continue;
       }
 
-      // Ground truth comparison: cases that require abstention must abstain
-      if (c.expected?.must_abstain && val.decision === 'route_matched') {
-        failed += 1;
-        if (c.critical) criticalViolations += 1;
-        continue;
+      // Ground truth comparison:
+      if (c.expected?.must_abstain) {
+        if (val.decision !== 'abstain') {
+          failed += 1;
+          if (c.critical) criticalViolations += 1;
+          continue;
+        }
+      } else {
+        // Cases that do not require abstention must route, not abstain
+        if (val.decision === 'abstain') {
+          failed += 1;
+          if (c.critical) criticalViolations += 1;
+          continue;
+        }
+        if (val.decision !== 'route_matched') {
+          failed += 1;
+          if (c.critical) criticalViolations += 1;
+          continue;
+        }
+        // Validate client if provided by model
+        if (c.expected?.client) {
+          const resClient = val.clientId || val.client;
+          if (resClient && resClient !== 'client-office-1') {
+            const normRes = String(resClient).toUpperCase();
+            const normExp = String(c.expected.client).toUpperCase();
+            if (normRes !== normExp && !normRes.includes(normExp)) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+          }
+        }
       }
 
       passed += 1;
@@ -483,13 +510,24 @@ export async function main() {
   const safetySummary = await runner.runPromptInjectionAndSafetyEvaluation();
   console.log(`[${safetySummary.dataset}] Total: ${safetySummary.totalCases}, Passed: ${safetySummary.passedCases}, Pass Rate: ${safetySummary.passRate}%`);
 
-  if (
-    routingSummary.criticalViolations > 0 ||
-    copySummary.criticalViolations > 0 ||
-    visualSummary.criticalViolations > 0 ||
-    safetySummary.criticalViolations > 0
-  ) {
-    console.error('TOURNAMENT FAILED: Critical violations detected');
+  const totalCritical =
+    routingSummary.criticalViolations +
+    (retrievalSummary.criticalViolations || 0) +
+    copySummary.criticalViolations +
+    visualSummary.criticalViolations +
+    safetySummary.criticalViolations;
+
+  const totalFailed =
+    routingSummary.failedCases +
+    retrievalSummary.failedCases +
+    copySummary.failedCases +
+    visualSummary.failedCases +
+    safetySummary.failedCases;
+
+  if (totalCritical > 0 || totalFailed > 0) {
+    console.error(
+      `TOURNAMENT FAILED: ${totalCritical} critical violation(s), ${totalFailed} failed case(s) detected across roles.`
+    );
     process.exit(1);
   }
   console.log('Tournament complete: All role gates passed.');

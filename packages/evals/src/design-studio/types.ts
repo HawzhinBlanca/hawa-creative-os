@@ -47,22 +47,22 @@ export interface Concept {
 export interface CanaryResult {
   winnerId: string;
   passed: boolean;
-  scoreAgainstDegraded1Normal: number;
-  scoreAgainstDegraded1Swapped: number;
-  scoreAgainstDegraded2Normal: number;
-  scoreAgainstDegraded2Swapped: number;
-  verdict: 'RELIABLE' | 'UNRELIABLE';
+  scoreAgainstDegraded1Normal?: number;
+  scoreAgainstDegraded1Swapped?: number;
+  scoreAgainstDegraded2Normal?: number;
+  scoreAgainstDegraded2Swapped?: number;
+  verdict: 'RELIABLE' | 'UNRELIABLE' | 'UNMEASURED';
 }
 
 export interface TournamentResult {
   winnerId: string;
   candidateScores: Record<string, number>;
-  swapConsistencyRate: number;
-  pairwiseRounds: number;
+  swapConsistencyRate?: number;
+  pairwiseRounds?: number;
 }
 
 export interface ParityResult {
-  parity: 'match' | 'minor' | 'major';
+  parity: 'match' | 'minor' | 'major' | 'unmeasured';
   divergences: Array<{
     what: string;
     region?: { x: number; y: number; w: number; h: number };
@@ -70,7 +70,7 @@ export interface ParityResult {
   }>;
   fontSubstituted: boolean;
   textReflowed: boolean;
-  copyVisibleIdentical: boolean;
+  copyVisibleIdentical?: boolean;
 }
 
 export interface StudioEvalRunResult {
@@ -78,20 +78,20 @@ export interface StudioEvalRunResult {
   briefName: string;
   language: string;
   dimensions: string;
-  status: 'transferred' | 'degraded' | 'failed';
+  status: 'transferred' | 'degraded' | 'failed' | 'incomplete';
   ladderRung: number;
   rungsTriggered: string[];
   callsCount: number;
   spentUsd: number;
   durationMs: number;
-  winnerScore: number;
+  winnerScore?: number;
   canary: CanaryResult;
   tournament: TournamentResult;
-  hardQaEscapes: number;
+  hardQaEscapes?: number;
   canvaDesignId?: string;
   previewSha256?: string;
   parity?: ParityResult;
-  fontFidelity: 'exact' | 'stand-in';
+  fontFidelity: 'exact' | 'stand-in' | 'unmeasured';
 }
 
 export interface StudioEvalReport {

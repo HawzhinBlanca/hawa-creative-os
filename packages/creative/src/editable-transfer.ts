@@ -6,6 +6,9 @@ export interface EditableTransferPlan {
   width: number; height: number; background: string;
   text: Array<{ copyIndex: number; x: number; y: number; width: number; height: number;
     fontSize: number; fontFamily: string; color: string; align: 'left'|'center'|'right'; bold?: boolean;
+    italic?: boolean;
+    opacity?: number;
+    letterSpacing?: number;
     /** Line height multiple from the layout. Falls back to 1.4 when a caller does not supply it. */
     lineHeight?: number;
     /** Right-to-left block (Sorani Kurdish): written with rtl="1", right alignment and lang="ku". Set by the server, never by the model. */
@@ -17,7 +20,7 @@ export interface EditableTransferPlan {
    */
   shapes: Array<{ x: number; y: number; width: number; height: number; color: string;
     kind?: 'rect'|'roundRect'|'ellipse'|'line'; opacity?: number; radius?: number;
-    strokeWidth?: number; strokeColor?: string }>;
+    rotation?: number; strokeWidth?: number; strokeColor?: string }>;
   logo?: { x: number; y: number; width: number; height: number };
   backgroundImage?: { bytes: Buffer; mimeType: 'image/png'|'image/jpeg' };
 }
@@ -66,21 +69,27 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
     const kind=shape.kind||'rect';
     const transparency=shape.opacity!==undefined&&shape.opacity!==null?Math.round((1-shape.opacity)*100):0;
     const geom={x:shape.x/96,y:shape.y/96,w:shape.width/96,h:shape.height/96};
+    const rotate = typeof shape.rotation === 'number' ? shape.rotation : 0;
     if(kind==='line'){
       // Mirrors the raster: a rule is a stroked line, not a filled box.
-      slide.addShape(pptx.ShapeType.line,{...geom,h:0,
+      slide.addShape(pptx.ShapeType.line,{...geom,h:0,rotate,
         line:{color:hex(shape.strokeColor||shape.color),width:Math.max(0.75,(shape.strokeWidth??Math.max(1,shape.height))*0.75),transparency}});
       continue;
     }
     const type=kind==='ellipse'?pptx.ShapeType.ellipse:kind==='roundRect'?pptx.ShapeType.roundRect:pptx.ShapeType.rect;
-    slide.addShape(type,{...geom,
+    slide.addShape(type,{...geom,rotate,
       fill:{color:hex(shape.color),transparency},
-      line:shape.strokeColor?{color:hex(shape.strokeColor),width:Math.max(0.75,(shape.strokeWidth||1)*0.75)}:{color:hex(shape.color),transparency:100},
+      line:shape.strokeColor?{color:hex(shape.strokeColor),width:Math.max(0.75,(shape.strokeWidth||1)*0.75),transparency:0}:{color:hex(shape.color),transparency:100},
       ...(kind==='roundRect'&&shape.radius?{rectRadius:shape.radius/96}:{})});
   }
-  for(const t of plan.text)slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,
-    fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),align:t.rtl?'right':t.align,bold:t.bold||false,
-    margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
+  for(const t of plan.text){
+    const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
+    slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,
+      fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),transparency:textTransparency,
+      ...(t.letterSpacing !== undefined && t.letterSpacing !== null ? { charSpacing: t.letterSpacing } : {}),
+      align:t.rtl?'right':t.align,bold:t.bold||false,italic:t.italic||false,
+      margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
+  }
   if(plan.logo&&logo)slide.addImage({data:`${logo.mimeType};base64,${logo.bytes.toString('base64')}`,x:plan.logo.x/96,y:plan.logo.y/96,w:plan.logo.width/96,h:plan.logo.height/96});
   const bytes=await pptx.write({outputType:'nodebuffer'}) as Buffer;
   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),manifest:{width:plan.width,height:plan.height,

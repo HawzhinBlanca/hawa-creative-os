@@ -65,7 +65,7 @@ import {
   pendingV3Concept,
 } from './stages/index.js';
 
-export type Scope = { tenantId: string; actorId: string };
+export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
@@ -729,6 +729,12 @@ export class DesignStudioService {
     const run = await this.repo.getRunById(runId, s.tenantId);
     if (!run) {
       throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
+    }
+    if (run.task_id && taskId && run.task_id !== taskId) {
+      throw new CanvaFlowError(403, 'TASK_SCOPE_MISMATCH', 'The studio run belongs to a different task.');
+    }
+    if (run.actor_id && s.actorId && run.actor_id !== s.actorId && s.role !== 'administrator' && s.role !== 'art_director') {
+      throw new CanvaFlowError(403, 'ACTOR_SCOPE_MISMATCH', 'Studio run can only be resumed by the initiating actor or an administrator/art director.');
     }
 
     // Terminal statuses
@@ -1643,6 +1649,12 @@ export class DesignStudioService {
   public async selectCandidate(s: Scope, taskId: string, runId: string, candidateId: string): Promise<StudioResumeResult> {
     const run = await this.repo.getRunById(runId, s.tenantId);
     if (!run) throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
+    if (run.task_id && taskId && run.task_id !== taskId) {
+      throw new CanvaFlowError(403, 'TASK_SCOPE_MISMATCH', 'The studio run belongs to a different task.');
+    }
+    if (run.actor_id && s.actorId && run.actor_id !== s.actorId && s.role !== 'administrator' && s.role !== 'art_director') {
+      throw new CanvaFlowError(403, 'ACTOR_SCOPE_MISMATCH', 'Studio candidate selection can only be performed by the initiating actor or an administrator/art director.');
+    }
     if (run.status !== 'awaiting_selection') {
       throw new CanvaFlowError(409, 'NOT_AWAITING_SELECTION', `Run is in status '${run.status}', not 'awaiting_selection'.`);
     }
@@ -1675,6 +1687,12 @@ export class DesignStudioService {
     return this.tx(s, async () => {
       const run = await this.repo.getRunById(runId, s.tenantId);
       if (!run) throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
+      if (run.task_id && taskId && run.task_id !== taskId) {
+        throw new CanvaFlowError(403, 'TASK_SCOPE_MISMATCH', 'The studio run belongs to a different task.');
+      }
+      if (run.actor_id && s.actorId && run.actor_id !== s.actorId && s.role !== 'administrator' && s.role !== 'art_director') {
+        throw new CanvaFlowError(403, 'ACTOR_SCOPE_MISMATCH', 'Studio run can only be abandoned by the initiating actor or an administrator/art director.');
+      }
       if (['transferred', 'abandoned'].includes(run.status)) {
         throw new CanvaFlowError(409, 'CANNOT_ABANDON', `Cannot abandon run in status '${run.status}'.`);
       }

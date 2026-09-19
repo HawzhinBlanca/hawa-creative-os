@@ -1,0 +1,23 @@
+{
+  "auditedAt": "2026-09-19",
+  "auditedCommit": "664ad55b85930b3cd29c6be170fc13f0d2876f66",
+  "sourceFile": "packages/integrations/src/google-publisher.ts",
+  "sourceSha256": "799cee39b4f9b2a66a835f75233edb2df67218492b62a73e9e2e0f9aa1e31f18",
+  "proofClass": "isolated execution of current source with synthetic provider transport",
+  "realProviderProof": false,
+  "databaseAccess": false,
+  "externalNetworkAccess": false,
+  "findingsReproduced": {
+    "newProcessEquivalentReplay": { "driveFiles": 2, "sheetRows": 2, "expectedLogicalFiles": 1, "expectedLogicalRows": 1 },
+    "lostUploadSuccessResponse": { "firstCallThrew": true, "driveFiles": 2, "sheetRows": 1 },
+    "lostSheetSuccessResponse": { "firstState": "drive_complete", "finalState": "complete", "driveFiles": 1, "sheetRows": 2 },
+    "wrongRemoteChecksumSameSize": { "publishState": "complete", "fileMarkedVerified": true, "independentLaterVerifyConsistent": false },
+    "rowMovedBeforeRetry": {
+      "initialState": "drive_complete", "finalState": "complete",
+      "overwrittenTaskIds": ["synthetic-other-task"],
+      "finalTaskIds": ["synthetic-task-a", "synthetic-task-a"],
+      "configuredSheetId": 123, "allSheetRangesUnqualified": true
+    },
+    "concurrentSameKey": { "driveFiles": 2, "sheetRows": 2 }
+  }
+}

@@ -30,6 +30,7 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       kind: s.kind,
       opacity: s.opacity,
       radius: s.radius,
+      rotation: s.rotation,
       strokeWidth: s.strokeWidth,
       strokeColor: s.strokeColor,
     })),
@@ -46,6 +47,9 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       color: t.color,
       align: t.align,
       bold: t.bold,
+      italic: t.italic,
+      opacity: t.opacity,
+      letterSpacing: t.letterSpacing,
       lineHeight: t.lineHeight,
       rtl: isRtlBlock(t),
     })),
@@ -193,23 +197,56 @@ export async function encodeStudioTransferV2(
 
   // 2. Shapes
   for (const shape of layout.shapes) {
-    slide.addShape(pptx.ShapeType.rect, {
+    const kind = shape.kind || 'rect';
+    const transparency = shape.opacity !== undefined && shape.opacity !== null ? Math.round((1 - shape.opacity) * 100) : 0;
+    const geom = {
       x: shape.x / 96,
       y: shape.y / 96,
       w: shape.width / 96,
       h: shape.height / 96,
-      fill: { color: hex(shape.color) },
-      line: { color: hex(shape.color), transparency: 100 },
+    };
+    const rotate = typeof shape.rotation === 'number' ? shape.rotation : 0;
+
+    if (kind === 'line') {
+      slide.addShape(pptx.ShapeType.line, {
+        ...geom,
+        h: 0,
+        rotate,
+        line: {
+          color: hex(shape.strokeColor || shape.color),
+          width: Math.max(0.75, (shape.strokeWidth ?? Math.max(1, shape.height)) * 0.75),
+          transparency,
+        },
+      });
+      continue;
+    }
+
+    const type = kind === 'ellipse'
+      ? pptx.ShapeType.ellipse
+      : kind === 'roundRect'
+      ? pptx.ShapeType.roundRect
+      : pptx.ShapeType.rect;
+
+    slide.addShape(type, {
+      ...geom,
+      rotate,
+      fill: { color: hex(shape.color), transparency },
+      line: shape.strokeColor
+        ? {
+            color: hex(shape.strokeColor),
+            width: Math.max(0.75, (shape.strokeWidth || 1) * 0.75),
+            transparency: 0,
+          }
+        : { color: hex(shape.color), transparency: 100 },
+      ...(kind === 'roundRect' && shape.radius ? { rectRadius: shape.radius / 96 } : {}),
     });
   }
 
   // 3. Text (sorted canonically by copyIndex so PPTX shape tree order matches expected copy order)
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
   for (const t of sortedText) {
-    // The layout's own rtl flag is the RTL signal, plus the cursive-script families as a
-    // safety net. Treating any right-aligned block as Arabic gave an English right-aligned
-    // footer rtlMode and lang="ku" in the deck, which Canva then rendered right-to-left.
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+    const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
     slide.addText(copy[t.copyIndex], {
       x: t.x / 96,
       y: t.y / 96,
@@ -218,18 +255,14 @@ export async function encodeStudioTransferV2(
       fontFace: t.fontFamily,
       fontSize: t.fontSize * 0.75,
       color: hex(t.color),
+      transparency: textTransparency,
+      ...(t.letterSpacing !== undefined && t.letterSpacing !== null ? { charSpacing: t.letterSpacing } : {}),
       align: isArabic ? 'right' : t.align,
       bold: t.bold || false,
       italic: t.italic || false,
       margin: 0,
-      // The line pitch in points, exactly as the raster sets it. A multiple ("1.3x") is read by
-      // PowerPoint and Canva against the font's own line height (about 1.33 em for Playfair
-      // Display), so every multi-line block drew ~30% looser than rendered and a box sized to the
-      // render clipped its last line (task b6621947, 2026-09-18: the title's third line cut off).
       lineSpacing: Math.round(t.fontSize * (t.lineHeight || (isArabic ? 1.7 : 1.3)) * 0.75 * 100) / 100,
       breakLine: false,
-      // Matches the raster, which centres the visible glyphs in the box. With 'top' the deck
-      // and the preview disagreed on vertical placement in every block.
       vertAnchor: 'middle',
       paraSpaceAfterPt: 0,
       fit: 'resize',
