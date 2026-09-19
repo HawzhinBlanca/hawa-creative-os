@@ -1,0 +1,136 @@
+{
+ "source": "output/proofs/2026-09-18-cheap-tier-run7/briefs/brief_08/layout.json, stored unchanged. The winner of that brief: one gold rule, a 952x3 box carrying strokeWidth 2160, which is 2 read as a fraction of the 1080px canvas. Painted, it is a 2160px gold band centred on y=1136, so it covers the whole poster; hard QA passed it, and transfer-v2 sends it to Canva as a 1620pt outline.",
+ "copy": [
+  "فەرمانگەی دڵنیایی جۆری و متمانەبەخشین",
+  "کۆبوونەوەی باڵای سەرۆک زانکۆکان",
+  "پەسەندکردنی ڕێسای نوێی خوێندنی ئەکادیمی",
+  "گفتوگۆ لەسەر شێوازی تاقیکردنەوەکان، نوێکردنەوەی پڕۆگرامەکان و پەسەندکردنی بڕوانامە نێودەوڵەتییەکان.",
+  "شاری سلێمانی • هۆڵی کۆنگرێس • کانوونی دووەمی ٢٠٢٦"
+ ],
+ "layout": {
+  "version": 2,
+  "width": 1080,
+  "height": 1350,
+  "grid": {
+   "margin": 64,
+   "columns": 6,
+   "gutter": 22,
+   "baseline": 27
+  },
+  "background": {
+   "color": "#0A1628"
+  },
+  "logo": {
+   "x": 471,
+   "y": 212,
+   "width": 138,
+   "height": 138
+  },
+  "shapes": [
+   {
+    "x": 64,
+    "y": 1136,
+    "width": 952,
+    "height": 3,
+    "color": "#1E3A5F",
+    "kind": "line",
+    "role": "rule",
+    "opacity": 1,
+    "radius": null,
+    "strokeWidth": 2160,
+    "strokeColor": "#F7B500"
+   }
+  ],
+  "text": [
+   {
+    "copyIndex": 0,
+    "role": "eyebrow",
+    "x": 64,
+    "y": 420,
+    "width": 952,
+    "height": 41,
+    "fontSize": 14,
+    "lineHeight": 1.6,
+    "letterSpacing": 0,
+    "fontFamily": "Amiri",
+    "color": "#F7B500",
+    "align": "center",
+    "bold": false,
+    "italic": false,
+    "rtl": true
+   },
+   {
+    "copyIndex": 1,
+    "role": "title",
+    "x": 64,
+    "y": 488,
+    "width": 952,
+    "height": 162,
+    "fontSize": 40,
+    "lineHeight": 1.6,
+    "letterSpacing": 0,
+    "fontFamily": "Amiri",
+    "color": "#FFFFFF",
+    "align": "center",
+    "bold": true,
+    "italic": false,
+    "rtl": true
+   },
+   {
+    "copyIndex": 2,
+    "role": "subtitle",
+    "x": 64,
+    "y": 650,
+    "width": 952,
+    "height": 81,
+    "fontSize": 20,
+    "lineHeight": 1.6,
+    "letterSpacing": 0,
+    "fontFamily": "Amiri",
+    "color": "#FFFFFF",
+    "align": "center",
+    "bold": false,
+    "italic": false,
+    "rtl": true
+   },
+   {
+    "copyIndex": 3,
+    "role": "body",
+    "x": 64,
+    "y": 731,
+    "width": 952,
+    "height": 135,
+    "fontSize": 18,
+    "lineHeight": 1.6,
+    "letterSpacing": 0,
+    "fontFamily": "Noto Sans Arabic",
+    "color": "#FDF8F3",
+    "align": "center",
+    "bold": false,
+    "italic": false,
+    "rtl": true
+   },
+   {
+    "copyIndex": 4,
+    "role": "footer",
+    "x": 64,
+    "y": 893,
+    "width": 952,
+    "height": 41,
+    "fontSize": 12,
+    "lineHeight": 1.6,
+    "letterSpacing": 0,
+    "fontFamily": "Noto Sans Arabic",
+    "color": "#FDF8F3",
+    "align": "center",
+    "bold": false,
+    "italic": false,
+    "rtl": true
+   }
+  ],
+  "typeScale": {
+   "base": 16,
+   "ratio": 1.333
+  }
+ }
+}

@@ -223,7 +223,10 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           bold: true,
           italic: true,
           opacity: 0.75,
-          letterSpacing: 2,
+          // Tracking is em, the unit the layout and the raster renderer use. This fixture used to
+          // read 2 and expect spc="200", which encoded the bug: the value was handed to pptxgenjs
+          // as points, so what the preview drew in em reached Canva 12-90x too small.
+          letterSpacing: 0.06,
         },
       ],
     };
@@ -244,8 +247,8 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
     expect(slideXml).toContain('1D4ED8');
     // Italic
     expect(slideXml).toContain('i="1"');
-    // Letter spacing
-    expect(slideXml).toContain('spc="200"');
+    // Letter spacing: 0.06em at 32px = 1.44pt, and spc is hundredths of a point.
+    expect(slideXml).toContain('spc="144"');
   });
 
   it('rejects unsupported fonts with clear validation errors instead of silent corruption', async () => {

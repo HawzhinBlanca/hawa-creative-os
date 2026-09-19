@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-19T18:30:56.044Z",
+  "generatedAt": "2026-09-19T22:19:18.771Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,29 +19,34 @@
     ]
   },
   "build": {
-    "commit": "3b4d7f253701e30f71dadd124824224fd906cf5d",
+    "commit": "eb11ac63bb716f99df172f93baf8798cf871c0d2",
     "treeClean": false,
     "uncommittedFiles": [
       "M apps/core/src/app.ts",
-      "M apps/core/src/services/chat-intake.ts",
+      "M apps/core/src/services/canva-design-planner.ts",
       "M apps/core/src/services/design-studio/design-studio-service.ts",
-      "M apps/core/src/services/design-studio/stages/brief.stage.ts",
-      "M apps/core/src/services/design-studio/stages/layouts.stage.ts",
       "M apps/core/src/services/design-studio/stages/v3.stage.ts",
-      "M apps/core/src/services/design-studio/types.ts",
+      "M apps/core/src/services/telegram-classifier.ts",
+      "M packages/creative/src/editable-transfer.ts",
       "M packages/creative/src/index.ts",
+      "M packages/creative/src/studio/hard-qa.ts",
       "M packages/creative/src/studio/layout-generator-v3.ts",
-      "M packages/creative/src/studio/layout-v2.ts",
-      "M packages/creative/src/studio/motifs.ts",
-      "M packages/creative/src/studio/pipeline-v3.ts",
       "M packages/creative/src/studio/render-layout-v2.ts",
+      "M packages/creative/src/studio/studio-normalize.ts",
       "M packages/creative/src/studio/transfer-v2.ts",
-      "?? apps/core/test/bilingual-request.test.ts",
-      "?? packages/creative/src/studio/style-spec.ts",
-      "?? packages/creative/test/fixtures/reference-k12-89c242f2.json",
-      "?? packages/creative/test/style-spec.test.ts"
+      "M packages/creative/test/r08-transfer-fidelity.test.ts",
+      "?? apps/core/test/intake-long-invitation.test.ts",
+      "?? apps/core/test/intake-unicode-routing.test.ts",
+      "?? apps/core/test/judge-input-has-text.test.ts",
+      "?? apps/core/test/studio-asset-resolution.test.ts",
+      "?? apps/core/test/telegram-classifier-unicode.test.ts",
+      "?? packages/creative/src/studio/asset-paths.ts",
+      "?? packages/creative/test/asset-paths.test.ts",
+      "?? packages/creative/test/fixtures/cheap-tier-stroke-slab-brief_08.json",
+      "?? packages/creative/test/stroke-width-slab.test.ts",
+      "?? packages/creative/test/transfer-tracking.test.ts"
     ],
-    "commitTimestamp": "2026-09-19T20:49:32+03:00",
+    "commitTimestamp": "2026-09-19T23:09:03+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -58,7 +63,7 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "74a1072149f37e94d20187b08ae34888e042ad5d616dca3f1a94404d8f162a58",
+        "apps/core/src/app.ts": "c90c3244ab703c6f430146f127106ced2f920218fd1fc37cad9cecb1312ec7ee",
         "apps/core/src/index.ts": "a51b02d6c1f4ddb6662746c6f74f79f1e4988773617079a12110815e42b36d34",
         "packages/integrations/src/google-publisher.ts": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60"
       }
@@ -111,5 +116,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "b2c783373a364573aa208c6dda9466263be659eb35e96e59e230074c609cc939"
+  "sha256": "6fa67284bde100df0b6088120980c2c26ff9d9b5f16c560ebbc38e62316ecdad"
 }

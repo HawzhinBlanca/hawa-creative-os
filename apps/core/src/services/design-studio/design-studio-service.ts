@@ -19,6 +19,7 @@ import {
   type StudioLayoutV2,
   ExemplarRetrievalIndex,
   studioReferenceFromRaw,
+  creativeAssetPath,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
@@ -70,21 +71,12 @@ export type Scope = { tenantId: string; actorId: string; role?: string; clientId
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
 /**
- * The official KAAE logo's path, from the repository in development and from /app in the image,
- * where the compiled file sits one directory deeper than its source. The stage context used a single
- * relative path that resolved to /app/apps/packages/... in production, found nothing there, and
- * every studio design reached Canva with its logo box empty (both pilots of 2026-09-18).
+ * The official KAAE logo's path. Resolved inside @hawa/creative, from that package's own location,
+ * because paths built here from cwd or from this file's depth under apps/core all missed in the
+ * image: every studio design reached Canva with its logo box empty (both pilots of 2026-09-18).
  */
 export function officialLogoPath(): string {
-  const candidates = [
-    resolve(process.cwd(), 'packages/creative/assets/logos/kaae-official-logo.png'),
-    resolve(process.cwd(), '../../packages/creative/assets/logos/kaae-official-logo.png'),
-    new URL('../../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
-    new URL('../../../../packages/creative/assets/logos/kaae-official-logo.png', import.meta.url).pathname,
-  ];
-  const found = candidates.find((p) => existsSync(p));
-  if (!found) throw new Error('Could not find kaae-official-logo.png');
-  return found;
+  return creativeAssetPath('logos/kaae-official-logo.png');
 }
 
 /**
@@ -197,17 +189,8 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'CLIENT_REQUIRED', 'Select the client before retrieving brand references.');
     }
 
-    const refCandidates = [
-      resolve(process.cwd(), 'packages/creative/assets/kaae-reference.json'),
-      resolve(process.cwd(), '../../packages/creative/assets/kaae-reference.json'),
-      new URL('../../../../../packages/creative/assets/kaae-reference.json', import.meta.url).pathname,
-      new URL('../../../../packages/creative/assets/kaae-reference.json', import.meta.url).pathname,
-    ];
-    const refPath = refCandidates.find((p) => existsSync(p));
-    if (!refPath) throw new Error('Could not find kaae-reference.json');
-
     const reference: ReferencePack & { clientId: string; logoSha256: string } = JSON.parse(
-      await readFile(refPath, 'utf8')
+      await readFile(creativeAssetPath('kaae-reference.json'), 'utf8')
     );
 
     if (task.client_id !== reference.clientId) {
@@ -617,36 +600,33 @@ export class DesignStudioService {
         arabic: 'Noto Sans Arabic',
       },
     };
-    let promotedRules = 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.';
-    let latinFont = 'Verdana';
-    let arabicFont = 'Noto Sans Arabic';
+    let promotedRules: string;
+    let latinFont: string;
+    let arabicFont: string;
 
     try {
-      const refCandidates = [
-        resolve(process.cwd(), 'packages/creative/assets/kaae-reference.json'),
-        resolve(import.meta.dirname, '../../../../packages/creative/assets/kaae-reference.json'),
-        new URL('../../../../packages/creative/assets/kaae-reference.json', import.meta.url).pathname,
-      ];
-      const refPath = refCandidates.find((p) => existsSync(p));
-      if (refPath) {
-        const rawRef = JSON.parse(readFileSync(refPath, 'utf8'));
-        // Read the way the qualification reads it (shared), so both design with the same rules.
-        const rules = studioReferenceFromRaw(rawRef);
-        referencePack.palette = rules.palette;
-        latinFont = rules.latinFont;
-        arabicFont = rules.arabicFont;
-        promotedRules = rules.promotedRules;
-        if (rawRef.rules?.fontFamily) {
-          referencePack.referenceFonts = { latin: rules.latinFont, arabic: rules.arabicFont };
-        }
+      const rawRef = JSON.parse(readFileSync(creativeAssetPath('kaae-reference.json'), 'utf8'));
+      // Read the way the qualification reads it (shared), so both design with the same rules.
+      const rules = studioReferenceFromRaw(rawRef);
+      referencePack.palette = rules.palette;
+      latinFont = rules.latinFont;
+      arabicFont = rules.arabicFont;
+      promotedRules = rules.promotedRules;
+      if (rawRef.rules?.fontFamily) {
+        referencePack.referenceFonts = { latin: rules.latinFont, arabic: rules.arabicFont };
       }
     } catch (err: any) {
-      // Silently falling back meant a client's own script font and colour rules could stop
-      // applying with nothing in the logs to say so, and the design would look generic for a
-      // reason no one could trace.
-      console.warn(
-        `[design-studio] Reference pack could not be read (${err?.message || err}); ` +
-          `falling back to default typography and colour rules for this design.`
+      // This used to fall back to a placeholder rule inside an "if (refPath)" with no else, and the
+      // only warning sat in a catch that never ran. Both candidate paths missed in the image, so
+      // 24 hours of production logs held no occurrence of it while every brief went out with
+      // "Keep title clear and centered..." instead of the client's colour rules. A run that cannot
+      // read the client's pack must stop rather than design to defaults nobody approved.
+      const detail = err?.message || String(err);
+      console.error(`[design-studio] Reference pack could not be read; this run is stopping. ${detail}`);
+      throw new CanvaFlowError(
+        500,
+        'REFERENCE_PACK_UNREADABLE',
+        `The client's brand reference pack could not be read, so this design cannot be briefed. ${detail}`
       );
     }
 
@@ -660,13 +640,13 @@ export class DesignStudioService {
       };
       const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3);
       for (const item of retrieval.retrievedExemplars) {
-        const itemCandidates = [
-          resolve(process.cwd(), item.path),
-          resolve(process.cwd(), 'packages/creative/assets/exemplars', item.filename),
-          resolve(import.meta.dirname, '../../../../', item.path),
-          resolve(import.meta.dirname, '../../../../packages/creative/assets/exemplars', item.filename),
-        ];
-        const imgPath = itemCandidates.find((p) => existsSync(p));
+        // The manifest still records the archive path the exemplar was curated from, which is
+        // outside the package and absent from the image; the copy in the package's own assets is
+        // the one that travels.
+        const archived = resolve(process.cwd(), item.path);
+        const imgPath =
+          creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
+          (existsSync(archived) ? archived : undefined);
         if (imgPath) {
           exemplars.push({
             path: imgPath,
@@ -677,9 +657,17 @@ export class DesignStudioService {
         }
       }
     } catch (err: any) {
-      console.warn(
+      console.error(
         `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
           `this design is being generated without exemplar conditioning.`
+      );
+    }
+    if (!exemplars.length) {
+      // In production this was silent: the layout model was conditioned on nothing and no one
+      // could tell from the logs that the run had seen no exemplar at all.
+      console.error(
+        `[design-studio] No exemplar image resolved under ${creativeAssetPath('exemplars', { optional: true }) || 'packages/creative/assets/exemplars'}; ` +
+          `run ${run.id} is being conditioned on no exemplar.`
       );
     }
 
@@ -781,7 +769,17 @@ export class DesignStudioService {
       await this.repo.updateRunStatus(runId, s.tenantId, run.status, { budget });
     };
 
-    const ctx = this.createStageContext(s, run, run.status, budget, onSpendUpdate);
+    // Building the context reads the client's reference pack, and a missing pack now throws rather
+    // than designing with defaults. Outside the try below that left the run in 'briefing' for the
+    // worker to retry for ever, so it is marked failed here with the reason.
+    let ctx: StageContext;
+    try {
+      ctx = this.createStageContext(s, run, run.status, budget, onSpendUpdate);
+    } catch (err: any) {
+      const diagnostic = `Stage context could not be built: ${err?.message || err}`;
+      await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+      throw err;
+    }
     // An image the requester attached reaches the brief, which says what it is; a style reference
     // then reaches the layout generator, the critique and the judge. It was saved with every
     // Telegram task but only the legacy planner ever read it.

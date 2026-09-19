@@ -124,6 +124,44 @@ export function hardQaContextFor(
   };
 }
 
+/**
+ * The render a candidate is judged on. It has to be `previewPng`, the full render with the copy,
+ * the art and the logo drawn on it. This stage used to pass `compositePng`, which the render stage
+ * fills with the *no-text* composite it keeps only to measure contrast against the real backdrop
+ * (render.stage.ts sets it from renderResult.noTextPng), so every P07 vote on hierarchy,
+ * typographic craft and legibility was cast on an image with no words on it.
+ */
+export function judgeRenderFor(
+  candidate: Pick<CandidateState, 'previewPng' | 'compositePng'>
+): Buffer | undefined {
+  // Only the preview. Falling back to the no-text composite would cost the run its judge to the
+  // guard below; with nothing here the pipeline re-renders the candidate from its layout, with the
+  // copy, which is what a candidate that never reached the render stage needs.
+  return candidate.previewPng || undefined;
+}
+
+/**
+ * Refuses to judge on a text-less render. The defect above stayed invisible for as long as it
+ * lasted because a no-text composite is a perfectly good PNG and the judge answers about it
+ * happily, so the only thing that can catch its return is comparing the bytes actually handed over
+ * against the candidate's own no-text composite, before any call is made. A candidate carrying no
+ * render at all is left alone: the pipeline renders that one from its layout, with the copy.
+ */
+export function assertJudgeSeesText(
+  entries: Array<{ renderedPng?: Buffer; candidate: CandidateState }>
+): void {
+  for (const { renderedPng, candidate } of entries) {
+    const noText = candidate.compositePng;
+    if (!renderedPng || !noText || !renderedPng.equals(noText)) continue;
+    throw new Error(
+      `P07 refused to judge candidate ${candidate.id} (ordinal ${candidate.ordinal}): the image ` +
+        `handed to the judge is its no-text composite, the render kept for contrast measurement. ` +
+        `Hierarchy, typographic craft and legibility cannot be judged on an image with no copy on ` +
+        `it. Re-run the render stage so the candidate carries its full preview render.`
+    );
+  }
+}
+
 /** The studio's candidates, ranked the way the pipeline ranks them, hard QA included. */
 export function rankStudioCandidatesV3(
   ctx: StageContext,
@@ -135,8 +173,8 @@ export function rankStudioCandidatesV3(
     candidates.map((c) => ({
       sourceIndex: c.ordinal,
       layout: c.currentLayout,
-      // The render the client will see, with art where there is art.
-      renderedPng: c.compositePng || c.previewPng || undefined,
+      // The render the client will see, with art where there is art and the copy set on it.
+      renderedPng: judgeRenderFor(c),
     })),
     copy,
     hardQaContextFor(ctx)
@@ -193,6 +231,7 @@ export async function runJudgeStageV3(
   ranked: Array<RankedCandidateV3 & { candidate: CandidateState }>;
 }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
+  assertJudgeSeesText(ranked);
   const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

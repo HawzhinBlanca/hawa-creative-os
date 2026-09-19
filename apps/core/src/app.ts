@@ -1738,7 +1738,11 @@ export function createApp(options?: CreateAppOptions) {
     if (!clientId) {
       const lower = rawText.toLowerCase();
       // Latin brand keywords match whole words only ('faster' is not FastPay, 'corona' is not Rona).
-      const word = (w: string) => new RegExp(`\\b${w}\\b`).test(lower);
+      // The left edge is a Unicode letter class rather than \b, which counts only ASCII word
+      // characters and so reported a boundary wherever Kurdish script ran into Latin: a brand name
+      // welded into the middle of a Kurdish word matched. The right edge stays ASCII on purpose,
+      // because Sorani attaches its suffixes to the word ("KAAEی" is still KAAE).
+      const word = (w: string) => new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_])${w}(?![A-Za-z0-9_])`, 'u').test(lower);
       if (
         word('kaae') ||
         rawText.includes('باوەڕپێدان') ||
@@ -1808,13 +1812,17 @@ export function createApp(options?: CreateAppOptions) {
         clientInstructions = payloadText.slice(0, sectionMatch.index).trim();
         payloadText = payloadText.slice(sectionMatch.index + sectionMatch[0].length).trim();
       } else {
-        // 3c. If message begins with conversational opening directives, strip leading directive block
-        const conversationalParagraph = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)\b[\s\S]*?(?=\n\s*\n)/i);
+        // 3c. If message begins with conversational opening directives, strip leading directive block.
+        // The boundary after the opening is a Unicode letter class, not \b: \b is ASCII only, so
+        // "تکایە" was never followed by a boundary and the Kurdish openings never matched. A Kurdish
+        // request that opened with "تکایە ..." kept that line as copy, and the instruction became
+        // the headline of the design.
+        const conversationalParagraph = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)(?![\p{L}\p{N}\p{M}_])[\s\S]*?(?=\n\s*\n)/iu);
         if (conversationalParagraph && payloadText.length > conversationalParagraph[0].length + 20) {
           clientInstructions = conversationalParagraph[0].trim();
           payloadText = payloadText.slice(conversationalParagraph[0].length).trim();
         } else {
-          const conversationalMatch = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)\b[^\n]*\n+/i);
+          const conversationalMatch = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)(?![\p{L}\p{N}\p{M}_])[^\n]*\n+/iu);
           if (conversationalMatch && payloadText.length > conversationalMatch[0].length + 20) {
             clientInstructions = conversationalMatch[0].trim();
             payloadText = payloadText.slice(conversationalMatch[0].length).trim();
@@ -1921,39 +1929,57 @@ export function createApp(options?: CreateAppOptions) {
     let generatedOps: StudioOperation[] = [];
     let designRefusal: 'COPY_REQUIRED' | undefined;
 
-    // Canva composition needs a genuine native operation, not a synthetic manifest.
-    // Keep intake available while explicitly pausing production at the studio boundary.
-    if (autoGenerate && preFlight.allowed) {
-      taskStatus = 'RECEIVED';
+    // The draft itself is the durable worker's job, so an automatic request stays in RECEIVED.
+    if (autoGenerate && preFlight.allowed) taskStatus = 'RECEIVED';
+
+    /**
+     * The legacy inline preview for this task, drawn only after the request is saved.
+     *
+     * On 2026-09-20 a long KAAE invitation was answered 503 and never saved: this ran before
+     * persistence, and the invitation template throws on copy that does not fit its fixed canvas
+     * ("Invitation copy exceeds safe canvas bounds"). Telegram retried the same update into the
+     * same throw, so the request was lost with no row anywhere. The preview is a convenience;
+     * nothing it does may decide the HTTP status or cost the office a request.
+     */
+    const drawLegacyPreviewOperations = () => {
+      if (!autoGenerate || !preFlight.allowed) return;
       const effectiveRules = clientId ? globalFeedbackMiner.getPromotedRules(clientId) : [];
       const isKaaeClient = clientId === KAAE_CLIENT_ID || clientId === 'client-office-1' || clientId === 'client-kaae' || String(clientId).includes('kaae');
       const isBrandClient = clientId === 'client-fastpay' || clientId === 'client-aster' || clientId === 'client-drustee';
       const kaaeLogoSha = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
       const template = isKaaeClient ? 'kaae' : isBrandClient ? 'brand' : null;
-      if (template && inlineTemplateCopyMissing(template, { headlineEn, headlineCkb, copyEn, copyCkb })) {
-        designRefusal = 'COPY_REQUIRED';
-      } else if (isKaaeClient) {
-        generatedOps = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
-          headlineEn,
-          headlineCkb,
-          copyEn,
-          copyCkb,
-          rawText: payloadText,
-          width: variantWidth,
-          height: variantHeight,
-          logoSha256: kaaeLogoSha,
-          learnedRules: effectiveRules,
-        });
-      } else if (isBrandClient) {
-        generatedOps = creativeDirector.generateCommercialBrandOperations(clientId!.replace('client-', ''), brief, {
-          headlineEn,
-          headlineCkb,
-          copyEn,
-          copyCkb,
-          learnedRules: effectiveRules,
-        });
+      try {
+        if (template && inlineTemplateCopyMissing(template, { headlineEn, headlineCkb, copyEn, copyCkb })) {
+          designRefusal = 'COPY_REQUIRED';
+        } else if (isKaaeClient) {
+          generatedOps = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
+            headlineEn,
+            headlineCkb,
+            copyEn,
+            copyCkb,
+            rawText: payloadText,
+            width: variantWidth,
+            height: variantHeight,
+            logoSha256: kaaeLogoSha,
+            learnedRules: effectiveRules,
+          });
+        } else if (isBrandClient) {
+          generatedOps = creativeDirector.generateCommercialBrandOperations(clientId!.replace('client-', ''), brief, {
+            headlineEn,
+            headlineCkb,
+            copyEn,
+            copyCkb,
+            learnedRules: effectiveRules,
+          });
+        }
+      } catch (err) {
+        generatedOps = [];
+        console.warn(
+          `[ingestChatCampaignTask] Task ${taskId} is saved; its inline preview was not drawn ` +
+            `(${err instanceof Error ? err.message : String(err)}). The design is produced in the studio.`
+        );
       }
-    }
+    };
 
     const task: any = {
       id: taskId,
@@ -1977,7 +2003,6 @@ export function createApp(options?: CreateAppOptions) {
       brief,
       finalDoc,
       generatedOps,
-      ...(designRefusal ? { designRefusal } : {}),
       costReceipt,
       latestRevisionId: revisionId,
       latestQAReport,
@@ -2027,10 +2052,21 @@ export function createApp(options?: CreateAppOptions) {
       task.status = toApiTaskStatus(persisted.task.state); task.state = persisted.task.state;
       task.createdAt = persisted.task.created_at; task.updatedAt = persisted.task.updated_at;
       brief.taskId = taskId;
-      if (!persisted.created) return { task, brief, costReceipt, latestQAReport, duplicate: true };
+      if (!persisted.created) {
+        drawLegacyPreviewOperations();
+        task.generatedOps = generatedOps;
+        if (designRefusal) task.designRefusal = designRefusal;
+        return { task, brief, costReceipt, latestQAReport, duplicate: true };
+      }
     } else if (isProduction) {
       throw new Error('Durable chat intake requires PostgreSQL; no task was acknowledged');
     }
+
+    // The request is committed. Everything after this point is presentation.
+    drawLegacyPreviewOperations();
+    task.generatedOps = generatedOps;
+    if (designRefusal) task.designRefusal = designRefusal;
+
     briefs.set(taskId, brief);
     tasks.set(taskId, task);
     events.set(taskId, [
