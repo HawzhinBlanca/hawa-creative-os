@@ -204,6 +204,7 @@ export async function runLayoutsStage(
         palette: ctx.referencePack.palette,
         background: ctx.requestedBackground,
         ornament: ctx.ornament,
+        style: ctx.style,
       });
       const existing = existingCandidates?.find((c) => c.ordinal === i);
       return {
@@ -328,9 +329,16 @@ export async function runLayoutsStage(
  * it used to get only the occasion, audience and tone, so "dark blue navy as a background" never
  * did, and two of three cheap-tier candidates came back cream and white (task 3c3a422b, 2026-09-18).
  */
+/** The enforced style decisions, told to the generator so its layouts start close to them. */
+function styleSummary(style: StageContext['style']): string {
+  if (!style) return '';
+  const set = Object.entries(style).filter(([, v]) => v !== 'as_generated' && v !== false);
+  return set.length ? `Enforced style (applied after generation): ${set.map(([k, v]) => `${k}=${v}`).join(', ')}` : '';
+}
+
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'>,
-  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference'>
+  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style'>
 ): string {
   return (
     [
@@ -339,6 +347,7 @@ export function layoutBriefV3(
       brief.must?.length ? `Must: ${brief.must.join('; ')}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
       ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
+      styleSummary(ctx.style),
     ]
       .filter(Boolean)
       .join('\n') || 'Official Institutional Communication'

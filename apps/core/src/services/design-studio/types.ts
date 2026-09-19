@@ -39,6 +39,8 @@ export interface CreativeBrief {
   referenceNotes?: string;
   /** Whether the brief saw an attached image. False when a photo arrived after it ran. */
   referenceSeen?: boolean;
+  /** Visual decisions read from the reference and instructions, enforced in preparation. Absent before 2026-09-19. */
+  styleSpec?: import('@hawa/creative').StyleSpec;
 }
 
 export type Archetype =
@@ -51,7 +53,7 @@ export type Archetype =
   | 'monumental-title'
   | 'ribbon-and-rules';
 
-export type MotifKind = 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash';
+export type MotifKind = 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | 'diagonal-lines';
 
 export interface Concept {
   id: string;
@@ -159,6 +161,8 @@ export interface StageContext {
   reference?: import('@hawa/creative').ClientReference;
   /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
   ornament?: import('@hawa/creative').OrnamentSettings;
+  /** The brief's style spec, applied to every layout in preparation. */
+  style?: import('@hawa/creative').StyleSpec;
 }
 
 export interface StageExecutionReceipt {

@@ -19,7 +19,7 @@ export interface GridConfig {
 export interface ArtConfig {
   source: 'generated' | 'procedural';
   prompt?: string;
-  motif?: 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash';
+  motif?: 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | 'diagonal-lines';
   box: Box;
   opacity: number; // 0..1
   scrim?: {
@@ -55,6 +55,8 @@ export interface TextElement extends Box {
   italic?: boolean;
   opacity?: number;
   rtl?: boolean;
+  /** The last paragraph of the copy (after its last line break) in this colour, e.g. a gold edition line. */
+  accentColor?: Hex;
 }
 
 export interface TypeScaleConfig {
@@ -107,7 +109,7 @@ export const scrimSchema = z.object({
 export const artSchema = z.object({
   source: z.enum(['generated', 'procedural']),
   prompt: z.string().optional(),
-  motif: z.enum(['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash']).optional(),
+  motif: z.enum(['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash', 'diagonal-lines']).optional(),
   box: boxSchema,
   opacity: z.number().min(0).max(1),
   scrim: scrimSchema.optional(),
@@ -138,6 +140,7 @@ export const textElementSchema = boxSchema.extend({
   italic: z.boolean().optional(),
   opacity: z.number().min(0).max(1).optional(),
   rtl: z.boolean().optional(),
+  accentColor: hexSchema.optional(),
 }).strict();
 
 export const studioLayoutV2Schema = z.object({
