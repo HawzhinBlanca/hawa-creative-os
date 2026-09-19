@@ -50,7 +50,7 @@ export const NEUTRAL_STYLE_SPEC: StyleSpec = {
 export const STYLE_SPEC_SCHEMA = {
   type: 'object',
   description:
-    "Concrete visual decisions to enforce, read from the attached style reference and the client's instructions; where they disagree the instructions win. Use 'as_generated' (or false) for anything neither shows or asks for.",
+    "Concrete visual decisions to enforce. Read each value off the attached style reference; a value comes from the client's instructions only where they name it explicitly (a font, a gold button, where the logo goes), and then the instructions win. General words such as 'clean' or 'minimal' decide nothing here. Use 'as_generated' (or false) for anything neither shows or asks for.",
   properties: {
     titleScale: {
       type: 'string',
@@ -66,7 +66,8 @@ export const STYLE_SPEC_SCHEMA = {
     alignment: {
       type: 'string',
       enum: ['as_generated', 'start', 'center', 'end'],
-      description: "Relative to reading direction: a left-aligned English reference is 'start'.",
+      description:
+        "Read it off the reference's lines of text: a ragged right edge with every line starting at the left margin is 'start' (mirrored for Kurdish); lines centred on the canvas are 'center'. Take it from the instructions only when they name an alignment.",
     },
     accentLastTitleLine: {
       type: 'boolean',
