@@ -149,7 +149,7 @@ export async function runCritiqueStageV3(
   candidates: CandidateState[]
 ): Promise<{ candidate: CandidateState; critique: BoxCritiqueResult; compositeScores: Map<string, number> }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
-  const critique = await critiqueCandidateV3(ranked[0], copyForStageV3(ctx), { client: ctx.client });
+  const critique = await critiqueCandidateV3(ranked[0], copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference });
   return {
     candidate: ranked[0].candidate,
     critique,
@@ -192,7 +192,7 @@ export async function runJudgeStageV3(
   ranked: Array<RankedCandidateV3 & { candidate: CandidateState }>;
 }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
-  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client });
+  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;
   return { selection, winner: find(selection.winner)!, runnerUp: find(selection.runnerUp), ranked };

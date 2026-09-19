@@ -152,6 +152,20 @@ export class DesignStudioService {
   /**
    * Builds the request context from task data, brand reference pack, and logo.
    */
+  /** The image saved with the task at intake, as a data: URL, or undefined. */
+  private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
+    const source = await this.tx(s, async (db) =>
+      (
+        await sql<any>`SELECT e.data FROM hawa.task_events e
+        WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
+        ORDER BY e.aggregate_version LIMIT 1`.execute(db)
+      ).rows[0]?.data
+    );
+    const payload = source?.payload || source || {};
+    const url = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
+    return typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url) ? url : undefined;
+  }
+
   private async getTaskContext(s: Scope, taskId: string, width: number, height: number) {
     if (![width, height].every((n) => Number.isInteger(n) && n >= 640 && n <= 2400)) {
       throw new CanvaFlowError(422, 'DIMENSIONS_REQUIRED', 'Choose dimensions between 640 and 2400 pixels.');
@@ -747,6 +761,14 @@ export class DesignStudioService {
     };
 
     const ctx = this.createStageContext(s, run, run.status, budget, onSpendUpdate);
+    // An image the requester attached reaches the brief, which says what it is; a style reference
+    // then reaches the layout generator, the critique and the judge. It was saved with every
+    // Telegram task but only the legacy planner ever read it.
+    ctx.attachedImage = await this.attachedImage(s, run.task_id);
+    const briefSoFar = runStages(run).brief as CreativeBrief | undefined;
+    if (ctx.attachedImage && briefSoFar?.referenceRole === 'style_reference') {
+      ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar.referenceNotes || '' };
+    }
 
     try {
       switch (run.status) {

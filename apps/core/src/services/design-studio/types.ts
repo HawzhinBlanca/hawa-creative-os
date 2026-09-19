@@ -33,6 +33,10 @@ export interface CreativeBrief {
   riskFlags: string[];
   /** Brand-palette hex the client explicitly asked for as the background; '' when they did not. Absent on briefs before 2026-09-18. */
   requestedBackground?: string;
+  /** What an attached image is: the client's logo, a style reference, or nothing to design from. Absent before 2026-09-19. */
+  referenceRole?: 'none' | 'logo' | 'style_reference';
+  /** What to take from a style reference: composition, colour placement, ornament, mood. */
+  referenceNotes?: string;
 }
 
 export type Archetype =
@@ -147,6 +151,10 @@ export interface StageContext {
   pipelineV3?: boolean;
   /** The palette colour the client asked for as the background, applied to every layout in code. */
   requestedBackground?: string;
+  /** An image the requester attached (data: URL), whatever it shows. The brief says what it is. */
+  attachedImage?: string;
+  /** The attached image when the brief read it as a style reference, with what to take from it. */
+  reference?: import('@hawa/creative').ClientReference;
   /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
   ornament?: import('@hawa/creative').OrnamentSettings;
 }

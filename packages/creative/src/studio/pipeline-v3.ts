@@ -16,6 +16,7 @@ import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
 import { computeLayoutMetrics } from './layout-metrics.js';
+import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
@@ -57,6 +58,8 @@ export interface PipelineV3CallOptions {
   client?: OpenAiStudioClient;
   /** Overrides the active tier's model for this role. */
   model?: string;
+  /** The client's style reference, shown to the critique and the judge. */
+  reference?: ClientReference;
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -885,6 +888,7 @@ export async function critiqueCandidateV3(
   options: PipelineV3CallOptions = {}
 ): Promise<BoxCritiqueResult> {
   return generateBoxGroundedCritique(candidate.layout, {
+    reference: options.reference,
     client: options.client,
     model: options.model || resolveModel('critique'),
     deterministicMetrics: candidate.metrics,
@@ -1038,6 +1042,7 @@ export async function selectWinnerV3(
   }
 
   const judgeOptions = {
+    reference: options.reference,
     client: options.client,
     model: options.model || resolveModel('judge'),
     renderOptions: { copyText: copy.text },

@@ -1,3 +1,4 @@
+import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
 import { fitLogoToAspect } from './studio-normalize.js';
 import { z } from 'zod';
@@ -1051,6 +1052,8 @@ export interface GenerateLayoutCandidatesOptions {
   model?: string;
   /** The official logo's width over height; the model is told it and the box is fitted to it. */
   logoAspect?: number;
+  /** An image the client sent to show the design they want; every candidate follows it. */
+  reference?: ClientReference;
 }
 
 export interface GenerateLayoutCandidatesResult {
@@ -1299,7 +1302,15 @@ export async function generateLayoutCandidatesV3(
       model: options.model || resolveModel('layout'),
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        options.reference
+          ? {
+              role: 'user',
+              content: [
+                { type: 'text', text: `${userPrompt}\n\n${clientReferenceInstruction(options.reference)}` },
+                clientReferencePart(options.reference),
+              ],
+            }
+          : { role: 'user', content: userPrompt },
       ],
       jsonSchema: {
         name: 'layout_v3_candidates',

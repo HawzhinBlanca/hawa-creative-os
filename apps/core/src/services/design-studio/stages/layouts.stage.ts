@@ -193,6 +193,7 @@ export async function runLayoutsStage(
       isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
       exemplars: retrieveExemplarsV3({ text: briefSummary, width: ctx.width, height: ctx.height }),
       logoAspect: ctx.logoAspect || 1.0,
+      reference: ctx.reference,
     });
 
     return v3Result.layouts.map((rawLayout, i) => {
@@ -329,7 +330,7 @@ export async function runLayoutsStage(
  */
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'>,
-  ctx: Pick<StageContext, 'instructions' | 'requestedBackground'>
+  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference'>
 ): string {
   return (
     [
@@ -337,6 +338,7 @@ export function layoutBriefV3(
       ctx.instructions ? `Client instructions: ${ctx.instructions.replace(/"/g, "'")}` : '',
       brief.must?.length ? `Must: ${brief.must.join('; ')}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
+      ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
     ]
       .filter(Boolean)
       .join('\n') || 'Official Institutional Communication'
