@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { computeActionSignature } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
@@ -170,16 +171,17 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
     expect((await res.json()).detail).toMatch(/has no authorized Google Drive production destination folder/);
   });
 
-  it('a chat approve-and-publish pins nothing, so it is refused before the task is approved', async () => {
+  it('a signed WhatsApp approve-and-publish pins nothing, so it is refused before the task is approved', async () => {
+    // Telegram approve commands and buttons never get this far: the webhook refuses them up front
+    // (ADR-022, see telegram-unknown-task.test.ts). The signed WhatsApp action is the chat path that
+    // reaches delivery, and the pin check is what refuses it.
     const { app, taskAwaitingApproval, status } = setup();
     const { taskId } = await taskAwaitingApproval();
+    const sig = computeActionSignature(taskId, 'approve');
 
-    const res = await app.request('/api/webhooks/telegram', {
-      method: 'POST',
-      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 90210, message: { text: `/approve ${taskId}`, chat: { id: 777 }, from: { id: 777 } } }),
-    });
+    const res = await app.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`);
     expect(res.status).toBe(422);
+    expect((await res.json()).detail).toBe('Nothing to deliver: the task has no approval. Approve in the Desk with the captured export selected.');
     expect(await status(taskId)).toBe('AWAITING_APPROVAL');
   });
 });
