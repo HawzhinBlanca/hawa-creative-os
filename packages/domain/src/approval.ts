@@ -59,6 +59,16 @@ export interface ApprovalDecision {
   };
   revisionRequest?: StructuredRevisionRequest;
   decidedAt: ISODateTime;
+  /** The exported files the reviewer approved; delivery sends exactly these bytes. */
+  pinnedExports?: PinnedExport[];
+}
+
+/** A stored Canva export pinned to an approval by its content hash. */
+export interface PinnedExport {
+  artifactId: UUID;
+  format: 'png' | 'pdf' | 'pptx';
+  sha256: SHA256;
+  byteSize: number;
 }
 
 export interface ApprovalBindingRecord {

@@ -6,6 +6,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { GooglePublisher } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
 describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-051)', () => {
@@ -215,7 +216,8 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
     });
 
     it('enforces Client DNA destination isolation via core omnichannel endpoint', async () => {
-      const app = createApp();
+      const exports = memoryExportStore();
+      const app = createApp({ deliverableStore: exports.store });
 
       // Ingest task with valid client
       const ingestRes = await app.request('/api/webhooks/telegram', {
@@ -242,14 +244,14 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
       });
       const { revisionId } = await revRes.json();
 
-      // Approve
+      // Approve, pinning the export the reviewer saw
       await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
         },
-        body: JSON.stringify({ decision: 'approved', role: 'art_director' }),
+        body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
 
       // Publish omnichannel
@@ -560,21 +562,17 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
 
   describe('4. FR-051: Notification Failure Independence & Nonexistent File Defense', () => {
     it('notification failure does not undo or roll back valid Google Drive and Sheets publication', async () => {
-      const app = createApp();
+      const exports = memoryExportStore();
+      const app = createApp({ deliverableStore: exports.store });
 
-      // Ingest task
-      const ingestRes = await app.request('/api/webhooks/telegram', {
+      // A task for a client with a Drive destination (a task without a client is never delivered)
+      const createRes = await app.request('/tasks', {
         method: 'POST',
-        headers: {
-          'x-telegram-bot-api-secret-token': 'expected_office_secret',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          update_id: 202617,
-          message: { text: 'Notification Isolation Campaign', chat: { id: 889 } },
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Notification Isolation Campaign', clientId: 'c1000000-0000-4000-8000-000000000002' }),
       });
-      const taskId = (await ingestRes.json()).task.id;
+      const created = await createRes.json();
+      const taskId = created.id || created.task?.id;
 
       // Register revision
       const revRes = await app.request(`/tasks/${taskId}/revisions`, {
@@ -593,7 +591,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
         },
-        body: JSON.stringify({ decision: 'approved', role: 'art_director' }),
+        body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
 
       // Publish with a failing notification callback injected in options

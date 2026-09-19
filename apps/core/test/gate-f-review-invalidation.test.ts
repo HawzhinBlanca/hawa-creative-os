@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR-043, FR-044, Invariant #11)', () => {
-  const app = createApp();
+  const exports = memoryExportStore();
+  const app = createApp({ deliverableStore: exports.store });
 
   async function createFixtureTask(clientName: string = 'Aster Hotel') {
     const res = await app.request('/api/webhooks/telegram', {
@@ -148,6 +150,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       body: JSON.stringify({
         decision: 'approved',
         role: 'creative_director',
+        pinnedExportIds: [exports.add(task.taskId)],
       }),
     });
     expect(reapproveRes.status).toBe(201);

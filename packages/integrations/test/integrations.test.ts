@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import {
   TelegramAdapter,
@@ -78,6 +79,8 @@ describe('Integrations: Real Adapters & Providers', () => {
 
   it('GooglePublisher: publishes idempotently to Google Drive and Sheets', async () => {
     const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'unit_test_token' });
+    const exportBytes = new TextEncoder().encode('export.png bytes for t-pub-2');
+    const exportSha256 = createHash('sha256').update(exportBytes).digest('hex');
     const request: PublishRequest = {
       taskId: 't-pub-2',
       clientId: 'c-pub-2',
@@ -91,8 +94,9 @@ describe('Integrations: Real Adapters & Providers', () => {
         storageKey: 'store/export.png',
         filename: 'export.png',
         mimeType: 'image/png',
-        byteSize: 2048,
-        sha256: 'sha256_file_2',
+        byteSize: exportBytes.length,
+        sha256: exportSha256,
+        content: exportBytes,
       }],
       destination: {
         sharedDriveId: 'drive-main',
@@ -112,6 +116,8 @@ describe('Integrations: Real Adapters & Providers', () => {
     if (pub1.ok && pub2.ok) {
       expect(pub1.value.publicationId).toBe(pub2.value.publicationId);
       expect(pub1.value.sheet.synced).toBe(true);
+      // No Google call was made, and the receipt says so.
+      expect(pub1.value.emulated).toBe(true);
     }
   });
 

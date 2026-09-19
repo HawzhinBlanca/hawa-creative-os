@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createDb, withRlsContext, PublicationRepository } from '@hawa/db';
 import { GooglePublisher } from '@hawa/integrations';
 import { DeterministicQAEngine } from '@hawa/qa';
@@ -40,7 +41,8 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     // -------------------------------------------------------------------------
     // STAGE 1: AUTHENTICATED INTAKE & DURABLE POSTGRESQL STORAGE
     // -------------------------------------------------------------------------
-    let app = createApp({ db, publicationRepo });
+    const exports = memoryExportStore();
+    let app = createApp({ db, publicationRepo, deliverableStore: exports.store });
 
     // Negative control: unauthenticated intake is rejected with 401
     const unauthRes = await app.request('/v1/tasks', {
@@ -96,7 +98,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
     // Recovery Check 1: Process crash after intake
     // Re-create app instance and verify task recovered directly from PostgreSQL
-    app = createApp({ db, publicationRepo });
+    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
     const readbackAfterIntake = await app.request(`/v1/tasks/${taskId}`, {
       headers: authHeaders,
     });
@@ -271,7 +273,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     );
 
     // Recovery Check 2: Process crash after revision creation
-    app = createApp({ db, publicationRepo });
+    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
     const { dbRev, dbDoc } = await withRlsContext(
       db,
       { tenantId, userId: operatorUserId, role: 'operator' },
@@ -314,13 +316,16 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     const crossJson = await crossApprove.json();
     expect(crossJson.title).toContain('Cross-Task Revision Mismatch');
 
-    // Legitimate Server-Enforced Approval
+    // Legitimate Server-Enforced Approval, pinning the export the reviewer saw
+    const pinnedBytes = Buffer.from(`APPROVED_KAAE_EXPORT_${taskId}`);
+    const pinnedExportId = exports.add(taskId, 'png', pinnedBytes);
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
         decision: 'approved',
         reason: 'Passed 100% deterministic QA and Kurdish Sorani orthography validation.',
+        pinnedExportIds: [pinnedExportId],
       }),
     });
     expect(approveRes.status).toBe(201);
@@ -329,7 +334,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     expect(approveJson.actor.userId).toBe(operatorUserId);
 
     // Recovery Check 3: Process crash after approval
-    app = createApp({ db, publicationRepo });
+    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
     const taskAfterApprove = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const taskAfterApproveJson = await taskAfterApprove.json();
     expect(taskAfterApproveJson.status).toBe('APPROVED');
@@ -432,10 +437,17 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     expect(corePubRes.status).toBe(202);
     const corePubJson = await corePubRes.json();
     expect(corePubJson.taskId).toBe(taskId);
-    expect(corePubJson.vaultUri).toContain(kaaeClientId);
+    // The app was restarted after approval, so the pin came back from the approval's durable payload.
+    expect(corePubJson).not.toHaveProperty('vaultUri');
+    expect(corePubJson.receipt.driveFiles).toHaveLength(1);
+    expect(corePubJson.receipt.driveFiles[0]).toMatchObject({
+      artifactId: pinnedExportId,
+      expectedSha256: crypto.createHash('sha256').update(pinnedBytes).digest('hex'),
+      observedSize: pinnedBytes.length,
+    });
 
     // Recovery Check 4: Final process restart & PostgreSQL independent verification
-    app = createApp({ db, publicationRepo });
+    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
     const finalTaskRes = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const finalTaskJson = await finalTaskRes.json();
     expect(finalTaskJson.status).toBe('COMPLETE');

@@ -8,6 +8,8 @@ export interface PackageFile {
   mimeType: string;
   byteSize: number;
   sha256: SHA256;
+  /** The file's bytes. Without them the publisher reads `storageKey` from disk; a file with neither is refused. */
+  content?: Uint8Array;
 }
 
 export interface PublishRequest {
@@ -46,10 +48,13 @@ export interface PublicationReceipt {
   publicationKey: string;
   driveFolderId: string;
   driveFiles: DriveFileReceipt[];
+  /** rowNumber is present only when Google Sheets reported the row it wrote. */
   sheet: { spreadsheetId: string; sheetId: number; rowKey: string; rowNumber?: number; expectedHash: SHA256; observedHash?: SHA256; synced: boolean };
   completedAt?: ISODateTime;
   state: 'drive_complete' | 'complete' | 'failed';
   detail: JsonObject;
+  /** True when no Google call was made (test emulation). Such a receipt proves nothing about Drive or Sheets. */
+  emulated?: boolean;
 }
 
 export interface Publisher {

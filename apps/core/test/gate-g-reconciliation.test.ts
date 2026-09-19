@@ -1,24 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12)', () => {
-  const app = createApp();
+  const exports = memoryExportStore();
+  const app = createApp({ deliverableStore: exports.store });
 
-  async function createPublishedTask(clientName: string = 'Aster Hotel') {
-    // 1. Ingest via webhook
-    const res = await app.request('/api/webhooks/telegram', {
+  async function createPublishedTask(title: string = 'Aster Hotel') {
+    // 1. A task for a client whose DNA names a Drive destination (a task without a client is never delivered)
+    const res = await app.request('/tasks', {
       method: 'POST',
-      headers: {
-        'x-telegram-bot-api-secret-token': 'expected_office_secret',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        update_id: Math.floor(Math.random() * 100000),
-        message: { text: `Campaign for ${clientName}`, chat: { id: 777 } },
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: 'c1000000-0000-4000-8000-000000000002', title: `Campaign for ${title}` }),
     });
     const json = await res.json();
-    const taskId = json.task.id;
+    const taskId = json.id || json.task?.id;
+    expect(taskId).toBeDefined();
 
     // 2. Register revision
     const revRes = await app.request(`/tasks/${taskId}/revisions`, {
@@ -34,7 +31,8 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
     });
     const { revisionId } = await revRes.json();
 
-    // 3. Human Approval
+    // 3. Human Approval, pinning the export the reviewer saw
+    const exportId = exports.add(taskId);
     await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: {
@@ -44,6 +42,7 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',
+        pinnedExportIds: [exportId],
       }),
     });
 

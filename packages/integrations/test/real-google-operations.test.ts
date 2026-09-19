@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -20,6 +21,8 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-pub-test-'));
   const testFilePath = path.join(tempDir, 'deliverable.png');
   fs.writeFileSync(testFilePath, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]));
+  // The publisher checks every file against its real SHA-256, so the requests carry the file's own hash.
+  const testFileSha256 = createHash('sha256').update(fs.readFileSync(testFilePath)).digest('hex');
 
   beforeAll(async () => {
     mockServer = http.createServer((req, res) => {
@@ -151,7 +154,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         filename: 'deliverable.png',
         mimeType: 'image/png',
         byteSize: 12,
-        sha256: 'sha256_123',
+        sha256: testFileSha256,
       }],
       destination: {
         productionRootFolderId: 'folder_root_123',
@@ -227,7 +230,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         filename: 'deliverable.png',
         mimeType: 'image/png',
         byteSize: 12,
-        sha256: 'sha256_123',
+        sha256: testFileSha256,
       }],
       destination: {
         productionRootFolderId: 'audit-invented-nonexistent-folder',
@@ -265,7 +268,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         filename: 'deliverable.png',
         mimeType: 'image/png',
         byteSize: 12,
-        sha256: 'sha256_123',
+        sha256: testFileSha256,
       }],
       destination: {
         productionRootFolderId: 'folder_prod_root_2026',
@@ -332,7 +335,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         filename: 'deliverable.png',
         mimeType: 'image/png',
         byteSize: 12,
-        sha256: 'sha256_456',
+        sha256: testFileSha256,
       }],
       destination: {
         productionRootFolderId: 'folder_prod_root_2026',

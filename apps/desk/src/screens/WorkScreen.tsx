@@ -6,7 +6,8 @@ import { VectorInspector } from '../components/VectorInspector.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
 import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
-import { reasonOf } from '../services/statusReport.js';
+import { read, reasonOf, type Reading } from '../services/statusReport.js';
+import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
 
 export interface LiveTask {
   id: string;
@@ -105,6 +106,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
+  const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
+  const [pinnedExportIds, setPinnedExportIds] = useState<string[]>([]);
   const [approverRole, setApproverRole] = useState<'art_director' | 'brand_lead' | 'compliance_reviewer'>('art_director');
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -357,10 +361,31 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     }
   };
 
-  // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03)
+  // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
+  // Core has stored for the task; the ones the reviewer keeps selected are pinned to the approval.
+  const openApprovalModal = async () => {
+    if (!selectedTask) return;
+    const taskId = selectedTask.id;
+    setIsApprovalModalOpen(true);
+    setApprovalExports({ state: 'loading' });
+    setPinnedExportIds([]);
+    const reading = await read(async () => {
+      const state = await apiClient.canva.taskState(taskId);
+      return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
+    });
+    setApprovalExports(reading);
+    if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value));
+  };
+
   const handleApprove = async () => {
     if (!selectedTask || !selectedTask.latestRevisionId) {
       showToast('No active design revision to approve.', 'error');
+      return;
+    }
+    const exportsForApproval = approvalExports.state === 'known' ? approvalExports.value : [];
+    const blocker = approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds);
+    if (blocker) {
+      showToast(blocker, 'error');
       return;
     }
     setActionLoading(true);
@@ -371,6 +396,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         {
           action: 'approve',
           reason: 'Brand, hierarchy, and exact-copy verified',
+          pinnedExportIds,
         }
       );
 
@@ -861,7 +887,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   <button
                     id="btn-approve-captured"
                     className="action-btn approve-btn"
-                    onClick={() => setIsApprovalModalOpen(true)}
+                    onClick={openApprovalModal}
                     disabled={actionLoading || !selectedTask.latestRevisionId || selectedTask.qaReport?.passed !== true || selectedTask.status === 'COMPLETE'}
                     title="Record human approval bound to captured revision (FR-041, FR-078)"
                   >
@@ -1211,6 +1237,30 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               </div>
             </div>
 
+            <fieldset style={{ border: 0, padding: 0, margin: '0 0 14px' }}>
+              <legend style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Files to deliver</legend>
+              <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 6px' }}>
+                Delivery sends exactly the selected exports, byte for byte, and nothing else.
+              </p>
+              {approvalExports.state === 'known' &&
+                approvalExports.value.map((e) => (
+                  <label key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={pinnedExportIds.includes(e.id)}
+                      onChange={() => setPinnedExportIds((prev) => togglePin(prev, e.id))}
+                    />
+                    <span style={{ fontFamily: 'monospace' }}>{describeExport(e)}</span>
+                  </label>
+                ))}
+              {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds) && (
+                <p role="status" style={{ fontSize: 12, color: '#b91c1c', margin: '4px 0 0' }}>
+                  {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds)}
+                  {approvalExports.state === 'unknown' ? ` (${approvalExports.reason})` : ''}
+                </p>
+              )}
+            </fieldset>
+
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 Sign-off Role
@@ -1234,7 +1284,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 className="btn primary"
                 style={{ background: '#166534', borderColor: '#166534' }}
                 onClick={handleApprove}
-                disabled={actionLoading}
+                disabled={
+                  actionLoading ||
+                  Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds))
+                }
               >
                 Confirm Approval & Release
               </button>

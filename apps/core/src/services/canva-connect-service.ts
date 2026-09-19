@@ -369,6 +369,21 @@ export class CanvaConnectService {
     if (!result) fail(404,'CANVA_ARTIFACT_NOT_FOUND','Export evidence not found for the current task and actor');
     return result;
   }
+  /** Retrieved exports of this task with these ids, for pinning to an approval. Unknown ids are left out. */
+  async exportsById(s: Scope,taskId: string,ids: string[]): Promise<Array<{ id:string; format:'png'|'pdf'|'pptx'; sha256:string; byte_size:number }>> {
+    if (!ids.length) return [];
+    const rows = await this.tx(s,async db => (await sql<any>`SELECT b.id,b.format,b.sha256,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
+      JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
+      WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
+        AND b.id = ANY(${ids}::uuid[])`.execute(db)).rows);
+    return rows.map((r:any) => ({ id:String(r.id),format:r.format,sha256:String(r.sha256),byte_size:Number(r.byte_size) }));
+  }
+  /** The stored bytes of one export of this task, for delivery. The caller checks them against the pinned hash. */
+  async exportBytes(s: Scope,taskId: string,id: string): Promise<Buffer|null> {
+    const row = await this.tx(s,async db => (await sql<any>`SELECT content FROM hawa.canva_export_bytes
+      WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
+    return row?.content ? Buffer.from(row.content) : null;
+  }
 }
 export async function downloadCanvaExport(value: string, customFetch: typeof fetch = fetch): Promise<Buffer> {
   let u: URL;
