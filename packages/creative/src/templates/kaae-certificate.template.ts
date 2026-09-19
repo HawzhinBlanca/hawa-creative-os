@@ -6,7 +6,7 @@ export interface KaaeCertificateParams {
   programName: string;
   startDate?: string;
   endDate?: string;
-  issueDate: string;
+  issueDate?: string;
   directorName?: string;
   directorTitle?: string;
   logoSha256?: string;
@@ -332,25 +332,27 @@ export function buildKaaeCertificateOperations(params: KaaeCertificateParams): S
     });
   }
 
-  ops.push({
-    op: 'addText',
-    nodeId: 'cert_issue_date',
-    pageId,
-    text: isKurdish ? `دەرکراوە لە: ${params.issueDate}` : `Issued on ${params.issueDate}`,
-    role: 'disclaimer',
-    x: 400,
-    y: datesY + 60,
-    width: width - 800,
-    height: 50,
-    style: {
-      fontSize: 38,
-      fontWeight: '500',
-      fontFamily: isKurdish ? 'Noto Naskh Arabic' : 'Inter',
-      textAlign: 'center',
-      color: '#666666',
-    },
-    locked: false,
-  });
+  if (params.issueDate) {
+    ops.push({
+      op: 'addText',
+      nodeId: 'cert_issue_date',
+      pageId,
+      text: isKurdish ? `دەرکراوە لە: ${params.issueDate}` : `Issued on ${params.issueDate}`,
+      role: 'disclaimer',
+      x: 400,
+      y: datesY + 60,
+      width: width - 800,
+      height: 50,
+      style: {
+        fontSize: 38,
+        fontWeight: '500',
+        fontFamily: isKurdish ? 'Noto Naskh Arabic' : 'Inter',
+        textAlign: 'center',
+        color: '#666666',
+      },
+      locked: false,
+    });
+  }
 
   // 11. Signatures Section (Left Director, Right Statutory Authority Citation)
   const signY = height - 420;
