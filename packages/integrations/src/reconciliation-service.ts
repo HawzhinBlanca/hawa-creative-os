@@ -91,15 +91,16 @@ export class ReconciliationService {
     let inSyncCount = 0;
 
     for (const task of tasks) {
-      // Only tasks that should already have been delivered can drift.
-      if (['COMPLETE', 'APPROVED', 'PUBLISHING'].includes(task.status)) {
+      // Only tasks that should already have been delivered can drift. PUBLISH_RECONCILIATION is a task
+      // whose files were delivered while its Sheets row was not confirmed.
+      if (['COMPLETE', 'APPROVED', 'PUBLISHING', 'PUBLISH_RECONCILIATION'].includes(task.status)) {
         const driveEntries = driveByTask.get(task.id) || [];
         const sheetEntry = sheetByTask.get(task.id);
 
         let taskHasDrift = false;
 
         // Check 1: no Drive delivery recorded
-        if (task.status === 'COMPLETE' && driveEntries.length === 0) {
+        if ((task.status === 'COMPLETE' || task.status === 'PUBLISH_RECONCILIATION') && driveEntries.length === 0) {
           taskHasDrift = true;
           anomalies.push({
             taskId: task.id,

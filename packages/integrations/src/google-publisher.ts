@@ -137,6 +137,22 @@ export class GooglePublisher implements Publisher {
           } as any,
         };
       }
+      // The files are delivered but the Sheets row was not confirmed: retry only the row, never re-upload.
+      if (existing.state === 'drive_complete') {
+        const token = await this.getAccessToken();
+        const retry = await this.syncSheetRow(request, token, existing.driveFiles);
+        existing.sheet.spreadsheetId = request.destination.spreadsheetId || existing.sheet.spreadsheetId;
+        existing.sheet.rowNumber = retry.rowNumber;
+        existing.sheet.synced = retry.synced;
+        const detail: Record<string, any> = { ...existing.detail };
+        if (retry.problem) detail.sheetProblem = retry.problem;
+        else delete detail.sheetProblem;
+        existing.detail = detail;
+        if (retry.synced && existing.detail?.verified) {
+          existing.state = 'complete';
+          existing.completedAt = new Date().toISOString();
+        }
+      }
       return { ok: true, value: existing };
     }
 
@@ -363,94 +379,10 @@ export class GooglePublisher implements Publisher {
 
     const allFilesVerified = driveFiles.length > 0 && driveFiles.every((f) => f.verified);
 
-    // Step 8: Google Sheets row upsert (FR-049). The row number is only ever one Sheets reported.
-    let sheetRowNumber: number | undefined = this.taskRowMap.get(request.taskId);
-    let sheetSynced = false;
-    if (request.destination.spreadsheetId) {
-      if (this.config.emulateNetworkForTesting) {
-        // Emulated row, marked by receipt.emulated.
-        if (sheetRowNumber === undefined) {
-          sheetRowNumber = this.taskRowMap.size + 2;
-          this.taskRowMap.set(request.taskId, sheetRowNumber);
-        }
-        sheetSynced = true;
-      } else {
-        const spreadsheetId = request.destination.spreadsheetId;
-        const rowValues = [
-          request.taskId,
-          request.clientId,
-          request.destination.productionRootFolderId,
-          new Date().toISOString(),
-          'COMPLETE',
-          driveFiles[0]?.webViewLink || '',
-          request.packageHash,
-        ];
-
-        const existingRow = this.taskRowMap.get(request.taskId);
-        let sheetRes: Response;
-        if (existingRow) {
-          // Idempotent upsert: update existing row for this task ID
-          const updateUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${existingRow}:G${existingRow}?valueInputOption=USER_ENTERED`;
-          sheetRes = await fetch(updateUrl, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              values: [rowValues],
-            }),
-          });
-          sheetRowNumber = existingRow;
-        } else {
-          // First publication: append row and record row index
-          const appendUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A1:append?valueInputOption=USER_ENTERED`;
-          sheetRes = await fetch(appendUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              values: [rowValues],
-            }),
-          });
-
-          if (sheetRes.ok) {
-            const sheetData = await sheetRes.json() as any;
-            const updatedRange = sheetData.updates?.updatedRange || '';
-            const match = updatedRange.match(/!A(\d+)/);
-            if (match) {
-              sheetRowNumber = parseInt(match[1], 10);
-              this.taskRowMap.set(request.taskId, sheetRowNumber);
-            }
-          }
-        }
-
-        // Without a row number from Sheets there is nothing to read back, so the row is not synced.
-        if (sheetRes.ok && sheetRowNumber !== undefined) {
-          // Step 8: Independent Readback from Google Sheets
-          const readbackSheetUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${sheetRowNumber}:G${sheetRowNumber}`;
-          const sheetReadbackRes = await fetch(readbackSheetUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-
-          if (sheetReadbackRes.ok) {
-            const sheetReadbackData = await sheetReadbackRes.json() as any;
-            const readRow = sheetReadbackData.values?.[0];
-            if (
-              readRow &&
-              readRow[0] === request.taskId &&
-              readRow[1] === request.clientId &&
-              readRow[4] === 'COMPLETE' &&
-              readRow[6] === request.packageHash
-            ) {
-              sheetSynced = true;
-            }
-          }
-        }
-      }
-    }
+    // Step 8: Google Sheets row upsert (FR-049).
+    const sheetResult = await this.syncSheetRow(request, token, driveFiles);
+    const sheetRowNumber = sheetResult.rowNumber;
+    const sheetSynced = sheetResult.synced;
 
     const isFullyComplete = allFilesVerified && sheetSynced;
     const receipt: PublicationReceipt = {
@@ -469,13 +401,94 @@ export class GooglePublisher implements Publisher {
       },
       completedAt: new Date().toISOString(),
       state: isFullyComplete ? 'complete' : driveFiles.length > 0 ? 'drive_complete' : 'failed',
-      detail: { verified: allFilesVerified, filesUploaded: driveFiles.length },
+      detail: {
+        verified: allFilesVerified,
+        filesUploaded: driveFiles.length,
+        ...(sheetResult.problem ? { sheetProblem: sheetResult.problem } : {}),
+      },
       emulated: this.config.emulateNetworkForTesting === true,
     };
     (receipt as any).clientId = request.clientId;
 
     this.inMemoryLedger.set(request.publicationKey, receipt);
     return { ok: true, value: receipt };
+  }
+
+  /**
+   * Writes (or updates) this task's Sheets row and reads it back. The row number is only ever one
+   * Sheets reported; when the row is not confirmed, `problem` says why.
+   */
+  private async syncSheetRow(
+    request: PublishRequest,
+    token: string | null | undefined,
+    driveFiles: DriveFileReceipt[]
+  ): Promise<{ rowNumber?: number; synced: boolean; problem?: string }> {
+    let rowNumber = this.taskRowMap.get(request.taskId);
+    const spreadsheetId = request.destination.spreadsheetId;
+    if (!spreadsheetId) return { rowNumber, synced: false, problem: 'No spreadsheet is configured for this client' };
+    if (this.config.emulateNetworkForTesting) {
+      // Emulated row, marked by receipt.emulated.
+      if (rowNumber === undefined) {
+        rowNumber = this.taskRowMap.size + 2;
+        this.taskRowMap.set(request.taskId, rowNumber);
+      }
+      return { rowNumber, synced: true };
+    }
+    if (!token) return { rowNumber, synced: false, problem: 'Google Workspace credentials are not configured' };
+
+    const rowValues = [
+      request.taskId,
+      request.clientId,
+      request.destination.productionRootFolderId,
+      new Date().toISOString(),
+      'COMPLETE',
+      driveFiles[0]?.webViewLink || '',
+      request.packageHash,
+    ];
+    try {
+      let sheetRes: Response;
+      if (rowNumber !== undefined) {
+        // Idempotent upsert: update this task's existing row
+        sheetRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:G${rowNumber}?valueInputOption=USER_ENTERED`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [rowValues] }),
+        });
+      } else {
+        // First publication: append the row and record the index Sheets reports
+        sheetRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A1:append?valueInputOption=USER_ENTERED`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [rowValues] }),
+        });
+        if (sheetRes.ok) {
+          const sheetData = (await sheetRes.json()) as any;
+          const match = String(sheetData.updates?.updatedRange || '').match(/!A(\d+)/);
+          if (match) {
+            rowNumber = parseInt(match[1], 10);
+            this.taskRowMap.set(request.taskId, rowNumber);
+          }
+        }
+      }
+      if (!sheetRes.ok) return { rowNumber, synced: false, problem: `Sheets write failed: HTTP ${sheetRes.status}` };
+      // Without a row number from Sheets there is nothing to read back, so the row is not synced.
+      if (rowNumber === undefined) return { synced: false, problem: 'Sheets did not report which row it wrote' };
+
+      const readback = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:G${rowNumber}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!readback.ok) return { rowNumber, synced: false, problem: `Sheets readback failed: HTTP ${readback.status}` };
+      const readRow = ((await readback.json()) as any).values?.[0];
+      const matches =
+        readRow &&
+        readRow[0] === request.taskId &&
+        readRow[1] === request.clientId &&
+        readRow[4] === 'COMPLETE' &&
+        readRow[6] === request.packageHash;
+      return matches ? { rowNumber, synced: true } : { rowNumber, synced: false, problem: `Row ${rowNumber} read back from Sheets does not match this publication` };
+    } catch (err: any) {
+      return { rowNumber, synced: false, problem: `Sheets could not be reached: ${err?.message || String(err)}` };
+    }
   }
 
   async reconcile(_ctx: RequestContext, publicationId: UUID): Promise<Result<PublicationReceipt>> {
