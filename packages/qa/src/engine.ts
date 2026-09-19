@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   QAEngine,
   QARequest,
@@ -532,7 +533,10 @@ export class DeterministicQAEngine implements QAEngine {
       status = 'passed';
     }
 
-    const reportHash = `report_hash_${request.taskId}_${request.designRevisionId}_${Date.now()}`;
+    // A real hash of what this run concluded (it used to be the label report_hash_<task>_<rev>_<time>).
+    const reportHash = createHash('sha256')
+      .update(JSON.stringify({ taskId: request.taskId, designRevisionId: request.designRevisionId, status, criticalPass, checks, findings: allFindings }))
+      .digest('hex');
 
     return {
       ok: true,
