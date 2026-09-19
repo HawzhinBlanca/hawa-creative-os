@@ -1,6 +1,7 @@
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import { measureWrappedLines } from './render-layout-v2.js';
 import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-contrast.js';
+import { logoClearZone } from './house-rules.js';
 import type { OrnamentSettings } from './pipeline-v3.js';
 
 /**
@@ -173,22 +174,35 @@ export function applyStyleSpec(
   }
   if (title && spec.titleWeight !== 'as_generated') title.bold = spec.titleWeight === 'heavy';
 
-  // Alignment: every block on one column edge, the text column spanning the safe area.
+  // Alignment: each block reads from the same column edge. Its own measure is kept, because
+  // stretching every box to the full column made all three candidates of a request identical
+  // (pairwise distance 0px on task 89c242f2) and pushed 52 of the 200 stored designs into QA
+  // failure: a widened box reaches the logo and whatever else shares its band.
   const alignFor = (t: TextElement): TextElement['align'] =>
     spec.alignment === 'center' ? 'center' : (spec.alignment === 'start') !== rtl(t) ? 'left' : 'right';
   if (spec.alignment !== 'as_generated') {
+    // Each measure is snapped to the design's own columns, so blocks that keep different widths
+    // still share edges. Without it, ragged edges cost the alignment gate: a Kurdish candidate came
+    // out at 0.60 against the 0.70 QA needs, while its type and composition were what the client
+    // asked for.
+    const columns = Math.max(1, Math.round(layout.grid?.columns || 12));
+    const columnWidth = (W - 2 * m) / columns;
     for (const t of layout.text) {
       t.align = alignFor(t);
       if (t === cta && spec.cta === 'gold_button') continue;
-      t.x = m;
-      t.width = W - 2 * m;
+      const snapped = Math.round(Math.min(t.width, W - 2 * m) / columnWidth) * columnWidth;
+      const width = Math.round(Math.min(W - 2 * m, Math.max(columnWidth, snapped)));
+      t.width = width;
+      t.x = t.align === 'left' ? m : t.align === 'right' ? W - m - width : Math.round((W - width) / 2);
     }
   }
 
   // Title at display size: the largest size, up to the cap, whose lines stay within one more
   // than the lines the client broke it into. Never smaller than the generator made it.
   if (title && spec.titleScale !== 'as_generated') {
-    if (spec.alignment === 'as_generated') {
+    if (spec.alignment === 'as_generated' && title.width < 0.5 * (W - 2 * m)) {
+      // A title set in a narrow column cannot carry display type; give it the column, but only
+      // when the spec says nothing about alignment (which sets the measure itself).
       title.x = m;
       title.width = W - 2 * m;
     }
@@ -243,11 +257,17 @@ export function applyStyleSpec(
     })();
     const padX = Math.round(0.9 * cta.fontSize);
     const padY = Math.round(0.45 * cta.fontSize);
-    const align = spec.alignment === 'as_generated' ? cta.align : alignFor(cta);
+    let align = spec.alignment === 'as_generated' ? cta.align : alignFor(cta);
     cta.align = 'center';
     cta.width = Math.min(W - 2 * m - 2 * padX, lineWidth);
     cta.height = Math.ceil(cta.fontSize * cta.lineHeight);
     const buttonWidth = cta.width + 2 * padX;
+    // The button keeps away from the logo's corner. In the owner's reference the button sits
+    // bottom-left with the logo bottom-right; mirrored for Kurdish, both wanted the same corner, and
+    // the design had to give up either its display title or the logo's place to fit them.
+    const logoBottom = layout.logo && spec.logoCorner.startsWith('bottom') ? spec.logoCorner.split('-')[1] : undefined;
+    if (logoBottom === 'right' && align === 'right') align = 'left';
+    else if (logoBottom === 'left' && align === 'left') align = 'right';
     const bx = align === 'left' ? m : align === 'right' ? W - m - buttonWidth : Math.round((W - buttonWidth) / 2);
     cta.x = bx + padX;
     const button: ShapeElement = {
@@ -351,4 +371,48 @@ export function composeStyleSpec(layout: StudioLayoutV2, spec: StyleSpec, logoCl
     layout.art.calmRegion = { ...layout.art.calmRegion, y: y0, height: y1 - y0 };
   }
   return layout;
+}
+
+/**
+ * What a prepared layout gets wrong, by the measures preparation can take on its own: blocks that
+ * overlap, copy that reads out of order down the page, a box whose copy no longer fits, text outside
+ * the safe area, and the logo's clear space breached. These mirror the hard-QA codes OVERLAP,
+ * COPY_ORDER, COPY_OVERFLOW, MARGIN and LOGO closely enough to choose between two arrangements of
+ * the same design without the QA context (fonts and palette rules) that only the caller holds.
+ */
+export function layoutDefectCount(layout: StudioLayoutV2, copy: { text: Record<number, string> }): number {
+  const W = layout.width;
+  const H = layout.height;
+  const m = layout.grid?.margin ?? 0;
+  const texts = layout.text || [];
+  let defects = 0;
+  for (let i = 0; i < texts.length; i++) {
+    for (let j = i + 1; j < texts.length; j++) if (intersects(texts[i], texts[j])) defects++;
+  }
+  const ordered = [...texts].sort((a, b) => a.y - b.y || a.x - b.x).map((t) => t.copyIndex);
+  for (let i = 1; i < ordered.length; i++) if (ordered[i] < ordered[i - 1]) defects++;
+  const lines = measureWrappedLines(layout, copy.text);
+  for (const t of texts) {
+    if (Math.ceil((lines[t.copyIndex] ?? 1) * t.fontSize * t.lineHeight) > t.height + 1) defects++;
+    if (t.x < m - 1 || t.y < m - 1 || t.x + t.width > W - m + 1 || t.y + t.height > H - m + 1) defects++;
+  }
+  if (layout.logo) {
+    const zone = logoClearZone(layout.logo);
+    for (const t of texts) if (intersects(t, zone)) defects++;
+    for (const sh of layout.shapes || []) if (sh.role === 'rule' && intersects(sh, zone)) defects++;
+  }
+  return defects;
+}
+
+/**
+ * The decisions that move or resize something, and so can put two parts of a design into each
+ * other. Ordered by what costs the client's look least when it has to go: where the logo sits, then
+ * the title's size, then the arrangement down the page, then the button's treatment, then whether
+ * cards are stripped, then the alignment everything reads from.
+ */
+export const MOVEMENT_DECISIONS = ['logoCorner', 'titleScale', 'composition', 'cta', 'panels', 'alignment'] as const;
+
+/** The same spec with one decision left to the generator. */
+export function withoutDecision(spec: StyleSpec, key: (typeof MOVEMENT_DECISIONS)[number]): StyleSpec {
+  return { ...spec, [key]: 'as_generated' };
 }
