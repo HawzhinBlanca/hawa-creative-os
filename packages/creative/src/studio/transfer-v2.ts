@@ -258,7 +258,17 @@ export async function encodeStudioTransferV2(
   for (const t of sortedText) {
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
     const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
-    slide.addText(keepCompoundsWhole(copy[t.copyIndex]), {
+    // A block with an accent colour is written as runs: its last paragraph in that colour.
+    const text = keepCompoundsWhole(copy[t.copyIndex]);
+    const paragraphs = text.split('\n').filter((p) => p.trim());
+    const runs =
+      t.accentColor && paragraphs.length > 1
+        ? paragraphs.map((p, i) => ({
+            text: p,
+            options: { breakLine: i < paragraphs.length - 1, ...(i === paragraphs.length - 1 ? { color: hex(t.accentColor!) } : {}) },
+          }))
+        : text;
+    slide.addText(runs as any, {
       x: t.x / 96,
       y: t.y / 96,
       w: t.width / 96,

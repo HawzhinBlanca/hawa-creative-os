@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { Hex } from './layout-v2.js';
 
-export type ProceduralMotifType = 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash';
+export type ProceduralMotifType = 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | 'diagonal-lines';
 
 export interface MotifOptions {
   width: number;
@@ -219,6 +219,42 @@ function generateGradientWashSvg(
 }
 
 /**
+ * Fine parallel hairlines rising left to right over a diagonal tonal split: the lower-right half a
+ * step lighter than the field. The texture of the owner's K-12 reference (task 89c242f2).
+ */
+function generateDiagonalLinesSvg(width: number, height: number, palette: Hex[], globalOpacity: number): string {
+  // The brand's royal navy for the lighter plane and its primary blue for the lines, or the palette
+  // colours nearest them (sorting by lightness picked a near-black from the KAAE palette).
+  const plane = nearestTo('#1E3A5F', palette);
+  const line = nearestTo('#4770A3', palette);
+  const spacing = Math.max(14, Math.round(Math.min(width, height) / 60));
+  const lines: string[] = [];
+  for (let c = -height; c < width + height; c += spacing) {
+    lines.push(`<line x1="${c}" y1="${height}" x2="${c + height}" y2="0"/>`);
+  }
+  return [
+    `<polygon points="${width},${Math.round(height * 0.12)} ${width},${height} 0,${height} 0,${Math.round(height * 0.95)}" fill="${plane}" opacity="${(1.0 * globalOpacity).toFixed(2)}"/>`,
+    `<g stroke="${line}" stroke-width="1.2" opacity="${(0.55 * globalOpacity).toFixed(2)}">`,
+    ...lines,
+    `</g>`,
+  ].join('\n  ');
+}
+
+function nearestTo(want: Hex, palette: Hex[]): Hex {
+  const rgb = (hex: string) => {
+    const c = hex.replace('#', '');
+    const f = c.length === 3 ? c.split('').map((x) => x + x).join('') : c;
+    return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16));
+  };
+  const [r, g, b] = rgb(want);
+  const d = (h: string) => {
+    const [x, y, z] = rgb(h);
+    return (x - r) ** 2 + (y - g) ** 2 + (z - b) ** 2;
+  };
+  return [...palette].sort((p, q) => d(p) - d(q))[0] || want;
+}
+
+/**
  * Deterministically generates an SVG string for a given procedural motif.
  * Enforces palette-only colors, no text elements, and identical output per seed.
  */
@@ -242,6 +278,9 @@ export function generateMotifSvg(type: ProceduralMotifType, options: MotifOption
       break;
     case 'gradient-wash':
       innerSvg = generateGradientWashSvg(width, height, palette, prng, opacity);
+      break;
+    case 'diagonal-lines':
+      innerSvg = generateDiagonalLinesSvg(width, height, palette, opacity);
       break;
     default:
       throw new Error(`Unknown motif type: ${type}`);

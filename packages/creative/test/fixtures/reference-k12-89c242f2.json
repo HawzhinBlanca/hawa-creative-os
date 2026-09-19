@@ -1,0 +1,423 @@
+{
+ "note": "The three prepared candidates of task 89c242f2 (2026-09-19) and the copy of its two language graphics. The live brief read the owner reference as `spec`.",
+ "spec": {
+  "titleScale": "dominant",
+  "titleWeight": "heavy",
+  "typeface": "sans",
+  "alignment": "start",
+  "accentLastTitleLine": true,
+  "cta": "gold_button",
+  "logoCorner": "bottom-right",
+  "texture": "diagonal-lines",
+  "dividers": "no",
+  "panels": "none",
+  "composition": "spread"
+ },
+ "copy": {
+  "ckb": [
+   "چوارچێوەی ستانداردەکانی پەروەردە (K-12)\nچاپی 2.0",
+   "بەرزکردنەوەی کوالێتی و بەردەوامی پەرەپێدانی پەروەردە (K-12) لە هەرێمی کوردستان.",
+   "ئێستا لە kaae.org بەردەستە"
+  ],
+  "en": [
+   "K-12 STANDARDS FRAMEWORK\nEDITION 2.0",
+   "Advancing quality and continuous improvement across K-12 education in the Kurdistan Region.",
+   "Now available at kaae.org."
+  ]
+ },
+ "layouts": [
+  {
+   "art": {
+    "box": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 1350
+    },
+    "motif": "sun-rays",
+    "source": "procedural",
+    "opacity": 0.25,
+    "calmRegion": {
+     "x": 108,
+     "y": 373,
+     "width": 864,
+     "height": 825
+    }
+   },
+   "grid": {
+    "gutter": 26,
+    "margin": 65,
+    "columns": 6,
+    "baseline": 12
+   },
+   "logo": {
+    "x": 486,
+    "y": 137,
+    "width": 108,
+    "height": 108
+   },
+   "text": [
+    {
+     "x": 108,
+     "y": 422,
+     "rtl": true,
+     "bold": true,
+     "role": "title",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 864,
+     "height": 187,
+     "italic": false,
+     "fontSize": 54,
+     "copyIndex": 0,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 130,
+     "y": 864,
+     "rtl": true,
+     "bold": false,
+     "role": "body",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 821,
+     "height": 45,
+     "italic": false,
+     "fontSize": 24,
+     "copyIndex": 1,
+     "fontFamily": "Noto Sans Arabic",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 346,
+     "y": 1146,
+     "rtl": true,
+     "bold": true,
+     "role": "cta",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 389,
+     "height": 45,
+     "italic": false,
+     "fontSize": 24,
+     "copyIndex": 2,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    }
+   ],
+   "genre": "poster",
+   "width": 1080,
+   "height": 1350,
+   "shapes": [
+    {
+     "x": 65,
+     "y": 339,
+     "kind": "rect",
+     "role": "panel",
+     "color": "#1E3A5F",
+     "width": 950,
+     "height": 351,
+     "opacity": 0.25
+    },
+    {
+     "x": 475,
+     "y": 776,
+     "kind": "line",
+     "role": "rule",
+     "color": "#F7B500",
+     "width": 130,
+     "height": 2,
+     "opacity": 1,
+     "strokeColor": "#F7B500",
+     "strokeWidth": 2
+    },
+    {
+     "x": 324,
+     "y": 1122,
+     "kind": "roundRect",
+     "role": "panel",
+     "color": "#1E3A5F",
+     "width": 432,
+     "height": 92,
+     "radius": 10,
+     "opacity": 1,
+     "strokeColor": "#1E3A5F"
+    }
+   ],
+   "version": 2,
+   "typeScale": {
+    "base": 24,
+    "ratio": 1.5
+   },
+   "background": {
+    "color": "#0A1628"
+   }
+  },
+  {
+   "art": {
+    "box": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 1350
+    },
+    "motif": "sun-rays",
+    "source": "procedural",
+    "opacity": 0.25,
+    "calmRegion": {
+     "x": 130,
+     "y": 324,
+     "width": 821,
+     "height": 844
+    }
+   },
+   "grid": {
+    "gutter": 22,
+    "margin": 65,
+    "columns": 12,
+    "baseline": 11
+   },
+   "logo": {
+    "x": 886,
+    "y": 95,
+    "width": 108,
+    "height": 108
+   },
+   "text": [
+    {
+     "x": 130,
+     "y": 366,
+     "rtl": true,
+     "bold": true,
+     "role": "title",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 821,
+     "height": 173,
+     "italic": false,
+     "fontSize": 50,
+     "copyIndex": 0,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 367,
+     "y": 766,
+     "rtl": true,
+     "bold": false,
+     "role": "body",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 583,
+     "height": 77,
+     "italic": false,
+     "fontSize": 22,
+     "copyIndex": 1,
+     "fontFamily": "Noto Sans Arabic",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 605,
+     "y": 1118,
+     "rtl": true,
+     "bold": true,
+     "role": "cta",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 324,
+     "height": 42,
+     "italic": false,
+     "fontSize": 22,
+     "copyIndex": 2,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    }
+   ],
+   "genre": "poster",
+   "width": 1080,
+   "height": 1350,
+   "shapes": [
+    {
+     "x": 983,
+     "y": 324,
+     "kind": "rect",
+     "role": "accent",
+     "color": "#4770A3",
+     "width": 2,
+     "height": 621,
+     "opacity": 0.35
+    },
+    {
+     "x": 594,
+     "y": 652,
+     "kind": "line",
+     "role": "rule",
+     "color": "#F7B500",
+     "width": 130,
+     "height": 2,
+     "opacity": 1,
+     "strokeColor": "#F7B500",
+     "strokeWidth": 2
+    },
+    {
+     "x": 583,
+     "y": 1094,
+     "kind": "roundRect",
+     "role": "panel",
+     "color": "#1E3A5F",
+     "width": 367,
+     "height": 89,
+     "radius": 9,
+     "opacity": 1,
+     "strokeColor": "#1E3A5F"
+    }
+   ],
+   "version": 2,
+   "typeScale": {
+    "base": 22,
+    "ratio": 1.5
+   },
+   "background": {
+    "color": "#0A1628"
+   }
+  },
+  {
+   "art": {
+    "box": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 1350
+    },
+    "motif": "sun-rays",
+    "source": "procedural",
+    "opacity": 0.25,
+    "calmRegion": {
+     "x": 65,
+     "y": 311,
+     "width": 950,
+     "height": 871
+    }
+   },
+   "grid": {
+    "gutter": 19,
+    "margin": 65,
+    "columns": 12,
+    "baseline": 10
+   },
+   "logo": {
+    "x": 86,
+    "y": 95,
+    "width": 108,
+    "height": 108
+   },
+   "text": [
+    {
+     "x": 65,
+     "y": 328,
+     "rtl": true,
+     "bold": true,
+     "role": "title",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 950,
+     "height": 344,
+     "italic": false,
+     "fontSize": 68,
+     "copyIndex": 0,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 108,
+     "y": 887,
+     "rtl": true,
+     "bold": false,
+     "role": "body",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 864,
+     "height": 104,
+     "italic": false,
+     "fontSize": 30,
+     "copyIndex": 1,
+     "fontFamily": "Noto Sans Arabic",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    },
+    {
+     "x": 130,
+     "y": 1136,
+     "rtl": true,
+     "bold": true,
+     "role": "cta",
+     "align": "right",
+     "color": "#FFFFFF",
+     "width": 367,
+     "height": 37,
+     "italic": false,
+     "fontSize": 20,
+     "copyIndex": 2,
+     "fontFamily": "Amiri",
+     "lineHeight": 1.6,
+     "letterSpacing": 0
+    }
+   ],
+   "genre": "poster",
+   "width": 1080,
+   "height": 1350,
+   "shapes": [
+    {
+     "x": 65,
+     "y": 783,
+     "kind": "rect",
+     "role": "panel",
+     "color": "#1E3A5F",
+     "width": 950,
+     "height": 459,
+     "opacity": 0.65
+    },
+    {
+     "x": 464,
+     "y": 727,
+     "kind": "line",
+     "role": "rule",
+     "color": "#F7B500",
+     "width": 151,
+     "height": 2,
+     "opacity": 1,
+     "strokeColor": "#F7B500",
+     "strokeWidth": 2
+    },
+    {
+     "x": 108,
+     "y": 1111,
+     "kind": "roundRect",
+     "role": "panel",
+     "color": "#1E3A5F",
+     "width": 410,
+     "height": 88,
+     "radius": 9,
+     "opacity": 1,
+     "strokeColor": "#1E3A5F"
+    }
+   ],
+   "version": 2,
+   "typeScale": {
+    "base": 20,
+    "ratio": 1.5
+   },
+   "background": {
+    "color": "#0A1628"
+   }
+  }
+ ]
+}

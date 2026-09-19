@@ -81,6 +81,37 @@ export function runsPipelineV3(
 }
 
 /**
+ * A request that carries the same copy in English and in Kurdish, one graphic per language: the
+ * English copy under a line such as "Here is the text to add on each of the Kurdish and English
+ * graphics:" above the divider, the Kurdish copy below it. On 2026-09-19 (task 89c242f2) the
+ * English copy was taken for instructions, and one Kurdish design was made; the owner wants one
+ * graphic per language. Returns each graphic's request text in the shape intake already reads
+ * (instructions, a divider, that graphic's copy), or null for any other request.
+ */
+export function splitBilingualRequest(rawText: string): { en: string; ckb: string } | null {
+  const text = String(rawText || '').replace(/\r\n/g, '\n');
+  const divider = text.match(/\n\s*([_\-=*]{3,})\s*\n/);
+  if (!divider || divider.index === undefined) return null;
+  const above = text.slice(0, divider.index);
+  const below = text.slice(divider.index + divider[0].length).trim();
+  const arabic = /[\u0600-\u06FF\u0750-\u077F]/;
+  const marker = above.match(/^[^\n]*\b(?:text|copy|content|wording)\b[^\n]*:\s*$/im);
+  if (!marker || marker.index === undefined) return null;
+  const english = above.slice(marker.index + marker[0].length).trim();
+  const instructions = above.slice(0, marker.index).trim();
+  if (!english || arabic.test(english) || !/[A-Za-z]/.test(english)) return null;
+  // The Kurdish side is Kurdish copy (Latin tokens such as "K-12" or "kaae.org" inside it are fine).
+  const kurdishParagraphs = below.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (!kurdishParagraphs.length || !kurdishParagraphs.every((p) => arabic.test(p))) return null;
+  const note = (lang: string, other: string) =>
+    `This graphic carries the ${lang} copy only; a separate graphic carries the ${other} copy.`;
+  return {
+    en: `${instructions}\n${note('English', 'Kurdish')}\n_____\n${english}`,
+    ckb: `${instructions}\n${note('Kurdish', 'English')}\n_____\n${below}`,
+  };
+}
+
+/**
  * The request in this chat that a caption-less photo should join: the latest one saved within
  * `withinMinutes` (HAWA_REFERENCE_MERGE_MINUTES, default 5) that goes to the v3 studio, has no image
  * of its own, and whose design has not reached layout generation. Null when there is none, and the

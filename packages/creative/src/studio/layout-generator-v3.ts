@@ -45,7 +45,7 @@ export interface NormalizedShapeElement extends NormalizedBox {
 export interface NormalizedArtConfig {
   source: 'generated' | 'procedural';
   prompt: string | null;
-  motif: 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | null;
+  motif: 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | 'diagonal-lines' | null;
   box: NormalizedBox;
   opacity: number;
   calmRegion: NormalizedBox;
@@ -900,7 +900,7 @@ export const LAYOUT_V3_JSON_SCHEMA = {
               prompt: { type: ['string', 'null'] },
               motif: {
                 type: ['string', 'null'],
-                enum: ['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash', null],
+                enum: ['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash', 'diagonal-lines', null],
               },
               box: {
                 type: 'object',

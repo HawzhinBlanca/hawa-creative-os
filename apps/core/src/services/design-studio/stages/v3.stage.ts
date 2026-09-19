@@ -65,7 +65,7 @@ const ARCHETYPE_FOR_V3: Record<string, Archetype> = {
   academic_citation_folio: 'editorial-centered',
   commencement_diploma_frame: 'framed-invitation',
 };
-const MOTIFS: MotifKind[] = ['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash'];
+const MOTIFS: MotifKind[] = ['guilloche', 'sun-rays', 'thin-rules', 'gradient-wash', 'diagonal-lines'];
 
 /**
  * Describes a v3 candidate for the Desk from what the generator actually produced. A v3 run used
@@ -175,6 +175,7 @@ export async function runReviseStageV3(
       palette: ctx.referencePack.palette,
       background: ctx.requestedBackground,
       ornament: ctx.ornament,
+      style: ctx.style,
     },
     qa: hardQaContextFor(ctx),
   });

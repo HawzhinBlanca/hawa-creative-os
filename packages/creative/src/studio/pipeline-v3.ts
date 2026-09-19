@@ -20,6 +20,7 @@ import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
+import { applyStyleSpec, composeStyleSpec, ornamentForStyle, type StyleSpec } from './style-spec.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -701,6 +702,8 @@ export function prepareGeneratedLayoutV3(
     background?: string;
     /** Brand ornament added when the generator left it out: a texture and gold dividers. */
     ornament?: OrnamentSettings;
+    /** What the client's reference and instructions decide; enforced over the generator's choices. */
+    style?: StyleSpec;
   }
 ): StudioLayoutV2 {
   // A background the client named is theirs, not the generator's choice: on the cheap tier two of
@@ -710,9 +713,20 @@ export function prepareGeneratedLayoutV3(
   const aspect = canvas.logoAspect || 1.0;
   const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
   const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
-  const conformed = conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
+  const fonted = sanitizeFontsV3(normalized, copy);
+  const styled = canvas.style ? applyStyleSpec(fonted, copy, canvas.style, canvas.palette || []) : fonted;
+  const conformed = conformToHouseRules(styled, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
-  const finish = (l: StudioLayoutV2) => (balance ? balanceVertically(l, copy) : l);
+  const spread = canvas.style?.composition === 'spread';
+  const finish = (l: StudioLayoutV2) => {
+    if (!spread) return balance ? balanceVertically(l, copy) : l;
+    // The reference's composition; kept only if it adds no defect by the pipeline's own measures.
+    const before = JSON.parse(JSON.stringify(l)) as StudioLayoutV2;
+    const composed = composeStyleSpec(l, canvas.style!, logoClearZone);
+    centerSeparatorsInGaps(composed.shapes || [], composed.text);
+    return ornamentAddsDefect(before, composed, copy) ? before : composed;
+  };
+  canvas = { ...canvas, ornament: ornamentForStyle(canvas.ornament, canvas.style) };
   if (!canvas.ornament) return finish(conformed);
   // Ornament may never make a design worse by the pipeline's own measures. The texture changes no
   // measure; dividers and the box fitting they need can (over the 160 stored designs, one fell below
@@ -863,7 +877,7 @@ function ornamentAddsDefect(plain: StudioLayoutV2, ornamented: StudioLayoutV2, c
   return measureDesignV3(ornamented, copy).failingMetrics.some((m) => !failing.has(m));
 }
 
-const MOTIFS = ['sun-rays', 'guilloche', 'thin-rules', 'gradient-wash'] as const;
+const MOTIFS = ['sun-rays', 'guilloche', 'thin-rules', 'gradient-wash', 'diagonal-lines'] as const;
 
 export interface OrnamentSettings {
   /** Gold rules under the title and above the date block, where the gap allows one. */
@@ -1074,7 +1088,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings; style?: StyleSpec };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }

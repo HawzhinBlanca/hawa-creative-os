@@ -1,5 +1,5 @@
 import type { StageContext, CreativeBrief } from '../types.js';
-import { nearestPaletteColour } from '@hawa/creative';
+import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP1Prompt } from '../prompts.js';
 
 export const CREATIVE_BRIEF_SCHEMA = {
@@ -63,6 +63,7 @@ export const CREATIVE_BRIEF_SCHEMA = {
       description:
         "For a style reference: what to take from it, concretely (composition, where colour and ornament sit, texture, type treatment, mood). Empty otherwise.",
     },
+    styleSpec: STYLE_SPEC_SCHEMA,
     requestedBackground: {
       type: 'string',
       description:
@@ -85,6 +86,7 @@ export const CREATIVE_BRIEF_SCHEMA = {
     'requestedBackground',
     'referenceRole',
     'referenceNotes',
+    'styleSpec',
   ],
   additionalProperties: false,
 };
@@ -115,8 +117,8 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
     prompt: attached
-      ? `${userPrompt}\n\nThe client attached the image shown. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it. The client's words above say what they sent it for.`
-      : userPrompt,
+      ? `${userPrompt}\n\nThe client attached the image shown. Classify it in referenceRole, and for a style reference say in referenceNotes what the design should take from it. The client's words above say what they sent it for.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
+      : `${userPrompt}\n\nFill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else.`,
     ...(attached ? { images: [{ mediaType: attached[1], data: attached[2] }] } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',
@@ -129,6 +131,7 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
     brief.referenceNotes = '';
   }
   brief.referenceSeen = Boolean(attached);
+  brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
   if (dropped.length > 0) {
     console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }

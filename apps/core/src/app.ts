@@ -1,4 +1,4 @@
-import { persistChatIntake, findRequestAwaitingReference } from './services/chat-intake.js';
+import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -3941,6 +3941,32 @@ export function createApp(options?: CreateAppOptions) {
     const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
 
     try {
+    // English and Kurdish copy for one graphic per language becomes two requests, each read and
+    // designed on its own (see splitBilingualRequest).
+    const bilingual = splitBilingualRequest(rawText);
+    if (bilingual) {
+      const results = [];
+      for (const [lang, text] of [['en', bilingual.en], ['ckb', bilingual.ckb]] as const) {
+        results.push(
+          await ingestChatCampaignTask({
+            platform: 'telegram',
+            sourceEventId: `${sourceEventId}:${lang}`,
+            sourceChannelId,
+            senderName,
+            rawText: text,
+            voiceTranscript,
+            referenceImageBase64,
+            explicitClientId: json.clientId,
+            autoGenerate: shouldGenerate,
+            deskBaseUrl: incomingDeskBase,
+            rawJson: { ...json, hawaLanguageGraphic: lang },
+          })
+        );
+      }
+      const duplicate = results.every((r) => r.duplicate === true);
+      return c.json({ ok: true, tasks: results.map((r) => r.task), task: results[0].task, bilingual: true, duplicate }, duplicate ? 200 : 201);
+    }
+
     const result = await ingestChatCampaignTask({
       platform: 'telegram',
       sourceEventId,

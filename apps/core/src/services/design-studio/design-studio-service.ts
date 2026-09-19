@@ -716,6 +716,7 @@ export class DesignStudioService {
       pipelineV3: isPipelineV3Run(run),
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: ornamentSettings(),
+      style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
     };
   }
 
