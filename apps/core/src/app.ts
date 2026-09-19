@@ -244,6 +244,17 @@ export interface CreateAppOptions {
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 
+/**
+ * The hash that names a QA report: the report's own reportSha256 when it states one, otherwise the
+ * SHA-256 of the report as stored (what qc_runs.report_sha256 holds). No report, no hash: approvals
+ * used to record the literal 'verified_qc_pass' instead.
+ */
+export function qaReportSha256(report: any): string | null {
+  if (!report) return null;
+  if (typeof report.reportSha256 === 'string' && report.reportSha256) return report.reportSha256;
+  return crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex');
+}
+
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
   const db = options?.db || (process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null);
@@ -5802,7 +5813,7 @@ export function createApp(options?: CreateAppOptions) {
     if (body.capturedArtifactSetHash && task?.latestCaptureSet && body.capturedArtifactSetHash !== task.latestCaptureSet.capturedArtifactSetHash) {
       return problem(c, 422, 'Unprocessable Entity', `Submitted captured artifact set hash '${body.capturedArtifactSetHash}' does not match stored Merkle root '${task.latestCaptureSet.capturedArtifactSetHash}'`);
     }
-    if (body.qcReportHash && task?.latestQAReport && body.qcReportHash !== (task.latestQAReport.reportSha256 || task.latestQAReport.reportHash)) {
+    if (body.qcReportHash && task?.latestQAReport && body.qcReportHash !== qaReportSha256(task.latestQAReport)) {
       return problem(c, 422, 'Unprocessable Entity', `Submitted QC report hash does not match stored QC run hash`);
     }
 
@@ -5834,7 +5845,7 @@ export function createApp(options?: CreateAppOptions) {
     if (body.capturedArtifactSetHash && task?.latestCaptureSet && body.capturedArtifactSetHash !== task.latestCaptureSet.capturedArtifactSetHash) {
       return problem(c, 422, 'Unprocessable Entity', `Submitted captured artifact set hash '${body.capturedArtifactSetHash}' does not match stored Merkle root '${task.latestCaptureSet.capturedArtifactSetHash}'`);
     }
-    if (body.qcReportHash && task?.latestQAReport && body.qcReportHash !== (task.latestQAReport.reportSha256 || task.latestQAReport.reportHash)) {
+    if (body.qcReportHash && task?.latestQAReport && body.qcReportHash !== qaReportSha256(task.latestQAReport)) {
       return problem(c, 422, 'Unprocessable Entity', `Submitted QC report hash does not match stored QC run hash`);
     }
 
@@ -5860,7 +5871,25 @@ export function createApp(options?: CreateAppOptions) {
     const actorRole: any = effectiveRole;
 
     const sourceHash = resolvedRev.document?.sourceSha256 || resolvedRev.sourceSha256 || crypto.createHash('sha256').update(JSON.stringify(resolvedRev.document || {})).digest('hex');
-    const qcReportHash = task?.latestQAReport ? crypto.createHash('sha256').update(JSON.stringify(task.latestQAReport)).digest('hex') : 'verified_qc_pass';
+    // The approval names the QA report it relied on: with a database, the stored QC run the approval
+    // is recorded against; otherwise the task's QA report. With no report there is no hash (null).
+    let qcReportHash: string | null = qaReportSha256(task?.latestQAReport);
+    if (revisionRepo && db) {
+      try {
+        const qcRun: any = await withRlsContext(db, { tenantId, userId: actorUserId, role: actorRole }, (trx) =>
+          trx
+            .selectFrom('qc_runs' as any)
+            .select(['report_sha256'])
+            .where('task_id', '=', taskId)
+            .where('design_revision_id', '=', resolvedRev.id || revisionId)
+            .where('tenant_id', '=', tenantId)
+            .executeTakeFirst()
+        );
+        if (qcRun?.report_sha256) qcReportHash = String(qcRun.report_sha256);
+      } catch (err) {
+        console.error('[core:approvals:qc_lookup] DB QC run lookup error:', err);
+      }
+    }
 
     let dbApproval: any = null;
     if (revisionRepo && db) {
@@ -6035,15 +6064,29 @@ export function createApp(options?: CreateAppOptions) {
         brandColors: ['#003366', '#D4AF37', '#F5F5F5'],
         approvedFonts: ['Cairo-Bold', 'NotoNaskhArabic-Regular'],
       },
-      qaEvidence: {
-        qcRunId: crypto.randomUUID(),
-        status: task.latestQAReport?.status || 'passed',
-        criticalPass: task.latestQAReport?.criticalPass ?? true,
-        qcReportHash: task.latestQAReport?.reportSha256 || 'verified_qc_pass',
-        findingsCount: task.latestQAReport?.findings?.length || 0,
-        glyphCoveragePass: true,
-        unobservedLayersCount: 0,
-      },
+      // Without a QA report the evidence says not run; it used to show a passed, critical-pass report
+      // with a random run id and the hash 'verified_qc_pass'.
+      qaEvidence: task.latestQAReport
+        ? {
+            qcRunId: task.latestQAReport.qcRunId ?? null,
+            status:
+              task.latestQAReport.status ||
+              (task.latestQAReport.criticalPass === true ? 'passed' : task.latestQAReport.criticalPass === false ? 'failed' : 'unknown'),
+            criticalPass: typeof task.latestQAReport.criticalPass === 'boolean' ? task.latestQAReport.criticalPass : null,
+            qcReportHash: qaReportSha256(task.latestQAReport),
+            findingsCount: task.latestQAReport.findings?.length || 0,
+            glyphCoveragePass: true,
+            unobservedLayersCount: 0,
+          }
+        : {
+            qcRunId: null,
+            status: 'not_run',
+            criticalPass: null,
+            qcReportHash: null,
+            findingsCount: 0,
+            glyphCoveragePass: null,
+            unobservedLayersCount: null,
+          },
       revisionDiff: (task as any).latestDiff,
     });
 
