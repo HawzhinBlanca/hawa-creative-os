@@ -49,7 +49,8 @@ export interface ApprovalDecision {
   taskId: UUID;
   designRevisionId: UUID;
   sourceHash: SHA256;
-  qcReportHash: SHA256;
+  /** The QA report this approval relied on; null when there was none. */
+  qcReportHash: SHA256 | null;
   decision: ApprovalState;
   actor: {
     userId: UUID;
@@ -121,14 +122,15 @@ export interface ReviewDeskInspection {
     brandColors: string[];
     approvedFonts: string[];
   };
+  /** With no QA report the status is 'not_run' and the report-derived fields are null, never a pass. */
   qaEvidence: {
-    qcRunId: UUID;
-    status: 'passed' | 'failed' | 'blocked';
-    criticalPass: boolean;
-    qcReportHash: SHA256;
+    qcRunId: UUID | null;
+    status: 'passed' | 'failed' | 'blocked' | 'not_run' | 'unknown';
+    criticalPass: boolean | null;
+    qcReportHash: SHA256 | null;
     findingsCount: number;
-    glyphCoveragePass: boolean;
-    unobservedLayersCount: number;
+    glyphCoveragePass: boolean | null;
+    unobservedLayersCount: number | null;
   };
   revisionDiff?: {
     fromRevisionId?: UUID;

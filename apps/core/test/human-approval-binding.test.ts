@@ -82,7 +82,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(deskData.exactCopy.some((c: any) => c.text.includes('بانگهێشتنامەی فەرمی'))).toBe(true);
     expect(deskData.exactCopy.some((c: any) => c.isKurdishRtl === true)).toBe(true);
     expect(deskData.brandReferences.officialLogoSha256).toBeDefined();
-    expect(deskData.qaEvidence.status).toBe('passed');
+    // No QA ran on this revision, so the evidence says so instead of reporting a pass.
+    expect(deskData.qaEvidence).toMatchObject({ status: 'not_run', criticalPass: null, qcReportHash: null, qcRunId: null });
   });
 
   it('2. Enforces real role authorization on review decisions (FR-043)', async () => {

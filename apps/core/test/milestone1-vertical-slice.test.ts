@@ -332,6 +332,8 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     const approveJson = await approveRes.json();
     expect(approveJson.decision).toBe('approved');
     expect(approveJson.actor.userId).toBe(operatorUserId);
+    // The approval names the stored QC run it relied on (formerly the literal 'verified_qc_pass').
+    expect(approveJson.qcReportHash).toBe(crypto.createHash('sha256').update(JSON.stringify(qaResult.value)).digest('hex'));
 
     // Recovery Check 3: Process crash after approval
     app = createApp({ db, publicationRepo, deliverableStore: exports.store });

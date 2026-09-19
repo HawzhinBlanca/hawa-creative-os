@@ -112,13 +112,13 @@ export class HumanApprovalManager {
       approvedFonts: string[];
     };
     qaEvidence: {
-      qcRunId: UUID;
-      status: 'passed' | 'failed' | 'blocked';
-      criticalPass: boolean;
-      qcReportHash: SHA256;
+      qcRunId: UUID | null;
+      status: 'passed' | 'failed' | 'blocked' | 'not_run' | 'unknown';
+      criticalPass: boolean | null;
+      qcReportHash: SHA256 | null;
       findingsCount: number;
-      glyphCoveragePass: boolean;
-      unobservedLayersCount: number;
+      glyphCoveragePass: boolean | null;
+      unobservedLayersCount: number | null;
     };
     revisionDiff?: {
       fromRevisionId?: UUID;
