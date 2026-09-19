@@ -107,6 +107,17 @@ describe('a style spec read from the reference is enforced on every candidate', 
     expect(framework).not.toContain('F7B500');
   });
 
+  it('keeps every paragraph of an accented Kurdish title right-to-left in the Canva deck', async () => {
+    const { layout, blocks } = prepared('ckb', 0);
+    const deck = await encodeStudioTransferV2(layout, blocks, undefined);
+    const xml = strFromU8(unzipSync(deck.bytes, { filter: (f) => f.name === 'ppt/slides/slide1.xml' })['ppt/slides/slide1.xml']);
+    const title = xml.slice(xml.lastIndexOf('<p:txBody>', xml.indexOf('چوارچێوەی')), xml.indexOf('</p:txBody>', xml.indexOf('چوارچێوەی')));
+    const paragraphs = title.match(/<a:pPr[^>]*>/g) || [];
+    expect(paragraphs).toHaveLength(2);
+    for (const p of paragraphs) expect(p).toContain('rtl="1"');
+    expect(title).toContain('F7B500');
+  });
+
   it('renders the diagonal-lines texture in brand colours', () => {
     const svg = generateMotifSvg('diagonal-lines', { width: 1080, height: 1350, palette: reference.palette as any });
     expect(svg).toContain('<polygon');

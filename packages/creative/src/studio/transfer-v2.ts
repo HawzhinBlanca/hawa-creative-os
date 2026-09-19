@@ -265,7 +265,14 @@ export async function encodeStudioTransferV2(
       t.accentColor && paragraphs.length > 1
         ? paragraphs.map((p, i) => ({
             text: p,
-            options: { breakLine: i < paragraphs.length - 1, ...(i === paragraphs.length - 1 ? { color: hex(t.accentColor!) } : {}) },
+            // Paragraph properties come from each run: without rtlMode here the Kurdish title's
+            // paragraphs lost rtl="1" and Canva set "(K-12)" on the wrong side (task 777c2921).
+            options: {
+              breakLine: i < paragraphs.length - 1,
+              align: t.align,
+              ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
+              ...(i === paragraphs.length - 1 ? { color: hex(t.accentColor!) } : {}),
+            },
           }))
         : text;
     slide.addText(runs as any, {
