@@ -19,6 +19,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
   };
 
   let app: any;
+  let mockService: any;
   let taskId: string;
   let runId: string;
   let candidateId: string;
@@ -69,7 +70,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       'draft', 8.9, ${fakePng}, ${fakeSha}
     )`.execute(db);
 
-    const mockService = {
+    mockService = {
       createOrGetRun: vi.fn(async (_scope, _tId, key, _params) => {
         if (key === idemKey) {
           return { run: { id: runId, status: 'briefing' }, created: true };
@@ -115,6 +116,19 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
   // 1. Authentication & Authorization Negative Controls
   describe('Authentication and Authorization', () => {
+    it("starts a run for an API-key caller under the operator's uuid, not its label", async () => {
+      // 81f4390 passed auth.actorId ('operator_1') as the actor; every studio start then failed in
+      // Postgres with "invalid input syntax for type uuid" (task 8fb76534, 2026-09-19).
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio`, {
+        method: 'POST',
+        headers: { ...headers, 'Idempotency-Key': `uuid-actor-${randomUUID().slice(0, 8)}` },
+        body: JSON.stringify({ width: 1080, height: 1350 }),
+      });
+      expect(res.status).toBe(202);
+      const scope = mockService.createOrGetRun.mock.calls.at(-1)[0];
+      expect(scope.actorId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    });
+
     it('returns 401 when unauthenticated', async () => {
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio`, {
         method: 'POST',

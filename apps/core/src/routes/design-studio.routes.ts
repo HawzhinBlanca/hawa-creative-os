@@ -64,7 +64,10 @@ export function registerDesignStudioRoutes(
     }
 
     try {
-      return await fn(c, { tenantId: auth.tenantId, actorId: auth.actorId || auth.userId, role: auth.role }, service, repo);
+      // The actor is the user's id, a uuid: studio runs, calls and Canva connections are keyed by it.
+      // auth.actorId is a label ('operator_1' for API-key callers such as the worker); passing it
+      // failed every studio start with "invalid input syntax for type uuid" (81f4390, 2026-09-19).
+      return await fn(c, { tenantId: auth.tenantId, actorId: String(auth.userId || auth.actorId || ""), role: auth.role }, service, repo);
     } catch (error: any) {
       if (error instanceof CanvaFlowError) {
         return ctx.problem(c, error.status, error.code, error.message);
