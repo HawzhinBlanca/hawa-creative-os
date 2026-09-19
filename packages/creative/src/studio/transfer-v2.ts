@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { StudioLayoutV2 } from './layout-v2.js';
-import { ARABIC_SCRIPT_FAMILIES } from './render-layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm } from './render-layout-v2.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 /**
@@ -60,7 +60,10 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       bold: t.bold,
       italic: t.italic,
       opacity: t.opacity,
-      letterSpacing: t.letterSpacing,
+      // The tracking as drawn, in em, not the model's raw request: the plan is both the manifest's
+      // record of the delivered design and an input the v1 encoder accepts, and a plan carrying a
+      // value the renderer never used describes a design nobody ever saw.
+      letterSpacing: effectiveLetterSpacingEm(t),
       lineHeight: t.lineHeight,
       rtl: isRtlBlock(t),
     })),
@@ -257,6 +260,10 @@ export async function encodeStudioTransferV2(
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
   for (const t of sortedText) {
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+    // The layout's tracking is em; pptxgenjs charSpacing is points, written as
+    // spc="round(charSpacing * 100)" (hundredths of a point) on the run properties. Passing the em
+    // value raw sent a 0.06em title to Canva as 0.06pt, about 0.08px where the preview drew 2.88px.
+    const trackingEm = effectiveLetterSpacingEm(t);
     const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
     // A block with an accent colour is written as runs: its last paragraph in that colour.
     const text = keepCompoundsWhole(copy[t.copyIndex]);
@@ -284,7 +291,7 @@ export async function encodeStudioTransferV2(
       fontSize: t.fontSize * 0.75,
       color: hex(t.color),
       transparency: textTransparency,
-      ...(t.letterSpacing !== undefined && t.letterSpacing !== null ? { charSpacing: t.letterSpacing } : {}),
+      ...(trackingEm ? { charSpacing: trackingEm * t.fontSize * 0.75 } : {}),
       // The layout's own alignment, which the preview drew and the judge scored. Every Kurdish block
       // was forced right, so a centred Kurdish title reached Canva flush right (task 8fb76534,
       // 2026-09-19). With rtl="1" the alignment is still absolute: "ctr" centres, "r" is right.

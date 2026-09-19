@@ -1,6 +1,6 @@
 import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
-import { fitLogoToAspect } from './studio-normalize.js';
+import { fitLogoToAspect, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
@@ -268,19 +268,25 @@ export function scaleNormalizedLayoutToV2(
         if (!strokeColor) strokeColor = '#1E3A5F';
       }
     }
-    return {
+    const box = {
       x: scaleX(s.x),
       y: scaleY(s.y),
       width: scaleDimX(s.width),
       height: scaleDimY(s.height),
+      role: s.role,
+    };
+    return {
+      ...box,
       kind: s.kind,
       color: resolvedColor,
-      role: s.role,
       opacity: s.opacity !== null && s.opacity !== undefined ? Number(clamp(s.opacity).toFixed(2)) : undefined,
       radius: s.radius !== null && s.radius !== undefined ? Math.round(s.radius * canvasWidth) : undefined,
+      // The model answers in either unit, so the unit is read from the value rather than assumed.
+      // Multiplying by the canvas width unconditionally turned a plain "2" into a 2160px band over
+      // the whole poster in 38 of the 200 designs stored on 2026-09-18.
       strokeWidth:
         s.strokeWidth !== null && s.strokeWidth !== undefined
-          ? Math.max(1, Math.round(s.strokeWidth * canvasWidth))
+          ? resolveStrokeWidth(s.strokeWidth, box, canvasWidth, canvasHeight)
           : undefined,
       strokeColor,
     };

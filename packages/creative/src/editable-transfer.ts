@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
+import { effectiveLetterSpacingEm } from './studio/render-layout-v2.js';
 
 export interface EditableTransferPlan {
   width: number; height: number; background: string;
@@ -8,6 +9,7 @@ export interface EditableTransferPlan {
     fontSize: number; fontFamily: string; color: string; align: 'left'|'center'|'right'; bold?: boolean;
     italic?: boolean;
     opacity?: number;
+    /** Tracking in em, as the layout and the raster renderer express it, not in points. */
     letterSpacing?: number;
     /** Line height multiple from the layout. Falls back to 1.4 when a caller does not supply it. */
     lineHeight?: number;
@@ -84,9 +86,13 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   }
   for(const t of plan.text){
     const textTransparency = t.opacity !== undefined && t.opacity !== null ? Math.round((1 - t.opacity) * 100) : 0;
+    // The plan's tracking is em; pptxgenjs charSpacing is points, written as
+    // spc="round(charSpacing * 100)" (hundredths of a point). Passing the em value raw sent a
+    // 0.06em title to Canva as 0.06pt, about 0.08px where the preview drew 2.88px.
+    const trackingEm = effectiveLetterSpacingEm(t);
     slide.addText(copy[t.copyIndex],{x:t.x/96,y:t.y/96,w:t.width/96,h:t.height/96,
       fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),transparency:textTransparency,
-      ...(t.letterSpacing !== undefined && t.letterSpacing !== null ? { charSpacing: t.letterSpacing } : {}),
+      ...(trackingEm ? { charSpacing: trackingEm * t.fontSize * 0.75 } : {}),
       align:t.rtl?'right':t.align,bold:t.bold||false,italic:t.italic||false,
       margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
   }

@@ -62,6 +62,39 @@ const fontCache = new Map<string, any>();
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
 export const ARABIC_SCRIPT_FAMILIES = new Set(['Noto Sans Arabic', 'Cairo', 'Amiri', 'Vazirmatn']);
 
+/**
+ * The tracking this renderer actually draws a block with, in em — the single definition of the
+ * rule, shared with the Canva transfer encoders.
+ *
+ * The rule used to be written out three times, and the two deck encoders then passed the layout's
+ * raw em value into pptxgenjs `charSpacing`, which is points: a Cinzel title tracked 0.06em at 48px
+ * drew 2.88px in the preview the judge scored and 0.06pt, about 0.08px, in Canva. Tracked capitals
+ * are this brand's typographic signature, so the delivered design lost them, and a title could
+ * break onto a different number of lines than the preview.
+ *
+ * `eyebrowShrunkToFit` is the renderer's second pass: an eyebrow that still wraps is set solid
+ * before its size is reduced. Only the renderer measures wrapping, so the encoders leave it unset.
+ */
+export function effectiveLetterSpacingEm(
+  t: { letterSpacing?: number; role?: string; rtl?: boolean; fontFamily?: string },
+  options: { eyebrowShrunkToFit?: boolean } = {}
+): number {
+  let em = t.letterSpacing || 0;
+  if (t.role === 'eyebrow' && em > 0.06) {
+    em = 0.04;
+  }
+  // Arabic script is cursive: letter-spacing inserts gaps between joined letters and reads as
+  // broken to a native reader. The generator emits 0.02 on Kurdish eyebrows, so this is dropped
+  // here rather than honoured.
+  if (t.rtl || (t.fontFamily && ARABIC_SCRIPT_FAMILIES.has(t.fontFamily))) {
+    em = 0;
+  }
+  if (options.eyebrowShrunkToFit && t.role === 'eyebrow') {
+    em = 0;
+  }
+  return em;
+}
+
 function getProjectRoot(): string {
   // Current file is at packages/creative/src/studio/render-layout-v2.ts
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -407,8 +440,7 @@ export function measureWrappedLines(
     if (!copy || !t.width) continue;
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
-      const letterSpacing =
-        t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 0 : t.letterSpacing || 0;
+      const letterSpacing = effectiveLetterSpacingEm(t);
       out[t.copyIndex] = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing).length;
     } catch {
       // unmeasurable family here; the metric falls back to the box for this block
@@ -571,16 +603,7 @@ function renderTextElementToSvg(
   fontsDir: string
 ): { svgSnippet: string; lineCount: number } {
   const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
-  let letterSpacingVal = t.letterSpacing || 0;
-  if (t.role === 'eyebrow' && letterSpacingVal > 0.06) {
-    letterSpacingVal = 0.04;
-  }
-  // Arabic script is cursive: letter-spacing inserts gaps between joined letters and reads as
-  // broken to a native reader. The generator emits 0.02 on Kurdish eyebrows, so this is dropped
-  // here rather than honoured.
-  if (t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily)) {
-    letterSpacingVal = 0;
-  }
+  let letterSpacingVal = effectiveLetterSpacingEm(t);
   // The size the text is actually measured and drawn at. The eyebrow autofit below used to shrink
   // a local copy and throw it away, so a shrunk eyebrow was still emitted at t.fontSize and
   // overflowed the box it had just been fitted into.
@@ -589,7 +612,7 @@ function renderTextElementToSvg(
 
   // Invariant: Eyebrows must NEVER wrap onto multiple lines
   if (t.role === 'eyebrow' && lines.length > 1) {
-    letterSpacingVal = 0;
+    letterSpacingVal = effectiveLetterSpacingEm(t, { eyebrowShrunkToFit: true });
     lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, 0);
     while (lines.length > 1 && renderFontSize > 10) {
       renderFontSize -= 1;

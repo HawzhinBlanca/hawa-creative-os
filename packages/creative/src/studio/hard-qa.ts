@@ -5,6 +5,7 @@ import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
 import { measureWrappedLines } from './render-layout-v2.js';
 import { requiredContrast } from './house-rules.js';
+import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 
 /**
  * The studio's hard QA gate, shared so the qualification applies exactly the gate a production
@@ -112,6 +113,36 @@ export function evaluateHardQa(
   if (asymmetric.length > 0) {
     defectCodes.push('ASYMMETRIC_SEPARATOR');
     messages.push(`ASYMMETRIC_SEPARATOR: ${asymmetric.length} divider(s) sit much closer to one of the two blocks they separate`);
+  }
+
+  // A stroke is painted centred on the shape's path, so half of it falls outside the box the layout
+  // declares, and nothing else here measures anything but that box. The generator used to read
+  // every strokeWidth as a share of the canvas width, so a plain "2" became a 2160px band across
+  // the whole poster. 38 of the 200 designs stored on 2026-09-18 carry one; 34 still carried it
+  // after preparation, and 31 of those 34 passed this gate. transfer-v2 turns the value into points
+  // at 0.75x, so one reached Canva as a 1620pt outline. Preparation repairs these, so this fires
+  // only for a layout that reached QA without it.
+  const strokeShapes = checked.shapes || [];
+  for (let i = 0; i < strokeShapes.length; i++) {
+    const s = strokeShapes[i];
+    if (s.strokeWidth === null || s.strokeWidth === undefined) continue;
+    const roleMax = maxStrokeWidth(s.role, checked.width, checked.height);
+    if (s.strokeWidth > roleMax) {
+      if (!defectCodes.includes('OVERSIZED_STROKE')) defectCodes.push('OVERSIZED_STROKE');
+      messages.push(
+        `OVERSIZED_STROKE: shape ${i} (${s.kind}, ${s.role}) carries a ${s.strokeWidth}px stroke; ` +
+          `a ${s.role} may be at most ${roleMax}px on a ${checked.width}x${checked.height} canvas`
+      );
+    }
+    const escape = s.strokeWidth / 2;
+    const tolerated = Math.max(STROKE_PAINT_TOLERANCE_PX, Math.min(s.width, s.height));
+    if (escape > tolerated) {
+      if (!defectCodes.includes('SHAPE_PAINT_ESCAPES_BOX')) defectCodes.push('SHAPE_PAINT_ESCAPES_BOX');
+      messages.push(
+        `SHAPE_PAINT_ESCAPES_BOX: shape ${i} (${s.kind}, ${s.role}) declares a ${s.width}x${s.height} box but its ` +
+          `${s.strokeWidth}px stroke paints up to ${Math.round(escape)}px outside it`
+      );
+    }
   }
 
   // The next two checks measure the layout as it ships. The validator's normalised copy (`checked`)

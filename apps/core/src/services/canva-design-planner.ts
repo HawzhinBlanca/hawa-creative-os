@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { encodeEditableTransfer, type EditableTransferPlan } from '@hawa/creative';
+import { encodeEditableTransfer, creativeAssetPath, type EditableTransferPlan } from '@hawa/creative';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
@@ -18,24 +18,19 @@ export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch}
 
 function loadConfirmedExemplars(): Array<{ label: string; sha256?: string; base64: string }> {
   try {
-    const exCandidates = [
-      resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json'),
-      resolve(import.meta.dirname, '../../../../packages/creative/assets/kaae-exemplars.json'),
-      new URL('../../../../packages/creative/assets/kaae-exemplars.json', import.meta.url).pathname,
-    ];
-    const exPath = exCandidates.find((p) => existsSync(p));
-    if (!exPath) return [];
-    const rawEx = JSON.parse(readFileSync(exPath, 'utf8'));
+    // Resolved inside @hawa/creative, from that package's own location. Candidates built here from
+    // cwd or from this file's depth under apps/core all missed in the image, and the bare catch
+    // below turned that into an empty list with nothing in the logs.
+    const rawEx = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
     const list = Array.isArray(rawEx.exemplars) ? rawEx.exemplars.slice(0, 2) : [];
     const results = [];
     for (const item of list) {
-      const itemCandidates = [
-        resolve(process.cwd(), item.path),
-        resolve(process.cwd(), 'packages/creative/assets/exemplars', item.filename),
-        resolve(import.meta.dirname, '../../../../', item.path),
-        resolve(import.meta.dirname, '../../../../packages/creative/assets/exemplars', item.filename),
-      ];
-      const imgPath = itemCandidates.find((p) => existsSync(p));
+      // The manifest records the archive path each exemplar was curated from, which is outside the
+      // package; the copy in the package's own assets is the one that travels into the image.
+      const archived = resolve(process.cwd(), item.path);
+      const imgPath =
+        creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
+        (existsSync(archived) ? archived : undefined);
       if (imgPath) {
         results.push({
           label: item.filename || 'KAAE Exemplar',
@@ -44,8 +39,12 @@ function loadConfirmedExemplars(): Array<{ label: string; sha256?: string; base6
         });
       }
     }
+    if (!results.length) {
+      console.error('[canva-planner] No confirmed exemplar image resolved; the plan is being drafted without one.');
+    }
     return results;
-  } catch {
+  } catch (err: any) {
+    console.error(`[canva-planner] Confirmed exemplars could not be loaded (${err?.message || err}).`);
     return [];
   }
 }
@@ -111,7 +110,7 @@ export class CanvaDesignPlanner {
       (SELECT e.data FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
       FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
     if(!task?.client_id)throw new CanvaFlowError(422,'CLIENT_REQUIRED','Select the client before retrieving brand references.');
-    const reference=JSON.parse(await readFile(new URL('../../../../packages/creative/assets/kaae-reference.json',import.meta.url),'utf8'));
+    const reference=JSON.parse(await readFile(creativeAssetPath('kaae-reference.json'),'utf8'));
     if(task.client_id!==reference.clientId)throw new CanvaFlowError(422,'CLIENT_REFERENCE_REQUIRED','This client needs its own verified reference pack. KAAE references cannot be used for another client.');
     const content=savedDesignCopy(task.source,task.description||'');
     if(!content.copy.length||content.copy.join('').length>16000)
@@ -122,7 +121,7 @@ export class CanvaDesignPlanner {
     const rtlFont:string|null=copyScripts.includes('arabic')?(typeof reference.rules?.scriptFonts?.arabic==='string'?reference.rules.scriptFonts.arabic:null):null;
     if(copyScripts.includes('arabic')&&!rtlFont)
       throw new CanvaFlowError(422,'COPY_UNSUPPORTED','The client reference pack names no Sorani typeface, so Kurdish copy cannot be drafted automatically yet.');
-    const logo=await readFile(new URL('../../../../packages/creative/assets/logos/kaae-official-logo.png',import.meta.url));
+    const logo=await readFile(creativeAssetPath('logos/kaae-official-logo.png'));
     if(hash(logo)!==reference.logoSha256)throw new CanvaFlowError(409,'LOGO_CHANGED','The official logo checksum changed; review the reference pack.');
     // PNG IHDR dimensions preserve the supplied logo's aspect ratio.
     if(logo.subarray(1,4).toString()!=='PNG')throw new Error('Expected PNG logo');
