@@ -144,6 +144,7 @@ import { type DesignStudioServiceOptions, DesignStudioService } from './services
 import { studioStatusNote } from './services/design-studio/studio-status-note.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
+import { manifestFromOperations } from './services/generated-manifest.js';
 import {
   canvaDeliverableStore,
   EMPTY_DELIVERABLE_STORE,
@@ -4804,16 +4805,19 @@ export function createApp(options?: CreateAppOptions) {
 
     const revisionId = crypto.randomUUID();
     const sourceSha256 = crypto.createHash('sha256').update(JSON.stringify(ops)).digest('hex');
-    const nodes: any[] = ops.map((op: any, idx: number) => ({
-      id: op.nodeId || `node_${idx}`,
-      type: op.type === 'insert_text' ? 'text' : op.type === 'insert_image' ? 'image' : 'element',
-      pageId: op.pageId || 'v1',
-      role: op.role || (op.type === 'insert_image' ? 'logo_primary' : 'body'),
-      text: op.text || undefined,
-      assetSha256: op.assetSha256 || undefined,
-      locked: op.type === 'insert_image',
-      zIndex: idx + 1,
-    }));
+    const manifest = manifestFromOperations(
+      ops,
+      (brief.variants || []).map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        width: v.width,
+        height: v.height,
+        unit: 'px',
+        language: brief.primaryLanguage,
+        direction: brief.direction,
+      }))
+    );
+    const nodes: any[] = manifest.nodes;
 
     const document: any = {
       documentId: `doc_${taskId.slice(0, 8)}`,
@@ -4837,16 +4841,43 @@ export function createApp(options?: CreateAppOptions) {
 
     revisions.set(revisionId, newRev);
 
-    const qaReport = {
-      criticalPass: true,
-      score: 100,
-      timestamp: new Date().toISOString(),
-      details: {
-        orthography: { pass: true, errors: [] },
-        contrast: { pass: true, ratio: 7.2 },
-        brandCompliance: { pass: true },
+    // QA runs the deterministic engine on the design just generated, against the brief and the client's
+    // DNA. It used to be a literal all-pass report (score 100, contrast 7.2) stored as a passing QC run.
+    const qaRun = await qaEngine.run(
+      {
+        tenantId,
+        taskId,
+        actor: { type: 'workflow', id: 'qa_runner' },
+        correlationId: crypto.randomUUID(),
+        deadline: new Date(Date.now() + 60000).toISOString(),
+        idempotencyKey: `qa_${revisionId}`,
       },
-    };
+      {
+        taskId,
+        designRevisionId: revisionId,
+        document,
+        sourceHash: sourceSha256,
+        manifest,
+        renders: [],
+        brief: brief as any,
+        clientDna: (clientDnas.get(currentClientId) as any) || { assets: [] },
+        profile: { name: 'generation', version: '1.0', rules: {} },
+        repairCycle: 0,
+      }
+    );
+    const qaReport: any = qaRun.ok
+      ? { ...qaRun.value, timestamp: new Date().toISOString() }
+      : {
+          status: 'error',
+          criticalPass: false,
+          checks: [],
+          findings: [],
+          error: qaRun.error.message,
+          timestamp: new Date().toISOString(),
+        };
+    const qaSummary = qaReport.criticalPass
+      ? 'Design generated; QA passed'
+      : `Design generated; QA ${qaReport.status}: ${(qaReport.findings || []).filter((f: any) => f.hardFailure || f.severity === 'critical').map((f: any) => f.ruleId).join(', ') || qaReport.error || 'no finding reported'}`;
 
     const currentStatus = task ? task.status : toApiTaskStatus(dbTask.state);
     const sm = new TaskStateMachine(taskId, currentStatus);
@@ -4859,7 +4890,7 @@ export function createApp(options?: CreateAppOptions) {
       if (t2.ok && events.has(taskId)) events.get(taskId)?.push(t2.value);
       const t3 = sm.transition('QA', { type: 'workflow', id: 'generator' }, 'QA');
       if (t3.ok && events.has(taskId)) events.get(taskId)?.push(t3.value);
-      const t4 = sm.transition('AWAITING_APPROVAL', { type: 'workflow', id: 'generator' }, 'Design generated and QA passed');
+      const t4 = sm.transition('AWAITING_APPROVAL', { type: 'workflow', id: 'generator' }, qaSummary);
       if (t4.ok && events.has(taskId)) events.get(taskId)?.push(t4.value);
     }
 
@@ -4881,7 +4912,7 @@ export function createApp(options?: CreateAppOptions) {
             toState: 'human_review',
             actorType: 'workflow',
             actorId: 'generator',
-            reason: 'Design generated and QA passed',
+            reason: qaSummary,
             data: { revisionId, qaReport },
           }, trx);
 
@@ -4893,21 +4924,7 @@ export function createApp(options?: CreateAppOptions) {
               studio: 'canva',
               sourceStorageKey: `tasks/${taskId}/revisions/${revisionId}/source.json`,
               sourceSha256,
-              neutralManifest: {
-                pages: brief.variants.map((v: any) => ({
-                  id: v.id,
-                  name: v.name,
-                  width: v.width,
-                  height: v.height,
-                  unit: 'px',
-                  language: brief.primaryLanguage,
-                  direction: brief.direction,
-                })),
-                nodes,
-                fonts: [{ family: 'Noto Sans Arabic', style: 'Regular' }],
-                assets: [{ sha256: 'sha256_logo_verified_primary', mimeType: 'image/png' }],
-                warnings: [],
-              } as any,
+              neutralManifest: manifest as any,
               authorType: 'model',
               authorId: 'generator',
               status: 'review',
@@ -4917,7 +4934,7 @@ export function createApp(options?: CreateAppOptions) {
               finalRevisionId = dbRev.id;
             }
 
-            // Persist verified passing QC run in PostgreSQL for Gate E / H03 QA compliance
+            // Persist the QC run as it came out: the approval gate requires a passing critical run.
             const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
             const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
             await trx
@@ -4927,8 +4944,8 @@ export function createApp(options?: CreateAppOptions) {
                 task_id: taskId as any,
                 design_revision_id: finalRevisionId as any,
                 qc_profile_id: profileId as any,
-                status: 'passed',
-                critical_pass: true,
+                status: qaReport.status === 'passed' ? 'passed' : qaReport.status === 'error' ? 'error' : 'failed',
+                critical_pass: qaReport.criticalPass === true,
                 report: qaReport as any,
                 report_sha256: crypto.createHash('sha256').update(JSON.stringify(qaReport)).digest('hex'),
               })

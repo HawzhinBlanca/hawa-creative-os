@@ -50,7 +50,7 @@ describe('an approval without a QA report', () => {
 });
 
 describe('an approval after QA ran', () => {
-  it('records the report\'s own SHA-256, the same one the review desk shows and the approval may echo back', async () => {
+  it('shows the report\'s own SHA-256; echoing it passes the hash check, and the failing QA then refuses approval', async () => {
     const app = createApp();
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA' }) })).json();
     const taskId: string = created.id;
@@ -65,12 +65,13 @@ describe('an approval after QA ran', () => {
 
     const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: auth })).json();
     expect(desk.qaEvidence.qcReportHash).toMatch(HEX64);
-    expect(desk.qaEvidence.status).toBe('passed');
+    // Real QA ran on the generated design and failed (the generic generator draws a placeholder logo).
+    expect(desk.qaEvidence).toMatchObject({ status: 'failed', criticalPass: false });
 
-    // A client echoing the hash it was shown is accepted (it used to be compared against a field the report lacks).
+    // The echoed hash matches (a forged one is 422, below); the refusal is the QA gate's.
     const echoed = await approve(app, taskId, latestRevisionId, { qcReportHash: desk.qaEvidence.qcReportHash });
-    expect(echoed.status).toBe(201);
-    expect((await echoed.json()).qcReportHash).toBe(desk.qaEvidence.qcReportHash);
+    expect(echoed.status).toBe(412);
+    expect((await echoed.json()).title).toBe('QA Verification Required');
   });
 
   it('refuses an approval that echoes a different QC hash', async () => {

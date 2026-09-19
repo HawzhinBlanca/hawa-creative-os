@@ -159,7 +159,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(replayTask.id).toBe(task.id);
   });
 
-  it('executes end-to-end task progression: route -> brief -> generate -> decide -> publish', async () => {
+  it('executes task progression: route -> brief -> generate -> real QA -> approval refused while QA fails', async () => {
     // 1. Create task
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -223,7 +223,12 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(pkgData.files.length).toBeGreaterThanOrEqual(4);
     expect(pkgData.files.some((f: any) => f.name.endsWith('.hyc'))).toBe(true);
 
-    // 5. Decide (Approve)
+    // 5. QA really ran on the generated design. The generic generator draws a placeholder logo hash,
+    //    so the official client logo is missing and QA fails (it used to be a literal all-pass report).
+    expect(currentTask.latestQAReport.criticalPass).toBe(false);
+    expect(currentTask.latestQAReport.findings.map((f: any) => f.ruleId)).toContain('OFFICIAL_LOGO_MISSING_OR_MUTATED');
+
+    // 6. A design failing critical QA cannot be approved
     const approveRes = await app.request(`/v1/tasks/${taskId}/revisions/${currentTask.latestRevisionId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -233,17 +238,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
         pinnedExportIds: [exports.add(taskId)],
       }),
     });
-    expect(approveRes.status).toBe(201);
-
-    // 6. Publish task
-    const pubRes = await app.request(`/v1/tasks/${taskId}/publish`, {
-      method: 'POST',
-    });
-    expect(pubRes.status).toBe(202);
-
-    const completedCheck = await app.request(`/v1/tasks/${taskId}`);
-    const completedTask = await completedCheck.json();
-    expect(completedTask.status).toBe('COMPLETE');
+    expect(approveRes.status).toBe(412);
+    expect((await (await app.request(`/v1/tasks/${taskId}`)).json()).status).toBe('AWAITING_APPROVAL');
 
     // 7. Check timeline
     const timelineRes = await app.request(`/v1/tasks/${taskId}/timeline`);
@@ -476,7 +472,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(updatedList[0].snapshotId).toBe(newSnap.snapshotId);
   });
 
-  it('executes complete end-to-end task lifecycle for Drustee (Ingress ➔ Route ➔ Brief ➔ Generate ➔ Approve ➔ Publish)', async () => {
+  it('executes the Drustee lifecycle up to review (Ingress ➔ Route ➔ Brief ➔ Generate ➔ real QA), and refuses approval while QA fails', async () => {
     // 1. Task Ingress (Desk simulator or internal user)
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -547,38 +543,28 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     const revisionId = generatedTask.latestRevisionId;
 
-    // 5. Human Decision (Approval)
+    // 5. QA really ran. The Drustee template adds text outside the approved copy and does not place the
+    //    DNA's official logo, so QA fails with those findings.
+    const qaRuleIds = generatedTask.latestQAReport.findings.map((f: any) => f.ruleId);
+    expect(generatedTask.latestQAReport.criticalPass).toBe(false);
+    expect(qaRuleIds).toEqual(expect.arrayContaining(['UNSOLICITED_CONTENT_DETECTED', 'OFFICIAL_LOGO_MISSING_OR_MUTATED']));
+
+    // 6. Approval is refused while critical QA fails
     const decisionRes = await app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         outcome: 'approved',
         reviewerId: 'art_director',
-        notes: 'Passed all visual quality, Kurdish orthography, and WCAG contrast diagnostics.',
         pinnedExportIds: [exports.add(taskId)],
       }),
     });
-    expect(decisionRes.status).toBe(201);
+    expect(decisionRes.status).toBe(412);
 
-    // 6. Publish Deliverables (Idempotent Publisher)
-    const pubRes = await app.request(`/v1/tasks/${taskId}/publish`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    expect(pubRes.status).toBe(202);
-    const pubData = await pubRes.json();
-    expect(pubData.taskId).toBe(taskId);
-
-    // Verify task is in COMPLETE terminal status
-    const finalTaskRes = await app.request(`/v1/tasks/${taskId}`);
-    const finalTask = await finalTaskRes.json();
-    expect(finalTask.status).toBe('COMPLETE');
-
-    // Verify timeline has full audit trail
+    // Verify timeline has the audit trail so far
     const timelineRes = await app.request(`/v1/tasks/${taskId}/timeline`);
     const timeline = await timelineRes.json();
-    expect(timeline.events.length).toBeGreaterThanOrEqual(5);
+    expect(timeline.events.length).toBeGreaterThanOrEqual(4);
   });
 
   it('generates sandboxed ComfyUI visual backdrops and smart contrast composites (Invariant #4)', async () => {
@@ -857,9 +843,13 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientId: 'client-drustee' }),
     });
-    await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
-    const revCheck = await app.request(`/v1/tasks/${taskId}`);
-    const { latestRevisionId } = await revCheck.json();
+    // A submitted revision (generated designs fail real QA until the generators are fixed).
+    const revRes = await app.request(`/tasks/${taskId}/revisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document: { id: 'd', pages: [{ id: 'p1', name: 'main', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'h', type: 'text', text: 'Omnichannel Publishing Test' }] } }),
+    });
+    const { revisionId: latestRevisionId } = await revRes.json();
     const pinnedBytes = new TextEncoder().encode('approved Drustee export');
     const exportId = exports.add(taskId, 'png', pinnedBytes);
     await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
