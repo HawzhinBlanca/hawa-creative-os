@@ -2368,7 +2368,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const isDeliverApprovedStored = options?.policy === 'deliver_approved_stored';
-    const sm = new TaskStateMachine(taskId, isDeliverApprovedStored ? 'APPROVED' : task.status);
+    const sm = new TaskStateMachine(taskId, isDeliverApprovedStored && task.status !== 'PUBLISH_RECONCILIATION' ? 'APPROVED' : task.status);
 
     if (autoApproveFromAwaiting && task.status === 'AWAITING_APPROVAL') {
       const approveTrans = sm.transition('APPROVED', actor as any, 'Approved via chat trigger');
@@ -2396,17 +2396,21 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    const trans = sm.transition('PUBLISHING', actor as any, 'Omnichannel publication started');
-    if (!trans.ok) {
-      return { ok: false, status: 409, message: trans.error.message };
+    // Files already delivered with the Sheets row unconfirmed: publishing again retries only the row.
+    const retryingSheetRow = task.status === 'PUBLISH_RECONCILIATION';
+    if (!retryingSheetRow) {
+      const trans = sm.transition('PUBLISHING', actor as any, 'Omnichannel publication started');
+      if (!trans.ok) {
+        return { ok: false, status: 409, message: trans.error.message };
+      }
+
+      if (!isDeliverApprovedStored) {
+        task.status = 'PUBLISHING';
+        events.get(taskId)?.push(trans.value);
+      }
     }
 
-    if (!isDeliverApprovedStored) {
-      task.status = 'PUBLISHING';
-      events.get(taskId)?.push(trans.value);
-    }
-
-    if (taskRepo && db && isValidUuid(taskId)) {
+    if (taskRepo && db && isValidUuid(taskId) && !retryingSheetRow) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
         await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -2481,15 +2485,25 @@ export function createApp(options?: CreateAppOptions) {
       };
     }
 
-    const finishTrans = sm.transition('COMPLETE', actor as any, reason);
-    if (finishTrans.ok) {
-      task.status = 'COMPLETE';
+    // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
+    // unconfirmed leave the task in PUBLISH_RECONCILIATION (the database keeps 'publishing'); it used
+    // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
+    const sheetsConfirmed = publishResult.value.state === 'complete';
+    const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
+    if (task.status !== finalStatus) {
+      const finishTrans = sm.transition(
+        finalStatus,
+        actor as any,
+        sheetsConfirmed ? reason : `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
+      );
+      if (!finishTrans.ok) {
+        return { ok: false, status: 409, message: finishTrans.error.message };
+      }
+      task.status = finalStatus;
       events.get(taskId)?.push(finishTrans.value);
-    } else {
-      task.status = 'COMPLETE';
     }
 
-    if (taskRepo && db && isValidUuid(taskId)) {
+    if (taskRepo && db && isValidUuid(taskId) && sheetsConfirmed) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
         await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -2533,6 +2547,21 @@ export function createApp(options?: CreateAppOptions) {
       receipt,
     });
 
+    if (!sheetsConfirmed) {
+      broadcast('task:publish_reconciliation', { taskId, status: task.status, sheetProblem: receipt.detail?.sheetProblem ?? null });
+      return {
+        ok: true,
+        taskId,
+        status: task.status,
+        complete: false,
+        sheetProblem: receipt.detail?.sheetProblem ?? null,
+        publicationReceipt: receipt,
+        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
+        sheetRowUrl: null,
+        filesCount: verifiedFiles.length,
+      };
+    }
+
     broadcast('task:published', { taskId, status: task.status, receipt });
     broadcast('omnichannel:published', { taskId, driveFolderId: targetFolderId, spreadsheetId });
 
@@ -2553,6 +2582,7 @@ export function createApp(options?: CreateAppOptions) {
       ok: true,
       taskId,
       status: task.status,
+      complete: true,
       publicationReceipt: receipt,
       driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
       sheetRowUrl:
@@ -4966,9 +4996,11 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    // Gate F/G: Only APPROVED tasks can be published under current_task policy
+    // Gate F/G: Only APPROVED tasks can be published under current_task policy. A task whose files
+    // were delivered but whose Sheets row was not confirmed may publish again: only the row is retried.
     const currentStatus = (task?.status || dbTask?.state || '').toLowerCase();
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved') {
+    const retryingSheetRow = currentStatus === 'publish_reconciliation';
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingSheetRow) {
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
     }
 
@@ -5010,16 +5042,18 @@ export function createApp(options?: CreateAppOptions) {
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
     const sm = new TaskStateMachine(taskId, policy === 'deliver_approved_stored' ? 'APPROVED' : (task ? task.status : 'APPROVED'));
-    const trans = sm.transition('PUBLISHING', { type: 'user', id: auth.userId }, 'Publication triggered');
-    if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
+    if (!retryingSheetRow) {
+      const trans = sm.transition('PUBLISHING', { type: 'user', id: auth.userId }, 'Publication triggered');
+      if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
 
-    if (task && policy !== 'deliver_approved_stored') {
-      task.status = 'PUBLISHING';
-      if (!events.has(taskId)) events.set(taskId, []);
-      events.get(taskId)?.push(trans.value);
+      if (task && policy !== 'deliver_approved_stored') {
+        task.status = 'PUBLISHING';
+        if (!events.has(taskId)) events.set(taskId, []);
+        events.get(taskId)?.push(trans.value);
+      }
     }
 
-    if (taskRepo && db) {
+    if (taskRepo && db && !retryingSheetRow) {
       try {
         await withRlsContext(
           db,
@@ -5069,8 +5103,15 @@ export function createApp(options?: CreateAppOptions) {
       },
     });
 
-    if (!pubRes.ok || pubRes.value.state !== 'complete' || !pubRes.value.detail?.verified) {
-      return problem(c, 422, 'Publication Failed', 'Delivery could not be verified by publisher: unverified files or missing credentials');
+    if (!pubRes.ok) {
+      return problem(c, 422, 'Publication Failed', (pubRes.error as any)?.message || 'The publisher refused the delivery');
+    }
+    // Files verified in Drive but the Sheets row not confirmed: the delivery is recorded as it stands,
+    // the task waits in PUBLISH_RECONCILIATION, and publishing again retries only the row.
+    const receipt = pubRes.value;
+    const sheetsConfirmed = receipt.state === 'complete';
+    if (!receipt.detail?.verified || (receipt.state !== 'complete' && receipt.state !== 'drive_complete')) {
+      return problem(c, 422, 'Publication Failed', 'The publisher could not verify the delivered files');
     }
 
     // Record in durable PostgreSQL tables (hawa.publications, hawa.drive_refs, hawa.sheet_syncs)
@@ -5080,7 +5121,9 @@ export function createApp(options?: CreateAppOptions) {
           db,
           { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
           async (trx) => {
-            const pub = await publicationRepo.createPublication({
+            // A Sheets retry finds the publication it already recorded; its Drive files are not recorded twice.
+            const recorded = await publicationRepo.findByKey(publicationKey, auth.tenantId, trx);
+            const pub = recorded || await publicationRepo.createPublication({
               tenantId: auth.tenantId,
               taskId,
               designRevisionId,
@@ -5091,7 +5134,7 @@ export function createApp(options?: CreateAppOptions) {
               initialState: 'drive_complete',
             }, trx);
 
-            for (const file of pubRes.value.driveFiles) {
+            for (const file of recorded ? [] : pubRes.value.driveFiles) {
               await publicationRepo.recordDriveRef({
                 tenantId: auth.tenantId,
                 publicationId: pub.id,
@@ -5121,6 +5164,7 @@ export function createApp(options?: CreateAppOptions) {
               }, trx);
             }
 
+            if (!sheetsConfirmed) return;
             await publicationRepo.markComplete({
               tenantId: auth.tenantId,
               publicationId: pub.id,
@@ -5149,7 +5193,7 @@ export function createApp(options?: CreateAppOptions) {
           `Failed to record publication receipt in durable storage: ${err.message}`
         );
       }
-    } else if (taskRepo && db) {
+    } else if (taskRepo && db && sheetsConfirmed) {
       try {
         await withRlsContext(
           db,
@@ -5171,20 +5215,29 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    const finishTrans = sm.transition('COMPLETE', { type: 'workflow', id: 'publisher' }, 'Published to Drive & Sheet');
-    if (finishTrans.ok && task) {
-      task.status = 'COMPLETE';
-      if (!events.has(taskId)) events.set(taskId, []);
-      events.get(taskId)?.push(finishTrans.value);
+    const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
+    if (sm.getStatus() !== finalStatus) {
+      const finishTrans = sm.transition(
+        finalStatus,
+        { type: 'workflow', id: 'publisher' },
+        sheetsConfirmed ? 'Published to Drive & Sheet' : `Files delivered; Sheets row not confirmed: ${receipt.detail?.sheetProblem || 'unknown reason'}`
+      );
+      if (finishTrans.ok && task) {
+        task.status = finalStatus;
+        if (!events.has(taskId)) events.set(taskId, []);
+        events.get(taskId)?.push(finishTrans.value);
+      }
     }
 
-    broadcast('task:published', { taskId, status: task ? task.status : 'COMPLETE' });
+    broadcast(sheetsConfirmed ? 'task:published' : 'task:publish_reconciliation', { taskId, status: task ? task.status : finalStatus });
 
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
       workflowId: `wf_${taskId}`,
       publicationId: pubRes.value.publicationId,
+      status: finalStatus,
+      ...(sheetsConfirmed ? {} : { sheetProblem: receipt.detail?.sheetProblem ?? null }),
       receipt: pubRes.value,
       acceptedAt: new Date().toISOString(),
     }, 202);
@@ -7654,7 +7707,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const currentStatus = (task.status || '').toLowerCase();
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved') {
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && currentStatus !== 'publish_reconciliation') {
       return problem(c, 409, 'Conflict', `Task ${taskId} is in status '${task.status}', not 'approved'`);
     }
 
@@ -7670,7 +7723,8 @@ export function createApp(options?: CreateAppOptions) {
       const title = status === 409 ? 'Conflict' : status === 404 ? 'Task Not Found' : 'Publish Error';
       return problem(c, status, title, (result as any).message || 'Publish failed');
     }
-    return c.json(result, 200);
+    // 202 while the Sheets row is unconfirmed: the files are delivered, the publication is not complete.
+    return c.json(result, (result as any).complete === false ? 202 : 200);
   });
 
   registerRoute('get', '/tasks/:taskId/publication-receipt', (c: any) => {

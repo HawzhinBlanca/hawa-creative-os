@@ -417,14 +417,21 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     if (!selectedTask) return;
     setActionLoading(true);
     try {
-      await apiClient.tasks.publish(selectedTask.id, {
+      const delivery: any = await apiClient.tasks.publish(selectedTask.id, {
         destination: 'google_drive',
       });
 
       // Await genuine server receipt and refresh task
       const refreshedTask = await apiClient.tasks.get(selectedTask.id);
       setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
-      showToast(refreshedTask.status === 'COMPLETE' ? 'Delivery complete.' : 'Publication requested. Check the task for verified delivery status.', refreshedTask.status === 'COMPLETE' ? 'success' : 'info');
+      if (refreshedTask.status === 'COMPLETE') {
+        showToast('Delivery complete.', 'success');
+      } else if (delivery?.status === 'PUBLISH_RECONCILIATION') {
+        // The files are in Drive but the Sheets row was not confirmed; delivering again retries only the row.
+        showToast(`Files delivered to Drive, but the Sheets row is not confirmed: ${delivery.sheetProblem || 'no reason reported'}. Deliver again to retry the row.`, 'info');
+      } else {
+        showToast('Publication requested. Check the task for verified delivery status.', 'info');
+      }
     } catch (err: any) {
       showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
     } finally {
@@ -440,6 +447,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         pillClass: 'pill-complete',
         message: 'Task is marked complete. Check its delivery receipt and audit history for destination evidence.',
         primaryButton: 'deliver_again',
+      };
+    }
+    if (task.status === 'PUBLISH_RECONCILIATION') {
+      return {
+        pill: 'SHEETS ROW PENDING',
+        pillClass: 'pill-action',
+        message: 'The approved files are in Google Drive, but the Sheets row is not confirmed. Deliver again to retry only the row.',
+        primaryButton: 'deliver',
       };
     }
     if (task.latestApproval) {

@@ -147,3 +147,46 @@ describe('GooglePublisher.verify reads the publication back', () => {
     });
   });
 });
+
+describe('a publication whose Sheets row was not confirmed', () => {
+  it('records why, and a replay retries only the row: nothing is uploaded again', async () => {
+    const f = file('a.png', 'aaa');
+    const req = request([f], 'pub-sheet-retry');
+    let appendFails = true;
+    let storedRow: string[] | undefined;
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method || 'GET'} ${url.split('?')[0]}`);
+      if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
+      if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png' });
+      if (url.includes(':append')) {
+        if (appendFails) return new Response('backend error', { status: 500 });
+        storedRow = JSON.parse(String(init?.body)).values[0];
+        return json({ updates: { updatedRange: 'Sheet1!A7:G7' } });
+      }
+      if (url.includes('/values/A7:G7')) return json({ values: storedRow ? [storedRow] : [] });
+      throw new Error(`unexpected call ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const publisher = livePublisher();
+
+    const first = await publisher.publish(ctx, req);
+    if (!first.ok) throw new Error('publish failed');
+    expect(first.value.state).toBe('drive_complete');
+    expect(first.value.sheet).toMatchObject({ synced: false, rowNumber: undefined });
+    expect(first.value.detail).toMatchObject({ verified: true, sheetProblem: 'Sheets write failed: HTTP 500' });
+
+    appendFails = false;
+    calls.length = 0;
+    const retry = await publisher.publish(ctx, req);
+    if (!retry.ok) throw new Error('retry failed');
+    expect(retry.value.publicationId).toBe(first.value.publicationId);
+    expect(retry.value.state).toBe('complete');
+    expect(retry.value.sheet).toMatchObject({ synced: true, rowNumber: 7 });
+    expect(retry.value.detail).not.toHaveProperty('sheetProblem');
+    expect(calls).toEqual([
+      'POST https://sheets.test/v4/spreadsheets/sheet-kaae/values/A1:append',
+      'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A7:G7',
+    ]);
+  });
+});
