@@ -9,6 +9,8 @@ import {
   encodeStudioTransferV2,
   generateMotifSvg,
   studioReferenceFromRaw,
+  layoutDefectCount,
+  checkCandidateSetDegeneracy,
   logoClearZone,
   type StyleSpec,
   type StudioLayoutV2,
@@ -68,13 +70,21 @@ describe('a style spec read from the reference is enforced on every candidate', 
         const title = layout.text.find((t) => t.role === 'title')!;
         const cta = layout.text.find((t) => t.role === 'cta')!;
         // Heavy sans display title across the column, its edition line in gold.
-        expect(title.fontSize).toBeGreaterThanOrEqual(0.07 * W);
+        // Display size. Sorani carries its marks above and below the line, so the house leading is
+        // 1.6-1.9 against 1.2-1.5 for Latin and the same box holds a slightly smaller face.
+        expect(title.fontSize).toBeGreaterThanOrEqual((lang === 'ckb' ? 0.06 : 0.07) * W);
         expect(title.bold).toBe(true);
         expect(title.fontFamily).toBe(lang === 'ckb' ? 'Noto Sans Arabic' : 'Verdana');
         expect(title.accentColor).toBe(GOLD);
-        expect(title.width).toBe(W - 2 * m);
+        // The measure is the design's own, snapped to its columns, not the full safe area: forcing
+        // every block to the column made all three candidates identical.
+        expect(title.width).toBeGreaterThan(0.5 * (W - 2 * m));
+        expect(title.width).toBeLessThanOrEqual(W - 2 * m);
         // Reading-direction start: left in English, right in Kurdish.
         for (const t of layout.text.filter((t) => t !== cta)) expect(t.align).toBe(lang === 'ckb' ? 'right' : 'left');
+        // The button keeps out of the logo's corner, as it does in the owner's reference.
+        const button = layout.shapes.find((sh) => sh.role === 'panel')!;
+        expect(button.x + button.width).toBeLessThan(layout.logo.x);
         // A gold button behind the call to action, dark text on it; no other panels, no dividers.
         const buttons = layout.shapes.filter((s) => s.role === 'panel');
         expect(buttons).toHaveLength(1);
@@ -133,5 +143,36 @@ describe('a style spec read from the reference is enforced on every candidate', 
     const a = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(fixture.layouts[0])), copy, canvas);
     const b = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(fixture.layouts[0])), copy, { ...canvas, style: neutral });
     expect(b).toEqual(a);
+  });
+
+  // The spec moves things, so it can put two parts of a design into each other. Preparation gives up
+  // one decision at a time, and only the one in the way; a design it cannot hold is delivered as the
+  // generator drew it. Applying the owner's real spec to the 200 stored designs used to drop hard QA
+  // from 195 to 143.
+  it('never leaves a design worse than the same design prepared without the spec', () => {
+    const blocks = fixture.copy.ckb;
+    const copy = { text: Object.fromEntries(blocks.map((b, i) => [i, b])) };
+    const canvas = { width: 1080, height: 1350, logoAspect: 1, palette: reference.palette, ornament: resolveOrnamentSettings({}) };
+    // A layout whose logo sits where the spec wants the button, and whose title cannot grow.
+    const cramped = JSON.parse(JSON.stringify(fixture.layouts[0])) as StudioLayoutV2;
+    cramped.logo = { x: 65, y: 1100, width: 150, height: 150 };
+    for (const t of cramped.text) t.rtl = true;
+    const plain = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(cramped)), copy, canvas);
+    const styled = prepareGeneratedLayoutV3(JSON.parse(JSON.stringify(cramped)), copy, { ...canvas, style: fixture.spec });
+    expect(layoutDefectCount(styled, copy)).toBeLessThanOrEqual(layoutDefectCount(plain, copy));
+  });
+
+  it('keeps the three candidates of a request distinct', () => {
+    const blocks = fixture.copy.en;
+    const copy = { text: Object.fromEntries(blocks.map((b, i) => [i, b])) };
+    const prepared = [0, 1, 2].map((k) => {
+      const raw = JSON.parse(JSON.stringify(fixture.layouts[k])) as StudioLayoutV2;
+      for (const t of raw.text) if (/Amiri|Noto Sans Arabic/.test(t.fontFamily)) t.fontFamily = 'Playfair Display';
+      return prepareGeneratedLayoutV3(raw, copy, {
+        width: 1080, height: 1350, logoAspect: 1, palette: reference.palette,
+        ornament: resolveOrnamentSettings({}), style: fixture.spec,
+      });
+    });
+    expect(checkCandidateSetDegeneracy(prepared).isDegenerate).toBe(false);
   });
 });

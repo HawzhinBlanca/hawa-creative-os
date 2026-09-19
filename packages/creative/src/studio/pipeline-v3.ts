@@ -20,7 +20,7 @@ import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
-import { applyStyleSpec, composeStyleSpec, ornamentForStyle, type StyleSpec } from './style-spec.js';
+import { applyStyleSpec, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -714,17 +714,21 @@ export function prepareGeneratedLayoutV3(
   const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
   const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
   const fonted = sanitizeFontsV3(normalized, copy);
-  const styled = canvas.style ? applyStyleSpec(fonted, copy, canvas.style, canvas.palette || []) : fonted;
-  const conformed = conformToHouseRules(styled, copy, canvas.palette);
+  const conformed = canvas.style
+    ? conformToStyleSpec(fonted, copy, canvas.style, canvas.palette)
+    : conformToHouseRules(fonted, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
   const finish = (l: StudioLayoutV2) => {
     if (!spread) return balance ? balanceVertically(l, copy) : l;
-    // The reference's composition; kept only if it adds no defect by the pipeline's own measures.
+    // The reference's composition, kept unless it adds a real defect. The measure here is the hard
+    // one (overlaps, reading order, copy that no longer fits, the safe area, the logo's clear
+    // space), not the metric set: spreading a design deliberately changes balance and rhythm, which
+    // is what the client asked for, and judging it by those reverted the arrangement every time.
     const before = JSON.parse(JSON.stringify(l)) as StudioLayoutV2;
     const composed = composeStyleSpec(l, canvas.style!, logoClearZone);
     centerSeparatorsInGaps(composed.shapes || [], composed.text);
-    return ornamentAddsDefect(before, composed, copy) ? before : composed;
+    return layoutDefectCount(composed, copy) > layoutDefectCount(before, copy) ? before : composed;
   };
   canvas = { ...canvas, ornament: ornamentForStyle(canvas.ornament, canvas.style) };
   if (!canvas.ornament) return finish(conformed);
@@ -864,6 +868,57 @@ export function balanceVertically(layout: StudioLayoutV2, copy: PipelineV3Copy):
   }
   Object.assign(layout, JSON.parse(snapshot));
   return layout;
+}
+
+/**
+ * House rules, with the client's style spec enforced as far as it can be without making the design
+ * worse than it would be with no spec at all. See `styleSpecLadder`.
+ */
+function conformToStyleSpec(
+  layout: StudioLayoutV2,
+  copy: PipelineV3Copy,
+  spec: StyleSpec,
+  palette?: string[]
+): StudioLayoutV2 {
+  const source = JSON.stringify(layout);
+  const prepare = (step: StyleSpec) =>
+    conformToHouseRules(applyStyleSpec(JSON.parse(source) as StudioLayoutV2, copy, step, palette || []), copy, palette);
+  const plain = conformToHouseRules(JSON.parse(source) as StudioLayoutV2, copy, palette);
+  const floor = layoutDefectCount(plain, copy);
+
+  let spec_ = spec;
+  let best = prepare(spec_);
+  let defects = layoutDefectCount(best, copy);
+  const dropped: string[] = [];
+  const remaining = new Set<(typeof MOVEMENT_DECISIONS)[number]>(
+    MOVEMENT_DECISIONS.filter((key) => spec[key] !== 'as_generated')
+  );
+  // Give up one decision at a time, and only the one that is actually in the way. Dropping them in
+  // a fixed order took the title's display size off a design whose single defect came from the
+  // logo's corner, which is the visible half of what the client asked for.
+  while (defects > floor && remaining.size) {
+    let choice: { key: (typeof MOVEMENT_DECISIONS)[number]; layout: StudioLayoutV2; defects: number } | undefined;
+    for (const key of remaining) {
+      const candidate = prepare(withoutDecision(spec_, key));
+      const count = layoutDefectCount(candidate, copy);
+      if (!choice || count < choice.defects) choice = { key, layout: candidate, defects: count };
+    }
+    if (!choice || choice.defects >= defects) break;
+    spec_ = withoutDecision(spec_, choice.key);
+    best = choice.layout;
+    defects = choice.defects;
+    dropped.push(choice.key);
+    remaining.delete(choice.key);
+  }
+  if (dropped.length) {
+    console.warn(
+      `[studio] style spec relaxed for this layout (${dropped.join(', ')} left to the generator): ` +
+        `enforcing them left ${defects} defect(s) against ${floor} without the spec.`
+    );
+  }
+  // A design that still cannot hold the spec is delivered as the generator drew it, since a client's
+  // look is not worth a broken design.
+  return defects <= floor ? best : plain;
 }
 
 function ornamentAddsDefect(plain: StudioLayoutV2, ornamented: StudioLayoutV2, copy: PipelineV3Copy): boolean {
