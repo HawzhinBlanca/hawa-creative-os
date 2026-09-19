@@ -528,12 +528,81 @@ export class GooglePublisher implements Publisher {
     };
   }
 
+  /**
+   * Reads the publication back from Google and reports every way it differs from its receipt. It
+   * used to answer consistent: true for any receipt it knew, without a single call. Consistent means
+   * every recorded Drive file is still there with its name, type, size and (when Drive reports one)
+   * SHA-256, and the recorded Sheets row still carries this task, COMPLETE and the package hash.
+   */
   async verify(_ctx: RequestContext, publicationId: UUID): Promise<Result<{ consistent: boolean; differences: Record<string, unknown>[] }>> {
-    for (const receipt of this.inMemoryLedger.values()) {
-      if (receipt.publicationId === publicationId) {
-        return { ok: true, value: { consistent: true, differences: [] } };
+    const receipt = Array.from(this.inMemoryLedger.values()).find((r) => r.publicationId === publicationId);
+    if (!receipt) {
+      return { ok: true, value: { consistent: false, differences: [{ error: 'not_found' }] } };
+    }
+    const inconsistent = (differences: Record<string, unknown>[]) =>
+      ({ ok: true as const, value: { consistent: differences.length === 0, differences } });
+
+    if (receipt.emulated) {
+      return inconsistent([{ check: 'emulated', detail: 'No Google call was made for this publication, so there is nothing to verify' }]);
+    }
+    const token = await this.getAccessToken();
+    if (!token) {
+      return inconsistent([{ check: 'credentials', detail: 'Google Workspace credentials are not configured, so Drive and Sheets could not be read' }]);
+    }
+
+    const differences: Record<string, unknown>[] = [];
+    const get = async (url: string): Promise<{ status: number; body?: any; error?: string }> => {
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        return res.ok ? { status: res.status, body: await res.json() } : { status: res.status };
+      } catch (err: any) {
+        return { status: 0, error: err?.message || String(err) };
+      }
+    };
+
+    if (receipt.driveFiles.length === 0) {
+      differences.push({ check: 'drive', detail: 'The receipt records no Drive file' });
+    }
+    for (const file of receipt.driveFiles) {
+      const read = await get(`${this.driveApiBaseUrl}/drive/v3/files/${encodeURIComponent(file.fileId)}?fields=id,name,size,mimeType,trashed,sha256Checksum`);
+      if (read.status === 404) {
+        differences.push({ check: 'drive', fileId: file.fileId, detail: 'The file is no longer in Google Drive' });
+        continue;
+      }
+      if (!read.body) {
+        differences.push({ check: 'drive', fileId: file.fileId, detail: `Drive could not be read (${read.error || `HTTP ${read.status}`})` });
+        continue;
+      }
+      const remote = read.body;
+      if (remote.trashed === true) differences.push({ check: 'drive', fileId: file.fileId, detail: 'The file is in the Drive trash' });
+      if (remote.name !== file.name) differences.push({ check: 'drive', fileId: file.fileId, field: 'name', expected: file.name, observed: remote.name ?? null });
+      if (remote.mimeType && remote.mimeType !== file.mimeType) differences.push({ check: 'drive', fileId: file.fileId, field: 'mimeType', expected: file.mimeType, observed: remote.mimeType });
+      if (Number(remote.size) !== file.observedSize) differences.push({ check: 'drive', fileId: file.fileId, field: 'size', expected: file.observedSize, observed: remote.size ?? null });
+      if (remote.sha256Checksum && String(remote.sha256Checksum).toLowerCase() !== String(file.expectedSha256).toLowerCase()) {
+        differences.push({ check: 'drive', fileId: file.fileId, field: 'sha256', expected: file.expectedSha256, observed: remote.sha256Checksum });
       }
     }
-    return { ok: true, value: { consistent: false, differences: [{ error: 'not_found' }] } };
+
+    const sheet = receipt.sheet;
+    if (!sheet.spreadsheetId) {
+      differences.push({ check: 'sheets', detail: 'No spreadsheet is recorded for this publication' });
+    } else if (sheet.rowNumber === undefined) {
+      differences.push({ check: 'sheets', detail: 'No Sheets row was recorded for this publication' });
+    } else {
+      const range = `A${sheet.rowNumber}:G${sheet.rowNumber}`;
+      const read = await get(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${encodeURIComponent(sheet.spreadsheetId)}/values/${range}`);
+      const row = read.body?.values?.[0];
+      if (!read.body) {
+        differences.push({ check: 'sheets', row: sheet.rowNumber, detail: `Sheets could not be read (${read.error || `HTTP ${read.status}`})` });
+      } else if (!row) {
+        differences.push({ check: 'sheets', row: sheet.rowNumber, detail: 'The recorded row is empty' });
+      } else {
+        if (row[0] !== sheet.rowKey) differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'taskId', expected: sheet.rowKey, observed: row[0] ?? null });
+        if (row[4] !== 'COMPLETE') differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'status', expected: 'COMPLETE', observed: row[4] ?? null });
+        if (row[6] !== sheet.expectedHash) differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'packageHash', expected: sheet.expectedHash, observed: row[6] ?? null });
+      }
+    }
+
+    return inconsistent(differences);
   }
 }

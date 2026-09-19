@@ -107,3 +107,43 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     if (res.ok) expect(res.value.emulated).toBe(true);
   });
 });
+
+describe('GooglePublisher.verify reads the publication back', () => {
+  it('an emulated receipt is never reported consistent: nothing was sent to verify', async () => {
+    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test' });
+    const res = await publisher.publish(ctx, request([file('a.png', 'aaa')]));
+    if (!res.ok) throw new Error('publish failed');
+    const verified = await publisher.verify(ctx, res.value.publicationId);
+    expect(verified.ok && verified.value).toEqual({
+      consistent: false,
+      differences: [{ check: 'emulated', detail: 'No Google call was made for this publication, so there is nothing to verify' }],
+    });
+  });
+
+  it('reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row', async () => {
+    const f = file('a.png', 'aaa');
+    let driveNow: any = { id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
+      if (url.startsWith('https://drive.test')) return json(driveNow);
+      if (url.includes(':append')) return json({ updates: {} }); // Sheets reports no row
+      throw new Error(`unexpected call ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const publisher = livePublisher();
+    const res = await publisher.publish(ctx, request([f]));
+    if (!res.ok) throw new Error('publish failed');
+
+    driveNow = { ...driveNow, size: '999', sha256Checksum: 'f'.repeat(64), trashed: true };
+    const verified = await publisher.verify(ctx, res.value.publicationId);
+    expect(verified.ok && verified.value).toEqual({
+      consistent: false,
+      differences: [
+        { check: 'drive', fileId: 'drive-file-1', detail: 'The file is in the Drive trash' },
+        { check: 'drive', fileId: 'drive-file-1', field: 'size', expected: f.byteSize, observed: '999' },
+        { check: 'drive', fileId: 'drive-file-1', field: 'sha256', expected: f.sha256, observed: 'f'.repeat(64) },
+        { check: 'sheets', detail: 'No Sheets row was recorded for this publication' },
+      ],
+    });
+  });
+});
