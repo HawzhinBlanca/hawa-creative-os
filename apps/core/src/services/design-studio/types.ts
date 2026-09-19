@@ -37,6 +37,8 @@ export interface CreativeBrief {
   referenceRole?: 'none' | 'logo' | 'style_reference';
   /** What to take from a style reference: composition, colour placement, ornament, mood. */
   referenceNotes?: string;
+  /** Whether the brief saw an attached image. False when a photo arrived after it ran. */
+  referenceSeen?: boolean;
 }
 
 export type Archetype =

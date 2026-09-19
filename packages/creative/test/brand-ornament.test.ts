@@ -13,8 +13,8 @@ const prepare = (ornament?: ReturnType<typeof resolveOrnamentSettings>) =>
 
 describe('brand ornament', () => {
   it('defaults to sun rays at a quarter opacity with dividers, and refuses unknown values', () => {
-    expect(resolveOrnamentSettings({})).toEqual({ dividers: true, texture: 'sun-rays', textureOpacity: 0.25 });
-    expect(resolveOrnamentSettings({ HAWA_DESIGN_TEXTURE: 'none', HAWA_DESIGN_DIVIDERS: 'off' })).toEqual({ dividers: false, texture: 'none', textureOpacity: 0.25 });
+    expect(resolveOrnamentSettings({})).toEqual({ dividers: true, texture: 'sun-rays', textureOpacity: 0.25, balance: true });
+    expect(resolveOrnamentSettings({ HAWA_DESIGN_TEXTURE: 'none', HAWA_DESIGN_DIVIDERS: 'off' })).toEqual({ dividers: false, texture: 'none', textureOpacity: 0.25, balance: true });
     expect(() => resolveOrnamentSettings({ HAWA_DESIGN_TEXTURE: 'marble' })).toThrow(/HAWA_DESIGN_TEXTURE/);
     expect(() => resolveOrnamentSettings({ HAWA_DESIGN_TEXTURE_OPACITY: '0.9' })).toThrow(/OPACITY/);
   });

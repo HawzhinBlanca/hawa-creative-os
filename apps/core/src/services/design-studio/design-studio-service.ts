@@ -162,8 +162,22 @@ export class DesignStudioService {
       ).rows[0]?.data
     );
     const payload = source?.payload || source || {};
-    const url = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
-    return typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url) ? url : undefined;
+    const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
+    const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
+    if (valid(own)) return own;
+    // A photo sent without a caption just after the request is saved as its own instruction-only
+    // task pointing here (Telegram delivers the two as separate messages; task 936c5c6f became a
+    // second full design run on 2026-09-19). The latest one is the reference.
+    const late = await this.tx(s, async (db) =>
+      (
+        await sql<any>`SELECT e.data FROM hawa.task_events e
+        WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created'
+          AND e.data->'studioOptions'->>'referenceFor' = ${taskId}
+        ORDER BY e.occurred_at DESC LIMIT 1`.execute(db)
+      ).rows[0]?.data
+    );
+    const url = late?.studioOptions?.referenceImageBase64 || late?.payload?.studioOptions?.referenceImageBase64;
+    return valid(url) ? url : undefined;
   }
 
   private async getTaskContext(s: Scope, taskId: string, width: number, height: number) {
@@ -772,8 +786,11 @@ export class DesignStudioService {
     // Telegram task but only the legacy planner ever read it.
     ctx.attachedImage = await this.attachedImage(s, run.task_id);
     const briefSoFar = runStages(run).brief as CreativeBrief | undefined;
-    if (ctx.attachedImage && briefSoFar?.referenceRole === 'style_reference') {
-      ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar.referenceNotes || '' };
+    // A photo that arrived after the brief ran is followed as a style reference: it came without a
+    // caption, so the synthetic instruction it carries is that one.
+    const arrivedLate = briefSoFar?.referenceSeen === false;
+    if (ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || arrivedLate)) {
+      ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
     }
 
     try {

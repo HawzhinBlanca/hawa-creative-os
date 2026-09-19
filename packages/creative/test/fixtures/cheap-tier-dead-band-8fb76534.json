@@ -1,0 +1,130 @@
+{
+ "note": "Winner of task 8fb76534 (2026-09-19) as delivered; copy reconstructed from the task, leading LRM marks dropped.",
+ "copy": [
+  "چوارچێوەی ستانداردەکانی پەروەردە (K-12)\nچاپی 2.0",
+  "بەرزکردنەوەی کوالێتی و بەردەوامی پەرەپێدانی پەروەردە (K-12) لە هەرێمی کوردستان.",
+  "ئێستا لە kaae.org بەردەستە"
+ ],
+ "layout": {
+  "art": {
+   "box": {
+    "x": 0,
+    "y": 0,
+    "width": 1080,
+    "height": 1350
+   },
+   "motif": "sun-rays",
+   "source": "procedural",
+   "opacity": 0.25,
+   "calmRegion": {
+    "x": 108,
+    "y": 119,
+    "width": 864,
+    "height": 621
+   }
+  },
+  "grid": {
+   "gutter": 32,
+   "margin": 65,
+   "columns": 6,
+   "baseline": 27
+  },
+  "logo": {
+   "x": 885,
+   "y": 1155,
+   "width": 130,
+   "height": 130
+  },
+  "text": [
+   {
+    "x": 108,
+    "y": 119,
+    "rtl": true,
+    "bold": true,
+    "role": "title",
+    "align": "center",
+    "color": "#FFFFFF",
+    "width": 864,
+    "height": 293,
+    "italic": false,
+    "fontSize": 61,
+    "copyIndex": 0,
+    "fontFamily": "Amiri",
+    "lineHeight": 1.6,
+    "letterSpacing": 0
+   },
+   {
+    "x": 108,
+    "y": 547,
+    "rtl": true,
+    "bold": false,
+    "role": "body",
+    "align": "center",
+    "color": "#FFFFFF",
+    "width": 864,
+    "height": 42,
+    "italic": false,
+    "fontSize": 22,
+    "copyIndex": 1,
+    "fontFamily": "Noto Sans Arabic",
+    "lineHeight": 1.6,
+    "letterSpacing": 0
+   },
+   {
+    "x": 523,
+    "y": 706,
+    "rtl": true,
+    "bold": true,
+    "role": "cta",
+    "align": "center",
+    "color": "#FDF8F3",
+    "width": 259,
+    "height": 34,
+    "italic": false,
+    "fontSize": 18,
+    "copyIndex": 2,
+    "fontFamily": "Amiri",
+    "lineHeight": 1.6,
+    "letterSpacing": 0
+   }
+  ],
+  "width": 1080,
+  "height": 1350,
+  "shapes": [
+   {
+    "x": 108,
+    "y": 65,
+    "kind": "rect",
+    "role": "rule",
+    "color": "#F7B500",
+    "width": 864,
+    "height": 3,
+    "radius": 0,
+    "opacity": 1,
+    "strokeColor": null,
+    "strokeWidth": null
+   },
+   {
+    "x": 426,
+    "y": 479,
+    "kind": "rect",
+    "role": "rule",
+    "color": "#F7B500",
+    "width": 372,
+    "height": 2,
+    "radius": 0,
+    "opacity": 1,
+    "strokeColor": null,
+    "strokeWidth": null
+   }
+  ],
+  "version": 2,
+  "typeScale": {
+   "base": 14,
+   "ratio": 1.5
+  },
+  "background": {
+   "color": "#0A1628"
+  }
+ }
+}

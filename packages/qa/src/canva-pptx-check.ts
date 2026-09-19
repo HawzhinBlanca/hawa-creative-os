@@ -290,7 +290,8 @@ export function checkCanvaPptx(
     }
   }
 
-  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+  // Word joiners (U+2060) are invisible: the studio deck adds them so Canva keeps "K-12" on one line.
+  const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
   const copyPass = texts.length === expectedCopy.length && texts.every((t, i) => normalize(t) === normalize(expectedCopy[i]));
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
   const rtlPass = arabicObjects === 0 || rtlObjects === arabicObjects;

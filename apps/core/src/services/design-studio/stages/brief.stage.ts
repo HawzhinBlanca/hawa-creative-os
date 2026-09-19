@@ -128,6 +128,7 @@ export async function runBriefStage(ctx: StageContext): Promise<CreativeBrief> {
     brief.referenceRole = 'none';
     brief.referenceNotes = '';
   }
+  brief.referenceSeen = Boolean(attached);
   if (dropped.length > 0) {
     console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }

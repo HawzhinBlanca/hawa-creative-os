@@ -711,14 +711,145 @@ export function prepareGeneratedLayoutV3(
   const fitted = fitLogoToAspect(layout, aspect, { width: canvas.width, margin: layout.grid?.margin ?? 0 });
   const normalized = normalizeStudioLayout(fitted, canvas.width, canvas.height, aspect);
   const conformed = conformToHouseRules(sanitizeFontsV3(normalized, copy), copy, canvas.palette);
-  if (!canvas.ornament) return conformed;
+  const balance = canvas.ornament?.balance ?? true;
+  const finish = (l: StudioLayoutV2) => (balance ? balanceVertically(l, copy) : l);
+  if (!canvas.ornament) return finish(conformed);
   // Ornament may never make a design worse by the pipeline's own measures. The texture changes no
   // measure; dividers and the box fitting they need can (over the 160 stored designs, one fell below
   // the alignment gate and one gained an off-centre divider). Those keep the texture alone.
   const plain = JSON.parse(JSON.stringify(conformed)) as StudioLayoutV2;
   const ornamented = addBrandOrnament(conformed, copy, canvas.ornament, canvas.palette || []);
-  if (!ornamentAddsDefect(plain, ornamented, copy)) return ornamented;
-  return addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []);
+  if (!ornamentAddsDefect(plain, ornamented, copy)) return finish(ornamented);
+  return finish(addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []));
+}
+
+/**
+ * Re-spaces a one-column design whose content leaves a dead band: the whole stack keeps its order,
+ * its blocks and type sizes, and its rhythm (every gap grows by the same factor, at most 1.6x), and
+ * sits at the optical centre of the space the logo leaves free. Task 8fb76534 (2026-09-19) put three
+ * short lines in the top 55% of a 1080x1350 canvas, 415px of nothing above a corner logo.
+ *
+ * Type is deliberately not enlarged: the owner's exemplars are 85-89% empty, so whitespace is the
+ * house style (see `measureWrappedLines`). The defect is where the whitespace falls. Only a layout
+ * the negative-space measure already fails is touched, and a change is kept only if it raises that
+ * measure without adding an overlap, a failing metric, a logo clear-space breach or text outside
+ * the safe area. Anything else is returned unchanged.
+ */
+export function balanceVertically(layout: StudioLayoutV2, copy: PipelineV3Copy): StudioLayoutV2 {
+  const W = layout.width;
+  const H = layout.height;
+  const m = layout.grid?.margin ?? 0;
+  const texts = layout.text || [];
+  if (!texts.length) return layout;
+  // One column: no two blocks share a height band.
+  const byY = [...texts].sort((a, b) => a.y - b.y);
+  for (let i = 1; i < byY.length; i++) if (byY[i].y < byY[i - 1].y + byY[i - 1].height) return layout;
+  // Artwork set in a region of its own is composed with the text where it stands.
+  const art = layout.art;
+  if (art?.box && !(art.box.width >= 0.98 * W && art.box.height >= 0.98 * H)) return layout;
+
+  const before = measureDesignV3(layout, copy);
+  if (before.metrics.negativeSpace.passed) return layout;
+
+  const fullBleed = (s: Rect) => s.width >= 0.98 * W && s.height >= 0.98 * H;
+  const shapes = (layout.shapes || []).filter((s) => !fullBleed(s));
+  // A shape on the canvas edge (a header or footer band) anchors the composition: leave it be.
+  if (shapes.some((s) => s.y <= 1 || s.y + s.height >= H - 1)) return layout;
+  const top0 = Math.min(...texts.map((t) => t.y), ...shapes.map((s) => s.y));
+  const bottom0 = Math.max(...texts.map((t) => t.y + t.height), ...shapes.map((s) => s.y + s.height));
+  const logo = layout.logo && layout.logo.width > 0 ? layout.logo : undefined;
+  const logoInStack = !!logo && logo.y >= top0 && logo.y + logo.height <= bottom0;
+
+  // The space free for the stack: the safe area, less the logo's clear space when the logo sits
+  // above or below the stack in the same column.
+  let free0 = m;
+  let free1 = H - m;
+  if (logo && !logoInStack) {
+    const zone = logoClearZone(logo);
+    const shareColumn = texts.some((t) => overlapsXRect(t, zone));
+    if (logo.y >= bottom0) free1 = shareColumn ? Math.min(free1, Math.floor(zone.y)) : free1;
+    else if (logo.y + logo.height <= top0) free0 = shareColumn ? Math.max(free0, Math.ceil(zone.y + zone.height)) : free0;
+    else return layout;
+  }
+
+  // Solid intervals move rigidly; the gaps between them scale. A panel is mapped edge by edge, so
+  // it keeps holding what it held.
+  const panels = shapes.filter((s) => s.role === 'panel');
+  const solids: Rect[] = [...texts, ...shapes.filter((s) => s.role !== 'panel'), ...(logoInStack ? [logo!] : [])];
+  const spans = solids.map((r) => [r.y, r.y + r.height]).sort((a, b) => a[0] - b[0]);
+  const merged: number[][] = [];
+  for (const [a, b] of spans) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  const solidHeight = merged.reduce((sum, [a, b]) => sum + (b - a), 0);
+  const inner = merged.slice(1).reduce((sum, [a], i) => sum + (a - merged[i][1]), 0);
+  const lead = merged[0][0] - top0;
+  const tail = bottom0 - merged[merged.length - 1][1];
+
+  const snapshot = JSON.stringify(layout);
+  const zoneBefore = logo ? logoClearZone(logo) : undefined;
+  const breachedBefore = new Set(
+    zoneBefore ? [...texts, ...shapes.filter((s) => s.role === 'rule')].map((r, i) => (intersects(r, zoneBefore) ? i : -1)) : []
+  );
+  const overlapsBefore = computeLayoutMetrics(layout).overlapCount;
+  const failingBefore = new Set(before.failingMetrics);
+
+  for (const g of [1.6, 1.45, 1.3, 1.15, 1]) {
+    const height = solidHeight + g * (inner + lead + tail);
+    if (height > free1 - free0) continue;
+    const start = Math.round(free0 + 0.45 * (free1 - free0 - height));
+    // New start of each solid interval.
+    const starts: number[] = [];
+    let cursor = start + g * lead;
+    merged.forEach(([a, b], i) => {
+      if (i > 0) cursor += g * (a - merged[i - 1][1]);
+      starts.push(cursor);
+      cursor += b - a;
+    });
+    const map = (y: number): number => {
+      for (let i = 0; i < merged.length; i++) {
+        const [a, b] = merged[i];
+        if (y < a) return i === 0 ? starts[0] - g * (a - y) : starts[i - 1] + (merged[i - 1][1] - merged[i - 1][0]) + g * (y - merged[i - 1][1]);
+        if (y <= b) return starts[i] + (y - a);
+      }
+      const [a, b] = merged[merged.length - 1];
+      return starts[merged.length - 1] + (b - a) + g * (y - b);
+    };
+
+    Object.assign(layout, JSON.parse(snapshot));
+    const cur = layout;
+    const curShapes = (cur.shapes || []).filter((s) => !fullBleed(s));
+    for (const t of cur.text) t.y = Math.round(map(t.y));
+    for (const s of curShapes) {
+      if (s.role === 'panel') {
+        const y = Math.round(map(s.y));
+        s.height = Math.round(map(s.y + s.height)) - y;
+        s.y = y;
+      } else s.y = Math.round(map(s.y));
+    }
+    if (logoInStack && cur.logo) cur.logo = { ...cur.logo, y: Math.round(map(cur.logo.y)) };
+    if (cur.art?.calmRegion) {
+      const c = cur.art.calmRegion;
+      const y = Math.max(0, Math.round(map(c.y)));
+      cur.art.calmRegion = { ...c, y, height: Math.min(H, Math.round(map(c.y + c.height))) - y };
+    }
+
+    const safe = cur.text.every((t) => t.y >= m && t.y + t.height <= H - m);
+    const zone = cur.logo ? logoClearZone(cur.logo) : undefined;
+    const breach =
+      !!zone &&
+      [...cur.text, ...(cur.shapes || []).filter((s) => s.role === 'rule')].some((r, i) => intersects(r, zone) && !breachedBefore.has(i));
+    if (!safe || breach || computeLayoutMetrics(cur).overlapCount > overlapsBefore) continue;
+    const after = measureDesignV3(cur, copy);
+    if (after.failingMetrics.some((f) => !failingBefore.has(f))) continue;
+    if (after.metrics.negativeSpace.score <= before.metrics.negativeSpace.score) continue;
+    if (after.compositeScore < before.compositeScore) continue;
+    return cur;
+  }
+  Object.assign(layout, JSON.parse(snapshot));
+  return layout;
 }
 
 function ornamentAddsDefect(plain: StudioLayoutV2, ornamented: StudioLayoutV2, copy: PipelineV3Copy): boolean {
@@ -741,6 +872,8 @@ export interface OrnamentSettings {
   texture: (typeof MOTIFS)[number] | 'none';
   /** The texture layer's opacity, applied once: in the render and in the Canva deck alike. */
   textureOpacity: number;
+  /** Re-spaces a one-column stack that leaves a dead band, see `balanceVertically`. */
+  balance: boolean;
 }
 
 /**
@@ -748,7 +881,8 @@ export interface OrnamentSettings {
  * HAWA_DESIGN_DIVIDERS (on | off), HAWA_DESIGN_TEXTURE (sun-rays | guilloche | thin-rules |
  * gradient-wash | none), HAWA_DESIGN_TEXTURE_OPACITY (0.05-0.6). Sun rays echo the rays of the KAAE
  * emblem; guilloche's loops ran through body copy in the preview, and thin-rules' frame crossed a
- * title wider than the margin. Throws on a value it does not know.
+ * title wider than the margin. HAWA_DESIGN_BALANCE (on | off) re-spaces a short stack that leaves
+ * part of the canvas dead. Throws on a value it does not know.
  */
 export function resolveOrnamentSettings(env: Record<string, string | undefined> = process.env): OrnamentSettings {
   const read = (name: string) => (env[name] || '').trim().toLowerCase();
@@ -760,7 +894,9 @@ export function resolveOrnamentSettings(env: Record<string, string | undefined> 
   }
   const opacity = read('HAWA_DESIGN_TEXTURE_OPACITY') ? Number(read('HAWA_DESIGN_TEXTURE_OPACITY')) : 0.25;
   if (!(opacity >= 0.05 && opacity <= 0.6)) throw new Error(`HAWA_DESIGN_TEXTURE_OPACITY must be between 0.05 and 0.6`);
-  return { dividers: dividers === 'on', texture, textureOpacity: opacity };
+  const balance = read('HAWA_DESIGN_BALANCE') || 'on';
+  if (balance !== 'on' && balance !== 'off') throw new Error(`HAWA_DESIGN_BALANCE must be on or off, not '${balance}'`);
+  return { dividers: dividers === 'on', texture, textureOpacity: opacity, balance: balance === 'on' };
 }
 
 /**

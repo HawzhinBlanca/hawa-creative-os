@@ -1,4 +1,4 @@
-import { persistChatIntake } from './services/chat-intake.js';
+import { persistChatIntake, findRequestAwaitingReference } from './services/chat-intake.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -3089,6 +3089,43 @@ export function createApp(options?: CreateAppOptions) {
       return c.json({ ok: true, ignored: true, reason, updateId: sourceEventId }, 200);
     }
 
+    // A photo sent without a caption right after a request is part of that request. Telegram sends
+    // the text and the photo as two messages; on 2026-09-19 the photo became a "revision" (task
+    // 936c5c6f) and a second full design run. If the request's design has not reached layout
+    // generation, the photo is saved as an instruction-only task pointing at it and the studio
+    // follows it; otherwise it takes the revision path below, as before.
+    const captionless = Boolean(referenceImageBase64) && !String(msg.caption || msg.text || json.text || '').trim();
+    if (captionless && !msg.reply_to_message && db && sourceChannelId !== 'tg_default') {
+      const target = await findRequestAwaitingReference(db, { sourceChannelId }).catch((err) => {
+        console.warn('[TelegramIngress] Could not look for a request to attach the photo to:', err);
+        return null;
+      });
+      if (target) {
+        const persisted = await persistChatIntake(db, {
+          platform: 'telegram',
+          sourceEventId,
+          sourceChannelId,
+          rawText,
+          rawJson: json,
+          clientId: target.clientId,
+          title: `${target.title} (reference image)`,
+          designInstructions: rawText,
+          exactCopy: [],
+          isInstructionOnly: true,
+          autoGenerate: false,
+          studioOptions: { referenceFor: target.taskId, referenceImageBase64 },
+        });
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text:
+            `🖼️ <b>Reference image added to your request</b> "${escapeTelegramHtml(target.title)}"\n\n` +
+            `<i>The design will follow it. No separate draft is made.</i>`,
+          parse_mode: 'HTML',
+        });
+        broadcast('task:created', persisted.task);
+        return c.json({ ok: true, referenceFor: target.taskId, task: persisted.task }, 201);
+      }
+    }
+
     // Handle bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
     if (typeof rawText === 'string' && rawText.startsWith('/')) {
       const cmdReply = telegramBridge.handleCommand(rawText, sourceChannelId, verifiedSender || undefined);
@@ -5765,6 +5802,60 @@ export function createApp(options?: CreateAppOptions) {
     });
   });
 
+  // Dead letters degrade the worker's health until someone acts on each one. Redrive is the only
+  // other action, and for an obsolete request it would re-run it: the command dead-lettered on
+  // 2026-09-17, when Restate had lost the worker, is a design request long since handled. Operators
+  // list them here and retire the obsolete ones, with a reason; a retired command is kept, as 'dead'.
+  registerRoute('get', '/outbox/failed', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Authentication Required');
+    if (!['operator', 'administrator', 'system'].includes(auth.role || '')) {
+      return problem(c, 403, 'Operator or Administrator Role Required', 'Only operators and administrators can list dead letters');
+    }
+    if (!db || !outboxRepo) return problem(c, 503, 'Database Unavailable', 'Dead letters are only held in the database');
+    const rows = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, (trx) =>
+      outboxRepo.listFailed(auth.tenantId, trx)
+    );
+    return c.json({
+      count: rows.length,
+      commands: rows.map((cmd: any) => ({
+        id: cmd.id,
+        aggregateId: cmd.aggregate_id,
+        commandType: cmd.command_type,
+        attempts: cmd.attempts,
+        errorMessage: cmd.last_error || null,
+        createdAt: cmd.created_at,
+        updatedAt: cmd.updated_at,
+      })),
+    });
+  });
+
+  registerRoute('post', '/tasks/:taskId/outbox/:commandId/retire', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Authentication Required');
+    if (!['operator', 'administrator'].includes(auth.role || '')) {
+      return problem(c, 403, 'Operator or Administrator Role Required', 'Only operators and administrators can retire dead letters');
+    }
+    const taskId = c.req.param('taskId');
+    const commandId = c.req.param('commandId');
+    const body = await c.req.json().catch(() => ({}));
+    const reason = typeof body?.reason === 'string' ? body.reason.trim() : '';
+    if (!reason) return problem(c, 422, 'Reason Required', 'Say why this command will never be delivered.');
+    if (!db || !outboxRepo || !isValidUuid(commandId)) return problem(c, 404, 'Command Not Found', `No outbox command ${commandId}`);
+    const result = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+      const cmd = await outboxRepo.findById(auth.tenantId, commandId, trx);
+      if (!cmd || cmd.aggregate_id !== taskId) return { status: 404 as const };
+      if (cmd.state !== 'failed') return { status: 409 as const, state: cmd.state };
+      const retired = await outboxRepo.retire(auth.tenantId, commandId, reason, String(auth.userId || auth.actorId || 'operator'), trx);
+      return retired ? { status: 200 as const, retired } : { status: 409 as const, state: 'changed' };
+    });
+    if (result.status === 404) return problem(c, 404, 'Command Not Found', `Outbox command ${commandId} was not found for task ${taskId}`);
+    if (result.status === 409) {
+      return problem(c, 409, 'Command Not Failed', `Command ${commandId} is in '${result.state}' state. Only failed commands can be retired.`);
+    }
+    return c.json({ retired: true, commandId, state: result.retired.state, lastError: result.retired.last_error });
+  });
+
   // Task R07: Actionable query of durable publication state & reconciliation needs
   registerRoute('get', '/tasks/:taskId/publication-state', async (c: any) => {
     const auth = verifyRequestAuth(c);
@@ -5921,6 +6012,11 @@ export function createApp(options?: CreateAppOptions) {
         ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]);
     const source = created?.data?.payload || created?.data || {};
     const sourceChannelId = source?.sourcePlatform === 'telegram' && source?.sourceChannelId ? String(source.sourceChannelId) : undefined;
+    // A reference image joined to another request has no draft of its own; the requester was told
+    // where it went when it arrived, and a "queued for manual design" notice would contradict that.
+    if (source?.studioOptions?.referenceFor) {
+      return c.json({ taskId, status, notified: false, reason: 'REFERENCE_FOR_ANOTHER_REQUEST' });
+    }
 
     // A Sorani draft is set in a provisional typeface (ADR-028); the requester is told so with the result.
     const notes: string[] = [];
