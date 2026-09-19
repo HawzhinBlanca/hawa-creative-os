@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { RequestContext, UUID, NeutralManifest } from '@hawa/contracts';
 import { TaskStateMachine, extractProtectedTokens, type DesignBrief, type ClientDNA } from '@hawa/domain';
 import { BriefBuilder, CreativeDirectorRunner } from '@hawa/creative';
@@ -263,22 +264,26 @@ export class SyntheticTrafficDaemon {
       // Stage 7: Idempotent Publication (Invariant #10)
       const t6 = Date.now();
       sm.transition('PUBLISHING', ctx.actor, 'Publishing to Drive and Sheets');
+      // A synthetic probe file with real bytes: the publisher checks every file's hash and size.
+      const probeBytes = new TextEncoder().encode(`hawa slo probe ${probeId}`);
+      const probeSha256 = createHash('sha256').update(probeBytes).digest('hex');
       const pubReq = {
         taskId,
         clientId: scenario.clientId,
         designRevisionId: crypto.randomUUID(),
         approvalId: crypto.randomUUID(),
         publicationKey: `pub_key_${taskId}`,
-        packageHash: 'sha256_pkg_slo',
+        packageHash: probeSha256,
         files: [
           {
             artifactId: crypto.randomUUID(),
-            relativePath: 'post.png',
-            storageKey: `store/slo/${taskId}.png`,
-            filename: 'post.png',
-            mimeType: 'image/png',
-            byteSize: 2048,
-            sha256: 'sha256_file_slo',
+            relativePath: 'probe.txt',
+            storageKey: `slo-probe:${probeId}`,
+            filename: 'probe.txt',
+            mimeType: 'text/plain',
+            byteSize: probeBytes.length,
+            sha256: probeSha256,
+            content: probeBytes,
           },
         ],
         destination: {

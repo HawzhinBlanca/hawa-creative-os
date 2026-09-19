@@ -1,7 +1,21 @@
 import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
 import crypto from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import type { RequestContext } from '@hawa/contracts';
+import type { PackageFile, RequestContext } from '@hawa/contracts';
+
+function deliverable(relativePath: string, storageKey: string, filename: string, mimeType: string, text: string): PackageFile {
+  const content = new TextEncoder().encode(text);
+  return {
+    artifactId: crypto.randomUUID(),
+    relativePath,
+    storageKey,
+    filename,
+    mimeType,
+    byteSize: content.length,
+    sha256: crypto.createHash('sha256').update(content).digest('hex'),
+    content,
+  };
+}
 import {
   TaskStateMachine,
   extractProtectedTokens,
@@ -422,34 +436,11 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               approvalId: approvalDecision.decisionId,
               publicationKey: `pub_drill_${dbTaskId}`,
               packageHash: `sha256_pkg_${index}`,
+              // Deliverables carry real bytes: the publisher checks each file's own hash and size.
               files: [
-                {
-                  artifactId: crypto.randomUUID(),
-                  relativePath: 'deliverables/feed.png',
-                  storageKey: `deliverables/${dbTaskId}/feed.png`,
-                  filename: `${scenario.clientId}-feed.png`,
-                  mimeType: 'image/png',
-                  byteSize: 350000,
-                  sha256: `sha256_feed_${index}`,
-                },
-                {
-                  artifactId: crypto.randomUUID(),
-                  relativePath: 'deliverables/vector.svg',
-                  storageKey: `deliverables/${dbTaskId}/vector.svg`,
-                  filename: `${scenario.clientId}-vector.svg`,
-                  mimeType: 'image/svg+xml',
-                  byteSize: 45000,
-                  sha256: `sha256_svg_${index}`,
-                },
-                {
-                  artifactId: crypto.randomUUID(),
-                  relativePath: 'source/editable_tree.hyc',
-                  storageKey: `source/${dbTaskId}/editable_tree.hyc`,
-                  filename: `${scenario.clientId}.hyc`,
-                  mimeType: 'application/json',
-                  byteSize: 18000,
-                  sha256: composedDoc.sourceSha256,
-                },
+                deliverable('deliverables/feed.png', `deliverables/${dbTaskId}/feed.png`, `${scenario.clientId}-feed.png`, 'image/png', `feed ${index}`),
+                deliverable('deliverables/vector.svg', `deliverables/${dbTaskId}/vector.svg`, `${scenario.clientId}-vector.svg`, 'image/svg+xml', `vector ${index}`),
+                deliverable('source/editable_tree.hyc', `source/${dbTaskId}/editable_tree.hyc`, `${scenario.clientId}.hyc`, 'application/json', JSON.stringify(composedDoc)),
               ],
               destination: {
                 sharedDriveId: `drive_${scenario.clientId}`,

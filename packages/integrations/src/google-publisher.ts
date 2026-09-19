@@ -1,6 +1,7 @@
 import type {
   Publisher,
   PublishRequest,
+  PackageFile,
   PublicationReceipt,
   DriveFileReceipt,
   RequestContext,
@@ -167,14 +168,13 @@ export class GooglePublisher implements Publisher {
           spreadsheetId: request.destination.spreadsheetId || '',
           sheetId: request.destination.sheetId || 0,
           rowKey: request.taskId,
-          rowNumber: 101,
           expectedHash: request.packageHash,
-          observedHash: request.packageHash,
           synced: false,
         },
         completedAt: new Date().toISOString(),
         state: 'failed',
         detail: { verified: false, filesUploaded: 0 },
+        emulated: this.config.emulateNetworkForTesting === true,
       };
       this.inMemoryLedger.set(request.publicationKey, emptyReceipt);
       return { ok: true, value: emptyReceipt };
@@ -196,12 +196,18 @@ export class GooglePublisher implements Publisher {
     const driveFolderId = request.destination.productionRootFolderId;
     const driveFiles: DriveFileReceipt[] = [];
 
-    // 6. Upload & Verification for each file
+    // 6. Every file's bytes are read and checked before anything is uploaded, so a missing or
+    //    altered file never leaves a partial delivery in the client's folder. There is no fallback
+    //    to placeholder bytes: a file Core cannot read is not delivered.
+    const prepared: Array<{ file: PackageFile; fileBuffer: Buffer }> = [];
     for (const file of request.files) {
-      const isExplicitPath = file.storageKey.startsWith('/') || file.storageKey.startsWith('./') || file.storageKey.startsWith('../');
-      const hasPhysicalFile = fs.existsSync(file.storageKey);
-
-      if (isExplicitPath && !hasPhysicalFile) {
+      let fileBuffer: Buffer | null = null;
+      if (file.content) {
+        fileBuffer = Buffer.from(file.content);
+      } else if (file.storageKey && fs.existsSync(file.storageKey)) {
+        fileBuffer = fs.readFileSync(file.storageKey);
+      }
+      if (!fileBuffer) {
         return {
           ok: false,
           error: {
@@ -211,14 +217,8 @@ export class GooglePublisher implements Publisher {
         };
       }
 
-      const fileBuffer = hasPhysicalFile
-        ? fs.readFileSync(file.storageKey)
-        : Buffer.alloc(file.byteSize || 1024);
-
-      // SHA-256 verification: If file has 64-char hex hash, verify hash equality with local fileBuffer
       const calculatedSha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-      const isHexSha256 = /^[a-f0-9]{64}$/i.test(file.sha256);
-      if (hasPhysicalFile && isHexSha256 && file.sha256.toLowerCase() !== calculatedSha256.toLowerCase()) {
+      if (String(file.sha256).toLowerCase() !== calculatedSha256) {
         return {
           ok: false,
           error: {
@@ -227,7 +227,20 @@ export class GooglePublisher implements Publisher {
           } as any,
         };
       }
+      if (file.byteSize !== fileBuffer.length) {
+        return {
+          ok: false,
+          error: {
+            code: 'PUBLICATION_VERIFICATION_FAILED',
+            message: `Size mismatch for deliverable file ${file.filename}: expected ${file.byteSize} bytes, read ${fileBuffer.length}`,
+          } as any,
+        };
+      }
+      prepared.push({ file, fileBuffer });
+    }
 
+    // 7. Upload & verification for each file
+    for (const { file, fileBuffer } of prepared) {
       let uploadedFileId: string;
       let readbackData: any;
       let webViewLink: string;
@@ -322,8 +335,7 @@ export class GooglePublisher implements Publisher {
         readbackIdMatches &&
         readbackNameMatches &&
         readbackSizeMatches &&
-        readbackMimeMatches &&
-        (hasPhysicalFile || this.config.emulateNetworkForTesting)
+        readbackMimeMatches
       );
 
       if (!fileVerified) {
@@ -351,11 +363,16 @@ export class GooglePublisher implements Publisher {
 
     const allFilesVerified = driveFiles.length > 0 && driveFiles.every((f) => f.verified);
 
-    // Step 7: Real Google Sheets Row Upsert (FR-049)
-    let sheetRowNumber = this.taskRowMap.get(request.taskId) || 101;
+    // Step 8: Google Sheets row upsert (FR-049). The row number is only ever one Sheets reported.
+    let sheetRowNumber: number | undefined = this.taskRowMap.get(request.taskId);
     let sheetSynced = false;
     if (request.destination.spreadsheetId) {
       if (this.config.emulateNetworkForTesting) {
+        // Emulated row, marked by receipt.emulated.
+        if (sheetRowNumber === undefined) {
+          sheetRowNumber = this.taskRowMap.size + 2;
+          this.taskRowMap.set(request.taskId, sheetRowNumber);
+        }
         sheetSynced = true;
       } else {
         const spreadsheetId = request.destination.spreadsheetId;
@@ -405,12 +422,13 @@ export class GooglePublisher implements Publisher {
             const match = updatedRange.match(/!A(\d+)/);
             if (match) {
               sheetRowNumber = parseInt(match[1], 10);
+              this.taskRowMap.set(request.taskId, sheetRowNumber);
             }
-            this.taskRowMap.set(request.taskId, sheetRowNumber);
           }
         }
 
-        if (sheetRes.ok) {
+        // Without a row number from Sheets there is nothing to read back, so the row is not synced.
+        if (sheetRes.ok && sheetRowNumber !== undefined) {
           // Step 8: Independent Readback from Google Sheets
           const readbackSheetUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${sheetRowNumber}:G${sheetRowNumber}`;
           const sheetReadbackRes = await fetch(readbackSheetUrl, {
@@ -452,6 +470,7 @@ export class GooglePublisher implements Publisher {
       completedAt: new Date().toISOString(),
       state: isFullyComplete ? 'complete' : driveFiles.length > 0 ? 'drive_complete' : 'failed',
       detail: { verified: allFilesVerified, filesUploaded: driveFiles.length },
+      emulated: this.config.emulateNetworkForTesting === true,
     };
     (receipt as any).clientId = request.clientId;
 
@@ -463,7 +482,7 @@ export class GooglePublisher implements Publisher {
     const token = await this.getAccessToken();
     for (const receipt of this.inMemoryLedger.values()) {
       if (receipt.publicationId === publicationId) {
-        if (receipt.state === 'failed' || !receipt.detail?.verified) {
+        if (receipt.state === 'failed' || !receipt.detail?.verified || receipt.emulated || receipt.sheet.rowNumber === undefined) {
           return { ok: true, value: receipt };
         }
 

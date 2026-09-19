@@ -60,6 +60,8 @@ export interface DecisionPayload {
   expectedTaskVersion?: number;
   capturedArtifactSetHash?: string;
   qcReportHash?: string;
+  /** Stored Canva export ids this approval pins; delivery sends exactly these files. */
+  pinnedExportIds?: string[];
   revisionRequest?: {
     scope?: string;
     category?: string;

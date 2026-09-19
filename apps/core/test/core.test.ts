@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
+import { createHash } from 'node:crypto';
 
 describe('Core API: Ingress & Task Lifecycle', () => {
-  const app = createApp();
+  const exports = memoryExportStore();
+  const app = createApp({ deliverableStore: exports.store });
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');
@@ -227,6 +230,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
       body: JSON.stringify({
         outcome: 'approved',
         reviewerId: 'art_director_1',
+        pinnedExportIds: [exports.add(taskId)],
       }),
     });
     expect(approveRes.status).toBe(201);
@@ -551,6 +555,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
         outcome: 'approved',
         reviewerId: 'art_director',
         notes: 'Passed all visual quality, Kurdish orthography, and WCAG contrast diagnostics.',
+        pinnedExportIds: [exports.add(taskId)],
       }),
     });
     expect(decisionRes.status).toBe(201);
@@ -836,7 +841,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(task.status).toBe('APPROVED');
   });
 
-  it('publishes 4-in-1 omnichannel campaign package to client Google Drive and Sheets with outbox receipt', async () => {
+  it('publishes exactly the pinned export to the client\'s Google Drive and Sheets, with an emulated receipt', async () => {
     // 1. Create and approve task
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -855,10 +860,12 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
     const revCheck = await app.request(`/v1/tasks/${taskId}`);
     const { latestRevisionId } = await revCheck.json();
+    const pinnedBytes = new TextEncoder().encode('approved Drustee export');
+    const exportId = exports.add(taskId, 'png', pinnedBytes);
     await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outcome: 'approved' }),
+      body: JSON.stringify({ outcome: 'approved', pinnedExportIds: [exportId] }),
     });
 
     // 2. Publish Omnichannel
@@ -872,10 +879,19 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const pubData = await pubRes.json();
     expect(pubData.ok).toBe(true);
     expect(pubData.status).toBe('COMPLETE');
-    expect(pubData.filesCount).toBe(12); // 4 formats x (png, svg, hyc)
-    expect(pubData.publicationReceipt).toBeDefined();
-    expect(pubData.publicationReceipt.state).toBe('complete');
-    expect(pubData.vaultUri).toContain(`${taskId}_omnichannel_bundle.zip`);
+    // One file: the export the reviewer pinned, hashed from its own bytes (formerly 12 invented files).
+    expect(pubData.filesCount).toBe(1);
+    const receipt = pubData.publicationReceipt;
+    expect(receipt.state).toBe('complete');
+    expect(receipt.emulated).toBe(true);
+    expect(receipt.driveFiles).toHaveLength(1);
+    expect(receipt.driveFiles[0]).toMatchObject({
+      artifactId: exportId,
+      expectedSha256: createHash('sha256').update(pinnedBytes).digest('hex'),
+      observedSize: pinnedBytes.length,
+      verified: true,
+    });
+    expect(pubData).not.toHaveProperty('vaultUri');
     expect(pubData.driveFolderUrl).toContain('https://drive.google.com/drive/folders/');
     expect(pubData.sheetRowUrl).toContain('https://docs.google.com/spreadsheets/d/');
   });

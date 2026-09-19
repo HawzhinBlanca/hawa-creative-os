@@ -1,6 +1,21 @@
 import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
 import { describe, it, expect } from 'vitest';
-import type { RequestContext } from '@hawa/contracts';
+import type { PackageFile, RequestContext } from '@hawa/contracts';
+import { createHash } from 'node:crypto';
+
+function deliverable(relativePath: string, storageKey: string, filename: string, mimeType: string, text: string): PackageFile {
+  const content = new TextEncoder().encode(text);
+  return {
+    artifactId: crypto.randomUUID(),
+    relativePath,
+    storageKey,
+    filename,
+    mimeType,
+    byteSize: content.length,
+    sha256: createHash('sha256').update(content).digest('hex'),
+    content,
+  };
+}
 import {
   TaskStateMachine,
   extractProtectedTokens,
@@ -399,25 +414,10 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       approvalId: approvalDecision.decisionId,
       publicationKey: `pub_key_${taskId}`,
       packageHash: 'sha256_package_archive_hash',
+      // Deliverables carry real bytes: the publisher checks each file's own hash and size.
       files: [
-        {
-          artifactId: crypto.randomUUID(),
-          relativePath: 'deliverables/post.png',
-          storageKey: `deliverables/${taskId}/post.png`,
-          filename: 'post.png',
-          mimeType: 'image/png',
-          byteSize: 204800,
-          sha256: 'sha256_post_png_hash',
-        },
-        {
-          artifactId: crypto.randomUUID(),
-          relativePath: 'source/post.hyc',
-          storageKey: `source/${taskId}/post.hyc`,
-          filename: 'post.hyc',
-          mimeType: 'application/octet-stream',
-          byteSize: 10240,
-          sha256: updatedDocRef.sourceSha256,
-        },
+        deliverable('deliverables/post.png', `deliverables/${taskId}/post.png`, 'post.png', 'image/png', `post.png for ${taskId}`),
+        deliverable('source/post.hyc', `source/${taskId}/post.hyc`, 'post.hyc', 'application/octet-stream', JSON.stringify(updatedDocRef)),
       ],
       destination: {
         sharedDriveId: 'drive_aster_hotel',

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
+import { createHash } from 'node:crypto';
 import { HumanApprovalManager } from '@hawa/integrations';
 import type { ApprovalActor } from '@hawa/domain';
 
@@ -12,8 +14,11 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
   const defaultClientId = '00000000-0000-4000-a000-000000000002';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
 
+  let exports: ReturnType<typeof memoryExportStore>;
+
   beforeEach(() => {
-    app = createApp();
+    exports = memoryExportStore();
+    app = createApp({ deliverableStore: exports.store });
     approvalManager = new HumanApprovalManager();
   });
 
@@ -393,9 +398,21 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
   });
 
   it('8. CORE ACCEPTANCE INVARIANT: B cannot ship using As approval; publication delivers stored A or blocks for B review; never exports live design (Acceptance Gate)', async () => {
-    const task = await createTestTask('Erbil Royal Hotel');
+    // A task for a client with a Drive destination (a task without a client is never delivered)
+    const createRes = await app.request('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Erbil Royal Hotel Grand Opening', clientId: 'c1000000-0000-4000-8000-000000000002' }),
+    });
+    const created = await createRes.json();
+    const task = { id: created.id || created.task?.id };
     const revA = 'rev_erbil_A';
     const revB = 'rev_erbil_B';
+    const bytesA = new TextEncoder().encode('export reviewed for revision A');
+    const bytesB = new TextEncoder().encode('export reviewed for revision B');
+    const exportA = exports.add(task.id, 'png', bytesA);
+    const exportB = exports.add(task.id, 'png', bytesB);
+    const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
     // Step 1: Submit Revision A
     await app.request(`/tasks/${task.id}/revisions`, {
@@ -417,6 +434,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',
+        pinnedExportIds: [exportA],
       }),
     });
     expect(approveARes.status).toBe(201);
@@ -483,6 +501,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     });
     expect(deliverStoredARes.status).toBe(200);
     const deliverStoredJson = await deliverStoredARes.json();
+    // The stored A delivery sends A's pinned export, byte for byte, never B's or a live re-export.
+    expect(deliverStoredJson.publicationReceipt.driveFiles.map((f: any) => f.expectedSha256)).toEqual([sha(bytesA)]);
     expect(deliverStoredJson.status).toBe('COMPLETE');
 
     // Step 7: Conduct proper review and approval of Revision B
@@ -495,6 +515,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',
+        pinnedExportIds: [exportB],
       }),
     });
     expect(approveBRes.status).toBe(201);
@@ -513,6 +534,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(publishBSuccessRes.status).toBe(200);
     const pubBSuccess = await publishBSuccessRes.json();
     expect(pubBSuccess.status).toBe('COMPLETE');
+    expect(pubBSuccess.publicationReceipt.driveFiles.map((f: any) => f.expectedSha256)).toEqual([sha(bytesB)]);
   });
 
   it('9. Maintains an immutable, cryptographically chained audit log (FR-069)', () => {

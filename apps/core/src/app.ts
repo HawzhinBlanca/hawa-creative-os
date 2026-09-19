@@ -36,6 +36,7 @@ import {
   resolveModel,
   resolveImageSettings,
   activeModelTier,
+  type PinnedExport,
 } from '@hawa/domain';
 import {
   createDb,
@@ -143,6 +144,13 @@ import { type DesignStudioServiceOptions, DesignStudioService } from './services
 import { studioStatusNote } from './services/design-studio/studio-status-note.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
+import {
+  canvaDeliverableStore,
+  EMPTY_DELIVERABLE_STORE,
+  loadPinnedDeliverables,
+  parsePinnedExportIds,
+  type DeliverableStore,
+} from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
 import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
@@ -230,6 +238,8 @@ export interface CreateAppOptions {
   publicationRepo?: PublicationRepository;
   telegramActionTokenService?: TelegramActionTokenService;
   telegramBridge?: TelegramBridgeDaemon;
+  /** Where approved exports are read from; defaults to the Canva export store when a database is connected. */
+  deliverableStore?: DeliverableStore;
 }
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
@@ -243,6 +253,8 @@ export function createApp(options?: CreateAppOptions) {
   const revisionRepo = db ? new RevisionRepository(db) : null;
   const canvaBindingRepo = db ? new CanvaBindingRepository(db) : null;
   const canvaConnectService = options?.canvaConnectService || (db ? new CanvaConnectService(db, options?.canvaOptions) : null);
+  const deliverableStore: DeliverableStore =
+    options?.deliverableStore || (canvaConnectService ? canvaDeliverableStore(canvaConnectService) : EMPTY_DELIVERABLE_STORE);
   const publicationRepo = options?.publicationRepo || (db ? new PublicationRepository(db) : null);
   const ingressPersistence = (db && ingressRepo && taskRepo)
     ? new PostgresIngressPersistenceAdapter(db, ingressRepo, taskRepo)
@@ -322,9 +334,12 @@ export function createApp(options?: CreateAppOptions) {
   const activeStudioType = 'canva';
   const studio: DesignStudioAdapter = canvaStudio;
   const isProduction = process.env.NODE_ENV === 'production';
+  // Only the test suite emulates Google. Development and staging deliver for real or fail with
+  // CREDENTIALS_MISSING; they used to report emulated uploads as verified.
+  const emulateGoogle = process.env.NODE_ENV === 'test';
   const publisher = new GooglePublisher({
-    emulateNetworkForTesting: !isProduction,
-    oauthToken: !isProduction ? 'test_local_token' : undefined,
+    emulateNetworkForTesting: emulateGoogle,
+    oauthToken: emulateGoogle ? 'test_local_token' : undefined,
   });
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
@@ -2267,6 +2282,55 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   // --- Reusable Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, ADR-0038) ---
+  /**
+   * The approval a delivery must honour: the task's current approval, from memory or, after a
+   * restart, from durable storage. Its pinned exports are what gets delivered.
+   */
+  async function findApprovalForDelivery(
+    tenantId: string,
+    taskId: string,
+    task: any,
+    revisionId?: string,
+    opts: { approvalId?: string; allowInvalidated?: boolean } = {}
+  ): Promise<{ approvalId: string; designRevisionId: string; pinnedExports?: PinnedExport[] } | null> {
+    // An approval invalidated by a later edit still names exactly what it approved, so it may be
+    // delivered, but only under the explicit deliver_approved_stored policy.
+    const recorded = [task?.latestApproval, ...[...(decisions.get(taskId) || [])].reverse()].filter(Boolean);
+    const match: any = recorded.find(
+      (a: any) =>
+        a.decisionId &&
+        a.decision === 'approved' &&
+        (!revisionId || a.designRevisionId === revisionId) &&
+        (!opts.approvalId || a.decisionId === opts.approvalId) &&
+        (opts.allowInvalidated || !a.invalidated)
+    );
+    if (match) {
+      return { approvalId: match.decisionId, designRevisionId: match.designRevisionId, pinnedExports: match.pinnedExports };
+    }
+    if (!db || !revisionId || !isValidUuid(taskId) || !isValidUuid(revisionId)) return null;
+    try {
+      const row: any = await withRlsContext(
+        db,
+        { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        async (trx) =>
+          await trx
+            .selectFrom('approvals' as any)
+            .selectAll()
+            .where('task_id', '=', taskId)
+            .where('design_revision_id', '=', revisionId)
+            .where('decision', '=', 'approved')
+            .$if(Boolean(opts.approvalId && isValidUuid(opts.approvalId)), (q: any) => q.where('id', '=', opts.approvalId))
+            .orderBy('created_at', 'desc')
+            .executeTakeFirst()
+      );
+      if (!row) return null;
+      return { approvalId: row.id, designRevisionId: row.design_revision_id, pinnedExports: row.decision_payload?.pinnedExports };
+    } catch (err) {
+      console.error('[core:publish:approval_lookup] DB lookup error:', err);
+      return null;
+    }
+  }
+
   async function executeOmnichannelPublish(
     taskId: string,
     actor: { type: string; id: string } = { type: 'workflow', id: 'publisher' },
@@ -2277,8 +2341,30 @@ export function createApp(options?: CreateAppOptions) {
     const task = tasks.get(taskId);
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
 
-    const client = clientDnas.get(task.clientId) || Array.from(clientDnas.values())[0];
+    // Only the task's own client DNA names a destination; another client's folder is never a fallback.
+    const client = clientDnas.get(task.clientId);
     const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
+
+    // Delivery sends exactly the exports the reviewer pinned when approving, checked before any
+    // state change, so a refused delivery leaves the task where it was.
+    const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
+    const approval = await findApprovalForDelivery(deliveryTenantId, taskId, task, options?.designRevisionId || task.latestRevisionId, {
+      approvalId: options?.approvalId,
+      allowInvalidated: options?.policy === 'deliver_approved_stored',
+    });
+    const deliverables = await loadPinnedDeliverables(
+      deliverableStore,
+      { tenantId: deliveryTenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
+      approval?.pinnedExports
+    );
+    if (!approval || !deliverables.ok) {
+      return {
+        ok: false,
+        status: 422,
+        code: deliverables.ok ? 'NO_PINNED_EXPORTS' : deliverables.code,
+        message: deliverables.ok ? 'Nothing to deliver: the task has no approval.' : deliverables.message,
+      };
+    }
 
     const isDeliverApprovedStored = options?.policy === 'deliver_approved_stored';
     const sm = new TaskStateMachine(taskId, isDeliverApprovedStored ? 'APPROVED' : task.status);
@@ -2337,37 +2423,9 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    const publicationKey = `pub_omni_${taskId}`;
-    const formats = ['feed', 'story', 'square', 'landscape'];
-    const files = formats.flatMap((fmt) => [
-      {
-        artifactId: crypto.randomUUID(),
-        relativePath: `deliverables/${fmt}/post.png`,
-        storageKey: `deliverables/${taskId}/${fmt}.png`,
-        filename: `${clientSlug}-${fmt}-retina.png`,
-        mimeType: 'image/png',
-        byteSize: 350000,
-        sha256: crypto.createHash('sha256').update(`${taskId}_${fmt}_png`).digest('hex'),
-      },
-      {
-        artifactId: crypto.randomUUID(),
-        relativePath: `deliverables/${fmt}/vector_master.svg`,
-        storageKey: `deliverables/${taskId}/${fmt}.svg`,
-        filename: `${clientSlug}-${fmt}-vector.svg`,
-        mimeType: 'image/svg+xml',
-        byteSize: 45000,
-        sha256: crypto.createHash('sha256').update(`${taskId}_${fmt}_svg`).digest('hex'),
-      },
-      {
-        artifactId: crypto.randomUUID(),
-        relativePath: `deliverables/${fmt}/editable_tree.hyc`,
-        storageKey: `deliverables/${taskId}/${fmt}.hyc`,
-        filename: `${clientSlug}-${fmt}.hyc`,
-        mimeType: 'application/json',
-        byteSize: 18000,
-        sha256: crypto.createHash('sha256').update(`${taskId}_${fmt}_hyc`).digest('hex'),
-      },
-    ]);
+    // One publication per approval: a new approval with other exports is a new delivery.
+    const publicationKey = `pub_omni_${taskId}_${approval.approvalId}`;
+    const files = deliverables.files;
 
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
@@ -2387,18 +2445,19 @@ export function createApp(options?: CreateAppOptions) {
         message: `Client '${task.clientId}' has no authorized Google Drive production destination folder configured in Client DNA. Refusing publication to unconfigured destination.`,
       };
     }
-    const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '1BXLlHxozjR4KRwEQ-hvNPgvlCtp-6_FQAL7EJ4GZ';
+    // No fallback sheet or Shared Drive: a client without one gets no Sheets row, reported as unsynced.
+    const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
 
     const publishResult = await publisher.publish(ctx, {
       taskId,
       clientId: task.clientId || defaultClientId,
-      designRevisionId: task.latestRevisionId || crypto.randomUUID(),
-      approvalId: task.latestApproval?.decisionId || options?.approvalId || crypto.randomUUID(),
+      designRevisionId: approval.designRevisionId,
+      approvalId: approval.approvalId,
       publicationKey,
-      packageHash: crypto.createHash('sha256').update(publicationKey).digest('hex'),
+      packageHash: deliverables.packageHash,
       files,
       destination: {
-        sharedDriveId: client?.destinations?.googleSharedDriveId || (client as any)?.productionDestinations?.googleSharedDriveId || '1XiMeNxKm3ofVSMr4pItZr4NDPltXUjYr',
+        sharedDriveId: client?.destinations?.googleSharedDriveId || (client as any)?.productionDestinations?.googleSharedDriveId || '',
         productionRootFolderId: targetFolderId,
         relativeFolderParts: ['Clients', client?.name || 'Hawa', new Date().getFullYear().toString()],
         spreadsheetId,
@@ -2448,22 +2507,28 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
+    // The recorded receipt holds only what Google confirmed: verified Drive files, and a Sheets row
+    // only when Sheets reported and read back the row. Anything else stays missing for the audit.
     const receipt = publishResult.value;
+    const verifiedFiles = receipt.driveFiles.filter((f) => f.verified);
     omnichannelReceipts.set(taskId, {
-      files: files.map((f) => ({
+      files: verifiedFiles.map((f) => ({
         taskId,
-        fileId: f.artifactId,
-        folderId: targetFolderId,
-        sha256: f.sha256,
-        byteSize: f.byteSize,
+        fileId: f.fileId,
+        folderId: f.folderId,
+        sha256: f.expectedSha256,
+        byteSize: f.observedSize,
       })),
-      sheetRow: {
-        taskId,
-        rowNumber: receipt.sheet.rowNumber || 101,
-        status: 'COMPLETE',
-        packageHash: publicationKey,
-        syncedAt: new Date().toISOString(),
-      },
+      sheetRow:
+        receipt.sheet.synced && receipt.sheet.rowNumber !== undefined
+          ? {
+              taskId,
+              rowNumber: receipt.sheet.rowNumber,
+              status: 'COMPLETE',
+              packageHash: receipt.sheet.expectedHash,
+              syncedAt: receipt.completedAt || new Date().toISOString(),
+            }
+          : undefined,
       receipt,
     });
 
@@ -2488,10 +2553,12 @@ export function createApp(options?: CreateAppOptions) {
       taskId,
       status: task.status,
       publicationReceipt: receipt,
-      vaultUri: `gdrive://hawa-vault/clients/${task.clientId || defaultClientId}/published/${taskId}_omnichannel_bundle.zip`,
       driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-      sheetRowUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${receipt.sheet.rowNumber || 101}`,
-      filesCount: files.length,
+      sheetRowUrl:
+        spreadsheetId && receipt.sheet.rowNumber !== undefined
+          ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${receipt.sheet.rowNumber}`
+          : null,
+      filesCount: verifiedFiles.length,
       publishedAt: new Date().toISOString(),
       notificationDelivered,
       notificationError,
@@ -4919,6 +4986,39 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 503, 'Publication Service Unavailable', 'Google Workspace credentials not configured; publication cannot proceed to external delivery');
     }
 
+    // Destination, approval and files are all settled before the task moves to PUBLISHING.
+    const targetClientId = task?.clientId || dbTask?.client_id || defaultClientId;
+    const client = clientDnas.get(targetClientId);
+    if (!client?.destinations?.productionFolderId) {
+      return problem(c, 422, 'No Delivery Destination', `Client '${targetClientId}' has no Google Drive production folder in its DNA, so nothing was delivered.`);
+    }
+    const destination = {
+      sharedDriveId: client.destinations.googleSharedDriveId || '',
+      productionRootFolderId: client.destinations.productionFolderId,
+      relativeFolderParts: ['Clients', client.code || client.name, new Date().getFullYear().toString()],
+      spreadsheetId: client.destinations.spreadsheetId || '',
+      sheetId: client.destinations.sheetId || 0,
+    };
+    const approval = await findApprovalForDelivery(auth.tenantId, taskId, task, targetRevisionId, {
+      approvalId: requestedApprovalId,
+      allowInvalidated: policy === 'deliver_approved_stored',
+    });
+    const clientSlug = String(client.name || 'client').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const deliverables = await loadPinnedDeliverables(
+      deliverableStore,
+      { tenantId: auth.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
+      approval?.pinnedExports
+    );
+    if (!approval || !deliverables.ok) {
+      return problem(
+        c,
+        422,
+        'Nothing Approved To Deliver',
+        deliverables.ok ? 'The task has no approval to deliver.' : deliverables.message
+      );
+    }
+    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
+
     const sm = new TaskStateMachine(taskId, policy === 'deliver_approved_stored' ? 'APPROVED' : (task ? task.status : 'APPROVED'));
     const trans = sm.transition('PUBLISHING', { type: 'user', id: auth.userId }, 'Publication triggered');
     if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
@@ -4959,64 +5059,17 @@ export function createApp(options?: CreateAppOptions) {
       idempotencyKey: `pub_${taskId}`,
     };
 
-    const targetClientId = task?.clientId || dbTask?.client_id || defaultClientId;
-    const client = clientDnas.get(targetClientId) || clientDnas.get(defaultClientId);
-    const destination = client?.destinations
-      ? {
-          sharedDriveId: client.destinations.googleSharedDriveId,
-          productionRootFolderId: client.destinations.productionFolderId,
-          relativeFolderParts: ['Clients', client.code || 'KAAE', '2026'],
-          spreadsheetId: client.destinations.spreadsheetId,
-          sheetId: client.destinations.sheetId,
-        }
-      : {
-          sharedDriveId: 'drive_office_main',
-          productionRootFolderId: 'folder_prod_root',
-          relativeFolderParts: ['Clients', 'Hawa', '2026'],
-          spreadsheetId: 'sheet_tracker_123',
-          sheetId: 0,
-        };
-
-    let designRevisionId = task?.latestRevisionId || dbTask?.current_design_revision_id;
-    let approvalId = crypto.randomUUID();
-    if (revisionRepo && db && designRevisionId) {
-      try {
-        const approval = await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => await trx
-            .selectFrom('approvals' as any)
-            .selectAll()
-            .where('design_revision_id', '=', designRevisionId)
-            .where('decision', '=', 'approved')
-            .executeTakeFirst()
-        );
-        if (approval) {
-          approvalId = (approval as any).id;
-        }
-      } catch (err: any) {
-        console.error('[core:publish:approval_lookup] DB lookup error:', err);
-      }
-    }
+    const designRevisionId = approval.designRevisionId;
+    const approvalId = approval.approvalId;
 
     const pubRes = await publisher.publish(ctx, {
       taskId,
       clientId: targetClientId,
-      designRevisionId: designRevisionId || crypto.randomUUID(),
+      designRevisionId,
       approvalId,
-      publicationKey: `pub_key_${taskId}`,
-      packageHash: 'sha256_pkg_hash',
-      files: [
-        {
-          artifactId: crypto.randomUUID(),
-          relativePath: 'deliverables/post.png',
-          storageKey: `deliverables/${taskId}.png`,
-          filename: 'post.png',
-          mimeType: 'image/png',
-          byteSize: 102400,
-          sha256: 'sha256_png_hash',
-        },
-      ],
+      publicationKey,
+      packageHash: deliverables.packageHash,
+      files: deliverables.files,
       destination,
       sheetRow: {
         taskId,
@@ -5042,9 +5095,9 @@ export function createApp(options?: CreateAppOptions) {
               taskId,
               designRevisionId,
               approvalId,
-              publicationKey: `pub_key_${taskId}`,
+              publicationKey,
               packageManifest: { files: pubRes.value.driveFiles },
-              packageSha256: pubRes.value.sheet.expectedHash || 'sha256_package_hash',
+              packageSha256: deliverables.packageHash,
               initialState: 'drive_complete',
             }, trx);
 
@@ -5052,7 +5105,7 @@ export function createApp(options?: CreateAppOptions) {
               await publicationRepo.recordDriveRef({
                 tenantId: auth.tenantId,
                 publicationId: pub.id,
-                sharedDriveId: destination.sharedDriveId || 'shared_drive_default',
+                sharedDriveId: destination.sharedDriveId,
                 folderId: file.folderId,
                 fileId: file.fileId,
                 fileName: file.name,
@@ -5092,7 +5145,7 @@ export function createApp(options?: CreateAppOptions) {
                 actorType: 'workflow',
                 actorId: 'publisher',
                 reason: 'Published to Drive & Sheet',
-                data: { publicationKey: `pub_key_${taskId}` },
+                data: { publicationKey },
               }, trx);
             }
           }
@@ -5119,7 +5172,7 @@ export function createApp(options?: CreateAppOptions) {
               actorType: 'workflow',
               actorId: 'publisher',
               reason: 'Published to Drive & Sheet',
-              data: { publicationKey: `pub_key_${taskId}` },
+              data: { publicationKey },
             }, trx);
           }
         );
@@ -5137,15 +5190,11 @@ export function createApp(options?: CreateAppOptions) {
 
     broadcast('task:published', { taskId, status: task ? task.status : 'COMPLETE' });
 
-    const clientId = task?.clientId || dbTask?.client_id || 'c1000000-0000-4000-8000-000000000002';
-    const vaultUri = `gdrive://hawa-vault/clients/${clientId}/published/${taskId}_bundle.zip`;
-
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
       workflowId: `wf_${taskId}`,
       publicationId: pubRes.value.publicationId,
-      vaultUri,
       receipt: pubRes.value,
       acceptedAt: new Date().toISOString(),
     }, 202);
@@ -5746,6 +5795,22 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 422, 'Unprocessable Entity', `Submitted QC report hash does not match stored QC run hash`);
     }
 
+    // The exports pinned here are what delivery will send, byte for byte (pinned-deliverables.ts).
+    let pinnedExports: PinnedExport[] | undefined;
+    if (isApproved) {
+      const pinned = parsePinnedExportIds(body.pinnedExportIds);
+      if (!pinned.ok) return problem(c, 422, 'Invalid Pinned Exports', pinned.message);
+      if (pinned.ids.length > 0) {
+        const found = await deliverableStore.find(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pinned.ids);
+        const byId = new Map(found.map((f) => [f.artifactId.toLowerCase(), f]));
+        const missing = pinned.ids.filter((id) => !byId.has(id));
+        if (missing.length > 0) {
+          return problem(c, 422, 'Export Not Found', `No retrieved export of this task has id ${missing.join(', ')}. Capture it before approving.`);
+        }
+        pinnedExports = pinned.ids.map((id) => byId.get(id)!);
+      }
+    }
+
     // Strictly server-derived actor identity
     const actorUserId = auth.userId || '00000000-0000-4000-b000-000000000001';
     const actorDisplayName = auth.displayName || (auth.role === 'administrator' ? 'Administrator' : auth.role === 'art_director' ? 'Art Director' : 'Primary Operator');
@@ -5771,6 +5836,7 @@ export function createApp(options?: CreateAppOptions) {
               sourceHash,
               qcReportHash,
               revisionRequest: body.revisionRequest,
+              ...(pinnedExports ? { pinnedExports } : {}),
             },
           }, trx)
         );
@@ -5801,6 +5867,7 @@ export function createApp(options?: CreateAppOptions) {
       },
       decidedAt: dbApproval?.created_at ? (dbApproval.created_at instanceof Date ? dbApproval.created_at.toISOString() : String(dbApproval.created_at)) : new Date().toISOString(),
       revisionRequest: body.revisionRequest,
+      ...(pinnedExports ? { pinnedExports } : {}),
     };
 
     if (!decisions.has(taskId)) decisions.set(taskId, []);
