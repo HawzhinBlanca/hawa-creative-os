@@ -24,6 +24,11 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
   // The publisher checks every file against its real SHA-256, so the requests carry the file's own hash.
   const testFileSha256 = createHash('sha256').update(fs.readFileSync(testFilePath)).digest('hex');
 
+  // The mock behaves like Google: it remembers what was uploaded and appended, and reads it back.
+  const uploadedFiles = new Map<string, { name: string; mimeType: string; size: string; sha256Checksum: string }>();
+  const purgedFiles = new Set<string>();
+  const sheetRows = new Map<number, string[]>();
+
   beforeAll(async () => {
     mockServer = http.createServer((req, res) => {
       const url = req.url || '';
@@ -38,7 +43,8 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
             contentType: req.headers['content-type'],
             bodyLength: body.length,
           });
-          const fileId = `real_gdrive_file_${Date.now()}_abc123`;
+          const fileId = `real_gdrive_file_${Date.now()}_${uploadedFiles.size}`;
+          uploadedFiles.set(fileId, { name: 'deliverable.png', mimeType: 'image/png', size: '12', sha256Checksum: testFileSha256 });
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             id: fileId,
@@ -55,14 +61,14 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         const match = url.match(/\/drive\/v3\/files\/([^?]+)/);
         const fileId = match ? match[1] : 'unknown';
         receivedDriveReadbacks.push(fileId);
+        const stored = uploadedFiles.get(fileId);
+        if (!stored || purgedFiles.has(fileId)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { code: 404, message: `File not found: ${fileId}` } }));
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          id: fileId,
-          name: 'deliverable.png',
-          mimeType: 'image/png',
-          size: '12',
-          webViewLink: `https://drive.google.com/file/d/${fileId}/view`,
-        }));
+        res.end(JSON.stringify({ id: fileId, ...stored, webViewLink: `https://drive.google.com/file/d/${fileId}/view` }));
         return;
       }
 
@@ -76,11 +82,13 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
             authHeader: req.headers.authorization,
             values: parsed.values,
           });
+          const rowNumber = 42 + sheetRows.size;
+          sheetRows.set(rowNumber, parsed.values[0]);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             spreadsheetId: 'sheet_prod_tracker',
             updates: {
-              updatedRange: 'Sheet1!A42:G42',
+              updatedRange: `Sheet1!A${rowNumber}:G${rowNumber}`,
               updatedRows: 1,
               updatedColumns: 7,
             },
@@ -89,24 +97,14 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         return;
       }
 
-      // 4. Google Sheets Independent Readback
-      if (req.method === 'GET' && url.includes('/values/A42:G42')) {
+      // 4. Google Sheets Independent Readback: the row that was appended there, if any
+      const rangeMatch = req.method === 'GET' ? url.match(/\/values\/A(\d+):G\1/) : null;
+      if (rangeMatch) {
         receivedSheetReadbacks.push(url);
+        const rowNumber = Number(rangeMatch[1]);
+        const row = sheetRows.get(rowNumber);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          range: 'Sheet1!A42:G42',
-          values: [
-            [
-              'task_real_qual_1',
-              'KAAE',
-              'folder_prod_root_2026',
-              '2026-09-09T10:00:00Z',
-              'COMPLETE',
-              'https://drive.google.com/file/d/real_gdrive_file/view',
-              'sha256_package_hash',
-            ],
-          ],
-        }));
+        res.end(JSON.stringify({ range: `Sheet1!A${rowNumber}:G${rowNumber}`, ...(row ? { values: [row] } : {}) }));
         return;
       }
 
@@ -351,10 +349,26 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     const recRes = await publisher.reconcile(dummyCtx, receipt.publicationId);
     expect(recRes.ok).toBe(true);
 
+    // Verify reads Drive and Sheets back: everything matches the receipt.
     const verifyRes = await publisher.verify(dummyCtx, receipt.publicationId);
     expect(verifyRes.ok).toBe(true);
     if (verifyRes.ok) {
-      expect(verifyRes.value.consistent).toBe(true);
+      expect(verifyRes.value).toEqual({ consistent: true, differences: [] });
+    }
+
+    // The row is edited in the sheet and the file is purged from Drive: verify reports both.
+    const fileId = receipt.driveFiles[0].fileId;
+    const row = sheetRows.get(receipt.sheet.rowNumber!)!;
+    row[4] = 'IN_PROGRESS';
+    purgedFiles.add(fileId);
+    const afterPurge = await publisher.verify(dummyCtx, receipt.publicationId);
+    expect(afterPurge.ok).toBe(true);
+    if (afterPurge.ok) {
+      expect(afterPurge.value.consistent).toBe(false);
+      expect(afterPurge.value.differences).toEqual([
+        { check: 'drive', fileId, detail: 'The file is no longer in Google Drive' },
+        { check: 'sheets', row: receipt.sheet.rowNumber, field: 'status', expected: 'COMPLETE', observed: 'IN_PROGRESS' },
+      ]);
     }
   });
 });
