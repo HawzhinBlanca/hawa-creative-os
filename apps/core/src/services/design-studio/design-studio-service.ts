@@ -1829,12 +1829,32 @@ export class DesignStudioService {
       throw new CanvaFlowError(404, 'CANVA_PNG_NOT_FOUND', 'Exported Canva PNG not found for task.');
     }
 
+    // Three of the five answers parity used to ask a vision model for are already known exactly.
+    // The PPTX export is parsed by checkCanvaPptx, which reads the slide XML: whether every copy
+    // string survived word for word, whether each text object kept the typeface it was sent in, and
+    // whether right-to-left runs stayed right-to-left. That check already gates delivery — the
+    // worker refuses on copyPass or fontPass (canva-draft-workflow.ts) — so parity was paying the
+    // top-tier model to squint at a picture and re-guess facts the pipeline had in hand, less
+    // reliably than the XML states them. They are now handed over as stated facts, leaving the
+    // model only the question the bytes cannot answer: did the arrangement survive the round trip.
+    const contentCheck = await this.tx(s, async (db) =>
+      (await sql<any>`SELECT content_check FROM hawa.canva_export_bytes
+        WHERE task_id = ${run.task_id}::uuid AND tenant_id = ${s.tenantId}::uuid
+          AND format = 'pptx' AND content_check IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0]?.content_check
+    );
+
     const budget = typeof run.budget === 'string' ? JSON.parse(run.budget) : (run.budget || { maxUsd: 5.0, maxCalls: 30, spentUsd: 0, calls: 0 });
     const stageCtx = this.createStageContext(s, run, 'parity', budget, async (cost) => {
       budget.spentUsd += cost;
       budget.calls += 1;
     });
-    const parityResult = await runParityStage(stageCtx, candidate.preview_png, canvaExportRow.content);
+    const parityResult = await runParityStage(
+      stageCtx,
+      candidate.preview_png,
+      canvaExportRow.content,
+      typeof contentCheck === 'string' ? JSON.parse(contentCheck) : contentCheck
+    );
 
     // Record judgment in append-only table
     await this.repo.insertJudgment({
