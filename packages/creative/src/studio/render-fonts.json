@@ -1,13 +1,35 @@
 {
-  "version": 2,
+  "version": 3,
+  "note": "The families the pipeline may put on a design, and the faces it has files for. Until 2026-09-20 this file was read by nothing: the admitted set lived in admittedFontFor (pipeline-v3.ts), in scaleNormalizedLayoutToV2 and in three prompt strings, which is how Amiri became the right-to-left display default without ever being listed here. Declaring a family here now adds it to the choices, and removing it takes it away. Admission is still earned: a family is offered for a script only when the real font file draws every character of scripts.<script>.requiredCharacters, and only where the weight being asked for has a file.",
+  "scripts": {
+    "latin": {
+      "requiredCharacters": "ABCDEFHIKLMNOPQRSTUWYabcdefghiklmnopqrstuvwxyz",
+      "source": "Every character in the Latin range of the client copy committed under packages/creative/test/fixtures/*.json, on 2026-09-20. packages/creative/test/font-registry.test.ts re-derives it from those files and fails when the two disagree, so a new client line with a new letter is a test failure rather than a silent .notdef."
+    },
+    "arabic": {
+      "requiredCharacters": "،ئابتجخدرزسشفقلمنهو٠٢٦پچڕکگڵۆیێە",
+      "source": "Every character in the Arabic range of the client copy committed under packages/creative/test/fixtures/*.json, on 2026-09-20: 32 characters, including the five Sorani letters ڕ ڵ ۆ ێ ە that Cairo has no glyph for. Derived rather than written out, for the same reason as the Latin set."
+    }
+  },
+  "aliases": {
+    "Lora": "Playfair Display",
+    "Cormorant Garamond": "Cinzel"
+  },
   "families": {
     "Verdana": {
       "name": "Verdana",
-      "role": "formalBody",
+      "script": "latin",
+      "roles": { "body": 1, "display": 3 },
+      "admitted": true,
       "fidelity": "exact",
       "license": "Microsoft-Core-TrueType / System",
       "licenseNote": "System-provided on host; non-redistributable container notice in DEVIATIONS.md. Canva export is canonical render.",
-      "script": "latin",
+      "files": {
+        "regular": "assets/fonts/Verdana.ttf",
+        "bold": "assets/fonts/Verdana Bold.ttf",
+        "italic": "assets/fonts/Verdana Italic.ttf",
+        "boldItalic": "assets/fonts/Verdana Bold Italic.ttf"
+      },
       "systemPaths": [
         "/System/Library/Fonts/Supplemental/Verdana.ttf",
         "/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
@@ -16,11 +38,12 @@
     },
     "Noto Sans Arabic": {
       "name": "Noto Sans Arabic",
-      "role": "formalBody",
+      "script": "arabic",
+      "roles": { "body": 1, "display": 2 },
+      "admitted": true,
       "fidelity": "exact",
       "license": "OFL-1.1",
       "licensePath": "assets/fonts/OFL-NotoSansArabic.txt",
-      "script": "arabic",
       "files": {
         "regular": "assets/fonts/NotoSansArabic-Regular.ttf",
         "bold": "assets/fonts/NotoSansArabic-Bold.ttf"
@@ -28,10 +51,11 @@
     },
     "Cinzel": {
       "name": "Cinzel",
-      "role": "display",
+      "script": "latin",
+      "roles": { "display": 1 },
+      "admitted": true,
       "fidelity": "exact",
       "license": "OFL-1.1",
-      "script": "latin",
       "files": {
         "semiBold": "assets/fonts/Cinzel-SemiBold.ttf",
         "bold": "assets/fonts/Cinzel-Bold.ttf"
@@ -39,31 +63,63 @@
     },
     "Playfair Display": {
       "name": "Playfair Display",
-      "role": "display",
+      "script": "latin",
+      "roles": { "display": 2 },
+      "admitted": true,
       "fidelity": "exact",
       "license": "OFL-1.1",
-      "script": "latin",
       "files": {
         "bold": "assets/fonts/PlayfairDisplay-Bold.ttf",
         "italic": "assets/fonts/PlayfairDisplay-Italic.ttf"
       }
     },
-    "Cairo": {
-      "name": "Cairo",
-      "role": "display",
+    "Amiri": {
+      "name": "Amiri",
+      "script": "arabic",
+      "roles": { "display": 1 },
+      "admitted": true,
       "fidelity": "exact",
       "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-Amiri.txt",
+      "licenseNote": "Bold added 2026-09-20. Until then this family had a Regular file only, so a bold Kurdish title was drawn by the renderer's synthetic emboldening in the preview while Canva set the real Bold — the two never matched. Amiri-Bold.ttf declares family 'Amiri', subfamily 'Bold', usWeightClass 700 (fontkit), draws all 32 characters of the client's Sorani copy, and probes 'exact' inside the core image against both a Latin and a Sorani probe string.",
+      "files": {
+        "regular": "assets/fonts/Amiri-Regular.ttf",
+        "bold": "assets/fonts/Amiri-Bold.ttf"
+      }
+    },
+    "IBM Plex Sans Arabic": {
+      "name": "IBM Plex Sans Arabic",
       "script": "arabic",
+      "roles": { "display": 5, "body": 2 },
+      "admitted": true,
+      "fidelity": "exact",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-IBMPlexSansArabic.txt",
+      "licenseNote": "Added 2026-09-20 to give Kurdish display copy a modern sans alongside Amiri's naskh, so a design can choose a voice rather than always getting the same one. Both files declare 'IBM Plex Sans Arabic' with subfamilies Regular (400) and Bold (700) (fontkit), cover all 32 characters of the client's Sorani copy including ڕ ڵ ۆ ێ ە, and probe 'exact' inside the core image on both a Latin and a Sorani probe string. Ranked below the incumbents deliberately: it is offered as a choice the design can make, and does not displace the face an unchosen block already falls back to.",
+      "files": {
+        "regular": "assets/fonts/IBMPlexSansArabic-Regular.ttf",
+        "bold": "assets/fonts/IBMPlexSansArabic-Bold.ttf"
+      }
+    },
+    "Cairo": {
+      "name": "Cairo",
+      "script": "arabic",
+      "roles": { "display": 3 },
+      "admitted": true,
+      "fidelity": "exact",
+      "license": "OFL-1.1",
       "files": {
         "regular": "assets/fonts/Cairo-Regular.ttf"
       }
     },
     "Plus Jakarta Sans": {
       "name": "Plus Jakarta Sans",
-      "role": "display",
+      "script": "latin",
+      "roles": { "display": 4 },
+      "admitted": false,
+      "admittedNote": "Bundled but never offered by the pipeline, and this change does not add Latin faces. Its regular file also carries the family name 'Plus Jakarta Sans Medium' (fontkit, 2026-09-20), so a renderer asked for 'Plus Jakarta Sans' regular would not resolve it.",
       "fidelity": "exact",
       "license": "OFL-1.1",
-      "script": "latin",
       "files": {
         "regular": "assets/fonts/PlusJakartaSans-Regular.ttf",
         "bold": "assets/fonts/PlusJakartaSans-Bold.ttf"
@@ -71,12 +127,16 @@
     },
     "Vazirmatn": {
       "name": "Vazirmatn",
-      "role": "display",
-      "fidelity": "exact",
-      "license": "OFL-1.1",
       "script": "arabic",
+      "roles": { "display": 4 },
+      "admitted": false,
+      "admittedNote": "Its files draw all 32 characters of the client's Sorani copy, so coverage would admit it, but it does not render. Re-measured inside the core image on 2026-09-20 with the fonts mounted and fc-cache run, against both a Latin and a Sorani probe string: both rasterise byte-identical to the ZZHawaNoSuchFamilyZZ sentinel, i.e. fontconfig falls through to the default face and never reaches this family. That is not a probe artefact — the Sorani probe distinguishes the Latin families correctly, and the files themselves are sound (static, not variable; 1333 glyphs; 'Vazirmatn' Regular 400 / Bold 700 per fontkit). Cause not yet found. Offering it would put a substituted typeface in the preview that the critique and the judge score, so it stays out until it renders.",
+      "fidelity": "stand-in",
+      "license": "OFL-1.1",
+      "licensePath": "assets/fonts/OFL-Vazirmatn.txt",
       "files": {
-        "regular": "assets/fonts/Vazirmatn-Regular.ttf"
+        "regular": "assets/fonts/Vazirmatn-Regular.ttf",
+        "bold": "assets/fonts/Vazirmatn-Bold.ttf"
       }
     }
   }

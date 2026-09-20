@@ -5,7 +5,14 @@ import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
-import { fontCoversText, measureWrappedLines, pickFontCovering } from './render-layout-v2.js';
+import {
+  admittedFontFace,
+  admittedFontFaces,
+  fontCoversText,
+  measureWrappedLines,
+  pickFontCovering,
+  type FontScript,
+} from './render-layout-v2.js';
 import { evaluateDesignMetrics, checkCandidateSetDegeneracy, type CandidateSetDegeneracyResult } from './design-metrics.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
 import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
@@ -308,29 +315,15 @@ export function scaleNormalizedLayoutToV2(
     const fontSizePx = Math.max(minSize, rawFontSize);
     const clampedLineHeight = Math.max(1.15, Math.min(1.85, Number(t.lineHeight.toFixed(2))));
 
-    // Typography invariant enforcement
-    let resolvedFont: string = t.fontFamily;
-    if (t.rtl) {
-      if (t.role === 'body' || t.role === 'footer') {
-        resolvedFont = 'Noto Sans Arabic';
-      } else if (resolvedFont !== 'Amiri' && resolvedFont !== 'Cairo') {
-        // Amiri, not Cairo, is the display default for right-to-left copy: Cairo cannot draw the
-        // Sorani letters ڕ ڵ ۆ ێ ە, and ە is among the most common characters in Kurdish.
-        resolvedFont = 'Amiri';
-      }
-    } else {
-      if (t.role === 'body' || t.role === 'footer') {
-        resolvedFont = 'Verdana';
-      } else {
-        if (resolvedFont === 'Lora') {
-          resolvedFont = 'Playfair Display';
-        } else if (resolvedFont === 'Cormorant Garamond' || resolvedFont === 'Amiri' || resolvedFont === 'Noto Sans Arabic' || !resolvedFont) {
-          resolvedFont = 'Cinzel';
-        } else if (resolvedFont !== 'Cinzel' && resolvedFont !== 'Playfair Display') {
-          resolvedFont = 'Cinzel';
-        }
-      }
-    }
+    // Typography invariant enforcement. This used to be a second, hand-written copy of the admitted
+    // set, and it disagreed with `admittedFontFor`: it kept Cairo on a right-to-left display block
+    // and sent a Latin Verdana title to Cinzel. Both now ask render-fonts.json the same question, so
+    // a family is added or removed in one place.
+    const resolvedFont: string = admittedFontFace(t.fontFamily, {
+      script: t.rtl ? 'arabic' : 'latin',
+      role: t.role === 'body' || t.role === 'footer' ? 'body' : 'display',
+      bold: t.bold,
+    });
 
     // WCAG 2.1 AA Contrast Enforcement:
     // Determine underlying surface color (panel behind text or canvas background)
@@ -590,10 +583,6 @@ const MEASURE_CONSENSUS_MIN = 3;
  * shape of defect this corrects. Distance thresholds cannot separate the two cases, because the
  * drifted footer and the deliberate insets deviate by the same 27-38px.
  */
-/** Fallback order per script, most preferred first. Every entry is an admitted family. */
-const RTL_FONT_PREFERENCES = ['Amiri', 'Cairo', 'Noto Sans Arabic'];
-const LATIN_FONT_PREFERENCES = ['Cinzel', 'Playfair Display', 'Verdana'];
-
 /**
  * Replaces any font that cannot draw the copy assigned to it with one that can.
  *
@@ -631,7 +620,15 @@ export function correctFontsThatCannotDrawTheCopy(
     const opts = { bold: t.bold, italic: t.italic };
     if (fontCoversText(t.fontFamily, ownScript, opts).covers) continue;
 
-    const preferences = t.rtl ? RTL_FONT_PREFERENCES : LATIN_FONT_PREFERENCES;
+    // The fallback order used to be two arrays here, and Cairo sat second in the right-to-left one
+    // while being the family this function exists to replace. It is the admitted set for the
+    // block's own script and role now, so a family leaves the fallbacks when it leaves
+    // render-fonts.json.
+    const preferences = admittedFontFaces({
+      script: t.rtl ? 'arabic' : 'latin',
+      role: t.role === 'body' || t.role === 'footer' ? 'body' : 'display',
+      bold: t.bold,
+    }).map((face) => face.name);
     const ordered = [t.fontFamily, ...preferences.filter((f) => f !== t.fontFamily)];
     const replacement = pickFontCovering(ordered, ownScript, opts);
     if (replacement !== t.fontFamily) {
@@ -829,6 +826,25 @@ export function findAsymmetricSeparators(
 }
 
 /**
+ * Every family a candidate may name, across both scripts and both roles, in a stable order.
+ *
+ * Read through a getter on the schema below rather than computed here, so importing this module
+ * still costs nothing: admission opens the real font files, and a consumer that never generates a
+ * layout should not fail to import because a font file is missing.
+ */
+function schemaFontFamilies(): string[] {
+  const names: string[] = [];
+  for (const script of ['latin', 'arabic'] as const) {
+    for (const role of ['display', 'body'] as const) {
+      for (const face of admittedFontFaces({ script, role })) {
+        if (!names.includes(face.name)) names.push(face.name);
+      }
+    }
+  }
+  return names;
+}
+
+/**
  * Strict JSON Schema without $defs for OpenAI Structured Outputs.
  */
 export const LAYOUT_V3_JSON_SCHEMA = {
@@ -987,16 +1003,14 @@ export const LAYOUT_V3_JSON_SCHEMA = {
                 letterSpacing: { type: ['number', 'null'] },
                 fontFamily: {
                   type: 'string',
-                  enum: [
-                    'Cinzel',
-                    'Lora',
-                    'Cairo',
-                    'Playfair Display',
-                    'Cormorant Garamond',
-                    'Amiri',
-                    'Verdana',
-                    'Noto Sans Arabic',
-                  ],
+                  // The schema offered Cairo, Lora and Cormorant Garamond, none of which could
+                  // reach a design: Cairo was replaced for the Sorani letters it lacks, the other
+                  // two were mapped onto Playfair Display and Cinzel. The enum is the admitted set
+                  // now, so the model cannot spend a choice on a family it will not get. A getter,
+                  // because this object is built at import time and admission reads font files.
+                  get enum() {
+                    return schemaFontFamilies();
+                  },
                 },
                 color: { type: 'string' },
                 align: { type: 'string', enum: ['left', 'center', 'right'] },
@@ -1077,7 +1091,24 @@ export interface GenerateLayoutCandidatesResult {
 }
 
 /**
+ * The faces the prompt may offer, as a quoted list, read from the same registry that enforces them.
+ *
+ * The prompt used to name its own set: "Cairo", "Amiri" for every Kurdish display block, while the
+ * pipeline replaced Cairo because its file has no glyph for ڕ ڵ ۆ ێ ە. Asking the model to choose
+ * between two families when only one could reach a design is how every Kurdish design ended up in
+ * the same typeface. What is listed here is what a candidate can actually be drawn in.
+ */
+function admittedFaceList(script: FontScript, role: 'display' | 'body', bold?: boolean): string {
+  return admittedFontFaces({ script, role, bold })
+    .map((face) => `"${face.name}"`)
+    .join(', ');
+}
+
+/**
  * Builds the byte-stable system prompt (> 1024 tokens for OpenAI prefix caching).
+ *
+ * Byte-stable for a given render-fonts.json: the font lists are read from it, so adding a family
+ * changes the cached prefix once, deliberately, rather than the prompt drifting from the pipeline.
  */
 export function buildLayoutV3SystemPrompt(): string {
   return `You are the Senior Typographer and Creative Director for KAAE (Kurdistan Accrediting Agency for Education).
@@ -1103,14 +1134,21 @@ You operate under strict mathematical, spatial, and typographic design rules est
 ================================================================================
 2. F12 TYPOGRAPHY & ROLE POLICY (NORMATIVE)
 ================================================================================
-Strict font family adherence is required. You may ONLY use the following admitted families:
+Strict font family adherence is required. You may ONLY use the following admitted families. Every
+one of them has a font file here and draws every letter of the script it is listed under, which is
+why the list is short; a family that is absent is one the renderer cannot set this client's copy in.
 - Body & Footer Roles (role: "body", "footer"):
-  * For Latin text: MUST use "Verdana".
-  * For Kurdish / Arabic text: MUST use "Noto Sans Arabic".
+  * For Latin text: MUST use ${admittedFaceList('latin', 'body')}.
+  * For Kurdish / Arabic text: MUST use ${admittedFaceList('arabic', 'body')}.
   * NEVER use display fonts for body or footer copy.
 - Display & Headline Roles (role: "title", "subtitle", "eyebrow", "cta"):
-  * For Latin text: "Cinzel", "Lora", "Playfair Display", "Cormorant Garamond".
-  * For Kurdish / Arabic text: "Cairo", "Amiri".
+  * For Latin text: ${admittedFaceList('latin', 'display')}.
+  * For Kurdish / Arabic text: ${admittedFaceList('arabic', 'display')}.
+  * Choose deliberately, and let candidates for the same brief differ in face where the brief allows
+    it. The first family listed for a script is the default, not the only answer.
+- BOLD: set bold: true only on a family that has a bold file — ${admittedFaceList('latin', 'display', true)} for
+  Latin, ${admittedFaceList('arabic', 'display', true)} for Kurdish / Arabic. Asking for bold on any other family
+  is dropped, because the renderer would draw it regular while Canva set a real bold.
 - NEVER use unadmitted fonts (such as Arimo, Arial, Times New Roman, Roboto, or generic sans-serif).
 - Type-Scale: Each layout declares its base font size in pixels (e.g., 14 to 18) and typographic ratio (e.g., 1.25 Major Third, 1.333 Perfect Fourth, 1.414 Augmented Fourth, or 1.5 Perfect Fifth).
   All font sizes must adhere to the declared modular scale.
@@ -1155,7 +1193,7 @@ When generating layouts for Kurdish or Arabic copy:
 - Set letterSpacing to 0 on every Arabic/Kurdish element. Arabic script joins cursively, so any
   tracking separates joined letters and reads as broken text to a native reader.
 - Alignment must be "right" or "center" (NEVER left-aligned for Arabic script).
-- Font family must be "Cairo" or "Amiri" for titles, and "Noto Sans Arabic" for body and footer.
+- Font family must be one of ${admittedFaceList('arabic', 'display')} for display roles, and ${admittedFaceList('arabic', 'body')} for body and footer.
 
 ================================================================================
 5. ART LAYER & CALM REGION SPECIFICATION
@@ -1264,7 +1302,7 @@ Ensure wide architectural diversity: vary alignment axes (centered vs asymmetric
 CRITICAL CONSTRAINTS:
 1. No two candidates may have identical or near-identical geometry (geometric distance > 15px).
 2. NO side-by-side bilateral symmetric twin cards.
-3. Use ONLY admitted fonts: Verdana (Latin) or Noto Sans Arabic (Sorani) for body/footer; Cinzel or Playfair Display for Latin titles; Amiri for Sorani titles (Cairo cannot draw the Sorani letters ڕ ڵ ۆ ێ ە).
+3. Use ONLY admitted fonts: ${admittedFaceList('latin', 'body')} (Latin) or ${admittedFaceList('arabic', 'body')} (Sorani) for body/footer; ${admittedFaceList('latin', 'display')} for Latin display roles; ${admittedFaceList('arabic', 'display')} for Sorani display roles. Vary the display face between candidates where the brief allows it.
 4. All coordinates strictly in [0.0, 1.0].
 5. Declare typeScale (base and ratio) for each candidate.
 6. Declare calmRegion if an art layer is requested.

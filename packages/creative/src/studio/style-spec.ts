@@ -1,7 +1,7 @@
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import { measureWrappedLines } from './render-layout-v2.js';
-import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-contrast.js';
-import { logoClearZone } from './house-rules.js';
+import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
+import { logoClearZone, requiredContrast } from './house-rules.js';
 import type { OrnamentSettings } from './pipeline-v3.js';
 
 /**
@@ -21,6 +21,12 @@ export interface StyleSpec {
   typeface: 'as_generated' | 'serif' | 'sans';
   /** Reading-direction relative: 'start' is left for English and right for Kurdish. */
   alignment: 'as_generated' | 'start' | 'center' | 'end';
+  /**
+   * The colour of the title as a whole: 'light' for a white or cream title, 'gold', 'dark'. Read
+   * off the reference image, because the title's colour is a decision of the design and not a
+   * standing rule. See `applyStyleSpec` for the incident behind it.
+   */
+  titleColor: 'as_generated' | 'light' | 'gold' | 'dark';
   /** The title's last line (after its last line break) set in the brand gold. */
   accentLastTitleLine: boolean;
   cta: 'as_generated' | 'plain' | 'gold_button';
@@ -38,6 +44,7 @@ export const NEUTRAL_STYLE_SPEC: StyleSpec = {
   titleWeight: 'as_generated',
   typeface: 'as_generated',
   alignment: 'as_generated',
+  titleColor: 'as_generated',
   accentLastTitleLine: false,
   cta: 'as_generated',
   logoCorner: 'as_generated',
@@ -69,6 +76,12 @@ export const STYLE_SPEC_SCHEMA = {
       enum: ['as_generated', 'start', 'center', 'end'],
       description:
         "Read it off the reference's lines of text: a ragged right edge with every line starting at the left margin is 'start' (mirrored for Kurdish); lines centred on the canvas are 'center'. Take it from the instructions only when they name an alignment.",
+    },
+    titleColor: {
+      type: 'string',
+      enum: ['as_generated', 'light', 'gold', 'dark'],
+      description:
+        "The colour of the title as a whole in the reference: 'light' for a white or cream title, 'gold' when the whole title is gold, 'dark' for a dark title on a light ground. A gold line inside an otherwise light title is 'light' plus accentLastTitleLine, not 'gold'.",
     },
     accentLastTitleLine: {
       type: 'boolean',
@@ -104,7 +117,7 @@ export const STYLE_SPEC_SCHEMA = {
       description: "'spread' when the title sits high, the call to action on the bottom margin and the rest between; 'centered' for one centred stack.",
     },
   },
-  required: ['titleScale', 'titleWeight', 'typeface', 'alignment', 'accentLastTitleLine', 'cta', 'logoCorner', 'texture', 'dividers', 'panels', 'composition'],
+  required: ['titleScale', 'titleWeight', 'typeface', 'alignment', 'titleColor', 'accentLastTitleLine', 'cta', 'logoCorner', 'texture', 'dividers', 'panels', 'composition'],
   additionalProperties: false,
 } as const;
 
@@ -233,6 +246,32 @@ export function applyStyleSpec(
     }
   }
 
+  // The title's colour is a decision of the design, not a standing rule. The client's brand DNA
+  // read "Title and dates must be Kurdistan Sun Gold (#F7B500)"; those rules only began reaching the
+  // brief on 2026-09-20 (the asset path fix, 125ea66), and the two designs delivered that morning
+  // (Canva DAHVuK0Oclo and DAHVuLZG8gM) came back with the entire title gold, while the owner's own
+  // reference image shows a white title with only its last line ("EDITION 2.0") in gold. The
+  // reference has to beat the rule, so the colour is read off the image and enforced here.
+  //
+  // Placed after titleScale and titleWeight, because the contrast a block needs depends on the size
+  // and weight it ends up with.
+  // The key is read defensively because specs stored before it existed (the gate's reference
+  // fixtures, replayed runs) carry no titleColor at all, and those must behave as 'as_generated'.
+  if (title && spec.titleColor && spec.titleColor !== 'as_generated') {
+    const light = palette.length ? nearest('#FFFFFF', palette) : '#FFFFFF';
+    const want = spec.titleColor === 'gold' ? gold : spec.titleColor === 'dark' ? darkest : light;
+    // Never below the contrast the house rules ask against the surface the layout declares behind
+    // the title: 'dark' over the navy background this client asks for is 1.0:1. A choice that
+    // cannot be read is left as the generator drew it, and conformToHouseRules then repairs it from
+    // the palette, which is the same path an unreadable generated colour already takes.
+    const surface = declaredBackgroundColour(layout, title);
+    const ratio = calculateLuminanceContrastRatio(hexToLuminance(want), hexToLuminance(surface));
+    if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) title.color = want;
+  }
+
+  // The gold accent line sits on top of that colour, which is the owner's own treatment: a light
+  // title whose edition line alone is gold. The renderer and the deck draw the last paragraph in
+  // accentColor and the rest in title.color, so the two decisions compose.
   if (title && spec.accentLastTitleLine && (copy.text[title.copyIndex] || '').trim().includes('\n')) {
     title.accentColor = gold;
   }
@@ -415,4 +454,17 @@ export const MOVEMENT_DECISIONS = ['logoCorner', 'titleScale', 'composition', 'c
 /** The same spec with one decision left to the generator. */
 export function withoutDecision(spec: StyleSpec, key: (typeof MOVEMENT_DECISIONS)[number]): StyleSpec {
   return { ...spec, [key]: 'as_generated' };
+}
+
+/**
+ * The spec's colour decisions alone. `titleColor` and `accentLastTitleLine` only recolour text:
+ * they move and resize nothing, so they cannot add one of the defects the relaxation ladder counts
+ * (overlaps, reading order, copy that no longer fits, the safe area, the logo's clear space), which
+ * is why they are not in MOVEMENT_DECISIONS. Giving them up would buy the ladder nothing. It would
+ * also cost something: a design cramped enough to lose every movement decision would then deliver
+ * the gold title the client's old rule produced, which is what the owner corrected on 2026-09-20.
+ * So they are kept even on the arrangement the generator drew.
+ */
+export function colourDecisionsOnly(spec: StyleSpec): StyleSpec {
+  return { ...NEUTRAL_STYLE_SPEC, titleColor: spec.titleColor, accentLastTitleLine: spec.accentLastTitleLine };
 }

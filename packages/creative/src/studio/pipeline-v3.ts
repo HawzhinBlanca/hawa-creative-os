@@ -1,7 +1,7 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
-import { renderLayoutV2, measureWrappedLines } from './render-layout-v2.js';
+import { renderLayoutV2, measureWrappedLines, admittedFontFace, findAdmittedFontFace } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
@@ -20,7 +20,7 @@ import type { ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
-import { applyStyleSpec, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
+import { applyStyleSpec, colourDecisionsOnly, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -70,20 +70,31 @@ function scriptOf(copy: PipelineV3Copy, copyIndex: number): CopyScriptV3 {
 }
 
 /**
- * Maps a family the model chose onto the admitted set, by the role and script of its block.
+ * Maps a family the model chose onto the admitted set, by the role, script and weight of its block.
  * Body and footer copy use the formal body faces; display copy keeps an admitted display face.
- * Amiri, not Cairo, is the right-to-left default: Cairo cannot draw the Sorani letters ڕ ڵ ۆ ێ ە.
+ *
+ * The set used to be written out here: Cairo, Amiri or Noto Sans Arabic for a right-to-left display
+ * block, Cinzel, Playfair Display or Verdana for a Latin one. It now comes from render-fonts.json
+ * and is measured against the real font files, so adding or removing a family is a change to that
+ * file. The Latin answers are the same ones. The Sorani answer for Cairo is not: it is refused
+ * outright rather than kept and corrected later, because its file has no glyph for ڕ ڵ ۆ ێ ە.
+ *
+ * The weight only decides the fallback. A family the design asked for and that is admitted keeps
+ * the block even when it has no file for that weight, so a style spec's serif stays a serif;
+ * `sanitizeFontsV3` then drops the weight rather than the typeface.
  */
-export function admittedFontFor(font: string, script: CopyScriptV3, role?: string): string {
-  if (role === 'body' || role === 'footer') {
-    return script === 'arabic' ? 'Noto Sans Arabic' : 'Verdana';
-  }
-  if (script === 'arabic') {
-    return font === 'Cairo' || font === 'Amiri' || font === 'Noto Sans Arabic' ? font : 'Amiri';
-  }
-  if (font === 'Cinzel' || font === 'Playfair Display' || font === 'Verdana') return font;
-  if (font === 'Lora') return 'Playfair Display';
-  return 'Cinzel';
+export function admittedFontFor(
+  font: string,
+  script: CopyScriptV3,
+  role?: string,
+  options: { bold?: boolean; registryPath?: string } = {}
+): string {
+  return admittedFontFace(font, {
+    script,
+    role: role === 'body' || role === 'footer' ? 'body' : 'display',
+    bold: options.bold,
+    registryPath: options.registryPath,
+  });
 }
 
 /**
@@ -94,14 +105,31 @@ export function admittedFontFor(font: string, script: CopyScriptV3, role?: strin
  * on English blocks and its Sorani face on Sorani ones. Direction is decided here too, from the
  * copy: a Sorani block the model left unmarked would otherwise render left-to-right, and the
  * coverage check — which reads a block's script from its direction — would skip it entirely.
+ *
+ * This is still the single enforcement point, and it is where the block's weight is made honest.
+ * A design may now choose among the admitted faces for its script, and a chosen face is kept even
+ * when it has no file for the weight asked for: what goes instead is the weight. The renderer
+ * already drew those blocks regular, because `fontFaceSupports` gates the axis it emits, while the
+ * deck set a real bold in Canva — so the preview the judge scored and the design the client opened
+ * were set in different weights. The weight is dropped last, after the coverage swap, because that
+ * swap can change which family the block ends up in.
  */
 export function sanitizeFontsV3(layout: StudioLayoutV2, copy: PipelineV3Copy): StudioLayoutV2 {
+  const roleOf = (t: { role?: string }) => (t.role === 'body' || t.role === 'footer' ? 'body' : 'display');
   for (const t of layout.text) {
     const script = scriptOf(copy, t.copyIndex);
     t.rtl = script === 'arabic';
-    t.fontFamily = admittedFontFor(t.fontFamily, script, t.role) as any;
+    t.fontFamily = admittedFontFor(t.fontFamily, script, t.role, { bold: t.bold }) as any;
   }
   correctFontsThatCannotDrawTheCopy(layout, copy.text);
+  for (const t of layout.text) {
+    if (!t.bold) continue;
+    const face = findAdmittedFontFace(t.fontFamily, {
+      script: scriptOf(copy, t.copyIndex),
+      role: roleOf(t),
+    });
+    if (face && !face.hasBold) t.bold = false;
+  }
   return layout;
 }
 
@@ -883,7 +911,10 @@ function conformToStyleSpec(
   const source = JSON.stringify(layout);
   const prepare = (step: StyleSpec) =>
     conformToHouseRules(applyStyleSpec(JSON.parse(source) as StudioLayoutV2, copy, step, palette || []), copy, palette);
-  const plain = conformToHouseRules(JSON.parse(source) as StudioLayoutV2, copy, palette);
+  // The fallback keeps the spec's colour decisions: they recolour text and move nothing, so the
+  // defect floor is the same with them as without, and the title colour the client's reference asks
+  // for survives even on a design that can hold none of the arrangement. See `colourDecisionsOnly`.
+  const plain = prepare(colourDecisionsOnly(spec));
   const floor = layoutDefectCount(plain, copy);
 
   let spec_ = spec;
