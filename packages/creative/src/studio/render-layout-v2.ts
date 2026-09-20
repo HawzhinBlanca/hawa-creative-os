@@ -60,7 +60,17 @@ export interface RenderLayoutV2Result {
 const fontCache = new Map<string, any>();
 
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
-export const ARABIC_SCRIPT_FAMILIES = new Set(['Noto Sans Arabic', 'Cairo', 'Amiri', 'Vazirmatn']);
+export const ARABIC_SCRIPT_FAMILIES = new Set([
+  'Noto Sans Arabic',
+  'Cairo',
+  'Amiri',
+  'Vazirmatn',
+  // Admitted 2026-09-20. Arabic script joins cursively in every family that draws it, so this list
+  // has to grow with render-fonts.json or a new Sorani face silently gets Latin letter-spacing
+  // applied to joined letters. It should be derived from the registry's script field rather than
+  // written out; until it is, adding a family here is part of admitting one.
+  'IBM Plex Sans Arabic',
+]);
 
 /**
  * The tracking this renderer actually draws a block with, in em — the single definition of the
@@ -202,6 +212,10 @@ export const ADMITTED_FONT_FAMILIES = [
   'Plus Jakarta Sans',
   'Vazirmatn',
   'Inter',
+  // Admitted 2026-09-20. getFontFidelityManifest probes only what this list names, so a family
+  // missing from it is never measured for substitution — the exact blindness that let Vazirmatn
+  // sit in the registry for days while the renderer drew something else for it.
+  'IBM Plex Sans Arabic',
 ] as const;
 
 /** A family name no font can carry, used as the substitution sentinel. */
@@ -313,6 +327,25 @@ export function fontFaceSupports(
   const familyLower = (fontFamily || '').toLowerCase();
   const has = (file: string) => fs.existsSync(path.join(dir, file));
 
+  // Answer from the registry where it declares the family with a real regular face, for the reason
+  // in registryFontFile: the substring chain below matches 'IBM Plex Sans Arabic' on 'arabic' and
+  // would report Noto's weights for it.
+  //
+  // Deliberately limited to families that declare a `regular`. Playfair Display and Cinzel declare
+  // none — every render of them opens a Bold or SemiBold file whatever weight is asked for — and
+  // the chain below encodes that. Answering those from the registry would quietly change which
+  // weight the preview draws, which is a separate defect with its own decision to make (the deck
+  // sends `bold: t.bold`, so a non-bold Playfair title is drawn bold here and set regular in
+  // Canva). Fixing the Plex mis-mapping must not drag that along with it.
+  const declared = registryFontFile(fontFamily, false, false, fontsDir);
+  const declaredIsRegular = declared && /-Regular\.[to]tf$/i.test(declared);
+  if (declaredIsRegular) {
+    return {
+      bold: !!bold && !!registryFontFile(fontFamily, true, false, fontsDir)?.match(/-Bold\.[to]tf$/i),
+      italic: !!italic && !!registryFontFile(fontFamily, false, true, fontsDir)?.match(/Italic\.[to]tf$/i),
+    };
+  }
+
   if (familyLower.includes('arabic')) return { bold: !!bold && has('NotoSansArabic-Bold.ttf'), italic: false };
   if (familyLower.includes('cinzel')) return { bold: !!bold && has('Cinzel-Bold.ttf'), italic: false };
   if (familyLower.includes('playfair')) {
@@ -329,15 +362,65 @@ export function fontFaceSupports(
 }
 
 /**
+ * The file render-fonts.json declares for a family and weight, if it declares one.
+ *
+ * The substring chain below it resolves by testing `familyLower.includes('arabic')` first, which is
+ * true of 'IBM Plex Sans Arabic' — so the moment that family was admitted (2026-09-20) every Plex
+ * block was measured and drawn from NotoSansArabic-Regular.ttf while the SVG still declared Plex.
+ * The block was wrapped in one face and rasterised in another, and `fontCoversText` validated Plex
+ * against Noto's glyph table. Any future family whose name contains an existing family's name would
+ * have done the same, so the fix is to ask the registry that already declares every file, and to
+ * keep the chain only for families it does not name.
+ */
+function registryFontFile(
+  family: string,
+  bold?: boolean,
+  italic?: boolean,
+  fontsDir?: string
+): string | undefined {
+  let declared: { files?: Record<string, string> } | undefined;
+  try {
+    const families = loadRenderFontRegistry().families || {};
+    declared =
+      (families as any)[family] ||
+      Object.values(families).find((f: any) => String(f?.name).toLowerCase() === family.toLowerCase());
+  } catch {
+    return undefined;
+  }
+  if (!declared?.files) return undefined;
+
+  // Prefer the exact weight, then the nearest the family actually ships. A family that declares no
+  // regular (Playfair Display, Cinzel) still answers, with the face the renderer will really draw.
+  const order = italic
+    ? [bold ? 'boldItalic' : 'italic', 'italic', 'boldItalic', 'regular', 'semiBold', 'bold']
+    : bold
+      ? ['bold', 'semiBold', 'regular']
+      : ['regular', 'semiBold', 'bold'];
+  for (const key of order) {
+    const rel = declared.files[key];
+    if (!rel) continue;
+    const abs = fontsDir ? path.join(fontsDir, path.basename(rel)) : creativeFilePath(rel);
+    if (abs && fs.existsSync(abs)) return abs;
+  }
+  return undefined;
+}
+
+/**
  * Loads font binary via fontkit and returns Font instance.
  */
 function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
   const dir = fontsDir || resolveFontsDir();
   const familyLower = fontFamily.toLowerCase();
 
-  let fontPath = '';
+  // Only families whose registry entry declares a real regular face resolve from the registry; the
+  // chain keeps Playfair Display and Cinzel, which declare none. See fontFaceSupports for why.
+  const declaredFile = registryFontFile(fontFamily, bold, italic, fontsDir);
+  const declaredRegular = registryFontFile(fontFamily, false, false, fontsDir);
+  let fontPath = declaredRegular && /-Regular\.[to]tf$/i.test(declaredRegular) ? declaredFile || '' : '';
 
-  if (familyLower.includes('arabic')) {
+  if (fontPath) {
+    // Declared in render-fonts.json: that file is the answer, whatever the chain below would say.
+  } else if (familyLower.includes('arabic')) {
     fontPath = path.join(dir, bold ? 'NotoSansArabic-Bold.ttf' : 'NotoSansArabic-Regular.ttf');
   } else if (familyLower.includes('cinzel')) {
     fontPath = path.join(dir, bold ? 'Cinzel-Bold.ttf' : 'Cinzel-SemiBold.ttf');

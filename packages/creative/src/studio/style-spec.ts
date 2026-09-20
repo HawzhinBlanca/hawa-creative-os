@@ -272,8 +272,20 @@ export function applyStyleSpec(
   // The gold accent line sits on top of that colour, which is the owner's own treatment: a light
   // title whose edition line alone is gold. The renderer and the deck draw the last paragraph in
   // accentColor and the rest in title.color, so the two decisions compose.
+  //
+  // It has to clear the same contrast bar as the title, and for the same reason, but nothing else
+  // in the pipeline will catch it if it does not: hard QA's CONTRAST rule, evaluateCompositeContrast
+  // and conformToHouseRules' repair all read `t.color` and none of them looks at `accentColor`. So
+  // an unreadable accent is invisible to every gate downstream. Measured on 2026-09-20: gold on the
+  // brand's Academic Cream is 1.72:1 against the 3:1 this size needs, and a full hard-QA pass
+  // returned `passed: true, defectCodes: []` on it — the edition line would have shipped unreadable
+  // on any cream or white ground. When gold cannot be read, the last line simply stays the title's
+  // own colour, which is legible by construction because the block above just checked it.
   if (title && spec.accentLastTitleLine && (copy.text[title.copyIndex] || '').trim().includes('\n')) {
-    title.accentColor = gold;
+    const surface = declaredBackgroundColour(layout, title);
+    const ratio = calculateLuminanceContrastRatio(hexToLuminance(gold), hexToLuminance(surface));
+    if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) title.accentColor = gold;
+    else delete (title as { accentColor?: string }).accentColor;
   }
 
   // Call to action on a gold button: the text sized to its line, the button its padding around it,
