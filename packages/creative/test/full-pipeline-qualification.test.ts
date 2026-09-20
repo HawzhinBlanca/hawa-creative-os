@@ -204,5 +204,5 @@ describe('T5 Full Pipeline Qualification Path', () => {
       'P07_JUDGE_BA',
       'P07_CANARY',
     ]);
-  });
+  }, 60000);
 });

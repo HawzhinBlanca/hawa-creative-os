@@ -244,6 +244,8 @@ export interface CreateAppOptions {
   telegramBridge?: TelegramBridgeDaemon;
   /** Where approved exports are read from; defaults to the Canva export store when a database is connected. */
   deliverableStore?: DeliverableStore;
+  /** Injectable QA engine for testing; defaults to DeterministicQAEngine. */
+  qaEngine?: any;
 }
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
@@ -334,7 +336,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
-  const qaEngine = new DeterministicQAEngine();
+  const qaEngine = options?.qaEngine || new DeterministicQAEngine();
   const canvaStudio = new CanvaDesignStudioAdapter(undefined, {
     resolveBinding: async (ctx) => {
       if (!db || !ctx.taskId || !ctx.clientId) return undefined;
@@ -361,7 +363,7 @@ export function createApp(options?: CreateAppOptions) {
   const modelGateway = new ResilientModelGateway();
   const evalRunner = new EvaluationRunner(modelGateway);
   // Zero seed probes: every SLO data point must come from a probe that actually ran.
-  const sloDaemon = new SyntheticTrafficDaemon(0);
+  const sloDaemon = new SyntheticTrafficDaemon(0, { publisher });
   const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
   const telegramActionTokenService =
@@ -2448,12 +2450,24 @@ export function createApp(options?: CreateAppOptions) {
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
 
     // Only the task's own client DNA names a destination; another client's folder is never a fallback.
-    const client = clientDnas.get(task.clientId);
-    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
-
-    // Delivery sends exactly the exports the reviewer pinned when approving, checked before any
-    // state change, so a refused delivery leaves the task where it was.
     const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
+    let client: any = clientDnas.get(task.clientId);
+    if (db && clientRepo && task.clientId) {
+      try {
+        const targetId = isValidUuid(task.clientId)
+          ? task.clientId
+          : (await clientRepo.findByCode(deliveryTenantId, task.clientId))?.id;
+        if (targetId) {
+          const activeDna = await clientRepo.findActiveDna(deliveryTenantId, targetId);
+          if (activeDna?.dna) {
+            client = activeDna.dna;
+          }
+        }
+      } catch (err) {
+        console.warn('[core:publish:client_dna] DB read error, using fallback:', err);
+      }
+    }
+    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
     const approval = await findApprovalForDelivery(deliveryTenantId, taskId, task, options?.designRevisionId || task.latestRevisionId, {
       approvalId: options?.approvalId,
       allowInvalidated: options?.policy === 'deliver_approved_stored',
@@ -2599,9 +2613,27 @@ export function createApp(options?: CreateAppOptions) {
             initialState: 'pending',
           }, trx);
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error('[core:omnichannel:intent] Error persisting publication intent:', err);
+        return {
+          ok: false,
+          error: {
+            code: 'PUBLICATION_INTENT_PERSISTENCE_FAILED',
+            message: `Failed to persist publication intent to database before external publish: ${err?.message || String(err)}`,
+          },
+        };
       }
+    }
+    if (dbPub && dbPub.state === 'complete') {
+      return {
+        ok: true,
+        value: {
+          publicationId: dbPub.id,
+          publicationKey,
+          state: 'complete',
+          detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
+        },
+      };
     }
 
     const publishResult = await publisher.publish(ctx, {
@@ -4193,6 +4225,13 @@ export function createApp(options?: CreateAppOptions) {
 
   // WAHA Kill Switch Management Endpoint (CV-08, FR-072)
   app.post('/api/waha/kill-switch', async (c) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) {
+      return problem(c, 401, 'Unauthorized', 'Authentication required for kill switch');
+    }
+    if (auth.role !== 'administrator') {
+      return problem(c, 403, 'Forbidden', 'Administrator role required for kill switch');
+    }
     let body: any = {};
     try {
       body = await c.req.json();
@@ -5345,7 +5384,23 @@ export function createApp(options?: CreateAppOptions) {
 
     // Destination, approval and files are all settled before the task moves to PUBLISHING.
     const targetClientId = task?.clientId || dbTask?.client_id || defaultClientId;
-    const client = clientDnas.get(targetClientId);
+    let client: any = clientDnas.get(targetClientId);
+    if (db && clientRepo && targetClientId) {
+      try {
+        const tenantId = task?.tenantId || dbTask?.tenant_id || auth.tenantId || DEFAULT_TENANT_ID;
+        const targetId = isValidUuid(targetClientId)
+          ? targetClientId
+          : (await clientRepo.findByCode(tenantId, targetClientId))?.id;
+        if (targetId) {
+          const activeDna = await clientRepo.findActiveDna(tenantId, targetId);
+          if (activeDna?.dna) {
+            client = activeDna.dna;
+          }
+        }
+      } catch (err) {
+        console.warn('[core:publish:destination] DB read error, using fallback:', err);
+      }
+    }
     if (!client?.destinations?.productionFolderId) {
       return problem(c, 422, 'No Delivery Destination', `Client '${targetClientId}' has no Google Drive production folder in its DNA, so nothing was delivered.`);
     }
@@ -5440,9 +5495,19 @@ export function createApp(options?: CreateAppOptions) {
             }, trx);
           }
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error('[core:publish:intent] DB intent error:', err);
+        return problem(c, 500, 'Publication Intent Failed', `Failed to commit publication intent to authoritative database: ${err?.message || String(err)}`);
       }
+    }
+    if (dbPub && dbPub.state === 'complete') {
+      return c.json({
+        ok: true,
+        publicationId: dbPub.id,
+        publicationKey,
+        state: 'complete',
+        alreadyCompleted: true,
+      }, 200);
     }
 
     const pubRes = await publisher.publish(ctx, {
@@ -6202,9 +6267,8 @@ export function createApp(options?: CreateAppOptions) {
             notificationDeduplicated: true,
           });
         }
-        // Nothing was written and nothing raced us. Refusing to send now would be worse than the
-        // fire-and-forget this replaced, so the message is still attempted, unrecorded and loudly.
-        console.error(`[canvaStatusHandler] Task ${taskId} status ${status} could not be written to the outbox; sending unrecorded:`, enqueueErr);
+        console.error(`[canvaStatusHandler] Task ${taskId} status ${status} could not be written to the outbox:`, enqueueErr);
+        return problem(c, 500, 'Notification Enqueue Failed', `Failed to persist notification command to durable outbox: ${String(enqueueErr)}`);
       }
 
       const dispatchRes = await telegramBridge.dispatchOutboundMessage(sourceChannelId, message);
@@ -6476,48 +6540,6 @@ export function createApp(options?: CreateAppOptions) {
     const revisionId = c.req.param('revisionId');
     const rev = revisions.get(revisionId);
     if (!rev) return problem(c, 404, 'Revision Not Found');
-
-    if (c.req.header('x-simulate-qa-fail') === 'true') {
-      const failingReport = {
-        revisionId,
-        designRevisionId: revisionId,
-        score: 30,
-        criticalPass: false,
-        findings: [
-          { ruleId: 'BIDI_ORDERING_ERROR', severity: 'critical', hardFailure: true, category: 'copy', message: 'BiDi text error' }
-        ],
-        checks: [{ name: 'bidi_ordering', pass: false, severity: 'critical' }],
-      };
-      const task = tasks.get(taskId);
-      if (task) {
-        task.latestQAReport = failingReport;
-      }
-      if (db) {
-        try {
-          const tenantId = (task as any)?.tenantId || '00000000-0000-4000-a000-000000000001';
-          await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-a000-000000000002', role: 'operator' }, async (trx) => {
-            const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
-            const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
-            await trx
-              .insertInto('qc_runs')
-              .values({
-                tenant_id: tenantId as any,
-                task_id: taskId as any,
-                design_revision_id: revisionId as any,
-                qc_profile_id: profileId as any,
-                status: 'failed',
-                critical_pass: false,
-                report: failingReport as any,
-                report_sha256: crypto.createHash('sha256').update(JSON.stringify(failingReport)).digest('hex'),
-              })
-              .execute();
-          });
-        } catch (err) {
-          console.error('[core:qa:db] Failed to persist simulated failure qc_run:', err);
-        }
-      }
-      return c.json(failingReport, 200);
-    }
 
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
@@ -6857,10 +6879,14 @@ export function createApp(options?: CreateAppOptions) {
         return problem(c, 422, 'Unprocessable Entity', 'Submitted QC report hash does not match stored QC run hash');
       }
 
-      // Stale or revoked Canva binding verification
-      const bindingStatus = task?.canvaBinding?.status || body.canvaBindingStatus || body.canvaBinding?.status;
-      if (bindingStatus && bindingStatus !== 'bound') {
-        return problem(c, 422, 'Stale Canva Binding', `Cannot approve design revision with Canva binding in status '${bindingStatus}'`);
+      // Stale or revoked Canva binding verification (Server Authoritative)
+      const serverBindingStatus = task?.canvaBinding?.status;
+      const clientBindingStatus = body.canvaBindingStatus || body.canvaBinding?.status;
+      const effectiveBindingStatus = (serverBindingStatus && serverBindingStatus !== 'bound')
+        ? serverBindingStatus
+        : (clientBindingStatus || serverBindingStatus);
+      if (effectiveBindingStatus && effectiveBindingStatus !== 'bound') {
+        return problem(c, 422, 'Stale Canva Binding', `Cannot approve design revision with Canva binding in status '${effectiveBindingStatus}'`);
       }
 
       // Capture set hash tampering verification
@@ -7560,22 +7586,26 @@ export function createApp(options?: CreateAppOptions) {
     if (db && clientRepo) {
       try {
         const tenantId = auth.tenantId || defaultTenantId;
-        const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
           ? clientId
           : (await clientRepo.findByCode(tenantId, clientId))?.id;
-        if (targetId) {
-          await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            await clientRepo.saveDnaVersion({
-              tenantId,
-              clientId: targetId,
-              version: dna.version,
-              dna,
-              contentHash: hash,
-              createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-              expectedVersion: body.expectedVersion,
-            }, trx);
-          });
+        if (!targetId && clientId.startsWith('client-')) {
+          targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
         }
+        if (!targetId) {
+          return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+        }
+        await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+          await clientRepo.saveDnaVersion({
+            tenantId,
+            clientId: targetId,
+            version: dna.version,
+            dna,
+            contentHash: hash,
+            createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+            expectedVersion: body.expectedVersion,
+          }, trx);
+        });
       } catch (err: any) {
         if (err.message && err.message.includes('OptimisticConcurrencyConflict')) {
           return problem(c, 409, 'Conflict', err.message);
@@ -8222,22 +8252,59 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const { clientId, ruleId } = c.req.param();
-    const body = await c.req.json().catch(() => ({}));
-    const effectiveRole = body.role || (auth.actorId === 'test_harness' ? 'art_director' : auth.role);
+
+    let body: any = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      // Body may be empty or not json
+    }
+    const requestedRole = typeof body?.role === 'string' ? body.role.trim().toLowerCase() : undefined;
+    if (requestedRole && requestedRole !== 'art_director' && requestedRole !== 'creative_director' && requestedRole !== 'administrator') {
+      return problem(c, 403, 'Forbidden', `Role '${requestedRole}' is not authorized to promote candidate rules`);
+    }
+
+    const effectiveRole = requestedRole || (auth.actorId === 'test_harness' ? 'art_director' : auth.role);
     if (effectiveRole !== 'art_director' && effectiveRole !== 'creative_director' && effectiveRole !== 'administrator') {
-      return problem(c, 403, 'Forbidden', 'Only art_director or creative_director can promote candidate rules');
+      return problem(c, 403, 'Forbidden', 'Only art_director, creative_director, or administrator can promote candidate rules');
     }
     if (auth.role !== 'art_director' && auth.role !== 'creative_director' && auth.role !== 'administrator' && auth.actorId !== 'test_harness') {
       return problem(c, 403, 'Forbidden', 'Caller role not authorized to promote candidate rules');
     }
-    const promoteRole = (effectiveRole === 'administrator' ? 'creative_director' : effectiveRole) as 'art_director' | 'creative_director';
 
+    // SA-02: Verify candidate rule exists and verify cross-client boundary BEFORE promotion
+    const existingRule = globalFeedbackMiner.getCandidateRules().find((r) => r.id === ruleId);
+    if (!existingRule) {
+      return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
+    }
+    const normalizeCode = (id: string) => id.replace(/^client-/, '');
+    if (normalizeCode(existingRule.clientId) !== normalizeCode(clientId)) {
+      return problem(c, 403, 'Forbidden', `Cross-client violation: candidate rule ${ruleId} belongs to '${existingRule.clientId}' and cannot be promoted into '${clientId}'`);
+    }
+
+    const promoteRole = (effectiveRole === 'administrator' ? 'creative_director' : effectiveRole) as 'art_director' | 'creative_director';
     const result = globalFeedbackMiner.promoteRule(ruleId, promoteRole);
     if (!result.promoted) {
       if (result.reason === 'CONFLICTING_RULES_PENDING') {
         return problem(c, 409, 'Conflict', 'Candidate rule has unresolved conflicts with existing guidelines and remains pending');
       }
       return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
+    }
+
+    let targetId: string | undefined = undefined;
+    const tenantId = auth.tenantId || defaultTenantId;
+
+    if (db && clientRepo) {
+      targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+        ? clientId
+        : (await clientRepo.findByCode(tenantId, clientId))?.id;
+      if (!targetId && clientId.startsWith('client-')) {
+        targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
+      }
+      if (!targetId) {
+        globalFeedbackMiner.rollbackPromotedRule(ruleId, 'system', 'Authoritative client not found');
+        return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+      }
     }
 
     // Attach to active client DNA and commit immutable snapshot
@@ -8252,46 +8319,55 @@ export function createApp(options?: CreateAppOptions) {
       if (!dna.guidelines.layoutRules.includes(result.rule.ruleText)) {
         dna.guidelines.layoutRules.push(result.rule.ruleText);
       }
+
       dna.version = (dna.version || 1) + 1;
       dna.updatedAt = new Date().toISOString();
 
-      const hash = computeDnaHash(dna);
+      let hash = computeDnaHash(dna);
       const snap: ClientDnaSnapshot = {
         snapshotId: `snap_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
         clientId,
         version: dna.version,
         sha256: hash,
         commitMessage: `Promoted candidate rule "${result.rule.title}" (Role: ${effectiveRole})`,
-        createdBy: effectiveRole,
+        createdBy: auth.userId || effectiveRole,
         createdAt: new Date().toISOString(),
         dna: { ...dna },
       };
+
+      if (db && clientRepo && targetId) {
+        try {
+          await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+            let maxDbVer = 0;
+            const existingSnaps = await clientRepo.listDnaSnapshots(tenantId, targetId, trx);
+            if (existingSnaps && existingSnaps.length > 0) {
+              maxDbVer = Math.max(...existingSnaps.map((s: any) => s.version));
+            }
+            if (maxDbVer >= dna.version) {
+              dna.version = maxDbVer + 1;
+              hash = computeDnaHash(dna);
+              snap.version = dna.version;
+              snap.sha256 = hash;
+              snap.dna = { ...dna };
+            }
+            await clientRepo.saveDnaVersion({
+              tenantId,
+              clientId: targetId,
+              version: dna.version,
+              dna: { ...dna, __commitMessage: snap.commitMessage },
+              contentHash: hash,
+              createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+            }, trx);
+          });
+        } catch (err: any) {
+          globalFeedbackMiner.rollbackPromotedRule(ruleId, 'system', 'DB persistence failure rollback');
+          return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist candidate rule promotion to database');
+        }
+      }
+
       const list = clientSnapshots.get(clientId) || [];
       list.unshift(snap);
       clientSnapshots.set(clientId, list);
-
-      if (db && clientRepo) {
-        try {
-          const tenantId = auth.tenantId || defaultTenantId;
-          const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-            ? clientId
-            : (await clientRepo.findByCode(tenantId, clientId))?.id;
-          if (targetId) {
-            await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-              await clientRepo.saveDnaVersion({
-                tenantId,
-                clientId: targetId,
-                version: dna.version,
-                dna: { ...dna, __commitMessage: snap.commitMessage },
-                contentHash: hash,
-                createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-              }, trx);
-            });
-          }
-        } catch {
-          // ignore error in fallback
-        }
-      }
 
       broadcast('dna:snapshot_created', { clientId, version: dna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
@@ -8342,15 +8418,26 @@ export function createApp(options?: CreateAppOptions) {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to rollback candidate rule');
     }
-    const body = await c.req.json().catch(() => ({}));
-    const effectiveRole = body.role || (auth.actorId === 'test_harness' ? 'art_director' : auth.role);
+    const { clientId, ruleId } = c.req.param();
+    const effectiveRole = auth.actorId === 'test_harness' ? 'art_director' : auth.role;
     if (effectiveRole !== 'art_director' && effectiveRole !== 'creative_director' && effectiveRole !== 'administrator') {
       return problem(c, 403, 'Forbidden', 'Only art_director, creative_director, or administrator can rollback candidate rules');
     }
     if (auth.role !== 'art_director' && auth.role !== 'creative_director' && auth.role !== 'administrator' && auth.actorId !== 'test_harness') {
       return problem(c, 403, 'Forbidden', 'Caller role not authorized to rollback candidate rules');
     }
-    const { clientId, ruleId } = c.req.param();
+
+    // SA-02: Verify candidate rule exists and verify cross-client boundary BEFORE rollback
+    const existingRule = globalFeedbackMiner.getCandidateRules().find((r) => r.id === ruleId);
+    if (!existingRule) {
+      return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
+    }
+    const normalizeCode = (id: string) => id.replace(/^client-/, '');
+    if (normalizeCode(existingRule.clientId) !== normalizeCode(clientId)) {
+      return problem(c, 403, 'Forbidden', `Cross-client violation: candidate rule ${ruleId} belongs to '${existingRule.clientId}' and cannot be rolled back from '${clientId}'`);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
     const actor = auth.userId || effectiveRole;
     const reason = body.reason || 'Manual rollback of candidate rule';
     const result = globalFeedbackMiner.rollbackPromotedRule(ruleId, actor, reason);
@@ -8375,6 +8462,34 @@ export function createApp(options?: CreateAppOptions) {
         createdAt: new Date().toISOString(),
         dna: { ...dna },
       };
+
+      if (db && clientRepo) {
+        try {
+          const tenantId = auth.tenantId || defaultTenantId;
+          let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+            ? clientId
+            : (await clientRepo.findByCode(tenantId, clientId))?.id;
+          if (!targetId && clientId.startsWith('client-')) {
+            targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
+          }
+          if (!targetId) {
+            return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+          }
+          await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+            await clientRepo.saveDnaVersion({
+              tenantId,
+              clientId: targetId,
+              version: dna.version,
+              dna: { ...dna, __commitMessage: snap.commitMessage },
+              contentHash: hash,
+              createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+            }, trx);
+          });
+        } catch (err: any) {
+          return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist candidate rule rollback to database');
+        }
+      }
+
       const list = clientSnapshots.get(clientId) || [];
       list.unshift(snap);
       clientSnapshots.set(clientId, list);
@@ -8532,7 +8647,8 @@ export function createApp(options?: CreateAppOptions) {
     const body = await c.req.json().catch(() => ({}));
     const { targetVersion, snapshotId, reason } = body;
 
-    const role = (body.role || auth.role || 'art_director') as string;
+    // SA-01: Derive role strictly from auth.role; do NOT use body.role
+    const role = (auth.role || 'operator') as string;
     if (role !== 'art_director' && role !== 'creative_director' && role !== 'administrator') {
       return problem(c, 403, 'Forbidden', 'Only art_director, creative_director, or administrator can rollback client DNA');
     }
@@ -8552,6 +8668,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const newVersion = (currentDna.version || 1) + 1;
+    const author = auth.userId || auth.role || 'system';
     const restoredDna: ClientDNA = {
       ...targetSnap.dna,
       clientId,
@@ -8559,45 +8676,48 @@ export function createApp(options?: CreateAppOptions) {
       updatedAt: new Date().toISOString(),
     };
 
-    clientDnas.set(clientId, restoredDna);
-
     const hash = computeDnaHash(restoredDna);
     const rollbackSnap: ClientDnaSnapshot = {
       snapshotId: `snap_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
       clientId,
       version: newVersion,
       sha256: hash,
-      commitMessage: `Rollback to baseline v${targetSnap.version}: ${reason || 'Governance rollback'} (Executed by ${role})`,
-      createdBy: role,
+      commitMessage: `Rollback to baseline v${targetSnap.version}: ${reason || 'Governance rollback'} (Executed by ${author})`,
+      createdBy: author,
       createdAt: new Date().toISOString(),
       dna: restoredDna,
     };
 
-    snapshots.unshift(rollbackSnap);
-    clientSnapshots.set(clientId, snapshots);
-
     if (db && clientRepo) {
       try {
         const tenantId = auth.tenantId || defaultTenantId;
-        const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
           ? clientId
           : (await clientRepo.findByCode(tenantId, clientId))?.id;
-        if (targetId) {
-          await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            await clientRepo.saveDnaVersion({
-              tenantId,
-              clientId: targetId,
-              version: newVersion,
-              dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage },
-              contentHash: hash,
-              createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-            }, trx);
-          });
+        if (!targetId && clientId.startsWith('client-')) {
+          targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
         }
-      } catch {
-        // ignore error in fallback
+        if (!targetId) {
+          return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+        }
+        await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+          await clientRepo.saveDnaVersion({
+            tenantId,
+            clientId: targetId,
+            version: newVersion,
+            dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage },
+            contentHash: hash,
+            createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+          }, trx);
+        });
+      } catch (err: any) {
+        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist rollback to database');
       }
     }
+
+    clientDnas.set(clientId, restoredDna);
+    snapshots.unshift(rollbackSnap);
+    clientSnapshots.set(clientId, snapshots);
 
     broadcast('dna:rollback', {
       clientId,

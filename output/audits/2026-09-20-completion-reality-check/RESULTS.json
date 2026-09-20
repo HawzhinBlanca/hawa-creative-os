@@ -1,0 +1,110 @@
+{
+  "date": "2026-09-20",
+  "head": "9c22026f444c81494d286354960a0b10efaa1176",
+  "scope": "Isolated probes, read-only runtime and source comparison. No real provider calls, live messages, production mutations, paid benchmark or recovery drill.",
+  "results": {
+    "tournament": {
+      "chunk_id": "ce846a",
+      "wall_time_seconds": 0.397902666,
+      "exit_code": 1,
+      "original_token_count": 332,
+      "output": "{\n  \"source\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"scope\": \"all component failures injected, output write intercepted\",\n  \"routingStatus\": \"FAILED\",\n  \"retrievalStatus\": \"FAILED\",\n  \"visualStatus\": \"FAILED\",\n  \"studioStatus\": \"FAILED\",\n  \"failedFallbacks\": {\n    \"rung1ModelFallbackVerified\": false,\n    \"rung3JudgeUnavailableVerified\": false,\n    \"rung4PlannerFallbackVerified\": false,\n    \"budgetCapStrictlyEnforced\": false,\n    \"status\": \"FAILED\"\n  },\n  \"admissions\": {\n    \"intake_router\": {\n      \"status\": \"REJECTED\",\n      \"scope\": \"Enforced routing, client scoping, and mandatory abstention\"\n    },\n    \"retrieval_agent\": {\n      \"status\": \"REJECTED\",\n      \"scope\": \"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage\"\n    },\n    \"visual_judge\": {\n      \"status\": \"REJECTED\",\n      \"scope\": \"10-dimensional rubric scoring strictly gated by independent hard QA rules\"\n    },\n    \"degradation_manager\": {\n      \"status\": \"REJECTED\",\n      \"scope\": \"Rungs 0 through 4 with deterministic budget and failure fallbacks\"\n    }\n  },\n  \"overallVerdict\": \"UNQUALIFIED\"\n}\n\n❌ NORMATIVE MODEL TOURNAMENT FAILED: Criteria not met (verdict: UNQUALIFIED)\n\n   ✓ Evidence dossier written to: /Users/hawzhin/Hawdesign/output/repairs/2026-09-19-architecture-remediation/MODEL_TOURNAMENT_EVIDENCE.json\n"
+    },
+    "evaluation": {
+      "chunk_id": "10ff83",
+      "wall_time_seconds": 0.516418667,
+      "exit_code": 0,
+      "original_token_count": 224,
+      "output": "{\n  \"source\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"scope\": \"offline counterexamples, no external effects\",\n  \"alwaysAbstain\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 5,\n    \"failedCases\": 195,\n    \"passRate\": 2.5,\n    \"criticalViolations\": 0\n  },\n  \"defaultFakeGateway\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"missingClientProjectAndBrief\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 5,\n    \"failedCases\": 195,\n    \"passRate\": 2.5,\n    \"criticalViolations\": 0\n  },\n  \"missingSwapMeasurements\": {\n    \"measuredRuns\": 1,\n    \"totalRuns\": 24,\n    \"aggregateSwapConsistency\": 0.041666666666666664,\n    \"emittedRow\": \"| Tournament Swap Consistency | 4.2% | ≥ 80.0% | FAIL |\"\n  }\n}\n"
+    },
+    "manifest": {
+      "chunk_id": "61a49e",
+      "wall_time_seconds": 0.116456666,
+      "exit_code": 0,
+      "original_token_count": 169,
+      "output": "{\n  \"scope\": \"Actual source verifier; synthetic in-memory manifest, no writes or network\",\n  \"input\": {\n    \"wrongCommit\": \"ffffffffffffffffffffffffffffffffffffffff\",\n    \"dirtyTree\": true,\n    \"componentCount\": 0,\n    \"modelCount\": 0\n  },\n  \"expected\": \"Refuse release identity without source/image/model coverage and a real clean build\",\n  \"observed\": {\n    \"ok\": false,\n    \"errors\": [\n      \"Manifest requires a clean tree (manifest declared treeClean: false)\",\n      \"Manifest components cannot be empty; requires component coverage\",\n      \"Manifest models coverage cannot be empty; requires pinnedModels\",\n      \"Manifest models registryVersion is invalid\"\n    ]\n  }\n}\n"
+    },
+    "notification_original": {
+      "chunk_id": "e2dcae",
+      "wall_time_seconds": 0.56795925,
+      "exit_code": 0,
+      "original_token_count": 150,
+      "output": "{\n  \"auditedAt\": \"2026-09-20\",\n  \"commit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"sourceSha256\": \"3281bff3d9d4058522508d77cb9e0a689b9ac6811369d338dddc9c9c7a19ccb3\",\n  \"externalCalls\": false,\n  \"databaseAccess\": false,\n  \"scenario\": \"Core fails before enqueue; replay after Core recovers\",\n  \"firstStatus\": \"MANUAL_DESIGN_REQUIRED\",\n  \"replayStatus\": \"MANUAL_DESIGN_REQUIRED\",\n  \"syntheticHttpCalls\": 2,\n  \"journalEntries\": [\n    [\n      \"canva-notify-manual_design_required\",\n      {\n        \"ok\": true,\n        \"notificationSent\": true\n      }\n    ]\n  ],\n  \"intentCouldBeCreated\": false\n}\n"
+    },
+    "publication": {
+      "chunk_id": "219df1",
+      "wall_time_seconds": 0.18737925,
+      "exit_code": 0,
+      "original_token_count": 417,
+      "output": "{\n  \"auditedAt\": \"2026-09-20\",\n  \"auditedCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"sourceFile\": \"packages/integrations/src/google-publisher.ts\",\n  \"sourceSha256\": \"28d767077fbbd34f681cbbd24545ffef3910ddc9b23d189a7de23be9595ca9f1\",\n  \"proofClass\": \"isolated execution of current source with synthetic provider transport\",\n  \"realProviderProof\": false,\n  \"databaseAccess\": false,\n  \"externalNetworkAccess\": false,\n  \"findingsReproduced\": {\n    \"newProcessEquivalentReplay\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 1,\n      \"expectedLogicalFiles\": 1,\n      \"expectedLogicalRows\": 1\n    },\n    \"lostUploadSuccessResponse\": {\n      \"firstCallThrew\": true,\n      \"driveFiles\": 2,\n      \"sheetRows\": 1\n    },\n    \"lostSheetSuccessResponse\": {\n      \"firstState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"driveFiles\": 1,\n      \"sheetRows\": 1\n    },\n    \"wrongRemoteChecksumSameSize\": {\n      \"publishState\": \"failed\",\n      \"fileMarkedVerified\": false,\n      \"independentLaterVerifyConsistent\": false\n    },\n    \"rowMovedBeforeRetry\": {\n      \"initialState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"overwrittenTaskIds\": [\n        \"synthetic-task-a\"\n      ],\n      \"finalTaskIds\": [\n        \"synthetic-other-task\",\n        \"synthetic-task-a\"\n      ],\n      \"configuredSheetId\": 123,\n      \"allSheetRangesUnqualified\": true\n    },\n    \"rowMovedIdentityCheckUnavailable\": {\n      \"finalState\": \"drive_complete\",\n      \"overwrittenTaskIds\": [],\n      \"finalTaskIds\": [\n        \"synthetic-other-task\",\n        \"synthetic-task-a\"\n      ]\n    },\n    \"concurrentSameKey\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 2\n    }\n  }\n}\n"
+    },
+    "manifest-variant.mjs": {
+      "chunk_id": "45473b",
+      "wall_time_seconds": 0.000010459,
+      "exit_code": 0,
+      "original_token_count": 112,
+      "output": "{\n  \"scope\": \"Actual source verifier; synthetic in-memory manifest, no writes or network\",\n  \"input\": {\n    \"wrongCommit\": \"ffffffffffffffffffffffffffffffffffffffff\",\n    \"declaredCleanDespiteDirtyWorkingTree\": true,\n    \"componentsWithNoHashesOrDigests\": 3,\n    \"inventedModelCount\": 1\n  },\n  \"expected\": \"Refuse release identity without source/image/model coverage and a real clean build\",\n  \"observed\": {\n    \"ok\": true,\n    \"errors\": []\n  }\n}\n"
+    },
+    "security-bounded.ts": {
+      "chunk_id": "9add96",
+      "wall_time_seconds": 0.7083845,
+      "exit_code": 0,
+      "original_token_count": 278,
+      "output": "{\n  \"sourceCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"networkAttempts\": 0,\n  \"unresolvedAliasAcknowledgment\": {\n    \"evidence\": \"real HTTP handlers, fake DB returning no client\",\n    \"status\": 404,\n    \"lookupCodes\": [\n      \"client-drustee\",\n      \"drustee\",\n      \"client-drustee\",\n      \"drustee\",\n      \"drustee\",\n      \"client-drustee\",\n      \"drustee\"\n    ],\n    \"attemptedDbTransactions\": 0,\n    \"snapshotAuthor\": \"art_director\",\n    \"forgedAuthorRejected\": true\n  },\n  \"rollbackRoleEscalation\": {\n    \"status\": 403,\n    \"authenticatedRole\": \"operator\",\n    \"claimedBodyRole\": \"administrator\"\n  },\n  \"crossClientRulePromotion\": {\n    \"proposalStatus\": 201,\n    \"originalRuleClient\": \"client-drustee\",\n    \"promotionUrlClient\": \"client-aster\",\n    \"promotionStatus\": 403,\n    \"unrelatedClientReceivedRule\": false\n  },\n  \"fixedTaskBinding\": {\n    \"rejectedCode\": \"TASK_SCOPE_MISMATCH\"\n  },\n  \"streamScope\": {\n    \"evidence\": \"real SSE handler with scoped fake principal and scope-less event fixture\",\n    \"status\": 200,\n    \"scopeLessForeignPayloadDelivered\": false,\n    \"authCalls\": 1\n  }\n}\n"
+    },
+    "publication-lookup-outage.mjs": {
+      "chunk_id": "cde140",
+      "wall_time_seconds": 0.608873917,
+      "exit_code": 0,
+      "original_token_count": 434,
+      "output": "{\n  \"auditedAt\": \"2026-09-20\",\n  \"additionalFault\": \"All full-column task-identity lookups return HTTP503\",\n  \"auditedCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"sourceFile\": \"packages/integrations/src/google-publisher.ts\",\n  \"sourceSha256\": \"28d767077fbbd34f681cbbd24545ffef3910ddc9b23d189a7de23be9595ca9f1\",\n  \"proofClass\": \"isolated execution of current source with synthetic provider transport\",\n  \"realProviderProof\": false,\n  \"databaseAccess\": false,\n  \"externalNetworkAccess\": false,\n  \"findingsReproduced\": {\n    \"newProcessEquivalentReplay\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 2,\n      \"expectedLogicalFiles\": 1,\n      \"expectedLogicalRows\": 1\n    },\n    \"lostUploadSuccessResponse\": {\n      \"firstCallThrew\": true,\n      \"driveFiles\": 2,\n      \"sheetRows\": 1\n    },\n    \"lostSheetSuccessResponse\": {\n      \"firstState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"driveFiles\": 1,\n      \"sheetRows\": 2\n    },\n    \"wrongRemoteChecksumSameSize\": {\n      \"publishState\": \"failed\",\n      \"fileMarkedVerified\": false,\n      \"independentLaterVerifyConsistent\": false\n    },\n    \"rowMovedBeforeRetry\": {\n      \"initialState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"overwrittenTaskIds\": [],\n      \"finalTaskIds\": [\n        \"synthetic-other-task\",\n        \"synthetic-task-a\",\n        \"synthetic-task-a\"\n      ],\n      \"configuredSheetId\": 123,\n      \"allSheetRangesUnqualified\": true\n    },\n    \"rowMovedIdentityCheckUnavailable\": {\n      \"finalState\": \"drive_complete\",\n      \"overwrittenTaskIds\": [],\n      \"finalTaskIds\": [\n        \"synthetic-other-task\",\n        \"synthetic-task-a\"\n      ]\n    },\n    \"concurrentSameKey\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 2\n    }\n  }\n}\n"
+    },
+    "default-offline-admission.mjs": {
+      "chunk_id": "47888e",
+      "wall_time_seconds": 0.507339125,
+      "exit_code": 0,
+      "original_token_count": 868,
+      "output": "================================================================================\n⚡ HAWA CREATIVE OS: NORMATIVE MODEL TOURNAMENT & QUALIFICATION (Task R10)\n   Normative Standards: FR-020, FR-021, FR-023, FR-055–058, NFR-009, NFR-024, NFR-025\n   ADR Compliance:      ADR-030 (Model Gateway Egress & Role Policy)\n================================================================================\n\n>>> 1. Executing 200-Task Routing & Brief Tournament (routing_brief.jsonl)...\n   ✓ Total cases:      200\n   ✓ Passed cases:     200\n   ✓ Pass rate:        100.00%\n   ✓ 95% Wilson CI:    [98.12%, 100.00%]\n   ✓ Critical escapes: 0\n\n>>> 2. Executing Scoped Retrieval Qualification (retrieval_eval.jsonl)...\n   ✓ Total cases:      20\n   ✓ Passed cases:     20\n   ✓ Pass rate:        100.00%\n   ✓ 95% Wilson CI:    [83.89%, 100.00%]\n   ✓ Foreign leakages: 0 (Strict Invariant: 0)\n\n>>> 3. Executing Factual Copy Guard Evaluation...\n   ✓ Passed cases:     4/4 (100.00%)\n\n>>> 4. Executing Visual Quality Rubric Evaluation...\n   ✓ Passed cases:     10/10 (100.00%)\n\n>>> 5. Executing 24 Golden Briefs Studio Tournament & Canary Validation...\n   ✓ Total briefs:     24\n   ✓ Completed briefs: 24\n   ✓ Mean score:       8.80/10.0\n   ✓ Canary rate:      100.0%\n   ✓ Swap consistency: 100.0%\n   ✓ Hard QA escapes:  0\n\n>>> 6. Verifying Degradation Ladder & Fallback Policies...\n   ✓ Rung 1 (Model Fallback):     Triggered = true\n   ✓ Rung 3 (Judge Unavailable):  Triggered = true\n   ✓ Rung 4 (Planner Fallback):   Triggered = true\n   ✓ Budget Cap Enforcement:      Triggered = true (Spent: $0.0400)\n{\n  \"proofClass\": \"Unmodified default evaluator, fake/offline dependencies; output write intercepted\",\n  \"overallVerdict\": \"QUALIFIED\",\n  \"admissions\": {\n    \"intake_router\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Enforced routing, client scoping, and mandatory abstention\"\n    },\n    \"retrieval_agent\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage\"\n    },\n    \"visual_judge\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"10-dimensional rubric scoring strictly gated by independent hard QA rules\"\n    },\n    \"degradation_manager\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Rungs 0 through 4 with deterministic budget and failure fallbacks\"\n    }\n  },\n  \"routing\": {\n    \"dataset\": \"evals/routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"confidenceInterval95\": {\n      \"pointEstimate\": 1,\n      \"ciLower95\": 0.9812,\n      \"ciUpper95\": 1\n    },\n    \"criticalViolations\": 0,\n    \"status\": \"PASSED\"\n  },\n  \"studio\": {\n    \"goldenBriefsCount\": 24,\n    \"completedBriefs\": 24,\n    \"meanScore\": 8.8,\n    \"canaryPassRate\": 1,\n    \"orderSwapConsistencyRate\": 1,\n    \"hardQaEscapeCount\": 0,\n    \"status\": \"PASSED\"\n  }\n}\n\n   ✓ Evidence dossier written to: /Users/hawzhin/Hawdesign/output/repairs/2026-09-19-architecture-remediation/MODEL_TOURNAMENT_EVIDENCE.json\n\n================================================================================\n🏆 NORMATIVE MODEL TOURNAMENT COMPLETE: ALL CRITERIA QUALIFIED\n   - 200-Task Tournament: 100.0% Pass Rate (95% CI: [98.12%, 100.00%])\n   - Scoped Retrieval:    100.0% Recall, 0 Foreign Leaks\n   - Order-Swap Canary:   100.0% Consistency\n   - Hard QA Escapes:     0 Escapes\n================================================================================\n\n"
+    },
+    "rejected_promotion_final": {
+      "chunk_id": "ff2ce2",
+      "wall_time_seconds": 0.000005,
+      "exit_code": 0,
+      "original_token_count": 45,
+      "output": "{\n  \"scenario\": \"Same-client promotion with authoritative DB client missing\",\n  \"status\": 404,\n  \"rulePresentBefore\": false,\n  \"rulePresentAfter\": true,\n  \"networkAttempts\": 0\n}\n"
+    },
+    "typecheck": {
+      "chunk_id": "5cb232",
+      "wall_time_seconds": 1.001763,
+      "session_id": 40094,
+      "original_token_count": 11,
+      "output": "$ tsc -b && tsc -p tsconfig.scripts.json\n"
+    },
+    "typecheck_final": {
+      "chunk_id": "26430b",
+      "wall_time_seconds": 0.000012375,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    }
+  },
+  "provenanceNote": "Commit labels embedded in inherited probes name the original baseline, not a committed remediation release. See source hashes in INVENTORY.json.",
+  "packValidation": {
+    "exit_code": 0,
+    "output": "PASS=617 WARN=0 FAIL=0\nHawa Creative OS blueprint validation passed.\n"
+  },
+  "runtimeComparison": {
+    "coreImage": "sha256:32dc9c3e35f095d11fbc811334cd9e56d86b5273d27ce55fe5cb7e3471587c23",
+    "workerImage": "sha256:c0b687b70a5fdf4914437f459773c4276873af26e6236376de8fe1875a495a57",
+    "coreCreated": "2026-09-20T11:00:27.631412847Z",
+    "workerCreated": "2026-09-20T11:00:31.087334417Z",
+    "coreApp": {
+      "runningIncludedSource": "7926fee664bed0b86ad020a5dc01064ba459016d5c55df6f5ef2043b31c51dc7",
+      "worktree": "f3f8ff15be1f4fa06c9281119445188496b4694ed1f4cd1310cba803b6942f1e"
+    },
+    "googlePublisher": {
+      "runningIncludedSource": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60",
+      "worktree": "28d767077fbbd34f681cbbd24545ffef3910ddc9b23d189a7de23be9595ca9f1"
+    }
+  }
+}

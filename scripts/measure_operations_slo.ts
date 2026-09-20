@@ -57,6 +57,19 @@ export async function measureOperationsSLO() {
     'Authorization': `Bearer ${process.env.HAWA_BEARER_TOKEN}`,
   };
 
+  let totalAttemptedCalls = 0;
+  let successfulCalls = 0;
+
+  const timedRequest = async (path: string, options?: any) => {
+    totalAttemptedCalls++;
+    const t0 = performance.now();
+    const res = await app.request(path, options);
+    const t1 = performance.now();
+    const ok = res.status >= 200 && res.status < 400;
+    if (ok) successfulCalls++;
+    return { res, duration: t1 - t0, ok };
+  };
+
   // ---------------------------------------------------------------------------
   // 1. Realistic Load: 100 Clients & Task Listing Latency (NFR-004, NFR-005)
   // ---------------------------------------------------------------------------
@@ -65,11 +78,9 @@ export async function measureOperationsSLO() {
   const N_LIST_SAMPLES = 50;
 
   for (let i = 0; i < N_LIST_SAMPLES; i++) {
-    const t0 = performance.now();
-    const res = await app.request('/v1/tasks?limit=50', { headers: authHeaders });
-    const t1 = performance.now();
-    if (res.status === 200) {
-      listLatencies.push(t1 - t0);
+    const { res, duration, ok } = await timedRequest('/v1/tasks?limit=50', { headers: authHeaders });
+    if (ok) {
+      listLatencies.push(duration);
     }
   }
 
@@ -87,8 +98,7 @@ export async function measureOperationsSLO() {
   const N_WEBHOOK_SAMPLES = 25;
 
   for (let i = 0; i < N_WEBHOOK_SAMPLES; i++) {
-    const t0 = performance.now();
-    const res = await app.request('/v1/ingress/rehearsal', {
+    const { res, duration, ok } = await timedRequest('/v1/ingress/rehearsal', {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({
@@ -97,9 +107,8 @@ export async function measureOperationsSLO() {
         text: `ڤیتامین پشکنراو نموونە ژمارە ${i + 1}`,
       }),
     });
-    const t1 = performance.now();
-    if (res.status === 200 || res.status === 201) {
-      webhookLatencies.push(t1 - t0);
+    if (ok) {
+      webhookLatencies.push(duration);
     }
   }
 
@@ -117,9 +126,8 @@ export async function measureOperationsSLO() {
   const N_TRANSITIONS = 15;
 
   for (let i = 0; i < N_TRANSITIONS; i++) {
-    const t0 = performance.now();
     // 1. Create task (intake -> queued)
-    const createRes = await app.request('/v1/tasks', {
+    const { res: createRes, duration: dCreate, ok: okCreate } = await timedRequest('/v1/tasks', {
       method: 'POST',
       headers: { ...authHeaders, 'Idempotency-Key': `perf-task-${i}-${Date.now()}` },
       body: JSON.stringify({ title: `Perf Test Task ${i}`, priority: 'routine', clientId: 'c1000000-0000-4000-8000-000000000002' }),
@@ -127,14 +135,13 @@ export async function measureOperationsSLO() {
     const task = await createRes.json();
 
     // 2. Submit revision (queued -> designing)
-    const revRes = await app.request(`/v1/tasks/${task.id}/revisions`, {
+    const { res: revRes, duration: dRev, ok: okRev } = await timedRequest(`/v1/tasks/${task.id}/revisions`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({ nodes: [{ id: 'n1', type: 'text', text: 'Perf Test' }] }),
     });
-    const t1 = performance.now();
-    if (createRes.status === 201 && revRes.status === 201) {
-      transitionLatencies.push(t1 - t0);
+    if (okCreate && okRev) {
+      transitionLatencies.push(dCreate + dRev);
     }
   }
 
@@ -216,7 +223,7 @@ export async function measureOperationsSLO() {
   console.log(`    Circuit breaker after 3 simulated outages: state=${breakerState} (Tripped: ${breakerState === 'OPEN'})`);
 
   // Channel kill-switch test
-  const killRes = await app.request('/v1/operations/kill-switch', {
+  const { res: killRes } = await timedRequest('/v1/operations/kill-switch', {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({ channel: 'telegram', active: true }),
@@ -225,7 +232,7 @@ export async function measureOperationsSLO() {
   console.log(`    Telegram Channel Kill Switch active: ${killData.active}`);
 
   // Reset kill switch
-  await app.request('/v1/operations/kill-switch', {
+  await timedRequest('/v1/operations/kill-switch', {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({ channel: 'telegram', active: false }),
@@ -239,52 +246,47 @@ export async function measureOperationsSLO() {
   const taskTraceStages: Array<{ stage: string; durationMs: number; status: string }> = [];
 
   // Stage 1: Ingress
-  const s1T0 = performance.now();
-  const taskRes = await app.request('/v1/tasks', {
+  const { res: taskRes, duration: s1Duration } = await timedRequest('/v1/tasks', {
     method: 'POST',
     headers: { ...authHeaders, 'Idempotency-Key': `trace-${Date.now()}` },
     body: JSON.stringify({ title: 'SLO Trace Task', priority: 'routine', clientId: 'c1000000-0000-4000-8000-000000000002' }),
   });
   const traceTask = await taskRes.json();
-  taskTraceStages.push({ stage: 'Ingress & Task Creation', durationMs: Math.round(performance.now() - s1T0), status: '201 Created' });
+  taskTraceStages.push({ stage: 'Ingress & Task Creation', durationMs: Math.round(s1Duration), status: '201 Created' });
 
   // Stage 2: Revision Creation
-  const s2T0 = performance.now();
-  const revRes = await app.request(`/v1/tasks/${traceTask.id}/revisions`, {
+  const { res: revRes, duration: s2Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({ nodes: [{ id: 't1', type: 'text', text: 'Traceable Verification Content' }] }),
   });
   const rev = await revRes.json();
-  taskTraceStages.push({ stage: 'Revision Creation', durationMs: Math.round(performance.now() - s2T0), status: '201 Created' });
+  taskTraceStages.push({ stage: 'Revision Creation', durationMs: Math.round(s2Duration), status: '201 Created' });
 
   // Stage 3: Deterministic QA Inspection
-  const s3T0 = performance.now();
-  const qaRes = await app.request(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/qa`, {
+  const { res: qaRes, duration: s3Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/qa`, {
     method: 'POST',
     headers: authHeaders,
   });
   const qa = await qaRes.json();
-  taskTraceStages.push({ stage: 'Deterministic QA Inspection', durationMs: Math.round(performance.now() - s3T0), status: `CriticalPass=${qa.criticalPass}` });
+  taskTraceStages.push({ stage: 'Deterministic QA Inspection', durationMs: Math.round(s3Duration), status: `CriticalPass=${qa.criticalPass}` });
 
   // Stage 4: Approval Decision
-  const s4T0 = performance.now();
-  const approveRes = await app.request(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/decisions`, {
+  const { res: approveRes, duration: s4Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/decisions`, {
     method: 'POST',
     headers: { ...authHeaders, 'x-user-role': 'art_director' },
     body: JSON.stringify({ action: 'approve', reason: 'Performance SLO trace approved' }),
   });
   const decision = await approveRes.json();
-  taskTraceStages.push({ stage: 'Art Director Approval', durationMs: Math.round(performance.now() - s4T0), status: `Decision=${decision.decision}` });
+  taskTraceStages.push({ stage: 'Art Director Approval', durationMs: Math.round(s4Duration), status: `Decision=${decision.decision}` });
 
   const totalTraceDurationMs = Math.round(performance.now() - traceT0);
   console.log(`    Total End-to-End Non-AI Lifecycle Duration: ${totalTraceDurationMs}ms`);
   taskTraceStages.forEach((s) => console.log(`      - ${s.stage}: ${s.durationMs}ms (${s.status})`));
 
   // Availability calculation over the measurement run
-  const totalCalls = listLatencies.length + webhookLatencies.length + transitionLatencies.length + 4;
-  const successfulCalls = totalCalls; // 0 HTTP errors encountered
-  const observedAvailability = Number(((successfulCalls / totalCalls) * 100).toFixed(4));
+  const totalCalls = totalAttemptedCalls;
+  const observedAvailability = totalCalls > 0 ? Number(((successfulCalls / totalCalls) * 100).toFixed(4)) : 100;
   console.log(`\nObserved Availability over active measurement window: ${observedAvailability}% (${successfulCalls}/${totalCalls} requests succeeded)`);
 
   const evidence = {

@@ -1,0 +1,210 @@
+{
+  "date": "2026-09-20",
+  "head": "9c22026f444c81494d286354960a0b10efaa1176",
+  "worktree": "uncommitted remediation, not production qualification",
+  "sourceFiles": [
+    {
+      "path": "MANIFEST.json",
+      "bytes": 38915,
+      "sha256": "ca1009b51c56f131e07a66b471c434ddb73f4e7e106e8c3f4f6cb791bdee7628"
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "bytes": 22713,
+      "sha256": "281916a86de156efb84eb2cddda5b4ba6bb09264633fc2c3903ad703bdadda50"
+    },
+    {
+      "path": "apps/core/src/app.ts",
+      "bytes": 408674,
+      "sha256": "f3f8ff15be1f4fa06c9281119445188496b4694ed1f4cd1310cba803b6942f1e"
+    },
+    {
+      "path": "apps/core/src/routes/system.routes.ts",
+      "bytes": 25543,
+      "sha256": "7a5dd364b0bb878b7878b0a2f3cf29b2d0ce233b1e64c3d723b26de7bccb0f8a"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "bytes": 36680,
+      "sha256": "7c6aee24328ce2089a451cd163dd4330e6d3bc247025328ad21fd2fb27800d7c"
+    },
+    {
+      "path": "apps/core/test/governed-feedback-adaptive-learning.test.ts",
+      "bytes": 11187,
+      "sha256": "a15dbaa05377582b104719d78ea061cff32b09e7ae1a776e52b1216278902a68"
+    },
+    {
+      "path": "apps/core/test/judge-input-has-text.test.ts",
+      "bytes": 8219,
+      "sha256": "8183664f9b853f9f87a67bd6884a38a8678facdba0b9936d19d330fc51e14dae"
+    },
+    {
+      "path": "apps/core/test/r04-scope-enforcement.test.ts",
+      "bytes": 10704,
+      "sha256": "a89435a4ad84ffb62aede9ed9d2f2cb8df54cb2c3ea1a1ce0c6f4e3e09188d99"
+    },
+    {
+      "path": "apps/core/test/studio-stages.test.ts",
+      "bytes": 26240,
+      "sha256": "9995dba29d16593270d6c834260f64504eb886f2bbf910ed3fcf70baf575db7d"
+    },
+    {
+      "path": "apps/core/test/verified-delivery-drive-sheets.test.ts",
+      "bytes": 25357,
+      "sha256": "b339cf818bc185cfd271bf1eb8e7fb5ae7396050d12c192b5f835d2cba955bcc"
+    },
+    {
+      "path": "apps/worker/src/canva-draft-workflow.ts",
+      "bytes": 15549,
+      "sha256": "3281bff3d9d4058522508d77cb9e0a689b9ac6811369d338dddc9c9c7a19ccb3"
+    },
+    {
+      "path": "apps/worker/src/outbox-consumer.ts",
+      "bytes": 11004,
+      "sha256": "f6459b2a2d5551bff62cde851b0c0e4cba40251d0e360de53b1c05ace71e8f41"
+    },
+    {
+      "path": "apps/worker/test/canva-draft-workflow.test.ts",
+      "bytes": 23512,
+      "sha256": "a29c7c8b0ca34346dd07608d4ab8e28d150eb2d86f9ef95858897109f99529b4"
+    },
+    {
+      "path": "infra/docker/deploy.sh",
+      "bytes": 8732,
+      "sha256": "8dd23c6ba67706948d004df8e3a3fb0ead29f8fb53287f26c7b9f71b418f54a8"
+    },
+    {
+      "path": "output/repairs/2026-09-19-architecture-remediation/OPERATIONS_SLO_EVIDENCE.json",
+      "bytes": 1983,
+      "sha256": "750e0c423a234e6dd5a830515e50cfa87559cf5c9a2ccf8b26dc35211ff90c4c"
+    },
+    {
+      "path": "output/repairs/2026-09-19-architecture-remediation/RELEASE_GATE_EVIDENCE.json",
+      "bytes": 1756,
+      "sha256": "368eb0c0fb675d9092e4a5031c93b7f7ea8340322d20fcca4ba00a8debc1eb6b"
+    },
+    {
+      "path": "packages/db/src/repositories/client.repository.ts",
+      "bytes": 5466,
+      "sha256": "82bcf70e74c99cab08100e666e02e9f41123d47dbfbc4ffc86b3e13a11df82ff"
+    },
+    {
+      "path": "packages/db/src/repositories/design-studio.repository.ts",
+      "bytes": 16665,
+      "sha256": "809be329f8154158b61e7a523f247897fe67b2aef07ba25489212c6fcd3eaf72"
+    },
+    {
+      "path": "packages/evals/src/design-studio/live-runner.ts",
+      "bytes": 13440,
+      "sha256": "b52a9c61764acbcc68efcdb2263efe04065dffbac7932cc5d5be29eb7ac4c140"
+    },
+    {
+      "path": "packages/evals/src/design-studio/report-generator.ts",
+      "bytes": 5076,
+      "sha256": "8d7812ed069489a8a820f0e5938e7fe5f596db3684fcce80cb5a516f26d0067d"
+    },
+    {
+      "path": "packages/evals/src/runner.ts",
+      "bytes": 20378,
+      "sha256": "bbc371027f0cc7ef119f588e13b85d12ba0dbdf5e941a3dce88c3cc2a98b1fd3"
+    },
+    {
+      "path": "packages/integrations/src/google-publisher.ts",
+      "bytes": 31293,
+      "sha256": "28d767077fbbd34f681cbbd24545ffef3910ddc9b23d189a7de23be9595ca9f1"
+    },
+    {
+      "path": "packages/integrations/src/telegram-bridge.ts",
+      "bytes": 34172,
+      "sha256": "1edaf327a745afc765930299fa0caa3cbe2ba57594b607d4cdbced5373c1ba93"
+    },
+    {
+      "path": "packages/integrations/test/google-publisher-bytes.test.ts",
+      "bytes": 9646,
+      "sha256": "7fd35709ce21fb4a5b40ac7c5c09a723923d2f7cc5444ae75855db016465bdfa"
+    },
+    {
+      "path": "packages/testkit/src/fake-model-gateway.ts",
+      "bytes": 7467,
+      "sha256": "35a8bf0c5c13240926bc5072e80887e479659b9c4f799e7af3532fe3cb02ce31"
+    },
+    {
+      "path": "scripts/disaster_recovery_drill.sh",
+      "bytes": 24624,
+      "sha256": "19dda40fed73d6b696ab3300785ca1c00c3a024417d36901fef270d1e2373042"
+    },
+    {
+      "path": "scripts/enforce_release_gate.sh",
+      "bytes": 10546,
+      "sha256": "af8d8401d4006654814bd8bda92417848e1d8f8040f992a07a8b79da2f15874c"
+    },
+    {
+      "path": "scripts/run_model_tournament.ts",
+      "bytes": 12405,
+      "sha256": "3fe939aea40e99f63086e2007b7e65a084241869a4c8332fec8c3bc11f78f7e4"
+    },
+    {
+      "path": "scripts/verify_release_manifest.ts",
+      "bytes": 5231,
+      "sha256": "88beacddea1eee8e181990726ea7b1d02ab541d974aef27712a6300a00aaecfe"
+    },
+    {
+      "path": "packages/creative/test/native-script-fidelity.test.ts",
+      "bytes": 10351,
+      "sha256": "083cb3cb83076d8d7c4cf7e8f7c7c7e935e6b50cdc055b6c7e6a5fa239b5557b"
+    },
+    {
+      "path": "docs/benchmark-protocol.md",
+      "bytes": 9360,
+      "sha256": "58f1bb85621bff74eee11e34d17398ad9203e9ea26698ee9f6cb25f90f54039d"
+    },
+    {
+      "path": "docs/pilot-contract.md",
+      "bytes": 7431,
+      "sha256": "df99c61902e61725409494c5499967319ced598de15428c29c287dbb7e2794ee"
+    },
+    {
+      "path": "scripts/measure_operations_slo.ts",
+      "bytes": 15772,
+      "sha256": "6dc309e5f2880014ee3578cd5fdb5a1371a003b86a7926e2d82483794a5e3376"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/REPORT.md",
+      "bytes": 9976,
+      "sha256": "5c1b457baf6e9a79a5f498a6ba8e4b542a96510a92c624daaf4133cc7e7a442b"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/RESULTS.json",
+      "bytes": 16654,
+      "sha256": "229e3fd9a569c68dbf52c208f936bb123b61b74fcbe5ab92887511e282bdc324"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/default-offline-admission.mjs",
+      "bytes": 815,
+      "sha256": "f9a02899254515f65203f32bc24dfbbdb49112415d6bf278460dfb36c57ef91c"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/manifest-variant.mjs",
+      "bytes": 1892,
+      "sha256": "c6cac9aec2b8039351d531e7d46b4ed92180d4d199b94421e2b4ee93f3322d37"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/publication-lookup-outage.mjs",
+      "bytes": 7736,
+      "sha256": "420517b6d645d6e18cf5c05ba36861088072aab49b3b15198241e191f25b0368"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/rejected-promotion-state.ts",
+      "bytes": 4460,
+      "sha256": "bd3463ba92a9aefb8f76da66f531a9d2312929b39a67ae66129b5368783e71d9"
+    },
+    {
+      "path": "output/audits/2026-09-20-completion-reality-check/security-bounded.ts",
+      "bytes": 5844,
+      "sha256": "e124f9e4bc0dbca52a4d0c163d9519c4b2ffd3bb144a66242b34549926685d33"
+    }
+  ],
+  "note": "Self excluded; selected coverage, not full application attestation"
+}

@@ -11,7 +11,7 @@ describe('native Canva workflow',()=>{
       {status:'retrieved',planId:'plan',designId:'DA_test'},{binding:{designId:'DA_test',version:1}},
       {status:'submitted',operationId:'export'},{status:'retrieved',artifact:{id:'artifact'}},
       {status:'submitted',operationId:'check'},{status:'retrieved',artifact:{content_check:{copyPass:true,fontPass:true}}}];
-    const remote=vi.fn(async()=>Response.json(replies.shift())),ctx=new DurableStepJournal();
+    const remote=vi.fn(async()=>Response.json(replies.shift() ?? { ok: true })),ctx=new DurableStepJournal();
     const result=await runCanvaDraft(input,ctx,remote);
     expect(result.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');expect(result.qcPassed).toBe(false);
     expect(remote.mock.calls[1][1].headers['Idempotency-Key']).toBe('workflow-'+input.taskId);

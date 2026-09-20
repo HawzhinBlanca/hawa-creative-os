@@ -46,8 +46,41 @@ const port = Number(process.env.PORT || 3001);
 const hostname = process.env.HOST || '0.0.0.0';
 
 console.log(`Starting Hawa Core API on http://${hostname}:${port}...`);
-serve({
+const server = serve({
   fetch: app.fetch,
   port,
   hostname,
 });
+
+let isShuttingDown = false;
+const shutdown = (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[${SERVICE_NAME}] Received ${signal}, starting graceful shutdown...`);
+
+  const forceTimeout = setTimeout(() => {
+    console.error(`[${SERVICE_NAME}] Graceful shutdown timed out after 10s, forcing exit`);
+    if (typeof (server as any).closeAllConnections === 'function') {
+      (server as any).closeAllConnections();
+    }
+    process.exit(1);
+  }, 10_000);
+  forceTimeout.unref();
+
+  if (typeof (server as any).closeIdleConnections === 'function') {
+    (server as any).closeIdleConnections();
+  }
+
+  server.close((err?: Error) => {
+    clearTimeout(forceTimeout);
+    if (err) {
+      console.error(`[${SERVICE_NAME}] Error during server close:`, err);
+      process.exit(1);
+    }
+    console.log(`[${SERVICE_NAME}] Server stopped gracefully`);
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

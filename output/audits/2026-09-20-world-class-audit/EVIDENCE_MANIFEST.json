@@ -1,0 +1,194 @@
+{
+  "date": "2026-09-20",
+  "sourceCommit": "9c22026f444c81494d286354960a0b10efaa1176",
+  "purpose": "Audit integrity inventory, not application release certification. Self excluded. Selected source coverage is explicit, not complete.",
+  "sources": [
+    {
+      "path": "apps/core/src/app.ts",
+      "bytes": 402971,
+      "sha256": "7926fee664bed0b86ad020a5dc01064ba459016d5c55df6f5ef2043b31c51dc7"
+    },
+    {
+      "path": "apps/core/src/routes/system.routes.ts",
+      "bytes": 24958,
+      "sha256": "35382d5d628c39015062604b0fb6c68d59b31de8f225ea4ac388450968164aad"
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "bytes": 6798,
+      "sha256": "ce36849ccb87c68ac1639e8938c3c2296cbf2e2250577bdcafa9cecce00b112e"
+    },
+    {
+      "path": "apps/worker/src/canva-draft-workflow.ts",
+      "bytes": 15427,
+      "sha256": "db8c2aee13d6acd02ad3ffcd8ace31ffe6dffb025ef7a204241e8542e7569982"
+    },
+    {
+      "path": "packages/integrations/src/google-publisher.ts",
+      "bytes": 29843,
+      "sha256": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60"
+    },
+    {
+      "path": "packages/contracts/src/release-manifest.ts",
+      "bytes": 2332,
+      "sha256": "5fb639c18054a172120208e25bc69f22a311e966db757ed9c1dbcced7f745813"
+    },
+    {
+      "path": "packages/creative/src/studio/transfer-v2.ts",
+      "bytes": 19369,
+      "sha256": "ea66f46bff7f16f71fe7a56c60cca0578437069bba7da400d8a654aac6a6a3a0"
+    },
+    {
+      "path": "packages/creative/src/studio/pairwise-judge-v3.ts",
+      "bytes": 19277,
+      "sha256": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889"
+    },
+    {
+      "path": "packages/evals/src/runner.ts",
+      "bytes": 19645,
+      "sha256": "e1aafa6b8b9fc9a5d53988ddbac25a97a088de3908bafcd3cd185a57adf1c3f0"
+    },
+    {
+      "path": "packages/evals/src/design-studio/live-runner.ts",
+      "bytes": 13478,
+      "sha256": "e1ce512361c08e000fc14d5b176a4116d424c19b12a4666acf8f382bb853ce9c"
+    },
+    {
+      "path": "packages/evals/src/design-studio/offline-runner.ts",
+      "bytes": 16936,
+      "sha256": "c281d0d829043cb7d40a959a5664d31a8ecd1478d4d3b032abeeb6dbb75f2c3b"
+    },
+    {
+      "path": "scripts/run_model_tournament.ts",
+      "bytes": 10549,
+      "sha256": "06da5e3d5b8e6834eac9ee6ecac131a0f37ab3a6c11cad80190edc9fbd719909"
+    },
+    {
+      "path": "scripts/verify_release_manifest.ts",
+      "bytes": 3961,
+      "sha256": "69331ea908af8419c35c7dba8d7bb0216c6b2d014ffa311d6837a9a2331a825d"
+    },
+    {
+      "path": "scripts/enforce_release_gate.sh",
+      "bytes": 9825,
+      "sha256": "67192fea9be9b43aeb47a7a4895a8dcaca1396da65de8fa35da4d42c1fcbb039"
+    },
+    {
+      "path": "scripts/disaster_recovery_drill.sh",
+      "bytes": 23805,
+      "sha256": "1be2548d1072e5628cb19ba40401b3e0d92c0dccea6cc1c13669110ed5b773a4"
+    },
+    {
+      "path": "scripts/measure_operations_slo.ts",
+      "bytes": 15772,
+      "sha256": "6dc309e5f2880014ee3578cd5fdb5a1371a003b86a7926e2d82483794a5e3376"
+    },
+    {
+      "path": "infra/docker/deploy.sh",
+      "bytes": 8738,
+      "sha256": "c6123e2a840a5eb830664db2b3b0cfd0f6aeecbf421fd3ffb7fdb8207f68cc07"
+    },
+    {
+      "path": "packages/testkit/test/r14-controlled-office-pilot.test.ts",
+      "bytes": 9124,
+      "sha256": "d7f58fab1933de5715e1296719c1ca229654068189876f041656c04a63a11d44"
+    },
+    {
+      "path": "RELEASE_MANIFEST.json",
+      "bytes": 2884,
+      "sha256": "38549489b59d9cf3b77c2ff0c884367bde20f03609718413e0093495603f22ac"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/DURABILITY_FINDINGS.md",
+      "bytes": 12244,
+      "sha256": "44652be781a3af0b9e0d6e1bac882ef411fce9143eaa85bdb3d93c2bae70271f"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/NOTIFICATION_PROBE.json",
+      "bytes": 538,
+      "sha256": "2216d8eebc726ad7f98dc860c50b4791556224c4f6b545350977612c4719e273"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/NOTIFICATION_PROBE.mjs",
+      "bytes": 1604,
+      "sha256": "d36624d05692023a513e46a4538d9e1cac7744d9e13e3f19719bf3aed211cbe9"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/PROOF_QUALITY_FINDINGS.md",
+      "bytes": 14128,
+      "sha256": "975fc092a5a7c38ebcd7c6776ba154c4c3a3c51fa4edba8edbe29f63484b0ebe"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/PUBLICATION_PROBE.json",
+      "bytes": 1694,
+      "sha256": "63930885675f17236378fff77cc46638e498b912bee2a073ea4922a61d9b0b38"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/PUBLICATION_PROBE.mjs",
+      "bytes": 7660,
+      "sha256": "ea5349549ceb4972d3ba2031d58a7f6ca7bcac52382f78064675a3274ee24d87"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/REPORT.md",
+      "bytes": 11519,
+      "sha256": "effa7f8a92b9dd07d7934a1568f1fe01f8c98fbfe0b08b04e8ab13f9ff3d3de9"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/ROOT_EXECUTION_RESULTS.json",
+      "bytes": 21391,
+      "sha256": "da3bbdda41f99d3a06e866c5127ceee2b9ad8826a0a5434417c68d180cae8085"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/RUNTIME_OBSERVATIONS.json",
+      "bytes": 1705,
+      "sha256": "3bf6858bf3d85e50b91df241d8fd29f4b4832a1ebb500c2f9a4a1e38c6e5e5aa"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/SECURITY_ARCHITECTURE_EVIDENCE.json",
+      "bytes": 1293,
+      "sha256": "a514fe81fa1c40577fc9504cf89806c0bf3e4c6ed38aaac2576f8d28e38d799f"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/SECURITY_ARCHITECTURE_FINDINGS.md",
+      "bytes": 12902,
+      "sha256": "e023db0c8e5fe169569178637f481a98e3ad538bb4440f2c096a64e5d3699462"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/TASK_SHEET.md",
+      "bytes": 12277,
+      "sha256": "ff79d3155143900c798c6f09d8b134bd6da8ca31906df264737bdedba6940da5"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/proof-negatives.json",
+      "bytes": 735,
+      "sha256": "c2e2f349733ef26d5e66b906a995eec9a115c86e75a49d1ae6aa3c6625863b2a"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/proof-negatives.mjs",
+      "bytes": 2696,
+      "sha256": "2f1737c83b1e7a13139b7bf474b7d0a0704d7da55f1ba87bb6c42ffb9d960498"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/release-provenance-probe.mjs",
+      "bytes": 1651,
+      "sha256": "db8e62b25897fe7b851610225db1bb0b92a70c59556e1977cc52364f53bfb017"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/security-architecture-probe.ts",
+      "bytes": 5734,
+      "sha256": "bcb4204431440e743b86e0a84a01c9cc66e5f4d95ed0c9232a7ec4691342bf62"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/tournament-failure-probe.mjs",
+      "bytes": 2055,
+      "sha256": "1bce1c154d77b6fe5f538e742090700b31b534b05a15c759f05e788f2e6437bd"
+    },
+    {
+      "path": "output/audits/2026-09-20-world-class-audit/tournament-failure-result.json",
+      "bytes": 972,
+      "sha256": "c124d3407b837295b1e754f557c5630c6744cfa0436cdb334e5de65295aeb7f6"
+    }
+  ]
+}

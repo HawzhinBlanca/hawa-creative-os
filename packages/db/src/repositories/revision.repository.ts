@@ -1,4 +1,4 @@
-import { Kysely, sql } from 'kysely';
+import { Kysely } from 'kysely';
 import crypto from 'node:crypto';
 import type { Database } from '../types.js';
 
@@ -146,16 +146,6 @@ export class RevisionRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      // Invalidate downstream permission on edits (FR-043, R05)
-      await dbClient
-        .updateTable('approvals')
-        .set({
-          decision_payload: sql`jsonb_set(COALESCE(decision_payload, '{}'::jsonb), '{invalidated}', 'true')` as any,
-        })
-        .where('task_id', '=', params.taskId)
-        .where('tenant_id', '=', params.tenantId)
-        .execute();
-
       // 5. Update task with current_design_revision_id, reset state to in_review, increment version
       const nextTaskVersion = Number(task.version) + 1;
       await dbClient
@@ -169,6 +159,42 @@ export class RevisionRepository {
         .where('id', '=', task.id)
         .where('tenant_id', '=', params.tenantId)
         .execute();
+
+      // Invalidate downstream permission on edits (FR-043, R05)
+      // hawa.approvals is append-only by trigger forbid_update_delete();
+      // invalidation of prior approval must be recorded by appending to task_events rather than mutating approvals.
+      const priorApproval = await dbClient
+        .selectFrom('approvals')
+        .select(['id', 'design_revision_id'])
+        .where('task_id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .where('decision', '=', 'approved')
+        .orderBy('created_at', 'desc')
+        .executeTakeFirst();
+
+      if (priorApproval) {
+        await dbClient
+          .insertInto('task_events')
+          .values({
+            tenant_id: params.tenantId,
+            task_id: params.taskId,
+            event_type: 'approval.invalidated',
+            schema_version: 1,
+            aggregate_version: nextTaskVersion,
+            actor_type: params.authorType === 'workflow' ? 'workflow' : 'user',
+            actor_id: params.authorId || null,
+            correlation_id: params.correlationId || crypto.randomUUID(),
+            causation_id: null,
+            trace_id: null,
+            data: {
+              invalidatedApprovalId: priorApproval.id,
+              priorRevisionId: priorApproval.design_revision_id,
+              newRevisionId: revision.id,
+              reason: 'New design revision created',
+            },
+          })
+          .execute();
+      }
 
       // 6. Append task event
       await dbClient

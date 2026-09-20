@@ -1,0 +1,16 @@
+{
+  "source":"9c22026f444c81494d286354960a0b10efaa1176",
+  "scope":"all component failures injected, output write intercepted",
+  "routingStatus":"FAILED",
+  "retrievalStatus":"FAILED",
+  "visualStatus":"FAILED",
+  "studioStatus":"FAILED",
+  "failedFallbacks":{"rung1ModelFallbackVerified":false,"rung3JudgeUnavailableVerified":false,"rung4PlannerFallbackVerified":false,"budgetCapStrictlyEnforced":false,"status":"PASSED"},
+  "admissions":{
+    "intake_router":{"status":"ADMITTED","scope":"Enforced routing, client scoping, and mandatory abstention"},
+    "retrieval_agent":{"status":"ADMITTED","scope":"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage"},
+    "visual_judge":{"status":"ADMITTED","scope":"10-dimensional rubric scoring strictly gated by independent hard QA rules"},
+    "degradation_manager":{"status":"ADMITTED","scope":"Rungs 0 through 4 with deterministic budget and failure fallbacks"}
+  },
+  "overallVerdict":"QUALIFIED"
+}

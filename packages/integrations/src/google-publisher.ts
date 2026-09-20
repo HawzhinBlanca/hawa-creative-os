@@ -34,6 +34,9 @@ export class GooglePublisher implements Publisher {
   private sheetsApiBaseUrl: string;
 
   constructor(private readonly config: GooglePublisherConfig = {}) {
+    if (config.emulateNetworkForTesting && process.env.NODE_ENV === 'production') {
+      throw new Error('emulateNetworkForTesting is strictly prohibited in production environment');
+    }
     this.driveApiBaseUrl = (config.driveApiBaseUrl || process.env.GOOGLE_DRIVE_API_BASE_URL || 'https://www.googleapis.com').replace(/\/$/, '');
     this.driveUploadBaseUrl = (config.driveUploadBaseUrl || process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL || 'https://www.googleapis.com/upload').replace(/\/$/, '');
     this.sheetsApiBaseUrl = (config.sheetsApiBaseUrl || process.env.GOOGLE_SHEETS_API_BASE_URL || 'https://sheets.googleapis.com').replace(/\/$/, '');
@@ -325,7 +328,7 @@ export class GooglePublisher implements Publisher {
         }
 
         // Step 6: Independent Readback from Google Drive to verify real persistence
-        const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink`;
+        const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum`;
         const readbackRes = await fetch(readbackUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
@@ -348,22 +351,16 @@ export class GooglePublisher implements Publisher {
       const readbackNameMatches = readbackData ? readbackData.name === file.filename : true;
       const readbackSizeMatches = readbackData ? Number(readbackData.size) === fileBuffer.length : true;
       const readbackMimeMatches = readbackData ? (!readbackData.mimeType || readbackData.mimeType === file.mimeType) : true;
+      const readbackChecksumMatches = readbackData?.sha256Checksum
+        ? readbackData.sha256Checksum.toLowerCase() === file.sha256.toLowerCase()
+        : true;
       const fileVerified = Boolean(
         readbackIdMatches &&
         readbackNameMatches &&
         readbackSizeMatches &&
-        readbackMimeMatches
+        readbackMimeMatches &&
+        readbackChecksumMatches
       );
-
-      if (!fileVerified) {
-        return {
-          ok: false,
-          error: {
-            code: 'PUBLICATION_VERIFICATION_FAILED',
-            message: `Remote readback verification failed for ${file.filename}: metadata or size mismatch`,
-          } as any,
-        };
-      }
 
       driveFiles.push({
         artifactId: file.artifactId,
@@ -376,6 +373,34 @@ export class GooglePublisher implements Publisher {
         verified: fileVerified,
         webViewLink,
       });
+
+      if (!fileVerified) {
+        const receipt: PublicationReceipt = {
+          publicationId,
+          publicationKey: request.publicationKey,
+          driveFolderId,
+          driveFiles,
+          sheet: {
+            spreadsheetId: request.destination.spreadsheetId || '',
+            sheetId: request.destination.sheetId || 0,
+            rowKey: request.taskId,
+            rowNumber: undefined,
+            expectedHash: request.packageHash,
+            observedHash: request.packageHash,
+            synced: false,
+          },
+          completedAt: new Date().toISOString(),
+          state: 'failed',
+          detail: {
+            verified: false,
+            filesUploaded: driveFiles.length,
+            error: `Remote readback verification failed for ${file.filename}: checksum or metadata mismatch`,
+          },
+          emulated: this.config.emulateNetworkForTesting === true,
+        };
+        this.inMemoryLedger.set(request.publicationKey, receipt);
+        return { ok: true, value: receipt };
+      }
     }
 
     const allFilesVerified = driveFiles.length > 0 && driveFiles.every((f) => f.verified);
@@ -466,11 +491,14 @@ export class GooglePublisher implements Publisher {
           const verifyRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:A${rowNumber}`, {
             headers: { 'Authorization': `Bearer ${token}` },
           });
-          if (verifyRes.ok) {
-            const verifyData = (await verifyRes.json()) as any;
-            const readTaskId = verifyData.values?.[0]?.[0];
-            if (readTaskId && readTaskId !== request.taskId) {
-              // Row position drifted (e.g. rows were moved, inserted, or sorted)! Find actual row by immutable taskId
+          if (!verifyRes.ok) {
+            return { rowNumber, synced: false, problem: `Row identity verification failed: HTTP ${verifyRes.status}` };
+          }
+          const verifyData = (await verifyRes.json()) as any;
+          const readTaskId = verifyData.values?.[0]?.[0];
+          if (readTaskId && readTaskId !== request.taskId) {
+            // Row position drifted (e.g. rows were moved, inserted, or sorted)! Find actual row by immutable taskId
+            try {
               const foundRow = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
               if (foundRow !== undefined) {
                 rowNumber = foundRow;
@@ -478,10 +506,23 @@ export class GooglePublisher implements Publisher {
               } else {
                 rowNumber = undefined; // Need to append a new row
               }
+            } catch (findErr: any) {
+              return { rowNumber, synced: false, problem: `Task identity search failed: ${findErr.message}` };
             }
           }
-        } catch {
-          // Fall back to current rowNumber
+        } catch (err: any) {
+          return { rowNumber, synced: false, problem: `Row identity verification error: ${err.message}` };
+        }
+      } else {
+        // Check if row already exists for this taskId before appending
+        try {
+          const foundRow = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
+          if (foundRow !== undefined) {
+            rowNumber = foundRow;
+            this.taskRowMap.set(request.taskId, rowNumber);
+          }
+        } catch (findErr: any) {
+          return { rowNumber, synced: false, problem: `Task identity search failed: ${findErr.message}` };
         }
       }
 
@@ -534,20 +575,18 @@ export class GooglePublisher implements Publisher {
    * Ensures immutable task identity even when rows are moved, sorted, or inserted externally.
    */
   async findRowByTaskId(spreadsheetId: string, token: string, taskId: string): Promise<number | undefined> {
-    try {
-      const res = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A:A`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return undefined;
-      const data = (await res.json()) as any;
-      const rows = data.values || [];
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i]?.[0] === taskId) {
-          return i + 1; // 1-indexed row number in Google Sheets
-        }
+    const res = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A:A`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as any;
+    const rows = data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i]?.[0] === taskId) {
+        return i + 1; // 1-indexed row number in Google Sheets
       }
-    } catch {
-      // Ignore network errors during row lookup
     }
     return undefined;
   }

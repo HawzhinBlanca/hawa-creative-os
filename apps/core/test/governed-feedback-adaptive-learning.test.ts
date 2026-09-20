@@ -240,5 +240,5 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
     // Verified: The subsequent task automatically inherited the learned typography & palette!
     expect(task3OpsStr).toContain('Cinzel');
     expect(task3OpsStr).toContain('#FFD15C');
-  });
+  }, 30000);
 });

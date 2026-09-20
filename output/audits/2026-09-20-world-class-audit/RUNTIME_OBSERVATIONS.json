@@ -1,0 +1,31 @@
+{
+  "auditDate": "2026-09-20",
+  "scope": "Read-only runtime observations. Included source hashes do not attest complete compiled image. No health/provider endpoint invoked.",
+  "containers": [
+    {
+      "name": "hawa-production-core-1",
+      "image": "sha256:32dc9c3e35f095d11fbc811334cd9e56d86b5273d27ce55fe5cb7e3471587c23",
+      "created": "2026-09-20T11:00:27.631412847Z",
+      "health": "healthy"
+    },
+    {
+      "name": "hawa-production-worker-1",
+      "image": "sha256:c0b687b70a5fdf4914437f459773c4276873af26e6236376de8fe1875a495a57",
+      "created": "2026-09-20T11:00:31.087334417Z",
+      "health": "healthy"
+    },
+    {
+      "name": "hawa-production-desk-1",
+      "image": "sha256:dc85940bd11a205fceea15b509274e1def0d14b80fca0ed61ef91db7c2ecc6b5",
+      "created": "2026-09-19T12:37:21.990658178Z",
+      "health": "healthy"
+    }
+  ],
+  "coreReadback": {
+    "chunk_id": "a56796",
+    "wall_time_seconds": 0.000009334,
+    "exit_code": 0,
+    "original_token_count": 157,
+    "output": "{\n  \"buildCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"globalV3\": \"off\",\n  \"globalV2\": \"off\",\n  \"pilotV3AllowlistCount\": 2,\n  \"sourceHashes\": [\n    {\n      \"path\": \"/app/apps/core/src/app.ts\",\n      \"sha256\": \"7926fee664bed0b86ad020a5dc01064ba459016d5c55df6f5ef2043b31c51dc7\"\n    },\n    {\n      \"path\": \"/app/packages/integrations/src/google-publisher.ts\",\n      \"sha256\": \"8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60\"\n    },\n    {\n      \"path\": \"/app/packages/creative/src/studio/transfer-v2.ts\",\n      \"sha256\": \"ea66f46bff7f16f71fe7a56c60cca0578437069bba7da400d8a654aac6a6a3a0\"\n    }\n  ]\n}\n"
+  }
+}

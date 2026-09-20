@@ -16,11 +16,12 @@ export function generateMarkdownReport(report: StudioEvalReport): string {
   const noUnmeasuredCanary = report.results.length > 0 && !report.results.some(r => r.canary.verdict === 'UNMEASURED');
   const noUnmeasuredQa = report.results.length > 0 && !report.results.some(r => r.hardQaEscapes === undefined);
   const noUnmeasuredParity = report.results.length > 0 && !report.results.some(r => !r.parity || r.parity.parity === 'unmeasured');
+  const noUnmeasuredSwap = report.results.length > 0 && !report.results.some(r => typeof r.tournament?.swapConsistencyRate !== 'number');
 
   lines.push(`| Qualification Completion | ${report.completedBriefs + report.degradedBriefs}/${report.totalBriefs} | 24/24 | ${allBriefsComplete ? 'PASS' : 'FAIL'} |`);
   lines.push(`| Hard QA Escapes | ${report.hardQaEscapeCount} | 0 | ${report.hardQaEscapeCount === 0 && noUnmeasuredQa ? 'PASS' : 'FAIL'} |`);
   lines.push(`| Canary Pass Rate | ${(report.canaryPassRate * 100).toFixed(1)}% (${Math.round(report.canaryPassRate * report.totalBriefs)}/${report.totalBriefs}) | ≥ 95.8% (≥23/24) | ${report.canaryPassRate >= 23 / 24 && report.totalBriefs >= 24 && noUnmeasuredCanary ? 'PASS' : 'FAIL'} |`);
-  lines.push(`| Tournament Swap Consistency | ${(report.tournamentSwapConsistencyRate * 100).toFixed(1)}% | ≥ 80.0% | ${report.tournamentSwapConsistencyRate >= 0.8 && report.results.length > 0 ? 'PASS' : 'FAIL'} |`);
+  lines.push(`| Tournament Swap Consistency | ${(report.tournamentSwapConsistencyRate * 100).toFixed(1)}% | ≥ 80.0% | ${report.tournamentSwapConsistencyRate >= 0.8 && report.results.length > 0 && noUnmeasuredSwap ? 'PASS' : 'FAIL'} |`);
   lines.push(`| Mean Winner Score | ${report.meanWinnerScore.toFixed(2)}/10 | ≥ 8.0/10 | ${report.meanWinnerScore >= 8.0 && noMissingScores ? 'PASS' : 'FAIL'} |`);
   lines.push(`| Minimum Winner Score | ${report.minWinnerScore.toFixed(2)}/10 | ≥ 7.0/10 | ${report.minWinnerScore >= 7.0 && noMissingScores ? 'PASS' : 'FAIL'} |`);
   lines.push(`| Canva Parity (Match or Minor) | ${report.parityVerdicts.match + report.parityVerdicts.minor}/${report.totalBriefs} | ≥ 22/24 | ${report.parityVerdicts.match + report.parityVerdicts.minor >= 22 && report.totalBriefs >= 24 && noUnmeasuredParity ? 'PASS' : 'FAIL'} |`);

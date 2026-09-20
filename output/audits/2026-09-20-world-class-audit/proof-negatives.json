@@ -1,0 +1,8 @@
+{
+  "source": "9c22026f444c81494d286354960a0b10efaa1176",
+  "scope": "offline counterexamples, no external effects",
+  "alwaysAbstain": {"dataset":"routing_brief.jsonl","totalCases":200,"passedCases":5,"failedCases":195,"passRate":2.5,"criticalViolations":0},
+  "defaultFakeGateway": {"dataset":"routing_brief.jsonl","totalCases":200,"passedCases":200,"failedCases":0,"passRate":100,"criticalViolations":0},
+  "missingClientProjectAndBrief": {"dataset":"routing_brief.jsonl","totalCases":200,"passedCases":200,"failedCases":0,"passRate":100,"criticalViolations":0},
+  "missingSwapMeasurements": {"measuredRuns":1,"totalRuns":24,"aggregateSwapConsistency":1,"emittedRow":"| Tournament Swap Consistency | 100.0% | ≥ 80.0% | PASS |"}
+}

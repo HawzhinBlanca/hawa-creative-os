@@ -33,6 +33,7 @@ async function main() {
   console.log('   ADR Compliance:      ADR-030 (Model Gateway Egress & Role Policy)');
   console.log('================================================================================');
 
+  const isLive = process.argv.includes('--live');
   const runner = new EvaluationRunner();
   const startTime = Date.now();
 
@@ -135,23 +136,26 @@ async function main() {
       passRate: visualJudgeRes.passRate,
       status: visualJudgeRes.passRate === 100.0 ? 'PASSED' : 'FAILED',
     },
-    designStudioTournament: {
-      goldenBriefsCount: studioReport.totalBriefs,
-      completedBriefs: studioReport.completedBriefs,
-      meanScore: studioReport.meanWinnerScore,
-      canaryPassRate: studioReport.canaryPassRate,
-      orderSwapConsistencyRate: studioReport.tournamentSwapConsistencyRate,
-      hardQaEscapeCount: studioReport.hardQaEscapeCount,
-      status: studioReport.hardQaEscapeCount === 0 && studioReport.tournamentSwapConsistencyRate >= 0.9 ? 'PASSED' : 'FAILED',
-    },
-    degradationLadderResilience: {
+    taskId: 'R10',
+    name: 'Normative Model Tournament & Component Admission',
+    evaluatedAt: new Date().toISOString(),
+    proofClass: isLive ? 'LIVE_MODEL_EVALUATION' : 'SIMULATED_OFFLINE_TEST',
+    simulated: !isLive,
+    designStudioTournament: studioReport,
+    degradationLadderFallbacks: {
       rung1ModelFallbackVerified: rung1Res.rungsTriggered.includes('rung1_opus_model_fallback'),
       rung3JudgeUnavailableVerified: rung3Res.rungsTriggered.includes('rung3_judge_unavailable'),
       rung4PlannerFallbackVerified: rung4Res.rungsTriggered.includes('rung4_planner_fallback'),
       budgetCapStrictlyEnforced: budgetRes.rungsTriggered.includes('budget_exhausted'),
-      status: 'PASSED',
+      status: (
+        rung1Res.rungsTriggered.includes('rung1_opus_model_fallback') &&
+        rung3Res.rungsTriggered.includes('rung3_judge_unavailable') &&
+        rung4Res.rungsTriggered.includes('rung4_planner_fallback') &&
+        budgetRes.rungsTriggered.includes('budget_exhausted')
+      ) ? 'PASSED' : 'FAILED',
     },
-    p10RetrospectiveContext: {
+    historicalSupercession: {
+      priorAuditEvidenceReviewed: true,
       historicalRunsPreserved: true,
       knownLimitationsDocumented: [
         'Single model provider family in historical run (gpt-6-astra)',
@@ -161,16 +165,56 @@ async function main() {
       remediedInR10: true,
     },
     admissions: {
-      intake_router: { status: 'ADMITTED', scope: 'Enforced routing, client scoping, and mandatory abstention' },
-      retrieval_agent: { status: 'ADMITTED', scope: 'Multi-intent asset and exemplar retrieval with zero foreign tenant leakage' },
-      visual_judge: { status: 'ADMITTED', scope: '10-dimensional rubric scoring strictly gated by independent hard QA rules' },
-      degradation_manager: { status: 'ADMITTED', scope: 'Rungs 0 through 4 with deterministic budget and failure fallbacks' },
+      intake_router: {
+        status: isLive
+          ? (routingRes.passRate >= 98.0 && routingRes.criticalViolations === 0 ? 'ADMITTED' : 'REJECTED')
+          : 'SIMULATED_NOT_ADMITTED',
+        scope: 'Enforced routing, client scoping, and mandatory abstention',
+      },
+      retrieval_agent: {
+        status: isLive
+          ? (retrievalRes.passRate === 100.0 && retrievalRes.criticalViolations === 0 ? 'ADMITTED' : 'REJECTED')
+          : 'SIMULATED_NOT_ADMITTED',
+        scope: 'Multi-intent asset and exemplar retrieval with zero foreign tenant leakage',
+      },
+      visual_judge: {
+        status: isLive
+          ? (copyGuardRes.passRate === 100.0 && visualJudgeRes.passRate === 100.0 && studioReport.hardQaEscapeCount === 0 && studioReport.tournamentSwapConsistencyRate >= 0.9 ? 'ADMITTED' : 'REJECTED')
+          : 'SIMULATED_NOT_ADMITTED',
+        scope: '10-dimensional rubric scoring strictly gated by independent hard QA rules',
+      },
+      degradation_manager: {
+        status: isLive
+          ? ((rung1Res.rungsTriggered.includes('rung1_opus_model_fallback') &&
+              rung3Res.rungsTriggered.includes('rung3_judge_unavailable') &&
+              rung4Res.rungsTriggered.includes('rung4_planner_fallback') &&
+              budgetRes.rungsTriggered.includes('budget_exhausted')) ? 'ADMITTED' : 'REJECTED')
+          : 'SIMULATED_NOT_ADMITTED',
+        scope: 'Rungs 0 through 4 with deterministic budget and failure fallbacks',
+      },
     },
-    overallVerdict: 'QUALIFIED',
+    overallVerdict: isLive
+      ? ((routingRes.passRate >= 98.0 && routingRes.criticalViolations === 0 &&
+          retrievalRes.passRate === 100.0 && retrievalRes.criticalViolations === 0 &&
+          copyGuardRes.passRate === 100.0 && visualJudgeRes.passRate === 100.0 &&
+          studioReport.hardQaEscapeCount === 0 && studioReport.tournamentSwapConsistencyRate >= 0.9 &&
+          rung1Res.rungsTriggered.includes('rung1_opus_model_fallback') &&
+          rung3Res.rungsTriggered.includes('rung3_judge_unavailable') &&
+          rung4Res.rungsTriggered.includes('rung4_planner_fallback') &&
+          budgetRes.rungsTriggered.includes('budget_exhausted')) ? 'QUALIFIED' : 'UNQUALIFIED')
+      : 'UNQUALIFIED_SIMULATION',
   };
 
   fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
   console.log(`\n   ✓ Evidence dossier written to: ${evidencePath}`);
+
+  if (evidence.overallVerdict !== 'QUALIFIED') {
+    if (!isLive) {
+      console.warn('\n⚠️  SIMULATION NOTICE: Running with offline/fake doubles. This verifies harness behavior but cannot confer release qualification or admit production roles.');
+    }
+    console.error(`\n❌ NORMATIVE MODEL TOURNAMENT NOT QUALIFIED: Criteria not met (verdict: ${evidence.overallVerdict})`);
+    process.exit(1);
+  }
 
   console.log('\n================================================================================');
   console.log('🏆 NORMATIVE MODEL TOURNAMENT COMPLETE: ALL CRITERIA QUALIFIED');

@@ -177,11 +177,18 @@ GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+GATE_STATUS="QUALIFIED"
+GATE_TESTS_STATUS="PASS"
+if [ "$SKIP_TESTS" -eq 1 ]; then
+  GATE_STATUS="UNQUALIFIED_TESTS_SKIPPED"
+  GATE_TESTS_STATUS="SKIPPED"
+fi
+
 cat <<EOF > "${EVIDENCE_FILE}"
 {
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
-  "status": "QUALIFIED",
+  "status": "${GATE_STATUS}",
   "evaluatedAt": "${TIMESTAMP}",
   "git": {
     "commit": "${GIT_COMMIT}",
@@ -205,7 +212,7 @@ cat <<EOF > "${EVIDENCE_FILE}"
     "Stage 1: TypeScript typecheck (pnpm typecheck)",
     "Stage 2: Database schema & migrations check (pnpm run db:check)",
     "Stage 3: Security & secret scanner with self-test (security_scan.py)",
-    "Stage 4: Knowledge pack validation (validate_pack.py: 601 passed)",
+    "Stage 4: Knowledge pack validation (validate_pack.py)",
     "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
     "Stage 6: Production DB & credential isolation guard",
     "Stage 7: Full monorepo acceptance tests (${TOTAL_TESTS} passed, 0 failed)"
@@ -218,7 +225,7 @@ cat <<EOF > "${EVIDENCE_FILE}"
     "GateE_DurableWorkflowTerminalState": "PASS",
     "GateF_EditableOutputFidelity": "PASS",
     "GateG_CleanHostDisasterRecovery": "PASS",
-    "GateH_ModelTournamentQuality": "PASS"
+    "GateH_ModelTournamentQuality": "${GATE_TESTS_STATUS}"
   },
   "negativeRefusalTest": {
     "command": "scripts/enforce_release_gate.sh --test-refusal",
@@ -227,6 +234,20 @@ cat <<EOF > "${EVIDENCE_FILE}"
   }
 }
 EOF
+
+if [ "$GATE_STATUS" != "QUALIFIED" ]; then
+  echo ""
+  echo "================================================================================"
+  echo "      RELEASE GATE FAILED / REFUSED: NOT QUALIFIED FOR RELEASE"
+  echo "      Status: ${GATE_STATUS}"
+  echo "================================================================================"
+  echo "Evidence written to: ${EVIDENCE_FILE}"
+  for s in "${STAGE_STATUS[@]}"; do
+    echo "  - $s"
+  done
+  echo "================================================================================"
+  exit 2
+fi
 
 echo ""
 echo "================================================================================"

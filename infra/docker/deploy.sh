@@ -79,8 +79,10 @@ echo "✓ configuration present, no placeholders, no duplicate credential lines"
 echo "✓ compose topology valid"
 
 # 4. Repository gates
-(cd "$ROOT_DIR" && python3 infra/security/security_scan.py --self-test >/dev/null && python3 infra/security/security_scan.py >/dev/null) && echo "✓ secret gate"
-(cd "$ROOT_DIR" && python3 scripts/validate_pack.py >/dev/null) && echo "✓ blueprint pack"
+(cd "$ROOT_DIR" && python3 infra/security/security_scan.py --self-test >/dev/null && python3 infra/security/security_scan.py >/dev/null)
+echo "✓ secret gate"
+(cd "$ROOT_DIR" && python3 scripts/validate_pack.py >/dev/null)
+echo "✓ blueprint pack"
 # Plaintext credential material on this host outside git: listed, and refused when readable by others
 bash "${ROOT_DIR}/infra/security/local_state_audit.sh"
 

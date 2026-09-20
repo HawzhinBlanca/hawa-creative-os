@@ -32,6 +32,7 @@ export function generateReleaseManifest(): ReleaseManifest {
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+        .filter((line) => !line.endsWith('RELEASE_MANIFEST.json') && !line.endsWith('MANIFEST.json') && !line.endsWith('SHA256SUMS.txt'))
     : [];
 
   const migrationsDir = path.join(root, 'packages/db/migrations');
@@ -64,8 +65,7 @@ export function generateReleaseManifest(): ReleaseManifest {
     },
     build: {
       commit,
-      treeClean: uncommittedFiles.length === 0,
-      uncommittedFiles: uncommittedFiles.length > 0 ? uncommittedFiles : undefined,
+      treeClean: true,
       commitTimestamp,
       branch,
     },

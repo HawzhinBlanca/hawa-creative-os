@@ -1,6 +1,6 @@
 import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
-import { fitLogoToAspect, resolveStrokeWidth } from './studio-normalize.js';
+import { fitLogoToAspect, resolveRadius, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { studioLayoutV2Schema } from './layout-v2.js';
@@ -286,9 +286,12 @@ export function scaleNormalizedLayoutToV2(
       ...box,
       kind: s.kind,
       color: resolvedColor,
-      opacity: s.opacity !== null && s.opacity !== undefined ? Number(clamp(s.opacity).toFixed(2)) : undefined,
-      radius: s.radius !== null && s.radius !== undefined ? Math.round(s.radius * canvasWidth) : undefined,
-      // The model answers in either unit, so the unit is read from the value rather than assumed.
+      // The model answers in either unit (fractional or pixel); resolveRadius reads the unit
+      // and holds corner radius to half the shape's smaller dimension so it never over-scales.
+      radius:
+        s.radius !== null && s.radius !== undefined
+          ? resolveRadius(s.radius, box, canvasWidth)
+          : undefined,
       // Multiplying by the canvas width unconditionally turned a plain "2" into a 2160px band over
       // the whole poster in 38 of the 200 designs stored on 2026-09-18.
       strokeWidth:

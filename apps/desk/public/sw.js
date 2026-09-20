@@ -129,8 +129,8 @@ self.addEventListener('fetch', (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          return new Response(JSON.stringify({ offline: true, items: [] }), {
-            status: 200,
+          return new Response(JSON.stringify({ error: 'SERVICE_UNAVAILABLE', message: 'Offline: Network unreachable and no cached response available' }), {
+            status: 503,
             headers: { 'Content-Type': 'application/json' },
           });
         })

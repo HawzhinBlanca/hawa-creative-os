@@ -20,6 +20,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   const receivedSheetAppends: any[] = [];
   const receivedSheetUpdates: any[] = [];
   const receivedSheetReadbacks: string[] = [];
+  let lastAppendedTaskId: string | null = null;
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-cv16-test-'));
   const testFilePng = path.join(tempDir, 'banner.png');
@@ -65,6 +66,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
           name: 'banner.png',
           mimeType: 'image/png',
           size: String(testFileBytes.length),
+          sha256Checksum: testFileSha256,
           webViewLink: `https://drive.google.com/file/d/${fileId}/view`,
         }));
         return;
@@ -80,6 +82,9 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
             authHeader: req.headers.authorization,
             values: parsed.values,
           });
+          if (parsed.values?.[0]?.[0]) {
+            lastAppendedTaskId = parsed.values[0][0];
+          }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             spreadsheetId: 'sheet_hawa_office_reporting',
@@ -90,6 +95,24 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
             },
           }));
         });
+        return;
+      }
+
+      // 3b. Google Sheets Row identity verification & search
+      if (req.method === 'GET' && url.includes('/values/A') && (url.includes(':A') || url.includes('A42:A42'))) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        if (url.includes('/values/A:A')) {
+          const colA = new Array(41).fill(['dummy_task']);
+          if (lastAppendedTaskId) {
+            colA.push([lastAppendedTaskId]);
+          }
+          res.end(JSON.stringify({ range: 'Sheet1!A:A', values: colA }));
+        } else {
+          res.end(JSON.stringify({
+            range: 'Sheet1!A42:A42',
+            values: [ [ lastAppendedTaskId || 'task_cv16_test_001' ] ],
+          }));
+        }
         return;
       }
 

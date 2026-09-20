@@ -79,7 +79,7 @@ else
   # `ls` on a pattern that matches nothing exits 1, and this script runs under pipefail: the first
   # run against a fresh destination (no .dump copies beside the .enc ones) aborted the whole backup
   # after the copy, so it never logged and the caller saw an empty failure.
-  for ext in dump enc; do
+  for ext in dump enc sql; do
     { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
       rm -f "$old" "$old.sha256"
     done

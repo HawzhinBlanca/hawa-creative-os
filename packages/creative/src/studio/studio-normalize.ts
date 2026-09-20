@@ -92,6 +92,37 @@ export function repairStrokeWidths<T extends Pick<StudioLayoutV2, 'width' | 'hei
 }
 
 /**
+ * Reads the corner radius of a freshly generated shape in whatever unit the model wrote,
+ * and clamps it so the corner curve never exceeds half of the shape's smaller dimension.
+ * Values <= 0.05 are a share of the canvas width; anything above is already in pixels.
+ */
+export function resolveRadius(
+  raw: number,
+  shape: Pick<ShapeElement, 'width' | 'height'>,
+  canvasWidth: number
+): number {
+  const maxRadius = Math.max(0, Math.floor(Math.min(shape.width, shape.height) / 2));
+  const px = raw <= 0.05 ? raw * canvasWidth : raw;
+  return Math.min(maxRadius, Math.max(0, Math.round(px)));
+}
+
+/**
+ * Repairs oversized corner radii on existing stored layouts or refinement outputs.
+ * An oversized radius (> min(width, height) / 2) stems from multiplying pixel values
+ * by canvas width (e.g. radius: 8640 from 8 * 1080).
+ */
+export function repairRadii<T extends Pick<StudioLayoutV2, 'width' | 'height' | 'shapes'>>(layout: T): T {
+  for (const shape of layout.shapes || []) {
+    if (shape.radius === null || shape.radius === undefined) continue;
+    const maxRadius = Math.max(0, Math.floor(Math.min(shape.width, shape.height) / 2));
+    if (shape.radius <= maxRadius) continue;
+    const undone = Math.round(shape.radius / Math.max(1, layout.width));
+    shape.radius = undone >= 0 && undone <= maxRadius ? undone : maxRadius;
+  }
+  return layout;
+}
+
+/**
  * The studio's post-generation normalisation: a 6% safe margin, the logo at its real aspect and
  * inside the margins, minimum type sizes, text boxes clamped inside the margins, and any non-panel
  * shape that collides with text or the logo removed. Mutates and returns the layout.
@@ -186,6 +217,7 @@ export function normalizeStudioLayout(
     !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
 
   repairStrokeWidths(lyt as StudioLayoutV2);
+  repairRadii(lyt as StudioLayoutV2);
 
   lyt.shapes = (lyt.shapes || []).map((s: any) => {
     if (s.role === 'frame') return { ...s, role: 'panel' };

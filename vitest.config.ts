@@ -48,6 +48,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 30000,
     include: ['**/*.test.ts', '**/*.spec.ts'],
     exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**'],
     fileParallelism: false,

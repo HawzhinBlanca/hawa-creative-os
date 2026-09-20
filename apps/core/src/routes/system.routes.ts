@@ -179,22 +179,26 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
       const subscriber = (ev: { id: string; event: string; data: any }) => {
         if (closed) return;
-        // Tenant isolation: discard events for other tenants
-        const evTenantId = ev.data?.tenantId;
-        const isSameTenant = (a?: string, b?: string) => {
-          if (!a || !b) return true;
-          if (a === b) return true;
-          const isDefaultA = a === 'tenant-default' || a === '00000000-0000-4000-a000-000000000001';
-          const isDefaultB = b === 'tenant-default' || b === '00000000-0000-4000-a000-000000000001';
-          return isDefaultA && isDefaultB;
-        };
-        if (!isSameTenant(evTenantId, auth.tenantId) && auth.role !== 'superadmin') {
-          return;
-        }
-        // Client isolation: discard events for other clients when user is client-scoped
-        const evClientId = ev.data?.clientId;
-        if (evClientId && (auth as any).clientId && evClientId !== (auth as any).clientId) {
-          return;
+        const isSystemEvent = ev.event?.startsWith('system:');
+        if (!isSystemEvent) {
+          const evTenantId = ev.data?.tenantId;
+          const evClientId = ev.data?.clientId;
+          const userTenantId = auth.tenantId;
+          const userClientId = (auth as any).clientId;
+
+          // Tenant isolation (fail-closed): if user is tenant-scoped, domain event MUST have matching tenantId
+          if (userTenantId && auth.role !== 'superadmin') {
+            if (!evTenantId) return; // Fail-closed: missing tenantId on domain event
+            const isDefaultTenant = (t?: string) => t === 'tenant-default' || t === '00000000-0000-4000-a000-000000000001';
+            const matchesTenant = evTenantId === userTenantId || (isDefaultTenant(evTenantId) && isDefaultTenant(userTenantId));
+            if (!matchesTenant) return;
+          }
+
+          // Client isolation (fail-closed): if user is client-scoped, domain event MUST have matching clientId
+          if (userClientId && auth.role !== 'superadmin' && auth.role !== 'administrator') {
+            if (!evClientId) return; // Fail-closed: missing clientId on domain event
+            if (evClientId !== userClientId) return;
+          }
         }
         stream.writeSSE({
           id: ev.id,
@@ -222,6 +226,13 @@ export function registerSystemRoutes(ctx: RouteContext) {
       // 2. Heartbeat Ping every 15 seconds
       const heartbeat = setInterval(async () => {
         if (closed) {
+          clearInterval(heartbeat);
+          subscribers.delete(subscriber as any);
+          return;
+        }
+        const currentAuth = verifyRequestAuth(c);
+        if (!currentAuth.authenticated) {
+          closed = true;
           clearInterval(heartbeat);
           subscribers.delete(subscriber as any);
           return;
