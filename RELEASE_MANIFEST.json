@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-19T23:01:06.403Z",
+  "generatedAt": "2026-09-20T08:13:53.353Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,25 +19,9 @@
     ]
   },
   "build": {
-    "commit": "81bb4f57506ede834a4a4e731c9957aef8bf48cb",
-    "treeClean": false,
-    "uncommittedFiles": [
-      "M apps/core/src/app.ts",
-      "M apps/core/src/services/design-studio/design-studio-service.ts",
-      "M apps/core/src/services/design-studio/stages/brief.stage.ts",
-      "M apps/worker/src/canva-draft-workflow.ts",
-      "M package.json",
-      "M packages/creative/src/studio/art-generator-v3.ts",
-      "M packages/creative/src/studio/transfer-v2.ts",
-      "M scripts/proofs/reprepare_stored_runs.mjs",
-      "?? apps/core/test/late-reference-rebrief.test.ts",
-      "?? apps/core/test/terminal-notification-durability.test.ts",
-      "?? apps/worker/test/canva-draft-workflow-polling.test.ts",
-      "?? packages/creative/test/gate-modes.test.ts",
-      "?? packages/creative/test/transfer-art-scrim.test.ts",
-      "?? scripts/proofs/gate-baseline.json"
-    ],
-    "commitTimestamp": "2026-09-20T01:39:34+03:00",
+    "commit": "1e6660489d3f6e8da2901e0c3c2a06cb46f23e8e",
+    "treeClean": true,
+    "commitTimestamp": "2026-09-20T02:03:37+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -107,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "af0c01fbc13cf4ee74571e634092a42576b2d66acaa173e192e39c28c9d98b33"
+  "sha256": "f550b76e90d8fe6799d0e478fddec78896734cd7b8c655e10a8acd975d5ed707"
 }
