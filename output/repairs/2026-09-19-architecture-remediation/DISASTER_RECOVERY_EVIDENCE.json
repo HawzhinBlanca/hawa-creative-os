@@ -1,6 +1,6 @@
 {
-  "drillId": "54d06302-c4a1-4944-9443-2eec65088f0f",
-  "timestamp": "20260919T113530Z",
+  "drillId": "44816654-54b1-4b17-b3e0-3dd8b85f9976",
+  "timestamp": "20260920T203356Z",
   "normativeStandards": ["FR-070", "NFR-003", "NFR-020", "Gate C", "Gate G", "Gate H"],
   "cleanHostExecution": {
     "disposableContainer": "hawa-clean-host-dr-postgres",
@@ -8,14 +8,14 @@
     "mountedProductionVolumes": false,
     "rpo": {
       "targetSeconds": 900,
-      "measuredSeconds": 12,
+      "measuredSeconds": 15,
       "passed": true,
-      "markerId": "dr-marker-54d06302-c4a1-4944-9443-2eec65088f0f",
-      "markerAcknowledgedAt": "2026-09-19 11:35:30.821101+00"
+      "markerId": "dr-marker-44816654-54b1-4b17-b3e0-3dd8b85f9976",
+      "markerAcknowledgedAt": "2026-09-20 20:33:56.392553+00"
     },
     "rto": {
       "targetSeconds": 14400,
-      "measuredSeconds": 9,
+      "measuredSeconds": 10,
       "passed": true
     }
   },
@@ -23,18 +23,18 @@
     "cipher": "AES-256-CBC",
     "keyDerivation": "PBKDF2",
     "iterations": 100000,
-    "rawBundleSha256": "053d0a010f40b1740261b0221788aa286abc1ffd7b84cc61b6916fedf3ae9cfe",
-    "rawSizeBytes": 224802304,
-    "encryptedBundleSha256": "a9c180fbfc8a30b91fc010471c8407e80cb5d77a3cd6c9603b5cf880aa01c45e",
-    "encryptedSizeBytes": 224802336,
-    "offhostReplica": "/Users/hawzhin/.hawa/offhost_snapshots/hawa_20260919T113530Z.enc"
+    "rawBundleSha256": "3ba4d66ec9f14a957237b245effee43a3b1c8b0baae3d6c7cc7522ab1fb700ab",
+    "rawSizeBytes": 295389184,
+    "encryptedBundleSha256": "fe455c3de0a0304f04995a2bb7139509c610d21e8097068f1d8ac0239c2c12ff",
+    "encryptedSizeBytes": 295389216,
+    "offhostReplica": "/Users/hawzhin/.hawa/offhost_snapshots/hawa_20260920T203356Z.enc"
   },
   "parityVerification": {
-    "tasks": { "production": 1576, "restored": 1576, "match": true },
-    "events": { "production": 2042, "restored": 2042, "match": true },
+    "tasks": { "production": 1590, "restored": 1590, "match": true },
+    "events": { "production": 2056, "restored": 2056, "match": true },
     "clients": { "production": 4, "restored": 4, "match": true },
-    "outboxCommands": { "production": 1565, "restored": 1565, "match": true },
-    "canvaPlans": { "production": 89, "restored": 89, "match": true },
+    "outboxCommands": { "production": 1586, "restored": 1586, "match": true },
+    "canvaPlans": { "production": 102, "restored": 102, "match": true },
     "schema": {
       "tables": 67,
       "policies": 108,
