@@ -321,7 +321,9 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
         },
         { type: 'image_url', image_url: { url: b64A, detail: 'low' } },
         { type: 'image_url', image_url: { url: b64B, detail: 'low' } },
-        ...(options.reference ? [clientReferencePart(options.reference)] : []),
+        // 'low', to match the two candidate renders beside it and the prompt's own description
+        // of them. See clientReferencePart.
+        ...(options.reference ? [clientReferencePart(options.reference, { detail: 'low' })] : []),
       ],
     },
   ];
@@ -339,6 +341,28 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
   });
 
   const data = res.data;
+
+  // A dimension the reply does not contain is not a vote. It used to become one: `winner === 'A'`
+  // is false for undefined, so every missing dimension silently counted for B, and a reply that
+  // carried no dimensions at all — which is exactly what createStructuredCompletion returns when a
+  // response is truncated or unparseable, an empty object — was read as a confident, unanimous 5-0
+  // for whichever design happened to be in the second position. Nothing downstream could tell that
+  // verdict apart from a real one; the order swap turns it into a discarded pair at best, and on
+  // the canary it fails a judge that was never asked a question it could answer.
+  const missing = JUDGE_DIMENSIONS.filter((dim) => {
+    const w = data.dimensions?.[dim]?.winner;
+    return w !== 'A' && w !== 'B';
+  });
+  if (missing.length) {
+    throw new Error(
+      `P07 refused a pairwise verdict from ${model}: the reply carries no usable winner for ` +
+        `${missing.join(', ')} (of ${JUDGE_DIMENSIONS.length} dimensions). A missing dimension is ` +
+        `an absent answer, not a vote against the candidate in position A. Most often the response ` +
+        `was truncated — raise maxTokens or retry — and the caller must treat the judge as ` +
+        `unavailable rather than act on a verdict nobody cast.`
+    );
+  }
+
   const votes: Record<JudgeDimension, 'A' | 'B'> = {} as any;
   const rationales: Record<JudgeDimension, string> = {} as any;
 
@@ -347,7 +371,7 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
 
   for (const dim of JUDGE_DIMENSIONS) {
     const dimData = data.dimensions?.[dim];
-    const w = dimData?.winner === 'A' ? 'A' : 'B';
+    const w = dimData!.winner === 'A' ? 'A' : 'B';
     votes[dim] = w;
     rationales[dim] = dimData?.rationale || '';
     if (w === 'A') votesA++;

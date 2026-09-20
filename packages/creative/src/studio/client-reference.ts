@@ -19,7 +19,25 @@ export function clientReferenceInstruction(reference: ClientReference): string {
   ].join(' ');
 }
 
-/** The reference as an image part of a model message. */
-export function clientReferencePart(reference: ClientReference) {
-  return { type: 'image_url' as const, image_url: { url: reference.dataUrl, detail: 'high' as const } };
+/**
+ * The reference as an image part of a model message.
+ *
+ * `detail` defaults to 'high' because the stage that invents the composition has to be able to read
+ * the reference properly — this client's direction failing to reach the layout is a defect this
+ * project has already had once, and it is not worth risking again to save a fraction of a cent.
+ *
+ * The judge is the exception and passes 'low'. It compares two candidate renders that are
+ * themselves attached at 'low'; its prompt even says so in as many words ("Attached are two images
+ * rendered at detail 'low'"), while the reference beside them was the only high-detail image
+ * anywhere in the studio. Paying for four times the resolution of the things being compared buys
+ * nothing, and the prompt was describing its own contents wrongly.
+ */
+export function clientReferencePart(
+  reference: ClientReference,
+  options: { detail?: 'low' | 'high' | 'auto' } = {}
+) {
+  return {
+    type: 'image_url' as const,
+    image_url: { url: reference.dataUrl, detail: options.detail ?? ('high' as const) },
+  };
 }
