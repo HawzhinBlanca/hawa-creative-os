@@ -510,6 +510,189 @@ export function pickFontCovering(
   return preferences[preferences.length - 1];
 }
 
+/** The scripts the client writes in. 'arabic' is Sorani Kurdish in Arabic script. */
+export type FontScript = 'latin' | 'arabic';
+
+/** What a family is set in. Body covers the body and footer roles; everything else is display. */
+export type FontRole = 'display' | 'body';
+
+export interface RenderFontFamily {
+  name: string;
+  script: FontScript;
+  /** The roles this family may take, and its preference within each. Lower is preferred. */
+  roles: Partial<Record<FontRole, number>>;
+  admitted: boolean;
+  admittedNote?: string;
+  license: string;
+  files: Record<string, string>;
+}
+
+export interface RenderFontRegistry {
+  version: number;
+  scripts: Record<FontScript, { requiredCharacters: string; source: string }>;
+  /** A family the model may still name, and the admitted family it is read as. */
+  aliases: Record<string, string>;
+  families: Record<string, RenderFontFamily>;
+}
+
+/** An admitted family, with the weights whose files are actually present on this host. */
+export interface AdmittedFontFace {
+  name: string;
+  rank: number;
+  weights: string[];
+  hasBold: boolean;
+  license: string;
+}
+
+const renderFontRegistryCache = new Map<string, RenderFontRegistry>();
+const admittedFaceCache = new Map<string, AdmittedFontFace[]>();
+
+/**
+ * render-fonts.json, from this module's own location.
+ *
+ * The package build copies only pricing.json into dist, so the compiled studio reads the source
+ * file two levels up, the same candidate list openai-studio-client.ts uses for pricing.json. The
+ * production image copies the whole packages/ tree, so packages/creative/src/studio/render-fonts.json
+ * is present there beside dist.
+ */
+function resolveRenderFontsPath(registryPath?: string): string {
+  if (registryPath) {
+    if (fs.existsSync(registryPath)) return registryPath;
+    throw new Error(`Font registry not found: ${registryPath}`);
+  }
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.join(here, 'render-fonts.json'),
+    path.resolve(here, '../../src/studio/render-fonts.json'),
+    path.resolve(process.cwd(), 'packages/creative/src/studio/render-fonts.json'),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (found) return found;
+  throw new Error(`Font registry render-fonts.json not found. Tried:\n  ${candidates.join('\n  ')}`);
+}
+
+/** The declared families, the aliases, and the characters each script's faces have to draw. */
+export function loadRenderFontRegistry(options: { registryPath?: string } = {}): RenderFontRegistry {
+  const file = resolveRenderFontsPath(options.registryPath);
+  const cached = renderFontRegistryCache.get(file);
+  if (cached) return cached;
+  const registry = JSON.parse(fs.readFileSync(file, 'utf8')) as RenderFontRegistry;
+  renderFontRegistryCache.set(file, registry);
+  return registry;
+}
+
+/** A path declared in render-fonts.json, resolved against packages/creative. */
+function creativeFilePath(relative: string): string | undefined {
+  if (path.isAbsolute(relative)) return fs.existsSync(relative) ? relative : undefined;
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, '../..', relative),
+    path.resolve(process.cwd(), 'packages/creative', relative),
+    path.resolve(process.cwd(), relative),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+/** The weight keys of a family whose file exists here. A declared file that is absent is not one. */
+function presentWeights(family: RenderFontFamily): string[] {
+  return Object.entries(family.files || {})
+    .filter(([, file]) => !!creativeFilePath(file))
+    .map(([weight]) => weight);
+}
+
+/**
+ * The families a design may use for one script and role, most preferred first.
+ *
+ * Until 2026-09-20 this set was written out in `admittedFontFor`, in `scaleNormalizedLayoutToV2`
+ * and in three prompt strings, and they disagreed: the prompts offered Cairo for every Kurdish
+ * title while the pipeline replaced it, because Cairo has no glyph for ڕ ڵ ۆ ێ ە. Admission is a
+ * measurement now, not a list. A family is offered only when it is declared for this script, when
+ * the file this renderer would open draws every character of `scripts.<script>.requiredCharacters`
+ * (derived from the client's own copy), and, for a bold block, when it has a bold file: a family
+ * without one is drawn regular in the preview the judge scores while Canva sets a real bold.
+ *
+ * Throws when a script and role have no face at all, because a design set in a family nobody
+ * admitted is worse than a run that stops.
+ */
+export function admittedFontFaces(options: {
+  script: FontScript;
+  role: FontRole;
+  bold?: boolean;
+  registryPath?: string;
+  fontsDir?: string;
+}): AdmittedFontFace[] {
+  const file = resolveRenderFontsPath(options.registryPath);
+  const key = `${file}|${options.fontsDir || ''}|${options.script}|${options.role}|${options.bold ? 1 : 0}`;
+  const cached = admittedFaceCache.get(key);
+  if (cached) return cached;
+
+  const registry = loadRenderFontRegistry({ registryPath: options.registryPath });
+  const required = registry.scripts?.[options.script]?.requiredCharacters ?? '';
+  const declared = Object.values(registry.families || {}).filter(
+    (family) =>
+      family.admitted && family.script === options.script && typeof family.roles?.[options.role] === 'number'
+  );
+
+  const drawable: AdmittedFontFace[] = declared
+    .map((family) => ({ family, weights: presentWeights(family) }))
+    .filter(({ weights }) => weights.length > 0)
+    .filter(({ family }) => fontCoversText(family.name, required, { fontsDir: options.fontsDir }).covers)
+    .map(({ family, weights }) => ({
+      name: family.name,
+      rank: family.roles[options.role] as number,
+      weights,
+      hasBold: weights.includes('bold'),
+      license: family.license,
+    }))
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+
+  if (!drawable.length) {
+    throw new Error(
+      `No admitted ${options.role} face for ${options.script} in ${file}: ` +
+        `${declared.length} declared, none with a present file that draws ${JSON.stringify(required)}.`
+    );
+  }
+
+  // A weight nothing has a file for is the renderer's problem, not a reason to leave the script
+  // without a face: keep the preferred list and let fontFaceSupports gate the emitted axis.
+  const withWeight = options.bold ? drawable.filter((face) => face.hasBold) : drawable;
+  const faces = withWeight.length ? withWeight : drawable;
+  admittedFaceCache.set(key, faces);
+  return faces;
+}
+
+export interface AdmittedFontFaceQuery {
+  script: FontScript;
+  role: FontRole;
+  bold?: boolean;
+  registryPath?: string;
+  fontsDir?: string;
+}
+
+/** The admitted face a family resolves to for this script and role, or undefined when it is not one. */
+export function findAdmittedFontFace(
+  font: string,
+  options: AdmittedFontFaceQuery
+): AdmittedFontFace | undefined {
+  const registry = loadRenderFontRegistry({ registryPath: options.registryPath });
+  const asked = registry.aliases?.[font] ?? font;
+  return admittedFontFaces({ ...options, bold: false }).find((face) => face.name === asked);
+}
+
+/**
+ * The admitted family a design gets for one block: the one it asked for whenever that family is
+ * admitted for the block's script and role, and otherwise the preferred face that has a file for
+ * the weight being asked for.
+ *
+ * The weight does not overrule a family the design chose. A style spec's "serif" puts Amiri on a
+ * Kurdish title; answering a bold block with the sans the brand uses for body copy would change the
+ * decision the client's own reference made. The block keeps its face, and `sanitizeFontsV3` drops
+ * the weight instead, so nothing downstream claims a face this renderer has no file for.
+ */
+export function admittedFontFace(font: string, options: AdmittedFontFaceQuery): string {
+  return findAdmittedFontFace(font, options)?.name ?? admittedFontFaces(options)[0].name;
+}
+
 /**
  * Measures text advance width in px using fontkit layout runs.
  */
