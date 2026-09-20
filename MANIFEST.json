@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-20T20:25:45Z",
+  "generatedAt": "2026-09-20T21:09:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -64,7 +64,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "acf6039b84963d3805efeda35e01f655e2af3a9a50acb4d8f2ba8846362d3634",
+      "sha256": "2fc11c01d1a33e4450762a39452c1afd92e26b0119766608ad9eaf5c21d18907",
       "bytes": 2884
     },
     {
@@ -819,8 +819,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "af8d8401d4006654814bd8bda92417848e1d8f8040f992a07a8b79da2f15874c",
-      "bytes": 10546
+      "sha256": "9b6efa1b59493bee2374d1655a962e8943da4362b603dda439c996026231e7dc",
+      "bytes": 10653
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -929,8 +929,8 @@
     },
     {
       "path": "scripts/generate_release_manifest.ts",
-      "sha256": "2877dd05fccf8a4c428162f93dee020e048a7ca493cf6746bff7a1c4d91a6a57",
-      "bytes": 5182
+      "sha256": "3d7c864742658774d16fcc3db6a483830d84988af4ae72d457df345150d9390e",
+      "bytes": 5207
     },
     {
       "path": "scripts/generate_t06_motifs.ts",
@@ -949,8 +949,8 @@
     },
     {
       "path": "scripts/measure_operations_slo.ts",
-      "sha256": "b5984c298a158c416482396f40fcd2130cf512ab30ca2abbb5168769a57379db",
-      "bytes": 15854
+      "sha256": "3c2bdb4b02362a5109cfa29b18e664b383a1e58678efeb85435271dd9fe8595c",
+      "bytes": 16912
     },
     {
       "path": "scripts/package_t8_blind_eval.ts",
@@ -1074,8 +1074,8 @@
     },
     {
       "path": "scripts/run_model_tournament.ts",
-      "sha256": "5f33e0794702522931b71b5f4841c11450838db550f5ddc5c57c001a5c909715",
-      "bytes": 12783
+      "sha256": "536d728ef8164cce057b214287fd5edb46964975ffbf2048ff1ca1753c090520",
+      "bytes": 13036
     },
     {
       "path": "scripts/run_p10_qualification.ts",
@@ -1159,8 +1159,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "5c3b73a67d55ee2118e5499a5aa3d608f84b7ec7fb5c79516ed911da324f8ac1",
-      "bytes": 7369
+      "sha256": "3a8aaa5c90cf9b2d0fdb28a4ac21cfa5a25b4dc5f8d907f6f674ff74c559caad",
+      "bytes": 7408
     },
     {
       "path": "scripts/verify_t8_ratings.ts",
