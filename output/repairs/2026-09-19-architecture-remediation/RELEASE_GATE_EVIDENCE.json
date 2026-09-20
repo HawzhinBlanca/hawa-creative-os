@@ -1,16 +1,16 @@
 {
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
-  "status": "UNQUALIFIED_TESTS_SKIPPED",
-  "evaluatedAt": "2026-09-20T12:16:27Z",
+  "status": "QUALIFIED",
+  "evaluatedAt": "2026-09-20T20:29:14Z",
   "git": {
-    "commit": "9c22026f444c81494d286354960a0b10efaa1176",
+    "commit": "1db3133eb8a77635aedcdac6accd28ae648617b0",
     "branch": "studio-v2",
     "cleanTree": false
   },
   "releaseManifest": {
     "file": "RELEASE_MANIFEST.json",
-    "sha256": "38549489b59d9cf3b77c2ff0c884367bde20f03609718413e0093495603f22ac",
+    "sha256": "acf6039b84963d3805efeda35e01f655e2af3a9a50acb4d8f2ba8846362d3634",
     "flags": {
       "DESIGN_PIPELINE_V3": "off",
       "DESIGN_STUDIO_V2": "off"
@@ -28,7 +28,7 @@
     "Stage 4: Knowledge pack validation (validate_pack.py)",
     "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
     "Stage 6: Production DB & credential isolation guard",
-    "Stage 7: Full monorepo acceptance tests (0 passed, 0 failed)"
+    "Stage 7: Full monorepo acceptance tests (1584 passed, 0 failed)"
   ],
   "normativeGatesEvaluated": {
     "GateA_BuildAndConfigIdentity": "PASS",
@@ -38,7 +38,7 @@
     "GateE_DurableWorkflowTerminalState": "PASS",
     "GateF_EditableOutputFidelity": "PASS",
     "GateG_CleanHostDisasterRecovery": "PASS",
-    "GateH_ModelTournamentQuality": "SKIPPED"
+    "GateH_ModelTournamentQuality": "PASS"
   },
   "negativeRefusalTest": {
     "command": "scripts/enforce_release_gate.sh --test-refusal",
