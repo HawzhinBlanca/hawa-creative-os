@@ -40,16 +40,52 @@ EVENTS="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) F
 docker exec "$PG" dropdb -U hawa_owner "$VDB" || fail "could not drop verification database"
 [[ "$REST" -gt 0 && "$LIVE" -ge "$REST" && $((LIVE - REST)) -lt 50 ]] || fail "restored task count ${REST} does not match live ${LIVE}"
 
-# Retention: keep the 14 newest nightly dumps, and copy off-disk to archive destination
+# Retention: keep the 14 newest nightly dumps, and copy off-disk to archive destination.
+#
+# The archive copy is encrypted when HAWA_BACKUP_ARCHIVE_KEYFILE names a passphrase file, because
+# the destination is now somewhere off this machine (an iCloud Drive folder by default on the
+# owner's Mac), and a dump carries every client's copy, briefs and task history in clear text.
+# Same cipher as the disaster-recovery drill, so one restore procedure covers both.
+# Losing the passphrase loses the archive: it belongs in the owner's password manager, not only here.
 ARCHIVE_DEST="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}"
+ARCHIVE_KEEP="${HAWA_BACKUP_ARCHIVE_KEEP:-14}"
+ARCHIVE_KEYFILE="${HAWA_BACKUP_ARCHIVE_KEYFILE:-}"
+ARCHIVE_SRC="$OUT"
+ARCHIVE_SRC_SHA="$OUT.sha256"
+if [[ -n "$ARCHIVE_KEYFILE" ]]; then
+  if [[ ! -r "$ARCHIVE_KEYFILE" ]]; then
+    fail "archive passphrase file $ARCHIVE_KEYFILE is not readable; refusing to write an unencrypted off-host copy"
+  fi
+  openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -salt -in "$OUT" -out "$OUT.enc" -pass "file:$ARCHIVE_KEYFILE" \
+    || fail "could not encrypt the archive copy"
+  # Proves the copy decrypts with this passphrase before the plain dump is ever pruned.
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in "$OUT.enc" -pass "file:$ARCHIVE_KEYFILE" \
+    | shasum -a 256 | cut -d' ' -f1 > "$OUT.enc.plain.sha256"
+  [[ "$(cat "$OUT.enc.plain.sha256")" == "$(cut -d' ' -f1 < "$OUT.sha256")" ]] \
+    || fail "the encrypted archive copy does not decrypt back to the dump"
+  shasum -a 256 "$OUT.enc" | cut -d' ' -f1 > "$OUT.enc.sha256"
+  rm -f "$OUT.enc.plain.sha256"
+  ARCHIVE_SRC="$OUT.enc"
+  ARCHIVE_SRC_SHA="$OUT.enc.sha256"
+fi
 if [[ "$ARCHIVE_DEST" == gs://* ]]; then
   if command -v gsutil >/dev/null 2>&1; then
-    gsutil cp "$OUT" "$OUT.sha256" "$ARCHIVE_DEST/" 2>/dev/null || echo "WARNING: off-disk upload to $ARCHIVE_DEST failed" >&2
+    gsutil cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/" 2>/dev/null || echo "WARNING: off-disk upload to $ARCHIVE_DEST failed" >&2
   fi
 else
   mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST"
-  cp "$OUT" "$OUT.sha256" "$ARCHIVE_DEST/"
+  cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/"
+  # The archive used to grow without limit: 13 GB on a disk the watchdog alarms at 90% full.
+  # `ls` on a pattern that matches nothing exits 1, and this script runs under pipefail: the first
+  # run against a fresh destination (no .dump copies beside the .enc ones) aborted the whole backup
+  # after the copy, so it never logged and the caller saw an empty failure.
+  for ext in dump enc; do
+    { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
+      rm -f "$old" "$old.sha256"
+    done
+  done
 fi
+[[ -n "$ARCHIVE_KEYFILE" ]] && rm -f "$OUT.enc" "$OUT.enc.sha256"
 
 ls -1t "$DIR"/hawa_*.dump 2>/dev/null | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256"; done
 ls -1t "$DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
