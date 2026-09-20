@@ -107,8 +107,41 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
   });
 
   it('3. Earlier PASS followed by later FAIL cannot qualify', async () => {
+    let qaPass = true;
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({
+      deliverableStore: exports.store,
+      qaEngine: {
+        run: async (_ctx: any, params: any) => {
+          if (!qaPass) {
+            return {
+              ok: true,
+              value: {
+                revisionId: params.designRevisionId,
+                designRevisionId: params.designRevisionId,
+                score: 30,
+                criticalPass: false,
+                findings: [
+                  { ruleId: 'BIDI_ORDERING_ERROR', severity: 'critical', hardFailure: true, category: 'copy', message: 'BiDi text error' }
+                ],
+                checks: [{ name: 'bidi_ordering', pass: false, severity: 'critical' }],
+              },
+            };
+          }
+          return {
+            ok: true,
+            value: {
+              revisionId: params.designRevisionId,
+              designRevisionId: params.designRevisionId,
+              score: 95,
+              criticalPass: true,
+              findings: [],
+              checks: [{ name: 'bidi_ordering', pass: true, severity: 'critical' }],
+            },
+          };
+        },
+      },
+    });
 
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -133,10 +166,11 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
     });
     expect(qa1Res.status).toBe(200);
 
-    // 2. Simulate later regression QA run on the task that reports failure
+    // 2. Simulate later regression QA run on the task that reports failure via injected QA engine
+    qaPass = false;
     const qa2Res = await app.request(`/v1/tasks/${task.id}/revisions/${rev.id}/qa`, {
       method: 'POST',
-      headers: { ...operatorHeaders, 'x-simulate-qa-fail': 'true' },
+      headers: operatorHeaders,
     });
     expect(qa2Res.status).toBe(200);
 

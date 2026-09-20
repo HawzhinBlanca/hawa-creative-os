@@ -72,6 +72,10 @@ export class CostGovernor {
     'openai:gpt-image-2.5-sunburst': { inputPer1M: 0.0, outputPer1M: 0.0, imagePer1M: 30.0, gpuPerSec: 0.04 },
     'openai:gpt-4o': { inputPer1M: 2.5, outputPer1M: 10.0 },
     'openai:gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.6 },
+    'openai:gpt-4.1-mini': { inputPer1M: 0.4, outputPer1M: 1.6, cacheReadPer1M: 0.1 },
+    'openai:o4-mini': { inputPer1M: 1.1, outputPer1M: 4.4, cacheReadPer1M: 0.275 },
+    'gpt-4.1-mini': { inputPer1M: 0.4, outputPer1M: 1.6, cacheReadPer1M: 0.1 },
+    'o4-mini': { inputPer1M: 1.1, outputPer1M: 4.4, cacheReadPer1M: 0.275 },
     'comfyui:sdxl-turbo': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.0003 },
     'comfyui:sdxl-lightning': { inputPer1M: 0.0, outputPer1M: 0.0, gpuPerSec: 0.0003 }
   };

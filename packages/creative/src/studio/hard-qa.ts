@@ -84,8 +84,9 @@ export function evaluateHardQa(
     checked = validation.layout;
   }
 
-  // Compute metrics if not present to ensure metrics report describes what ships
-  const metrics = existingMetrics || computeLayoutMetrics(checked);
+  // Compute metrics if not present or if layout was normalized, ensuring report describes what ships
+  const layoutNormalized = Boolean(checked !== layout && JSON.stringify(checked) !== JSON.stringify(layout));
+  const metrics = (!layoutNormalized && existingMetrics) ? existingMetrics : computeLayoutMetrics(checked);
 
   if (metrics.overlapCount > 0) {
     defectCodes.push('OVERLAP');

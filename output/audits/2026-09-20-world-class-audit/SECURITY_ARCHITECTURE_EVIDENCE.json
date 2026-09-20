@@ -1,0 +1,36 @@
+{
+  "sourceCommit": "9c22026f444c81494d286354960a0b10efaa1176",
+  "command": "node --import tsx output/audits/2026-09-20-world-class-audit/security-architecture-probe.ts",
+  "exitCode": 0,
+  "meaning": "Probe executed successfully; confirmed failures below are not acceptance passes.",
+  "networkAttempts": 0,
+  "unresolvedAliasAcknowledgment": {
+    "evidence": "real HTTP handlers, fake DB returning no client",
+    "status": 201,
+    "lookupCodes": ["client-drustee", "client-drustee", "client-drustee"],
+    "attemptedDbTransactions": 0,
+    "snapshotAuthor": "operator_1",
+    "forgedAuthorRejected": true
+  },
+  "rollbackRoleEscalation": {
+    "status": 200,
+    "authenticatedRole": "operator",
+    "claimedBodyRole": "administrator",
+    "rolledBack": true,
+    "snapshotAuthor": "administrator"
+  },
+  "crossClientRulePromotion": {
+    "proposalStatus": 201,
+    "originalRuleClient": "client-drustee",
+    "promotionUrlClient": "client-aster",
+    "promotionStatus": 200,
+    "unrelatedClientReceivedRule": true
+  },
+  "fixedTaskBinding": { "rejectedCode": "TASK_SCOPE_MISMATCH" },
+  "streamScope": {
+    "evidence": "real SSE handler with scoped fake principal and scope-less event fixture",
+    "status": 200,
+    "scopeLessForeignPayloadDelivered": true,
+    "authCalls": 1
+  }
+}

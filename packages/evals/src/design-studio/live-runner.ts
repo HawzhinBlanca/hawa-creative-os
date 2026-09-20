@@ -329,8 +329,8 @@ export class LiveRunner {
       .map((r) => r.tournament.swapConsistencyRate)
       .filter((rate): rate is number => typeof rate === 'number');
     const tournamentSwapConsistencyRate =
-      measuredSwapRates.length > 0
-        ? measuredSwapRates.reduce((a, b) => a + b, 0) / measuredSwapRates.length
+      total > 0
+        ? measuredSwapRates.reduce((a, b) => a + b, 0) / total
         : 0;
 
     const measuredScores = results

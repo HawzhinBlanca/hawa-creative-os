@@ -83,7 +83,8 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     const f = file('a.png', 'aaa');
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
-      if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png' });
+      if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 });
+      if (url.includes('/values/A:A')) return json({ values: [] });
       if (url.includes(':append')) return json({ updates: {} }); // no updatedRange
       throw new Error(`unexpected call ${url}`);
     });
@@ -97,8 +98,8 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     expect(res.value.sheet.synced).toBe(false);
     expect(res.value.state).toBe('drive_complete');
     expect(res.value.emulated).toBe(false);
-    // Upload, Drive readback and the append; no Sheets readback of an unknown row.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Upload, Drive readback, pre-append task identity check, and the append.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('marks an emulated receipt as emulated', async () => {
@@ -158,7 +159,8 @@ describe('a publication whose Sheets row was not confirmed', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(`${init?.method || 'GET'} ${url.split('?')[0]}`);
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
-      if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png' });
+      if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 });
+      if (url.includes('/values/A:A')) return json({ values: [] });
       if (url.includes(':append')) {
         if (appendFails) return new Response('backend error', { status: 500 });
         storedRow = JSON.parse(String(init?.body)).values[0];
@@ -185,6 +187,7 @@ describe('a publication whose Sheets row was not confirmed', () => {
     expect(retry.value.sheet).toMatchObject({ synced: true, rowNumber: 7 });
     expect(retry.value.detail).not.toHaveProperty('sheetProblem');
     expect(calls).toEqual([
+      'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A:A',
       'POST https://sheets.test/v4/spreadsheets/sheet-kaae/values/A1:append',
       'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A7:G7',
     ]);

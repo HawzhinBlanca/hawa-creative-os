@@ -6,6 +6,7 @@ import {
   type Kysely,
 } from '@hawa/db';
 import { OfficeTracer } from '@hawa/observability';
+import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 
 export interface OutboxCommandRecord {
@@ -128,7 +129,21 @@ export class OutboxConsumer {
     if (!this.handlers.has('notify.telegram')) {
       this.handlers.set('notify.telegram', async (cmd, db) => {
         // Effect transport: Outbound Telegram notification
-        throw new Error('Telegram notification transport is not registered; no message was sent');
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (!botToken) {
+          throw new Error('Telegram notification transport is not configured (missing TELEGRAM_BOT_TOKEN)');
+        }
+        const telegramBridge = new TelegramBridge({ botToken });
+        const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+        const chatId = payload?.chatId;
+        const message = payload?.message;
+        if (!chatId || !message) {
+          throw new Error(`Invalid payload for notify.telegram on task ${cmd.aggregate_id}`);
+        }
+        const res = await telegramBridge.dispatchOutboundMessage(chatId, typeof message === 'string' ? { text: message } : message);
+        if (!res.success) {
+          throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
+        }
       });
     }
 

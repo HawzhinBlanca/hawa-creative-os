@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-20T08:13:53.353Z",
+  "generatedAt": "2026-09-20T20:23:08.777Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,9 +19,9 @@
     ]
   },
   "build": {
-    "commit": "1e6660489d3f6e8da2901e0c3c2a06cb46f23e8e",
+    "commit": "2d3a930ca1ec303ba17c9320b99094563de92ef5",
     "treeClean": true,
-    "commitTimestamp": "2026-09-20T02:03:37+03:00",
+    "commitTimestamp": "2026-09-20T19:56:08+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -38,9 +38,9 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "7926fee664bed0b86ad020a5dc01064ba459016d5c55df6f5ef2043b31c51dc7",
-        "apps/core/src/index.ts": "a51b02d6c1f4ddb6662746c6f74f79f1e4988773617079a12110815e42b36d34",
-        "packages/integrations/src/google-publisher.ts": "8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60"
+        "apps/core/src/app.ts": "bd21c95e1cc24b4076d8eec111e8f60c8052c42442233a1261461efcda470ab9",
+        "apps/core/src/index.ts": "9938b9ae39f04385afb1eb149f59635cd29518eeb57d21cb829d5c861e0eb717",
+        "packages/integrations/src/google-publisher.ts": "f008f29751322cab89603536ce7bdbe70fdde4aa0b70fd4f68d60d089f4bde62"
       }
     },
     "desk": {
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "f550b76e90d8fe6799d0e478fddec78896734cd7b8c655e10a8acd975d5ed707"
+  "sha256": "ff034f98cebbe0098c1dc38ba2c219ccdfb23a8309f6fbe44fb4282b52f81969"
 }

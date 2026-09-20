@@ -578,58 +578,6 @@ export const OpsScreen: React.FC = () => {
                   <td colSpan={4}>Could not read task failures, so this list may be incomplete: {unreadable.failures}</td>
                 </tr>
               )}
-
-              <tr>
-                <td>WAHA (WhatsApp)</td>
-                <td><span className="pill ok">active</span></td>
-                <td>QR connected · cursor current</td>
-                <td>
-                  <button
-                    className="btn"
-                    style={{ fontSize: 11 }}
-                    onClick={() => {
-                      setOpsToast('✓ WAHA WhatsApp Session Verified: QR cursor alive & canonical Desk bridge active');
-                      setTimeout(() => setOpsToast(null), 4000);
-                    }}
-                  >
-                    Verify
-                  </button>
-                </td>
-              </tr>
-              <tr>
-                <td>Drive publication</td>
-                <td><span className="pill ok">verified</span></td>
-                <td>Google Shared Drive target reachable</td>
-                <td>
-                  <button
-                    className="btn"
-                    style={{ fontSize: 11 }}
-                    onClick={() => {
-                      setOpsToast('✓ Google Drive Permission Verified: Shared Drive storage target accessible with Invariant #4 directory isolation');
-                      setTimeout(() => setOpsToast(null), 4000);
-                    }}
-                  >
-                    Check
-                  </button>
-                </td>
-              </tr>
-              <tr>
-                <td>Google Sheets Ledger</td>
-                <td><span className="pill ok">connected</span></td>
-                <td>Durable transaction append enabled</td>
-                <td>
-                  <button
-                    className="btn"
-                    style={{ fontSize: 11 }}
-                    onClick={() => {
-                      setOpsToast('✓ Google Sheets Ledger Schema Verified: Append-only transaction log synced with 0 schema drift');
-                      setTimeout(() => setOpsToast(null), 4000);
-                    }}
-                  >
-                    Verify
-                  </button>
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -700,8 +648,13 @@ export const OpsScreen: React.FC = () => {
               </button>
               <button
                 className="btn primary"
-                onClick={() => {
-                  setOpsToast(`✓ Task ${inspectingFailure.id.substring(0, 8)}… re-queued into operator intake pipeline`);
+                onClick={async () => {
+                  try {
+                    await apiClient.tasks.redrive(inspectingFailure.id);
+                    setOpsToast(`✓ Task ${inspectingFailure.id.substring(0, 8)}… re-queued into operator intake pipeline`);
+                  } catch (err: any) {
+                    setOpsToast(`✕ Failed to re-queue task: ${err.message || 'Error'}`);
+                  }
                   setTimeout(() => setOpsToast(null), 4000);
                   setInspectingFailure(null);
                 }}

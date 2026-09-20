@@ -943,3 +943,6 @@ export class TelegramBridgeDaemon {
   }
 }
 
+export const TelegramBridge = TelegramBridgeDaemon;
+export type TelegramBridge = TelegramBridgeDaemon;
+

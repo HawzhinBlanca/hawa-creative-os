@@ -159,16 +159,25 @@ export function validateLayoutV2(
     ...admittedDisplayFonts,
   ]);
   const arabicScriptFont = context.reference.rules.scriptFonts?.arabic || 'Noto Sans Arabic';
+  const admittedArabicFonts = new Set([
+    'noto sans arabic',
+    'amiri',
+    'ibm plex sans arabic',
+    (context.reference.rules.scriptFonts?.arabic || '').toLowerCase(),
+  ].filter(Boolean));
 
   for (let i = 0; i < normalized.text.length; i++) {
     const t = normalized.text[i];
     const script = context.copyScripts[t.copyIndex] || 'latin';
 
     if (script === 'arabic') {
-      // Overwrite to scriptFonts.arabic, right-aligned, rtl: true (server decision, ADR-028)
-      t.fontFamily = arabicScriptFont;
-      t.align = 'right';
       t.rtl = true;
+      if (!t.fontFamily || !admittedArabicFonts.has(t.fontFamily.toLowerCase())) {
+        t.fontFamily = arabicScriptFont;
+      }
+      if (t.align !== 'center' && t.align !== 'right') {
+        t.align = 'right';
+      }
     } else {
       if (!admittedLatinFonts.has(t.fontFamily.toLowerCase())) {
         return {

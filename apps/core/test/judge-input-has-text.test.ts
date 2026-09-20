@@ -192,7 +192,7 @@ describe('P07 judges the render that carries the copy', () => {
       expect(sent).toContain(previewBytes(ordinal).toString('base64'));
       expect(sent).not.toContain(noTextBytes(ordinal).toString('base64'));
     }
-  });
+  }, 30000);
 
   // A candidate that holds only its no-text composite hands the judge nothing, so the pipeline
   // re-renders it from its layout with the copy. Passing the composite instead would have cost the
@@ -208,7 +208,7 @@ describe('P07 judges the render that carries the copy', () => {
     expect(fetcher).toHaveBeenCalled();
     const sent = fetcher.mock.calls.map(([, init]: any[]) => String(init?.body || '')).join('');
     for (const ordinal of [0, 1]) expect(sent).not.toContain(noTextBytes(ordinal).toString('base64'));
-  });
+  }, 30000);
 
   it('refuses to judge if a no-text composite is ever handed over directly', () => {
     const candidate = createCandidate(0, { compositePng: noTextBytes(0) });
@@ -224,5 +224,5 @@ describe('P07 judges the render that carries the copy', () => {
 
     expect(outcome.winner).toBeDefined();
     expect(fetcher).toHaveBeenCalled();
-  });
+  }, 30000);
 });

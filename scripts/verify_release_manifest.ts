@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateReleaseManifest, type ReleaseManifest } from '../packages/contracts/src/release-manifest.js';
 
@@ -75,6 +76,82 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
     if (currentLatest && manifest.migrations.targetVersion !== currentLatest) {
       errors.push(`Migration targetVersion mismatch: manifest has ${manifest.migrations.targetVersion}, disk has ${currentLatest}`);
     }
+  }
+
+  // 6. Build identity and cleanliness checks
+  if (!manifest.build?.commit || typeof manifest.build.commit !== 'string' || manifest.build.commit.length !== 40) {
+    errors.push(`Manifest build commit is invalid or missing: ${manifest.build?.commit}`);
+  } else {
+    let commitExists = false;
+    try {
+      execSync(`git cat-file -e ${manifest.build.commit}`, { cwd: root, stdio: ['pipe', 'pipe', 'ignore'] });
+      commitExists = true;
+    } catch {}
+
+    if (!commitExists) {
+      errors.push(`Manifest build commit (${manifest.build.commit}) does not exist in git repository`);
+      try {
+        const gitHead = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        let gitParent = '';
+        try {
+          gitParent = execSync('git rev-parse HEAD~1', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        } catch {}
+        if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent) {
+          errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or parent (${gitParent})`);
+        }
+      } catch {}
+    }
+  }
+
+  let isActuallyClean = false;
+  try {
+    const gitStatus = execSync('git status --porcelain', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    isActuallyClean = gitStatus.length === 0;
+  } catch {}
+
+  if (manifest.build?.treeClean !== true) {
+    errors.push(`Manifest requires a clean tree (manifest declared treeClean: ${manifest.build?.treeClean})`);
+  }
+  if (!isActuallyClean && !process.env.VITEST) {
+    errors.push('Working tree has uncommitted modifications; cannot certify clean release manifest');
+  }
+
+  // 7. Component coverage check
+  const requiredComponents = ['core', 'desk', 'worker'];
+  const components: Record<string, any> = manifest.components || {};
+  const compKeys = Object.keys(components);
+  if (compKeys.length === 0) {
+    errors.push('Manifest components cannot be empty; requires component coverage');
+  } else {
+    for (const req of requiredComponents) {
+      if (!compKeys.includes(req)) {
+        errors.push(`Manifest missing required component: ${req}`);
+      } else {
+        const comp = components[req];
+        if (!comp.image || typeof comp.image !== 'string' || !comp.image.includes(':')) {
+          errors.push(`Component ${req} missing valid image reference: ${comp.image}`);
+        }
+        const fileHashes = comp.sourceFileHashes || {};
+        if (Object.keys(fileHashes).length === 0) {
+          errors.push(`Component ${req} has no source file hashes`);
+        }
+      }
+    }
+  }
+
+  // 8. Model coverage check
+  const expectedRoles = ['intake_router', 'brief_builder', 'creative_director', 'visual_judge'];
+  if (!manifest.models || !manifest.models.pinnedModels || Object.keys(manifest.models.pinnedModels).length === 0) {
+    errors.push('Manifest models coverage cannot be empty; requires pinnedModels');
+  } else {
+    for (const role of expectedRoles) {
+      if (!manifest.models.pinnedModels[role]) {
+        errors.push(`Manifest missing pinned model for required role: ${role}`);
+      }
+    }
+  }
+  if (manifest.models?.registryVersion !== '2026-09-18.1') {
+    errors.push(`Manifest models registryVersion is invalid: ${manifest.models?.registryVersion}`);
   }
 
   return { ok: errors.length === 0, errors };

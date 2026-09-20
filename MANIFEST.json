@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-19T16:03:26Z",
+  "generatedAt": "2026-09-20T20:23:15Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 229,
+  "fileCount": 235,
   "files": [
     {
       "path": ".dockerignore",
@@ -64,8 +64,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "df7eb3e84b07a2686b90caf373d8761df47d3ff1917534a6171fb4d37e57c1f3",
-      "bytes": 5808
+      "sha256": "7df6cfbb9d622c71934666ab4faa24e461ee7cfce95c35630a092f512c4192c2",
+      "bytes": 2884
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -578,6 +578,16 @@
       "bytes": 2604
     },
     {
+      "path": "docs/benchmark-protocol.md",
+      "sha256": "b536df0796fe876c5805f47ed01994c82ed8412e371180c81e3431f6e6b2be0e",
+      "bytes": 9584
+    },
+    {
+      "path": "docs/pilot-contract.md",
+      "sha256": "df99c61902e61725409494c5499967319ced598de15428c29c287dbb7e2794ee",
+      "bytes": 7431
+    },
+    {
       "path": "evals/fault_injection_matrix.csv",
       "sha256": "1391f4be911fe541432fec1f02998d7f500103d312e1e6de1d46b70a05836f41",
       "bytes": 9762
@@ -794,8 +804,8 @@
     },
     {
       "path": "scripts/disaster_recovery_drill.sh",
-      "sha256": "1be2548d1072e5628cb19ba40401b3e0d92c0dccea6cc1c13669110ed5b773a4",
-      "bytes": 23805
+      "sha256": "19dda40fed73d6b696ab3300785ca1c00c3a024417d36901fef270d1e2373042",
+      "bytes": 24624
     },
     {
       "path": "scripts/dispatch_authentic_kaae_telegram.ts",
@@ -809,8 +819,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "67192fea9be9b43aeb47a7a4895a8dcaca1396da65de8fa35da4d42c1fcbb039",
-      "bytes": 9825
+      "sha256": "af8d8401d4006654814bd8bda92417848e1d8f8040f992a07a8b79da2f15874c",
+      "bytes": 10546
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -821,6 +831,21 @@
       "path": "scripts/execute_live_vertical_slice.ts",
       "sha256": "74ac53d5f068c7fb6c7b663353de01582464abcea065a57fa565a997ef43cb05",
       "bytes": 19421
+    },
+    {
+      "path": "scripts/experiments/judge-model-agreement.ts",
+      "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
+      "bytes": 11715
+    },
+    {
+      "path": "scripts/experiments/layout-reasoning-effort.ts",
+      "sha256": "181ef00b2d8aacacf5efb81da2c374ee56d29e58bdf859e8fb29851bb81b8ecd",
+      "bytes": 7272
+    },
+    {
+      "path": "scripts/experiments/prompt-cache-probe.ts",
+      "sha256": "79578a670a1853cffd4ebdf717f3cda131daaac52a273a034a730066d32fd8f0",
+      "bytes": 3239
     },
     {
       "path": "scripts/export_kaae_deliverables.ts",
@@ -904,8 +929,8 @@
     },
     {
       "path": "scripts/generate_release_manifest.ts",
-      "sha256": "63cdf919311f84dd8f0ad30d95750db9079c74157c079c9b69fbce78954d7d0b",
-      "bytes": 5153
+      "sha256": "2877dd05fccf8a4c428162f93dee020e048a7ca493cf6746bff7a1c4d91a6a57",
+      "bytes": 5182
     },
     {
       "path": "scripts/generate_t06_motifs.ts",
@@ -924,8 +949,8 @@
     },
     {
       "path": "scripts/measure_operations_slo.ts",
-      "sha256": "6dc309e5f2880014ee3578cd5fdb5a1371a003b86a7926e2d82483794a5e3376",
-      "bytes": 15772
+      "sha256": "b5984c298a158c416482396f40fcd2130cf512ab30ca2abbb5168769a57379db",
+      "bytes": 15854
     },
     {
       "path": "scripts/package_t8_blind_eval.ts",
@@ -948,6 +973,11 @@
       "bytes": 7846
     },
     {
+      "path": "scripts/proofs/gate-baseline.json",
+      "sha256": "17a8eba1cb6598fde8e3305dafdf484da4050f54561b50444f7e4472d45148db",
+      "bytes": 11710
+    },
+    {
       "path": "scripts/proofs/measure_candidate_diversity.ts",
       "sha256": "586ebc4c767239a6b6f9affaa2bebc75367ca50a95c6eefc81a6662efa2b20e0",
       "bytes": 2551
@@ -964,8 +994,8 @@
     },
     {
       "path": "scripts/proofs/reprepare_stored_runs.mjs",
-      "sha256": "503d63f88d0b81c6a0e187469a918d38b2060448997ecfef6945bb8eb421525e",
-      "bytes": 4537
+      "sha256": "88482e32ed8bb9842f8b699e31732e2bed957caebd9e3ca3c6cb976fedb70c95",
+      "bytes": 15420
     },
     {
       "path": "scripts/proofs/rerender_with_production_fonts.mjs",
@@ -1044,8 +1074,8 @@
     },
     {
       "path": "scripts/run_model_tournament.ts",
-      "sha256": "06da5e3d5b8e6834eac9ee6ecac131a0f37ab3a6c11cad80190edc9fbd719909",
-      "bytes": 10549
+      "sha256": "5f33e0794702522931b71b5f4841c11450838db550f5ddc5c57c001a5c909715",
+      "bytes": 12783
     },
     {
       "path": "scripts/run_p10_qualification.ts",
@@ -1129,8 +1159,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "69331ea908af8419c35c7dba8d7bb0216c6b2d014ffa311d6837a9a2331a825d",
-      "bytes": 3961
+      "sha256": "5c3b73a67d55ee2118e5499a5aa3d608f84b7ec7fb5c79516ed911da324f8ac1",
+      "bytes": 7369
     },
     {
       "path": "scripts/verify_t8_ratings.ts",

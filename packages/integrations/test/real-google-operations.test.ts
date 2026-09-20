@@ -98,6 +98,17 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
       }
 
       // 4. Google Sheets Independent Readback: the row that was appended there, if any
+      if (req.method === 'GET' && url.includes('/values/A:A')) {
+        const values: string[][] = [];
+        const maxRow = Math.max(0, ...Array.from(sheetRows.keys()));
+        for (let r = 1; r <= maxRow; r++) {
+          const row = sheetRows.get(r);
+          values.push(row ? [row[0]] : []);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ range: 'Sheet1!A:A', values }));
+        return;
+      }
       const rangeMatch = req.method === 'GET' ? url.match(/\/values\/A(\d+):G\1/) : null;
       if (rangeMatch) {
         receivedSheetReadbacks.push(url);

@@ -1,0 +1,126 @@
+{
+  "auditDate": "2026-09-20",
+  "sourceCommit": "9c22026f444c81494d286354960a0b10efaa1176",
+  "scope": "Read-only audit plus local isolated fault probes; no production mutation, live provider generation, full suite, clean-host restore or live fault drill.",
+  "results": {
+    "sept20_typecheck": {
+      "name": "typecheck",
+      "cmd": "pnpm typecheck",
+      "chunk_id": "cecb68",
+      "wall_time_seconds": 1.00235625,
+      "session_id": 22264,
+      "original_token_count": 11,
+      "output": "$ tsc -b && tsc -p tsconfig.scripts.json\n"
+    },
+    "sept20_typecheck_result": {
+      "chunk_id": "5f97c9",
+      "wall_time_seconds": 0.000005958,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "sept20_blueprint": {
+      "name": "blueprint",
+      "cmd": "python3 scripts/validate_pack.py",
+      "chunk_id": "4fb20e",
+      "wall_time_seconds": 1.00215675,
+      "session_id": 74480,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "sept20_blueprint_result": {
+      "chunk_id": "39afb7",
+      "wall_time_seconds": 0.000005583,
+      "exit_code": 1,
+      "original_token_count": 164,
+      "output": "PASS=601 WARN=0 FAIL=10\nFAIL: manifest hash matches RELEASE_MANIFEST.json\nFAIL: manifest size matches RELEASE_MANIFEST.json\nFAIL: manifest hash matches scripts/proofs/reprepare_stored_runs.mjs\nFAIL: manifest size matches scripts/proofs/reprepare_stored_runs.mjs\nFAIL: SHA256SUMS covers every package file except itself\nFAIL: SHA256SUMS hash matches RELEASE_MANIFEST.json\nFAIL: SHA256SUMS hash matches scripts/experiments/judge-model-agreement.ts\nFAIL: SHA256SUMS hash matches scripts/experiments/prompt-cache-probe.ts\nFAIL: SHA256SUMS hash matches scripts/proofs/gate-baseline.json\nFAIL: SHA256SUMS hash matches scripts/proofs/reprepare_stored_runs.mjs\n"
+    },
+    "sept20_manifest_retry": {
+      "chunk_id": "b78c7f",
+      "wall_time_seconds": 0.000005458,
+      "exit_code": 0,
+      "original_token_count": 31,
+      "output": "Verifying release manifest...\nRELEASE MANIFEST VERIFIED: All topology, build, hash, migration, and flag invariants pass.\n"
+    },
+    "sept20_dr_evidence_tests": {
+      "name": "dr_evidence_tests",
+      "cmd": "pnpm exec vitest run packages/db/test/r09-disaster-recovery.test.ts",
+      "chunk_id": "37c184",
+      "wall_time_seconds": 0.706721917,
+      "exit_code": 0,
+      "original_token_count": 52,
+      "output": "\n RUN  v4.1.11 /Users/hawzhin/Hawdesign\n\n\n Test Files  1 passed (1)\n      Tests  8 passed (8)\n   Start at  14:45:48\n   Duration  147ms (transform 27ms, setup 47ms, import 8ms, tests 3ms, environment 0ms)\n\n"
+    },
+    "sept20_release_probe": {
+      "chunk_id": "5118b8",
+      "wall_time_seconds": 0.146641875,
+      "exit_code": 0,
+      "original_token_count": 99,
+      "output": "{\n  \"scope\": \"Actual source verifier; synthetic in-memory manifest, no writes or network\",\n  \"input\": {\n    \"wrongCommit\": \"ffffffffffffffffffffffffffffffffffffffff\",\n    \"dirtyTree\": true,\n    \"componentCount\": 0,\n    \"modelCount\": 0\n  },\n  \"expected\": \"Refuse release identity without source/image/model coverage and a real clean build\",\n  \"observed\": {\n    \"ok\": true,\n    \"errors\": []\n  }\n}\n"
+    },
+    "sept20_shell_gate_probe": {
+      "chunk_id": "f9385b",
+      "wall_time_seconds": 0.0000155,
+      "exit_code": 0,
+      "original_token_count": 7,
+      "output": "gate_failure_did_not_abort\n"
+    },
+    "sept20_replay_security": {
+      "cmd": "node --import tsx output/audits/2026-09-20-world-class-audit/security-architecture-probe.ts",
+      "chunk_id": "e3dc36",
+      "wall_time_seconds": 0.281503208,
+      "exit_code": 0,
+      "original_token_count": 276,
+      "output": "{\n  \"sourceCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"networkAttempts\": 0,\n  \"unresolvedAliasAcknowledgment\": {\n    \"evidence\": \"real HTTP handlers, fake DB returning no client\",\n    \"status\": 201,\n    \"lookupCodes\": [\n      \"client-drustee\",\n      \"client-drustee\",\n      \"client-drustee\"\n    ],\n    \"attemptedDbTransactions\": 0,\n    \"snapshotAuthor\": \"operator_1\",\n    \"forgedAuthorRejected\": true\n  },\n  \"rollbackRoleEscalation\": {\n    \"status\": 200,\n    \"authenticatedRole\": \"operator\",\n    \"claimedBodyRole\": \"administrator\",\n    \"rolledBack\": true,\n    \"snapshotAuthor\": \"administrator\"\n  },\n  \"crossClientRulePromotion\": {\n    \"proposalStatus\": 201,\n    \"originalRuleClient\": \"client-drustee\",\n    \"promotionUrlClient\": \"client-aster\",\n    \"promotionStatus\": 200,\n    \"unrelatedClientReceivedRule\": true\n  },\n  \"fixedTaskBinding\": {\n    \"rejectedCode\": \"TASK_SCOPE_MISMATCH\"\n  },\n  \"streamScope\": {\n    \"evidence\": \"real SSE handler with scoped fake principal and scope-less event fixture\",\n    \"status\": 200,\n    \"scopeLessForeignPayloadDelivered\": true,\n    \"authCalls\": 1\n  }\n}\n"
+    },
+    "sept20_replay_publication": {
+      "name": "publication",
+      "cmd": "node output/audits/2026-09-20-world-class-audit/PUBLICATION_PROBE.mjs",
+      "chunk_id": "f53ee4",
+      "wall_time_seconds": 0.358409792,
+      "exit_code": 0,
+      "original_token_count": 424,
+      "output": "{\n  \"auditedAt\": \"2026-09-20\",\n  \"auditedCommit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"sourceFile\": \"packages/integrations/src/google-publisher.ts\",\n  \"sourceSha256\": \"8b8ac0d13cc1dd2776496e727e17360752c016206b05c48f4a161aa06a5a0d60\",\n  \"proofClass\": \"isolated execution of current source with synthetic provider transport\",\n  \"realProviderProof\": false,\n  \"databaseAccess\": false,\n  \"externalNetworkAccess\": false,\n  \"findingsReproduced\": {\n    \"newProcessEquivalentReplay\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 2,\n      \"expectedLogicalFiles\": 1,\n      \"expectedLogicalRows\": 1\n    },\n    \"lostUploadSuccessResponse\": {\n      \"firstCallThrew\": true,\n      \"driveFiles\": 2,\n      \"sheetRows\": 1\n    },\n    \"lostSheetSuccessResponse\": {\n      \"firstState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"driveFiles\": 1,\n      \"sheetRows\": 2\n    },\n    \"wrongRemoteChecksumSameSize\": {\n      \"publishState\": \"complete\",\n      \"fileMarkedVerified\": true,\n      \"independentLaterVerifyConsistent\": false\n    },\n    \"rowMovedBeforeRetry\": {\n      \"initialState\": \"drive_complete\",\n      \"finalState\": \"complete\",\n      \"overwrittenTaskIds\": [\n        \"synthetic-task-a\"\n      ],\n      \"finalTaskIds\": [\n        \"synthetic-other-task\",\n        \"synthetic-task-a\"\n      ],\n      \"configuredSheetId\": 123,\n      \"allSheetRangesUnqualified\": true\n    },\n    \"rowMovedIdentityCheckUnavailable\": {\n      \"finalState\": \"complete\",\n      \"overwrittenTaskIds\": [\n        \"synthetic-other-task\"\n      ],\n      \"finalTaskIds\": [\n        \"synthetic-task-a\",\n        \"synthetic-task-a\"\n      ]\n    },\n    \"concurrentSameKey\": {\n      \"driveFiles\": 2,\n      \"sheetRows\": 2\n    }\n  }\n}\n"
+    },
+    "sept20_replay_notification": {
+      "name": "notification",
+      "cmd": "node output/audits/2026-09-20-world-class-audit/NOTIFICATION_PROBE.mjs",
+      "chunk_id": "e1ef45",
+      "wall_time_seconds": 0.358278583,
+      "exit_code": 0,
+      "original_token_count": 135,
+      "output": "{\n  \"auditedAt\": \"2026-09-20\",\n  \"commit\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"sourceSha256\": \"db8c2aee13d6acd02ad3ffcd8ace31ffe6dffb025ef7a204241e8542e7569982\",\n  \"externalCalls\": false,\n  \"databaseAccess\": false,\n  \"scenario\": \"Core fails before enqueue; replay after Core recovers\",\n  \"firstStatus\": \"MANUAL_DESIGN_REQUIRED\",\n  \"replayStatus\": \"MANUAL_DESIGN_REQUIRED\",\n  \"syntheticHttpCalls\": 1,\n  \"journalEntries\": [\n    [\n      \"canva-notify-manual_design_required\",\n      {}\n    ]\n  ],\n  \"intentCouldBeCreated\": false\n}\n"
+    },
+    "sept20_replay_eval": {
+      "name": "eval",
+      "cmd": "node --import tsx output/audits/2026-09-20-world-class-audit/proof-negatives.mjs",
+      "chunk_id": "3e6a92",
+      "wall_time_seconds": 0.387991458,
+      "exit_code": 0,
+      "original_token_count": 220,
+      "output": "{\n  \"source\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"scope\": \"offline counterexamples, no external effects\",\n  \"alwaysAbstain\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 5,\n    \"failedCases\": 195,\n    \"passRate\": 2.5,\n    \"criticalViolations\": 0\n  },\n  \"defaultFakeGateway\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"missingClientProjectAndBrief\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"missingSwapMeasurements\": {\n    \"measuredRuns\": 1,\n    \"totalRuns\": 24,\n    \"aggregateSwapConsistency\": 1,\n    \"emittedRow\": \"| Tournament Swap Consistency | 100.0% | ≥ 80.0% | PASS |\"\n  }\n}\n"
+    },
+    "sept20_replay_tournament": {
+      "cmd": "node --import tsx output/audits/2026-09-20-world-class-audit/tournament-failure-probe.mjs",
+      "chunk_id": "483f97",
+      "wall_time_seconds": 0.105672292,
+      "exit_code": 0,
+      "original_token_count": 420,
+      "output": "{\n  \"source\": \"9c22026f444c81494d286354960a0b10efaa1176\",\n  \"scope\": \"all component failures injected, output write intercepted\",\n  \"routingStatus\": \"FAILED\",\n  \"retrievalStatus\": \"FAILED\",\n  \"visualStatus\": \"FAILED\",\n  \"studioStatus\": \"FAILED\",\n  \"failedFallbacks\": {\n    \"rung1ModelFallbackVerified\": false,\n    \"rung3JudgeUnavailableVerified\": false,\n    \"rung4PlannerFallbackVerified\": false,\n    \"budgetCapStrictlyEnforced\": false,\n    \"status\": \"PASSED\"\n  },\n  \"admissions\": {\n    \"intake_router\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Enforced routing, client scoping, and mandatory abstention\"\n    },\n    \"retrieval_agent\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage\"\n    },\n    \"visual_judge\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"10-dimensional rubric scoring strictly gated by independent hard QA rules\"\n    },\n    \"degradation_manager\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Rungs 0 through 4 with deterministic budget and failure fallbacks\"\n    }\n  },\n  \"overallVerdict\": \"QUALIFIED\"\n}\n\n   ✓ Evidence dossier written to: /Users/hawzhin/Hawdesign/output/repairs/2026-09-19-architecture-remediation/MODEL_TOURNAMENT_EVIDENCE.json\n\n================================================================================\n🏆 NORMATIVE MODEL TOURNAMENT COMPLETE: ALL CRITERIA QUALIFIED\n   - 200-Task Tournament: 100.0% Pass Rate (95% CI: [0.00%, 1.88%])\n   - Scoped Retrieval:    100.0% Recall, 0 Foreign Leaks\n   - Order-Swap Canary:   0.0% Consistency\n   - Hard QA Escapes:     0 Escapes\n================================================================================\n\n"
+    },
+    "sept20_scan_final_result": {
+      "chunk_id": "21d231",
+      "wall_time_seconds": 0.000005375,
+      "exit_code": 0,
+      "original_token_count": 2233,
+      "output": "Security scan passed: 0 secrets in committable files; 48 justified allowlist hit(s).\n  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 902): Fixture value beginning with \"mock-\" passed to an in-memory provider configuration test.\n  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 923): Fixture value beginning with \"mock-\" passed to an in-memory provider configuration test.\n  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 963): Fixture value beginning with \"mock-\" passed to an in-memory provider configuration test.\n  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 974): Fixture value beginning with \"mock-\" passed to an in-memory provider configuration test.\n  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 975): Fixture value beginning with \"mock-\" passed to an in-memory provider configuration test.\n  allow: apps/core/test/core.test.ts|long_credential_assignment (line 902): Fixture provider key beginning with \"mock-\" for the settings-screen provider test.\n  allow: apps/core/test/core.test.ts|long_credential_assignment (line 975): Fixture provider key beginning with \"mock-\" for the settings-screen provider test.\n  allow: apps/core/test/h11-governed-learning-scope.test.ts|quoted_secret_assignment (line 11): Fixture bearer token beginning with \"test_\" accepted only when NODE_ENV=test and VITEST are set.\n  allow: apps/core/test/h11-governed-learning-scope.test.ts|quoted_secret_assignment (line 12): Fixture bearer token beginning with \"test_\" accepted only when NODE_ENV=test and VITEST are set.\n  allow: apps/core/test/unauthenticated-route-escalations.test.ts|quoted_secret_assignment (line 7): Fixture admin/operator keys beginning with \"cfg_\" set on process.env for an in-memory app only.\n  allow: apps/desk/src/services/manualTaskIntake.ts|long_credential_assignment (line 4): localStorage key name for the pending manual draft; not a credential.\n  allow: apps/desk/test/desk-auth.test.ts|quoted_secret_assignment (line 18): Synthetic test fixture token used to verify browser localStorage authorization header injection in isolated unit test.\n  allow: apps/desk/test/desk-auth.test.ts|quoted_secret_assignment (line 159): Synthetic test fixture token used to verify browser localStorage authorization header injection in isolated unit test.\n  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 102): Audit probe fixture (\"isolated…\") for the emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 110): Audit probe fixture (\"isolated…\") for the emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 113): Audit probe fixture (\"isolated…\") for the emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 115): Audit probe fixture (\"isolated…\") for the emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 119): Audit probe fixture (\"isolated…\") for the emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-12-canva-reality-check/probe.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 29): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-12-followup-bug-hunt/baseline-retest.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-12-followup-bug-hunt/core-probes.ts|quoted_secret_assignment (line 5): Audit probe sets a fake \"audit-…\" bearer token for an isolated in-process app.\n  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 29): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake \"audit-…\" model key to prove the gateway fails closed.\n  allow: output/audits/2026-09-19-architecture-reliability/PUBLICATION_PROBE.mjs|quoted_secret_assignment (line 26): Offline audit probe fixture token passed to emulated Google publisher; no live credential.\n  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|quoted_secret_assignment (line 13): Offline audit probe fixture bearer token for isolated in-process app; no live credential.\n  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|quoted_secret_assignment (line 14): Offline audit probe fixture bearer token for isolated in-process app; no live credential.\n  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|long_credential_assignment (line 13): Offline audit probe fixture bearer token for isolated in-process app; no live credential.\n  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|long_credential_assignment (line 14): Offline audit probe fixture bearer token for isolated in-process app; no live credential.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 42): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 64): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 97): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 148): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 185): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 239): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 240): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 266): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 267): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 269): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.\n  allow: packages/integrations/test/canva-connect-client.test.ts|long_credential_assignment (line 239): Synthetic fixture credential passed to a mocked Canva transport; no such credential exists.\n  allow: scripts/publish_kaae_omnichannel.ts|long_credential_assignment (line 426): Idempotency key label for a publication request; not a credential.\n  allow: scripts/publish_kaae_omnichannel.ts|long_credential_assignment (line 434): Idempotency key label for a publication request; not a credential.\n  allow: scripts/run_independent_completion_audit.ts|quoted_secret_assignment (line 343): Synthetic \"canva_…\" client credentials for a configuration-shape check against a mocked transport.\n  allow: scripts/verify_all_h01_h14.ts|quoted_secret_assignment (line 197): Synthetic \"canva-…\" client secret for a configuration-shape check against a mocked transport.\n  allow: scripts/verify_live_h04_h05_h10.ts|quoted_secret_assignment (line 108): Synthetic \"audit_…\" client secret for a configuration-shape check against a mocked transport.\n"
+    }
+  },
+  "notes": [
+    "Initial tsx CLI invocation was sandbox-blocked; node --import tsx ran the manifest verifier successfully.",
+    "Initial secret scans caught synthetic credential literals in newly added audit probes. Those probes now generate disposable random values. Final scan passed; no scanner policy weakened.",
+    "R09's eight passing tests validate a saved recovery report, not a new disaster recovery execution.",
+    "Tournament probe intercepts the qualification output write. Its console text claiming it wrote a dossier is unmodified application output, not an actual disk write.",
+    "Isolated failures establish concrete implementation counterexamples, not estimates of real-world incident frequency."
+  ]
+}

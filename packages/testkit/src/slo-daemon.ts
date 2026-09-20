@@ -95,7 +95,7 @@ export class SyntheticTrafficDaemon {
   private readonly creativeDirector = new CreativeDirectorRunner();
   private readonly qaEngine = new DeterministicQAEngine();
   private readonly studio = new FakeDesignStudioAdapter();
-  private readonly publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'slo_test_token' });
+  private readonly publisher: GooglePublisher;
   private readonly retrieval = new RetrievalService();
   readonly modelGateway = new ResilientModelGateway();
 
@@ -104,7 +104,11 @@ export class SyntheticTrafficDaemon {
   private readonly targetP99Ms = 1500;
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(initialProbes: number = 0) {
+  constructor(initialProbes: number = 0, options?: { publisher?: GooglePublisher }) {
+    this.publisher = options?.publisher || new GooglePublisher({
+      emulateNetworkForTesting: process.env.NODE_ENV !== 'production',
+      oauthToken: process.env.NODE_ENV !== 'production' ? 'slo_test_token' : undefined,
+    });
     for (let i = 0; i < initialProbes; i++) {
       this.recordSyntheticSeedProbe(i, initialProbes);
     }

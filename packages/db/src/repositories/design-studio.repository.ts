@@ -102,18 +102,20 @@ export class DesignStudioRepository {
 
   private async withClient<T>(
     trx: Kysely<Database> | undefined,
-    tenantId: string | undefined,
+    scope: { tenantId?: string; clientId?: string } | string | undefined,
     fn: (client: Kysely<Database>) => Promise<T>
   ): Promise<T> {
     const base = trx || this.db;
+    const tenantId = typeof scope === 'string' ? scope : scope?.tenantId;
+    const clientId = typeof scope === 'object' ? scope?.clientId : undefined;
     if (tenantId) {
-      return withRlsContext(base, { tenantId }, fn);
+      return withRlsContext(base, { tenantId, clientId }, fn);
     }
     return fn(base);
   }
 
   async createRun(params: CreateDesignStudioRunParams, trx?: Kysely<Database>) {
-    return this.withClient(trx, params.tenantId, async (client) => {
+    return this.withClient(trx, { tenantId: params.tenantId, clientId: params.clientId }, async (client) => {
       const [row] = await client
         .insertInto('design_studio_runs')
         .values({

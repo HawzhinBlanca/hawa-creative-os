@@ -29,7 +29,28 @@ cd "${ROOT_DIR}"
 PROD_CONTAINER="hawa-production-postgres-1"
 DR_CONTAINER="hawa-clean-host-dr-postgres"
 DR_PORT="56432"
-ENCRYPTION_KEY="${HAWA_BACKUP_KEY:-hawa_production_disaster_recovery_master_key_2026_pbkdf2}"
+
+# Security & Key Custody (audit finding: remove committed encryption fallback)
+if [[ -z "${HAWA_BACKUP_KEY:-}" && -z "${HAWA_BACKUP_KEYFILE:-}" ]]; then
+  echo "FATAL: HAWA_BACKUP_KEY or HAWA_BACKUP_KEYFILE must be provided via secure off-host key custody. Committed fallback keys are strictly prohibited." >&2
+  exit 1
+fi
+if [[ -n "${HAWA_BACKUP_KEYFILE:-}" ]]; then
+  if [[ ! -r "${HAWA_BACKUP_KEYFILE}" ]]; then
+    echo "FATAL: HAWA_BACKUP_KEYFILE (${HAWA_BACKUP_KEYFILE}) is not readable." >&2
+    exit 1
+  fi
+  ENCRYPTION_KEY="$(cat "${HAWA_BACKUP_KEYFILE}")"
+else
+  ENCRYPTION_KEY="${HAWA_BACKUP_KEY}"
+fi
+
+# Drill Safety: require explicit operator confirmation before injecting marker into database
+if [[ "${HAWA_DRILL_AUTHORIZED:-0}" != "1" ]]; then
+  echo "FATAL: Disaster recovery drill writes a marker to configured source database. Set HAWA_DRILL_AUTHORIZED=1 to confirm execution." >&2
+  exit 1
+fi
+
 OFFHOST_DEST="${HAWA_OFFHOST_BACKUP_DEST:-$HOME/.hawa/offhost_snapshots}"
 DRILL_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"

@@ -162,4 +162,96 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
       expect(getRes2.status).toBe(401);
     });
   });
+
+  describe('4. Governance and Scope Enforcement (SA-01 to SA-05)', () => {
+    it('SA-01: rejects operator claiming administrator role via request body in DNA rollback', async () => {
+      const app = createApp();
+      const headers = {
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_dev_token'}`,
+        'Content-Type': 'application/json',
+        'x-enforce-auth': '1',
+      };
+      const res = await app.request('/v1/clients/client-drustee/dna/rollback', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ targetVersion: 1, role: 'administrator', reason: 'Role escalation probe' }),
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('SA-02: rejects cross-client candidate rule promotion', async () => {
+      const app = createApp();
+      const operatorHeaders = {
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_dev_token'}`,
+        'Content-Type': 'application/json',
+        'x-enforce-auth': '1',
+      };
+      const adminHeaders = {
+        Authorization: `Bearer ${staticAdminKey}`,
+        'Content-Type': 'application/json',
+        'x-enforce-auth': '1',
+      };
+
+      // 1. Propose rule for client-drustee
+      const propRes = await app.request('/v1/clients/client-drustee/candidate-rules/propose', {
+        method: 'POST',
+        headers: operatorHeaders,
+        body: JSON.stringify({
+          taskId: 'task-scope-test-1',
+          title: 'Drustee Specific Guideline',
+          category: 'layout',
+          ruleText: 'DRUSTEE_EXCLUSIVE_RULE_SCOPE_TEST',
+          rationale: 'Testing cross-client isolation',
+        }),
+      });
+      expect(propRes.status).toBe(201);
+      const { proposal } = await propRes.json();
+
+      // 2. Attempt to promote into client-aster
+      const promoteRes = await app.request(`/v1/clients/client-aster/candidate-rules/${proposal.id}/promote`, {
+        method: 'POST',
+        headers: adminHeaders,
+        body: '{}',
+      });
+      expect(promoteRes.status).toBe(403);
+
+      // 3. Verify client-aster did NOT receive the rule
+      const asterDnaRes = await app.request('/v1/clients/client-aster/dna', { headers: adminHeaders });
+      const asterDna = await asterDnaRes.json();
+      expect(asterDna.guidelines?.layoutRules).not.toContain('DRUSTEE_EXCLUSIVE_RULE_SCOPE_TEST');
+    });
+
+    it('SA-03: rejects client DNA write when database is configured but client is not found', async () => {
+      const lookupCodes: string[] = [];
+      const builder: any = new Proxy({}, {
+        get(_o, key) {
+          if (key === 'executeTakeFirst') return async () => undefined;
+          if (key === 'where') return (field: string, _op: string, value: string) => {
+            if (field === 'code') lookupCodes.push(value);
+            return builder;
+          };
+          return () => builder;
+        },
+      });
+      const fakeDb: any = {
+        selectFrom: () => builder,
+        transaction: () => ({ execute: async () => { throw new Error('Injected refusal'); } }),
+      };
+      const app = createApp({ db: fakeDb });
+      const headers = {
+        Authorization: `Bearer ${staticAdminKey}`,
+        'Content-Type': 'application/json',
+        'x-enforce-auth': '1',
+      };
+      const original: any = await (await app.request('/v1/clients/client-drustee/dna', { headers })).json();
+      const res = await app.request('/v1/clients/client-drustee/dna', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...original, name: 'Unsaved Test' }),
+      });
+      expect(res.status).toBe(404);
+      expect(lookupCodes).toContain('client-drustee');
+      expect(lookupCodes).toContain('drustee');
+    });
+  });
 });

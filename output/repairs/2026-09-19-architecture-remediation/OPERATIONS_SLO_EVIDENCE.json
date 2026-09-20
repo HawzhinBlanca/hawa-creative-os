@@ -2,29 +2,29 @@
   "taskId": "R12",
   "name": "Measure Operations, Performance and Safe Failure Behavior",
   "status": "QUALIFIED",
-  "evaluatedAt": "2026-09-19T12:02:28.675Z",
+  "evaluatedAt": "2026-09-20T12:31:55.250Z",
   "latencySLOs": {
     "taskList": {
       "samples": 50,
-      "p50Ms": 52.27,
-      "p95Ms": 56.35,
-      "p99Ms": 71.8,
+      "p50Ms": 240.57,
+      "p95Ms": 247.84,
+      "p99Ms": 268.95,
       "targetP95Ms": 1500,
       "compliant": true
     },
     "webhookIngress": {
       "samples": 25,
-      "p50Ms": 0.23,
-      "p95Ms": 0.82,
-      "p99Ms": 1.21,
+      "p50Ms": 0.14,
+      "p95Ms": 1.22,
+      "p99Ms": 3.66,
       "targetP95Ms": 1000,
       "compliant": true
     },
     "nonAiTransitions": {
       "samples": 15,
-      "p50Ms": 18.95,
-      "p95Ms": 23.29,
-      "p99Ms": 28.43,
+      "p50Ms": 17.6,
+      "p95Ms": 27.3,
+      "p99Ms": 31.3,
       "targetP95Ms": 2000,
       "compliant": true
     }
@@ -53,17 +53,17 @@
     "honestDegradedHealth": true
   },
   "endToEndTaskTrace": {
-    "taskId": "fa871892-a760-426f-9840-3db05c20c150",
-    "totalDurationMs": 48,
+    "taskId": "badc04b8-7dce-4c4c-8d93-e775bc787789",
+    "totalDurationMs": 43,
     "stages": [
       {
         "stage": "Ingress & Task Creation",
-        "durationMs": 5,
+        "durationMs": 4,
         "status": "201 Created"
       },
       {
         "stage": "Revision Creation",
-        "durationMs": 14,
+        "durationMs": 12,
         "status": "201 Created"
       },
       {
@@ -73,7 +73,7 @@
       },
       {
         "stage": "Art Director Approval",
-        "durationMs": 24,
+        "durationMs": 22,
         "status": "Decision=approved"
       }
     ]

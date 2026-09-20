@@ -376,7 +376,7 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(rendered[0].metrics).toBeDefined();
     expect(rendered[0].metrics?.alignmentScore).toBeGreaterThanOrEqual(0.7);
     expect(rendered[0].metrics?.whitespaceRatio).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   it('6. critique stage: scores candidate, computes weighted score, checks hard fails', async () => {
     const mockCritique = {

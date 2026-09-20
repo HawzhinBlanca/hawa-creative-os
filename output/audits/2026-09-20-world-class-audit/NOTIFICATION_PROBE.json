@@ -1,0 +1,18 @@
+{
+  "auditedAt": "2026-09-20",
+  "commit": "9c22026f444c81494d286354960a0b10efaa1176",
+  "sourceSha256": "db8c2aee13d6acd02ad3ffcd8ace31ffe6dffb025ef7a204241e8542e7569982",
+  "externalCalls": false,
+  "databaseAccess": false,
+  "scenario": "Core fails before enqueue; replay after Core recovers",
+  "firstStatus": "MANUAL_DESIGN_REQUIRED",
+  "replayStatus": "MANUAL_DESIGN_REQUIRED",
+  "syntheticHttpCalls": 1,
+  "journalEntries": [
+    [
+      "canva-notify-manual_design_required",
+      {}
+    ]
+  ],
+  "intentCouldBeCreated": false
+}

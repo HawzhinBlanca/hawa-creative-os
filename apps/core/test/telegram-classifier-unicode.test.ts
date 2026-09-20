@@ -108,4 +108,21 @@ describe('classifier: a multi-paragraph message is never chatter or instruction-
     const res = classifyWithHeuristics('make it more gold and less crowded', false);
     expect(res.isInstructionOnly).toBe(true);
   });
+
+  it('preserves a single-paragraph brief that starts with a greeting when it carries event details or design copy', () => {
+    const text = 'سڵاو کاکە تکایە پۆستەرێکمان بۆ دروست بکەن بۆ سیمیناری ددان لە ٢٥ی مانگ لە هۆڵی سەعد عەبدوڵڵا';
+    const res = classifyWithHeuristics(text, false);
+    expect(res.intent).toBe('new_brief');
+    expect(res.kind).toBe('new_brief');
+    expect(res.isInstructionOnly).toBe(false);
+  });
+
+  it('preserves a single-paragraph brief phrased as a question when it carries substantial event copy', () => {
+    const text = 'Can we design a poster for our dental workshop on September 25 at City Hall?';
+    const res = classifyWithHeuristics(text, false);
+    expect(res.intent).toBe('new_brief');
+    expect(res.kind).toBe('new_brief');
+    expect(res.isInstructionOnly).toBe(false);
+  });
 });
+

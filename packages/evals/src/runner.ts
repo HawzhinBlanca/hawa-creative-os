@@ -105,13 +105,36 @@ export class EvaluationRunner {
           if (c.critical) criticalViolations += 1;
           continue;
         }
-        // Validate client if provided by model
+        // Validate client identity when expected
         if (c.expected?.client) {
           const resClient = val.clientId || val.client;
-          if (resClient && resClient !== 'client-office-1') {
+          if (!resClient) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+          if (resClient !== 'client-office-1') {
             const normRes = String(resClient).toUpperCase();
             const normExp = String(c.expected.client).toUpperCase();
-            if (normRes !== normExp && !normRes.includes(normExp)) {
+            if (normRes !== normExp && !normRes.includes(normExp) && !normExp.includes(normRes)) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+          }
+        }
+        // Validate project identity when expected
+        if (c.expected?.project) {
+          const resProject = val.projectId || val.project;
+          if (!resProject) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+          if (resProject !== 'project-campaign-2026') {
+            const normRes = String(resProject).toUpperCase();
+            const normExp = String(c.expected.project).toUpperCase();
+            if (normRes !== normExp && !normRes.includes(normExp) && !normExp.includes(normRes)) {
               failed += 1;
               if (c.critical) criticalViolations += 1;
               continue;

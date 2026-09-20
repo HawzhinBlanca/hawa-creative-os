@@ -138,7 +138,7 @@ export function classifyWithHeuristics(
 
   // Detect whether the incoming message is a full structured brief with event body copy
   const hasMultipleParagraphs = trimmed.split(/\n\s*\n/).filter(Boolean).length >= 2;
-  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?|ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت)\b/i.test(trimmed);
+  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?)\b/i.test(trimmed) || /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(trimmed);
   const hasDivider = /\n\s*([_\-=\*]{3,})\s*\n/.test(trimmed);
   const hasSectionHeader = /\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i.test(trimmed);
   const isFullStructuredBrief = hasDivider || hasSectionHeader || (hasMultipleParagraphs && (hasEventIndicators || trimmed.length > 200));
@@ -186,10 +186,16 @@ export function classifyWithHeuristics(
     };
   }
 
-  // 3. Greetings or bot slash-commands. A greeting on the first line of a several-paragraph message
-  // is an opening, not chatter: answering it with a hello would drop the brief under it, because
-  // 'question' and 'other' are answered in chat and never become a task.
-  if (trimmed.startsWith('/') || (!hasMultipleParagraphs && startsWithWord(trimmed, GREETING_WORDS))) {
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const hasDesignKeyword = /\b(poster|design|flyer|banner|logo|brochure|invitation)\b/i.test(trimmed) || /(دیزاین|پۆستەر|فلایەر|بانەر|لۆگۆ|بانگهێشت)/u.test(trimmed);
+  const hasSubstantialBriefContent = hasEventIndicators || (wordCount >= 12 && hasDesignKeyword) || wordCount >= 20;
+
+  // 3. Greetings or bot slash-commands. A greeting on the first line of a message is an opening, not chatter:
+  // answering it with a hello would drop the brief under it, because 'question' and 'other' are answered
+  // in chat and never become a task. A single-paragraph message with substantial event copy or design details
+  // starting with a greeting is an opening to a brief, not chatter.
+  if (trimmed.startsWith('/') || (!hasMultipleParagraphs && !hasSubstantialBriefContent && startsWithWord(trimmed, GREETING_WORDS))) {
     return {
       kind: trimmed.startsWith('/') ? 'question' : 'other',
       intent: 'question_or_other',
@@ -200,8 +206,9 @@ export function classifyWithHeuristics(
     };
   }
 
-  // 4. Questions, on the same rule: a brief that happens to end in a question mark is still a brief.
-  if (!hasMultipleParagraphs && (/\?$/.test(trimmed) || startsWithWord(trimmed, QUESTION_WORDS))) {
+  // 4. Questions: a brief that happens to end in a question mark or open with a question word is still a brief
+  // when it carries substantial copy or event indicators.
+  if (!hasMultipleParagraphs && !hasSubstantialBriefContent && (/\?$/.test(trimmed) || startsWithWord(trimmed, QUESTION_WORDS))) {
     return {
       kind: 'question',
       intent: 'question_or_other',

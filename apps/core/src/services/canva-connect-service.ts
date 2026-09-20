@@ -372,10 +372,23 @@ export class CanvaConnectService {
   /** Retrieved exports of this task with these ids, for pinning to an approval. Unknown ids are left out. */
   async exportsById(s: Scope,taskId: string,ids: string[]): Promise<Array<{ id:string; format:'png'|'pdf'|'pptx'; sha256:string; byte_size:number }>> {
     if (!ids.length) return [];
-    const rows = await this.tx(s,async db => (await sql<any>`SELECT b.id,b.format,b.sha256,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
-      JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
-      WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
-        AND b.id = ANY(${ids}::uuid[])`.execute(db)).rows);
+    let binding: any = null;
+    try {
+      binding = await this.binding(s, taskId);
+    } catch {
+      binding = null;
+    }
+    const rows = await this.tx(s,async db => {
+      let query = sql<any>`SELECT b.id,b.format,b.sha256,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
+        JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
+        WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
+          AND (b.content_check IS NULL OR b.content_check != 'failed')
+          AND b.id = ANY(${ids}::uuid[])`;
+      if (binding?.canva_design_id) {
+        query = sql<any>`${query} AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}`;
+      }
+      return (await query.execute(db)).rows;
+    });
     return rows.map((r:any) => ({ id:String(r.id),format:r.format,sha256:String(r.sha256),byte_size:Number(r.byte_size) }));
   }
   /** The stored bytes of one export of this task, for delivery. The caller checks them against the pinned hash. */
