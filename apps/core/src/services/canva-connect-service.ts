@@ -378,15 +378,14 @@ export class CanvaConnectService {
     } catch {
       binding = null;
     }
+    if (!binding?.canva_design_id) return [];
     const rows = await this.tx(s,async db => {
-      let query = sql<any>`SELECT b.id,b.format,b.sha256,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
+      const query = sql<any>`SELECT b.id,b.format,b.sha256,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
         JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
         WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
-          AND (b.content_check IS NULL OR b.content_check != 'failed')
+          AND (b.content_check IS NULL OR ((b.content_check->>'copyPass') IS DISTINCT FROM 'false' AND (b.content_check->>'fontPass') IS DISTINCT FROM 'false' AND (b.content_check->>'status') IS DISTINCT FROM 'failed'))
+          AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}
           AND b.id = ANY(${ids}::uuid[])`;
-      if (binding?.canva_design_id) {
-        query = sql<any>`${query} AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}`;
-      }
       return (await query.execute(db)).rows;
     });
     return rows.map((r:any) => ({ id:String(r.id),format:r.format,sha256:String(r.sha256),byte_size:Number(r.byte_size) }));

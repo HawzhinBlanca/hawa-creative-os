@@ -1,0 +1,21 @@
+{
+  "head": "6d3c583791a404c914e25b77dda558b16d26bd6c",
+  "sourceSha256": "f008f29751322cab89603536ce7bdbe70fdde4aa0b70fd4f68d60d089f4bde62",
+  "scope": "actual source with synthetic transport; NOT production/real provider proof",
+  "databaseAccess": false,
+  "externalNetworkAccess": false,
+  "publication": {
+    "freshInstances": { "files": 2, "rows": 1, "unsupportedEndpoints": [] },
+    "lostDriveReply": { "lostError": "Synthetic committed upload with lost reply", "files": 2, "rows": 1, "state": "complete", "unsupportedEndpoints": [] },
+    "concurrentSameAdapter": { "files": 2, "rows": 2, "states": ["complete", "complete"], "unsupportedEndpoints": [] },
+    "fullColumn503": { "state": "drive_complete", "rows": 0, "problem": "Task identity search failed: HTTP 503", "unsupportedEndpoints": [] },
+    "lostSheetReply": { "state": "complete", "rows": 1, "files": 1 },
+    "wrongChecksum": { "state": "failed", "verified": false },
+    "missingChecksum": { "state": "complete", "verified": true },
+    "moveBetweenLookupAndPut": { "state": "complete", "overwritten": ["synthetic-other-task"], "rowTaskIds": ["synthetic-task-a", "synthetic-task-a"], "unsupportedEndpoints": [] },
+    "sameKeyChangedDestination": { "state": "complete", "returnedFolder": "synthetic-folder-a", "requestedFolder": "synthetic-folder-b", "rejected": false }
+  },
+  "workflowSourceSha256": "af6b8880f4f30b2f47f447e228ad56b54b2eb28d17834124d09fcea3479d15b6",
+  "notificationWorkflow503": { "firstError": "Canva workflow Core boundary HTTP 503", "calls": 2, "replayStatus": "MANUAL_DESIGN_REQUIRED", "journalEntries": 1, "realRestateRecoveryProven": false },
+  "notificationWorkflow400": "returned"
+}

@@ -1,18 +1,22 @@
 {
   "auditedAt": "2026-09-20",
   "commit": "9c22026f444c81494d286354960a0b10efaa1176",
-  "sourceSha256": "db8c2aee13d6acd02ad3ffcd8ace31ffe6dffb025ef7a204241e8542e7569982",
+  "sourceSha256": "af6b8880f4f30b2f47f447e228ad56b54b2eb28d17834124d09fcea3479d15b6",
   "externalCalls": false,
   "databaseAccess": false,
   "scenario": "Core fails before enqueue; replay after Core recovers",
-  "firstStatus": "MANUAL_DESIGN_REQUIRED",
+  "firstStatus": "THREW_503_RECOVERY_REQUIRED",
+  "firstError": "Canva workflow Core boundary HTTP 503",
   "replayStatus": "MANUAL_DESIGN_REQUIRED",
-  "syntheticHttpCalls": 1,
+  "syntheticHttpCalls": 2,
   "journalEntries": [
     [
       "canva-notify-manual_design_required",
-      {}
+      {
+        "ok": true,
+        "notificationSent": true
+      }
     ]
   ],
-  "intentCouldBeCreated": false
+  "intentCouldBeCreated": true
 }

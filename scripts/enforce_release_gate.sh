@@ -184,6 +184,11 @@ if [ "$SKIP_TESTS" -eq 1 ]; then
   GATE_TESTS_STATUS="SKIPPED"
 fi
 
+CLEAN_TREE="false"
+if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+  CLEAN_TREE="true"
+fi
+
 cat <<EOF > "${EVIDENCE_FILE}"
 {
   "taskId": "R11",
@@ -193,7 +198,7 @@ cat <<EOF > "${EVIDENCE_FILE}"
   "git": {
     "commit": "${GIT_COMMIT}",
     "branch": "${GIT_BRANCH}",
-    "cleanTree": false
+    "cleanTree": ${CLEAN_TREE}
   },
   "releaseManifest": {
     "file": "RELEASE_MANIFEST.json",

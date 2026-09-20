@@ -1,0 +1,46 @@
+{
+  "source": "6d3c583791a404c914e25b77dda558b16d26bd6c",
+  "date": "2026-09-20",
+  "scope": "No network/provider/database access; original evidence writes intercepted; all persisted outputs confined to new audit directory.",
+  "setupIssues": [
+    "First native baseline and mutation launches failed before execution because fflate was package-local. Probe resolver corrected; subsequent baseline and mutation both executed. No application edits."
+  ],
+  "results": [
+    {
+      "name": "default",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-tournament-mode.mjs",
+      "exitCode": 1,
+      "stdout": "{\n  \"scope\": \"Actual script; only evidence write intercepted\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"liveFlag\": false,\n  \"networkAttempts\": 0,\n  \"proofClass\": \"SIMULATED_OFFLINE_TEST\",\n  \"simulated\": true,\n  \"routing\": {\n    \"dataset\": \"evals/routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"confidenceInterval95\": {\n      \"pointEstimate\": 1,\n      \"ciLower95\": 0.9812,\n      \"ciUpper95\": 1\n    },\n    \"criticalViolations\": 0,\n    \"status\": \"PASSED\"\n  },\n  \"admissions\": {\n    \"intake_router\": {\n      \"status\": \"SIMULATED_NOT_ADMITTED\",\n      \"scope\": \"Enforced routing, client scoping, and mandatory abstention\"\n    },\n    \"retrieval_agent\": {\n      \"status\": \"SIMULATED_NOT_ADMITTED\",\n      \"scope\": \"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage\"\n    },\n    \"visual_judge\": {\n      \"status\": \"SIMULATED_NOT_ADMITTED\",\n      \"scope\": \"10-dimensional rubric scoring strictly gated by independent hard QA rules\"\n    },\n    \"degradation_manager\": {\n      \"status\": \"SIMULATED_NOT_ADMITTED\",\n      \"scope\": \"Rungs 0 through 4 with deterministic budget and failure fallbacks\"\n    }\n  },\n  \"overallVerdict\": \"UNQUALIFIED_SIMULATION\"\n}\n"
+    },
+    {
+      "name": "false_live",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-tournament-mode.mjs --live",
+      "exitCode": 0,
+      "stdout": "{\n  \"scope\": \"Actual script; only evidence write intercepted\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"liveFlag\": true,\n  \"networkAttempts\": 0,\n  \"proofClass\": \"LIVE_MODEL_EVALUATION\",\n  \"simulated\": false,\n  \"routing\": {\n    \"dataset\": \"evals/routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"confidenceInterval95\": {\n      \"pointEstimate\": 1,\n      \"ciLower95\": 0.9812,\n      \"ciUpper95\": 1\n    },\n    \"criticalViolations\": 0,\n    \"status\": \"PASSED\"\n  },\n  \"admissions\": {\n    \"intake_router\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Enforced routing, client scoping, and mandatory abstention\"\n    },\n    \"retrieval_agent\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Multi-intent asset and exemplar retrieval with zero foreign tenant leakage\"\n    },\n    \"visual_judge\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"10-dimensional rubric scoring strictly gated by independent hard QA rules\"\n    },\n    \"degradation_manager\": {\n      \"status\": \"ADMITTED\",\n      \"scope\": \"Rungs 0 through 4 with deterministic budget and failure fallbacks\"\n    }\n  },\n  \"overallVerdict\": \"QUALIFIED\"\n}\n"
+    },
+    {
+      "name": "routing_variant",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-routing-variants.mjs",
+      "exitCode": 0,
+      "stdout": "{\n  \"scope\": \"Actual evaluator with offline injected response; no database/network/files written\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"defaultSentinelIdentity\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"singleAmbiguousIdentityForAllCases\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  }\n}\n"
+    },
+    {
+      "name": "all_http_fail",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-slo-all-fail.mjs",
+      "exitCode": 0,
+      "stdout": "{\n  \"scope\": \"Actual measurement function; app503/database stub; evidence write intercepted\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"attempted\": 111,\n  \"status\": \"QUALIFIED\",\n  \"observedAvailability\": {\n    \"windowRequests\": 111,\n    \"successfulRequests\": 0,\n    \"availabilityPercent\": 0,\n    \"targetPercent\": 99.5,\n    \"compliant\": false\n  },\n  \"latencySLOs\": {\n    \"taskList\": {\n      \"samples\": 0,\n      \"p50Ms\": 0,\n      \"p95Ms\": 0,\n      \"p99Ms\": 0,\n      \"targetP95Ms\": 1500,\n      \"compliant\": true\n    },\n    \"webhookIngress\": {\n      \"samples\": 0,\n      \"p50Ms\": 0,\n      \"p95Ms\": 0,\n      \"p99Ms\": 0,\n      \"targetP95Ms\": 1000,\n      \"compliant\": true\n    },\n    \"nonAiTransitions\": {\n      \"samples\": 0,\n      \"p50Ms\": 0,\n      \"p95Ms\": 0,\n      \"p99Ms\": 0,\n      \"targetP95Ms\": 2000,\n      \"compliant\": true\n    }\n  },\n  \"faultTolerance\": {\n    \"circuitBreakerTripsOnOutage\": true,\n    \"channelKillSwitchEnforced\": false,\n    \"honestDegradedHealth\": true\n  },\n  \"traceStatuses\": [\n    \"201 Created\",\n    \"201 Created\",\n    \"CriticalPass=false\",\n    \"Decision=denied\"\n  ]\n}\n"
+    },
+    {
+      "name": "native_baseline",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-native-copy-mutation.mjs",
+      "exitCode": 0,
+      "stdout": "{\n  \"scope\": \"Actual W06 assertion bodies with real encoder and QA; lightweight assert facade; output write intercepted\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"corrupt\": false,\n  \"mutationCount\": 0,\n  \"confirmedCorruptExports\": 0,\n  \"results\": [\n    {\n      \"name\": \"verifies dataset completeness: exactly 40 synthetic golden cases and 20 real Sorani cases loaded\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"runs all 40 synthetic golden RTL cases through bidi analysis, typography clearance, and editable transfer\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"runs all 20 real commercial Sorani briefs through orthography, clearance, and editable transfer\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"verifies negative controls: unapproved fonts, overlapping boxes, and tight clearance clipping risks\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"writes the deterministic evidence report to DISASTER_RECOVERY_EVIDENCE and W06 evidence files\",\n      \"status\": \"PASS\"\n    }\n  ],\n  \"evidence\": {\n    \"syntheticCount\": 40,\n    \"syntheticPassed\": 40,\n    \"realCount\": 20,\n    \"realPassed\": 20,\n    \"componentFidelityVerdict\": \"PASSED\",\n    \"liveCanvaHumanInspection\": \"NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER\"\n  }\n}\n"
+    },
+    {
+      "name": "native_corrupt_copy",
+      "command": "node --import tsx output/audits/2026-09-20-post-change-deep-audit/proof-native-copy-mutation.mjs --corrupt-copy",
+      "exitCode": 0,
+      "stdout": "{\n  \"scope\": \"Actual W06 assertion bodies with real encoder and QA; lightweight assert facade; output write intercepted\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"corrupt\": true,\n  \"mutationCount\": 60,\n  \"confirmedCorruptExports\": 60,\n  \"results\": [\n    {\n      \"name\": \"verifies dataset completeness: exactly 40 synthetic golden cases and 20 real Sorani cases loaded\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"runs all 40 synthetic golden RTL cases through bidi analysis, typography clearance, and editable transfer\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"runs all 20 real commercial Sorani briefs through orthography, clearance, and editable transfer\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"verifies negative controls: unapproved fonts, overlapping boxes, and tight clearance clipping risks\",\n      \"status\": \"PASS\"\n    },\n    {\n      \"name\": \"writes the deterministic evidence report to DISASTER_RECOVERY_EVIDENCE and W06 evidence files\",\n      \"status\": \"PASS\"\n    }\n  ],\n  \"evidence\": {\n    \"syntheticCount\": 40,\n    \"syntheticPassed\": 40,\n    \"realCount\": 20,\n    \"realPassed\": 20,\n    \"componentFidelityVerdict\": \"PASSED\",\n    \"liveCanvaHumanInspection\": \"NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER\"\n  }\n}\n"
+    }
+  ]
+}

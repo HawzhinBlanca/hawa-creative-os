@@ -77,10 +77,35 @@ export class FakeModelGateway implements ModelGateway {
         text.includes('upload it to aster folder') ||
         text.includes('ignore the system') ||
         text.includes('which sara?');
+
+      let resolvedClient = 'client-office-1';
+      if (text.includes('aster')) resolvedClient = 'ASTER';
+      else if (text.includes('nova')) resolvedClient = 'NOVA';
+      else if (text.includes('rona')) resolvedClient = 'RONA';
+      else if (text.includes('drustee')) resolvedClient = 'DRUSTEE';
+      else if (text.includes('sebar')) resolvedClient = 'SEBAR';
+      else if (text.includes('erbil')) resolvedClient = 'ERBIL_EXPRESS';
+
+      let resolvedProject = 'project-campaign-2026';
+      const projectKeywords = [
+        'SUMMER', 'PODCAST', 'RETAIL', 'LAUNCH', 'EVENTS', 'SOCIAL',
+        'HEALTH', 'AWARENESS', 'RECRUIT', 'TECH', 'PHARMA', 'SPA',
+        'LOGISTICS', 'AUTUMN', 'WELLNESS', 'LAB', 'LUXURY', 'DELIVERY',
+        'CLOUD', 'CLINIC', 'CLINICAL', 'HOSPITALITY', 'CARGO', 'AI',
+        'FLEET', 'DINING', 'EVIDENCE', 'SUITE', 'TRACKING'
+      ];
+      for (const kw of projectKeywords) {
+        const re = new RegExp('(^|[^a-zA-Z0-9])' + kw.toLowerCase() + '([^a-zA-Z0-9]|$)');
+        if (re.test(text)) {
+          resolvedProject = kw;
+          break;
+        }
+      }
+
       val = {
         decision: mustAbstain ? 'abstain' : 'route_matched',
-        clientId: 'client-office-1',
-        projectId: 'project-campaign-2026',
+        clientId: resolvedClient,
+        projectId: resolvedProject,
         confidence: 0.96,
         reasoning: 'Matches known client channel and brand keywords',
       };
@@ -110,6 +135,8 @@ export class FakeModelGateway implements ModelGateway {
       };
     } else if (request.role === 'visual_judge') {
       val = {
+        decision: 'approved',
+        confidence: 0.96,
         passed: true,
         rubricScores: {
           hierarchy: 9.5,

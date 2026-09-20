@@ -1,0 +1,256 @@
+{
+  "audit": "2026-09-21-engineering-rank-audit",
+  "auditor": "Claude (orchestrator) with 29 read-only subagents",
+  "window": "2026-09-20 20:13 +03 to 2026-09-21",
+  "scope": {
+    "changedApplicationCode": false,
+    "deployed": false,
+    "paidModelCalls": false,
+    "productionDatabaseQueries": false,
+    "writes": [
+      "output/audits/2026-09-21-engineering-rank-audit/*",
+      "one Obsidian _raw note",
+      "a throwaway git worktree in the session scratchpad (removed)"
+    ]
+  },
+  "method": {
+    "phase1": "10 dimension auditors, each followed by an adversarial verifier instructed to refute; 2 web researchers",
+    "phase2": "4 gap investigators (design output review, end-to-end crash trace, performance/cost, privacy/licensing); 3-lens calibration panel",
+    "orchestratorChecks": "8 headline claims re-verified by hand at 2d3a930; re-checked at 6d3c583; hops 12 and 14 of the crash trace re-checked; client-data, repo visibility and font licence claims re-checked; 3 rendered designs viewed",
+    "agents": 29,
+    "subagentTokens": "about 6.1 million",
+    "toolCalls": "about 2400"
+  },
+  "executed": {
+    "baseline 2d3a930 (isolated worktree)": {
+      "typecheck": "PASS",
+      "deskBuild": "PASS",
+      "tests": {
+        "files": 215,
+        "failedFiles": 3,
+        "passed": 1568,
+        "failed": 3,
+        "skipped": 12
+      },
+      "note": "all 3 failures are default 5000 ms timeouts while 22 agents loaded the machine",
+      "durationSeconds": 187
+    },
+    "shared working tree 2026-09-20 20:15 (+03), 35 dirty paths": {
+      "typecheck": "FAIL (scripts/run_model_tournament.ts:144 TS1117; scripts/verify_release_manifest.ts:117 TS7053)",
+      "tests": {
+        "files": 217,
+        "failedFiles": 56,
+        "passed": 1197,
+        "failed": 8,
+        "skipped": 6
+      },
+      "note": "apps/core/src/app.ts was written at 20:17:12 during the run and did not parse (Unexpected \")\" at line 5730); 51 files failed to load on that one error; still unparseable at 20:21"
+    },
+    "current 6d3c583 (isolated worktree)": {
+      "typecheck": "PASS",
+      "deskBuild": "PASS",
+      "tests": {
+        "files": 217,
+        "failedFiles": 0,
+        "passed": 1584,
+        "failed": 0,
+        "skipped": 12
+      },
+      "durationSeconds": 151
+    },
+    "coverage": "NOT MEASURED: vitest has a coverage block but @vitest/coverage-v8 is not installed and is absent from the local pnpm store; no network install was made",
+    "pnpmAudit": {
+      "high": 2,
+      "critical": 0,
+      "note": "both ignored in pnpm-workspace.yaml with written reachability reasoning (image-size via pptxgenjs)"
+    }
+  },
+  "computed": {
+    "tsLines": 139063,
+    "sourceFiles": 305,
+    "testFiles": 215,
+    "testLines": 42325,
+    "commits": 301,
+    "firstCommit": "2026-09-04",
+    "gitAuthors": 1,
+    "appTsLines": 9352,
+    "anyInSource": 942,
+    "tsIgnore": 0,
+    "consoleCalls": 185,
+    "emptyCatch": 17,
+    "processEnvReads": 202,
+    "trackedFiles": 2151,
+    "trackedUnderOutput": 968,
+    "gitDirMB": 266,
+    "ciWorkflows": 0,
+    "linterConfigs": 0,
+    "githubRepoVisibility": "PRIVATE"
+  },
+  "scores": {
+    "phase1": [
+      {
+        "key": "core-architecture",
+        "auditor": 3.8,
+        "verifier": 3.8,
+        "findings": 12,
+        "confirmed": 8,
+        "partiallyConfirmed": 2,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "security",
+        "auditor": 5,
+        "verifier": 5,
+        "findings": 12,
+        "confirmed": 7,
+        "partiallyConfirmed": 3,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "data-layer",
+        "auditor": 5,
+        "verifier": 5,
+        "findings": 14,
+        "confirmed": 7,
+        "partiallyConfirmed": 3,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "durability-integrations",
+        "auditor": 4.7,
+        "verifier": 4.8,
+        "findings": 13,
+        "confirmed": 7,
+        "partiallyConfirmed": 3,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "creative-engine",
+        "auditor": 4.7,
+        "verifier": 4.8,
+        "findings": 12,
+        "confirmed": 8,
+        "partiallyConfirmed": 2,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "ai-llm-engineering",
+        "auditor": 4.3,
+        "verifier": 4.6,
+        "findings": 12,
+        "confirmed": 5,
+        "partiallyConfirmed": 5,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "frontend-desk",
+        "auditor": 4,
+        "verifier": 4,
+        "findings": 12,
+        "confirmed": 6,
+        "partiallyConfirmed": 4,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "test-quality",
+        "auditor": 5,
+        "verifier": 5,
+        "findings": 12,
+        "confirmed": 5,
+        "partiallyConfirmed": 5,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "devops-release-observability",
+        "auditor": 4,
+        "verifier": 4,
+        "findings": 12,
+        "confirmed": 8,
+        "partiallyConfirmed": 2,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      },
+      {
+        "key": "maintainability-hygiene",
+        "auditor": 4,
+        "verifier": 4.1,
+        "findings": 12,
+        "confirmed": 7,
+        "partiallyConfirmed": 3,
+        "refuted": 0,
+        "missedFoundByVerifier": 4
+      }
+    ],
+    "gaps": [
+      {
+        "key": "output-quality",
+        "score": 4.5,
+        "basis": "single investigator, not adversarially verified"
+      },
+      {
+        "key": "end-to-end-crash-trace",
+        "score": 3.4,
+        "basis": "single investigator, not adversarially verified"
+      },
+      {
+        "key": "performance-cost-scalability",
+        "score": 4.5,
+        "basis": "single investigator, not adversarially verified"
+      },
+      {
+        "key": "privacy-licensing-compliance",
+        "score": 3,
+        "basis": "single investigator, not adversarially verified"
+      }
+    ]
+  },
+  "recheckAt6d3c583": {
+    "addressedBy73a3b6b": [
+      "POST /api/waha/kill-switch now requires administrator",
+      "x-simulate-qa-fail header removed",
+      "OpsScreen hard-coded Verify/Check success toasts removed",
+      "sw.js answers 503 instead of 200 on a failed API fetch",
+      "core index.ts handles SIGTERM/SIGINT",
+      "createRevision no longer UPDATEs the append-only approvals table",
+      "publish also reads client DNA from PostgreSQL (Map still read first)"
+    ],
+    "unchanged": [
+      "in-class Drive/Sheets emulator in GooglePublisher (10 references)",
+      "notify.published: 8 producer/reader sites, 0 consumer handlers",
+      "9 routes registered directly on the Hono app",
+      "2 zod parse sites and 325 any in app.ts",
+      "16 module-level Maps in app.ts",
+      "health probe initialises dbStatus to connected",
+      "sheet_syncs retry is a plain INSERT on a UNIQUE key",
+      "4 spawnSync rasterisations on the event loop",
+      "renderer draws a line corner to corner when height > 2",
+      "no widow/orphan control",
+      "deploy.sh runs no test or typecheck",
+      "0 CI workflows, 0 linter configs",
+      "4 Verdana files and 73 client reference files tracked",
+      "no GRANT for hawa_app in db/*.sql or infra/docker/*.sql",
+      "mini-app session token is base64url of the user profile"
+    ],
+    "note": "re-checked by grep over git show HEAD:<file>; not executed"
+  },
+  "drillClaimIn6d3c583": {
+    "claimed": "clean-host disaster recovery, RPO 15 s, RTO 10 s, overall_verdict QUALIFIED",
+    "observed": "restore target is a Docker container named hawa-clean-host-dr-postgres on the same Mac; offhostReplica path is /Users/hawzhin/.hawa/offhost_snapshots on the same disk; RTO measures a database restore, not a usable service"
+  },
+  "limits": [
+    "No penetration test, no exploit attempt, no production query, no live provider call",
+    "Phase-2 gap results had one investigator each and no adversarial verifier",
+    "Design output review is one AI reviewer, not blind, on SVG-rasterised previews of one client; it is not a ranking",
+    "Percentile statements are estimates: no published percentile data exists for private codebases",
+    "Another agent edited and deployed from the checkout throughout; line numbers drift",
+    "Web research claims (competitor capabilities after mid-2026) rest on the cited pages and were not independently checked"
+  ]
+}

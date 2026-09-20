@@ -105,7 +105,7 @@ export class EvaluationRunner {
           if (c.critical) criticalViolations += 1;
           continue;
         }
-        // Validate client identity when expected
+        // Validate client identity when expected (reject ambiguous concatenations)
         if (c.expected?.client) {
           const resClient = val.clientId || val.client;
           if (!resClient) {
@@ -113,17 +113,24 @@ export class EvaluationRunner {
             if (c.critical) criticalViolations += 1;
             continue;
           }
+          const strRes = String(resClient).trim();
+          if (strRes.includes('|') || strRes.includes(':') || strRes.includes(',') || strRes.includes(';')) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+
           if (resClient !== 'client-office-1') {
-            const normRes = String(resClient).toUpperCase();
-            const normExp = String(c.expected.client).toUpperCase();
-            if (normRes !== normExp && !normRes.includes(normExp) && !normExp.includes(normRes)) {
+            const normRes = strRes.toUpperCase().replace(/^CLIENT-/, '');
+            const normExp = String(c.expected.client).trim().toUpperCase().replace(/^CLIENT-/, '');
+            if (normRes !== normExp) {
               failed += 1;
               if (c.critical) criticalViolations += 1;
               continue;
             }
           }
         }
-        // Validate project identity when expected
+        // Validate project identity when expected (reject ambiguous concatenations)
         if (c.expected?.project) {
           const resProject = val.projectId || val.project;
           if (!resProject) {
@@ -131,10 +138,17 @@ export class EvaluationRunner {
             if (c.critical) criticalViolations += 1;
             continue;
           }
+          const strResP = String(resProject).trim();
+          if (strResP.includes('|') || strResP.includes(':') || strResP.includes(',') || strResP.includes(';')) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+
           if (resProject !== 'project-campaign-2026') {
-            const normRes = String(resProject).toUpperCase();
-            const normExp = String(c.expected.project).toUpperCase();
-            if (normRes !== normExp && !normRes.includes(normExp) && !normExp.includes(normRes)) {
+            const normRes = strResP.toUpperCase().replace(/^PROJECT-/, '');
+            const normExp = String(c.expected.project).trim().toUpperCase().replace(/^PROJECT-/, '');
+            if (normRes !== normExp) {
               failed += 1;
               if (c.critical) criticalViolations += 1;
               continue;
@@ -357,7 +371,12 @@ export class EvaluationRunner {
     let modelVal: any = undefined;
     if (judgeRes.ok) {
       modelVal = (judgeRes.value as any)?.value !== undefined ? (judgeRes.value as any).value : judgeRes.value;
-      if (modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA' || (typeof modelVal?.confidence === 'number' && modelVal.confidence < 0)) {
+      const validDecisions = ['approved', 'rejected', 'revision_requested', 'qualified', 'pass'];
+      const hasInvalidDecision = modelVal?.decision !== undefined && (typeof modelVal.decision !== 'string' || !validDecisions.includes(modelVal.decision.toLowerCase()));
+      const hasInvalidConfidence = modelVal?.confidence !== undefined && (typeof modelVal.confidence !== 'number' || modelVal.confidence < 0 || modelVal.confidence > 1.0 || isNaN(modelVal.confidence));
+      const hasInvalidPassed = modelVal?.passed !== undefined && typeof modelVal.passed !== 'boolean';
+
+      if (hasInvalidDecision || hasInvalidConfidence || hasInvalidPassed || modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA') {
         return {
           dataset: 'visual_judge_rubric.json',
           totalCases: rubricDimensions.length,

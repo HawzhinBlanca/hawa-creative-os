@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateReleaseManifest, type ReleaseManifest } from '../packages/contracts/src/release-manifest.js';
 
@@ -79,28 +79,28 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
   }
 
   // 6. Build identity and cleanliness checks
-  if (!manifest.build?.commit || typeof manifest.build.commit !== 'string' || manifest.build.commit.length !== 40) {
+  if (!manifest.build?.commit || typeof manifest.build.commit !== 'string' || !/^[0-9a-f]{40}$/i.test(manifest.build.commit)) {
     errors.push(`Manifest build commit is invalid or missing: ${manifest.build?.commit}`);
   } else {
     let commitExists = false;
     try {
-      execSync(`git cat-file -e ${manifest.build.commit}`, { cwd: root, stdio: ['pipe', 'pipe', 'ignore'] });
+      execFileSync('git', ['cat-file', '-e', manifest.build.commit], { cwd: root, stdio: ['pipe', 'pipe', 'ignore'] });
       commitExists = true;
     } catch {}
 
     if (!commitExists) {
       errors.push(`Manifest build commit (${manifest.build.commit}) does not exist in git repository`);
-      try {
-        const gitHead = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-        let gitParent = '';
-        try {
-          gitParent = execSync('git rev-parse HEAD~1', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-        } catch {}
-        if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent) {
-          errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or parent (${gitParent})`);
-        }
-      } catch {}
     }
+    try {
+      const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      let gitParent = '';
+      try {
+        gitParent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      } catch {}
+      if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent) {
+        errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or parent (${gitParent})`);
+      }
+    } catch {}
   }
 
   let isActuallyClean = false;

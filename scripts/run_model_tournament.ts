@@ -34,6 +34,10 @@ async function main() {
   console.log('================================================================================');
 
   const isLive = process.argv.includes('--live');
+  if (isLive) {
+    console.error('\n❌ LIVE ADMISSION REFUSED: Offline/fake doubles (FakeModelGateway, OfflineRunner) cannot confer live qualification under --live. Real live model provider wiring and credentials required.');
+    process.exit(1);
+  }
   const runner = new EvaluationRunner();
   const startTime = Date.now();
 

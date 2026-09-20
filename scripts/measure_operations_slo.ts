@@ -251,8 +251,9 @@ export async function measureOperationsSLO() {
     headers: { ...authHeaders, 'Idempotency-Key': `trace-${Date.now()}` },
     body: JSON.stringify({ title: 'SLO Trace Task', priority: 'routine', clientId: 'c1000000-0000-4000-8000-000000000002' }),
   });
-  const traceTask = await taskRes.json();
-  taskTraceStages.push({ stage: 'Ingress & Task Creation', durationMs: Math.round(s1Duration), status: '201 Created' });
+  const traceTask = await taskRes.json().catch(() => ({}));
+  const s1Status = taskRes.status === 201 ? '201 Created' : `HTTP ${taskRes.status}`;
+  taskTraceStages.push({ stage: 'Ingress & Task Creation', durationMs: Math.round(s1Duration), status: s1Status });
 
   // Stage 2: Revision Creation
   const { res: revRes, duration: s2Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions`, {
@@ -260,16 +261,18 @@ export async function measureOperationsSLO() {
     headers: authHeaders,
     body: JSON.stringify({ nodes: [{ id: 't1', type: 'text', text: 'Traceable Verification Content' }] }),
   });
-  const rev = await revRes.json();
-  taskTraceStages.push({ stage: 'Revision Creation', durationMs: Math.round(s2Duration), status: '201 Created' });
+  const rev = await revRes.json().catch(() => ({}));
+  const s2Status = revRes.status === 201 ? '201 Created' : `HTTP ${revRes.status}`;
+  taskTraceStages.push({ stage: 'Revision Creation', durationMs: Math.round(s2Duration), status: s2Status });
 
   // Stage 3: Deterministic QA Inspection
   const { res: qaRes, duration: s3Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/qa`, {
     method: 'POST',
     headers: authHeaders,
   });
-  const qa = await qaRes.json();
-  taskTraceStages.push({ stage: 'Deterministic QA Inspection', durationMs: Math.round(s3Duration), status: `CriticalPass=${qa.criticalPass}` });
+  const qa = await qaRes.json().catch(() => ({}));
+  const s3Status = qaRes.ok ? `CriticalPass=${qa.criticalPass}` : `HTTP ${qaRes.status}`;
+  taskTraceStages.push({ stage: 'Deterministic QA Inspection', durationMs: Math.round(s3Duration), status: s3Status });
 
   // Stage 4: Approval Decision
   const { res: approveRes, duration: s4Duration } = await timedRequest(`/v1/tasks/${traceTask.id}/revisions/${rev.id}/decisions`, {
@@ -277,8 +280,9 @@ export async function measureOperationsSLO() {
     headers: { ...authHeaders, 'x-user-role': 'art_director' },
     body: JSON.stringify({ action: 'approve', reason: 'Performance SLO trace approved' }),
   });
-  const decision = await approveRes.json();
-  taskTraceStages.push({ stage: 'Art Director Approval', durationMs: Math.round(s4Duration), status: `Decision=${decision.decision}` });
+  const decision = await approveRes.json().catch(() => ({}));
+  const s4Status = approveRes.ok ? `Decision=${decision.decision}` : `HTTP ${approveRes.status}`;
+  taskTraceStages.push({ stage: 'Art Director Approval', durationMs: Math.round(s4Duration), status: s4Status });
 
   const totalTraceDurationMs = Math.round(performance.now() - traceT0);
   console.log(`    Total End-to-End Non-AI Lifecycle Duration: ${totalTraceDurationMs}ms`);
@@ -289,10 +293,19 @@ export async function measureOperationsSLO() {
   const observedAvailability = totalCalls > 0 ? Number(((successfulCalls / totalCalls) * 100).toFixed(4)) : 100;
   console.log(`\nObserved Availability over active measurement window: ${observedAvailability}% (${successfulCalls}/${totalCalls} requests succeeded)`);
 
+  const isAvailable = observedAvailability >= 99.5;
+  const isKillSwitchPassed = killData.active === true;
+  const isLatencyCompliant = listLatencies.length > 0 && p95List <= 1500 &&
+                             webhookLatencies.length > 0 && p95Webhook <= 1000 &&
+                             transitionLatencies.length > 0 && p95Transition <= 2000;
+  const isCircuitBreakerPassed = breakerState === 'OPEN';
+  const isOverallQualified = isAvailable && isKillSwitchPassed && isLatencyCompliant && isCircuitBreakerPassed;
+  const overallStatus = isOverallQualified ? 'QUALIFIED' : 'FAILED';
+
   const evidence = {
     taskId: 'R12',
     name: 'Measure Operations, Performance and Safe Failure Behavior',
-    status: 'QUALIFIED',
+    status: overallStatus,
     evaluatedAt: new Date().toISOString(),
     latencySLOs: {
       taskList: {
@@ -301,7 +314,7 @@ export async function measureOperationsSLO() {
         p95Ms: p95List,
         p99Ms: p99List,
         targetP95Ms: 1500,
-        compliant: p95List <= 1500,
+        compliant: listLatencies.length > 0 && p95List <= 1500,
       },
       webhookIngress: {
         samples: webhookLatencies.length,
@@ -309,7 +322,7 @@ export async function measureOperationsSLO() {
         p95Ms: p95Webhook,
         p99Ms: p99Webhook,
         targetP95Ms: 1000,
-        compliant: p95Webhook <= 1000,
+        compliant: webhookLatencies.length > 0 && p95Webhook <= 1000,
       },
       nonAiTransitions: {
         samples: transitionLatencies.length,
@@ -317,7 +330,7 @@ export async function measureOperationsSLO() {
         p95Ms: p95Transition,
         p99Ms: p99Transition,
         targetP95Ms: 2000,
-        compliant: p95Transition <= 2000,
+        compliant: transitionLatencies.length > 0 && p95Transition <= 2000,
       },
     },
     concurrencyAndQueues: {

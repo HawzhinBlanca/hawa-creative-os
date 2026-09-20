@@ -23,7 +23,7 @@ describe('native Canva workflow',()=>{
       {binding:{designId:'DA_test',version:1}},{status:'stale'},
       {binding:{designId:'DA_test',version:1}},{status:'submitted',operationId:'fresh'},
       {status:'retrieved',artifact:{id:'artifact'}},{status:'retrieved',artifact:{content_check:{copyPass:true,fontPass:false}}}];
-    const remote=vi.fn(async()=>Response.json(replies.shift()));
+    const remote=vi.fn(async()=>Response.json(replies.shift() ?? { ok: true }));
     expect((await runCanvaDraft(input,new DurableStepJournal(),remote)).status).toBe('CANVA_FONT_MISMATCH');
     expect(remote.mock.calls.filter(c=>String(c[0]).endsWith('/canva/generate'))).toHaveLength(1);
     expect(remote.mock.calls[5][1].headers['Idempotency-Key']).toContain('-retry-1');
@@ -43,7 +43,7 @@ describe('native Canva workflow',()=>{
   });
   it('never turns an uncertain generation into an approval or new request',async()=>{
     vi.stubEnv('HAWA_BEARER_TOKEN','test-only');const responses=[{tenantId:'tenant',clientId:'client'},{status:'uncertain',planId:'plan'}];
-    const remote=vi.fn(async()=>Response.json(responses.shift()));const result=await runCanvaDraft(input,new DurableStepJournal(),remote);
+    const remote=vi.fn(async()=>Response.json(responses.shift() ?? { ok: true }));const result=await runCanvaDraft(input,new DurableStepJournal(),remote);
     expect(result.status).toBe('DESIGN_UNCERTAIN');expect(result.qcPassed).toBe(false);
     // scope check, generation, and one outcome notification; never a second generation
     expect(remote).toHaveBeenCalledTimes(3);
@@ -112,7 +112,7 @@ describe('native Canva workflow',()=>{
       { status: 'retrieved', artifact: { id: 'art1' } },
       { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } },
     ];
-    const remote = vi.fn(async () => Response.json(replies.shift()));
+    const remote = vi.fn(async () => Response.json(replies.shift() ?? { ok: true }));
     const result = await runCanvaDraft(input, new DurableStepJournal(), remote);
     expect(result.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
     const pptxCall = remote.mock.calls.find((c) => String(c[0]).endsWith('/canva/exports') && JSON.parse(c[1].body).format === 'pptx');
@@ -382,6 +382,45 @@ describe('native Canva workflow',()=>{
     const body = JSON.parse(notifyCall[1].body);
     expect(body.parity).toBe('unavailable');
     expect(body.parityError).toBe('PARITY_IMAGE_TOO_LARGE');
+  });
+
+  it('proves terminal notification transient 503 throws and replaying after Core recovery does not re-run design generation', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const replies = [
+      { tenantId: 'tenant', clientId: 'client' }, // scope check
+      { status: 'submitted', planId: 'plan-1' }, // canva-design-plan
+      { status: 'retrieved', planId: 'plan-1', designId: 'DA_test' }, // canva-poll-draft
+      { binding: { designId: 'DA_test', version: 1 } }, // canva-read-binding
+      { status: 'submitted', operationId: 'exp-1' }, // canva-submit-export
+      { status: 'retrieved', artifact: { id: 'art-1' } }, // canva-poll-export-0
+      { status: 'submitted', operationId: 'chk-1' }, // canva-submit-qc
+      { status: 'retrieved', artifact: { content_check: { copyPass: true, fontPass: true } } }, // canva-poll-qc-0
+      new Response('Synthetic Core 503 during notification', { status: 503 }), // canva-notify-canva_draft_ready_for_visual_review fails
+    ];
+    const remote = vi.fn(async () => {
+      const rep = replies.shift();
+      return rep instanceof Response ? rep : Response.json(rep);
+    });
+    const ctx = new DurableStepJournal();
+
+    // First attempt: should throw CoreBoundaryError(503) during notification
+    await expect(runCanvaDraft(input, ctx, remote)).rejects.toThrow('HTTP 503');
+
+    // Verify all design generation steps were committed to journal
+    expect(ctx.hasStep('canva-create-draft')).toBe(true);
+    expect(ctx.hasStep('canva-read-binding')).toBe(true);
+    expect(ctx.hasStep('canva-notify-canva_draft_ready_for_visual_review')).toBe(false);
+
+    // Replay after Core recovery: only terminal notification should be called
+    const replayRemote = vi.fn(async () => Response.json({ ok: true, notificationSent: true }));
+    const result = await runCanvaDraft(input, ctx, replayRemote);
+
+    expect(result.status).toBe('CANVA_DRAFT_READY_FOR_VISUAL_REVIEW');
+    // Replay made exactly 1 call: to notifications/canva-status
+    expect(replayRemote).toHaveBeenCalledTimes(1);
+    expect(String(replayRemote.mock.calls[0][0])).toContain('/notifications/canva-status');
+    // Journal now records notification completed
+    expect(ctx.hasStep('canva-notify-canva_draft_ready_for_visual_review')).toBe(true);
   });
 });
 
