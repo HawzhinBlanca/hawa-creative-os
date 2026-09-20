@@ -720,7 +720,15 @@ export class FeedbackMiner {
   public dismissRule(ruleId: string): boolean {
     const rule = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
     if (!rule) return false;
+    if (rule.status === 'PROMOTED') return false;
     rule.status = 'DISMISSED';
+    return true;
+  }
+
+  public restoreRuleStatus(ruleId: string, status: 'PROPOSED' | 'PROMOTED' | 'DISMISSED'): boolean {
+    const rule = Array.from(this.candidateRules.values()).find((r) => r.id === ruleId);
+    if (!rule) return false;
+    rule.status = status;
     return true;
   }
 

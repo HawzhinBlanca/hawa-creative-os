@@ -65,7 +65,7 @@ export function generateReleaseManifest(): ReleaseManifest {
     },
     build: {
       commit,
-      treeClean: true,
+      treeClean: uncommittedFiles.length === 0,
       commitTimestamp,
       branch,
     },

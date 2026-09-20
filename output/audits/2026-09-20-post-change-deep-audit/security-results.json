@@ -1,0 +1,43 @@
+{
+  "sourceCommit": "6d3c583791a404c914e25b77dda558b16d26bd6c",
+  "networkAttempts": 0,
+  "transactionAttempts": 1,
+  "missingClientPromotion": {
+    "status": 404,
+    "dnaUnchanged": true,
+    "ruleStatusBefore": "PROPOSED",
+    "ruleStatusAfter": "PROPOSED"
+  },
+  "rejectedTransactionPromotion": {
+    "status": 500,
+    "rulePresentBefore": false,
+    "rulePresentAfter": false,
+    "versionBefore": 1,
+    "versionAfter": 1,
+    "ruleStatusAfter": "PROPOSED"
+  },
+  "historicalSnapshot": {
+    "promotionStatus": 200,
+    "baselineContentChanged": false,
+    "savedHashUnchanged": true,
+    "savedHashMatchesCurrentContent": true
+  },
+  "unauthorizedDismiss": {
+    "status": 403,
+    "authenticatedRole": "operator",
+    "urlClient": "client-nova",
+    "actualRuleClient": "client-aster",
+    "ruleStatusAfter": "PROMOTED",
+    "activeDnaStillContainsRule": true
+  },
+  "repairedControls": {
+    "forgedRollbackStatus": 403,
+    "crossClientPromotionStatus": 403
+  },
+  "authorizedRealtimeUpdate": {
+    "mutationStatus": 201,
+    "streamStatus": 200,
+    "observationMilliseconds": 200,
+    "eventObserved": true
+  }
+}

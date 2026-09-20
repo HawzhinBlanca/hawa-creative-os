@@ -1,0 +1,4 @@
+{
+  "exitCode": 0,
+  "stdout": "{\n  \"scope\": \"Actual evaluator with offline injected response; no database/network/files written\",\n  \"source\": \"6d3c583791a404c914e25b77dda558b16d26bd6c\",\n  \"defaultSentinelIdentity\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"singleAmbiguousIdentityForAllCases\": {\n    \"dataset\": \"routing_brief.jsonl\",\n    \"totalCases\": 200,\n    \"passedCases\": 200,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  },\n  \"invalidVisualResponse\": {\n    \"dataset\": \"visual_quality_rubric.md\",\n    \"totalCases\": 10,\n    \"passedCases\": 10,\n    \"failedCases\": 0,\n    \"passRate\": 100,\n    \"criticalViolations\": 0\n  }\n}\n"
+}

@@ -109,15 +109,22 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   // Every terminal outcome is reported to the requester through Core. A failed chat message
   // must never fail (or retry) the workflow, so the notification swallows its own errors.
   const finish = async (status: string, designId?: string, code?: string, parity?: string) => {
-    await ctx.run('canva-notify-' + status.toLowerCase(), () =>
-      call('/notifications/canva-status', {
-        status,
-        designId,
-        code,
-        runId: result?.runId,
-        ...(parity ? { parity, parityError: code } : {}),
-      }).catch(() => ({}))
-    );
+    await ctx.run('canva-notify-' + status.toLowerCase(), async () => {
+      try {
+        return await call('/notifications/canva-status', {
+          status,
+          designId,
+          code,
+          runId: result?.runId,
+          ...(parity ? { parity, parityError: code } : {}),
+        });
+      } catch (err: any) {
+        if (err instanceof CoreBoundaryError && err.httpStatus >= 400 && err.httpStatus < 500 && err.httpStatus !== 429) {
+          return { error: 'non_retryable_client_error', status: err.httpStatus };
+        }
+        throw err;
+      }
+    });
     return output(status, designId);
   };
 

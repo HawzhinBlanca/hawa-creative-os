@@ -119,6 +119,14 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
       expect(slideXml).toContain('<a:r>');
       expect(slideXml).toContain('<a:t>');
 
+      // 1b. Exact factual copy preserved in exported live text node
+      const extractedTextNodes = Array.from(slideXml.matchAll(/<a:t>([^<]*)<\/a:t>/g)).map((m) => m[1]);
+      const combinedExtractedText = extractedTextNodes.join(' ').replace(/\s+/g, ' ');
+      const expectedLines = cleanText.split('\n').map((l) => l.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).filter(Boolean);
+      for (const line of expectedLines) {
+        expect(combinedExtractedText).toContain(line);
+      }
+
       // 2. Typeface preserved
       expect(slideXml).toContain(`typeface="${font}"`);
 
@@ -200,6 +208,14 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
       expect(slideXml).toContain('algn="r"');
       expect(orthography.valid).toBe(true);
       expect(clearance.safe).toBe(true);
+
+      // Exact factual copy preserved in exported live text node
+      const extractedTextNodes = Array.from(slideXml.matchAll(/<a:t>([^<]*)<\/a:t>/g)).map((m) => m[1]);
+      const combinedExtractedText = extractedTextNodes.join(' ').replace(/\s+/g, ' ');
+      const expectedLines = copyText.split('\n').map((l) => l.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).filter(Boolean);
+      for (const line of expectedLines) {
+        expect(combinedExtractedText).toContain(line);
+      }
 
       realResults.push({
         id: brief.id,

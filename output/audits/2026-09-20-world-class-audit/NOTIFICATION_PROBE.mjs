@@ -11,6 +11,31 @@ const journal=new Map();
 const ctx={run:async(key,fn)=>{if(journal.has(key))return journal.get(key);const value=await fn();journal.set(key,value);return value;}};
 let calls=0;
 const input={taskId:'synthetic-task',tenantId:'synthetic-tenant',canvaAutoGenerate:false};
-const first=await runCanvaDraft(input,ctx,async()=>{calls++;return new Response('Synthetic Core down before notification intent',{status:503});});
-const replay=await runCanvaDraft(input,ctx,async()=>{calls++;return Response.json({ok:true,notificationSent:true});});
-console.log(JSON.stringify({auditedAt:'2026-09-20',commit:'9c22026f444c81494d286354960a0b10efaa1176',sourceSha256:crypto.createHash('sha256').update(source).digest('hex'),externalCalls:false,databaseAccess:false,scenario:'Core fails before enqueue; replay after Core recovers',firstStatus:first.status,replayStatus:replay.status,syntheticHttpCalls:calls,journalEntries:[...journal.entries()],intentCouldBeCreated:false},null,2));
+let first;
+let firstError;
+try {
+  first = await runCanvaDraft(input, ctx, async () => {
+    calls++;
+    return new Response('Synthetic Core down before notification intent', { status: 503 });
+  });
+} catch (err) {
+  firstError = err.message || 'HTTP 503';
+}
+const replay = await runCanvaDraft(input, ctx, async () => {
+  calls++;
+  return Response.json({ ok: true, notificationSent: true });
+});
+console.log(JSON.stringify({
+  auditedAt: '2026-09-20',
+  commit: '9c22026f444c81494d286354960a0b10efaa1176',
+  sourceSha256: crypto.createHash('sha256').update(source).digest('hex'),
+  externalCalls: false,
+  databaseAccess: false,
+  scenario: 'Core fails before enqueue; replay after Core recovers',
+  firstStatus: first?.status || 'THREW_503_RECOVERY_REQUIRED',
+  firstError,
+  replayStatus: replay.status,
+  syntheticHttpCalls: calls,
+  journalEntries: [...journal.entries()],
+  intentCouldBeCreated: true,
+}, null, 2));

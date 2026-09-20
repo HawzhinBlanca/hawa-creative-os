@@ -409,6 +409,10 @@ export function createApp(options?: CreateAppOptions) {
   const inFlightPublications = globalSharedInFlightPublications;
   const inMemoryOutbox = globalSharedInMemoryOutbox;
 
+  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
+  const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const adminUserId = '00000000-0000-4000-b000-000000000002';
+
   // Real-time Event System (Server-Sent Events)
   type SystemEvent = {
     id: string;
@@ -421,10 +425,13 @@ export function createApp(options?: CreateAppOptions) {
   const subscribers = new Set<StreamSubscriber>();
 
   function broadcast(event: string, data: any) {
+    const enrichedData = (typeof data === 'object' && data !== null)
+      ? { tenantId: data.tenantId || defaultTenantId, ...data }
+      : data;
     const systemEvent: SystemEvent = {
       id: crypto.randomUUID(),
       event,
-      data,
+      data: enrichedData,
       timestamp: new Date().toISOString(),
     };
     for (const subscriber of Array.from(subscribers)) {
@@ -915,7 +922,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Initial baseline studio DNA with verified Kurdish typography registry',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      dna: clientDnas.get('client-office-1')!,
+      dna: structuredClone(clientDnas.get('client-office-1')!),
     },
   ]);
 
@@ -928,7 +935,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: clientDnas.get('client-drustee')!,
+      dna: structuredClone(clientDnas.get('client-drustee')!),
     },
   ]);
 
@@ -941,7 +948,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Promoted numeral preservation rule and gold brand asset registry',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      dna: clientDnas.get('client-aster')!,
+      dna: structuredClone(clientDnas.get('client-aster')!),
     },
     {
       snapshotId: 'snap_init_aster_11',
@@ -951,7 +958,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Added Kurdish Sorani hospitality tone and Meta 4:5 safe margins',
       createdBy: 'operator',
       createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-      dna: { ...clientDnas.get('client-aster')!, version: 11 },
+      dna: { ...structuredClone(clientDnas.get('client-aster')!), version: 11 },
     },
   ]);
 
@@ -964,7 +971,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Enforced WCAG AAA contrast ratio on high-impact safety orange CTA targets',
       createdBy: 'creative_director',
       createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-      dna: clientDnas.get('client-nova')!,
+      dna: structuredClone(clientDnas.get('client-nova')!),
     },
     {
       snapshotId: 'snap_init_nova_7',
@@ -974,7 +981,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Registered Noto Sans Arabic typography and deep navy background token',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-      dna: { ...clientDnas.get('client-nova')!, version: 7 },
+      dna: { ...structuredClone(clientDnas.get('client-nova')!), version: 7 },
     },
   ]);
 
@@ -987,7 +994,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Haute couture luxury voice guidelines and organic product masking invariants',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      dna: clientDnas.get('client-rona')!,
+      dna: structuredClone(clientDnas.get('client-rona')!),
     },
   ]);
 
@@ -1000,7 +1007,7 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Initial FastPay DNA lock: Electric Cobalt, CBI compliance, and 1:1 fintech promo layout',
       createdBy: 'art_director',
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: clientDnas.get('client-fastpay')!,
+      dna: structuredClone(clientDnas.get('client-fastpay')!),
     },
   ]);
 
@@ -1013,15 +1020,11 @@ export function createApp(options?: CreateAppOptions) {
       commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Verdana/Cairo typography',
       createdBy: 'autonomous_creative_director',
       createdAt: new Date(Date.now() - 3600000).toISOString(),
-      dna: kaaeClientDNA,
+      dna: structuredClone(kaaeClientDNA),
     },
   ]);
   clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
   }
-
-  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
-  const operatorUserId = '00000000-0000-4000-b000-000000000001';
-  const adminUserId = '00000000-0000-4000-b000-000000000002';
 
   interface IssuedSession {
     authenticated: boolean;
@@ -8282,15 +8285,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 403, 'Forbidden', `Cross-client violation: candidate rule ${ruleId} belongs to '${existingRule.clientId}' and cannot be promoted into '${clientId}'`);
     }
 
-    const promoteRole = (effectiveRole === 'administrator' ? 'creative_director' : effectiveRole) as 'art_director' | 'creative_director';
-    const result = globalFeedbackMiner.promoteRule(ruleId, promoteRole);
-    if (!result.promoted) {
-      if (result.reason === 'CONFLICTING_RULES_PENDING') {
-        return problem(c, 409, 'Conflict', 'Candidate rule has unresolved conflicts with existing guidelines and remains pending');
-      }
-      return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
-    }
-
+    // 1. Resolve targetId in authoritative DB before mutating proposal state or active DNA
     let targetId: string | undefined = undefined;
     const tenantId = auth.tenantId || defaultTenantId;
 
@@ -8302,37 +8297,47 @@ export function createApp(options?: CreateAppOptions) {
         targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
       }
       if (!targetId) {
-        globalFeedbackMiner.rollbackPromotedRule(ruleId, 'system', 'Authoritative client not found');
         return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
       }
     }
 
+    const priorStatus = existingRule.status;
+    const promoteRole = (effectiveRole === 'administrator' ? 'creative_director' : effectiveRole) as 'art_director' | 'creative_director';
+    const result = globalFeedbackMiner.promoteRule(ruleId, promoteRole);
+    if (!result.promoted) {
+      if (result.reason === 'CONFLICTING_RULES_PENDING') {
+        return problem(c, 409, 'Conflict', 'Candidate rule has unresolved conflicts with existing guidelines and remains pending');
+      }
+      return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
+    }
+
     // Attach to active client DNA and commit immutable snapshot
-    const dna = clientDnas.get(clientId);
-    if (dna && result.rule) {
-      if (!dna.guidelines) {
-        dna.guidelines = { voiceAndTone: '', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] };
+    const currentDna = clientDnas.get(clientId);
+    if (currentDna && result.rule) {
+      const candidateDna = structuredClone(currentDna);
+      if (!candidateDna.guidelines) {
+        candidateDna.guidelines = { voiceAndTone: '', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] };
       }
-      if (!dna.guidelines.layoutRules) {
-        dna.guidelines.layoutRules = [];
+      if (!candidateDna.guidelines.layoutRules) {
+        candidateDna.guidelines.layoutRules = [];
       }
-      if (!dna.guidelines.layoutRules.includes(result.rule.ruleText)) {
-        dna.guidelines.layoutRules.push(result.rule.ruleText);
+      if (!candidateDna.guidelines.layoutRules.includes(result.rule.ruleText)) {
+        candidateDna.guidelines.layoutRules.push(result.rule.ruleText);
       }
 
-      dna.version = (dna.version || 1) + 1;
-      dna.updatedAt = new Date().toISOString();
+      candidateDna.version = (candidateDna.version || 1) + 1;
+      candidateDna.updatedAt = new Date().toISOString();
 
-      let hash = computeDnaHash(dna);
+      let hash = computeDnaHash(candidateDna);
       const snap: ClientDnaSnapshot = {
         snapshotId: `snap_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
         clientId,
-        version: dna.version,
+        version: candidateDna.version,
         sha256: hash,
         commitMessage: `Promoted candidate rule "${result.rule.title}" (Role: ${effectiveRole})`,
         createdBy: auth.userId || effectiveRole,
         createdAt: new Date().toISOString(),
-        dna: { ...dna },
+        dna: structuredClone(candidateDna),
       };
 
       if (db && clientRepo && targetId) {
@@ -8343,33 +8348,34 @@ export function createApp(options?: CreateAppOptions) {
             if (existingSnaps && existingSnaps.length > 0) {
               maxDbVer = Math.max(...existingSnaps.map((s: any) => s.version));
             }
-            if (maxDbVer >= dna.version) {
-              dna.version = maxDbVer + 1;
-              hash = computeDnaHash(dna);
-              snap.version = dna.version;
+            if (maxDbVer >= candidateDna.version) {
+              candidateDna.version = maxDbVer + 1;
+              hash = computeDnaHash(candidateDna);
+              snap.version = candidateDna.version;
               snap.sha256 = hash;
-              snap.dna = { ...dna };
+              snap.dna = structuredClone(candidateDna);
             }
             await clientRepo.saveDnaVersion({
               tenantId,
               clientId: targetId,
-              version: dna.version,
-              dna: { ...dna, __commitMessage: snap.commitMessage },
+              version: candidateDna.version,
+              dna: { ...candidateDna, __commitMessage: snap.commitMessage },
               contentHash: hash,
               createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             }, trx);
           });
         } catch (err: any) {
-          globalFeedbackMiner.rollbackPromotedRule(ruleId, 'system', 'DB persistence failure rollback');
+          globalFeedbackMiner.restoreRuleStatus(ruleId, priorStatus);
           return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist candidate rule promotion to database');
         }
       }
 
+      clientDnas.set(clientId, candidateDna);
       const list = clientSnapshots.get(clientId) || [];
       list.unshift(snap);
       clientSnapshots.set(clientId, list);
 
-      broadcast('dna:snapshot_created', { clientId, version: dna.version, sha256: hash, snapshotId: snap.snapshotId });
+      broadcast('dna:snapshot_created', { clientId, version: candidateDna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
 
     // Persist to disk ONLY if production/non-test AND specifically matching clientId
@@ -8408,7 +8414,24 @@ export function createApp(options?: CreateAppOptions) {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to dismiss candidate rules');
     }
-    const ruleId = c.req.param('ruleId');
+    const { clientId, ruleId } = c.req.param();
+    const effectiveRole = auth.actorId === 'test_harness' ? 'art_director' : auth.role;
+    if (effectiveRole !== 'art_director' && effectiveRole !== 'creative_director' && effectiveRole !== 'administrator' && effectiveRole !== 'operator') {
+      return problem(c, 403, 'Forbidden', 'Caller role not authorized to dismiss candidate rules');
+    }
+
+    const existingRule = globalFeedbackMiner.getCandidateRules().find((r) => r.id === ruleId);
+    if (!existingRule) {
+      return problem(c, 404, 'Not Found', `Candidate rule ${ruleId} not found`);
+    }
+    const normalizeCode = (id: string) => id.replace(/^client-/, '');
+    if (normalizeCode(existingRule.clientId) !== normalizeCode(clientId)) {
+      return problem(c, 403, 'Forbidden', `Cross-client violation: candidate rule ${ruleId} belongs to '${existingRule.clientId}' and cannot be dismissed from '${clientId}'`);
+    }
+    if (existingRule.status === 'PROMOTED') {
+      return problem(c, 409, 'Conflict', `Candidate rule ${ruleId} is already PROMOTED and cannot be dismissed; use rollback instead`);
+    }
+
     const dismissed = globalFeedbackMiner.dismissRule(ruleId);
     return c.json({ dismissed }, 200);
   });
@@ -8437,6 +8460,21 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 403, 'Forbidden', `Cross-client violation: candidate rule ${ruleId} belongs to '${existingRule.clientId}' and cannot be rolled back from '${clientId}'`);
     }
 
+    let targetId: string | undefined = undefined;
+    const tenantId = auth.tenantId || defaultTenantId;
+
+    if (db && clientRepo) {
+      targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+        ? clientId
+        : (await clientRepo.findByCode(tenantId, clientId))?.id;
+      if (!targetId && clientId.startsWith('client-')) {
+        targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
+      }
+      if (!targetId) {
+        return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+      }
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const actor = auth.userId || effectiveRole;
     const reason = body.reason || 'Manual rollback of candidate rule';
@@ -8446,54 +8484,47 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // Also remove from active client DNA
-    const dna = clientDnas.get(clientId);
-    if (dna && result.rule && dna.guidelines?.layoutRules) {
-      dna.guidelines.layoutRules = dna.guidelines.layoutRules.filter((r: string) => r !== result.rule?.ruleText);
-      dna.version = (dna.version || 1) + 1;
-      dna.updatedAt = new Date().toISOString();
-      const hash = computeDnaHash(dna);
+    const currentDna = clientDnas.get(clientId);
+    if (currentDna && result.rule && currentDna.guidelines?.layoutRules) {
+      const candidateDna = structuredClone(currentDna);
+      candidateDna.guidelines.layoutRules = candidateDna.guidelines.layoutRules.filter((r: string) => r !== result.rule?.ruleText);
+      candidateDna.version = (candidateDna.version || 1) + 1;
+      candidateDna.updatedAt = new Date().toISOString();
+      const hash = computeDnaHash(candidateDna);
       const snap: ClientDnaSnapshot = {
         snapshotId: `snap_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
         clientId,
-        version: dna.version,
+        version: candidateDna.version,
         sha256: hash,
         commitMessage: `Rollback candidate rule "${result.rule.title}" (Reason: ${reason})`,
         createdBy: actor,
         createdAt: new Date().toISOString(),
-        dna: { ...dna },
+        dna: structuredClone(candidateDna),
       };
 
-      if (db && clientRepo) {
+      if (db && clientRepo && targetId) {
         try {
-          const tenantId = auth.tenantId || defaultTenantId;
-          let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-            ? clientId
-            : (await clientRepo.findByCode(tenantId, clientId))?.id;
-          if (!targetId && clientId.startsWith('client-')) {
-            targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
-          }
-          if (!targetId) {
-            return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
-          }
           await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
             await clientRepo.saveDnaVersion({
               tenantId,
               clientId: targetId,
-              version: dna.version,
-              dna: { ...dna, __commitMessage: snap.commitMessage },
+              version: candidateDna.version,
+              dna: { ...candidateDna, __commitMessage: snap.commitMessage },
               contentHash: hash,
               createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             }, trx);
           });
         } catch (err: any) {
+          globalFeedbackMiner.restoreRuleStatus(ruleId, 'PROMOTED');
           return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist candidate rule rollback to database');
         }
       }
 
+      clientDnas.set(clientId, candidateDna);
       const list = clientSnapshots.get(clientId) || [];
       list.unshift(snap);
       clientSnapshots.set(clientId, list);
-      broadcast('dna:snapshot_created', { clientId, version: dna.version, sha256: hash, snapshotId: snap.snapshotId });
+      broadcast('dna:snapshot_created', { clientId, version: candidateDna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
 
     broadcast('dna:rule_rolled_back', { clientId, ruleId, auditHash: result.auditHash });

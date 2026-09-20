@@ -1,0 +1,39 @@
+{
+  "head": "6d3c583791a404c914e25b77dda558b16d26bd6c",
+  "sourceSha256": "9abcc9bb207e9fbd9e46a559adf1e1c2803a2686783acaa85e0efa9b6d43a735",
+  "scope": "actual production consumer classification/default handler with synthetic DB and TelegramBridge boundary",
+  "externalNetworkAccess": false,
+  "databaseAccess": false,
+  "scenario": "Bridge returns receipt invalid after provider HTTP200",
+  "sends": 2,
+  "decisions": [
+    "uncertain",
+    "uncertain"
+  ],
+  "first": {
+    "leased": 1,
+    "succeeded": 0,
+    "retried": 0,
+    "deadLettered": 1,
+    "errors": [
+      {
+        "id": "synthetic-command",
+        "commandType": "notify.telegram",
+        "error": "TELEGRAM_RECEIPT_INVALID"
+      }
+    ]
+  },
+  "second": {
+    "leased": 1,
+    "succeeded": 0,
+    "retried": 0,
+    "deadLettered": 1,
+    "errors": [
+      {
+        "id": "synthetic-command",
+        "commandType": "notify.telegram",
+        "error": "TELEGRAM_RECEIPT_INVALID"
+      }
+    ]
+  }
+}

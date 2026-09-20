@@ -226,7 +226,7 @@ export class OutboxConsumer {
             /CHAT_NOT_FOUND|BOT_BLOCKED|USER_DEACTIVATED|INVALID_RECIPIENT|PERMANENT_REJECTION|CLIENT_REQUIRED|INVALID_DESTINATION/i.test(errorMessage);
           const isUncertain =
             (err instanceof OutboxDeliveryError && err.category === 'uncertain') ||
-            /DELIVERY_UNCERTAIN|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE/i.test(errorMessage);
+            /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE/i.test(errorMessage);
 
           // 4. Retry with exponential backoff or dead-letter in a fresh clean transaction
           try {

@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-09-20 20:55:23 UTC",
+  "manifest": {
+    "chunk_id": "9870c6",
+    "wall_time_seconds": 0.054816834,
+    "exit_code": 0,
+    "original_token_count": 256,
+    "output": "{\n  \"scope\": \"Read-only isolated manifest probes; no file/provider/DB writes\",\n  \"results\": [\n    {\n      \"case\": \"Actual dirty-tree refusal control\",\n      \"observed\": {\n        \"ok\": false,\n        \"errors\": [\n          \"Working tree has uncommitted modifications; cannot certify clean release manifest\"\n        ]\n      }\n    },\n    {\n      \"case\": \"Existing obsolete commit, fabricated component images/models and README-only source coverage\",\n      \"condition\": \"VITEST=true bypasses dirty-tree check; isolates manifest identity predicates\",\n      \"observed\": {\n        \"ok\": true,\n        \"errors\": []\n      }\n    },\n    {\n      \"case\": \"40-character manifest commit interpreted as shell program\",\n      \"commit\": \"HEAD;printf AUDIT_SHELL_OK;#xxxxxxxxxxxx\",\n      \"observed\": {\n        \"ok\": true,\n        \"errors\": []\n      },\n      \"executedShellCommands\": [\n        {\n          \"command\": \"git cat-file -e HEAD;printf AUDIT_SHELL_OK;#xxxxxxxxxxxx\",\n          \"stdout\": \"AUDIT_SHELL_OK\"\n        }\n      ]\n    }\n  ]\n}\n"
+  },
+  "blueprint": {
+    "chunk_id": "8de1bd",
+    "wall_time_seconds": 0.000011958,
+    "exit_code": 1,
+    "original_token_count": 32,
+    "output": "PASS=617 WARN=0 FAIL=2\nFAIL: manifest hash matches RELEASE_MANIFEST.json\nFAIL: SHA256SUMS hash matches RELEASE_MANIFEST.json\n"
+  },
+  "runtime": {
+    "chunk_id": "f5d425",
+    "wall_time_seconds": 0.000009792,
+    "exit_code": 0,
+    "original_token_count": 107,
+    "output": "bd21c95e1cc24b4076d8eec111e8f60c8052c42442233a1261461efcda470ab9  /app/apps/core/src/app.ts\n7c6aee24328ce2089a451cd163dd4330e6d3bc247025328ad21fd2fb27800d7c  /app/apps/core/src/services/canva-connect-service.ts\ndb8c2aee13d6acd02ad3ffcd8ace31ffe6dffb025ef7a204241e8542e7569982  /app/apps/worker/src/canva-draft-workflow.ts\nf6459b2a2d5551bff62cde851b0c0e4cba40251d0e360de53b1c05ace71e8f41  /app/apps/worker/src/outbox-consumer.ts\n"
+  },
+  "unchangedFindingSourceHashes": true,
+  "note": "Finding-source hashes reconfirmed unchanged at 20:54:58 UTC relative to ROOT_RESULTS candidate. Release metadata files changed separately during the audit. This is not a full clean-tree attestation."
+}
