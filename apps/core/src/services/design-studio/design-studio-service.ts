@@ -945,14 +945,16 @@ export class DesignStudioService {
             // the measure v3 ranks on.
             try {
               const { candidate, critique, compositeScores } = await runCritiqueStageV3(ctx, candidateStates);
-              const { annotatedPng, ...critiqueRecord } = critique;
               await this.repo.insertJudgment({
                 id: randomUUID(),
                 runId: run.id,
                 tenantId: s.tenantId,
                 kind: 'critique',
                 candidateA: candidate.id,
-                verdict: { pipeline: 'v3', ...critiqueRecord, annotatedSha256: hash(annotatedPng) } as any,
+                // No annotated render to hash: the critique is measured from the run's own hard QA
+                // and metrics rather than written by a model, so there is no image it looked at.
+                // The winner's own preview is still stored on the candidate row.
+                verdict: { pipeline: 'v3', ...critique } as any,
               });
               for (const cand of candidateStates) {
                 await this.repo.updateCandidate(cand.id, s.tenantId, { score: compositeScores.get(cand.id) ?? null });

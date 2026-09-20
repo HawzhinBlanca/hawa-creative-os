@@ -1,11 +1,11 @@
 import {
   rankCandidatesV3,
-  critiqueCandidateV3,
   refineCandidateV3,
   selectWinnerV3,
   type PipelineV3Copy,
   type RankedCandidateV3,
   type BoxCritiqueResult,
+  type CritiqueComment,
   type RefinementOutcomeV3,
   type WinnerSelectionV3,
   type NormalizedLayoutCandidate,
@@ -181,16 +181,104 @@ export function rankStudioCandidatesV3(
   ).map((r) => ({ ...r, candidate: byOrdinal.get(r.sourceIndex)! }));
 }
 
-/** P05: the box-grounded critique of the top-ranked candidate. */
+/** The metric a failing name belongs to, as a critique category. */
+const CATEGORY_FOR_METRIC: Record<string, CritiqueComment['category']> = {
+  textLegibility: 'hierarchy',
+  gridAppropriateness: 'placement',
+  alignment: 'alignment',
+  balance: 'whitespace',
+  justification: 'alignment',
+  regularity: 'placement',
+  typeScale: 'proportion',
+};
+
+/**
+ * The critique record, built from what the run has already measured instead of from a model call.
+ *
+ * P05 used to spend one call on the top-ranked candidate — $0.046 of a $0.629 design, measured over
+ * 16 production runs — for a written critique that reached nobody. Three facts, each checked rather
+ * than assumed:
+ *
+ *  - No screen shows it. The Desk's Critique tab reads `candidate.critiques`, and the v3 branch of
+ *    design-studio-service never writes that column: across 60 candidates in v3 runs in the
+ *    2026-09-20 snapshot, zero carry a critique. Only old v2 runs (5 of 50) ever filled it.
+ *  - No later stage reads it. `runReviseStageV3` calls `refineCandidateV3` with the canvas and the
+ *    QA context and nothing else; the refinement critiques for itself, on its own model role. The
+ *    service's own comment already said so.
+ *  - It was not carrying the score. `compositeScores` come from `rankStudioCandidatesV3`, which is
+ *    deterministic and runs before the critique either way.
+ *
+ * So the call bought a paragraph filed in a judgment row nobody reads. The row is still written —
+ * it is the run's audit trail, and its shape is what the Desk would read if the tab were ever wired
+ * up — but it is filled from the hard-QA defects and failing metrics, which name the same problems
+ * more precisely than prose did, and cost nothing. The receipt records no model, so the ledger
+ * cannot mistake this for a call that was made.
+ */
+export function deterministicCritiqueV3(ranked: RankedCandidateV3): Omit<BoxCritiqueResult, 'annotatedPng'> {
+  const comments: CritiqueComment[] = [];
+
+  // Hard QA speaks first: these are the defects that would stop the design shipping.
+  const qa = ranked.hardQa;
+  for (const [i, code] of (qa?.defectCodes || []).entries()) {
+    comments.push({
+      boxId: 'layout',
+      category: 'placement',
+      issue: `${code}: ${qa?.messages?.[i] || 'hard QA defect'}`,
+      severity: 'high',
+      suggestedFix: 'Repair before transfer; hard QA refuses this layout as it stands.',
+    });
+  }
+
+  // Then the measured metrics that fell short, each named with its score.
+  for (const name of ranked.metrics.failingMetrics || []) {
+    const metric = (ranked.metrics.metrics as Record<string, { score: number }>)[name];
+    comments.push({
+      boxId: 'layout',
+      category: CATEGORY_FOR_METRIC[name] || 'proportion',
+      issue: `${name} scores ${metric ? metric.score.toFixed(3) : 'below threshold'} and does not pass.`,
+      severity: 'medium',
+      suggestedFix: `Improve ${name} in the next revision.`,
+    });
+  }
+
+  const score = ranked.metrics.compositeScore.toFixed(3);
+  const overallAssessment = comments.length
+    ? `Composite ${score}; hard QA ${qa ? (qa.passed ? 'passed' : 'failed') : 'not run'}. ` +
+      `${comments.length} measured issue(s): ${comments.map((c) => c.issue).join(' ')}`
+    : `Composite ${score}; hard QA ${qa ? (qa.passed ? 'passed' : 'failed') : 'not run'}. No measured defect.`;
+
+  return {
+    status: 'success',
+    comments,
+    rejectedComments: [],
+    overallAssessment,
+    deterministicMetrics: ranked.metrics,
+    annotations: [],
+    receipt: {
+      model: 'deterministic',
+      responseId: 'none',
+      xRequestId: null,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+      latencyMs: 0,
+    },
+  };
+}
+
+/** P05: the box-grounded critique of the top-ranked candidate, measured rather than written. */
 export async function runCritiqueStageV3(
   ctx: StageContext,
   candidates: CandidateState[]
-): Promise<{ candidate: CandidateState; critique: BoxCritiqueResult; compositeScores: Map<string, number> }> {
+): Promise<{
+  candidate: CandidateState;
+  critique: Omit<BoxCritiqueResult, 'annotatedPng'>;
+  compositeScores: Map<string, number>;
+}> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
-  const critique = await critiqueCandidateV3(ranked[0], copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference });
   return {
     candidate: ranked[0].candidate,
-    critique,
+    critique: deterministicCritiqueV3(ranked[0]),
     compositeScores: new Map(ranked.map((r) => [r.candidate.id, r.metrics.compositeScore])),
   };
 }
