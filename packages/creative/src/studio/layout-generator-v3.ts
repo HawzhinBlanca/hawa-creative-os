@@ -1069,8 +1069,8 @@ export const LAYOUT_V3_JSON_SCHEMA = {
  * tier will answer do not send a parameter the cheap models reject with a 400; this stage then
  * passed `'low'` explicitly as well, so the default was never even the reason.
  *
- * The default is `'medium'`, and it is `'medium'` rather than `'high'` because raising it was
- * measured rather than assumed. `scripts/experiments/layout-reasoning-effort.ts`, two briefs, one
+ * The default is `'low'` — unchanged from what shipped — but it is now a measured choice rather
+ * than an inherited one, and it is overridable. Raising it was tested rather than assumed. `scripts/experiments/layout-reasoning-effort.ts`, two briefs, one
  * Latin and one Sorani, same inputs, only the effort moved:
  *
  *   brief            effort   best composite   spread   output tok   latency
@@ -1085,10 +1085,20 @@ export const LAYOUT_V3_JSON_SCHEMA = {
  * and died at 430s, and the worker gives up on a quiet run long before that. Had this defaulted to
  * 'high' on the strength of the recommendation, every design would have failed.
  *
- * `'medium'` is worth having. It moved the Sorani layout from 0.648 to 0.911 — the right-to-left
- * composition is where the model had most to get wrong and most to gain — and the Latin one from
- * 0.866 to 0.912. The measurement ran on the dev tier's o4-mini, so the direction is evidence and
- * the exact figures are not production's; re-run it against gpt-6-astra before treating them as such.
+ * `'medium'` is worth having on the model it was measured on. It moved the Sorani layout from 0.648
+ * to 0.911 — the right-to-left composition is where the model had most to get wrong and most to
+ * gain — and the Latin one from 0.866 to 0.912. But that measurement ran on the dev tier's o4-mini,
+ * and it does not carry: on gpt-6-astra a 'medium' layout call does not complete on this host. Two
+ * attempts, 2026-09-20, both died after 7m11s having exhausted all six of the client's retries with
+ * `SocketError: other side closed` — the same signature, and the same 430s, as the 'high' arms.
+ * That is almost certainly the egress fault T9 already documents in openai-studio-client.ts
+ * ("VPN/tunnel egress intermittently drops long-lived TLS mid-request"), not the model refusing:
+ * the dev-tier arms at the same effort finished in ~51s. Either way the call fails, so the default
+ * stays 'low' and the quality left on the table stays on the table until a long production call can
+ * be held open. Raise it with HAWA_LAYOUT_REASONING_EFFORT once that is fixed, and re-measure.
+ *
+ * Worth reading as more than a settings note: a production model call that needs several minutes
+ * dies on this host today. That is a standing risk to any slow stage, not only this one.
  *
  * Two costs come with it, both real. Output tokens roughly quadruple, which on the production model
  * is the dominant term in this stage's bill. And latency triples, to ~55s, which is close enough to
@@ -1106,7 +1116,7 @@ export const LAYOUT_V3_JSON_SCHEMA = {
  */
 export function layoutReasoningEffort(): 'low' | 'medium' | 'high' {
   const raw = (process.env.HAWA_LAYOUT_REASONING_EFFORT || '').trim().toLowerCase();
-  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'medium';
+  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'low';
 }
 
 export interface GenerateLayoutCandidatesOptions {
