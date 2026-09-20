@@ -35,12 +35,19 @@ def main() -> int:
         if path.name in SELF_EXCLUDED:
             continue
         entries.append({"path": str(path.relative_to(ROOT)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size})
+    prior_entries = prior.get("files", [])
+    files_changed = entries != prior_entries
+    generated_at = (
+        datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        if files_changed or "generatedAt" not in prior
+        else prior["generatedAt"]
+    )
     manifest = {
         "schemaVersion": prior.get("schemaVersion", "1.0.0"),
         "package": prior.get("package", "hawa-creative-os-blueprint"),
         "specificationVersion": prior.get("specificationVersion", "1.0.0"),
         "researchFreeze": prior.get("researchFreeze", "2026-09-03"),
-        "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "generatedAt": generated_at,
         "hashAlgorithm": "SHA-256",
         "exclusions": [
             "MANIFEST.json (self-reference)",
