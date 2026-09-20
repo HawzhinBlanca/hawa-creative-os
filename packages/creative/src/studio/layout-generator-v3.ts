@@ -1059,6 +1059,56 @@ export const LAYOUT_V3_JSON_SCHEMA = {
   additionalProperties: false,
 };
 
+/**
+ * How hard the model thinks before inventing the three compositions.
+ *
+ * This call is where design quality is decided — everything after it selects, repairs and transfers
+ * what this stage imagined — and it was asking for `'low'`, the cheapest setting the model offers.
+ * Nothing chose that on the merits. `openai-studio-client.ts` sets `reasoning_effort: 'low'` for
+ * gpt-6-astra whenever a caller names none, a fallback that exists so callers who cannot know which
+ * tier will answer do not send a parameter the cheap models reject with a 400; this stage then
+ * passed `'low'` explicitly as well, so the default was never even the reason.
+ *
+ * The default is `'medium'`, and it is `'medium'` rather than `'high'` because raising it was
+ * measured rather than assumed. `scripts/experiments/layout-reasoning-effort.ts`, two briefs, one
+ * Latin and one Sorani, same inputs, only the effort moved:
+ *
+ *   brief            effort   best composite   spread   output tok   latency
+ *   en_square        low      0.866            91.3      2,356       16.8s
+ *   en_square        medium   0.912            14.3      9,995       54.6s
+ *   en_square        high     FAILED — fetch failed after 430s
+ *   ckb_portrait45   low      0.648            72.6      2,587       15.6s
+ *   ckb_portrait45   medium   0.911            18.9      8,799       51.3s
+ *   ckb_portrait45   high     FAILED — fetch failed after 430s
+ *
+ * `'high'` is not a setting this pipeline can use: both arms ran past the client's own 240s budget
+ * and died at 430s, and the worker gives up on a quiet run long before that. Had this defaulted to
+ * 'high' on the strength of the recommendation, every design would have failed.
+ *
+ * `'medium'` is worth having. It moved the Sorani layout from 0.648 to 0.911 — the right-to-left
+ * composition is where the model had most to get wrong and most to gain — and the Latin one from
+ * 0.866 to 0.912. The measurement ran on the dev tier's o4-mini, so the direction is evidence and
+ * the exact figures are not production's; re-run it against gpt-6-astra before treating them as such.
+ *
+ * Two costs come with it, both real. Output tokens roughly quadruple, which on the production model
+ * is the dominant term in this stage's bill. And latency triples, to ~55s, which is close enough to
+ * the worker's stuck-run threshold to matter — if that threshold is ever tightened, this must be
+ * reconsidered. Candidate spread also collapses (91 to 14): the three layouts come out more alike,
+ * so a better design is bought partly with less variety to choose between.
+ *
+ * Set here and nowhere else: the stages that read a finished design back — critique, judge, parity —
+ * are comparison work and keep the client's fallback. Override with HAWA_LAYOUT_REASONING_EFFORT.
+ *
+ * Reasoning tokens are billed as output and count against `max_completion_tokens`, which is 16,000
+ * here against roughly 2,900 tokens of actual layout JSON. The medium arms used ~9,000 output
+ * tokens in total, so the headroom holds; if the cap is ever lowered, lower the effort with it or a
+ * long think will truncate the JSON.
+ */
+export function layoutReasoningEffort(): 'low' | 'medium' | 'high' {
+  const raw = (process.env.HAWA_LAYOUT_REASONING_EFFORT || '').trim().toLowerCase();
+  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'medium';
+}
+
 export interface GenerateLayoutCandidatesOptions {
   client: OpenAiStudioClient;
   brief: string;
@@ -1365,7 +1415,7 @@ export async function generateLayoutCandidatesV3(
       // gpt-4.1-mini and gpt-4o-mini reject reasoning_effort with a 400, so it is sent only to a
       // model that accepts it rather than assumed.
       ...(modelSupportsReasoningEffort(options.model || resolveModel('layout'))
-        ? { reasoningEffort: 'low' as const }
+        ? { reasoningEffort: layoutReasoningEffort() }
         : {}),
       timeoutMs: 240000,
     });
