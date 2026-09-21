@@ -41,6 +41,7 @@ import {
 import {
   createDb,
   withRlsContext,
+  withSessionAdvisoryLock,
   TaskRepository,
   ClientRepository,
   IngressRepository,
@@ -523,6 +524,26 @@ export function createApp(options?: CreateAppOptions) {
       detail: detail || title,
       instance: c.req.url,
     }, status);
+  }
+
+  /**
+   * One publisher per task at a time, across processes. The Drive lookup makes a retry safe, but two
+   * publishers starting in the same instant both find an empty folder and both upload. The second is
+   * refused and told to retry; by then the first has finished and the lookup adopts its file.
+   * Without a database there is one process and nothing to race.
+   */
+  async function publishExclusively<T extends { ok: boolean }>(taskId: string, publish: () => Promise<T>) {
+    if (!db) return await publish();
+    const held = await withSessionAdvisoryLock(db, `publish:${taskId}`, publish);
+    if (held.acquired) return held.value;
+    return {
+      ok: false as const,
+      error: {
+        code: 'PUBLICATION_IN_PROGRESS',
+        message: 'Another process is delivering this task right now; try again in a moment',
+        retryable: true,
+      } as any,
+    };
   }
 
   // Domain singletons
@@ -2894,7 +2915,7 @@ export function createApp(options?: CreateAppOptions) {
       };
     }
 
-    const publishResult = await publisher.publish(ctx, {
+    const publishResult = await publishExclusively(taskId, () => publisher.publish(ctx, {
       taskId,
       clientId: task.clientId || defaultClientId,
       designRevisionId: approval.designRevisionId,
@@ -2915,12 +2936,12 @@ export function createApp(options?: CreateAppOptions) {
         status: 'COMPLETE',
         publishedAt: new Date().toISOString(),
       },
-    });
+    }));
 
     if (!publishResult.ok) {
       return {
         ok: false,
-        status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : 422,
+        status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : (publishResult.error as any).code === 'PUBLICATION_IN_PROGRESS' ? 409 : 422,
         code: publishResult.error.code,
         message: publishResult.error.message,
       };
@@ -5955,7 +5976,7 @@ export function createApp(options?: CreateAppOptions) {
       }, 200);
     }
 
-    const pubRes = await publisher.publish(ctx, {
+    const pubRes = await publishExclusively(taskId, () => publisher.publish(ctx, {
       taskId,
       clientId: targetClientId,
       designRevisionId,
@@ -5970,8 +5991,11 @@ export function createApp(options?: CreateAppOptions) {
         status: 'COMPLETE',
         publishedAt: new Date().toISOString(),
       },
-    });
+    }));
 
+    if (!pubRes.ok && (pubRes.error as any)?.code === 'PUBLICATION_IN_PROGRESS') {
+      return problem(c, 409, 'Publication In Progress', (pubRes.error as any).message);
+    }
     if (!pubRes.ok) {
       return problem(c, 422, 'Publication Failed', (pubRes.error as any)?.message || 'The publisher refused the delivery');
     }
