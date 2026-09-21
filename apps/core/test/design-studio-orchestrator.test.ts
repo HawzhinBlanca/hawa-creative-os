@@ -240,9 +240,6 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     await sql`INSERT INTO hawa.clients(id, tenant_id, code, name) 
       VALUES(${clientId}::uuid, ${scope.tenantId}::uuid, 'kaae', 'KAAE') 
       ON CONFLICT DO NOTHING`.execute(db);
-  });
-
-  beforeEach(async () => {
     await withRlsContext(db, scope, async (tx) => {
       await sql`UPDATE hawa.design_studio_runs 
         SET status='abandoned' 
@@ -293,9 +290,16 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         tier: 'standard',
       })
     ).rejects.toMatchObject({ code: 'GENERATION_CONFLICT' });
+    await service.abandon(scope, taskId, res1.run.id, 'cleanup');
   });
 
   it('2. enforces one active run per task and 2 active runs per tenant', async () => {
+    await withRlsContext(db, scope, async (tx) => {
+      await sql`UPDATE hawa.design_studio_runs 
+        SET status='abandoned' 
+        WHERE tenant_id=${scope.tenantId}::uuid 
+          AND status NOT IN ('transferred','degraded','failed','abandoned')`.execute(tx);
+    });
     const taskId1 = await createTask();
     const taskId2 = await createTask();
     const taskId3 = await createTask();
@@ -349,6 +353,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     await expect(
       service.createOrGetRun(scope, taskId1, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 })
     ).rejects.toMatchObject({ code: 'STUDIO_RUN_IN_PROGRESS' });
+
+    await withRlsContext(db, scope, async (tx) => {
+      await sql`UPDATE hawa.design_studio_runs SET status = 'abandoned'
+        WHERE id IN (${run1.run.id}::uuid, ${run2.run.id}::uuid, ${run3.run.id}::uuid)`.execute(tx);
+    });
   });
 
   it('3. interruption between stages resumes without a second charge (ledger count unchanged)', async () => {
@@ -393,6 +402,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       await sql<any>`SELECT count(*) as n FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid AND stage='conceiving'`.execute(db)
     ).rows[0];
     expect(Number(conceptCallsCheck.n)).toBe(1);
+    await service.abandon(scope, taskId, run.id, 'cleanup');
   });
 
   it('4. budget cap exhaustion transitions to BUDGET_EXHAUSTED with best candidate so far', async () => {
@@ -585,6 +595,11 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       // move a pilot run off v3 halfway through.
       process.env.DESIGN_PIPELINE_V3_CHATS = '';
       expect(isPipelineV3Run(pilot.run)).toBe(true);
+
+      await withRlsContext(db, scope, async (tx) => {
+        await sql`UPDATE hawa.design_studio_runs SET status = 'abandoned'
+          WHERE id IN (${pilot.run.id}::uuid, ${other.run.id}::uuid)`.execute(tx);
+      });
     } finally {
       if (originalFlag === undefined) delete process.env.DESIGN_PIPELINE_V3;
       else process.env.DESIGN_PIPELINE_V3 = originalFlag;
@@ -810,5 +825,6 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
     expect(created).toBe(true);
     expect(run2.id).not.toBe(run1.id);
+    await service.abandon(scope, taskId, run2.id, 'cleanup');
   });
 });

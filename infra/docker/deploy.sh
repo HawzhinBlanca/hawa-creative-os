@@ -116,8 +116,8 @@ echo "✓ blueprint pack"
 # Plaintext credential material on this host outside git: listed, and refused when readable by others
 bash "${ROOT_DIR}/infra/security/local_state_audit.sh"
 
-# Master admission release gate and evidence attestation check
-bash "${ROOT_DIR}/scripts/enforce_release_gate.sh" --skip-tests >/dev/null
+# Master admission release gate and evidence attestation check (full test execution required)
+bash "${ROOT_DIR}/scripts/enforce_release_gate.sh"
 echo "✓ master release gate and evidence attestation verified"
 
 if [[ $APPLY == 0 ]]; then

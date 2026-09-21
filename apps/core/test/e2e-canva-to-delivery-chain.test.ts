@@ -297,4 +297,112 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // Verify telegram message was dispatched to the right chat
     expect(sentMessages.some((m) => m.chatId === testChannelId && m.message.text.includes(taskId))).toBe(true);
   });
+
+  it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {
+    const canvaService = new CanvaConnectService(db);
+    const deliverableStore = canvaDeliverableStore(canvaService);
+    const app = createApp({
+      db,
+      deliverableStore,
+    });
+
+    const taskId = randomUUID();
+    await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
+      await sql`
+        INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
+        VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaaeClientId}::uuid,
+                'Corrupted Copy Test Task', 'Task with mismatched copy',
+                'received', 3, 1, now(), now())
+      `.execute(trx);
+    });
+
+    const designId = `canva_corrupt_${randomUUID().slice(0, 8)}`;
+    const opId = randomUUID();
+    const exportId = randomUUID();
+    const exportContent = Buffer.from('PNG_CORRUPTED_EXPORT_CONTENT_LONGER_THAN_32_BYTES_12345');
+    const exportSha256 = createHash('sha256').update(exportContent).digest('hex');
+
+    // Store export bytes with corrupted copy check failure
+    await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
+      await sql`
+        INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid,
+                ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())
+      `.execute(trx);
+
+      await sql`
+        INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+        VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
+                ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
+                ${JSON.stringify({ format: 'png' })}::jsonb, now(), now())
+      `.execute(trx);
+
+      await sql`
+        INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
+        VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid,
+                'png', ${exportSha256}, ${exportContent},
+                ${JSON.stringify({
+                  copyPass: false,
+                  fontPass: true,
+                  status: 'failed',
+                  offendingObjects: [{ text: 'Corrupted hallucinated slogan', reason: 'Mismatch with source copy' }],
+                })}::jsonb, now())
+      `.execute(trx);
+    });
+
+    // Notify Canva draft ready
+    const statusRes = await app.request(`/tasks/${taskId}/notifications/canva-status`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+        designId,
+      }),
+    });
+    expect(statusRes.status).toBe(200);
+
+    // Verify task state in DB: state is 'human_review', revision is linked
+    const dbTask = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
+      return (await sql<any>`SELECT * FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0];
+    });
+    expect(dbTask.current_design_revision_id).toBeTruthy();
+    const revId = dbTask.current_design_revision_id;
+
+    // Verify qc_runs record in PostgreSQL recorded a REAL FAILURE
+    const dbQc = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
+      return (await sql<any>`SELECT * FROM hawa.qc_runs WHERE design_revision_id = ${revId}::uuid`.execute(trx)).rows[0];
+    });
+    expect(dbQc).toBeDefined();
+    expect(dbQc.critical_pass).toBe(false);
+    expect(dbQc.status).toBe('failed');
+    expect(dbQc.report?.errors?.length).toBeGreaterThan(0);
+    expect(dbQc.report.errors[0]).toContain('Copy mismatch');
+
+    // Desk API: verify task details show changes requested / failed QC
+    const taskGetRes = await app.request(`/tasks/${taskId}`, { headers });
+    expect(taskGetRes.status).toBe(200);
+    const taskDetail = await taskGetRes.json();
+    expect(taskDetail.qaReport.passed).toBe(false);
+    expect(taskDetail.qaReport.copyFidelity).toBe(false);
+
+    // Desk Attempt to Approve MUST BE REFUSED WITH HTTP 412
+    const approveRes = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        decision: 'approved',
+        role: 'art_director',
+        reason: 'Attempting approval despite corrupted copy',
+      }),
+    });
+    expect(approveRes.status).toBe(412);
+    const approveError = await approveRes.json();
+    expect(approveError.title).toBe('QA Verification Required');
+
+    // Ensure task in PostgreSQL remains unapproved
+    const dbTaskAfterFailedApprove = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
+      return (await sql<any>`SELECT * FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0];
+    });
+    expect(dbTaskAfterFailedApprove.state).toBe('human_review');
+  });
 });

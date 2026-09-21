@@ -89,6 +89,7 @@ import {
 } from '@hawa/creative';
 import {
   DeterministicQAEngine,
+  checkCanvaPptx,
   inspectKurdishFontCoverage,
   KURDISH_SORANI_GLYPH_TABLE,
   packageKurdishWebFont,
@@ -157,6 +158,7 @@ import { registerSystemRoutes } from './routes/system.routes.js';
 import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
 import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
+import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -259,6 +261,153 @@ export function qaReportSha256(report: any): string | null {
   if (!report) return null;
   if (typeof report.reportSha256 === 'string' && report.reportSha256) return report.reportSha256;
   return crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex');
+}
+
+export interface CanvaQcEvaluationResult {
+  qaReport: {
+    status: 'passed' | 'failed';
+    criticalPass: boolean;
+    passed: boolean;
+    bidiIsolation: boolean;
+    fontCoverage: boolean;
+    copyFidelity: boolean;
+    contrastCompliant: boolean;
+    safeMargins: boolean;
+    errors: string[];
+    checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
+    exportSha256: string | null;
+    exportFormat: string | null;
+    verifiedAt: string;
+  };
+  criticalPass: boolean;
+  status: 'passed' | 'failed';
+}
+
+export function evaluateCanvaExportQc(
+  exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any },
+  expectedCopy?: string[],
+  requiredFont?: string
+): CanvaQcEvaluationResult {
+  const contentCheck = exportRow?.content_check;
+  const errors: string[] = [];
+
+  if (!exportRow) {
+    errors.push('No Canva export artifact retrieved for task; quality verification unavailable');
+    return {
+      status: 'failed',
+      criticalPass: false,
+      qaReport: {
+        status: 'failed',
+        criticalPass: false,
+        passed: false,
+        bidiIsolation: false,
+        fontCoverage: false,
+        copyFidelity: false,
+        contrastCompliant: false,
+        safeMargins: false,
+        errors,
+        checks: [
+          { name: 'exportRetrieved', passed: false },
+          { name: 'copyPass', passed: false },
+          { name: 'fontPass', passed: false },
+        ],
+        exportSha256: null,
+        exportFormat: null,
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  // If check is missing and bytes are PPTX, attempt real checkCanvaPptx
+  let resolvedCheck = contentCheck;
+  if (!resolvedCheck && exportRow.format === 'pptx' && exportRow.content && expectedCopy && expectedCopy.length > 0) {
+    try {
+      resolvedCheck = checkCanvaPptx(
+        exportRow.content instanceof Uint8Array ? exportRow.content : new Uint8Array(exportRow.content),
+        expectedCopy,
+        requiredFont || 'Verdana'
+      );
+    } catch (err: any) {
+      errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
+    }
+  }
+
+  if (!resolvedCheck) {
+    errors.push('No verified copy or font check recorded on Canva export bytes');
+    return {
+      status: 'failed',
+      criticalPass: false,
+      qaReport: {
+        status: 'failed',
+        criticalPass: false,
+        passed: false,
+        bidiIsolation: false,
+        fontCoverage: false,
+        copyFidelity: false,
+        contrastCompliant: false,
+        safeMargins: false,
+        errors,
+        checks: [
+          { name: 'exportRetrieved', passed: true },
+          { name: 'copyPass', passed: false },
+          { name: 'fontPass', passed: false },
+        ],
+        exportSha256: exportRow.sha256 || null,
+        exportFormat: exportRow.format || null,
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  const copyPass = resolvedCheck.copyPass === true;
+  const fontPass = resolvedCheck.fontPass === true;
+  const rtlPass = resolvedCheck.rtlPass !== false;
+  const checkStatus = resolvedCheck.status !== 'failed';
+  const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
+  const status: 'passed' | 'failed' = criticalPass ? 'passed' : 'failed';
+
+  if (!copyPass) {
+    errors.push(
+      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
+        ? `Copy mismatch: ${resolvedCheck.offendingObjects.map((o: any) => o.text || o.reason).join('; ')}`
+        : 'Exported copy does not match verified source copy exactly'
+    );
+  }
+  if (!fontPass) {
+    errors.push(
+      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
+        ? `Brand font violation: ${resolvedCheck.offendingObjects.map((o: any) => o.reason || o.observedFont).join('; ')}`
+        : 'Exported typography violates brand font policy'
+    );
+  }
+  if (!rtlPass) {
+    errors.push('RTL text direction violation detected in exported design');
+  }
+
+  return {
+    status,
+    criticalPass,
+    qaReport: {
+      status,
+      criticalPass,
+      passed: criticalPass,
+      bidiIsolation: rtlPass,
+      fontCoverage: fontPass,
+      copyFidelity: copyPass,
+      contrastCompliant: criticalPass,
+      safeMargins: criticalPass,
+      errors,
+      checks: [
+        { name: 'exportRetrieved', passed: true },
+        { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
+        { name: 'fontPass', passed: fontPass, observedFonts: resolvedCheck.observedFonts || [] },
+        { name: 'bidiIsolation', passed: rtlPass },
+      ],
+      exportSha256: exportRow.sha256 || null,
+      exportFormat: exportRow.format || null,
+      verifiedAt: new Date().toISOString(),
+    },
+  };
 }
 
 export function createApp(options?: CreateAppOptions) {
@@ -1426,11 +1575,24 @@ export function createApp(options?: CreateAppOptions) {
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
     const restateStatus = (await probeRestate()).status;
+
+    let funnelMetrics: any = null;
+    let funnelStatus: string = 'idle';
+    if (db) {
+      try {
+        funnelMetrics = await checkProductionFunnelHealth(db, { windowHours: 48 });
+        funnelStatus = funnelMetrics.status;
+      } catch {
+        // DB error already reported under postgres dependency probe
+      }
+    }
+
     const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
-      || restateStatus === 'unregistered' || restateStatus === 'unreachable';
+      || restateStatus === 'unregistered' || restateStatus === 'unreachable'
+      || funnelStatus === 'stalled';
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -1449,6 +1611,7 @@ export function createApp(options?: CreateAppOptions) {
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
         everyMinutes: billingProbeMs / 60_000,
       },
+      funnel: funnelMetrics,
       // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
       // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
       // the selected image provider has one.
@@ -1485,6 +1648,8 @@ export function createApp(options?: CreateAppOptions) {
         restate: restateStatus,
         modelProvider: modelProviderStatus,
         telegramApi: telegramApiStatus,
+        funnel: funnelStatus,
+        ...(funnelMetrics?.alert ? { funnelAlert: funnelMetrics.alert } : {}),
         ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
       },
     }, isUnhealthy ? 503 : 200);
@@ -1527,6 +1692,7 @@ export function createApp(options?: CreateAppOptions) {
     '/ready',
     '/system/studio-status',
     '/system/cutover/status',
+    '/system/funnel/health',
     '/adapters/telegram/status',
   ]);
   const isPublicRead = (path: string) =>
@@ -2296,19 +2462,30 @@ export function createApp(options?: CreateAppOptions) {
       const currentTask = await taskRepo?.findById(taskId, tenantId, trx);
       if (revisionRepo && !currentTask?.current_design_revision_id) {
         const revisionId = crypto.randomUUID();
-        const exportRow = (await sql<any>`SELECT sha256, format FROM hawa.canva_export_bytes
+        const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
           ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+        const planRow = (await sql<any>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
+          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
+          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
+        const candidateLayouts = (await sql<any>`SELECT c.layouts FROM hawa.design_studio_candidates c
+          JOIN hawa.design_studio_runs r ON r.id = c.run_id
+          WHERE r.tenant_id = ${tenantId}::uuid AND r.task_id = ${taskId}::uuid AND c.status = 'winner'
+          ORDER BY c.created_at DESC LIMIT 1`.execute(trx)).rows[0]?.layouts;
+
+        const baseNodes = planRow?.nodes || candidateLayouts?.[0]?.shapes || [
+          { id: 'canva-page-1', type: 'frame', name: 'Canva Composition', width: 1080, height: 1350 },
+          { id: 'canva-text-1', type: 'text', text: taskData.title || 'Canva Draft' },
+        ];
+
         const neutralManifest = {
           documentId: finalDesignId || revisionId,
           title: taskData.title || 'Canva Draft',
           studio: 'canva',
           designId: finalDesignId,
           canvaUrl: finalCanvaUrl,
-          nodes: [
-            { id: 'canva-page-1', type: 'frame', name: 'Canva Composition', width: 1080, height: 1350 },
-            { id: 'canva-text-1', type: 'text', text: taskData.title || 'Canva Draft' },
-          ],
+          nodes: baseNodes,
+          ...(planRow || {}),
         };
         const sourceSha256 = exportRow?.sha256 || crypto.createHash('sha256').update(JSON.stringify(neutralManifest)).digest('hex');
         const dbRev = await revisionRepo.createRevision({
@@ -2326,17 +2503,20 @@ export function createApp(options?: CreateAppOptions) {
         const finalRevId = dbRev?.id || revisionId;
         const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
         const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
-        const qaReport = { status: 'passed', criticalPass: true, passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true, errors: [] };
+
+        const qcEval = evaluateCanvaExportQc(exportRow, planRow?.copy || taskData.exactCopy);
         await trx.insertInto('qc_runs').values({
           tenant_id: tenantId as any,
           task_id: taskId as any,
           design_revision_id: finalRevId as any,
           qc_profile_id: profileId as any,
-          status: 'passed',
-          critical_pass: true,
-          report: qaReport as any,
-          report_sha256: crypto.createHash('sha256').update(JSON.stringify(qaReport)).digest('hex'),
+          status: qcEval.status as any,
+          critical_pass: qcEval.criticalPass,
+          report: qcEval.qaReport as any,
+          report_sha256: crypto.createHash('sha256').update(JSON.stringify(qcEval.qaReport)).digest('hex'),
         }).execute();
+
+        await sql`UPDATE hawa.tasks SET state = 'human_review', current_design_revision_id = ${finalRevId}::uuid, updated_at = now() WHERE id = ${taskId}::uuid`.execute(trx);
       } else {
         await sql`UPDATE hawa.tasks SET state = 'human_review', updated_at = now() WHERE id = ${taskId}::uuid`.execute(trx);
       }
@@ -4516,6 +4696,7 @@ export function createApp(options?: CreateAppOptions) {
             safeMargins: qc.report?.safeMargins ?? true,
             contrastCompliant: qc.report?.contrastCompliant ?? true,
             fontCoverage: qc.report?.fontCoverage ?? true,
+            copyFidelity: qc.report?.copyFidelity ?? true,
             errors: qc.report?.errors || [],
           } : undefined;
 
@@ -4895,6 +5076,7 @@ export function createApp(options?: CreateAppOptions) {
               safeMargins: report?.safeMargins ?? true,
               contrastCompliant: report?.contrastCompliant ?? true,
               fontCoverage: report?.fontCoverage ?? true,
+              copyFidelity: report?.copyFidelity ?? true,
               errors: report?.errors || [],
             };
           }
@@ -6417,9 +6599,19 @@ export function createApp(options?: CreateAppOptions) {
               WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
               ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
 
-            const exportRow = (await sql<any>`SELECT sha256, format FROM hawa.canva_export_bytes
+            const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
               WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid
               ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+
+            const candidateLayouts = (await sql<any>`SELECT c.layouts FROM hawa.design_studio_candidates c
+              JOIN hawa.design_studio_runs r ON r.id = c.run_id
+              WHERE r.tenant_id = ${auth.tenantId}::uuid AND r.task_id = ${taskId}::uuid AND c.status = 'winner'
+              ORDER BY c.created_at DESC LIMIT 1`.execute(trx)).rows[0]?.layouts;
+
+            const baseNodes = manifestRow?.nodes || candidateLayouts?.[0]?.shapes || [
+              { id: 'canva-page-1', type: 'frame', name: 'Canva Composition', width: 1080, height: 1350 },
+              { id: 'canva-text-1', type: 'text', text: currentTask?.title || 'Canva Draft' },
+            ];
 
             const neutralManifest = {
               documentId: designId || revisionId,
@@ -6427,10 +6619,7 @@ export function createApp(options?: CreateAppOptions) {
               studio: 'canva',
               designId,
               canvaUrl,
-              nodes: [
-                { id: 'canva-page-1', type: 'frame', name: 'Canva Composition', width: 1080, height: 1350 },
-                { id: 'canva-text-1', type: 'text', text: currentTask?.title || 'Canva Draft' },
-              ],
+              nodes: baseNodes,
               ...(manifestRow || {}),
             };
             const sourceSha256 = exportRow?.sha256 || crypto.createHash('sha256').update(JSON.stringify(neutralManifest)).digest('hex');
@@ -6452,22 +6641,8 @@ export function createApp(options?: CreateAppOptions) {
 
             const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
             const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
-            const qaReport = {
-              status: 'passed',
-              criticalPass: true,
-              passed: true,
-              bidiIsolation: true,
-              safeMargins: true,
-              contrastCompliant: true,
-              fontCoverage: true,
-              errors: [],
-              checks: [
-                { name: 'bidiIsolation', passed: true },
-                { name: 'safeMargins', passed: true },
-                { name: 'contrastCompliant', passed: true },
-                { name: 'fontCoverage', passed: true },
-              ],
-            };
+
+            const qcEval = evaluateCanvaExportQc(exportRow, manifestRow?.copy || source?.exactCopy);
 
             await trx
               .insertInto('qc_runs')
@@ -6476,18 +6651,20 @@ export function createApp(options?: CreateAppOptions) {
                 task_id: taskId as any,
                 design_revision_id: finalRevId as any,
                 qc_profile_id: profileId as any,
-                status: 'passed',
-                critical_pass: true,
-                report: qaReport as any,
-                report_sha256: crypto.createHash('sha256').update(JSON.stringify(qaReport)).digest('hex'),
+                status: qcEval.status as any,
+                critical_pass: qcEval.criticalPass,
+                report: qcEval.qaReport as any,
+                report_sha256: crypto.createHash('sha256').update(JSON.stringify(qcEval.qaReport)).digest('hex'),
               })
               .execute();
+
+            await sql`UPDATE hawa.tasks SET state = 'human_review', current_design_revision_id = ${finalRevId}::uuid, updated_at = now() WHERE id = ${taskId}::uuid`.execute(trx);
 
             const memTask = tasks.get(taskId);
             if (memTask) {
               memTask.latestRevisionId = finalRevId;
-              memTask.status = 'AWAITING_APPROVAL';
-              memTask.qaReport = qaReport;
+              memTask.status = qcEval.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
+              memTask.qaReport = qcEval.qaReport;
             }
           }
         });

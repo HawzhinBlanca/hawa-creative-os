@@ -1,6 +1,7 @@
 import type { RouteContext } from './types.js';
 import { withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
+import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 
 export function registerSystemRoutes(ctx: RouteContext) {
   const {
@@ -33,6 +34,19 @@ export function registerSystemRoutes(ctx: RouteContext) {
   app.get('/v1/health', honestHealthHandler);
   app.get('/ready', honestHealthHandler);
   app.get('/v1/ready', honestHealthHandler);
+
+  // Production Funnel Health & Stall Detection (Step 5 of Engineering Rank Audit)
+  registerRoute('get', '/system/funnel/health', async (c: any) => {
+    const windowHours = Number(c.req.query('windowHours')) || 48;
+    const auth = verifyRequestAuth(c);
+    const metrics = await checkProductionFunnelHealth(db, {
+      tenantId: auth.tenantId,
+      windowHours,
+      telegramBridge,
+      opsChannelId: process.env.TELEGRAM_OPS_CHANNEL_ID,
+    });
+    return c.json({ ok: true, ...metrics }, metrics.status === 'stalled' ? 424 : 200);
+  });
 
   const requireAdministrator = (c: any): Response | null => {
     const authHeader = c.req.header('Authorization');
