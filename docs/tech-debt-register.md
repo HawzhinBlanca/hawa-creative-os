@@ -56,6 +56,85 @@ not from the worst case the defect could in principle cause.
 
 ---
 
+## Independently verified status — second pass, 2026-09-21
+
+Everything below was re-checked by reading the shipping code or running it, not by reading a report.
+A concurrent agent fixed most of this register between the first and second pass; this records what
+actually holds.
+
+**Verified fixed** (I ran or read the shipping path myself):
+
+| # | Item | How verified |
+|---|---|---|
+| 4 | Briefs discarded by the classifier | `inbox_events` persistence present before the canned reply |
+| 5 | Network blip dead-letters delivery | `ECONNREFUSED`/`ENOTFOUND` now classified apart from "uncertain" |
+| 7 | `shape.radius` unit bug | `resolveRadius` sniffs the unit, clamps to half the smaller side; `repairRadii` fixes stored layouts |
+| 8 | Revision idempotency defeated | key is now `_rev_${targetId}`, deterministic, not `Date.now()` |
+| 10 | Truncated reply parsed as `{}` | critique now rejects a payload lacking a non-empty assessment or a comments array |
+| 13 | Backup archive prune | retention loop is `for ext in dump enc sql` |
+| 14 | Gate/model-experiment confusion | `reprepare_stored_runs.mjs` now names `judge-model-agreement.ts` |
+| 15 | `awaiting_selection` dead end | `selectCandidate` calls `this.resume(...)` |
+| 18a | Overlapping text scored 1.0 | ran it: four overlapping blocks now score **0.2, failed, MUTUAL_TEXT_OVERLAP** |
+| 18b | Off-canvas box scored perfect contrast | `ratios.length === 0` now returns **1.0 (failure)**, was 21.0 |
+| 18c | Transparent shape counted 80% opaque | ran it: a fully transparent shape no longer moves the balance centroid |
+| 21 | Cost governor missing judge price | `gpt-4.1-mini` present in `pricingRates` |
+| 24 | Failing stage reported no spend | fixed this pass — read back from the persisted row |
+
+**Fixed this pass, by me:**
+
+| 12 | QA swapped the winner's typeface *after* judging | `evaluateHardQa` now returns the layout it measured, and reports a would-be script rewrite instead of applying it |
+
+**Still open, and why:**
+
+| # | Item | Status |
+|---|---|---|
+| 0 | Desk work silently runs v2 | **Open — needs your decision.** Code can't choose this for you. |
+| 3 | Stranded imports | **Partial.** Sweeper works; the two instances are unblocked but undelivered, and blocked behind item 0. |
+| 11 | Restate inactivity/abort timeouts | **Open.** No override in compose or registration; was unconfirmed and remains so. |
+| 16 | Font identity across three lists | **Partial.** Registry-first resolution landed; `ARABIC_SCRIPT_FAMILIES` is augmented at import rather than derived, and `ADMITTED_FONT_FAMILIES` is untouched. |
+| 17 | Playfair drawn bold, sent regular | **Open — needs your decision.** `render-layout-v2.ts:353` still returns `bold: !italic`. Ship a regular weight, or tell the transfer the effective weight. |
+| 19 | Long production calls die on this host | **Open.** Blocks a measured quality win. |
+| 22 | v2/v3 coexist | Re-scored to item 0. |
+| 23 | Ignored advisories | No upstream patch exists; documented and re-checked. |
+| 25 | Client PII in published git history | **New — see below. Needs your decision.** |
+| 26 | Two agents, one working copy | **New — see below.** |
+
+---
+
+## New items found on 2026-09-21
+
+**25. The client's staff contact details are in the published git history** — Cat: Privacy · I 4 · R 4 · E 3 · **Pri 24**
+`config/clients/kaae.dna.json` on the published line carries emails and phone numbers for eight KAAE
+staff — president, secretary, CHE, K-12, IT, HR, office, finance. The local line removed them, and
+the 2026-09-21 audit counted that as "client PII scrubbed". **Removing a line in a later commit does
+not remove it from history.** Anyone who clones the repository can still read those details out of
+any earlier commit, and GitHub keeps unreferenced objects reachable by SHA for a period even after a
+rewrite.
+This project has been here before: a live database password committed in September needed a BFG
+rewrite, and two checkpoint refs still pinned it locally afterwards.
+*Fix:* the same procedure — mirror clone, BFG or `git filter-repo` over that path, force-push, then
+every clone on every machine re-cloned rather than pulled, and the contact details treated as
+disclosed (they were on GitHub for some period). **This is destructive and needs your say-so**, and
+it needs the other agent's checkout coordinated, or it will simply be pushed back.
+*Business case:* it is your client's staff, not yours, and you did not ask for it to be published.
+
+**26. Two agents share one working copy, and it has cost real safety today** — Cat: Infra/Process · I 4 · R 5 · E 2 · **Pri 36**
+Not a code defect; the most expensive item here anyway. On 2026-09-21 alone this produced: a release
+manifest regenerated over another agent's uncommitted work and nearly committed; a merge aborting on
+files a second agent was mid-write on; a `studio-v2` rebased out from under an in-flight session; and
+the git remote deleted entirely, so nothing reached GitHub for hours while both agents believed they
+were pushing. The divergence that followed — 267 local commits against 252 published — came within
+one `--force` of destroying the client's entire extracted document corpus, which existed nowhere
+else.
+It also undermines any qualification claim made from this checkout: a release gate that passes here
+says nothing about the published branch unless the two are known to agree, and today they did not.
+*Fix:* give each agent its own git worktree (`git worktree add`), which this repo's tooling already
+supports, and make the release gate refuse when `HEAD` is not an ancestor of its tracking branch.
+Both are small. The discipline is the hard part.
+*Business case:* every other fix in this register is only as durable as the copy it lands in.
+
+---
+
 ## Phase 1 — do first (high priority, low effort)
 
 | # | Item | Cat | I | R | E | Pri | Status |

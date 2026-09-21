@@ -136,6 +136,32 @@ if echo "${TEST_DATABASE_URL:-}" | grep -q "${PROD_PORT}"; then
   exit 1
 fi
 echo "    [PASS] Production port ${PROD_PORT} isolated from test execution."
+
+# A gate that passes here says nothing about what is published unless the two agree. On 2026-09-21
+# this branch had been rebased and its remote deleted: 267 local commits against 252 published,
+# sharing only a distant ancestor, while a qualification report was being written from this checkout
+# claiming production readiness. The report was not wrong about the tests; it was answering about a
+# tree nobody could relate to the published history. Refuse rather than certify a branch that has
+# diverged, and say which way it went.
+if git -C "${ROOT_DIR}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  UPSTREAM="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref --symbolic-full-name '@{u}')"
+  git -C "${ROOT_DIR}" fetch --quiet origin 2>/dev/null || true
+  AHEAD_BEHIND="$(git -C "${ROOT_DIR}" rev-list --left-right --count "HEAD...${UPSTREAM}" 2>/dev/null || echo "0	0")"
+  LOCAL_AHEAD="$(echo "${AHEAD_BEHIND}" | cut -f1)"
+  REMOTE_AHEAD="$(echo "${AHEAD_BEHIND}" | cut -f2)"
+  if [ "${REMOTE_AHEAD:-0}" -gt 0 ]; then
+    echo "FATAL: ${UPSTREAM} has ${REMOTE_AHEAD} commit(s) this branch does not (local is ${LOCAL_AHEAD} ahead)."
+    echo "       A release cannot be certified from a branch that has diverged from what is published."
+    echo "       Reconcile first — and never with --force before checking what exists only on the remote."
+    exit 1
+  fi
+  echo "    [PASS] Branch agrees with ${UPSTREAM} (${LOCAL_AHEAD} ahead, 0 behind)."
+else
+  echo "FATAL: this branch tracks no remote, so nothing here is published or backed up off this host."
+  echo "       A remote was deleted from this repository's config on 2026-09-21; restore it before certifying."
+  exit 1
+fi
+
 T_END=$(date +%s)
 STAGE_STATUS+=("db_isolation:PASS ($((T_END - T_START))s)")
 

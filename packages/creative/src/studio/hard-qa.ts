@@ -200,7 +200,46 @@ export function evaluateHardQa(
     messages.push(`COPY_ORDER: ${reordered.join('; ')}; stack blocks top to bottom in copyIndex order, as the client wrote them`);
   }
 
-  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout: checked };
+  // The layout returned is the layout measured, which is the whole point of the two checks above.
+  //
+  // It used to return `checked`, the validator's normalised copy, while CONTRAST and COPY_OVERFLOW
+  // deliberately measured `layout` — and `runQAStage` assigns the return straight onto the winner
+  // (`winner.currentLayout = outcome.layout`), which is what the transfer then encodes. So the
+  // design that shipped was not the design that was measured, and not the design the judge chose.
+  // Proved 2026-09-21: a centred Sorani title in Amiri passes here with no defects, then ships as
+  // Noto Sans Arabic right-aligned, wrapping to three lines in a box sized for two — re-running
+  // this same gate on what actually ships returns COPY_OVERFLOW. Thirty width/size combinations
+  // behave that way, and the reference-driven `typeface` and centred-title decisions are erased
+  // along with it.
+  //
+  // Returning `layout` makes the comment above true. The normalisation is not lost so much as no
+  // longer needed here: in the v3 path `sanitizeFontsV3` has already put every block in an admitted
+  // face for its script and set `rtl`, so `checked` is normally identical. When it is not, that
+  // difference is reported rather than applied, because a script rewrite after judging is a
+  // finding, not a repair.
+  const rewritten = checked !== layout
+    ? layout.text
+        .map((t, i) => {
+          const c = checked.text[i];
+          if (!c) return '';
+          const changes = [
+            c.fontFamily !== t.fontFamily ? `font ${t.fontFamily}->${c.fontFamily}` : '',
+            c.align !== t.align ? `align ${t.align}->${c.align}` : '',
+            c.rtl !== t.rtl ? `rtl ${t.rtl}->${c.rtl}` : '',
+          ].filter(Boolean);
+          return changes.length ? `block ${t.copyIndex} (${t.role}): ${changes.join(', ')}` : '';
+        })
+        .filter(Boolean)
+    : [];
+  if (rewritten.length) {
+    messages.push(
+      `SCRIPT_NORMALISATION_DIVERGENCE (reported, not applied): the validator would have rewritten ` +
+        `${rewritten.join('; ')}. The layout measured and returned is the one that was judged; the ` +
+        `rewrite is not applied, because applying it after judging ships a design nobody scored.`
+    );
+  }
+
+  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout };
 }
 
 /**
