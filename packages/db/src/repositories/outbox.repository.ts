@@ -12,6 +12,38 @@ export interface EnqueueCommandParams {
   availableAt?: Date;
 }
 
+/**
+ * How long a command survives a dependency outage before it is dead-lettered.
+ *
+ * The schedule was 5 attempts from a 5 s base: 5, 10, 20, 40 s, then a dead letter. A Telegram or
+ * Core outage of 76 seconds therefore turned every waiting "your design is ready" into a dead letter
+ * that only an operator could redrive, and with no jitter every command failed by one outage came
+ * back in the same second.
+ *
+ * Twelve attempts from a 15 s base, capped at an hour, wait about 4 h 20 min in total (15, 30, 60,
+ * 120, 240, 480, 960, 1920 s, then 3600 s three times), which covers an evening's outage. A late
+ * notice is worth more than none, and dead letters still degrade worker health, which pages.
+ */
+export const OUTBOX_MAX_ATTEMPTS = 12;
+export const OUTBOX_BACKOFF_BASE_SECONDS = 15;
+export const OUTBOX_BACKOFF_CAP_SECONDS = 3600;
+
+/**
+ * Delay before attempt `attempt + 1`, in seconds. Exponential, capped, with equal jitter: the
+ * result lies between half the nominal delay and the whole of it, so commands failed together do
+ * not return together, and no retry is ever immediate. `random` is injectable for tests.
+ */
+export function outboxRetryDelaySeconds(
+  attempt: number,
+  baseSeconds: number = OUTBOX_BACKOFF_BASE_SECONDS,
+  capSeconds: number = OUTBOX_BACKOFF_CAP_SECONDS,
+  random: () => number = Math.random
+): number {
+  const n = Number.isFinite(attempt) ? Math.max(1, Math.floor(attempt)) : 1;
+  const nominal = Math.min(capSeconds, baseSeconds * Math.pow(2, Math.min(n - 1, 30)));
+  return nominal / 2 + random() * (nominal / 2);
+}
+
 export class OutboxRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
@@ -154,7 +186,13 @@ export class OutboxRepository {
       .executeTakeFirstOrThrow();
   }
 
-  async retryOrDeadLetter(id: string, error: string, maxAttempts: number = 5, backoffBaseSeconds: number = 5, trx?: Kysely<Database>) {
+  async retryOrDeadLetter(
+    id: string,
+    error: string,
+    maxAttempts: number = OUTBOX_MAX_ATTEMPTS,
+    backoffBaseSeconds: number = OUTBOX_BACKOFF_BASE_SECONDS,
+    trx?: Kysely<Database>
+  ) {
     const client = trx || this.db;
     const existing = await client
       .selectFrom('outbox_commands')
@@ -176,7 +214,7 @@ export class OutboxRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
     } else {
-      const delaySeconds = Math.min(3600, Math.pow(2, attempts - 1) * backoffBaseSeconds);
+      const delaySeconds = outboxRetryDelaySeconds(attempts, backoffBaseSeconds);
       const nextAvailableAt = new Date(Date.now() + delaySeconds * 1000);
       return await client
         .updateTable('outbox_commands')

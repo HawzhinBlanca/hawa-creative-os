@@ -6852,9 +6852,9 @@ export function createApp(options?: CreateAppOptions) {
           // (telegram-bridge.ts, the message_id and chat id check), and a retry would send it twice.
           /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID/.test(reason)
             ? outboxRepo.markUncertain(command.id, reason, trx)
-            // Same ceiling and base the worker's consumer applies to later attempts, so the schedule
-            // does not change hands halfway: delays of 5s, 10s, 20s, 40s, then a dead letter.
-            : outboxRepo.retryOrDeadLetter(command.id, reason, 5, 5, trx));
+            // The repository's defaults, which the worker's consumer also applies to later attempts, so
+            // the schedule does not change hands halfway.
+            : outboxRepo.retryOrDeadLetter(command.id, reason, undefined, undefined, trx));
       }
 
       // Photo Delivery via dispatchOutboundPhoto

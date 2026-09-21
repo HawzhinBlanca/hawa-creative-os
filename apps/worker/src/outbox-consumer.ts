@@ -5,6 +5,8 @@ import {
   sql,
   type Database,
   type Kysely,
+  OUTBOX_MAX_ATTEMPTS,
+  OUTBOX_BACKOFF_BASE_SECONDS,
 } from '@hawa/db';
 import { OfficeTracer } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
@@ -215,8 +217,8 @@ export class OutboxConsumer {
   async processBatch(batchSize?: number): Promise<BatchProcessingSummary> {
     const limit = batchSize || this.options.batchSize || 20;
     const leaseSeconds = this.options.leaseSeconds || 60;
-    const maxAttempts = this.options.maxAttempts || 5;
-    const backoffBase = this.options.backoffBaseSeconds || 5;
+    const maxAttempts = this.options.maxAttempts || OUTBOX_MAX_ATTEMPTS;
+    const backoffBase = this.options.backoffBaseSeconds || OUTBOX_BACKOFF_BASE_SECONDS;
     const configuredTenantIds = this.options.tenantIds && this.options.tenantIds.length > 0
       ? this.options.tenantIds
       : [this.options.tenantId || '00000000-0000-4000-a000-000000000001'];
