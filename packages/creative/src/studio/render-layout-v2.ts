@@ -1,3 +1,4 @@
+import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -913,9 +914,9 @@ function renderShapesToSvg(shapes: ShapeElement[]): string {
         `<ellipse id="shape-${i}" cx="${s.x + s.width / 2}" cy="${s.y + s.height / 2}" rx="${s.width / 2}" ry="${s.height / 2}" fill="${s.color}"${opacityAttr}${strokeAttr}${transformAttr}/>`
       );
     } else if (s.kind === 'line') {
-      const strokeW = s.strokeWidth || Math.max(1, s.height);
+      const g = lineGeometry(s);
       parts.push(
-        `<line id="shape-${i}" x1="${s.x}" y1="${s.y}" x2="${s.x + s.width}" y2="${s.y + (s.height > 2 ? s.height : 0)}" stroke="${s.color}" stroke-width="${strokeW}"${opacityAttr}${transformAttr}/>`
+        `<line id="shape-${i}" x1="${g.x1}" y1="${g.y1}" x2="${g.x2}" y2="${g.y2}" stroke="${s.color}" stroke-width="${g.strokeWidth}"${opacityAttr}${transformAttr}/>`
       );
     }
   }

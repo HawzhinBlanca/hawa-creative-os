@@ -1,3 +1,4 @@
+import { lineGeometry } from './line-geometry.js';
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
@@ -372,13 +373,17 @@ export async function encodeStudioTransferV2(
     const rotate = typeof shape.rotation === 'number' ? shape.rotation : 0;
 
     if (kind === 'line') {
+      // Same reading as the preview: along the long side, through the middle of the short one.
+      const g = lineGeometry(shape);
       slide.addShape(pptx.ShapeType.line, {
-        ...geom,
-        h: 0,
+        x: g.x1 / 96,
+        y: g.y1 / 96,
+        w: (g.x2 - g.x1) / 96,
+        h: (g.y2 - g.y1) / 96,
         rotate,
         line: {
           color: hex(shape.strokeColor || shape.color),
-          width: Math.max(0.75, (shape.strokeWidth ?? Math.max(1, shape.height)) * 0.75),
+          width: Math.max(0.75, g.strokeWidth * 0.75),
           transparency,
         },
       });
