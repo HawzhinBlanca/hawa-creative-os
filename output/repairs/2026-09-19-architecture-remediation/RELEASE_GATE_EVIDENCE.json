@@ -2,15 +2,15 @@
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
   "status": "QUALIFIED",
-  "evaluatedAt": "2026-09-21T12:31:00Z",
+  "evaluatedAt": "2026-09-21T12:50:30Z",
   "git": {
-    "commit": "8b9f1c3f3d4e7d46c04c3262756521569a7f28c4",
+    "commit": "782512d8ade84beaeec7b1827d05bf4877e3e2ea",
     "branch": "studio-v2",
     "cleanTree": false
   },
   "releaseManifest": {
     "file": "RELEASE_MANIFEST.json",
-    "sha256": "44270e1133e75024d92b394a1a95e85053b8c5c38bad419ea4f4fc495a07c074",
+    "sha256": "c3757fa6df635f150f89c5a311da4eaa054da6e11a8713c6d176d603cb44fb6d",
     "flags": {
       "DESIGN_PIPELINE_V3": "off",
       "DESIGN_STUDIO_V2": "off"
