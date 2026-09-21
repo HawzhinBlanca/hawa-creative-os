@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
+import { createDb, sql, withRlsContext, PublicationRepository, type Kysely, type Database } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
@@ -296,6 +296,50 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
 
     // Verify telegram message was dispatched to the right chat
     expect(sentMessages.some((m) => m.chatId === testChannelId && m.message.text.includes(taskId))).toBe(true);
+
+    // -------------------------------------------------------------------------
+    // 8. SHEETS RETRY: a sheet that failed once can still be recorded as synced
+    // -------------------------------------------------------------------------
+    // recordSheetSync was a plain INSERT on a UNIQUE (spreadsheet, sheet, row_key) row, so the retry
+    // after a failed first attempt always died on the key and the ledger row could never be closed.
+    const repo = new PublicationRepository(db);
+    const rowKey = `retry-${randomUUID()}`;
+    const base = {
+      tenantId, publicationId: dbPub.id, spreadsheetId: 'sheet_retry_fixture', sheetId: 0, taskId, rowKey,
+      expectedHash: 'a'.repeat(64),
+    };
+    const asOperator = <T>(fn: (trx: any) => Promise<T>) => withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, fn);
+
+    const first = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'pending', lastError: 'Sheets 503' }, trx));
+    expect(first.status).toBe('pending');
+    expect(first.attempts).toBe(1);
+
+    const retried = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'synced', rowNumber: 42, observedHash: 'a'.repeat(64) }, trx));
+    expect(retried.id).toBe(first.id);
+    expect(retried.status).toBe('synced');
+    expect(retried.attempts).toBe(2);
+    expect(Number(retried.row_number)).toBe(42);
+    expect(retried.last_error).toBeNull();
+    expect(retried.synced_at).toBeTruthy();
+
+    // A late 'pending' for the same content must not undo a confirmed sync.
+    const late = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'pending' }, trx));
+    expect(late.status).toBe('synced');
+    expect(Number(late.row_number)).toBe(42);
+    expect(late.attempts).toBe(3);
+
+    const rows = await asOperator(async (trx) => (await sql<any>`SELECT count(*)::int AS n FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0].n);
+    expect(rows).toBe(1);
+
+    // The same key presented for a different task is refused, not overwritten.
+    const otherTask = randomUUID();
+    await asOperator((trx) => sql`
+      INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
+      VALUES (${otherTask}::uuid, ${tenantId}::uuid, ${kaaeClientId}::uuid, 'Other task', 'owns no sheet row', 'received', 3, 1, now(), now())`.execute(trx));
+    await expect(asOperator((trx) => repo.recordSheetSync({ ...base, taskId: otherTask, status: 'synced' }, trx))).rejects.toThrow(/already belongs to another task/);
+    const untouched = await asOperator(async (trx) => (await sql<any>`SELECT task_id, status FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0]);
+    expect(untouched.task_id).toBe(taskId);
+    expect(untouched.status).toBe('synced');
   });
 
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Database, PublicationsTable, DriveRefsTable, SheetSyncsTable } from '../types.js';
 
 export interface CreatePublicationParams {
@@ -228,9 +228,35 @@ export class PublicationRepository {
           last_error: params.lastError || null,
           synced_at: params.status === 'synced' ? new Date() : null,
         })
+        // A row is keyed by (spreadsheet, sheet, row_key), so the second attempt at the same row is
+        // an update, not an insert. It used to be a plain insert: the first attempt recorded
+        // 'pending', and every retry then died on the unique key, so a sheet that failed once could
+        // never be recorded as synced. The update is confined to the same tenant and task, so a
+        // clashing key from another task is refused instead of overwritten, and a confirmed sync of
+        // the same content is never downgraded by a late 'pending'.
+        .onConflict((oc) =>
+          oc
+            .columns(['spreadsheet_id', 'sheet_id', 'row_key'])
+            .doUpdateSet({
+              publication_id: sql`excluded.publication_id`,
+              row_number: sql`COALESCE(excluded.row_number, sheet_syncs.row_number)`,
+              expected_hash: sql`excluded.expected_hash`,
+              observed_hash: sql`COALESCE(excluded.observed_hash, sheet_syncs.observed_hash)`,
+              status: sql`CASE WHEN sheet_syncs.status = 'synced' AND sheet_syncs.expected_hash = excluded.expected_hash THEN 'synced' ELSE excluded.status END`,
+              attempts: sql`sheet_syncs.attempts + 1`,
+              last_error: sql`excluded.last_error`,
+              synced_at: sql`CASE WHEN excluded.status = 'synced' THEN now() ELSE sheet_syncs.synced_at END`,
+            } as any)
+            .where(sql<boolean>`sheet_syncs.tenant_id = excluded.tenant_id AND sheet_syncs.task_id = excluded.task_id`)
+        )
         .returningAll()
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
 
+      if (!sheetSync) {
+        throw new Error(
+          `Sheet row key ${params.rowKey} in ${params.spreadsheetId} already belongs to another task; refusing to overwrite it`
+        );
+      }
       return sheetSync;
     };
 
