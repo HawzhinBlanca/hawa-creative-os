@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-21T12:45:58Z",
+  "generatedAt": "2026-09-21T16:19:23Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -604,8 +604,8 @@
     },
     {
       "path": "docs/tech-debt-register.md",
-      "sha256": "c8573edfc77ce5fb6a07101d22cd7a20e899a4e573c3f0b29985eaf587d023d2",
-      "bytes": 21254
+      "sha256": "f3da19defa08cb85dbbb5fcb49a7001ed83127dc1af0a0bd5c192fac595ed6e1",
+      "bytes": 31375
     },
     {
       "path": "evals/fault_injection_matrix.csv",
@@ -839,8 +839,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "c4fb502117d26a48d1a36be2cca147e5df7261a0aa63f920da64689729433be6",
-      "bytes": 13451
+      "sha256": "d4120d42f57ac2cd8773bc8d7cdf5478d1402f503663209d24054e495f59b6f3",
+      "bytes": 15160
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
