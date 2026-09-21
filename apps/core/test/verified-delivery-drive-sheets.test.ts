@@ -56,6 +56,14 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
       }
 
       // 2. Google Drive Independent Readback
+      // The lookup the publisher makes before every upload. This mock keeps no file properties, so it
+      // reports nothing delivered; drive-upload-idempotency.test.ts covers a Drive that remembers.
+      if (req.method === 'GET' && /\/drive\/v3\/files\?/.test(url)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ files: [] }));
+        return;
+      }
+
       if (req.method === 'GET' && url.includes('/drive/v3/files/')) {
         const match = url.match(/\/drive\/v3\/files\/([^?]+)/);
         const fileId = match ? match[1] : 'unknown';

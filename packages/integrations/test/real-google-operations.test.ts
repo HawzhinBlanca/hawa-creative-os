@@ -56,6 +56,14 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         return;
       }
 
+      // 1b. The lookup the publisher makes before every upload. This mock keeps no file properties,
+      // so it reports nothing delivered; drive-upload-idempotency.test.ts covers a Drive that remembers.
+      if (req.method === 'GET' && /\/drive\/v3\/files\?/.test(url)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ files: [] }));
+        return;
+      }
+
       // 2. Google Drive Independent Readback
       if (req.method === 'GET' && url.includes('/drive/v3/files/')) {
         const match = url.match(/\/drive\/v3\/files\/([^?]+)/);

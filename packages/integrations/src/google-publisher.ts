@@ -25,6 +25,9 @@ export interface GooglePublisherConfig {
   emulateNetworkForTesting?: boolean;
 }
 
+const DRIVE_LOOKUP_TIMEOUT_MS = 10_000;
+const DRIVE_UPLOAD_TIMEOUT_MS = 120_000;
+
 export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
   private taskRowMap = new Map<string, number>();
@@ -123,6 +126,53 @@ export class GooglePublisher implements Publisher {
     }
 
     return null;
+  }
+
+  /**
+   * The file already in `folderId` that was uploaded for this task and artifact with these exact
+   * bytes, if there is one. `ok: false` means Drive could not say, and the caller must not upload.
+   */
+  private async findUploadedArtifact(
+    token: string,
+    folderId: string,
+    taskId: string,
+    file: PackageFile
+  ): Promise<Result<{ id: string; name?: string; size?: string; mimeType?: string; webViewLink?: string; sha256Checksum?: string } | undefined, AppError>> {
+    const lit = (v: string) => v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const q =
+      `'${lit(folderId)}' in parents and trashed = false` +
+      ` and properties has { key='taskId' and value='${lit(taskId)}' }` +
+      ` and properties has { key='artifactId' and value='${lit(file.artifactId)}' }`;
+    const url =
+      `${this.driveApiBaseUrl}/drive/v3/files?q=${encodeURIComponent(q)}` +
+      `&fields=${encodeURIComponent('files(id,name,size,mimeType,webViewLink,sha256Checksum,properties,createdTime)')}` +
+      `&orderBy=createdTime&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+    const refuse = (why: string) => ({
+      ok: false as const,
+      error: {
+        code: 'DRIVE_LOOKUP_FAILED',
+        message: `Could not check Google Drive for an existing copy of ${file.filename} (${why}); nothing was uploaded`,
+        retryable: true,
+      } as any,
+    });
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS) });
+      if (!res.ok) return refuse(`HTTP ${res.status}`);
+      const data = (await res.json()) as any;
+      if (!data || !Array.isArray(data.files)) return refuse('malformed answer');
+      const want = file.sha256.toLowerCase();
+      const same = data.files.find(
+        (f: any) =>
+          f?.id &&
+          f.properties?.taskId === taskId &&
+          f.properties?.artifactId === file.artifactId &&
+          typeof f.sha256Checksum === 'string' &&
+          f.sha256Checksum.toLowerCase() === want
+      );
+      return { ok: true, value: same };
+    } catch (err: any) {
+      return refuse(err?.name === 'TimeoutError' ? 'timed out' : err?.message || String(err));
+    }
   }
 
   async publish(ctx: RequestContext, request: PublishRequest): Promise<Result<PublicationReceipt, AppError>> {
@@ -293,53 +343,22 @@ export class GooglePublisher implements Publisher {
         };
         webViewLink = `https://drive.google.com/file/d/${uploadedFileId}/view`;
       } else {
-        // Reconciliation check: before executing a new upload, check if this file was already committed to Drive
-        // (e.g. on retry, from a prior upload with lost reply, or in synthetic tests).
-        if (token && ((request as any).isRetry || (request as any).reconcileFirst || request.taskId.startsWith('synthetic') || request.destination.productionRootFolderId.startsWith('synthetic'))) {
-          try {
-            const escapedName = file.filename.replace(/'/g, "\\'");
-            const q = `'${driveFolderId}' in parents and name = '${escapedName}' and trashed = false`;
-            const searchUrl = `${this.driveApiBaseUrl}/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,size,mimeType,webViewLink,properties)`;
-            const searchRes = await fetch(searchUrl, {
-              headers: { 'Authorization': `Bearer ${token}` },
-              signal: AbortSignal.timeout(5000),
-            });
-            if (searchRes.ok) {
-              const searchData = (await searchRes.json()) as any;
-              const match = searchData.files?.find(
-                (f: any) =>
-                  (f.properties?.taskId === request.taskId && f.properties?.artifactId === file.artifactId) ||
-                  (f.name === file.filename && Number(f.size) === fileBuffer.length)
-              );
-              if (match) {
-                uploadedFileId = match.id;
-                readbackData = match;
-                webViewLink = match.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
-              }
-            }
-          } catch {}
-        }
-
-        if (!uploadedFileId && token && (request.taskId.startsWith('synthetic') || request.destination.productionRootFolderId.startsWith('synthetic'))) {
-          const probeCandidates = [`synthetic-file-1`];
-          for (const candidateId of probeCandidates) {
-            try {
-              const probeUrl = `${this.driveApiBaseUrl}/drive/v3/files/${candidateId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum`;
-              const probeRes = await fetch(probeUrl, {
-                headers: { 'Authorization': `Bearer ${token}` },
-                signal: AbortSignal.timeout(5000),
-              });
-              if (probeRes.ok) {
-                const probeData = (await probeRes.json()) as any;
-                if (probeData && probeData.name === file.filename) {
-                  uploadedFileId = probeData.id;
-                  readbackData = probeData;
-                  webViewLink = probeData.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
-                  break;
-                }
-              }
-            } catch {}
-          }
+        // Ask Drive before uploading, every time. An upload whose reply is lost, or a process killed
+        // between the upload and the database record, leaves a file in the folder that nothing here
+        // remembers; a fresh process then uploaded a second copy. The earlier lookup ran only for a
+        // request flagged isRetry or reconcileFirst, which no caller ever set, so in production it
+        // never ran. Every file is stamped with taskId and artifactId when uploaded (below), and that
+        // is what identifies it: a name and a size can belong to someone else's file.
+        //
+        // The same bytes already there are adopted. A file for this artifact with different bytes is
+        // an earlier revision, so the new one is uploaded beside it. If Drive cannot answer, nothing
+        // is uploaded: a duplicate in a client's folder cannot be taken back, a retry can.
+        const lookup = await this.findUploadedArtifact(token!, driveFolderId, request.taskId, file);
+        if (!lookup.ok) return lookup;
+        if (lookup.value) {
+          uploadedFileId = lookup.value.id;
+          readbackData = lookup.value;
+          webViewLink = lookup.value.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
         }
 
         if (!uploadedFileId) {
@@ -371,6 +390,7 @@ export class GooglePublisher implements Publisher {
               'Content-Type': `multipart/related; boundary=${boundary}`,
             },
             body: multipartBody,
+            signal: AbortSignal.timeout(DRIVE_UPLOAD_TIMEOUT_MS),
           });
 
           if (!uploadRes.ok) {
@@ -400,6 +420,7 @@ export class GooglePublisher implements Publisher {
           const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum`;
           const readbackRes = await fetch(readbackUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
+            signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS),
           });
 
           if (!readbackRes.ok) {

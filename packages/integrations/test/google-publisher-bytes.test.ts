@@ -83,6 +83,8 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     const f = file('a.png', 'aaa');
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
+      // The lookup the publisher makes before every upload: nothing delivered yet.
+      if (url.startsWith('https://drive.test/drive/v3/files?q=')) return json({ files: [] });
       if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 });
       if (url.includes('/values/A:A')) return json({ values: [] });
       if (url.includes(':append')) return json({ updates: {} }); // no updatedRange
@@ -98,8 +100,8 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     expect(res.value.sheet.synced).toBe(false);
     expect(res.value.state).toBe('drive_complete');
     expect(res.value.emulated).toBe(false);
-    // Upload, Drive readback, pre-append task identity check, and the append.
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // Drive lookup, upload, Drive readback, pre-append task identity check, and the append.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it('marks an emulated receipt as emulated', async () => {
@@ -126,6 +128,8 @@ describe('GooglePublisher.verify reads the publication back', () => {
     let driveNow: any = { id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 };
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
+      // The lookup the publisher makes before every upload: nothing delivered yet.
+      if (url.startsWith('https://drive.test/drive/v3/files?q=')) return json({ files: [] });
       if (url.startsWith('https://drive.test')) return json(driveNow);
       if (url.includes(':append')) return json({ updates: {} }); // Sheets reports no row
       throw new Error(`unexpected call ${url}`);
@@ -159,6 +163,8 @@ describe('a publication whose Sheets row was not confirmed', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(`${init?.method || 'GET'} ${url.split('?')[0]}`);
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
+      // The lookup the publisher makes before every upload: nothing delivered yet.
+      if (url.startsWith('https://drive.test/drive/v3/files?q=')) return json({ files: [] });
       if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 });
       if (url.includes('/values/A:A')) return json({ values: [] });
       if (url.includes(':append')) {
