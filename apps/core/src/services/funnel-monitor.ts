@@ -100,11 +100,23 @@ export async function checkProductionFunnelHealth(
     let status: 'healthy' | 'idle' | 'stalled' = 'healthy';
     let alert: string | null = null;
 
+    // A stall is briefs arriving and no designs coming out. It is not the absence of approvals and
+    // publications, which is what this used to test.
+    //
+    // Those two stages belong to a flow this product does not currently run: the deliverable is an
+    // editable Canva link, and the owner reviews and edits it there, outside this system. So
+    // `approvals` and `deliveries` sat at zero permanently, health reported `degraded` permanently,
+    // and a real outage would have looked exactly like every other day — 14 briefs, 13 drafts, a
+    // working pipeline, and a red light. A monitor that is always alarming is worse than none,
+    // because it teaches the one person watching to ignore it.
+    //
+    // Both counts are still reported, because they are the truth about a flow that may yet be used.
+    // They no longer decide whether the pipeline is stalled.
     if (briefsCount === 0) {
       status = 'idle';
-    } else if (approvalsCount === 0 || deliveriesCount === 0) {
+    } else if (draftsCount === 0) {
       status = 'stalled';
-      alert = `Production Funnel Stalled: ${briefsCount} briefs arrived in the last ${windowHours}h, but approvals (${approvalsCount}) or deliveries (${deliveriesCount}) are zero.`;
+      alert = `Production Funnel Stalled: ${briefsCount} briefs arrived in the last ${windowHours}h and no design was produced.`;
 
       if (options?.telegramBridge && options?.opsChannelId) {
         options.telegramBridge.dispatchOutboundMessage(options.opsChannelId, {

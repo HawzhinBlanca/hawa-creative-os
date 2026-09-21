@@ -6693,6 +6693,38 @@ export function createApp(options?: CreateAppOptions) {
       } catch (revErr) {
         console.error('[canvaStatusHandler] Failed to bridge revision/qc_run:', revErr);
       }
+
+      // A task whose design has been made and sent is no longer `received`.
+      //
+      // Nothing advanced it, so on 2026-09-21 every task in production read RECEIVED — including
+      // the two designs delivered to the owner the previous morning with working Canva links. The
+      // records could not tell "designed and sent" apart from "never touched", which is exactly how
+      // an audit came to describe ordinary Desk drills as stranded client work, and how six requests
+      // from a second chat could not be confirmed as answered.
+      //
+      // `human_review` is the honest state: the design exists and is with a person, who reviews and
+      // edits it in Canva. It is deliberately not `complete` — nothing here knows whether the owner
+      // accepted it, and claiming otherwise would trade one wrong record for another.
+      try {
+        const current = await taskRepo.findById(taskId, auth.tenantId!);
+        // Only ever move forward, and only from the states that precede a delivered draft: a task
+        // already approved, rejected or revised must not be dragged back by a re-sent notification.
+        const advanceable = ['received', 'routing', 'brief_draft', 'brief_review', 'design_planning',
+          'asset_production', 'studio_composition', 'qa', 'auto_repair'];
+        if (current && advanceable.includes(String(current.state))) {
+          await taskRepo.updateStatus(
+            taskId,
+            String(current.state),
+            'human_review',
+            auth.userId || 'system',
+            'workflow',
+            `Canva draft delivered (${status})${designId ? ` as ${designId}` : ''}; awaiting visual review.`
+          );
+        }
+      } catch (stateErr) {
+        // Never fail the delivery over bookkeeping: the Canva link is what the owner is waiting for.
+        console.error('[canvaStatusHandler] Failed to advance task state to human_review:', stateErr);
+      }
     }
 
     let notificationSent = false;
