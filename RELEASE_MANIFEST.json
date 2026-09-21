@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-21T16:25:07.133Z",
+  "generatedAt": "2026-09-21T16:26:54.262Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,9 +19,9 @@
     ]
   },
   "build": {
-    "commit": "be8297315aa91cb221a0e286b6e031576ab1aaf7",
-    "treeClean": false,
-    "commitTimestamp": "2026-09-21T19:23:12+03:00",
+    "commit": "c8fbdef94e4acf8251c40a1ede8ef5893222e8c1",
+    "treeClean": true,
+    "commitTimestamp": "2026-09-21T19:26:43+03:00",
     "branch": "studio-v2"
   },
   "migrations": {
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "1deb0425f7e2bca357b120965142b174ba5f8b776efcc2aea899d05a66c7861e"
+  "sha256": "a5837bd143680403f0d54e1563cdb23e3ba9f61da592d50590828767882f1dfc"
 }
