@@ -1,7 +1,7 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
-import { renderLayoutV2, measureWrappedLines, admittedFontFace, findAdmittedFontFace } from './render-layout-v2.js';
+import { renderLayoutV2, measureWrappedLines, balancedBoxWidths, admittedFontFace, findAdmittedFontFace } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
@@ -747,7 +747,8 @@ export function prepareGeneratedLayoutV3(
     : conformToHouseRules(fonted, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
-  const finish = (l: StudioLayoutV2) => {
+  const finish = (l: StudioLayoutV2) => balanceLineBreaks(compose(l), copy);
+  const compose = (l: StudioLayoutV2) => {
     if (!spread) return balance ? balanceVertically(l, copy) : l;
     // The reference's composition, kept unless it adds a real defect. The measure here is the hard
     // one (overlaps, reading order, copy that no longer fits, the safe area, the logo's clear
@@ -767,6 +768,40 @@ export function prepareGeneratedLayoutV3(
   const ornamented = addBrandOrnament(conformed, copy, canvas.ornament, canvas.palette || []);
   if (!ornamentAddsDefect(plain, ornamented, copy)) return finish(ornamented);
   return finish(addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []));
+}
+
+/**
+ * Narrows a text box whose copy ends on a single stranded word, so the break moves up and the lines
+ * balance. The box is what Canva receives, so the change reaches the editable design; see
+ * `balancedBoxWidths`. The block keeps its anchor: a left-aligned block its left edge, a
+ * right-aligned one its right edge, a centred one its centre. Line counts, heights and type sizes
+ * do not change.
+ *
+ * Like every optional pass here, a change is kept only if it costs nothing by the pipeline's own
+ * measures: no new layout defect and no metric that passed before failing after. Each block is
+ * decided on its own, so one that cannot be narrowed does not hold back the rest.
+ */
+export function balanceLineBreaks(layout: StudioLayoutV2, copy: PipelineV3Copy): StudioLayoutV2 {
+  const widths = balancedBoxWidths(layout, copy.text);
+  const indices = Object.keys(widths).map(Number);
+  if (!indices.length) return layout;
+  const failing = (l: StudioLayoutV2) =>
+    Object.values(measureDesignV3(l, copy).metrics).filter((m) => !m.passed).length;
+  let current = layout;
+  for (const copyIndex of indices) {
+    const next = JSON.parse(JSON.stringify(current)) as StudioLayoutV2;
+    const t = next.text.find((b) => b.copyIndex === copyIndex);
+    if (!t) continue;
+    const delta = t.width - widths[copyIndex];
+    if (delta <= 0) continue;
+    if (t.align === 'center') t.x += delta / 2;
+    else if (t.align === 'right') t.x += delta;
+    t.width = widths[copyIndex];
+    if (layoutDefectCount(next, copy) > layoutDefectCount(current, copy)) continue;
+    if (failing(next) > failing(current)) continue;
+    current = next;
+  }
+  return current;
 }
 
 /**

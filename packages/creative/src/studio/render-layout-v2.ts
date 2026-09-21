@@ -534,6 +534,81 @@ export function measureWrappedLines(
 }
 
 /**
+ * Box widths that stop a block ending on a single stranded word.
+ *
+ * Wrapping is greedy, so a title one word too long for its box ends "Statutory Accreditation / Order":
+ * 11 of the 20 winners of the 2026-09-18 qualification run end a title or paragraph that way. Breaking
+ * the line differently in the preview would not reach the client, because Canva wraps the text itself
+ * and receives only the box. So the box is narrowed instead: to a width at which the same copy wraps
+ * to the same number of lines with the break moved up, which is what CSS calls `text-wrap: balance`.
+ *
+ * Canva measures type slightly differently, so the tightest such width is not used. The returned
+ * width sits halfway between the tightest width and the widest one that still gives the same breaks,
+ * leaving room on both sides before a different break appears.
+ *
+ * Returns a width only for blocks that have a widow and can lose it; line counts never change.
+ */
+export function balancedBoxWidths(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string>,
+  options: RenderLayoutOptions = {}
+): Record<number, number> {
+  const fontsDir = resolveFontsDir(options);
+  const out: Record<number, number> = {};
+  for (const t of layout.text) {
+    const copy = copyText[t.copyIndex];
+    if (!copy || !t.width || copy.includes('\n')) continue;
+    try {
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const ls = effectiveLetterSpacingEm(t);
+      const wrap = (w: number) => wrapTextWithFontkit(copy, w, font, t.fontSize, ls);
+      const widthOf = (line: string) => measureTextWidth(line, font, t.fontSize, ls);
+      const lines = wrap(t.width);
+      if (lines.length < 2) continue;
+      const last = lines[lines.length - 1];
+      const widest = Math.max(...lines.map(widthOf));
+      const widow = !/\s/.test(last.trim()) && widthOf(last) < 0.5 * widest;
+      if (!widow) continue;
+
+      // Tightest width that keeps the line count. Narrower than the longest word can never work.
+      const longestWord = Math.max(...copy.trim().split(/\s+/).map(widthOf));
+      let lo = Math.ceil(longestWord);
+      let hi = Math.floor(t.width);
+      if (lo >= hi || wrap(lo).length < lines.length) continue;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (wrap(mid).length <= lines.length) hi = mid;
+        else lo = mid + 1;
+      }
+      const tight = lo;
+      const balanced = wrap(tight);
+      if (balanced.length !== lines.length) continue;
+      const balancedLast = balanced[balanced.length - 1];
+      // Only worth a change if the last line is no longer a stranded word.
+      if (!/\s/.test(balancedLast.trim()) && widthOf(balancedLast) < 0.5 * Math.max(...balanced.map(widthOf))) continue;
+
+      // Widest width that still gives exactly these breaks.
+      const same = (w: number) => {
+        const got = wrap(w);
+        return got.length === balanced.length && got.every((l, i) => l === balanced[i]);
+      };
+      let a = tight;
+      let b = Math.floor(t.width);
+      while (a < b) {
+        const mid = Math.ceil((a + b) / 2);
+        if (same(mid)) a = mid;
+        else b = mid - 1;
+      }
+      const chosen = Math.round(tight + (a - tight) / 2);
+      if (chosen < t.width) out[t.copyIndex] = chosen;
+    } catch {
+      // unmeasurable family here; the block keeps its box
+    }
+  }
+  return out;
+}
+
+/**
  * Measures the maximum rendered line advance width in px for each text block.
  * Catches horizontal overflow where words or lines exceed t.width.
  */
