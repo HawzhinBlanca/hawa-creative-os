@@ -2728,7 +2728,7 @@ export function createApp(options?: CreateAppOptions) {
     autoApproveFromAwaiting: boolean = false,
     options?: { policy?: string; designRevisionId?: string; approvalId?: string }
   ) {
-    const task = tasks.get(taskId);
+    const task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
 
     // Only the task's own client DNA names a destination; another client's folder is never a fallback.
@@ -2755,7 +2755,7 @@ export function createApp(options?: CreateAppOptions) {
       allowInvalidated: options?.policy === 'deliver_approved_stored',
     });
     if (!approval) {
-      return { ok: false, status: 422, code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
+      return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
     }
     const deliverables = await loadPinnedDeliverables(
       deliverableStore,
@@ -2763,7 +2763,7 @@ export function createApp(options?: CreateAppOptions) {
       approval.pinnedExports
     );
     if (!deliverables.ok) {
-      return { ok: false, status: 422, code: deliverables.code, message: deliverables.message };
+      return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: deliverables.code, message: deliverables.message };
     }
 
     const isDeliverApprovedStored = options?.policy === 'deliver_approved_stored';
@@ -5790,25 +5790,12 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const taskId = c.req.param('taskId');
-    const task = tasks.get(taskId);
-
-    let dbTask: any = null;
-    if (taskRepo && db) {
-      try {
-        dbTask = await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => await taskRepo.findById(taskId, auth.tenantId, trx)
-        );
-      } catch (err: any) {
-        console.error('[core:publish:task_lookup] DB task error:', err);
-      }
-    }
-    if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+    const task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
     const policy = body.policy || 'current_task';
-    const targetRevisionId = body.designRevisionId || task?.latestRevisionId || dbTask?.current_design_revision_id;
+    const targetRevisionId = body.designRevisionId || task?.latestRevisionId;
     const requestedApprovalId = body.approvalId;
 
     // Invariant: B cannot ship using A's approval (CV-15)
@@ -5825,12 +5812,10 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    // Gate F/G: Only APPROVED tasks can be published under current_task policy. A task whose files
-    // were delivered but whose Sheets row was not confirmed may publish again: only the row is retried.
-    const currentStatus = (task?.status || dbTask?.state || '').toLowerCase();
+    const currentStatus = (task?.status || '').toLowerCase();
     const retryingSheetRow = currentStatus === 'publish_reconciliation';
     if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingSheetRow) {
-      if (currentStatus === 'complete' && (omnichannelReceipts.has(taskId) || (dbTask && dbTask.state === 'complete'))) {
+      if (currentStatus === 'complete' && omnichannelReceipts.has(taskId)) {
         const existing = omnichannelReceipts.get(taskId);
         return c.json({
           commandId: crypto.randomUUID(),
@@ -5845,396 +5830,34 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
     }
 
-    // Gate G Check: Verify Google Workspace credentials before proceeding
-    const creds = publisher.getCredentials();
-    if (!creds.hasKey && !process.env.MOCK_GOOGLE_TOKEN) {
-      return problem(c, 503, 'Publication Service Unavailable', 'Google Workspace credentials not configured; publication cannot proceed to external delivery');
-    }
-
-    // Destination, approval and files are all settled before the task moves to PUBLISHING.
-    const targetClientId = task?.clientId || dbTask?.client_id || defaultClientId;
-    let client: any = clientDnas.get(targetClientId);
-    if (db && clientRepo && targetClientId) {
-      try {
-        const tenantId = task?.tenantId || dbTask?.tenant_id || auth.tenantId || DEFAULT_TENANT_ID;
-        const targetId = isValidUuid(targetClientId)
-          ? targetClientId
-          : (await clientRepo.findByCode(tenantId, targetClientId))?.id;
-        if (targetId) {
-          const activeDna = await clientRepo.findActiveDna(tenantId, targetId);
-          if (activeDna?.dna) {
-            client = activeDna.dna;
-          }
-        }
-      } catch (err) {
-        console.warn('[core:publish:destination] DB read error, using fallback:', err);
-      }
-    }
-    if (!client?.destinations?.productionFolderId) {
-      return problem(c, 422, 'No Delivery Destination', `Client '${targetClientId}' has no Google Drive production folder in its DNA, so nothing was delivered.`);
-    }
-    const destination = {
-      sharedDriveId: client.destinations.googleSharedDriveId || '',
-      productionRootFolderId: client.destinations.productionFolderId,
-      relativeFolderParts: ['Clients', client.code || client.name, new Date().getFullYear().toString()],
-      spreadsheetId: client.destinations.spreadsheetId || '',
-      sheetId: client.destinations.sheetId || 0,
-    };
-    const approval = await findApprovalForDelivery(auth.tenantId, taskId, task, targetRevisionId, {
-      approvalId: requestedApprovalId,
-      allowInvalidated: policy === 'deliver_approved_stored',
-    });
-    const clientSlug = String(client.name || 'client').toLowerCase().replace(/[^a-z0-9]/g, '-');
-    if (!approval) {
-      return problem(c, 422, 'Nothing Approved To Deliver', NO_APPROVAL_TO_DELIVER);
-    }
-    const deliverables = await loadPinnedDeliverables(
-      deliverableStore,
-      { tenantId: auth.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
-      approval.pinnedExports
+    const result = await executeOmnichannelPublish(
+      taskId,
+      { type: 'user', id: auth.userId },
+      'Publication triggered',
+      false,
+      { policy, designRevisionId: targetRevisionId, approvalId: requestedApprovalId }
     );
-    if (!deliverables.ok) {
-      return problem(c, 422, 'Nothing Approved To Deliver', deliverables.message);
-    }
-    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
-    const sm = new TaskStateMachine(taskId, policy === 'deliver_approved_stored' ? 'APPROVED' : (task ? task.status : 'APPROVED'));
-    if (!retryingSheetRow) {
-      const trans = sm.transition('PUBLISHING', { type: 'user', id: auth.userId }, 'Publication triggered');
-      if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
-
-      if (task && policy !== 'deliver_approved_stored') {
-        task.status = 'PUBLISHING';
-        if (!events.has(taskId)) events.set(taskId, []);
-        events.get(taskId)?.push(trans.value);
-      }
+    if (!result.ok) {
+      const status = (result as any).status || 422;
+      const title = (result as any).title || (status === 409 ? 'Conflict' : status === 404 ? 'Task Not Found' : 'Publication Failed');
+      return problem(c, status, title, (result as any).message || 'The publisher refused the delivery');
     }
 
-    if (taskRepo && db && !retryingSheetRow) {
-      try {
-        await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            await taskRepo.transitionState({
-              taskId,
-              tenantId: auth.tenantId,
-              toState: 'publishing',
-              actorType: 'user',
-              actorId: auth.userId,
-              reason: 'Publication triggered',
-            }, trx);
-          }
-        );
-      } catch (err) {
-        console.error('[core:publish:start_transition] DB transition error:', err);
-      }
-    }
-
-    const ctx: RequestContext = {
-      tenantId: auth.tenantId,
-      taskId,
-      actor: { type: 'workflow', id: 'publisher' },
-      correlationId: crypto.randomUUID(),
-      deadline: new Date(Date.now() + 60000).toISOString(),
-      idempotencyKey: `pub_${taskId}`,
-    };
-
-    const designRevisionId = approval.designRevisionId;
-    const approvalId = approval.approvalId;
-
-    // Persist publication intent before provider calls (Task R06)
-    let dbPub: any = null;
-    if (publicationRepo && db && designRevisionId) {
-      try {
-        await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            const recorded = await publicationRepo.findByKey(publicationKey, auth.tenantId, trx);
-            dbPub = recorded || await publicationRepo.createPublication({
-              tenantId: auth.tenantId,
-              taskId,
-              designRevisionId,
-              approvalId,
-              publicationKey,
-              packageManifest: { files: deliverables.files.map(f => ({ name: f.filename, sha256: f.sha256, size: f.byteSize })) },
-              packageSha256: deliverables.packageHash,
-              initialState: 'pending',
-            }, trx);
-          }
-        );
-      } catch (err: any) {
-        console.error('[core:publish:intent] DB intent error:', err);
-        return problem(c, 500, 'Publication Intent Failed', `Failed to commit publication intent to authoritative database: ${err?.message || String(err)}`);
-      }
-    }
-    if (dbPub && dbPub.state === 'complete') {
-      return c.json({
-        ok: true,
-        publicationId: dbPub.id,
-        publicationKey,
-        state: 'complete',
-        alreadyCompleted: true,
-      }, 200);
-    }
-
-    const pubRes = await publisher.publish(ctx, {
-      taskId,
-      clientId: targetClientId,
-      designRevisionId,
-      approvalId,
-      publicationKey,
-      packageHash: deliverables.packageHash,
-      files: deliverables.files,
-      destination,
-      sheetRow: {
-        taskId,
-        client: targetClientId,
-        status: 'COMPLETE',
-        publishedAt: new Date().toISOString(),
-      },
-    });
-
-    if (!pubRes.ok) {
-      return problem(c, 422, 'Publication Failed', (pubRes.error as any)?.message || 'The publisher refused the delivery');
-    }
-    // Files verified in Drive but the Sheets row not confirmed: the delivery is recorded as it stands,
-    // the task waits in PUBLISH_RECONCILIATION, and publishing again retries only the row.
-    const receipt = pubRes.value;
-    const sheetsConfirmed = receipt.state === 'complete';
-    if (!receipt.detail?.verified || (receipt.state !== 'complete' && receipt.state !== 'drive_complete')) {
-      return problem(c, 422, 'Publication Failed', 'The publisher could not verify the delivered files');
-    }
-
-    // Record in durable PostgreSQL tables (hawa.publications, hawa.drive_refs, hawa.sheet_syncs)
-    if (publicationRepo && db && designRevisionId) {
-      try {
-        await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            // A Sheets retry finds the publication it already recorded; its Drive files are not recorded twice.
-            const recorded = await publicationRepo.findByKey(publicationKey, auth.tenantId, trx);
-            const pub = recorded || await publicationRepo.createPublication({
-              tenantId: auth.tenantId,
-              taskId,
-              designRevisionId,
-              approvalId,
-              publicationKey,
-              packageManifest: { files: pubRes.value.driveFiles },
-              packageSha256: deliverables.packageHash,
-              initialState: 'drive_complete',
-            }, trx);
-
-            for (const file of recorded ? [] : pubRes.value.driveFiles) {
-              await publicationRepo.recordDriveRef({
-                tenantId: auth.tenantId,
-                publicationId: pub.id,
-                sharedDriveId: destination.sharedDriveId,
-                folderId: file.folderId,
-                fileId: file.fileId,
-                fileName: file.name,
-                mimeType: file.mimeType,
-                expectedSha256: file.expectedSha256,
-                observedSize: file.observedSize,
-                status: file.verified ? 'verified' : 'uploaded',
-              }, trx);
-            }
-
-            if (pubRes.value.sheet.spreadsheetId) {
-              await publicationRepo.recordSheetSync({
-                tenantId: auth.tenantId,
-                publicationId: pub.id,
-                spreadsheetId: pubRes.value.sheet.spreadsheetId,
-                sheetId: pubRes.value.sheet.sheetId || 0,
-                taskId,
-                rowKey: taskId,
-                rowNumber: pubRes.value.sheet.rowNumber,
-                expectedHash: pubRes.value.sheet.expectedHash,
-                observedHash: pubRes.value.sheet.observedHash,
-                status: pubRes.value.sheet.synced ? 'synced' : 'pending',
-              }, trx);
-            }
-
-            if (!sheetsConfirmed) return;
-            await publicationRepo.markComplete({
-              tenantId: auth.tenantId,
-              publicationId: pub.id,
-              taskId,
-            }, trx);
-
-            if (taskRepo) {
-              const outboxPayload = {
-                taskId,
-                tenantId: auth.tenantId,
-                publicationKey,
-                publicationId: pub.id,
-                driveFiles: pubRes.value.driveFiles?.map((f: any) => ({
-                  fileId: f.fileId,
-                  name: f.name,
-                  mimeType: f.mimeType,
-                })) || [],
-                sheet: pubRes.value.sheet ? {
-                  spreadsheetId: pubRes.value.sheet.spreadsheetId,
-                  rowNumber: pubRes.value.sheet.rowNumber,
-                  synced: pubRes.value.sheet.synced,
-                } : null,
-                publishedAt: new Date().toISOString(),
-              };
-
-              await taskRepo.transitionState({
-                taskId,
-                tenantId: auth.tenantId,
-                toState: 'complete',
-                actorType: 'workflow',
-                actorId: 'publisher',
-                reason: 'Published to Drive & Sheet',
-                data: { publicationKey },
-                command: {
-                  type: 'notify.published',
-                  idempotencyKey: `notify_pub_${taskId}_${publicationKey}`,
-                  payload: outboxPayload,
-                },
-              }, trx);
-            }
-          }
-        );
-      } catch (err: any) {
-        console.error('[core:publish:db_record] DB recording error:', err);
-        return problem(
-          c,
-          503,
-          'Durable Storage Unavailable',
-          `Failed to record publication receipt in durable storage: ${err.message}`
-        );
-      }
-    } else if (taskRepo && db && sheetsConfirmed) {
-      try {
-        await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            const outboxPayload = {
-              taskId,
-              tenantId: auth.tenantId,
-              publicationKey,
-              driveFiles: pubRes.value.driveFiles?.map((f: any) => ({
-                fileId: f.fileId,
-                name: f.name,
-                mimeType: f.mimeType,
-              })) || [],
-              sheet: pubRes.value.sheet ? {
-                spreadsheetId: pubRes.value.sheet.spreadsheetId,
-                rowNumber: pubRes.value.sheet.rowNumber,
-                synced: pubRes.value.sheet.synced,
-              } : null,
-              publishedAt: new Date().toISOString(),
-            };
-
-            await taskRepo.transitionState({
-              taskId,
-              tenantId: auth.tenantId,
-              toState: 'complete',
-              actorType: 'workflow',
-              actorId: 'publisher',
-              reason: 'Published to Drive & Sheet',
-              data: { publicationKey },
-              command: {
-                type: 'notify.published',
-                idempotencyKey: `notify_pub_${taskId}_${publicationKey}`,
-                payload: outboxPayload,
-              },
-            }, trx);
-          }
-        );
-      } catch (err) {
-        console.error('[core:publish:finish_transition] DB transition error:', err);
-      }
-    }
-
-    if (sheetsConfirmed) {
-      const outboxPayload = {
-        taskId,
-        tenantId: auth.tenantId || 'tenant-default',
-        publicationKey,
-        publicationId: pubRes.value.publicationId,
-        driveFiles: pubRes.value.driveFiles?.map((f: any) => ({
-          fileId: f.fileId,
-          name: f.name,
-          mimeType: f.mimeType,
-        })) || [],
-        sheet: pubRes.value.sheet ? {
-          spreadsheetId: pubRes.value.sheet.spreadsheetId,
-          rowNumber: pubRes.value.sheet.rowNumber,
-          synced: pubRes.value.sheet.synced,
-        } : null,
-        publishedAt: new Date().toISOString(),
-      };
-      const existingCmds = inMemoryOutbox.get(taskId) || [];
-      if (!existingCmds.some((c: any) => c.command_type === 'notify.published')) {
-        existingCmds.push({
-          id: crypto.randomUUID(),
-          tenant_id: auth.tenantId || 'tenant-default',
-          aggregate_type: 'task',
-          aggregate_id: taskId,
-          command_type: 'notify.published',
-          idempotency_key: `notify_pub_${taskId}_${publicationKey}`,
-          payload: outboxPayload,
-          state: 'pending',
-          attempts: 0,
-          created_at: new Date().toISOString(),
-        });
-        inMemoryOutbox.set(taskId, existingCmds);
-      }
-    }
-
+    const receipt = result.publicationReceipt || result.receipt || omnichannelReceipts.get(taskId)?.receipt;
+    const sheetsConfirmed = result.complete !== false && receipt?.state === 'complete';
     const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
-    if (sm.getStatus() !== finalStatus) {
-      const finishTrans = sm.transition(
-        finalStatus,
-        { type: 'workflow', id: 'publisher' },
-        sheetsConfirmed ? 'Published to Drive & Sheet' : `Files delivered; Sheets row not confirmed: ${receipt.detail?.sheetProblem || 'unknown reason'}`
-      );
-      if (finishTrans.ok && task) {
-        task.status = finalStatus;
-        if (!events.has(taskId)) events.set(taskId, []);
-        events.get(taskId)?.push(finishTrans.value);
-      }
-    }
-
-    const verifiedFiles = pubRes.value.driveFiles.filter((f: any) => f.verified);
-    omnichannelReceipts.set(taskId, {
-      files: verifiedFiles.map((f: any) => ({
-        taskId,
-        fileId: f.fileId,
-        folderId: f.folderId,
-        sha256: f.expectedSha256,
-        byteSize: f.observedSize,
-      })),
-      sheetRow:
-        pubRes.value.sheet?.synced && pubRes.value.sheet?.rowNumber !== undefined
-          ? {
-              taskId,
-              rowNumber: pubRes.value.sheet.rowNumber,
-              status: 'COMPLETE',
-              packageHash: pubRes.value.sheet.expectedHash,
-              syncedAt: pubRes.value.completedAt || new Date().toISOString(),
-            }
-          : undefined,
-      receipt: pubRes.value,
-    });
 
     return c.json({
       commandId: crypto.randomUUID(),
       taskId,
       workflowId: `wf_${taskId}`,
-      publicationId: pubRes.value.publicationId,
+      publicationId: receipt?.publicationId || `pub_${taskId}`,
       status: finalStatus,
-      ...(sheetsConfirmed ? {} : { sheetProblem: receipt.detail?.sheetProblem ?? null }),
-      receipt: pubRes.value,
+      ...(sheetsConfirmed ? {} : { sheetProblem: receipt?.detail?.sheetProblem ?? result.sheetProblem ?? null }),
+      receipt,
       acceptedAt: new Date().toISOString(),
-    }, 202);
+    }, sheetsConfirmed && result.alreadyCompleted ? 200 : 202);
   });
 
   // Task R07: Inspect task outbox commands and notification delivery state
@@ -7025,7 +6648,7 @@ export function createApp(options?: CreateAppOptions) {
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
 
-    const allowedControls = ['pause', 'resume', 'cancel', 'retry', 'approve'];
+    const allowedControls = ['pause', 'resume', 'cancel', 'retry'];
     if (!allowedControls.includes(control)) {
       return next();
     }
@@ -7039,12 +6662,6 @@ export function createApp(options?: CreateAppOptions) {
     else if (control === 'resume') targetStatus = 'PLANNING';
     else if (control === 'cancel') targetStatus = 'OPERATOR_REQUIRED';
     else if (control === 'retry') targetStatus = 'PLANNING';
-    else if (control === 'approve') {
-      if (!isAuthorizedReviewerRole(auth.role)) {
-        return problem(c, 403, 'Forbidden', 'Only an authorized reviewer (art_director, creative_director, administrator) can approve tasks');
-      }
-      targetStatus = 'APPROVED';
-    }
 
     const trans = sm.transition(targetStatus, { type: 'user', id: auth.actorId || 'operator' }, reason);
     if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);

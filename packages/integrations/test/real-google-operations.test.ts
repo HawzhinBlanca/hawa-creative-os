@@ -156,34 +156,40 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
   };
 
   it('1. Fail-closed: refuses to publish and returns CREDENTIALS_MISSING when no Google credentials exist', async () => {
-    const unconfiguredPublisher = new GooglePublisher({});
-    const req: PublishRequest = {
-      taskId: 'task_real_qual_1',
-      clientId: 'KAAE',
-      designRevisionId: 'rev_1',
-      approvalId: 'app_1',
-      publicationKey: 'pub_key_unconf',
-      packageHash: 'sha256_hash_1',
-      files: [{
-        artifactId: 'art_1',
-        relativePath: 'deliverable.png',
-        storageKey: testFilePath,
-        filename: 'deliverable.png',
-        mimeType: 'image/png',
-        byteSize: 12,
-        sha256: testFileSha256,
-      }],
-      destination: {
-        productionRootFolderId: 'folder_root_123',
-        spreadsheetId: 'sheet_prod_tracker',
-      },
-    };
+    const savedToken = process.env.GOOGLE_OAUTH_TOKEN;
+    delete process.env.GOOGLE_OAUTH_TOKEN;
+    try {
+      const unconfiguredPublisher = new GooglePublisher({});
+      const req: PublishRequest = {
+        taskId: 'task_real_qual_1',
+        clientId: 'KAAE',
+        designRevisionId: 'rev_1',
+        approvalId: 'app_1',
+        publicationKey: 'pub_key_unconf',
+        packageHash: 'sha256_hash_1',
+        files: [{
+          artifactId: 'art_1',
+          relativePath: 'deliverable.png',
+          storageKey: testFilePath,
+          filename: 'deliverable.png',
+          mimeType: 'image/png',
+          byteSize: 12,
+          sha256: testFileSha256,
+        }],
+        destination: {
+          productionRootFolderId: 'folder_root_123',
+          spreadsheetId: 'sheet_prod_tracker',
+        },
+      };
 
-    const res = await unconfiguredPublisher.publish(dummyCtx, req);
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.error.code).toBe('CREDENTIALS_MISSING');
-      expect(res.error.message).toContain('Google Workspace credentials not configured');
+      const res = await unconfiguredPublisher.publish(dummyCtx, req);
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe('CREDENTIALS_MISSING');
+        expect(res.error.message).toContain('Google Workspace credentials not configured');
+      }
+    } finally {
+      if (savedToken) process.env.GOOGLE_OAUTH_TOKEN = savedToken;
     }
   });
 

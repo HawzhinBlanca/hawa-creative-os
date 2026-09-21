@@ -20,7 +20,9 @@ process.on('uncaughtException', (err: Error) => {
   console.error(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err.stack);
   process.exit(1);
 });
+import { runCanvaDraft } from './canva-draft-workflow.js';
 export * from './workflow.js';
+export * from './canva-draft-workflow.js';
 export * from './outbox-consumer.js';
 export * from './durable-context.js';
 export * from './workflow-dispatcher.js';
@@ -58,6 +60,9 @@ const taskService = restate.service({
   name: 'TaskService',
   handlers: {
     runTask: async (ctx: restate.Context, input: WorkflowInput) => {
+      if (input.canvaAutoGenerate) {
+        return await runCanvaDraft(input, durableContext(ctx));
+      }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       return await runner.run(input, durableContext(ctx));
     },
@@ -68,6 +73,9 @@ const taskWorkflow = restate.workflow({
   name: 'TaskWorkflow',
   handlers: {
     run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => {
+      if (input.canvaAutoGenerate) {
+        return await runCanvaDraft(input, durableContext(ctx));
+      }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       return await runner.run(input, durableContext(ctx));
     },
