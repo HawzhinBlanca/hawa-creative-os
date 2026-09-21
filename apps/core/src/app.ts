@@ -1683,7 +1683,7 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
-  const PUBLIC_MUTATION_PATHS = new Set(['/auth/session']);
+  const PUBLIC_MUTATION_PATHS = new Set(['/auth/session', '/auth/telegram-miniapp']);
   const isPublicMutation = (path: string) => PUBLIC_MUTATION_PATHS.has(path) || path.startsWith('/webhooks/');
 
   const PUBLIC_READ_PATHS = new Set([
@@ -1694,6 +1694,7 @@ export function createApp(options?: CreateAppOptions) {
     '/system/cutover/status',
     '/system/funnel/health',
     '/adapters/telegram/status',
+    '/waha/health',
   ]);
   const isPublicRead = (path: string) =>
     PUBLIC_READ_PATHS.has(path) ||
@@ -3153,7 +3154,7 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   // Webhooks
-  app.post('/api/webhooks/telegram', async (c) => {
+  registerRoute('post', '/webhooks/telegram', async (c: any) => {
     const secret = c.req.header('x-telegram-bot-api-secret-token');
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secret || !expectedSecret || secret !== expectedSecret) {
@@ -3728,6 +3729,31 @@ export function createApp(options?: CreateAppOptions) {
 
       // Handle questions and general chatter without polluting task pipeline
       if (classification.kind === 'question' || classification.kind === 'other') {
+        if (db) {
+          try {
+            const inquiryHash = crypto.createHash('sha256').update(JSON.stringify(json ?? { text: rawText })).digest('hex');
+            const sourceId = `${sourceChannelId}:${sourceEventId}`;
+            await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+              const existing = await trx.selectFrom('inbox_events').select(['id'])
+                .where('tenant_id', '=', DEFAULT_TENANT_ID)
+                .where('source_account_id', '=', 'telegram')
+                .where('source_event_id', '=', sourceId).executeTakeFirst();
+              if (!existing) {
+                await trx.insertInto('inbox_events').values({
+                  tenant_id: DEFAULT_TENANT_ID,
+                  source_account_id: 'telegram',
+                  source_event_id: sourceId,
+                  event_kind: `telegram_inquiry_${classification.kind}`,
+                  payload: json ?? { text: rawText },
+                  payload_hash: inquiryHash,
+                  verified: true,
+                } as any).execute();
+              }
+            });
+          } catch (inqErr) {
+            console.warn('[TelegramIngress] Failed to persist inquiry event to inbox_events:', inqErr);
+          }
+        }
         if (!sourceChannelId || sourceChannelId === 'tg_default') {
           // Returning PROCESSED here without sending anything is how a person ends up messaging
           // the system and getting silence — the reported symptom that started this work. The
@@ -4111,7 +4137,7 @@ export function createApp(options?: CreateAppOptions) {
 
           const persisted = await persistChatIntake(db, {
             platform: 'telegram',
-            sourceEventId: `${sourceEventId}_rev_${Date.now()}`,
+            sourceEventId: `${sourceEventId}_rev_${targetId}`,
             sourceChannelId,
             rawText: priorPayload.rawRequestText || priorRow?.description || feedbackTargetTask.rawText || rawText,
             rawJson: json,
@@ -4287,7 +4313,7 @@ export function createApp(options?: CreateAppOptions) {
 
   const wahaIngress = new WahaIngressHandler(process.env.WAHA_WEBHOOK_SECRET);
 
-  app.post('/api/webhooks/whatsapp', async (c) => {
+  registerRoute('post', '/webhooks/whatsapp', async (c: any) => {
     // 1. Office Kill Switch Check (CV-08, FR-071, FR-072)
     if (process.env.WAHA_KILL_SWITCH === 'true') {
       return problem(c, 503, 'Service Unavailable', 'WAHA adapter is currently disabled by office kill switch. Fallback to Hawa Desk intake at /desk.');
@@ -4351,7 +4377,7 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // WAHA Session Health Probe (CV-08, FR-072)
-  app.get('/api/waha/health', async (c) => {
+  registerRoute('get', '/waha/health', async (c: any) => {
     const isKillSwitchActive = process.env.WAHA_KILL_SWITCH === 'true';
     const allowedGroupsEnv = process.env.WAHA_ALLOWED_GROUPS;
     const allowedGroups = allowedGroupsEnv ? allowedGroupsEnv.split(',').map((s) => s.trim()).filter(Boolean) : [];
@@ -4453,7 +4479,7 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // WAHA Kill Switch Management Endpoint (CV-08, FR-072)
-  app.post('/api/waha/kill-switch', async (c) => {
+  registerRoute('post', '/waha/kill-switch', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for kill switch');
@@ -4479,7 +4505,7 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // Unified Ingress Endpoint (CV-06, FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-010, FR-012)
-  app.post('/api/ingress/unified', async (c) => {
+  registerRoute('post', '/ingress/unified', async (c: any) => {
     // Only an authenticated adapter or operator may declare a verified inbound message.
     const ingressAuth = verifyRequestAuth(c);
     if (!ingressAuth.authenticated) return problem(c, 401, 'Unauthorized', 'Authentication required for unified ingress');
@@ -4532,8 +4558,8 @@ export function createApp(options?: CreateAppOptions) {
     return c.json(result, statusCode);
   });
 
-  // Explicit Promotion Endpoint (FR-010)
-  app.post('/api/ingress/promote', async (c) => {
+  // Explicit Promotion Endpoint (FR-010, SEC-04)
+  registerRoute('post', '/ingress/promote', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for promotion');
@@ -4551,12 +4577,8 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 400, 'Missing Field', 'messageEventId is required');
     }
 
-    const tenantId = body.tenantId || auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    const userId =
-      body.userId ||
-      (tenantId === '00000000-0000-4000-a000-000000000007'
-        ? '00000000-0000-4000-b000-000000000007'
-        : (auth.userId || '00000000-0000-4000-b000-000000000001'));
+    const tenantId = (body.tenantId && isValidUuid(body.tenantId)) ? body.tenantId : (auth.tenantId || defaultTenantId);
+    const userId = (body.userId && isValidUuid(body.userId)) ? body.userId : (auth.userId || operatorUserId);
 
     if (db && taskRepo) {
       try {
@@ -4603,7 +4625,7 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // Telegram Mini App Identity Verification (FR-071)
-  app.post('/api/auth/telegram-miniapp', async (c) => {
+  registerRoute('post', '/auth/telegram-miniapp', async (c: any) => {
     const body = await c.req.json().catch(() => ({}));
     const initData = body.initData;
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -9422,6 +9444,7 @@ export function createApp(options?: CreateAppOptions) {
     });
 
     task.outboundDispatch = dispatch;
+    task.status = 'AWAITING_APPROVAL';
     broadcast('campaign:dispatched_for_review', { taskId, dispatchId: dispatch.dispatchId, recipientPhone });
 
     return c.json({
@@ -9491,23 +9514,20 @@ export function createApp(options?: CreateAppOptions) {
         return c.json({ ok: true, status: 'COMPLETE', taskId, message: 'Campaign approved and published successfully', publishRes });
       }
 
-      const sm = new TaskStateMachine(taskId, task.status);
-      let trans = sm.transition('APPROVED', { type: 'adapter', id: phone || 'whatsapp_client' }, 'Approved via WhatsApp interactive action');
-      if (!trans.ok) {
-        task.status = 'AWAITING_APPROVAL';
-        const sm2 = new TaskStateMachine(taskId, 'AWAITING_APPROVAL');
-        trans = sm2.transition('APPROVED', { type: 'adapter', id: phone || 'whatsapp_client' }, 'Approved via WhatsApp interactive action');
-      }
-      if (trans.ok) {
+      if (task.status !== 'APPROVED') {
+        const effectiveStatus = (task.status === 'RECEIVED' && task.outboundDispatch) ? 'AWAITING_APPROVAL' : task.status;
+        const sm = new TaskStateMachine(taskId, effectiveStatus);
+        const trans = sm.transition('APPROVED', { type: 'adapter', id: phone || 'whatsapp_client' }, 'Approved via WhatsApp interactive action');
+        if (!trans.ok) {
+          return problem(c, 409, 'Conflict', trans.error?.message || 'Illegal state transition to APPROVED');
+        }
         task.status = 'APPROVED';
         events.get(taskId)?.push(trans.value);
-      } else {
-        task.status = 'APPROVED';
       }
 
       if (taskRepo && db) {
         try {
-          const tenantId = task.tenantId && task.tenantId.includes('-') ? task.tenantId : '00000000-0000-4000-a000-000000000001';
+          const tenantId = task.tenantId && task.tenantId.includes('-') ? task.tenantId : defaultTenantId;
           await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
             await taskRepo.transitionState({
               taskId,
@@ -9541,18 +9561,36 @@ export function createApp(options?: CreateAppOptions) {
       }
       return c.json({ ok: true, status: 'APPROVED', taskId, message: 'Campaign approved successfully' });
     } else {
-      task.status = 'IN_PROGRESS';
-      events.get(taskId)?.push({
-        eventId: crypto.randomUUID(),
-        taskId,
-        fromStatus: task.status,
-        toStatus: 'IN_PROGRESS',
-        actor: { type: 'adapter', id: phone || 'whatsapp_client' },
-        reason: notes || 'Revision requested via WhatsApp',
-        occurredAt: new Date().toISOString(),
-      });
+      if (task.status !== 'REVISION_REQUESTED') {
+        const sm = new TaskStateMachine(taskId, task.status);
+        const trans = sm.transition('REVISION_REQUESTED', { type: 'adapter', id: phone || 'whatsapp_client' }, notes || 'Revision requested via WhatsApp');
+        if (!trans.ok) {
+          return problem(c, 409, 'Conflict', trans.error?.message || 'Illegal state transition to REVISION_REQUESTED');
+        }
+        task.status = 'REVISION_REQUESTED';
+        events.get(taskId)?.push(trans.value);
+      }
+
+      if (taskRepo && db) {
+        try {
+          const tenantId = task.tenantId && task.tenantId.includes('-') ? task.tenantId : defaultTenantId;
+          await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+            await taskRepo.transitionState({
+              taskId,
+              tenantId,
+              toState: 'revision_requested',
+              actorType: 'adapter',
+              actorId: phone || 'whatsapp_client',
+              reason: notes || 'Revision requested via WhatsApp',
+            }, trx);
+          });
+        } catch (err) {
+          console.error('[core:whatsapp:revision] DB transition error:', err);
+        }
+      }
+
       broadcast('task:revision_requested', { taskId, notes, requestedBy: phone });
-      broadcast('task:transitioned', { taskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'IN_PROGRESS' });
+      broadcast('task:transitioned', { taskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'REVISION_REQUESTED' });
 
       if (isGet) {
         return c.html(`
@@ -9568,12 +9606,10 @@ export function createApp(options?: CreateAppOptions) {
           </html>
         `);
       }
-      return c.json({ ok: true, status: 'IN_PROGRESS', taskId, message: 'Revision request recorded' });
+      return c.json({ ok: true, status: 'REVISION_REQUESTED', taskId, message: 'Revision request recorded' });
     }
   };
 
-  app.get('/api/webhooks/whatsapp/actions', handleActionCallback);
-  app.post('/api/webhooks/whatsapp/actions', handleActionCallback);
   registerRoute('post', '/webhooks/whatsapp/actions', handleActionCallback);
   registerRoute('get', '/webhooks/whatsapp/actions', handleActionCallback);
 

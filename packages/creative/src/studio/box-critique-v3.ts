@@ -298,8 +298,21 @@ Identify any spatial, alignment, margin, or hierarchy defects and return actiona
     maxTokens: 1500,
   });
 
-  const rawData = response.data || { overallAssessment: '', comments: [] };
-  const { accepted, rejected } = filterCritiqueComments(rawData.comments || [], validBoxIds);
+  const rawData = response.data;
+  if (
+    !rawData ||
+    typeof rawData !== 'object' ||
+    typeof rawData.overallAssessment !== 'string' ||
+    !rawData.overallAssessment.trim() ||
+    !Array.isArray(rawData.comments)
+  ) {
+    throw new Error(
+      `P05 refused box critique from ${model}: model response is empty, truncated, or unparseable. ` +
+        `A critique must provide a valid overallAssessment and comments array. ` +
+        `Raw content: ${response.rawText?.slice(0, 100) || '<empty>'}`
+    );
+  }
+  const { accepted, rejected } = filterCritiqueComments(rawData.comments, validBoxIds);
 
   return {
     status: rejected.length > 0 ? 'filtered' : 'success',

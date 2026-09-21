@@ -284,7 +284,8 @@ export function computeBalance(layout: StudioLayoutV2): MetricResult {
   for (const s of layout.shapes || []) {
     if (s.role === 'frame' || (s.width >= w * 0.95 && s.height >= h * 0.95)) continue;
     const area = s.width * s.height;
-    const weight = area * (s.opacity || 0.8) * (s.role === 'panel' ? 0.3 : 0.8);
+    const opacity = s.opacity !== undefined && s.opacity !== null ? s.opacity : 0.8;
+    const weight = area * opacity * (s.role === 'panel' ? 0.3 : 0.8);
     weightedX += (s.x + s.width / 2) * weight;
     weightedY += (s.y + s.height / 2) * weight;
     totalWeight += weight;
@@ -361,10 +362,48 @@ export function computeRegularity(layout: StudioLayoutV2): MetricResult {
     return { score: 1.0, passed: true, metric: 'regularity' };
   }
 
+  // Check for mutual text collisions (2D overlapping text blocks)
+  for (let i = 0; i < elements.length; i++) {
+    for (let j = i + 1; j < elements.length; j++) {
+      const a = elements[i];
+      const b = elements[j];
+      const xOverlap = Math.max(a.x, b.x) < Math.min(a.x + a.width, b.x + b.width);
+      const yOverlap = Math.max(a.y, b.y) < Math.min(a.y + a.height, b.y + b.height);
+      if (xOverlap && yOverlap) {
+        return {
+          score: 0.2,
+          passed: false,
+          metric: 'regularity',
+          details: {
+            reason: 'MUTUAL_TEXT_OVERLAP: Text elements collide in 2D space',
+            pair: [i, j],
+          },
+        };
+      }
+    }
+  }
+
   const gaps: number[] = [];
   for (let i = 0; i < elements.length - 1; i++) {
-    const gap = elements[i + 1].y - (elements[i].y + elements[i].height);
-    if (gap >= 0) {
+    const a = elements[i];
+    const b = elements[i + 1];
+    const xOverlap = Math.max(a.x, b.x) < Math.min(a.x + a.width, b.x + b.width);
+    const gap = b.y - (a.y + a.height);
+    if (xOverlap) {
+      if (gap < 0) {
+        return {
+          score: 0.2,
+          passed: false,
+          metric: 'regularity',
+          details: {
+            reason: 'VERTICAL_OVERLAP: Vertically stacked text elements overlap',
+            pair: [i, i + 1],
+            gap,
+          },
+        };
+      }
+      gaps.push(gap);
+    } else if (gap >= 0) {
       gaps.push(gap);
     }
   }

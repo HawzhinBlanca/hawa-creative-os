@@ -16,10 +16,15 @@ export function createDb(connectionString?: string): Kysely<Database> {
     connectionString: resolved,
     max: 20,
     idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  pool.on('error', (err) => {
+    console.error('[db:pool] Unexpected error on idle client:', err);
   });
 
   pool.on('connect', (client) => {
-    client.query('SET search_path TO hawa, public');
+    client.query("SET search_path TO hawa, public; SET statement_timeout TO '15s'; SET idle_in_transaction_session_timeout TO '30s';");
   });
 
   return new Kysely<Database>({

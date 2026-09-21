@@ -2,9 +2,9 @@
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
   "status": "QUALIFIED",
-  "evaluatedAt": "2026-09-21T11:47:48Z",
+  "evaluatedAt": "2026-09-21T11:52:16Z",
   "git": {
-    "commit": "aa0828e57d06500735c2b0f0da651692d6725074",
+    "commit": "f9c576b61fc93efa6458ba48dee3e516ae14ea9e",
     "branch": "studio-v2",
     "cleanTree": false
   },

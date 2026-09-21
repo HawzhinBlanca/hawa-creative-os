@@ -468,10 +468,11 @@ export function registerSystemRoutes(ctx: RouteContext) {
     if (!authHeader || !auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to view system providers');
     }
+    const isAdmin = auth.role === 'admin' || auth.role === 'administrator';
     const keyStatus = (name: string, envVar: string) => {
       const key = process.env[envVar];
       return key
-        ? { name, envVar, configured: true, mode: 'API key set', preview: maskKey(key), status: 'KEY_SET' }
+        ? { name, envVar, configured: true, mode: 'API key set', preview: isAdmin ? maskKey(key) : 'configured (hidden)', status: 'KEY_SET' }
         : { name, envVar, configured: false, mode: 'Not configured', preview: 'Not configured', status: 'NOT_CONFIGURED' };
     };
 

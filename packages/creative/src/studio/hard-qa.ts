@@ -3,7 +3,7 @@ import { validateLayoutV2, type LayoutValidationContext } from './validate-layou
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
-import { measureWrappedLines } from './render-layout-v2.js';
+import { measureWrappedLines, measureMaxLineWidths } from './render-layout-v2.js';
 import { requiredContrast } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 
@@ -171,6 +171,7 @@ export function evaluateHardQa(
   // but not when no arrangement has room: T5 brief_17 kept a 210px title in a 130px box.
   if (ctx.copyText) {
     const lines = measureWrappedLines(layout, ctx.copyText);
+    const lineWidths = measureMaxLineWidths(layout, ctx.copyText);
     for (const t of layout.text) {
       const count = lines[t.copyIndex] ?? 1;
       const needed = Math.ceil(count * t.fontSize * t.lineHeight);
@@ -178,6 +179,13 @@ export function evaluateHardQa(
         if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
         messages.push(
           `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) wraps to ${count} line(s) needing ${needed}px; its box is ${t.height}px tall`
+        );
+      }
+      const actualWidth = lineWidths[t.copyIndex] ?? 0;
+      if (actualWidth > t.width + 4) {
+        if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
+        messages.push(
+          `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) text exceeds box width (${actualWidth}px > ${t.width}px); word or line runs past box boundary`
         );
       }
     }

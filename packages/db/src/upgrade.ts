@@ -1,17 +1,30 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { resolveWorkspaceFile } from './migrate.js';
 
-// An explicit ordered list excludes rollback scripts and does not replay schema.sql.
-const upgrades = ['001_canva_bindings.sql', '002_canva_binding_isolation.sql', '003_canva_connect.sql', '004_canva_task_scope_lock.sql', '005_canva_runtime_permissions.sql', '006_canva_editable_sources.sql', '007_canva_design_plans.sql', '008_canva_roundtrip_checks.sql', '009_correct_kaae_identity.sql', '010_canva_plan_abandon.sql', '011_desk_sessions.sql', '012_service_identities.sql', '013_design_studio.sql'] as const;
+export function discoverMigrations(migrationsDir?: string): string[] {
+  const dir = migrationsDir || resolveWorkspaceFile('packages/db/migrations');
+  const files = readdirSync(dir)
+    .filter((f) => /^\d{3}_(?!.*_down\.sql$).*\.sql$/.test(f))
+    .sort();
+
+  for (let i = 0; i < files.length; i++) {
+    const num = parseInt(files[i].slice(0, 3), 10);
+    if (num !== i + 1) {
+      throw new Error(`Migration sequence gap or mismatch at ${files[i]}: expected ${(i + 1).toString().padStart(3, '0')}`);
+    }
+  }
+  return files;
+}
 
 export async function upgradeCanvaSchema(connectionString: string): Promise<{ applied: string[]; verified: string[] }> {
   if (!connectionString) throw new Error('DATABASE_URL is required; no implicit target or successful dry run');
   const client = new pg.Client({ connectionString, connectionTimeoutMillis: 10000 });
   const result: { applied: string[]; verified: string[] } = { applied: [], verified: [] };
+  const upgrades = discoverMigrations();
   try {
     await client.connect();
     await client.query('BEGIN');

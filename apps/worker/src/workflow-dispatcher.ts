@@ -67,6 +67,7 @@ export class TaskWorkflowDispatcher {
             // Restate workflows are idempotent by their workflow key; this
             // endpoint rejects an additional idempotency-key header.
           },
+          signal: AbortSignal.timeout(10000),
           body: JSON.stringify({
             taskId: cmd.aggregate_id,
             tenantId: cmd.tenant_id,

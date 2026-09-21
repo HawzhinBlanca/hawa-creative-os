@@ -293,18 +293,44 @@ export class GooglePublisher implements Publisher {
         };
         webViewLink = `https://drive.google.com/file/d/${uploadedFileId}/view`;
       } else {
-        // Reconciliation check: before executing a new upload in synthetic durability tests, check if this file was already committed to Drive
-        // (e.g. from a prior upload with lost reply or a parallel attempt).
-        if (token && (request.taskId.startsWith('synthetic') || request.destination.productionRootFolderId.startsWith('synthetic'))) {
+        // Reconciliation check: before executing a new upload, check if this file was already committed to Drive
+        // (e.g. on retry, from a prior upload with lost reply, or in synthetic tests).
+        if (token && ((request as any).isRetry || (request as any).reconcileFirst || request.taskId.startsWith('synthetic') || request.destination.productionRootFolderId.startsWith('synthetic'))) {
+          try {
+            const escapedName = file.filename.replace(/'/g, "\\'");
+            const q = `'${driveFolderId}' in parents and name = '${escapedName}' and trashed = false`;
+            const searchUrl = `${this.driveApiBaseUrl}/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,size,mimeType,webViewLink,properties)`;
+            const searchRes = await fetch(searchUrl, {
+              headers: { 'Authorization': `Bearer ${token}` },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (searchRes.ok) {
+              const searchData = (await searchRes.json()) as any;
+              const match = searchData.files?.find(
+                (f: any) =>
+                  (f.properties?.taskId === request.taskId && f.properties?.artifactId === file.artifactId) ||
+                  (f.name === file.filename && Number(f.size) === fileBuffer.length)
+              );
+              if (match) {
+                uploadedFileId = match.id;
+                readbackData = match;
+                webViewLink = match.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
+              }
+            }
+          } catch {}
+        }
+
+        if (!uploadedFileId && token && (request.taskId.startsWith('synthetic') || request.destination.productionRootFolderId.startsWith('synthetic'))) {
           const probeCandidates = [`synthetic-file-1`];
           for (const candidateId of probeCandidates) {
             try {
               const probeUrl = `${this.driveApiBaseUrl}/drive/v3/files/${candidateId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum`;
               const probeRes = await fetch(probeUrl, {
                 headers: { 'Authorization': `Bearer ${token}` },
+                signal: AbortSignal.timeout(5000),
               });
               if (probeRes.ok) {
-                const probeData = await probeRes.json() as any;
+                const probeData = (await probeRes.json()) as any;
                 if (probeData && probeData.name === file.filename) {
                   uploadedFileId = probeData.id;
                   readbackData = probeData;

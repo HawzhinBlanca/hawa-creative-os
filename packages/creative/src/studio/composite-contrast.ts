@@ -109,7 +109,7 @@ export function computeBoxP05Contrast(
     }
   }
 
-  if (ratios.length === 0) return 21.0; // fallback maximum if outside bounds
+  if (ratios.length === 0) return 1.0; // minimum contrast (failure) if outside canvas bounds
 
   ratios.sort((a, b) => a - b);
   const p05Index = Math.min(ratios.length - 1, Math.floor(0.05 * ratios.length));

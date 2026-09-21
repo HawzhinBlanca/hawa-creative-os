@@ -533,6 +533,37 @@ export function measureWrappedLines(
 }
 
 /**
+ * Measures the maximum rendered line advance width in px for each text block.
+ * Catches horizontal overflow where words or lines exceed t.width.
+ */
+export function measureMaxLineWidths(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string>,
+  options: RenderLayoutOptions = {}
+): Record<number, number> {
+  const fontsDir = resolveFontsDir(options);
+  const out: Record<number, number> = {};
+  for (const t of layout.text) {
+    const copy = copyText[t.copyIndex];
+    if (!copy || !t.width) continue;
+    try {
+      const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+      const letterSpacing = effectiveLetterSpacingEm(t);
+      const lines = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
+      let maxW = 0;
+      for (const line of lines) {
+        const w = measureTextWidth(line, font, t.fontSize, letterSpacing);
+        if (w > maxW) maxW = w;
+      }
+      out[t.copyIndex] = Math.ceil(maxW);
+    } catch {
+      // unmeasurable family here; ignored
+    }
+  }
+  return out;
+}
+
+/**
  * There is deliberately no "scale the type up to fill the canvas" pass here.
  *
  * It was written and measured. It does raise coverage (one layout went from 0.18 to 0.34 occupied

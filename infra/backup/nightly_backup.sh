@@ -75,15 +75,6 @@ if [[ "$ARCHIVE_DEST" == gs://* ]]; then
 else
   mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST"
   cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/"
-  # The archive used to grow without limit: 13 GB on a disk the watchdog alarms at 90% full.
-  # `ls` on a pattern that matches nothing exits 1, and this script runs under pipefail: the first
-  # run against a fresh destination (no .dump copies beside the .enc ones) aborted the whole backup
-  # after the copy, so it never logged and the caller saw an empty failure.
-  for ext in dump enc sql; do
-    { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
-      rm -f "$old" "$old.sha256"
-    done
-  done
 fi
 [[ -n "$ARCHIVE_KEYFILE" ]] && rm -f "$OUT.enc" "$OUT.enc.sha256"
 
@@ -92,6 +83,15 @@ ls -1t "$DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
   [[ -d "$ARCHIVE_DEST" ]] && cp "$old" "$ARCHIVE_DEST/" 2>/dev/null || true
   rm -f "$old"
 done
+
+# Prune archive destination after all new and moved files have arrived
+if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
+  for ext in dump enc sql; do
+    { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
+      rm -f "$old" "$old.sha256"
+    done
+  done
+fi
 
 echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16)" >> "$LOG"
 echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, archived to ${ARCHIVE_DEST}"
