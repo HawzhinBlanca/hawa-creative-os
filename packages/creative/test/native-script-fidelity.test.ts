@@ -126,6 +126,8 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
       for (const line of expectedLines) {
         expect(combinedExtractedText).toContain(line);
       }
+      const expectedCombined = expectedLines.join(' ').replace(/\s+/g, ' ').trim();
+      expect(combinedExtractedText.trim()).toBe(expectedCombined);
 
       // 2. Typeface preserved
       expect(slideXml).toContain(`typeface="${font}"`);
@@ -216,6 +218,8 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
       for (const line of expectedLines) {
         expect(combinedExtractedText).toContain(line);
       }
+      const expectedCombined = expectedLines.join(' ').replace(/\s+/g, ' ').trim();
+      expect(combinedExtractedText.trim()).toBe(expectedCombined);
 
       realResults.push({
         id: brief.id,

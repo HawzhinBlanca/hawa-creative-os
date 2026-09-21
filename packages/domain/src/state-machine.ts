@@ -44,7 +44,7 @@ export class TaskStateMachine {
   }
 
   canTransitionTo(next: TaskStatus): boolean {
-    const allowed = LEGAL_TRANSITIONS[this.currentStatus];
+    const allowed = LEGAL_TRANSITIONS[this.currentStatus] || [];
     return allowed.includes(next);
   }
 

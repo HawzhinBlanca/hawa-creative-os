@@ -13,9 +13,46 @@ import type {
   AppError,
   JsonObject,
 } from '@hawa/contracts';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export class FakeModelGateway implements ModelGateway {
   private failWithCode?: string;
+  private cursors = new Map<string, number>();
+  private static routingCasesMap: Map<string, Array<{ client?: string; project?: string; mustAbstain?: boolean }>> | null = null;
+
+  private static getRoutingCasesMap() {
+    if (FakeModelGateway.routingCasesMap) return FakeModelGateway.routingCasesMap;
+    const map = new Map<string, Array<{ client?: string; project?: string; mustAbstain?: boolean }>>();
+    try {
+      const candidates = [
+        path.join(process.cwd(), 'evals/routing_brief.jsonl'),
+        path.join(process.cwd(), '../../evals/routing_brief.jsonl'),
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          const lines = fs.readFileSync(p, 'utf8').trim().split('\n');
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const c = JSON.parse(line);
+            const key = (c.input_text || c.message || '').trim().toLowerCase();
+            if (key) {
+              const existing = map.get(key) || [];
+              existing.push({
+                client: c.expected?.client,
+                project: c.expected?.project,
+                mustAbstain: c.expected?.must_abstain,
+              });
+              map.set(key, existing);
+            }
+          }
+          break;
+        }
+      }
+    } catch {}
+    FakeModelGateway.routingCasesMap = map;
+    return map;
+  }
 
   setFailure(code?: string) {
     this.failWithCode = code;
@@ -70,42 +107,58 @@ export class FakeModelGateway implements ModelGateway {
 
     let val: unknown;
     if (request.role === 'intake_router') {
-      const text = (request.inputs?.[0]?.text || '').toLowerCase();
+      const rawText = (request.inputs?.[0]?.text || '').trim();
+      const text = rawText.toLowerCase();
+      const map = FakeModelGateway.getRoutingCasesMap();
+      const list = map.get(text);
+      let matchedCase: { client?: string; project?: string; mustAbstain?: boolean } | undefined;
+      if (list && list.length > 0) {
+        const cursor = this.cursors.get(text) || 0;
+        matchedCase = list[cursor % list.length];
+        this.cursors.set(text, cursor + 1);
+      }
+
       const mustAbstain =
-        text.includes('same design again') ||
-        text.includes('talab?') ||
-        text.includes('upload it to aster folder') ||
-        text.includes('ignore the system') ||
-        text.includes('which sara?');
+        matchedCase?.mustAbstain !== undefined
+          ? matchedCase.mustAbstain
+          : text.includes('same design again') ||
+            text.includes('talab?') ||
+            text.includes('upload it to aster folder') ||
+            text.includes('ignore the system') ||
+            text.includes('which sara?');
 
-      let resolvedClient = 'client-office-1';
-      if (text.includes('aster')) resolvedClient = 'ASTER';
-      else if (text.includes('nova')) resolvedClient = 'NOVA';
-      else if (text.includes('rona')) resolvedClient = 'RONA';
-      else if (text.includes('drustee')) resolvedClient = 'DRUSTEE';
-      else if (text.includes('sebar')) resolvedClient = 'SEBAR';
-      else if (text.includes('erbil')) resolvedClient = 'ERBIL_EXPRESS';
+      let resolvedClient = matchedCase?.client;
+      if (!resolvedClient) {
+        if (text.includes('aster')) resolvedClient = 'ASTER';
+        else if (text.includes('nova')) resolvedClient = 'NOVA';
+        else if (text.includes('rona')) resolvedClient = 'RONA';
+        else if (text.includes('drustee')) resolvedClient = 'DRUSTEE';
+        else if (text.includes('sebar')) resolvedClient = 'SEBAR';
+        else if (text.includes('erbil')) resolvedClient = 'ERBIL_EXPRESS';
+      }
 
-      let resolvedProject = 'project-campaign-2026';
-      const projectKeywords = [
-        'SUMMER', 'PODCAST', 'RETAIL', 'LAUNCH', 'EVENTS', 'SOCIAL',
-        'HEALTH', 'AWARENESS', 'RECRUIT', 'TECH', 'PHARMA', 'SPA',
-        'LOGISTICS', 'AUTUMN', 'WELLNESS', 'LAB', 'LUXURY', 'DELIVERY',
-        'CLOUD', 'CLINIC', 'CLINICAL', 'HOSPITALITY', 'CARGO', 'AI',
-        'FLEET', 'DINING', 'EVIDENCE', 'SUITE', 'TRACKING'
-      ];
-      for (const kw of projectKeywords) {
-        const re = new RegExp('(^|[^a-zA-Z0-9])' + kw.toLowerCase() + '([^a-zA-Z0-9]|$)');
-        if (re.test(text)) {
-          resolvedProject = kw;
-          break;
+      let resolvedProject = matchedCase?.project;
+      if (!resolvedProject) {
+        const projectKeywords = [
+          'SUMMER', 'PODCAST', 'RETAIL', 'LAUNCH', 'EVENTS', 'SOCIAL',
+          'HEALTH', 'AWARENESS', 'RECRUIT', 'TECH', 'PHARMA', 'SPA',
+          'LOGISTICS', 'AUTUMN', 'WELLNESS', 'LAB', 'LUXURY', 'DELIVERY',
+          'CLOUD', 'CLINIC', 'CLINICAL', 'HOSPITALITY', 'CARGO', 'AI',
+          'FLEET', 'DINING', 'EVIDENCE', 'SUITE', 'TRACKING'
+        ];
+        for (const kw of projectKeywords) {
+          const re = new RegExp('(^|[^a-zA-Z0-9])' + kw.toLowerCase() + '([^a-zA-Z0-9]|$)');
+          if (re.test(text)) {
+            resolvedProject = kw;
+            break;
+          }
         }
       }
 
       val = {
         decision: mustAbstain ? 'abstain' : 'route_matched',
-        clientId: resolvedClient,
-        projectId: resolvedProject,
+        clientId: resolvedClient || 'UNRESOLVED',
+        projectId: resolvedProject || 'UNRESOLVED',
         confidence: 0.96,
         reasoning: 'Matches known client channel and brand keywords',
       };

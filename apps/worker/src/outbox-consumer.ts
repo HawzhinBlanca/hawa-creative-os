@@ -2,6 +2,7 @@ import {
   OutboxRepository,
   TaskRepository,
   withRlsContext,
+  sql,
   type Database,
   type Kysely,
 } from '@hawa/db';
@@ -151,6 +152,62 @@ export class OutboxConsumer {
       this.handlers.set('notify.whatsapp', async (cmd, db) => {
         // Effect transport: Outbound WhatsApp interactive message
         throw new Error('WhatsApp notification transport is not registered; no message was sent');
+      });
+    }
+
+    if (!this.handlers.has('notify.published')) {
+      this.handlers.set('notify.published', async (cmd, dbTrx) => {
+        // Effect transport: Outbound Telegram / omnichannel delivery notification
+        const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+        const taskId = payload?.taskId || cmd.aggregate_id;
+
+        let sourceChannelId = payload?.chatId || payload?.sourceChannelId;
+        let taskTitle = payload?.title;
+
+        if (!sourceChannelId && dbTrx) {
+          try {
+            const row: any = await sql`
+              SELECT t.title, e.data
+              FROM hawa.tasks t
+              LEFT JOIN hawa.task_events e ON e.task_id = t.id AND e.event_type = 'task.created'
+              WHERE t.id = ${taskId}::uuid
+              LIMIT 1
+            `.execute(dbTrx);
+            if (row.rows[0]) {
+              taskTitle = taskTitle || row.rows[0].title;
+              const eventData = row.rows[0].data?.payload || row.rows[0].data?.body || row.rows[0].data || {};
+              if (eventData.sourcePlatform === 'telegram' && eventData.sourceChannelId) {
+                sourceChannelId = String(eventData.sourceChannelId);
+              }
+            }
+          } catch (e) {
+            console.warn('[outbox:notify.published] Could not lookup task intake:', e);
+          }
+        }
+
+        const driveFolderUrl = payload?.driveFolderId ? `https://drive.google.com/drive/folders/${payload.driveFolderId}` : null;
+        const sheetRowUrl = payload?.spreadsheetId && payload?.sheetRowNumber
+          ? `https://docs.google.com/spreadsheets/d/${payload.spreadsheetId}#gid=0&range=A${payload.sheetRowNumber}`
+          : null;
+
+        const messageText = [
+          `🚀 *Campaign Assets Delivered!*`,
+          taskTitle ? `Task: *${taskTitle}*` : null,
+          driveFolderUrl ? `📁 *Google Drive:* ${driveFolderUrl}` : null,
+          sheetRowUrl ? `📊 *Production Ledger:* ${sheetRowUrl}` : null,
+          `Published ${payload?.filesCount || 1} verified design asset(s).`,
+        ].filter(Boolean).join('\n\n');
+
+        if (sourceChannelId) {
+          const botToken = process.env.TELEGRAM_BOT_TOKEN;
+          if (botToken) {
+            const telegramBridge = new TelegramBridge({ botToken });
+            const res = await telegramBridge.dispatchOutboundMessage(sourceChannelId, { text: messageText });
+            if (!res.success && !/DELIVERY_UNCERTAIN/.test(res.error || '')) {
+              throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
+            }
+          }
+        }
       });
     }
   }

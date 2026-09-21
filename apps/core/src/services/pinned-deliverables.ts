@@ -25,7 +25,9 @@ export const EMPTY_DELIVERABLE_STORE: DeliverableStore = {
 export function canvaDeliverableStore(service: CanvaConnectService): DeliverableStore {
   return {
     async find(tenantId, userId, taskId, artifactIds) {
-      const rows = await service.exportsById({ tenantId, actorId: userId }, taskId, artifactIds);
+      const rows = artifactIds.length > 0
+        ? await service.exportsById({ tenantId, actorId: userId }, taskId, artifactIds)
+        : await service.allExports({ tenantId, actorId: userId }, taskId);
       return rows.map((r) => ({ artifactId: r.id, format: r.format, sha256: r.sha256, byteSize: r.byte_size }));
     },
     async read(tenantId, userId, taskId, artifactId) {

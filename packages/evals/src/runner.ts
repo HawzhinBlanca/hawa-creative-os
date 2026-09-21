@@ -120,14 +120,12 @@ export class EvaluationRunner {
             continue;
           }
 
-          if (resClient !== 'client-office-1') {
-            const normRes = strRes.toUpperCase().replace(/^CLIENT-/, '');
-            const normExp = String(c.expected.client).trim().toUpperCase().replace(/^CLIENT-/, '');
-            if (normRes !== normExp) {
-              failed += 1;
-              if (c.critical) criticalViolations += 1;
-              continue;
-            }
+          const normRes = strRes.toUpperCase().replace(/^CLIENT-/, '');
+          const normExp = String(c.expected.client).trim().toUpperCase().replace(/^CLIENT-/, '');
+          if (normRes !== normExp) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
           }
         }
         // Validate project identity when expected (reject ambiguous concatenations)
@@ -145,14 +143,12 @@ export class EvaluationRunner {
             continue;
           }
 
-          if (resProject !== 'project-campaign-2026') {
-            const normRes = strResP.toUpperCase().replace(/^PROJECT-/, '');
-            const normExp = String(c.expected.project).trim().toUpperCase().replace(/^PROJECT-/, '');
-            if (normRes !== normExp) {
-              failed += 1;
-              if (c.critical) criticalViolations += 1;
-              continue;
-            }
+          const normRes = strResP.toUpperCase().replace(/^PROJECT-/, '');
+          const normExp = String(c.expected.project).trim().toUpperCase().replace(/^PROJECT-/, '');
+          if (normRes !== normExp) {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
           }
         }
       }
@@ -360,7 +356,10 @@ export class EvaluationRunner {
 
     const judgeRes = await this.gateway.generateStructured<{ decision?: string; confidence?: number; passed?: boolean }>(ctx, {
       role: 'visual_judge',
-      inputs: [{ kind: 'text', text: JSON.stringify(samplePayload) }],
+      inputs: [
+        { kind: 'text', text: JSON.stringify(samplePayload) },
+        { kind: 'image', storageKey: 'packages/creative/assets/logos/kaae-official-logo.png', mimeType: 'image/png' },
+      ],
       systemPromptVersion: '1.0',
       responseSchema: {},
       budget: { maxCostUsd: 0.05, maxLatencyMs: 5000, maxAttempts: 1 },
@@ -368,24 +367,32 @@ export class EvaluationRunner {
       cachePolicy: 'disabled',
     });
 
-    let modelVal: any = undefined;
-    if (judgeRes.ok) {
-      modelVal = (judgeRes.value as any)?.value !== undefined ? (judgeRes.value as any).value : judgeRes.value;
-      const validDecisions = ['approved', 'rejected', 'revision_requested', 'qualified', 'pass'];
-      const hasInvalidDecision = modelVal?.decision !== undefined && (typeof modelVal.decision !== 'string' || !validDecisions.includes(modelVal.decision.toLowerCase()));
-      const hasInvalidConfidence = modelVal?.confidence !== undefined && (typeof modelVal.confidence !== 'number' || modelVal.confidence < 0 || modelVal.confidence > 1.0 || isNaN(modelVal.confidence));
-      const hasInvalidPassed = modelVal?.passed !== undefined && typeof modelVal.passed !== 'boolean';
+    if (!judgeRes.ok) {
+      return {
+        dataset: 'visual_judge_rubric.json',
+        totalCases: rubricDimensions.length,
+        passedCases: 0,
+        failedCases: rubricDimensions.length,
+        passRate: 0,
+        criticalViolations: 1,
+      };
+    }
 
-      if (hasInvalidDecision || hasInvalidConfidence || hasInvalidPassed || modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA') {
-        return {
-          dataset: 'visual_judge_rubric.json',
-          totalCases: rubricDimensions.length,
-          passedCases: 0,
-          failedCases: rubricDimensions.length,
-          passRate: 0,
-          criticalViolations: 1,
-        };
-      }
+    const modelVal: any = (judgeRes.value as any)?.value !== undefined ? (judgeRes.value as any).value : judgeRes.value;
+    const validDecisions = ['approved', 'rejected', 'revision_requested', 'qualified', 'pass'];
+    const hasInvalidDecision = !modelVal?.decision || typeof modelVal.decision !== 'string' || !validDecisions.includes(modelVal.decision.toLowerCase());
+    const hasInvalidConfidence = modelVal?.confidence !== undefined && (typeof modelVal.confidence !== 'number' || modelVal.confidence < 0 || modelVal.confidence > 1.0 || isNaN(modelVal.confidence));
+    const hasInvalidPassed = typeof modelVal?.passed !== 'boolean';
+
+    if (hasInvalidDecision || hasInvalidConfidence || hasInvalidPassed || modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA' || modelVal?.decision === 'NOT_A_VALID_VERDICT') {
+      return {
+        dataset: 'visual_judge_rubric.json',
+        totalCases: rubricDimensions.length,
+        passedCases: 0,
+        failedCases: rubricDimensions.length,
+        passRate: 0,
+        criticalViolations: 1,
+      };
     }
 
     let passed = 0;

@@ -664,7 +664,7 @@ export function loadRenderFontRegistry(options: { registryPath?: string } = {}):
   return registry;
 }
 
-/** A path declared in render-fonts.json, resolved against packages/creative. */
+/** A path declared in render-fonts.json, resolved against packages/creative or host system. */
 function creativeFilePath(relative: string): string | undefined {
   if (path.isAbsolute(relative)) return fs.existsSync(relative) ? relative : undefined;
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -673,7 +673,20 @@ function creativeFilePath(relative: string): string | undefined {
     path.resolve(process.cwd(), 'packages/creative', relative),
     path.resolve(process.cwd(), relative),
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate));
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (found) return found;
+
+  const baseName = path.basename(relative);
+  const systemCandidates = [
+    path.join('/System/Library/Fonts/Supplemental', baseName),
+    path.join('/System/Library/Fonts', baseName),
+    path.join('/Library/Fonts', baseName),
+    path.join('/usr/share/fonts/truetype/msttcorefonts', baseName),
+  ];
+  const systemFound = systemCandidates.find((candidate) => fs.existsSync(candidate));
+  if (systemFound) return systemFound;
+
+  return undefined;
 }
 
 /** The weight keys of a family whose file exists here. A declared file that is absent is not one. */

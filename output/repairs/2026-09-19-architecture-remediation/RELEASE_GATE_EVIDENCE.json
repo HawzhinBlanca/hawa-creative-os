@@ -1,16 +1,16 @@
 {
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
-  "status": "QUALIFIED",
-  "evaluatedAt": "2026-09-20T21:13:29Z",
+  "status": "UNQUALIFIED_TESTS_SKIPPED",
+  "evaluatedAt": "2026-09-20T21:39:37Z",
   "git": {
-    "commit": "3e7d5aeacc14f76842868c0153c9c3ee023e0e81",
+    "commit": "dca34a6624b229fed4c40a68ec87ca93d037b401",
     "branch": "studio-v2",
     "cleanTree": false
   },
   "releaseManifest": {
     "file": "RELEASE_MANIFEST.json",
-    "sha256": "2fc11c01d1a33e4450762a39452c1afd92e26b0119766608ad9eaf5c21d18907",
+    "sha256": "57d4668f210da3e2a9fffbbfe31e2dd75590ecf3bd6b76c6cc3692d2e96d7a41",
     "flags": {
       "DESIGN_PIPELINE_V3": "off",
       "DESIGN_STUDIO_V2": "off"
@@ -28,18 +28,18 @@
     "Stage 4: Knowledge pack validation (validate_pack.py)",
     "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
     "Stage 6: Production DB & credential isolation guard",
-    "Stage 7: Full monorepo acceptance tests (1585 passed, 0 failed)"
+    "Stage 7: Full monorepo acceptance tests (0 passed, 0 failed)"
   ],
   "normativeGatesEvaluated": {
-    "GateA_BuildAndConfigIdentity": "PASS",
-    "GateB_AuthoritativePostgreSQLAndScope": "PASS",
-    "GateC_ApprovalContractAndQCBinding": "PASS",
-    "GateD_PublicationSafetyAndIdempotency": "PASS",
-    "GateE_DurableWorkflowTerminalState": "PASS",
-    "GateF_EditableOutputFidelity": "PASS",
-    "GateG_CleanHostDisasterRecovery": "PASS",
-    "GateH_ModelTournamentQuality": "PASS"
-  },
+    "GateA_StudioProof": "PASS",
+    "GateB_SecurityClientIsolation": "PASS",
+    "GateC_DurableOperation": "PASS",
+    "GateD_ModelRetrievalQuality": "SKIPPED",
+    "GateE_DesignQA": "PASS",
+    "GateF_HumanReview": "NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER",
+    "GateG_Publication": "PASS",
+    "GateH_Recovery": "PASS"
+},
   "negativeRefusalTest": {
     "command": "scripts/enforce_release_gate.sh --test-refusal",
     "expectedBehavior": "Fail-closed non-zero exit when manifest flag violated",

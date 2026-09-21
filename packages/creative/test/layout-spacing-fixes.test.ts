@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
@@ -14,6 +15,16 @@ const fk = ((fontkit as any).default || fontkit) as typeof fontkit;
 // package while `pnpm test` runs it from the repo root, and a cwd-relative path passes in one and
 // fails in the other.
 const FONTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../assets/fonts');
+
+function resolveTestFont(filename: string): string {
+  const local = path.join(FONTS_DIR, filename);
+  if (fs.existsSync(local)) return local;
+  const sysMac = path.join('/System/Library/Fonts/Supplemental', filename);
+  if (fs.existsSync(sysMac)) return sysMac;
+  const sysLinux = path.join('/usr/share/fonts/truetype/msttcorefonts', filename);
+  if (fs.existsSync(sysLinux)) return sysLinux;
+  return path.join(FONTS_DIR, 'Inter-Regular.ttf');
+}
 
 function textBlock(over: Partial<any> = {}) {
   return {
@@ -204,7 +215,7 @@ describe('ink centring in the renderer', () => {
     const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: copy } });
     const baseline = baselineOf(svg);
 
-    const font = fk.openSync(path.join(FONTS_DIR, 'Verdana.ttf'));
+    const font = fk.openSync(resolveTestFont('Verdana.ttf'));
     const scale = t.fontSize / font.unitsPerEm;
     const bbox = (font as any).layout(copy).bbox;
     const inkAbove = bbox.maxY * scale;
@@ -225,7 +236,7 @@ describe('ink centring in the renderer', () => {
     const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: 'Quality Standards' } });
     const baseline = baselineOf(svg);
 
-    const font = fk.openSync(path.join(FONTS_DIR, 'Verdana.ttf'));
+    const font = fk.openSync(resolveTestFont('Verdana.ttf'));
     const metricAscent = (font.ascent || 800) * (t.fontSize / font.unitsPerEm);
     expect(baseline).toBeGreaterThan(t.y + metricAscent);
   });
@@ -240,7 +251,7 @@ describe('ink centring in the renderer', () => {
     const baseline = baselineOf(svg);
     expect(baseline).toBeGreaterThan(0);
 
-    const font = fk.openSync(path.join(FONTS_DIR, 'Verdana.ttf'));
+    const font = fk.openSync(resolveTestFont('Verdana.ttf'));
     const t: any = layout.text[0];
     const bbox = (font as any).layout('Quality').bbox;
     const inkAbove = bbox.maxY * (t.fontSize / font.unitsPerEm);
