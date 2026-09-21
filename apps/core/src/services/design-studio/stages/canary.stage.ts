@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import type { StageContext, CreativeBrief, CandidateState, CanaryResult, PairwiseVerdict } from '../types.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
-import { renderLayoutV2, computeLayoutMetrics } from '@hawa/creative';
+import { renderLayoutV2Async, computeLayoutMetrics } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP6Prompt } from '../prompts.js';
 import { PAIRWISE_SCHEMA } from './tournament.stage.js';
 
@@ -63,7 +63,7 @@ export async function runCanaryStage(
 
   // 1. Render Perturbation 1
   const layoutP1 = createPerturbation1(winner.currentLayout);
-  const renderP1 = renderLayoutV2(layoutP1, {
+  const renderP1 = await renderLayoutV2Async(layoutP1, {
     copyText: copyMap,
     artImagePath: artDataUri,
     logoDataUri,
@@ -75,7 +75,7 @@ export async function runCanaryStage(
 
   // 2. Render Perturbation 2
   const layoutP2 = createPerturbation2(winner.currentLayout);
-  const renderP2 = renderLayoutV2(layoutP2, {
+  const renderP2 = await renderLayoutV2Async(layoutP2, {
     copyText: copyMap,
     artImagePath: artDataUri,
     logoDataUri,

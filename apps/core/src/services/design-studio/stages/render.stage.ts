@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { StageContext, CandidateState } from '../types.js';
-import { renderLayoutV2, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
+import { renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 
 export async function runRenderStage(
   ctx: StageContext,
@@ -20,7 +20,7 @@ export async function runRenderStage(
       ? `data:image/png;base64,${cand.artPng.toString('base64')}`
       : undefined;
 
-    const renderResult = renderLayoutV2(cand.currentLayout, {
+    const renderResult = await renderLayoutV2Async(cand.currentLayout, {
       copyText: copyMap,
       artImagePath: artDataUri,
       logoDataUri,
