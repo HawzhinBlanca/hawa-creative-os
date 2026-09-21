@@ -1,16 +1,16 @@
 {
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
-  "status": "UNQUALIFIED_TESTS_SKIPPED",
-  "evaluatedAt": "2026-09-20T21:39:37Z",
+  "status": "QUALIFIED",
+  "evaluatedAt": "2026-09-21T11:47:48Z",
   "git": {
-    "commit": "dca34a6624b229fed4c40a68ec87ca93d037b401",
+    "commit": "aa0828e57d06500735c2b0f0da651692d6725074",
     "branch": "studio-v2",
     "cleanTree": false
   },
   "releaseManifest": {
     "file": "RELEASE_MANIFEST.json",
-    "sha256": "57d4668f210da3e2a9fffbbfe31e2dd75590ecf3bd6b76c6cc3692d2e96d7a41",
+    "sha256": "572a2e71b1de7eed856963d162e0536441270fe088f1e56aeb2f74f25a354f76",
     "flags": {
       "DESIGN_PIPELINE_V3": "off",
       "DESIGN_STUDIO_V2": "off"
@@ -28,13 +28,13 @@
     "Stage 4: Knowledge pack validation (validate_pack.py)",
     "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
     "Stage 6: Production DB & credential isolation guard",
-    "Stage 7: Full monorepo acceptance tests (0 passed, 0 failed)"
+    "Stage 7: Full monorepo acceptance tests (1600 passed, 0 failed)"
   ],
   "normativeGatesEvaluated": {
     "GateA_StudioProof": "PASS",
     "GateB_SecurityClientIsolation": "PASS",
     "GateC_DurableOperation": "PASS",
-    "GateD_ModelRetrievalQuality": "SKIPPED",
+    "GateD_ModelRetrievalQuality": "PASS",
     "GateE_DesignQA": "PASS",
     "GateF_HumanReview": "NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER",
     "GateG_Publication": "PASS",
