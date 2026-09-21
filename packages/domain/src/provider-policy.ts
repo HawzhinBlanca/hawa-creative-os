@@ -84,7 +84,7 @@ export type ModelTier = 'production' | 'dev';
 /**
  * Which tier is active.
  *
- * `HAWA_MODEL_TIER` decides when set. Otherwise the tier follows NODE_ENV, which both Dockerfiles
+ * `HAWA_MODEL_TIER` decides when set. Otherwise the tier follows the environment, which both Dockerfiles
  * and the compose file pin to `production`: so the deployed containers always run the production
  * models, and anything run outside them — scripts, local dev, tests — gets the cheap tier without
  * anyone having to remember a flag. The fail-safe direction is deliberate: a missing variable
@@ -246,9 +246,9 @@ export class DisallowedProviderError extends Error {
  * Rejects before network dispatch.
  */
 export function assertModelAllowed(model: string): void {
-  // Allow explicit test fixtures when executing within unit test runner
+  // Allow explicit test fixtures when executing in dev/testing tier
   if (
-    process.env.NODE_ENV === 'test' &&
+    activeModelTier() === 'dev' &&
     (model.startsWith('mock-') || model.startsWith('test-') || model.startsWith('fixture-'))
   ) {
     return;

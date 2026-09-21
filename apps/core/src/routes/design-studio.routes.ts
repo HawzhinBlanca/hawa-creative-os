@@ -32,11 +32,7 @@ export function registerDesignStudioRoutes(
     if (!auth.authenticated || !auth.tenantId || !auth.userId) {
       return ctx.problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
     }
-    const role = (
-      (process.env.NODE_ENV === 'test' && c.req.header('x-user-role')) ||
-      auth.role ||
-      ''
-    ).toLowerCase().trim();
+    const role = (auth.role || '').toLowerCase().trim();
     if (
       !['administrator', 'art_director', 'creative_director', 'operator', 'designer'].includes(
         role

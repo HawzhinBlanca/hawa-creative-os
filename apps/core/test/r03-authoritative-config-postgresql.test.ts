@@ -17,6 +17,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
 
   beforeAll(() => {
     process.env.HAWA_BEARER_TOKEN = testToken;
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   });
 
   afterAll(() => {

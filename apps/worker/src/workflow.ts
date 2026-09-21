@@ -85,9 +85,9 @@ export class TaskWorkflowRunner {
   }
 
   async run(input: WorkflowInput, ctx?: WorkflowDurableContext): Promise<WorkflowOutput> {
-    if(process.env.NODE_ENV==='production'||input.canvaAutoGenerate){
-      if(!ctx)throw new Error('Production Canva workflows require the durable Restate context');
-      return runCanvaDraft(input,ctx);
+    if (input.canvaAutoGenerate) {
+      if (!ctx) throw new Error('Production Canva workflows require the durable Restate context');
+      return runCanvaDraft(input, ctx);
     }
     const span = this.tracer.startSpan('TaskWorkflowRunner.run', undefined, {
       taskId: input.taskId,

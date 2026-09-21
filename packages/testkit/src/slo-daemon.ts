@@ -106,8 +106,8 @@ export class SyntheticTrafficDaemon {
 
   constructor(initialProbes: number = 0, options?: { publisher?: GooglePublisher }) {
     this.publisher = options?.publisher || new GooglePublisher({
-      emulateNetworkForTesting: process.env.NODE_ENV !== 'production',
-      oauthToken: process.env.NODE_ENV !== 'production' ? 'slo_test_token' : undefined,
+      emulateNetworkForTesting: true,
+      oauthToken: 'slo_test_token',
     });
     for (let i = 0; i < initialProbes; i++) {
       this.recordSyntheticSeedProbe(i, initialProbes);

@@ -150,7 +150,10 @@ export class OpenAiCircuitBreaker {
 }
 
 function computeRetryDelayMs(attempt: number): number {
-  if (process.env.NODE_ENV === 'test') return 10 * attempt;
+  if (process.env.HAWA_RETRY_DELAY_MS) {
+    const custom = Number(process.env.HAWA_RETRY_DELAY_MS);
+    if (!Number.isNaN(custom)) return custom * attempt;
+  }
   const base = Math.pow(2, attempt) * 1000;
   const jitter = Math.floor(Math.random() * 250);
   return base + jitter;

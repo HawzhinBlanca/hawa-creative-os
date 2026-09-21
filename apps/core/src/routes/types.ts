@@ -96,4 +96,5 @@ export interface RouteContext {
   broadcastEvent: (type: string, data: any) => void;
   honestHealthHandler: (c: any) => Promise<Response>;
   handleDecommissionedFigmaRoute: (c: any) => Response;
+  options?: any;
 }

@@ -283,8 +283,8 @@ export interface OfficeDailyBudgetCheckResult {
 }
 
 export async function sendOperatorAlert(text: string): Promise<boolean> {
-  // A test must never message the office, whatever happens to be in its environment.
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return false;
+  // Live operator messaging requires explicit enabling in the environment
+  if (process.env.HAWA_OPERATOR_ALERTS !== 'true') return false;
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0];
   if (!token || !chat) return false;

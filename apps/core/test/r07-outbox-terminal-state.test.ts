@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createApp, globalSharedInMemoryOutbox } from '../src/app.js';
+import { createApp } from '../src/app.js';
 import { GooglePublisher } from '@hawa/integrations';
 import { createDb, type Kysely, type Database, OutboxRepository, withRlsContext } from '@hawa/db';
 import { memoryExportStore } from './pinned-exports-fixture.js';
@@ -297,7 +297,8 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ publisher, deliverableStore: exports.store });
+    const inMemoryOutbox = new Map<string, any[]>();
+    const app = createApp({ publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -312,7 +313,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     expect(body1.commands[0].actionableRecovery).toContain('pending worker pickup');
 
     // Simulate marking command in server state as failed with permanent error
-    const serverCmd = globalSharedInMemoryOutbox.get(task.id)![0];
+    const serverCmd = inMemoryOutbox.get(task.id)![0];
     serverCmd.state = 'failed';
     serverCmd.last_error = 'CHAT_NOT_FOUND: chat id does not exist';
     serverCmd.attempts = 1;
@@ -352,7 +353,8 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ publisher, deliverableStore: exports.store });
+    const inMemoryOutbox = new Map<string, any[]>();
+    const app = createApp({ publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -361,7 +363,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       body: JSON.stringify({ approvalId: approval.decisionId }),
     });
 
-    const serverCmd = globalSharedInMemoryOutbox.get(task.id)![0];
+    const serverCmd = inMemoryOutbox.get(task.id)![0];
 
     // Non-operator is forbidden even before inspecting command state
     const viewerRedriveRes = await app.request(`/v1/tasks/${task.id}/outbox/${serverCmd.id}/redrive`, {

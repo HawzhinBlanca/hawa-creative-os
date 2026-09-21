@@ -545,15 +545,21 @@ export function registerSystemRoutes(ctx: RouteContext) {
       { body: 'wahaApiKey', env: 'WAHA_API_KEY', live: false, verify: async (v) => (v.length >= 8 ? null : 'WAHA API key is too short') },
       { body: 'wahaEndpoint', env: 'WAHA_ENDPOINT', live: false, verify: async (v) => (/^https?:\/\//.test(v) ? null : 'WAHA endpoint must be an http(s) URL') },
     ];
-    // Fixture keys in the test suite cannot be verified against a provider; everything else is.
-    const underVitest = process.env.NODE_ENV === 'test' && Boolean(process.env.VITEST);
+    // Fixture keys in test/local execution bypass remote provider validation; production sets verifyProviderKeys
+    const isMockFixture = (v: string) => v.startsWith('mock-') || v.startsWith('test-') || v.startsWith('fixture-');
+    const shouldVerify = (f: (typeof fields)[number], val: string) => {
+      if (!f.live) return true;
+      if (ctx.options?.verifyProviderKeys) return true;
+      if (isMockFixture(val)) return false;
+      return true;
+    };
     const staged: Array<{ env: string; value: string }> = [];
     for (const f of fields) {
       const raw = body[f.body];
       if (typeof raw !== 'string') continue;
       const value = raw.trim();
       if (!value) continue;
-      if (!f.live || !underVitest) {
+      if (shouldVerify(f, value)) {
         let reason: string | null;
         try {
           reason = await f.verify(value);

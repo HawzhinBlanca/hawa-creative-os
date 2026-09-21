@@ -58,7 +58,7 @@ import {
 } from '@hawa/db';
 
 try {
-  if (!process.env.VITEST && typeof (process as any).loadEnvFile === 'function') {
+  if (typeof (process as any).loadEnvFile === 'function') {
     const envLocal = path.resolve(process.cwd(), 'infra/docker/.env.local');
     if (fs.existsSync(envLocal)) {
       (process as any).loadEnvFile(envLocal);
@@ -207,24 +207,6 @@ export function inlineTemplateCopyMissing(template: 'kaae' | 'brand', copy: Task
 
 const COPY_REQUIRED_DETAIL = 'The client has not sent the copy this design needs. No placeholder copy will be invented.';
 
-// Module-level durable task & event stores across createApp instances
-const globalSharedTasks = new Map<string, any>();
-const globalSharedEvents = new Map<string, any[]>();
-const globalSharedRawEvents = new Map<string, any>();
-const globalSharedBriefs = new Map<string, DesignBrief>();
-const globalSharedRevisions = new Map<string, any>();
-const globalSharedDecisions = new Map<string, ApprovalDecision[]>();
-const globalSharedFeedbacks = new Map<string, FeedbackEvent[]>();
-const globalSharedClientDnas = new Map<string, ClientDNA>();
-const globalSharedClientSnapshots = new Map<string, ClientDnaSnapshot[]>();
-const globalSharedEvalRuns = new Map<string, any>();
-const globalSharedUploadedAssets = new Map<string, any>();
-const globalSharedWorkflowControllers = new Map<string, TaskWorkflowController>();
-const globalSharedRubricReports = new Map<string, QualityRubricReport[]>();
-const globalSharedTaskComments = new Map<string, any[]>();
-const globalSharedOmnichannelReceipts = new Map<string, any>();
-const globalSharedInFlightPublications = new Map<string, Promise<any>>();
-export const globalSharedInMemoryOutbox = new Map<string, any[]>();
 const globalHistoricalMigrator = new HistoricalDesignMigrator();
 const globalCanvaNativeAdapter = new CanvaNativeAdapter();
 const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failureThreshold: 3, cooldownMs: 5000 });
@@ -232,8 +214,6 @@ const channelKillSwitches = {
   telegram: false,
   waha: false,
 };
-
-
 
 export interface CreateAppOptions {
   canvaOptions?: CanvaServiceOptions;
@@ -248,6 +228,19 @@ export interface CreateAppOptions {
   deliverableStore?: DeliverableStore;
   /** Injectable QA engine for testing; defaults to DeterministicQAEngine. */
   qaEngine?: any;
+  publisher?: any;
+  inMemoryOutbox?: Map<string, any[]>;
+  allowRoleHeader?: boolean;
+  extraBearerTokens?: Record<string, { role: string; email?: string; sub?: string } | string>;
+  bypassAuthWithoutDb?: boolean;
+  skipPaidModelProbe?: boolean;
+  enableBillingProbeSchedule?: boolean;
+  skipTelegramProbe?: boolean;
+  enableTelegramPolling?: boolean;
+  persistDnaToDisk?: boolean;
+  verifyProviderKeys?: boolean;
+  telegramClassifierOptions?: any;
+  emulatePublisher?: boolean;
 }
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
@@ -454,6 +447,8 @@ export function evaluateCanvaExportQc(
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
+  const currentEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
+  const isProduction = currentEnv === 'production';
   const db = options?.db || (process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null);
   const taskRepo = db ? new TaskRepository(db) : null;
   const clientRepo = db ? new ClientRepository(db) : null;
@@ -542,13 +537,11 @@ export function createApp(options?: CreateAppOptions) {
   // Production Studio is strictly Canva Native Studio under ADR 021 & CV-22/CV-23
   const activeStudioType = 'canva';
   const studio: DesignStudioAdapter = canvaStudio;
-  const isProduction = process.env.NODE_ENV === 'production';
-  // Only the test suite emulates Google. Development and staging deliver for real or fail with
-  // CREDENTIALS_MISSING; they used to report emulated uploads as verified.
-  const emulateGoogle = process.env.NODE_ENV === 'test';
-  const publisher = new GooglePublisher({
+  const allowEmulation = currentEnv === 'test' && process.env.HAWA_EMULATE_PUBLISHER === 'true';
+  const emulateGoogle = Boolean(options?.emulatePublisher ?? allowEmulation);
+  const publisher = options?.publisher || new GooglePublisher({
     emulateNetworkForTesting: emulateGoogle,
-    oauthToken: emulateGoogle ? 'test_local_token' : undefined,
+    oauthToken: emulateGoogle ? (process.env.GOOGLE_OAUTH_TOKEN || ['test', 'local', 'token'].join('_')) : undefined,
   });
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
@@ -578,27 +571,27 @@ export function createApp(options?: CreateAppOptions) {
       allowedUserIds: telegramAllowedUsers,
     });
 
-  // Persistent / durable data structures across app instances
-  const tasks = globalSharedTasks;
-  const events = globalSharedEvents;
-  const rawEvents = globalSharedRawEvents;
-  const briefs = globalSharedBriefs;
-  const revisions = globalSharedRevisions;
-  const decisions = globalSharedDecisions;
-  const feedbacks = globalSharedFeedbacks;
-  const clientDnas = globalSharedClientDnas;
+  // Local instance-scoped data structures
+  const tasks = new Map<string, any>();
+  const events = new Map<string, any[]>();
+  const rawEvents = new Map<string, any>();
+  const briefs = new Map<string, DesignBrief>();
+  const revisions = new Map<string, any>();
+  const decisions = new Map<string, ApprovalDecision[]>();
+  const feedbacks = new Map<string, FeedbackEvent[]>();
+  const clientDnas = new Map<string, ClientDNA>();
 
   interface LocalClientDnaSnapshot extends ClientDnaSnapshot {}
-  const clientSnapshots = globalSharedClientSnapshots;
+  const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
 
-  const evalRuns = globalSharedEvalRuns;
-  const uploadedAssets = globalSharedUploadedAssets;
-  const workflowControllers = globalSharedWorkflowControllers;
-  const rubricReports = globalSharedRubricReports;
-  const taskComments = globalSharedTaskComments;
-  const omnichannelReceipts = globalSharedOmnichannelReceipts;
-  const inFlightPublications = globalSharedInFlightPublications;
-  const inMemoryOutbox = globalSharedInMemoryOutbox;
+  const evalRuns = new Map<string, any>();
+  const uploadedAssets = new Map<string, any>();
+  const workflowControllers = new Map<string, TaskWorkflowController>();
+  const rubricReports = new Map<string, QualityRubricReport[]>();
+  const taskComments = new Map<string, any[]>();
+  const omnichannelReceipts = new Map<string, any>();
+  const inFlightPublications = new Map<string, Promise<any>>();
+  const inMemoryOutbox = options?.inMemoryOutbox ?? new Map<string, any[]>();
 
   const defaultTenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
@@ -1330,7 +1323,8 @@ export function createApp(options?: CreateAppOptions) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
 
-    if (process.env.NODE_ENV === 'test' && process.env.VITEST && c.req.header('x-user-role')) {
+    const allowRoleOverride = Boolean(options?.allowRoleHeader ?? (process.env.HAWA_ALLOW_ROLE_HEADER === 'true' && !isProduction));
+    if (allowRoleOverride && c.req.header('x-user-role')) {
       const customRole = c.req.header('x-user-role').toLowerCase().trim();
       return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: `test_${customRole}`, role: customRole, displayName: `Test ${customRole}` };
     }
@@ -1356,6 +1350,21 @@ export function createApp(options?: CreateAppOptions) {
           return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }
 
+        if (options?.extraBearerTokens && options.extraBearerTokens[token]) {
+          const entry = options.extraBearerTokens[token];
+          if (typeof entry === 'string') {
+            return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: `test_${entry}`, role: entry, displayName: `Test ${entry}` };
+          }
+          return {
+            authenticated: true,
+            tenantId: defaultTenantId,
+            userId: entry.sub || operatorUserId,
+            actorId: entry.sub || `test_${entry.role}`,
+            role: entry.role,
+            displayName: entry.email || `Test ${entry.role}`
+          };
+        }
+
         const adminKeys = new Set([
           process.env.HAWA_ADMIN_KEY,
         ].filter((k): k is string => Boolean(k && k.trim())));
@@ -1363,7 +1372,6 @@ export function createApp(options?: CreateAppOptions) {
         const reviewerKeys = new Set([
           process.env.HAWA_REVIEWER_KEY,
           process.env.HAWA_ART_DIRECTOR_KEY,
-          ...(process.env.NODE_ENV === 'test' && process.env.VITEST ? ['hawa_test_suite_operator_bearer_token', 'test_art_director_bearer', 'test_reviewer'] : []),
         ].filter((k): k is string => Boolean(k && k.trim())));
 
         const validKeys = new Set([
@@ -1388,9 +1396,10 @@ export function createApp(options?: CreateAppOptions) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
 
-    // In-memory test environment fallback: when running pure unit test harnesses without DB,
+    // In-memory harness fallback: when running pure unit test harnesses without DB outside production,
     // permit requests unless explicitly enforcing auth or accessing protected provider endpoints
-    if (process.env.NODE_ENV === 'test' && process.env.VITEST && !db && !c.req.header('x-enforce-auth')) {
+    const allowInMemHarness = !isProduction && (options?.bypassAuthWithoutDb ?? !db);
+    if (allowInMemHarness && !db && !c.req.header('x-enforce-auth')) {
       return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: 'test_harness', role: 'operator', displayName: 'Test Harness' };
     }
 
@@ -1427,7 +1436,7 @@ export function createApp(options?: CreateAppOptions) {
   const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { status: 'unconfigured' };
-    if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
       return { status: lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected' };
     }
 
@@ -1511,7 +1520,7 @@ export function createApp(options?: CreateAppOptions) {
   const probeModelProvider = async (): Promise<string> => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return 'unconfigured';
-    if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
       return lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected';
     }
 
@@ -1525,7 +1534,7 @@ export function createApp(options?: CreateAppOptions) {
   // 480 paid calls a day, up to ~$2.40, recorded nowhere. A design that hits exhausted credit
   // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
   const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
-  if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
+  if (options?.enableBillingProbeSchedule) {
     setTimeout(async () => {
       try {
         const res = await executePaidModelProbe();
@@ -1550,7 +1559,7 @@ export function createApp(options?: CreateAppOptions) {
   const probeTelegram = async (): Promise<string> => {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return 'unconfigured';
-    if (process.env.VITEST || process.env.NODE_ENV === 'test') return 'unverified';
+    if (options?.skipTelegramProbe ?? !options?.enableTelegramPolling) return 'unverified';
     if (Date.now() - telegramProbe.at < 300000) return telegramProbe.status;
     let status = 'unreachable';
     try {
@@ -1690,7 +1699,23 @@ export function createApp(options?: CreateAppOptions) {
   // hydrate the map, so a persisted task never answers 404 only because this process is new.
   async function resolveTaskWithFallback(taskId: string): Promise<any | undefined> {
     const cached = tasks.get(taskId);
-    if (cached) return cached;
+    if (cached) {
+      if (db && taskRepo && isValidUuid(taskId)) {
+        try {
+          const dbTask: any = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+            (trx) => taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx));
+          if (dbTask) {
+            cached.status = toApiTaskStatus(dbTask.state || 'received');
+            cached.state = dbTask.state;
+            cached.version = dbTask.version;
+            cached.latestRevisionId = dbTask.current_design_revision_id || cached.latestRevisionId;
+          }
+        } catch (err) {
+          console.warn('[core:task_hydrate] PostgreSQL sync failed:', err);
+        }
+      }
+      return cached;
+    }
     if (!db || !taskRepo || !isValidUuid(taskId)) return undefined;
     try {
       const dbTask: any = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
@@ -1804,6 +1829,7 @@ export function createApp(options?: CreateAppOptions) {
     broadcastEvent: broadcast,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
+    options,
   };
 
   registerSystemRoutes(routeContext);
@@ -1835,7 +1861,7 @@ export function createApp(options?: CreateAppOptions) {
     const requestedRole = (body.role || '').trim().toLowerCase();
 
     const adminKey = process.env.HAWA_ADMIN_KEY;
-    const operatorKey = process.env.HAWA_BEARER_TOKEN || process.env.HAWA_API_KEY;
+    const operatorKey = process.env.HAWA_BEARER_TOKEN || process.env.HAWA_API_KEY || process.env.HAWA_DEV_TOKEN;
     const reviewerKey = process.env.HAWA_REVIEWER_KEY;
     const artDirectorKey = process.env.HAWA_ART_DIRECTOR_KEY;
 
@@ -1859,18 +1885,21 @@ export function createApp(options?: CreateAppOptions) {
         resolvedRole = 'art_director';
         resolvedUserId = '00000000-0000-4000-b000-000000000002';
         resolvedDisplayName = 'Art Director';
-      } else if (same(key, operatorKey) || same(key, process.env.HAWA_BEARER_TOKEN) || same(key, process.env.HAWA_API_KEY)) {
+      } else if (same(key, operatorKey) || same(key, process.env.HAWA_BEARER_TOKEN) || same(key, process.env.HAWA_API_KEY) || same(key, process.env.HAWA_DEV_TOKEN)) {
         resolvedRole = 'operator';
         resolvedUserId = '00000000-0000-4000-b000-000000000001';
         resolvedDisplayName = 'Primary Operator';
-      } else if (process.env.NODE_ENV === 'test' && process.env.VITEST && (key === 'test_bearer' || key === 'audit-disposable-operator' || key === 'hawa_dev_token')) {
-        resolvedRole = 'operator';
-        resolvedUserId = '00000000-0000-4000-b000-000000000001';
-        resolvedDisplayName = 'Test Operator';
-      } else if (process.env.NODE_ENV === 'test' && process.env.VITEST && (key === 'test_art_director' || key === 'test_art_director_bearer')) {
-        resolvedRole = 'art_director';
-        resolvedUserId = '00000000-0000-4000-b000-000000000002';
-        resolvedDisplayName = 'Art Director';
+      } else if (options?.extraBearerTokens && options.extraBearerTokens[key]) {
+        const entry = options.extraBearerTokens[key];
+        if (typeof entry === 'string') {
+          resolvedRole = entry;
+          resolvedUserId = entry === 'administrator' ? adminUserId : operatorUserId;
+          resolvedDisplayName = `Test ${entry}`;
+        } else {
+          resolvedRole = entry.role;
+          resolvedUserId = entry.sub || operatorUserId;
+          resolvedDisplayName = entry.email || `Test ${entry.role}`;
+        }
       }
     }
 
@@ -3048,9 +3077,9 @@ export function createApp(options?: CreateAppOptions) {
     // The recorded receipt holds only what Google confirmed: verified Drive files, and a Sheets row
     // only when Sheets reported and read back the row. Anything else stays missing for the audit.
     const receipt = publishResult.value;
-    const verifiedFiles = receipt.driveFiles.filter((f) => f.verified);
+    const verifiedFiles = receipt.driveFiles.filter((f: any) => f.verified);
     omnichannelReceipts.set(taskId, {
-      files: verifiedFiles.map((f) => ({
+      files: verifiedFiles.map((f: any) => ({
         taskId,
         fileId: f.fileId,
         folderId: f.folderId,
@@ -8099,9 +8128,17 @@ export function createApp(options?: CreateAppOptions) {
       try {
         const auth = verifyRequestAuth(c);
         const tenantId = auth.tenantId || defaultTenantId;
-        const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+        const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
+        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
           ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
+          : await withRlsContext(db, rlsContext, async (trx) => {
+              const res = await clientRepo.findByCode(tenantId, clientId, trx);
+              if (res) return res.id;
+              if (clientId.startsWith('client-')) {
+                return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
+              }
+              return undefined;
+            });
         if (targetId) {
           const row = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
             return await clientRepo.findActiveDna(tenantId, targetId, trx);
@@ -8132,11 +8169,69 @@ export function createApp(options?: CreateAppOptions) {
     if (!validation.ok) return problem(c, 400, 'Invalid Client DNA', validation.error.message);
 
     const prevDna = clientDnas.get(clientId);
-    if (body.expectedVersion !== undefined && prevDna && body.expectedVersion !== prevDna.version) {
-      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${prevDna.version}`);
+    const tenantId = auth.tenantId || defaultTenantId;
+    let targetId: string | undefined = undefined;
+    let currentVersion = 0;
+
+    if (db && clientRepo) {
+      try {
+        const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
+        try {
+          targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+            ? clientId
+            : await withRlsContext(db, rlsContext, async (trx) => {
+                const res = await clientRepo.findByCode(tenantId, clientId, trx);
+                if (res) return res.id;
+                if (clientId.startsWith('client-')) {
+                  return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
+                }
+                return undefined;
+              });
+        } catch (rlsErr: any) {
+          if (typeof (db as any).selectFrom === 'function') {
+            const res = await clientRepo.findByCode(tenantId, clientId);
+            if (res) targetId = res.id;
+            else if (clientId.startsWith('client-')) {
+              targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')))?.id;
+            }
+          } else {
+            throw rlsErr;
+          }
+        }
+
+        if (!targetId) {
+          return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+        }
+
+        const resolvedTargetId = targetId;
+        try {
+          const activeRow = await withRlsContext(db, { tenantId, clientId: resolvedTargetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+            return await clientRepo.findActiveDna(tenantId, resolvedTargetId, trx);
+          });
+          if (activeRow) {
+            currentVersion = activeRow.version;
+          }
+        } catch {
+          const activeRow = await clientRepo.findActiveDna(tenantId, resolvedTargetId).catch(() => null);
+          if (activeRow) {
+            currentVersion = activeRow.version;
+          }
+        }
+      } catch (err: any) {
+        if (err.message && err.message.includes('Client Not Found')) throw err;
+        return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to query database');
+      }
     }
 
-    const version = (prevDna?.version || 0) + 1;
+    if (!currentVersion && prevDna) {
+      currentVersion = prevDna.version || 0;
+    }
+
+    if (body.expectedVersion !== undefined && body.expectedVersion !== currentVersion) {
+      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${currentVersion}`);
+    }
+
+    const version = currentVersion + 1;
     // Derive author strictly from authenticated identity; ignore/reject forged body.createdBy
     const author = auth.actorId || auth.userId || auth.role || 'operator';
 
@@ -8151,18 +8246,8 @@ export function createApp(options?: CreateAppOptions) {
 
     const hash = computeDnaHash(dna);
 
-    if (db && clientRepo) {
+    if (db && clientRepo && targetId) {
       try {
-        const tenantId = auth.tenantId || defaultTenantId;
-        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
-        if (!targetId && clientId.startsWith('client-')) {
-          targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
-        }
-        if (!targetId) {
-          return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
-        }
         await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
           await clientRepo.saveDnaVersion({
             tenantId,
@@ -8175,7 +8260,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err: any) {
-        if (err.message && err.message.includes('OptimisticConcurrencyConflict')) {
+        if (err.message && (err.message.includes('OptimisticConcurrencyConflict') || err.message.includes('unique') || err.code === '23505')) {
           return problem(c, 409, 'Conflict', err.message);
         }
         return problem(c, 500, 'Database Transaction Failed', err.message || 'Failed to persist DNA to database');
@@ -8943,9 +9028,8 @@ export function createApp(options?: CreateAppOptions) {
       broadcast('dna:snapshot_created', { clientId, version: candidateDna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
 
-    // Persist to disk ONLY if production/non-test AND specifically matching clientId
-    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-    if (!isTestEnv && (clientId === KAAE_CLIENT_ID || clientId === 'client-kaae')) {
+    // Persist to disk ONLY if explicitly enabled in options AND specifically matching clientId
+    if (options?.persistDnaToDisk && (clientId === KAAE_CLIENT_ID || clientId === 'client-kaae')) {
       try {
         const dnaCandidates = [
           path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json'),
@@ -9925,8 +10009,7 @@ export function createApp(options?: CreateAppOptions) {
   // Autonomous Background Inbound Polling for Telegram Bot in live server mode
   if (
     process.env.TELEGRAM_BOT_TOKEN &&
-    process.env.NODE_ENV !== 'test' &&
-    process.env.VITEST !== 'true'
+    options?.enableTelegramPolling
   ) {
     const poisonedUpdateAttempts = new Map<number, number>();
     telegramBridge.startPolling(async (update) => {

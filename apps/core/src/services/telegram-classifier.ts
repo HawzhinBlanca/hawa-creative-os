@@ -29,6 +29,7 @@ export interface ClassifierOptions {
   apiKey?: string;
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  useHeuristics?: boolean;
 }
 
 const REVISION_KEYWORDS = [
@@ -296,8 +297,8 @@ export async function classifyInboundTelegramMessage(
   const fetcher = options.fetcher || fetch;
   const timeoutMs = options.timeoutMs || 10000;
 
-  // If no OpenAI key or in offline test environment without mock fetcher, use heuristics
-  if (!apiKey || (process.env.NODE_ENV === 'test' && !options.fetcher && !process.env.VITEST_REAL_AI)) {
+  // If no OpenAI key or heuristics explicitly requested, use heuristics
+  if (!apiKey || options.useHeuristics) {
     return classifyWithHeuristics(messageText, Boolean(recentTask), hasReplyTo);
   }
 

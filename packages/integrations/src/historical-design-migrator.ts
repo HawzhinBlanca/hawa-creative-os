@@ -81,8 +81,8 @@ export class HistoricalDesignMigrator {
   constructor(archiveRoot?: string) {
     if (archiveRoot) {
       this.archiveRoot = archiveRoot;
-    } else if (process.env.VITEST || process.env.NODE_ENV === 'test') {
-      this.archiveRoot = path.resolve(process.cwd(), 'node_modules/.cache/historical-designs-test');
+    } else if (process.env.HISTORICAL_DESIGNS_ARCHIVE_ROOT) {
+      this.archiveRoot = process.env.HISTORICAL_DESIGNS_ARCHIVE_ROOT;
     } else {
       const rootDir = process.cwd().includes('/apps/')
         ? path.resolve(process.cwd(), '../../archive/historical-designs')
