@@ -24,11 +24,16 @@ export function createDb(connectionString?: string): Kysely<Database> {
   });
 
   pool.on('connect', (client) => {
-    client.query("SET search_path TO hawa, public; SET statement_timeout TO '15s'; SET idle_in_transaction_session_timeout TO '30s';");
-  });
-
-  pool.on('connect', (client) => {
-    client.query('SET search_path TO hawa, public');
+    // The pool's own 'error' event covers idle clients only. A connection that dies while checked
+    // out (a PostgreSQL restart, pg_terminate_backend, a dropped socket) emits 'error' on the client,
+    // and an EventEmitter with no listener for it throws: one database restart would take Core down
+    // through uncaughtException. The query in flight still rejects, so the caller sees the failure.
+    client.on('error', (err) => {
+      console.error('[db:pool] Connection lost while in use:', err.message);
+    });
+    client
+      .query("SET search_path TO hawa, public; SET statement_timeout TO '15s'; SET idle_in_transaction_session_timeout TO '30s';")
+      .catch((err) => console.error('[db:pool] Could not apply session settings:', err.message));
   });
 
   return new Kysely<Database>({
