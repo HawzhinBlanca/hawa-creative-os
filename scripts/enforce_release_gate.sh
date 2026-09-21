@@ -105,7 +105,26 @@ echo "    [PASS] Security scanner and self-test passed with 0 findings."
 echo ""
 echo "--> [Stage 4/7] Validating knowledge pack and blueprint checksums..."
 T_START=$(date +%s)
+# Verify the committed manifest is current; do not quietly make it current.
+#
+# This stage used to run refresh_manifest.py, which rewrites MANIFEST.json and SHA256SUMS.txt in
+# place. Stage 5 then refuses to certify a tree with uncommitted modifications — so the gate dirtied
+# the tree it was about to demand be clean, and passed only when the manifest happened to be in sync
+# already. Its verdict therefore depended on whether someone had committed a manifest moments
+# before, not on the state of the release. Both "all seven stages passed" runs on 2026-09-21 were
+# that coincidence.
+#
+# A gate checks; it does not repair. Regenerating into the working tree and comparing against HEAD
+# tells us whether the committed manifest is stale, and the tree is put back either way. These two
+# files are generated artifacts and are never hand-edited, so restoring them loses nothing.
 python3 "${ROOT_DIR}/scripts/refresh_manifest.py"
+if ! git -C "${ROOT_DIR}" diff --quiet -- MANIFEST.json SHA256SUMS.txt; then
+  git -C "${ROOT_DIR}" checkout -- MANIFEST.json SHA256SUMS.txt
+  echo "FATAL: the committed manifest is stale — regenerating it produces different checksums."
+  echo "       Run: python3 scripts/refresh_manifest.py && npx tsx scripts/generate_release_manifest.ts"
+  echo "       then commit MANIFEST.json, SHA256SUMS.txt and RELEASE_MANIFEST.json, and re-run this gate."
+  exit 1
+fi
 python3 "${ROOT_DIR}/scripts/validate_pack.py"
 T_END=$(date +%s)
 STAGE_STATUS+=("pack_validation:PASS ($((T_END - T_START))s)")
