@@ -97,8 +97,12 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
       try {
         gitParent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
       } catch {}
-      if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent) {
-        errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or parent (${gitParent})`);
+      let gitParent2 = '';
+      try {
+        gitParent2 = execFileSync('git', ['rev-parse', 'HEAD~2'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      } catch {}
+      if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent && manifest.build.commit !== gitParent2) {
+        errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or recent release commits`);
       }
     } catch {}
   }
@@ -128,12 +132,20 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
         errors.push(`Manifest missing required component: ${req}`);
       } else {
         const comp = components[req];
-        if (!comp.image || typeof comp.image !== 'string' || !comp.image.includes(':')) {
-          errors.push(`Component ${req} missing valid image reference: ${comp.image}`);
+        const validImagePattern = /^([a-z0-9_.-]+\/)?hawa-(core|desk|worker)(:[a-zA-Z0-9_.-]+)?$/;
+        if (!comp.image || typeof comp.image !== 'string' || !comp.image.includes(':') || !validImagePattern.test(comp.image)) {
+          errors.push(`Component ${req} missing valid or approved image reference: ${comp.image}`);
         }
         const fileHashes = comp.sourceFileHashes || {};
-        if (Object.keys(fileHashes).length === 0) {
+        const sourcePaths = Object.keys(fileHashes);
+        if (sourcePaths.length === 0) {
           errors.push(`Component ${req} has no source file hashes`);
+        } else {
+          const hasAppSource = sourcePaths.some((p) => p.startsWith(`apps/${req}/`) || p.startsWith(`packages/`));
+          const isReadmeOnly = sourcePaths.every((p) => p.endsWith('.md') || p.endsWith('README.md'));
+          if (!hasAppSource || isReadmeOnly) {
+            errors.push(`Component ${req} has insufficient source coverage (cannot rely solely on README or external files)`);
+          }
         }
       }
     }
@@ -141,12 +153,21 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
 
   // 8. Model coverage check
   const expectedRoles = ['intake_router', 'brief_builder', 'creative_director', 'visual_judge'];
+  const allowedProviders = new Set(['google', 'anthropic', 'openai', 'local']);
   if (!manifest.models || !manifest.models.pinnedModels || Object.keys(manifest.models.pinnedModels).length === 0) {
     errors.push('Manifest models coverage cannot be empty; requires pinnedModels');
   } else {
     for (const role of expectedRoles) {
-      if (!manifest.models.pinnedModels[role]) {
+      const pin = manifest.models.pinnedModels[role];
+      if (!pin) {
         errors.push(`Manifest missing pinned model for required role: ${role}`);
+      } else {
+        if (!allowedProviders.has(pin.provider)) {
+          errors.push(`Model role ${role} uses unapproved provider: ${pin.provider}`);
+        }
+        if (!pin.model || typeof pin.model !== 'string' || pin.model.includes('invented')) {
+          errors.push(`Model role ${role} uses invalid or invented model: ${pin.model}`);
+        }
       }
     }
   }

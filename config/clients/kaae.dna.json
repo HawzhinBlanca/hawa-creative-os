@@ -35,26 +35,26 @@
       {
         "name": "Dr. Boushra Rahal Alameh",
         "role": "President, KAAE",
-        "email": "boushra.rahal@kaae.org",
-        "phone": "+964 (0)750 345 8885"
+        "email": "president@kaae.iq",
+        "phone": "+964 (0)750 000 0001"
       },
       {
         "name": "Dr. Honar Issa",
         "role": "Secretary-General, KAAE",
-        "email": "honar.issa@kaae.org",
-        "phone": "+964 (0)775 777 8888"
+        "email": "secretary@kaae.iq",
+        "phone": "+964 (0)750 000 0002"
       },
       {
         "name": "Dr. Dilan Majid Rostam",
         "role": "Director, Commission on Higher Education (CHE)",
-        "email": "dilan.rostam@kaae.org",
-        "phone": "+964 (0)750 345 8883"
+        "email": "che@kaae.iq",
+        "phone": "+964 (0)750 000 0003"
       },
       {
         "name": "Dr. Lara Nabil Abdallah",
         "role": "Director, Commission on K-12",
-        "email": "lara.nabil@kaae.org",
-        "phone": "+964 (0)750 345 8884"
+        "email": "k12@kaae.iq",
+        "phone": "+964 (0)750 000 0004"
       }
     ],
     "products": [
@@ -90,50 +90,50 @@
       {
         "name": "Dr. Boushra Rahal Alameh",
         "title": "President",
-        "email": "boushra.rahal@kaae.org",
-        "phone": "+964 (0)750 345 8885"
+        "email": "president@kaae.iq",
+        "phone": "+964 (0)750 000 0001"
       },
       {
         "name": "Dr. Honar Issa",
         "title": "Secretary-General",
-        "email": "honar.issa@kaae.org",
-        "phone": "+964 (0)775 777 8888"
+        "email": "secretary@kaae.iq",
+        "phone": "+964 (0)750 000 0002"
       },
       {
         "name": "Dr. Dilan Majid Rostam",
         "title": "Director, Commission on Higher Education",
-        "email": "dilan.rostam@kaae.org",
-        "phone": "+964 (0)750 345 8883"
+        "email": "che@kaae.iq",
+        "phone": "+964 (0)750 000 0003"
       },
       {
         "name": "Dr. Lara Nabil Abdallah",
         "title": "Director, Commission on K-12",
-        "email": "lara.nabil@kaae.org",
-        "phone": "+964 (0)750 345 8884"
+        "email": "k12@kaae.iq",
+        "phone": "+964 (0)750 000 0004"
       },
       {
         "name": "Akam Omer",
         "title": "Manager, Information Technology",
-        "email": "akam.omer@kaae.org",
-        "phone": "+964 (0)750 345 8886"
+        "email": "it@kaae.iq",
+        "phone": "+964 (0)750 000 0005"
       },
       {
         "name": "Zhila Faris Ali",
         "title": "Manager, Human Resources & Finance",
-        "email": "zhila.faris@kaae.org",
-        "phone": "+964 (0)750 345 8882"
+        "email": "hr@kaae.iq",
+        "phone": "+964 (0)750 000 0006"
       },
       {
         "name": "Yad Hidayat",
         "title": "Executive Assistant",
-        "email": "yad.hidayat@kaae.org",
-        "phone": "+964 (0)775 777 8888"
+        "email": "office@kaae.iq",
+        "phone": "+964 (0)750 000 0002"
       },
       {
         "name": "Areen Shaba",
         "title": "Accountant",
-        "email": "areen.shaba@kaae.org",
-        "phone": "+964 (0)750 345 8887"
+        "email": "finance@kaae.iq",
+        "phone": "+964 (0)750 000 0007"
       }
     ],
     "highCouncil": [

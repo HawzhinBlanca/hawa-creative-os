@@ -26,6 +26,16 @@ if [[ -z "$BUILD_COMMIT" || "$BUILD_COMMIT" == "unknown" ]]; then
 fi
 export HAWA_BUILD_COMMIT="$BUILD_COMMIT"
 
+# Enforce clean working tree (Step 2: No uncommitted deployments)
+if [[ -n "$(git -C "$ROOT_DIR" status --porcelain 2>/dev/null)" ]]; then
+  if [[ "${ALLOW_DIRTY_DEPLOY:-0}" != "1" ]]; then
+    echo "ERROR: Working tree has uncommitted modifications! Refusing deployment from dirty checkout." >&2
+    echo "Commit your changes or stash them before deploying." >&2
+    git -C "$ROOT_DIR" status --short >&2
+    exit 1
+  fi
+fi
+
 echo "=== Hawa Creative OS production deployment ($([[ $APPLY == 1 ]] && echo apply || echo pre-flight)) ==="
 echo "Build stamp: ${HAWA_BUILD_COMMIT}"
 
@@ -85,6 +95,10 @@ echo "✓ secret gate"
 echo "✓ blueprint pack"
 # Plaintext credential material on this host outside git: listed, and refused when readable by others
 bash "${ROOT_DIR}/infra/security/local_state_audit.sh"
+
+# Master admission release gate and evidence attestation check
+bash "${ROOT_DIR}/scripts/enforce_release_gate.sh" --skip-tests >/dev/null
+echo "✓ master release gate and evidence attestation verified"
 
 if [[ $APPLY == 0 ]]; then
   echo ""

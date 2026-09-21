@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-20T21:09:48Z",
+  "generatedAt": "2026-09-21T07:24:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 235,
+  "fileCount": 238,
   "files": [
     {
       "path": ".dockerignore",
@@ -26,6 +26,11 @@
       "path": ".env.test.example",
       "sha256": "f88ee51cad17a0b2d6cd6b10dd872b0ab55033e04044a91b5946a61f569e57bb",
       "bytes": 1086
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "00210ab9b9c2dc0acfbd411ed2a23349480ddbe7b17fced3d036d087d9738be8",
+      "bytes": 3637
     },
     {
       "path": "AGENTS.md",
@@ -64,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "2fc11c01d1a33e4450762a39452c1afd92e26b0119766608ad9eaf5c21d18907",
+      "sha256": "57d4668f210da3e2a9fffbbfe31e2dd75590ecf3bd6b76c6cc3692d2e96d7a41",
       "bytes": 2884
     },
     {
@@ -588,6 +593,11 @@
       "bytes": 7431
     },
     {
+      "path": "docs/tech-debt-register.md",
+      "sha256": "69be29c008d492dcd221e8fa1da8f0f061ff0cd0dcfff80fd227398b33694247",
+      "bytes": 16902
+    },
+    {
       "path": "evals/fault_injection_matrix.csv",
       "sha256": "1391f4be911fe541432fec1f02998d7f500103d312e1e6de1d46b70a05836f41",
       "bytes": 9762
@@ -819,8 +829,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "9b6efa1b59493bee2374d1655a962e8943da4362b603dda439c996026231e7dc",
-      "bytes": 10653
+      "sha256": "c4fb502117d26a48d1a36be2cca147e5df7261a0aa63f920da64689729433be6",
+      "bytes": 13451
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -1093,6 +1103,11 @@
       "bytes": 11617
     },
     {
+      "path": "scripts/sanitize_history.sh",
+      "sha256": "3c083f5d47d8c810a6b2ba64747c5630d627c5eadd15fe58e04b99f79fae4951",
+      "bytes": 2305
+    },
+    {
       "path": "scripts/setup_public_tunnel.ts",
       "sha256": "9361a7fbb191775d2fd915665b8afdd2907d563a5f1eec8dadddc53f8baa36bb",
       "bytes": 4274
@@ -1159,8 +1174,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "3a8aaa5c90cf9b2d0fdb28a4ac21cfa5a25b4dc5f8d907f6f674ff74c559caad",
-      "bytes": 7408
+      "sha256": "c1905fcbdb00ac1051d5f2b62318e79348cc415b0fff0385e82daf1c3cb77bc8",
+      "bytes": 8718
     },
     {
       "path": "scripts/verify_t8_ratings.ts",
