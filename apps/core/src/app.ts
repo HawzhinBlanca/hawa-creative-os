@@ -274,6 +274,34 @@ export function secretsEqual(presented: string | undefined | null, configured: s
   return crypto.timingSafeEqual(a, b);
 }
 
+export type DatabaseProbeStatus = 'connected' | 'disconnected' | 'uninitialized';
+
+/**
+ * Whether PostgreSQL answers, for /health. "connected" is a result, never a starting value.
+ *
+ * The probe used to start at 'connected' and turn to 'disconnected' only for ECONNREFUSED or an
+ * error message containing "connect". A wrong password, a missing schema, an exhausted pool, a
+ * statement timeout or a hung server all left health green, and the watchdog reads this route.
+ * Any failure and any answer slower than the timeout is 'disconnected' now. No handle at all is
+ * 'uninitialized', which production treats as unhealthy.
+ */
+export async function probeDatabase(db: unknown, timeoutMs = 2000): Promise<DatabaseProbeStatus> {
+  if (!db) return 'uninitialized';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const query = sql`SELECT 1`.execute(db as any);
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`database probe exceeded ${timeoutMs}ms`)), timeoutMs);
+    });
+    await Promise.race([query, timeout]);
+    return 'connected';
+  } catch {
+    return 'disconnected';
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export interface CanvaQcEvaluationResult {
   qaReport: {
     status: 'passed' | 'failed';
@@ -1534,22 +1562,7 @@ export function createApp(options?: CreateAppOptions) {
   };
 
   const honestHealthHandler = async (c: any) => {
-    let dbStatus = 'connected';
-    if (db) {
-      try {
-        if (typeof (db as any).selectFrom === 'function') {
-          await (db as any).selectFrom('tasks').select('id').limit(1).execute().catch((err: any) => {
-            if (err?.code === 'ECONNREFUSED' || err?.message?.includes('connect')) {
-              dbStatus = 'disconnected';
-            }
-          });
-        }
-      } catch {
-        dbStatus = 'disconnected';
-      }
-    } else if (process.env.DATABASE_URL) {
-      dbStatus = 'connected';
-    }
+    const dbStatus = await probeDatabase(db);
 
     const canvaBreakerState = globalCanvaCircuitBreaker.getSnapshot();
     let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'connected');
@@ -1601,7 +1614,8 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    const isUnhealthy = dbStatus === 'disconnected' || diskStatus === 'read_only';
+    // Production without a database handle keeps state in process memory only: that is an outage.
+    const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
