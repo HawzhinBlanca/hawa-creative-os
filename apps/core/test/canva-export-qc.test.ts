@@ -1,0 +1,181 @@
+import { describe, it, expect } from 'vitest';
+import { crc32 } from 'node:zlib';
+import { checkCanvaPptx } from '@hawa/qa';
+import { evaluateCanvaExportQc } from '../src/app.js';
+
+/**
+ * The approval gate reads the qc_runs row this evaluator produces for a Canva draft. An earlier
+ * version wrote a literal passing report, so every draft was approvable on checks nobody ran.
+ * These tests pin the opposite: a pass needs a real copy and font result from the exported PPTX,
+ * and anything missing, unreadable or altered is a failure.
+ */
+
+/** A stored (uncompressed) ZIP, written by hand so Core needs no archive dependency for one fixture. */
+function zipSync(files: Record<string, Uint8Array>): Uint8Array {
+  const parts: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const [name, data] of Object.entries(files)) {
+    const n = Buffer.from(name, 'utf8');
+    const d = Buffer.from(data);
+    const crc = crc32(d);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(d.length, 18);
+    local.writeUInt32LE(d.length, 22);
+    local.writeUInt16LE(n.length, 26);
+    parts.push(local, n, d);
+    const cen = Buffer.alloc(46);
+    cen.writeUInt32LE(0x02014b50, 0);
+    cen.writeUInt16LE(20, 4);
+    cen.writeUInt16LE(20, 6);
+    cen.writeUInt16LE(0x0800, 8);
+    cen.writeUInt32LE(crc, 16);
+    cen.writeUInt32LE(d.length, 20);
+    cen.writeUInt32LE(d.length, 24);
+    cen.writeUInt16LE(n.length, 28);
+    cen.writeUInt32LE(offset, 42);
+    central.push(cen, n);
+    offset += 30 + n.length + d.length;
+  }
+  const cd = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(files).length, 8);
+  end.writeUInt16LE(Object.keys(files).length, 10);
+  end.writeUInt32LE(cd.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return new Uint8Array(Buffer.concat([...parts, cd, end]));
+}
+const strToU8 = (text: string) => new Uint8Array(Buffer.from(text, 'utf8'));
+
+const COPY = ['KAAE Summit', 'کۆنفرانسی نیشتمانی'];
+const SENT = { fontsByIndex: ['Cinzel', 'Amiri'] };
+
+function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soraniFont?: string; rtl?: boolean } = {}) {
+  const { title = COPY[0], sorani = COPY[1], titleFont = 'Cinzel', soraniFont = 'Amiri', rtl = true } = opts;
+  return zipSync({
+    'ppt/presentation.xml': strToU8('<p:presentation/>'),
+    'ppt/slides/slide1.xml': strToU8(
+      '<p:sld>' +
+        `<p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${titleFont}"/></a:rPr><a:t>${title}</a:t></a:r></a:p></p:txBody></p:sp>` +
+        `<p:sp><p:txBody><a:p>${rtl ? '<a:pPr rtl="1"/>' : ''}<a:r><a:rPr><a:cs typeface="${soraniFont}"/></a:rPr><a:t>${sorani}</a:t></a:r></a:p></p:txBody></p:sp>` +
+        '</p:sld>'
+    ),
+  });
+}
+
+/** The row Core stores: the check is computed from the bytes at capture time, as canva-connect-service does. */
+const storedRow = (bytes: Uint8Array) => ({
+  sha256: 'a'.repeat(64),
+  format: 'pptx',
+  content: bytes,
+  content_check: checkCanvaPptx(bytes, COPY, SENT),
+});
+
+describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
+  it('passes an export whose copy, fonts and direction survived Canva, and says what it did not measure', () => {
+    const r = evaluateCanvaExportQc(storedRow(pptx()), COPY);
+    expect(r.status).toBe('passed');
+    expect(r.criticalPass).toBe(true);
+    expect(r.qaReport.copyFidelity).toBe(true);
+    expect(r.qaReport.fontCoverage).toBe(true);
+    expect(r.qaReport.bidiIsolation).toBe(true);
+    expect(r.qaReport.errors).toEqual([]);
+    expect(r.qaReport.exportSha256).toBe('a'.repeat(64));
+    // A PPTX read measures neither pixels nor geometry. Reporting true here would be the old fabrication.
+    expect(r.qaReport.contrastCompliant).toBeNull();
+    expect(r.qaReport.safeMargins).toBeNull();
+  });
+
+  it('refuses an export whose copy was changed in Canva', () => {
+    const r = evaluateCanvaExportQc(storedRow(pptx({ title: 'KAAE Summit 2027' })), COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.status).toBe('failed');
+    expect(r.qaReport.passed).toBe(false);
+    expect(r.qaReport.copyFidelity).toBe(false);
+    expect(r.qaReport.errors.join(' ')).toMatch(/copy/i);
+  });
+
+  it('refuses an export with a changed Sorani letter', () => {
+    // Arabic yeh (ي) in place of Farsi yeh (ی): one code point, invisible at a glance.
+    const r = evaluateCanvaExportQc(storedRow(pptx({ sorani: COPY[1].replace('ی', 'ي') })), COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.qaReport.copyFidelity).toBe(false);
+  });
+
+  it('refuses an export where Canva substituted the Sorani typeface', () => {
+    const r = evaluateCanvaExportQc(storedRow(pptx({ soraniFont: 'Arimo' })), COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.qaReport.copyFidelity).toBe(true);
+    expect(r.qaReport.fontCoverage).toBe(false);
+    expect(r.qaReport.errors.join(' ')).toMatch(/font/i);
+  });
+
+  it('refuses an export whose Sorani paragraph lost its right-to-left flag', () => {
+    const r = evaluateCanvaExportQc(storedRow(pptx({ rtl: false })), COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.qaReport.bidiIsolation).toBe(false);
+    expect(r.qaReport.errors.join(' ')).toMatch(/RTL/);
+  });
+
+  it('fails when no export was retrieved', () => {
+    const r = evaluateCanvaExportQc(undefined, COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.status).toBe('failed');
+    expect(r.qaReport.checks.find(c => c.name === 'exportRetrieved')?.passed).toBe(false);
+    expect(r.qaReport.exportSha256).toBeNull();
+  });
+
+  it('fails an export that carries no check and cannot be checked (a PNG)', () => {
+    const r = evaluateCanvaExportQc({ sha256: 'b'.repeat(64), format: 'png', content: new Uint8Array([1, 2, 3]) }, COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.qaReport.errors.join(' ')).toMatch(/No verified copy or font check/);
+  });
+
+  it('fails a PPTX with no stored check when the expected copy is unknown', () => {
+    const r = evaluateCanvaExportQc({ sha256: 'c'.repeat(64), format: 'pptx', content: pptx() }, undefined);
+    expect(r.criticalPass).toBe(false);
+  });
+
+  it('fails unreadable PPTX bytes and never throws', () => {
+    const r = evaluateCanvaExportQc({ sha256: 'd'.repeat(64), format: 'pptx', content: new Uint8Array([0, 1, 2, 3]) }, COPY);
+    expect(r.criticalPass).toBe(false);
+    expect(r.status).toBe('failed');
+  });
+
+  it('checks the bytes itself when the stored check is missing', () => {
+    // Latin-only, because the fallback checks against one required face.
+    const latin = zipSync({
+      'ppt/presentation.xml': strToU8('<p:presentation/>'),
+      'ppt/slides/slide1.xml': strToU8(
+        '<p:sld><p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="Verdana"/></a:rPr><a:t>Exact copy</a:t></a:r></a:p></p:txBody></p:sp></p:sld>'
+      ),
+    });
+    expect(evaluateCanvaExportQc({ sha256: 'e'.repeat(64), format: 'pptx', content: latin }, ['Exact copy'], 'Verdana').criticalPass).toBe(true);
+    expect(evaluateCanvaExportQc({ sha256: 'e'.repeat(64), format: 'pptx', content: latin }, ['Exact  copy!'], 'Verdana').criticalPass).toBe(false);
+  });
+
+  it('does not accept a partial check record as a pass', () => {
+    const base = { sha256: 'f'.repeat(64), format: 'pptx' };
+    // A record that is silent on direction is not a checkCanvaPptx result.
+    expect(evaluateCanvaExportQc({ ...base, content_check: { copyPass: true, fontPass: true } }, COPY).criticalPass).toBe(false);
+    // Truthy non-booleans must not count.
+    expect(evaluateCanvaExportQc({ ...base, content_check: { copyPass: 'yes', fontPass: 1, rtlPass: true } }, COPY).criticalPass).toBe(false);
+    expect(evaluateCanvaExportQc({ ...base, content_check: { copyPass: true, fontPass: true, rtlPass: true, status: 'failed' } }, COPY).criticalPass).toBe(false);
+    expect(evaluateCanvaExportQc({ ...base, content_check: {} }, COPY).criticalPass).toBe(false);
+  });
+
+  it('keeps the top-level verdict and the stored report in agreement', () => {
+    for (const row of [storedRow(pptx()), storedRow(pptx({ soraniFont: 'Arimo' })), undefined]) {
+      const r = evaluateCanvaExportQc(row as any, COPY);
+      expect(r.qaReport.criticalPass).toBe(r.criticalPass);
+      expect(r.qaReport.passed).toBe(r.criticalPass);
+      expect(r.qaReport.status).toBe(r.status);
+      expect(r.status).toBe(r.criticalPass ? 'passed' : 'failed');
+    }
+  });
+});

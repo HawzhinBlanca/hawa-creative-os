@@ -271,8 +271,9 @@ export interface CanvaQcEvaluationResult {
     bidiIsolation: boolean;
     fontCoverage: boolean;
     copyFidelity: boolean;
-    contrastCompliant: boolean;
-    safeMargins: boolean;
+    /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
+    contrastCompliant: boolean | null;
+    safeMargins: boolean | null;
     errors: string[];
     checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
@@ -361,7 +362,9 @@ export function evaluateCanvaExportQc(
 
   const copyPass = resolvedCheck.copyPass === true;
   const fontPass = resolvedCheck.fontPass === true;
-  const rtlPass = resolvedCheck.rtlPass !== false;
+  // checkCanvaPptx always reports rtlPass as a boolean, so an absent value means the record is not
+  // one of its results. Absence is a failure here, never a pass.
+  const rtlPass = resolvedCheck.rtlPass === true;
   const checkStatus = resolvedCheck.status !== 'failed';
   const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
   const status: 'passed' | 'failed' = criticalPass ? 'passed' : 'failed';
@@ -394,8 +397,8 @@ export function evaluateCanvaExportQc(
       bidiIsolation: rtlPass,
       fontCoverage: fontPass,
       copyFidelity: copyPass,
-      contrastCompliant: criticalPass,
-      safeMargins: criticalPass,
+      contrastCompliant: null,
+      safeMargins: null,
       errors,
       checks: [
         { name: 'exportRetrieved', passed: true },
@@ -2464,7 +2467,7 @@ export function createApp(options?: CreateAppOptions) {
       if (revisionRepo && !currentTask?.current_design_revision_id) {
         const revisionId = crypto.randomUUID();
         const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
-          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
+          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND format = 'pptx'
           ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
         const planRow = (await sql<any>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
@@ -6622,7 +6625,7 @@ export function createApp(options?: CreateAppOptions) {
               ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
 
             const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
-              WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid
+              WHERE tenant_id = ${auth.tenantId}::uuid AND task_id = ${taskId}::uuid AND format = 'pptx'
               ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
 
             const candidateLayouts = (await sql<any>`SELECT c.layouts FROM hawa.design_studio_candidates c

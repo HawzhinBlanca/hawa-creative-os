@@ -59,8 +59,9 @@ export interface LiveTask {
   qaReport?: {
     passed: boolean;
     bidiIsolation: boolean;
-    safeMargins: boolean;
-    contrastCompliant: boolean;
+    /** null = not measured by the check that produced this report; rendered as pending, never as a pass. */
+    safeMargins: boolean | null;
+    contrastCompliant: boolean | null;
     fontCoverage: boolean;
     errors?: string[];
   };

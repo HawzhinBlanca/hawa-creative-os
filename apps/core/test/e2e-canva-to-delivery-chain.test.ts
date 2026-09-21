@@ -96,15 +96,15 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'png' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
       `.execute(trx);
 
       // Stored export bytes
       await sql`
         INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
         VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid,
-                'png', ${exportSha256}, ${exportContent},
-                ${JSON.stringify({ copyPass: true, fontPass: true, status: 'passed' })}::jsonb, now())
+                'pptx', ${exportSha256}, ${exportContent},
+                ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())
       `.execute(trx);
     });
 
@@ -334,13 +334,13 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'png' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
       `.execute(trx);
 
       await sql`
         INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
         VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid,
-                'png', ${exportSha256}, ${exportContent},
+                'pptx', ${exportSha256}, ${exportContent},
                 ${JSON.stringify({
                   copyPass: false,
                   fontPass: true,
