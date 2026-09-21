@@ -263,6 +263,17 @@ export function qaReportSha256(report: any): string | null {
   return crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex');
 }
 
+/**
+ * Compares a presented secret with the configured one in constant time. Both sides are hashed first,
+ * so neither the position of the first wrong byte nor the secret's length shows in the timing.
+ */
+export function secretsEqual(presented: string | undefined | null, configured: string | undefined | null): boolean {
+  if (!presented || !configured) return false;
+  const a = crypto.createHash('sha256').update(presented).digest();
+  const b = crypto.createHash('sha256').update(configured).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 export interface CanvaQcEvaluationResult {
   qaReport: {
     status: 'passed' | 'failed';
@@ -1285,7 +1296,7 @@ export function createApp(options?: CreateAppOptions) {
       // The webhook secret is shared with the Telegram platform. It authenticates webhook
       // deliveries only and must never act as an operator credential for the rest of the API.
       const isWebhookPath = String(c.req.path || '').startsWith('/api/webhooks/');
-      if (isWebhookPath && expectedSecret && botSecret === expectedSecret) {
+      if (isWebhookPath && secretsEqual(botSecret, expectedSecret)) {
         return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: 'telegram_bot', role: 'adapter', displayName: 'Telegram Bridge' };
       }
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
@@ -3160,7 +3171,7 @@ export function createApp(options?: CreateAppOptions) {
   registerRoute('post', '/webhooks/telegram', async (c: any) => {
     const secret = c.req.header('x-telegram-bot-api-secret-token');
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (!secret || !expectedSecret || secret !== expectedSecret) {
+    if (!secretsEqual(secret, expectedSecret)) {
       return problem(c, 401, 'Unauthorized', 'Invalid or missing Telegram webhook secret token');
     }
 
@@ -4331,7 +4342,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 503, 'Service Unavailable', 'WAHA_WEBHOOK_SECRET is not configured; unauthenticated WhatsApp intake is refused in production');
     }
     if (expectedSecret) {
-      const secretMatches = secret && (secret === expectedSecret || secret === `Bearer ${expectedSecret}`);
+      const secretMatches = secretsEqual(secret, expectedSecret) || secretsEqual(secret, `Bearer ${expectedSecret}`);
       const sigMatches = signature && wahaIngress.verifySignature(rawBody, signature);
       if (!secretMatches && !sigMatches) {
         return problem(c, 401, 'Unauthorized', 'Invalid or missing WhatsApp webhook secret token or HMAC signature');
