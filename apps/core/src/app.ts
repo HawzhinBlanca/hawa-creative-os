@@ -537,12 +537,7 @@ export function createApp(options?: CreateAppOptions) {
   // Production Studio is strictly Canva Native Studio under ADR 021 & CV-22/CV-23
   const activeStudioType = 'canva';
   const studio: DesignStudioAdapter = canvaStudio;
-  const allowEmulation = currentEnv === 'test' && process.env.HAWA_EMULATE_PUBLISHER === 'true';
-  const emulateGoogle = Boolean(options?.emulatePublisher ?? allowEmulation);
-  const publisher = options?.publisher || new GooglePublisher({
-    emulateNetworkForTesting: emulateGoogle,
-    oauthToken: emulateGoogle ? (process.env.GOOGLE_OAUTH_TOKEN || ['test', 'local', 'token'].join('_')) : undefined,
-  });
+  const publisher = options?.publisher || new GooglePublisher();
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
   const evalRunner = new EvaluationRunner(modelGateway);

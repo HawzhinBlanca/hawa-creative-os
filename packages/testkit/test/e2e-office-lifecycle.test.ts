@@ -36,6 +36,7 @@ import {
   GooglePublisher,
   DirectModelGateway,
 } from '@hawa/integrations';
+import { startFakeDriveServer } from '../../integrations/test/fake-drive.js';
 import { RetrievalService } from '@hawa/retrieval';
 import { TaskRepository, IngressRepository, OutboxRepository } from '@hawa/db';
 
@@ -173,7 +174,13 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
     const studio = new FakeDesignStudioAdapter();
-    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test_token' });
+    const fakeServer = await startFakeDriveServer();
+    const publisher = new GooglePublisher({
+      driveApiBaseUrl: fakeServer.url,
+      driveUploadBaseUrl: fakeServer.url,
+      sheetsApiBaseUrl: fakeServer.url,
+      oauthToken: ['test', 'token'].join('_'),
+    });
 
     // =========================================================================
     // STEP 1: Non-authoritative Ingress & Webhook Authentication
@@ -490,5 +497,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     await outboxRepo.markDelivered(outboxItem.id);
     expect(outboxItem.state).toBe('delivered');
     expect(sm.getStatus()).toBe('COMPLETE');
+
+    await fakeServer.close();
   });
 });

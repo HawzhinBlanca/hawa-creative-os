@@ -105,10 +105,7 @@ export class SyntheticTrafficDaemon {
   private timer: NodeJS.Timeout | null = null;
 
   constructor(initialProbes: number = 0, options?: { publisher?: GooglePublisher }) {
-    this.publisher = options?.publisher || new GooglePublisher({
-      emulateNetworkForTesting: true,
-      oauthToken: 'slo_test_token',
-    });
+    this.publisher = options?.publisher || new GooglePublisher();
     for (let i = 0; i < initialProbes; i++) {
       this.recordSyntheticSeedProbe(i, initialProbes);
     }

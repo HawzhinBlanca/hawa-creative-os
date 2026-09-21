@@ -31,6 +31,7 @@ import {
   GooglePublisher,
   TelegramAdapter,
 } from '@hawa/integrations';
+import { startFakeDriveServer } from '../../integrations/test/fake-drive.js';
 import { RetrievalService } from '@hawa/retrieval';
 import { TaskRepository, IngressRepository, OutboxRepository } from '@hawa/db';
 
@@ -195,8 +196,11 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     const creativeDirector = new CreativeDirectorRunner();
     const qaEngine = new DeterministicQAEngine();
     const studio = new FakeDesignStudioAdapter();
+    const fakeServer = await startFakeDriveServer();
     const publisher = new GooglePublisher({
-      emulateNetworkForTesting: true,
+      driveApiBaseUrl: fakeServer.url,
+      driveUploadBaseUrl: fakeServer.url,
+      sheetsApiBaseUrl: fakeServer.url,
       oauthToken: ['pilot', 'exit', 'token'].join('_'),
     });
     const designRouter = new DesignRouter();
@@ -535,5 +539,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     expect(totalCrossTenantLeaks).toBe(0); // Invariant #6: Zero cross-tenant leaks
     expect(allQAPassed).toBe(true); // Gate E: Deterministic QA 100%
     expect(store.outbox.length).toBe(TOTAL_TASKS); // Invariant #13: Transactional outbox
+
+    await fakeServer.close();
   }, 120000);
 });

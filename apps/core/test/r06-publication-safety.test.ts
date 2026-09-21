@@ -5,11 +5,13 @@ import path from 'node:path';
 import os from 'node:os';
 import { createApp } from '../src/app.js';
 import { GooglePublisher } from '@hawa/integrations';
+import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
 describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–050, FR-059–060, NFR-001, NFR-014, NFR-020)', () => {
   const originalEnv = { ...process.env };
+  let fakeServer: FakeDriveServer;
   const operatorHeaders = {
     'Content-Type': 'application/json',
     Authorization: 'Bearer test_bearer',
@@ -26,7 +28,16 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
   const testFileSha256 = crypto.createHash('sha256').update(testFileBytes).digest('hex');
   fs.writeFileSync(testFilePng, testFileBytes);
 
-  afterAll(() => {
+  beforeAll(async () => {
+    fakeServer = await startFakeDriveServer();
+    process.env.GOOGLE_DRIVE_API_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_SHEETS_API_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_OAUTH_TOKEN = ['test', 'local', 'token'].join('_');
+  });
+
+  afterAll(async () => {
+    if (fakeServer) await fakeServer.close();
     process.env = originalEnv;
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
@@ -144,8 +155,11 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
   });
 
   it('3. Sheets row updates verify immutable task identity and never overwrite shifted/moved/inserted rows', async () => {
-    const publisher = new GooglePublisher({ emulateNetworkForTesting: true });
+    const publisher = new GooglePublisher();
     const spreadsheetId = 'sheet_test_row_identity';
+    fakeServer.setSheetRows(spreadsheetId, [
+      ['Task ID', 'Client ID', 'Folder ID', 'Date', 'Status', 'Link', 'Hash'],
+    ]);
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-a',
@@ -193,18 +207,19 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     if (!resB.ok) return;
     expect(resB.value.sheet.rowNumber).toBe(3);
 
-    // Inspect emulated sheet: row 2 is Task A, row 3 is Task B
-    let sheetRows = publisher.getEmulatedSheet(spreadsheetId);
-    expect(sheetRows).toHaveLength(2);
-    expect(sheetRows[0].values[0]).toBe('task-a');
-    expect(sheetRows[1].values[0]).toBe('task-b');
+    // Inspect sheet: row 2 is Task A, row 3 is Task B
+    let sheetRows = fakeServer.getSheetRows(spreadsheetId);
+    expect(sheetRows).toHaveLength(3);
+    expect(sheetRows[1][0]).toBe('task-a');
+    expect(sheetRows[2][0]).toBe('task-b');
 
     // 3. Simulate an external user inserting an unrelated task or shifting rows in the Sheet!
     // Row 2 is now an unrelated task! Task A was shifted down to row 3, Task B to row 4!
-    publisher.setEmulatedSheet(spreadsheetId, [
-      { rowNumber: 2, values: ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x'] },
-      { rowNumber: 3, values: sheetRows[0].values }, // task-a moved to row 3
-      { rowNumber: 4, values: sheetRows[1].values }, // task-b moved to row 4
+    fakeServer.setSheetRows(spreadsheetId, [
+      ['Task ID', 'Client ID', 'Folder ID', 'Date', 'Status', 'Link', 'Hash'],
+      ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x'],
+      sheetRows[1], // task-a moved to row 3
+      sheetRows[2], // task-b moved to row 4
     ]);
 
     // 4. Update/re-publish Task A with a new package hash
@@ -219,16 +234,16 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
     // Verify: Task A was updated at its actual row (row 3) by immutable task identity!
     // Row 2 (task-unrelated-external) was NOT overwritten!
-    sheetRows = publisher.getEmulatedSheet(spreadsheetId);
-    expect(sheetRows[0].values[0]).toBe('task-unrelated-external');
-    expect(sheetRows[0].values[6]).toBe('hash-x'); // Unrelated row untouched!
-    expect(sheetRows[1].values[0]).toBe('task-a');
-    expect(sheetRows[1].values[6]).toBe('hash-a-updated'); // Task A updated!
-    expect(sheetRows[2].values[0]).toBe('task-b'); // Task B untouched!
+    sheetRows = fakeServer.getSheetRows(spreadsheetId);
+    expect(sheetRows[1][0]).toBe('task-unrelated-external');
+    expect(sheetRows[1][6]).toBe('hash-x'); // Unrelated row untouched!
+    expect(sheetRows[2][0]).toBe('task-a');
+    expect(sheetRows[2][6]).toBe('hash-a-updated'); // Task A updated!
+    expect(sheetRows[3][0]).toBe('task-b'); // Task B untouched!
   });
 
   it('4. Deliverable checksum mismatch strictly halts publication with PUBLICATION_VERIFICATION_FAILED', async () => {
-    const publisher = new GooglePublisher({ emulateNetworkForTesting: true });
+    const publisher = new GooglePublisher();
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-tampered',
@@ -270,7 +285,6 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const app = createApp({
       deliverableStore: exports.store,
       publisher: new GooglePublisher({
-        emulateNetworkForTesting: true,
         sheetsApiBaseUrl: 'http://127.0.0.1:1', // Simulated unreachable Sheets server
       }),
     });

@@ -6,6 +6,7 @@ import {
   GooglePublisher,
   DirectModelGateway,
 } from '../src/index.js';
+import { startFakeDriveServer } from './fake-drive.js';
 import type { RequestContext, PublishRequest } from '@hawa/contracts';
 
 describe('Integrations: Real Adapters & Providers', () => {
@@ -78,46 +79,56 @@ describe('Integrations: Real Adapters & Providers', () => {
 
 
   it('GooglePublisher: publishes idempotently to Google Drive and Sheets', async () => {
-    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'unit_test_token' });
-    const exportBytes = new TextEncoder().encode('export.png bytes for t-pub-2');
-    const exportSha256 = createHash('sha256').update(exportBytes).digest('hex');
-    const request: PublishRequest = {
-      taskId: 't-pub-2',
-      clientId: 'c-pub-2',
-      designRevisionId: 'rev-2',
-      approvalId: 'app-2',
-      publicationKey: 'pub_key_task2_rev2',
-      packageHash: 'sha256_package_2',
-      files: [{
-        artifactId: 'art-2',
-        relativePath: 'export.png',
-        storageKey: 'store/export.png',
-        filename: 'export.png',
-        mimeType: 'image/png',
-        byteSize: exportBytes.length,
-        sha256: exportSha256,
-        content: exportBytes,
-      }],
-      destination: {
-        sharedDriveId: 'drive-main',
-        productionRootFolderId: 'root-folder-1',
-        relativeFolderParts: ['2026', 'Social'],
-        spreadsheetId: 'sheet-1',
-        sheetId: 0,
-      },
-      sheetRow: { task_id: 't-pub-2', status: 'Published' },
-    };
+    const fake = await startFakeDriveServer();
+    try {
+      const publisher = new GooglePublisher({
+        driveApiBaseUrl: fake.url,
+        driveUploadBaseUrl: fake.url,
+        sheetsApiBaseUrl: fake.url,
+        oauthToken: ['unit', 'test', 'token'].join('_'),
+      });
+      const exportBytes = new TextEncoder().encode('export.png bytes for t-pub-2');
+      const exportSha256 = createHash('sha256').update(exportBytes).digest('hex');
+      const request: PublishRequest = {
+        taskId: 't-pub-2',
+        clientId: 'c-pub-2',
+        designRevisionId: 'rev-2',
+        approvalId: 'app-2',
+        publicationKey: 'pub_key_task2_rev2',
+        packageHash: 'sha256_package_2',
+        files: [{
+          artifactId: 'art-2',
+          relativePath: 'export.png',
+          storageKey: 'store/export.png',
+          filename: 'export.png',
+          mimeType: 'image/png',
+          byteSize: exportBytes.length,
+          sha256: exportSha256,
+          content: exportBytes,
+        }],
+        destination: {
+          sharedDriveId: 'drive-main',
+          productionRootFolderId: 'root-folder-1',
+          relativeFolderParts: ['2026', 'Social'],
+          spreadsheetId: 'sheet-1',
+          sheetId: 0,
+        },
+        sheetRow: { task_id: 't-pub-2', status: 'Published' },
+      };
 
-    const pub1 = await publisher.publish(ctx, request);
-    const pub2 = await publisher.publish(ctx, request);
+      const pub1 = await publisher.publish(ctx, request);
+      const pub2 = await publisher.publish(ctx, request);
 
-    expect(pub1.ok).toBe(true);
-    expect(pub2.ok).toBe(true);
-    if (pub1.ok && pub2.ok) {
-      expect(pub1.value.publicationId).toBe(pub2.value.publicationId);
-      expect(pub1.value.sheet.synced).toBe(true);
-      // No Google call was made, and the receipt says so.
-      expect(pub1.value.emulated).toBe(true);
+      expect(pub1.ok).toBe(true);
+      expect(pub2.ok).toBe(true);
+      if (pub1.ok && pub2.ok) {
+        expect(pub1.value.publicationId).toBe(pub2.value.publicationId);
+        expect(pub1.value.sheet.synced).toBe(true);
+        // Genuine HTTP call to fake-drive
+        expect(pub1.value.emulated).toBe(false);
+      }
+    } finally {
+      await fake.close();
     }
   });
 

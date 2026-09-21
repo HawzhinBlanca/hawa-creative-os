@@ -6,12 +6,14 @@ import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createDb, withRlsContext, PublicationRepository } from '@hawa/db';
 import { GooglePublisher } from '@hawa/integrations';
+import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive.js';
 import { DeterministicQAEngine } from '@hawa/qa';
 
 describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage -> Editable Design -> QA -> Approval -> Delivery & Recovery', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
   const publicationRepo = new PublicationRepository(db);
+  let fakeServer: FakeDriveServer;
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
@@ -23,15 +25,23 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     'Authorization': authSessionBearer,
   };
 
+  const originalEnv = { ...process.env };
   const testTmpDir = path.join(process.cwd(), '.tmp_milestone1_test');
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    fakeServer = await startFakeDriveServer();
+    process.env.GOOGLE_DRIVE_API_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_SHEETS_API_BASE_URL = fakeServer.url;
+    process.env.GOOGLE_OAUTH_TOKEN = ['milestone1', 'verified', 'token'].join('_');
     if (!fs.existsSync(testTmpDir)) {
       fs.mkdirSync(testTmpDir, { recursive: true });
     }
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (fakeServer) await fakeServer.close();
+    process.env = originalEnv;
     try {
       fs.rmSync(testTmpDir, { recursive: true, force: true });
     } catch {}
@@ -351,7 +361,9 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     const certFileSha256 = crypto.createHash('sha256').update(certFileBytes).digest('hex');
 
     const publisher = new GooglePublisher({
-      emulateNetworkForTesting: true,
+      driveApiBaseUrl: fakeServer.url,
+      driveUploadBaseUrl: fakeServer.url,
+      sheetsApiBaseUrl: fakeServer.url,
       oauthToken: ['milestone1', 'verified', 'token'].join('_'),
     });
 

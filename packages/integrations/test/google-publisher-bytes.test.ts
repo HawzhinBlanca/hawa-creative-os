@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PackageFile, PublishRequest, RequestContext } from '@hawa/contracts';
 import { GooglePublisher } from '../src/google-publisher.js';
+import { startFakeDriveServer } from './fake-drive.js';
 
 /**
  * The publisher sends only real bytes. Until 2026-09-19 a file it could not read became
@@ -104,19 +105,39 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
-  it('marks an emulated receipt as emulated', async () => {
-    const res = await new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test' }).publish(ctx, request([file('a.png', 'aaa')]));
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.value.emulated).toBe(true);
+  it('marks published receipts as not emulated (genuine HTTP)', async () => {
+    const fake = await startFakeDriveServer();
+    try {
+      const pub = new GooglePublisher({
+        oauthToken: ['test', 'token'].join('_'),
+        driveApiBaseUrl: fake.url,
+        driveUploadBaseUrl: fake.url,
+        sheetsApiBaseUrl: fake.url,
+      });
+      const res = await pub.publish(ctx, request([file('a.png', 'aaa')]));
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.value.emulated).toBe(false);
+    } finally {
+      await fake.close();
+    }
   });
 });
 
 describe('GooglePublisher.verify reads the publication back', () => {
   it('an emulated receipt is never reported consistent: nothing was sent to verify', async () => {
-    const publisher = new GooglePublisher({ emulateNetworkForTesting: true, oauthToken: 'test' });
-    const res = await publisher.publish(ctx, request([file('a.png', 'aaa')]));
-    if (!res.ok) throw new Error('publish failed');
-    const verified = await publisher.verify(ctx, res.value.publicationId);
+    const publisher = new GooglePublisher({ oauthToken: ['test', 'token'].join('_') });
+    const receiptId = '00000000-0000-4000-a000-000000000001';
+    (publisher as any).inMemoryLedger.set('pub-test', {
+      publicationId: receiptId,
+      publicationKey: 'pub-test',
+      driveFolderId: 'folder',
+      driveFiles: [],
+      sheet: { spreadsheetId: 'sheet', sheetId: 0, rowKey: 'task', synced: false, expectedHash: 'hash' },
+      state: 'complete',
+      detail: {},
+      emulated: true,
+    });
+    const verified = await publisher.verify(ctx, receiptId);
     expect(verified.ok && verified.value).toEqual({
       consistent: false,
       differences: [{ check: 'emulated', detail: 'No Google call was made for this publication, so there is nothing to verify' }],

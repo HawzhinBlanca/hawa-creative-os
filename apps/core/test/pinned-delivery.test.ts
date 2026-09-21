@@ -114,7 +114,7 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
     expect(body.status).toBe('COMPLETE');
     expect(body.filesCount).toBe(1);
     expect(body).not.toHaveProperty('vaultUri');
-    expect(body.publicationReceipt.emulated).toBe(true);
+    expect(body.publicationReceipt.emulated).toBe(false);
     expect(body.publicationReceipt.driveFiles).toEqual([
       expect.objectContaining({ artifactId: exportId, expectedSha256: sha256(bytes), observedSize: bytes.length, verified: true }),
     ]);
@@ -122,7 +122,7 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
     // The stored receipt the reconciliation audit reads holds the confirmed file and row, nothing invented.
     const stored = (await (await app.request(`/tasks/${taskId}/publication-receipt`)).json()).receipt;
     expect(stored.files).toEqual([
-      expect.objectContaining({ taskId, fileId: `emulated_file_${exportId}`, sha256: sha256(bytes), byteSize: bytes.length }),
+      expect.objectContaining({ taskId, fileId: expect.stringMatching(/^drive_file_/), sha256: sha256(bytes), byteSize: bytes.length }),
     ]);
     expect(stored.sheetRow.rowNumber).toBe(body.publicationReceipt.sheet.rowNumber);
     expect(stored.sheetRow.packageHash).toBe(sha256(new TextEncoder().encode(sha256(bytes))));
@@ -223,6 +223,7 @@ describe('the Desk\'s Deliver route (/tasks/:id/publish) uses the same pins', ()
 describe('only the test suite emulates Google', () => {
   it('outside NODE_ENV=test, a delivery without Google credentials fails instead of reporting an emulated upload', async () => {
     vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('GOOGLE_OAUTH_TOKEN', '');
     try {
       const exports = memoryExportStore();
       const app = createApp({ deliverableStore: exports.store });

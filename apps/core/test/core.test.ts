@@ -877,7 +877,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(pubData.filesCount).toBe(1);
     const receipt = pubData.publicationReceipt;
     expect(receipt.state).toBe('complete');
-    expect(receipt.emulated).toBe(true);
+    expect(receipt.emulated).toBe(false);
     expect(receipt.driveFiles).toHaveLength(1);
     expect(receipt.driveFiles[0]).toMatchObject({
       artifactId: exportId,

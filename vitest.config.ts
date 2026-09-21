@@ -53,8 +53,10 @@ export default defineConfig({
     exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**'],
     fileParallelism: false,
     // Resolved from this file: `pnpm --filter <pkg> test` runs vitest inside the package, where a
-    // relative path missed the guard and every file reported 0 tests.
-    setupFiles: [resolve(import.meta.dirname, 'packages/db/src/test-connection-guard.ts')],
+    setupFiles: [
+      resolve(import.meta.dirname, 'packages/db/src/test-connection-guard.ts'),
+      resolve(import.meta.dirname, 'packages/integrations/test/setup-fake-drive.ts'),
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

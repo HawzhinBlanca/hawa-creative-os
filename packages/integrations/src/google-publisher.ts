@@ -21,10 +21,6 @@ export interface GooglePublisherConfig {
   driveApiBaseUrl?: string;
   driveUploadBaseUrl?: string;
   sheetsApiBaseUrl?: string;
-  /** EXPLICIT TEST ONLY: Emulates network responses for isolated unit testing */
-  emulateNetworkForTesting?: boolean;
-  driveUploadFn?: any;
-  sheetAppendFn?: any;
 }
 
 const DRIVE_LOOKUP_TIMEOUT_MS = 10_000;
@@ -34,16 +30,11 @@ export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
   private taskRowMap = new Map<string, number>();
   private inFlight = new Map<string, Promise<Result<PublicationReceipt, AppError>>>();
-  private emulatedSheets = new Map<string, Array<{ rowNumber: number; values: string[] }>>();
   private driveApiBaseUrl: string;
   private driveUploadBaseUrl: string;
   private sheetsApiBaseUrl: string;
 
   constructor(private readonly config: GooglePublisherConfig = {}) {
-    if (config.driveUploadFn || config.sheetAppendFn) {
-      config.emulateNetworkForTesting = true;
-      if (!config.oauthToken) config.oauthToken = ['test', 'local', 'token'].join('_');
-    }
     this.driveApiBaseUrl = (config.driveApiBaseUrl || process.env.GOOGLE_DRIVE_API_BASE_URL || 'https://www.googleapis.com').replace(/\/$/, '');
     this.driveUploadBaseUrl = (config.driveUploadBaseUrl || process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL || 'https://www.googleapis.com/upload').replace(/\/$/, '');
     this.sheetsApiBaseUrl = (config.sheetsApiBaseUrl || process.env.GOOGLE_SHEETS_API_BASE_URL || 'https://sheets.googleapis.com').replace(/\/$/, '');
@@ -56,13 +47,6 @@ export class GooglePublisher implements Publisher {
     if (this.config.oauthToken || process.env.GOOGLE_OAUTH_TOKEN) {
       return {
         token: this.config.oauthToken || process.env.GOOGLE_OAUTH_TOKEN,
-        hasKey: true,
-        source: 'token',
-      };
-    }
-    if (this.config.driveUploadFn || this.config.sheetAppendFn || this.config.emulateNetworkForTesting) {
-      return {
-        token: this.config.oauthToken || 'mock_fn_token',
         hasKey: true,
         source: 'token',
       };
@@ -272,7 +256,7 @@ export class GooglePublisher implements Publisher {
         completedAt: new Date().toISOString(),
         state: 'failed',
         detail: { verified: false, filesUploaded: 0 },
-        emulated: this.config.emulateNetworkForTesting === true,
+        emulated: false,
       };
       this.inMemoryLedger.set(request.publicationKey, emptyReceipt);
       return { ok: true, value: emptyReceipt };
@@ -280,7 +264,7 @@ export class GooglePublisher implements Publisher {
 
     // 5. Resolve credentials & token
     const token = await this.getAccessToken();
-    if (!token && !this.config.emulateNetworkForTesting) {
+    if (!token) {
       return {
         ok: false,
         error: {
@@ -344,35 +328,19 @@ export class GooglePublisher implements Publisher {
       let readbackData: any = undefined;
       let webViewLink: string = '';
 
-      if (this.config.emulateNetworkForTesting) {
-        uploadedFileId = `emulated_file_${file.artifactId}`;
-        readbackData = {
-          name: file.filename,
-          mimeType: file.mimeType,
-          size: fileBuffer.length,
-        };
-        webViewLink = `https://drive.google.com/file/d/${uploadedFileId}/view`;
-      } else {
-        // Ask Drive before uploading, every time. An upload whose reply is lost, or a process killed
-        // between the upload and the database record, leaves a file in the folder that nothing here
-        // remembers; a fresh process then uploaded a second copy. The earlier lookup ran only for a
-        // request flagged isRetry or reconcileFirst, which no caller ever set, so in production it
-        // never ran. Every file is stamped with taskId and artifactId when uploaded (below), and that
-        // is what identifies it: a name and a size can belong to someone else's file.
-        //
-        // The same bytes already there are adopted. A file for this artifact with different bytes is
-        // an earlier revision, so the new one is uploaded beside it. If Drive cannot answer, nothing
-        // is uploaded: a duplicate in a client's folder cannot be taken back, a retry can.
-        const lookup = await this.findUploadedArtifact(token!, driveFolderId, request.taskId, file);
-        if (!lookup.ok) return lookup;
-        if (lookup.value) {
-          uploadedFileId = lookup.value.id;
-          readbackData = lookup.value;
-          webViewLink = lookup.value.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
-        }
+      // Ask Drive before uploading, every time. An upload whose reply is lost, or a process killed
+      // between the upload and the database record, leaves a file in the folder that nothing here
+      // remembers; a fresh process then uploaded a second copy.
+      const lookup = await this.findUploadedArtifact(token!, driveFolderId, request.taskId, file);
+      if (!lookup.ok) return lookup;
+      if (lookup.value) {
+        uploadedFileId = lookup.value.id;
+        readbackData = lookup.value;
+        webViewLink = lookup.value.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
+      }
 
-        if (!uploadedFileId) {
-          const boundary = `-------HawaBoundary${crypto.randomBytes(16).toString('hex')}`;
+      if (!uploadedFileId) {
+        const boundary = `-------HawaBoundary${crypto.randomBytes(16).toString('hex')}`;
           const metadata = JSON.stringify({
             name: file.filename,
             parents: [driveFolderId],
@@ -446,18 +414,15 @@ export class GooglePublisher implements Publisher {
           readbackData = await readbackRes.json() as any;
           webViewLink = readbackData.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
         }
-      }
 
-      const readbackIdMatches = readbackData ? (readbackData.id === uploadedFileId || this.config.emulateNetworkForTesting) : true;
+      const readbackIdMatches = readbackData ? readbackData.id === uploadedFileId : true;
       const readbackNameMatches = readbackData ? readbackData.name === file.filename : true;
       const readbackSizeMatches = readbackData ? Number(readbackData.size) === fileBuffer.length : true;
       const readbackMimeMatches = readbackData ? (!readbackData.mimeType || readbackData.mimeType === file.mimeType) : true;
-      const readbackChecksumMatches = this.config.emulateNetworkForTesting
-        ? true
-        : Boolean(
-            readbackData?.sha256Checksum &&
-            readbackData.sha256Checksum.toLowerCase() === file.sha256.toLowerCase()
-          );
+      const readbackChecksumMatches = Boolean(
+        readbackData?.sha256Checksum &&
+        readbackData.sha256Checksum.toLowerCase() === file.sha256.toLowerCase()
+      );
       const fileVerified = Boolean(
         readbackIdMatches &&
         readbackNameMatches &&
@@ -500,7 +465,7 @@ export class GooglePublisher implements Publisher {
             filesUploaded: driveFiles.length,
             error: `Remote readback verification failed for ${file.filename}: checksum or metadata mismatch`,
           },
-          emulated: this.config.emulateNetworkForTesting === true,
+          emulated: false,
         };
         this.inMemoryLedger.set(request.publicationKey, receipt);
         return { ok: true, value: receipt };
@@ -536,7 +501,7 @@ export class GooglePublisher implements Publisher {
         filesUploaded: driveFiles.length,
         ...(sheetResult.problem ? { sheetProblem: sheetResult.problem } : {}),
       },
-      emulated: this.config.emulateNetworkForTesting === true,
+      emulated: false,
     };
     (receipt as any).clientId = request.clientId;
 
@@ -567,24 +532,6 @@ export class GooglePublisher implements Publisher {
       request.packageHash,
     ];
 
-    if (this.config.emulateNetworkForTesting) {
-      // Emulated row with immutable task identity guarantee across row inserts/moves/sorts
-      let sheet = this.emulatedSheets.get(spreadsheetId);
-      if (!sheet) {
-        sheet = [];
-        this.emulatedSheets.set(spreadsheetId, sheet);
-      }
-      const existing = sheet.find((r) => r.values && r.values[0] === request.taskId);
-      if (existing) {
-        existing.values = rowValues;
-        this.taskRowMap.set(request.taskId, existing.rowNumber);
-        return { rowNumber: existing.rowNumber, synced: true };
-      }
-      const newRowNumber = sheet.length > 0 ? Math.max(...sheet.map((r) => r.rowNumber)) + 1 : (this.taskRowMap.size + 2);
-      sheet.push({ rowNumber: newRowNumber, values: rowValues });
-      this.taskRowMap.set(request.taskId, newRowNumber);
-      return { rowNumber: newRowNumber, synced: true };
-    }
     if (!token) return { rowNumber, synced: false, problem: 'Google Workspace credentials are not configured' };
 
     try {
@@ -707,19 +654,11 @@ export class GooglePublisher implements Publisher {
     return undefined;
   }
 
-  getEmulatedSheet(spreadsheetId: string): Array<{ rowNumber: number; values: string[] }> {
-    return this.emulatedSheets.get(spreadsheetId) || [];
-  }
-
-  setEmulatedSheet(spreadsheetId: string, rows: Array<{ rowNumber: number; values: string[] }>): void {
-    this.emulatedSheets.set(spreadsheetId, rows);
-  }
-
   async reconcile(_ctx: RequestContext, publicationId: UUID): Promise<Result<PublicationReceipt>> {
     const token = await this.getAccessToken();
     for (const receipt of this.inMemoryLedger.values()) {
       if (receipt.publicationId === publicationId) {
-        if (receipt.state === 'failed' || !receipt.detail?.verified || receipt.emulated || receipt.sheet.rowNumber === undefined) {
+        if (receipt.state === 'failed' || !receipt.detail?.verified || receipt.sheet.rowNumber === undefined) {
           return { ok: true, value: receipt };
         }
 
