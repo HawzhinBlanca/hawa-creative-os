@@ -117,11 +117,22 @@ T_START=$(date +%s)
 # A gate checks; it does not repair. Regenerating into the working tree and comparing against HEAD
 # tells us whether the committed manifest is stale, and the tree is put back either way. These two
 # files are generated artifacts and are never hand-edited, so restoring them loses nothing.
+#
+# The comparison skips the three manifest files' own entries. MANIFEST.json and RELEASE_MANIFEST.json
+# each embed a `generatedAt` timestamp, so their bytes — and therefore their checksums, and therefore
+# the SHA256SUMS lines recording them — differ on every regeneration and can never converge. That is
+# worth knowing on its own: it means the "cryptographic release manifest" cannot be independently
+# reproduced, and its hash attests only that nobody hand-edited the file, not that its contents
+# follow from the tree. Every other one of the ~240 entries is content-derived and stable, which is
+# what this check is actually about.
+GATE_SUMS_BEFORE="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
 python3 "${ROOT_DIR}/scripts/refresh_manifest.py"
-if ! git -C "${ROOT_DIR}" diff --quiet -- MANIFEST.json SHA256SUMS.txt; then
-  git -C "${ROOT_DIR}" checkout -- MANIFEST.json SHA256SUMS.txt
-  echo "FATAL: the committed manifest is stale — regenerating it produces different checksums."
-  echo "       Run: python3 scripts/refresh_manifest.py && npx tsx scripts/generate_release_manifest.ts"
+GATE_SUMS_AFTER="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
+git -C "${ROOT_DIR}" checkout -- MANIFEST.json SHA256SUMS.txt 2>/dev/null || true
+if [ "${GATE_SUMS_BEFORE}" != "${GATE_SUMS_AFTER}" ]; then
+  echo "FATAL: the committed manifest is stale — regenerating it changes the checksum of a tracked file."
+  diff <(echo "${GATE_SUMS_BEFORE}") <(echo "${GATE_SUMS_AFTER}") | head -10
+  echo "       Run: npx tsx scripts/generate_release_manifest.ts && python3 scripts/refresh_manifest.py"
   echo "       then commit MANIFEST.json, SHA256SUMS.txt and RELEASE_MANIFEST.json, and re-run this gate."
   exit 1
 fi
