@@ -1,4 +1,5 @@
 import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
+import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -1635,13 +1636,28 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
+    // A client message that intake could not accept and had to park. Someone has to read it and
+    // answer the sender, so it shows here for 48 hours, which is what the watchdog pages on.
+    let parkedUpdates = 0;
+    if (db && dbStatus === 'connected') {
+      try {
+        parkedUpdates = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+          Number((await sql<{ n: string }>`SELECT count(*) AS n FROM hawa.inbox_events
+            WHERE tenant_id = ${DEFAULT_TENANT_ID}::uuid AND event_kind = 'telegram_update_parked'
+              AND received_at > now() - interval '48 hours'`.execute(trx)).rows[0]?.n || 0));
+      } catch {
+        // The database probe above reports an unreachable database.
+      }
+    }
+
     // Production without a database handle keeps state in process memory only: that is an outage.
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
-      || funnelStatus === 'stalled';
+      || funnelStatus === 'stalled'
+      || parkedUpdates > 0;
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -1689,6 +1705,7 @@ export function createApp(options?: CreateAppOptions) {
       },
       dependencies: {
         postgres: dbStatus,
+        parkedClientMessages: parkedUpdates,
         canva: canvaStatus,
         canvaCircuitBreaker: canvaBreakerState.state,
         telegram: telegramStatus,
@@ -9952,48 +9969,32 @@ export function createApp(options?: CreateAppOptions) {
     process.env.NODE_ENV !== 'test' &&
     process.env.VITEST !== 'true'
   ) {
-    const poisonedUpdateAttempts = new Map<number, number>();
-    telegramBridge.startPolling(async (update) => {
-      const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-      if (!secret) {
-        console.error('[TelegramBridge] Ingress dispatch halted: TELEGRAM_WEBHOOK_SECRET is not configured');
-        return;
-      }
-      const attempts = (poisonedUpdateAttempts.get(update.update_id) || 0) + 1;
-      poisonedUpdateAttempts.set(update.update_id, attempts);
-      if (attempts > 3) {
-        // Three failed deliveries of the same update: skip it so the office queue keeps moving.
-        console.error(`[TelegramBridge] Update ${update.update_id} failed ${attempts - 1} times; skipping it to unblock intake`);
-        poisonedUpdateAttempts.delete(update.update_id);
-        return;
-      }
-      try {
+    // A failing update is retried, then parked for an operator with the sender told. It is never
+    // skipped: see polled-update-dispatch.ts.
+    const handlePolledUpdate = createPolledUpdateHandler<any>({
+      deliver: async (update) => {
+        const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+        if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET is not configured');
         const res = await app.request('/api/webhooks/telegram?generate=true', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-telegram-bot-api-secret-token': secret,
-          },
+          headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
           body: JSON.stringify(update),
         });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, errText);
-          if (res.status >= 500 || res.status === 429) throw new Error(`Retryable Telegram ingress HTTP ${res.status}`);
-        } else {
-          const resJson: any = await res.json().catch(() => ({}));
-          if (resJson.duplicate) {
-            console.warn(`[TelegramBridge] Update ${update.update_id} skipped as duplicate`);
-          } else {
-            console.log(`[TelegramBridge] Ingress update ${update.update_id} processed successfully`);
-          }
-        }
-        poisonedUpdateAttempts.delete(update.update_id);
-      } catch (err) {
-        console.error('[TelegramBridge] Ingress error processing update:', err);
-        throw err;
-      }
+        if (!res.ok) console.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, await res.text().catch(() => ''));
+        return res.status;
+      },
+      park: async (update, reason) => {
+        if (!db) throw new Error('no database to park the update in');
+        await parkTelegramUpdate(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID }, update, reason);
+      },
+      notifySender: async (update, text) => {
+        const chatId = update?.message?.chat?.id ?? update?.edited_message?.chat?.id ?? update?.callback_query?.message?.chat?.id;
+        if (chatId === undefined || chatId === null) return;
+        const sent = await telegramBridge.dispatchOutboundMessage(chatId, { text });
+        if (!sent.success) throw new Error(sent.error || 'send failed');
+      },
     });
+    telegramBridge.startPolling(handlePolledUpdate);
   }
 
   return app;
