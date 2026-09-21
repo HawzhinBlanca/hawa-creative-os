@@ -193,6 +193,12 @@ async function main(argv) {
     process.exit(2);
   }
 
+  console.log('================================================================================');
+  console.log('[GATE:PREPARE] Replaying stored layouts through local preparation code.');
+  console.log('  NOTE: This gate makes 0 model calls and validates preparation invariants only.');
+  console.log('  For prompt/model changes, run live evals: scripts/experiments/judge-model-agreement.ts');
+  console.log('================================================================================');
+
   const creative = await import(path.join(ROOT, 'packages/creative/dist/index.js'));
   const reference = creative.studioReferenceFromRaw(
     JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/creative/assets/kaae-reference.json'), 'utf8'))

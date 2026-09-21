@@ -182,7 +182,11 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       const before = String(result.status);
       try {
         result = await ctx.run('canva-studio-resume-' + n, () =>
-          call('/canva/studio/' + encodeURIComponent(result.runId) + '/resume', {})
+          call(
+            '/canva/studio/' + encodeURIComponent(result.runId) + '/resume',
+            {},
+            'workflow-studio-resume-' + input.taskId + '-' + result.runId + '-' + n
+          )
         );
       } catch (error) {
         return await handleBoundaryError(error, 'DESIGN_REJECTED');

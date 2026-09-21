@@ -695,6 +695,21 @@ export function loadRenderFontRegistry(options: { registryPath?: string } = {}):
   return registry;
 }
 
+// Remediating Tech Debt Item 16: Derive script families dynamically from registry
+try {
+  const defaultRegistry = loadRenderFontRegistry();
+  if (defaultRegistry?.families) {
+    for (const [name, fam] of Object.entries(defaultRegistry.families)) {
+      if (fam.script === 'arabic') {
+        ARABIC_SCRIPT_FAMILIES.add(name);
+        if (fam.name) ARABIC_SCRIPT_FAMILIES.add(fam.name);
+      }
+    }
+  }
+} catch {
+  // Retains baseline ARABIC_SCRIPT_FAMILIES fallback
+}
+
 /** A path declared in render-fonts.json, resolved against packages/creative or host system. */
 function creativeFilePath(relative: string): string | undefined {
   if (path.isAbsolute(relative)) return fs.existsSync(relative) ? relative : undefined;

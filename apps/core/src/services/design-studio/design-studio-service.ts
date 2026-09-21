@@ -1764,12 +1764,16 @@ export class DesignStudioService {
       winnerCandidateId: candidateId,
     });
 
-    return {
-      runId,
-      status: 'transferring',
-      winnerCandidateId: candidateId,
-      message: 'Candidate selected; ready for Canva transfer.',
-    };
+    try {
+      return await this.resume(s, taskId, runId);
+    } catch {
+      return {
+        runId,
+        status: 'transferring',
+        winnerCandidateId: candidateId,
+        message: 'Candidate selected; ready for Canva transfer.',
+      };
+    }
   }
 
   /**
