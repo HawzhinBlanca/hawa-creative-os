@@ -92,9 +92,15 @@ export interface RouteContext {
 
   // Shared utility functions
   verifyRequestAuth: (c: any) => AuthContext;
-  problem: (c: any, status: number, title: string, detail: string, ext?: Record<string, any>) => Response;
+  problem: (c: any, status: number, title: string, detail?: string, ext?: Record<string, any>) => Response;
   broadcastEvent: (type: string, data: any) => void;
   honestHealthHandler: (c: any) => Promise<Response>;
   handleDecommissionedFigmaRoute: (c: any) => Response;
+  ensureSessionLoaded?: (token?: string) => Promise<void>;
+  bearerTokenOf?: (c: any) => string | undefined;
+  saveSession?: (token: string, session: any) => void;
+  persistSession?: (token: string, session: any) => Promise<boolean>;
+  revokeSession?: (token: string) => Promise<void>;
+  clientRepo?: any;
   options?: any;
 }

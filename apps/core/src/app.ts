@@ -155,6 +155,10 @@ import {
   type DeliverableStore,
 } from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
+import { registerAuthRoutes } from './routes/auth.routes.js';
+import { registerClientsRoutes } from './routes/clients.routes.js';
+import { registerEvalsRoutes } from './routes/evals.routes.js';
+import { registerIngressRoutes } from './routes/ingress.routes.js';
 import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
 import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
@@ -1824,120 +1828,22 @@ export function createApp(options?: CreateAppOptions) {
     broadcastEvent: broadcast,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
+    ensureSessionLoaded,
+    bearerTokenOf,
+    saveSession,
+    persistSession,
+    revokeSession,
+    clientRepo,
     options,
   };
 
   registerSystemRoutes(routeContext);
   registerCanvaRoutes(routeContext, options?.canvaOptions);
   registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
-
-  // Authenticated Session Endpoints (H01, FR-076, FR-078)
-  registerRoute('get', '/auth/session', async (c: any) => {
-    await ensureSessionLoaded(bearerTokenOf(c));
-    const auth = verifyRequestAuth(c);
-    if (!auth.authenticated) {
-      return problem(c, 401, 'Unauthorized', 'No active session or valid credentials found');
-    }
-    return c.json({
-      authenticated: true,
-      tenantId: auth.tenantId,
-      user: {
-        id: auth.userId,
-        role: auth.role,
-        displayName: auth.displayName || (auth.role === 'administrator' ? 'Administrator' : auth.role === 'art_director' ? 'Art Director' : 'Primary Operator'),
-      },
-    }, 200);
-  });
-
-  registerRoute('post', '/auth/session', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const key = (body.token || body.key || body.apiKey || body.password || '').trim();
-    const requestedEmail = (body.email || '').trim().toLowerCase();
-    const requestedRole = (body.role || '').trim().toLowerCase();
-
-    const adminKey = process.env.HAWA_ADMIN_KEY;
-    const operatorKey = process.env.HAWA_BEARER_TOKEN || process.env.HAWA_API_KEY || process.env.HAWA_DEV_TOKEN;
-    const reviewerKey = process.env.HAWA_REVIEWER_KEY;
-    const artDirectorKey = process.env.HAWA_ART_DIRECTOR_KEY;
-
-    let resolvedRole: string | null = null;
-    let resolvedUserId: string = '00000000-0000-4000-b000-000000000001';
-    let resolvedDisplayName: string = 'Primary Operator';
-    // Constant-time comparison: a wrong key costs the same whether it differs in the first or last byte.
-    const same = (candidate: string, configured: string | undefined): boolean => {
-      if (!configured) return false;
-      const a = Buffer.from(candidate), b = Buffer.from(configured);
-      return a.length === b.length && crypto.timingSafeEqual(a, b);
-    };
-
-    // 1. Validate by secret key / token
-    if (key) {
-      if (same(key, adminKey)) {
-        resolvedRole = 'administrator';
-        resolvedUserId = '00000000-0000-4000-b000-000000000002';
-        resolvedDisplayName = 'Administrator';
-      } else if (same(key, reviewerKey) || same(key, artDirectorKey)) {
-        resolvedRole = 'art_director';
-        resolvedUserId = '00000000-0000-4000-b000-000000000002';
-        resolvedDisplayName = 'Art Director';
-      } else if (same(key, operatorKey) || same(key, process.env.HAWA_BEARER_TOKEN) || same(key, process.env.HAWA_API_KEY) || same(key, process.env.HAWA_DEV_TOKEN)) {
-        resolvedRole = 'operator';
-        resolvedUserId = '00000000-0000-4000-b000-000000000001';
-        resolvedDisplayName = 'Primary Operator';
-      } else if (options?.extraBearerTokens && options.extraBearerTokens[key]) {
-        const entry = options.extraBearerTokens[key];
-        if (typeof entry === 'string') {
-          resolvedRole = entry;
-          resolvedUserId = entry === 'administrator' ? adminUserId : operatorUserId;
-          resolvedDisplayName = `Test ${entry}`;
-        } else {
-          resolvedRole = entry.role;
-          resolvedUserId = entry.sub || operatorUserId;
-          resolvedDisplayName = entry.email || `Test ${entry.role}`;
-        }
-      }
-    }
-
-    // Email addresses and requested roles are claims, not authentication.
-    // A configured office credential must establish identity before a session exists.
-    if (!resolvedRole) {
-      return problem(c, 401, 'Unauthorized', 'Invalid credentials or access key');
-    }
-
-    const sessionToken = `hawa_sess_${crypto.randomUUID().replace(/-/g, '')}`;
-    const sessionRecord = {
-      authenticated: true,
-      tenantId: '00000000-0000-4000-a000-000000000001',
-      userId: resolvedUserId,
-      actorId: `sess_${resolvedUserId.slice(0, 8)}`,
-      role: resolvedRole,
-      displayName: resolvedDisplayName,
-    };
-    const issued = { ...sessionRecord, expiresAt: Date.now() + 24 * 60 * 60 * 1000, checkedAt: Date.now() };
-    saveSession(sessionToken, issued);
-    const durable = await persistSession(sessionToken, issued);
-
-    return c.json({
-      ok: true,
-      token: sessionToken,
-      durable,
-      tenantId: '00000000-0000-4000-a000-000000000001',
-      user: {
-        id: resolvedUserId,
-        role: resolvedRole,
-        displayName: resolvedDisplayName,
-      },
-    }, 201);
-  });
-
-  registerRoute('delete', '/auth/session', async (c: any) => {
-    const authHeader = c.req.header('Authorization');
-    if (authHeader) {
-      const token = authHeader.replace(/^Bearer\s*/, '').trim();
-      await revokeSession(token);
-    }
-    return c.json({ ok: true }, 200);
-  });
+  registerAuthRoutes(routeContext);
+  registerClientsRoutes(routeContext);
+  registerEvalsRoutes(routeContext);
+  registerIngressRoutes(routeContext);
 
   // Autonomous Inbound Chat Ingress & Vector Composition Engine (Invariants #1, #2, #4, #8, #10)
   async function ingestChatCampaignTask(input: {
