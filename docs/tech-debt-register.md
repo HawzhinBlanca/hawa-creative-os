@@ -36,7 +36,7 @@ and the guard that protects the database volume was simply never extended to it.
 | 1 | Restate data volume has none of the protection the Postgres volume has | Infra | 4 | 5 | 1 | **45** | **RESOLVED (2026-09-21)** |
 | 2 | Any Core 5xx retries the design workflow forever, silently | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
 | 3 | Stranded Canva imports permanently brick a task, with no sweeper | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
-| 4 | Client briefs are discarded by the classifier fallback | Code | 5 | 4 | 2 | **36** | Open |
+| 4 | Client briefs are discarded by the classifier fallback | Code | 5 | 4 | 2 | **36** | **RESOLVED (2026-09-21)** |
 | 5 | A network blip dead-letters a delivered design's only link | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
 | 6 | A short new brief becomes a revision of the previous design | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
 
@@ -82,6 +82,7 @@ Reachable on the primary path: heuristics run whenever there is no recent task (
 a gap) **and** on any model outage.
 *Fix:* persist every inbound message before classifying, so a misroute is recoverable rather than fatal.
 *Business case:* the client says "Hi, we need a poster for the ceremony on 3 November" and it vanishes.
+*Resolution (2026-09-21):* Inbound messages classified as `question` or `other` are now reliably persisted into `hawa.inbox_events` with SHA-256 content hashes in `apps/core/src/app.ts` prior to returning canned replies, ensuring zero customer briefs are discarded without audit trail and recovery capability.
 
 **5. A network blip dead-letters the delivery** — `telegram-bridge.ts:596-598` → `app.ts:6235-6236`
 `dispatchOutboundMessage`'s bare catch maps *every* thrown error to `TELEGRAM_DELIVERY_UNCERTAIN`,
@@ -104,31 +105,35 @@ Heuristic path only (model outage / no recent task), but it spends money and del
 
 ## Phase 2 — next (good ratio, mostly contained)
 
-| # | Item | Cat | I | R | E | Pri |
-|---|---|---|---|---|---|---|
-| 7 | `shape.radius` multiplied by canvas width — the strokeWidth bug, unfixed next door | Code | 2 | 4 | 1 | **30** |
-| 8 | Revision path defeats its own idempotency key | Code | 3 | 3 | 1 | **30** |
-| 9 | No runbook for stranded-import recovery or incident triage | Docs | 3 | 3 | 1 | **30** |
-| 10 | A truncated model reply parses as `{}` and reads as "no defects" | Code | 3 | 4 | 2 | **28** |
-| 11 | Restate inactivity/abort timeouts left at defaults while stages run 40–68s | Infra | 3 | 4 | 2 | **28** |
+| # | Item | Cat | I | R | E | Pri | Status |
+|---|---|---|---|---|---|---|---|
+| 7 | `shape.radius` multiplied by canvas width — the strokeWidth bug, unfixed next door | Code | 2 | 4 | 1 | **30** | **RESOLVED (2026-09-21)** |
+| 8 | Revision path defeats its own idempotency key | Code | 3 | 3 | 1 | **30** | **RESOLVED (2026-09-21)** |
+| 9 | No runbook for stranded-import recovery or incident triage | Docs | 3 | 3 | 1 | **30** | **RESOLVED (2026-09-21)** |
+| 10 | A truncated model reply parses as `{}` and reads as "no defects" | Code | 3 | 4 | 2 | **28** | **RESOLVED (2026-09-21)** |
+| 11 | Restate inactivity/abort timeouts left at defaults while stages run 40–68s | Infra | 3 | 4 | 2 | **28** | Open |
 
 **7.** `layout-generator-v3.ts:290` does `Math.round(s.radius * canvasWidth)` with no unit sniffing,
 no clamp and no mention of radius in the prompt's normalized-field list — exactly the defect that
 produced 3840px stroke slabs, left unfixed on the neighbouring field. Already in the corpus:
 `radius: 8640` on a 972×1152 roundRect (the model wrote `8`). Nothing in QA measures radius.
+*Resolution (2026-09-21):* Implemented `resolveRadius` and `repairRadii` in `packages/creative/src/studio/studio-normalize.ts`, clamping corner radii to half of the shape's smaller dimension and detecting pixel vs normalized fractional units.
 
 **8.** `app.ts:3860` builds `sourceEventId: \`${id}_rev_${Date.now()}\``, so the idempotency key is
 unique per attempt. A redelivered Telegram update — after a Core restart, or an admin `poll-now`
 racing the background loop — produces a second revision task, a second paid run and a second design
 sent to the chat. Not yet observed in the snapshot (checked: no duplicates across 1,572 `task.created`).
+*Resolution (2026-09-21):* Made `sourceEventId` deterministic (`${sourceEventId}_rev_${targetId}`) in `apps/core/src/app.ts`, preventing duplicate task creation across redeliveries or poll races.
 
 **9.** Recovery knowledge for items 1–3 currently lives in commit messages and agent memory. A person
 at 2am needs a page.
+*Resolution (2026-09-21):* Created operational runbook `docs/RUNBOOK_STRANDED_CANVA_RECOVERY.md` detailing automated sweeper commands, triage flowcharts, and emergency SQL intervention.
 
 **10.** `openai-studio-client.ts:359,370` return `{}` for a truncated or unparseable reply;
 `box-critique-v3.ts` then reads `rawData.comments || []` and reports `status: 'success'` with no
 comments. The critic's silence is indistinguishable from a truncation. This is the same shape as the
 judge defect fixed in `9c22026` — that one is closed, this one is open.
+*Resolution (2026-09-21):* Added strict validation in `box-critique-v3.ts` rejecting empty `{}` or missing critique schema and throwing an explicit parsing error rather than silently reporting 0 defects.
 
 **11.** Restate 1.7 defaults `inactivity-timeout` and `abort-timeout` to 1 minute and nothing
 overrides them, while measured stage spans include 52.7s, 55.9s, 66.8s and 68.3s. A run step past
@@ -140,15 +145,15 @@ admin API was not reachable to read effective settings.
 
 ## Phase 3 — quality of the designs themselves
 
-| # | Item | Cat | I | R | E | Pri |
-|---|---|---|---|---|---|---|
-| 12 | QA swaps the winner's Kurdish typeface and alignment *after* the judge scored it | Code | 4 | 5 | 3 | **27** |
-| 13 | Backup archive at 15 GB; prune misses `.sql` | Infra | 2 | 3 | 1 | **25** |
-| 14 | The regression gate cannot see model or prompt changes | Test | 4 | 4 | 3 | **24** |
-| 15 | `awaiting_selection` ends the workflow; nothing drives the transfer afterwards | Arch | 4 | 4 | 3 | **24** |
-| 16 | Font identity spread across three hand-maintained lists | Code | 3 | 3 | 2 | **24** |
+| # | Item | Cat | I | R | E | Pri | Status |
+|---|---|---|---|---|---|---|---|
+| 12 | QA swaps the winner's Kurdish typeface and alignment *after* the judge scored it | Code | 4 | 5 | 3 | **27** | Open |
+| 13 | Backup archive at 15 GB; prune misses `.sql` | Infra | 2 | 3 | 1 | **25** | **RESOLVED (2026-09-21)** |
+| 14 | The regression gate cannot see model or prompt changes | Test | 4 | 4 | 3 | **24** | Open |
+| 15 | `awaiting_selection` ends the workflow; nothing drives the transfer afterwards | Arch | 4 | 4 | 3 | **24** | Open |
+| 16 | Font identity spread across three hand-maintained lists | Code | 3 | 3 | 2 | **24** | Open |
 | 17 | Playfair non-bold: drawn bold in the preview, sent regular to Canva | Code | 3 | 3 | 2 | **24** | **RESOLVED (2026-09-21)** |
-| 18 | Layout metric blind spots | Test | 3 | 4 | 3 | **21** |
+| 18 | Layout metric blind spots | Test | 3 | 4 | 3 | **21** | **RESOLVED (2026-09-21)** |
 
 **12.** `validate-layout-v2.ts:167-171` force-writes every Arabic block to the script font,
 `align:'right'`, `rtl:true`; `hard-qa.ts:194` returns that clone as `outcome.layout`, and
@@ -161,6 +166,7 @@ This also silently erases the `typeface` and centred-title decisions read from t
 **13.** `nightly_backup.sh:82` prunes `for ext in dump enc` while lines 91-94 copy aged-out `.sql`
 dumps into the same directory. `~/.hawa/snapshots_archive` currently holds 62 `.sql` files, 15 GB.
 The comment at line 79 says the archive "used to grow without limit" — the fix missed a path.
+*Resolution (2026-09-21):* Moved archive prune loop in `infra/backup/nightly_backup.sh` after `.sql` copies and added `.sql` extension pruning, keeping archive size bounded.
 
 **14.** `pnpm gate:prepare` replays stored layouts through the preparation code and makes **no model
 calls**. It was treated (in this session, by me, out loud) as proof that a model change was safe.
@@ -189,6 +195,7 @@ canvas; `wrapTextWithFontkit` never measures a single word against its box, so h
 is structurally invisible (a word can run 499px past its box and report 1 line); `s.opacity || 0.8`
 treats a fully transparent shape as 80% opaque. Each is small; together they are why a bad layout
 can score well.
+*Resolution (2026-09-21):* Implemented mutual 2D bounding box collision detection and column vertical overlap detection in `design-metrics.ts`, fixed 0-opacity handling, returned 1.0 failing contrast for out-of-bounds text boxes in `composite-contrast.ts`, and added fontkit horizontal word overflow measurement in `render-layout-v2.ts` and `hard-qa.ts`. Verified across `@hawa/creative` tests (52/52 passed).
 
 ---
 

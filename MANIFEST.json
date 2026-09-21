@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-21T12:16:09Z",
+  "generatedAt": "2026-09-21T12:25:03Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 240,
+  "fileCount": 241,
   "files": [
     {
       "path": ".dockerignore",
@@ -588,6 +588,11 @@
       "bytes": 2604
     },
     {
+      "path": "docs/RUNBOOK_STRANDED_CANVA_RECOVERY.md",
+      "sha256": "dd19b6e67ef27b77c05d9ea98bbafdce8b95851af8ef373a8177662b5af43060",
+      "bytes": 3116
+    },
+    {
       "path": "docs/benchmark-protocol.md",
       "sha256": "b536df0796fe876c5805f47ed01994c82ed8412e371180c81e3431f6e6b2be0e",
       "bytes": 9584
@@ -599,8 +604,8 @@
     },
     {
       "path": "docs/tech-debt-register.md",
-      "sha256": "9bf36d9a3c61e9af138ed5ede600ab9fdd7eaea0afc99e568065c04480b387aa",
-      "bytes": 19281
+      "sha256": "c8573edfc77ce5fb6a07101d22cd7a20e899a4e573c3f0b29985eaf587d023d2",
+      "bytes": 21254
     },
     {
       "path": "evals/fault_injection_matrix.csv",

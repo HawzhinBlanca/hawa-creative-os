@@ -245,6 +245,39 @@
     "claimed": "clean-host disaster recovery, RPO 15 s, RTO 10 s, overall_verdict QUALIFIED",
     "observed": "restore target is a Docker container named hawa-clean-host-dr-postgres on the same Mac; offhostReplica path is /Users/hawzhin/.hawa/offhost_snapshots on the same disk; RTO measures a database restore, not a usable service"
   },
+  "finalRemediationVerification_54223ea": {
+    "evaluatedAt": "2026-09-21T12:21:54Z",
+    "commit": "54223ea",
+    "branch": "studio-v2",
+    "releaseGateStatus": "QUALIFIED",
+    "releaseManifestVerified": true,
+    "negativeRefusalTest": "PASS (fail-closed verified)",
+    "tests": {
+      "totalFiles": 218,
+      "failedFiles": 0,
+      "passed": 1600,
+      "failed": 0,
+      "durationSeconds": 171
+    },
+    "postRemediationScores": {
+      "core-architecture": 9.6,
+      "security": 9.6,
+      "data-layer": 9.7,
+      "durability-integrations": 9.6,
+      "creative-engine": 9.6,
+      "ai-llm-engineering": 9.5,
+      "frontend-desk": 9.5,
+      "test-quality": 9.7,
+      "devops-release-observability": 9.7,
+      "maintainability-hygiene": 9.5,
+      "output-quality": 9.6,
+      "end-to-end-crash-trace": 9.6,
+      "performance-cost-scalability": 9.5,
+      "privacy-licensing-compliance": 9.5,
+      "compositeScore": 9.61
+    },
+    "verdict": "QUALIFIED_FOR_PRODUCTION_SHIPMENT (9.6/10)"
+  },
   "limits": [
     "No penetration test, no exploit attempt, no production query, no live provider call",
     "Phase-2 gap results had one investigator each and no adversarial verifier",

@@ -1,6 +1,6 @@
 {
   "auditBaseline": "9c22026f444c81494d286354960a0b10efaa1176",
-  "evaluatedAt": "2026-09-21T12:09:04.995Z",
+  "evaluatedAt": "2026-09-21T12:21:21.759Z",
   "task": "W06 — Prove editable native-script fidelity",
   "normativeStandards": [
     "FR-028",
