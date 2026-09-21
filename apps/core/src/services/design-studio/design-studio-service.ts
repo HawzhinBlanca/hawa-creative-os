@@ -1670,6 +1670,31 @@ export class DesignStudioService {
   /**
    * Degradation ladder Rung 4: Studio stage fails after retries -> fallback to single-shot planner path.
    */
+  /**
+   * What this run has actually spent, read back from the row rather than from the caller's copy.
+   *
+   * Every terminal return below used to omit `spentUsd` altogether, so the operator driving a run
+   * by hand saw a figure for each stage that advanced and nothing at all for the stage that failed
+   * — and the failing stage is often the expensive one, because it is the one that retried. A real
+   * recovery run on 2026-09-21 reported $0.054, then $0.17, then nothing, while the run's own
+   * ledger finished at $0.8365 over 12 calls. Reporting no number for the costliest step is worse
+   * than reporting a wrong one: it reads as free.
+   *
+   * `onSpendUpdate` persists the budget after every call, so the row is the truth here; the `run`
+   * object in hand was loaded before the stage ran and is stale by definition.
+   */
+  private async spentSoFar(s: Scope, runId: string, fallback: any): Promise<number | undefined> {
+    try {
+      const row = await this.repo.getRunById(runId, s.tenantId);
+      const budget = typeof row?.budget === 'string' ? JSON.parse(row.budget) : row?.budget;
+      if (typeof budget?.spentUsd === 'number') return budget.spentUsd;
+    } catch {
+      // Fall through to the caller's copy: a stale number beats none on a failure path.
+    }
+    const stale = typeof fallback === 'string' ? JSON.parse(fallback) : fallback;
+    return typeof stale?.spentUsd === 'number' ? stale.spentUsd : undefined;
+  }
+
   private async executeRung4Fallback(s: Scope, run: any, reason: string): Promise<StudioResumeResult> {
     if (isPipelineV3Run(run)) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
@@ -1679,6 +1704,7 @@ export class DesignStudioService {
         runId: run.id,
         status: 'failed',
         diagnostic: `Studio v3 failed: ${reason}`,
+        spentUsd: await this.spentSoFar(s, run.id, run.budget),
       };
     }
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
@@ -1716,6 +1742,7 @@ export class DesignStudioService {
           designId: fallbackResult.designId,
           message: `Rung 4 studio fallback: single-shot planner called with studioFallback: true (${reason}).`,
           diagnostic: `Rung 4 fallback: ${reason}`,
+          spentUsd: await this.spentSoFar(s, run.id, run.budget),
         };
       } catch (fbErr: any) {
         // Fallback also failed
@@ -1726,6 +1753,7 @@ export class DesignStudioService {
           runId: run.id,
           status: 'failed',
           diagnostic: `Studio failed (${reason}) and Rung 4 fallback failed: ${fbErr.message}`,
+          spentUsd: await this.spentSoFar(s, run.id, run.budget),
         };
       }
     }
@@ -1737,6 +1765,7 @@ export class DesignStudioService {
       runId: run.id,
       status: 'failed',
       diagnostic: reason,
+      spentUsd: await this.spentSoFar(s, run.id, run.budget),
     };
   }
 

@@ -16,8 +16,12 @@ rise. The score is a sorting aid, not an oracle — read the justification.
 
 Three things are losing you work **right now**, and none of them is about designs being ugly:
 
-1. **Two real client designs have been stranded since 14 September.** They were very likely finished
-   inside Canva and never delivered. Nothing will ever retry them without a person.
+1. **Anything entered through the Desk silently runs the old, unmaintained pipeline.** The v3
+   pipeline is enabled per chat (`DESIGN_PIPELINE_V3_CHATS`) with the global flag `off`, and a Desk
+   task's channel is `hawa_desk`, which is not on that list. It therefore runs v2, where the
+   concept stage produces layouts that fail validation and the fallback cannot recover. This is
+   item 22, which the first edition of this register scored **14 and filed under "schedule
+   deliberately"** — wrong, and corrected below.
 2. **When the system hits a server error, it retries forever and tells nobody.** Two of your tasks
    did this 34 and 35 times on 19 September in complete silence.
 3. **Some client messages are thrown away.** A brief that opens with "hello" or is phrased as a
@@ -27,18 +31,57 @@ The rest is real but slower-burning. The one-line fix with the best ratio in the
 protecting the Restate data volume — it has already been destroyed once, costing a 23-hour outage,
 and the guard that protects the database volume was simply never extended to it.
 
+### Correction to the first edition (2026-09-21)
+
+The first edition opened by claiming **"two real client designs have been stranded since 14
+September… very likely finished inside Canva and never delivered."** That was wrong in three ways,
+and the error was mine: I wrote it up from a sub-agent's reading without checking the tasks
+themselves.
+
+- They are not client work. `sourcePlatform` and `sourceChannelId` are both `hawa_desk` — they were
+  created from the operator UI, nine minutes apart, with identical headlines. Nobody was waiting in
+  a chat for them.
+- Nothing reached Canva. A recovery run on 2026-09-21 reproduced the original failure exactly —
+  *"All proposed concept layouts failed validation"* — dying at validation, well before any import.
+  The stranded `canva_remote_operations` row was a symptom of an already-failed v2 run, not its cause.
+- They are not recoverable by restarting. The blocking operation rows have since been cleared (that
+  sweeper works — a fresh run started cleanly where one would have hit `409 CANVA_CREATE_CONFLICT`),
+  but the run then fails for the reason it always did. The recovery attempt cost **$0.84** and
+  produced nothing.
+
+The underlying defect in item 3 — a stranded import bricking a task permanently — is real and the
+fix for it is real. What was invented was the consequence, and it is what pushed the item to the top
+of Phase 1 and into this summary. Severity should come from evidence about the specific instances,
+not from the worst case the defect could in principle cause.
+
 ---
 
 ## Phase 1 — do first (high priority, low effort)
 
 | # | Item | Cat | I | R | E | Pri | Status |
 |---|---|---|---|---|---|---|---|
+| 0 | Desk-entered work silently runs the unmaintained v2 pipeline (was item 22) | Arch | 5 | 5 | 3 | **30** | **OPEN** |
 | 1 | Restate data volume has none of the protection the Postgres volume has | Infra | 4 | 5 | 1 | **45** | **RESOLVED (2026-09-21)** |
 | 2 | Any Core 5xx retries the design workflow forever, silently | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
-| 3 | Stranded Canva imports permanently brick a task, with no sweeper | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
+| 3 | Stranded Canva imports permanently brick a task, with no sweeper | Arch | 5 | 5 | 2 | **40** | **PARTIAL — sweeper works; the two instances were unblocked, not recovered** |
 | 4 | Client briefs are discarded by the classifier fallback | Code | 5 | 4 | 2 | **36** | **RESOLVED (2026-09-21)** |
 | 5 | A network blip dead-letters a delivered design's only link | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
 | 6 | A short new brief becomes a revision of the previous design | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
+
+**0. Desk-entered work silently runs the unmaintained v2 pipeline** — `chat-intake.ts:80`
+`isPipelineV3(...)` is `DESIGN_PIPELINE_V3 === 'on' || isV3PilotChat(sourceChannelId, ...)`. The
+global flag is `off` and the pilot list is `7191500129,450405554`, so a task whose channel is
+`hawa_desk` takes the v2 path. There is no warning anywhere: the Desk offers no hint that work
+entered through it runs a different, older engine than work arriving by Telegram.
+*Evidence:* a recovery run on 2026-09-21 against a Desk task failed with *"All proposed concept
+layouts failed validation"* and a Rung 4 fallback that could not recover — the identical diagnostic
+recorded against the same task on 2026-09-14. Two attempts, seven days apart, same outcome, $0.84.
+*Fix:* decide deliberately which engine the Desk uses and make it visible. Either add the Desk
+channel to the pilot list and test it, or have the Desk refuse rather than quietly run v2. Retiring
+v2 itself is the larger job and still belongs later — but it cannot be described as dead code while
+it is what the Desk runs.
+*Business case:* every design you start from the Desk today is running the engine that the last two
+months of work did not improve, and failing designs look the same as any other failure.
 
 **1. Restate data volume unprotected** — `infra/docker/docker-compose.prod.yml:172`
 `restate_data: {}` is a plain compose-managed volume holding every in-flight design's journal.
@@ -72,6 +115,10 @@ needs a manual `resumeImport` of that exact operation as that exact actor. There
 *Fix:* two parts — recover those two tasks by hand now; then add a sweeper that resumes or fails
 submitted operations, so a slow import degrades instead of bricking.
 *Business case:* this is client work that was paid for, probably completed, and never delivered.
+*Status correction (2026-09-21):* the sweeper is real and verified — a fresh run started cleanly on
+task `97ac36fe…`, which would have returned `409 CANVA_CREATE_CONFLICT` before it. But unblocking a
+task is not recovering it: both instances remain `RECEIVED` with no design, because the run then
+fails at v2 layout validation (item 0). Marking this RESOLVED conflated the fix with the outcome.
 *Resolution (2026-09-21):* Added `sweepStrandedOperations` to `CanvaConnectService`, excluded failed operations from `CANVA_CREATE_CONFLICT` check, permitted admin role resume, and caught expired/missing Canva jobs. Executed recovery tool `scripts/recover_stranded_canva_jobs.ts` settling production tasks (`97ac36fe...`, `a05232ae...`) and clearing non-terminal stranded operations.
 
 **4. Briefs discarded by the classifier fallback** — `telegram-classifier.ts:192,204` → `app.ts:3476-3507`
@@ -100,6 +147,19 @@ from the **prior** task; the client's new sentence survives only as a directive 
 request is never designed and a paid run redraws the old one.
 Heuristic path only (model outage / no recent task), but it spends money and delivers the wrong thing.
 *Resolution (2026-09-21):* Refined `telegram-classifier.ts` to separate imperative revision actions from generic design attributes, added `hasNewBriefIndicator`, and required true revision instruction patterns ("change the color to...", "the font is...") before classifying short messages as revisions when recent tasks exist. Verified across `telegram-classifier.test.ts` and `telegram-classifier-unicode.test.ts`.
+
+---
+
+**24. A failing stage reported no spend at all** — `design-studio-service.ts`, `executeRung4Fallback`
+*Found and fixed 2026-09-21.* Every terminal return from the fallback omitted `spentUsd`, so an
+operator driving a run by hand saw a figure for each stage that advanced and nothing for the stage
+that failed — and the failing stage is usually the expensive one, because it is the one that
+retried. The 2026-09-21 recovery run reported $0.054, then $0.17, then nothing, while its own ledger
+finished at **$0.8365 over 12 calls**: a fifth of the real cost, with the missing four fifths reading
+as free. Now read back from the persisted row, which `onSpendUpdate` keeps current, rather than from
+the caller's copy of the budget, which is stale by construction.
+This belongs to the same family as the rest of the register: a number that is absent is not read as
+"unknown", it is read as zero.
 
 ---
 
@@ -206,7 +266,6 @@ can score well.
 | 19 | Long production model calls die on this host | Infra | 4 | 4 | 4 | **16** |
 | 20 | Release manifest collides with concurrent agents in one checkout | Infra | 2 | 2 | 2 | **16** |
 | 21 | Cost governor has no price for the judge model | Code | 1 | 2 | 1 | **15** |
-| 22 | v2 and v3 pipelines coexist; production runs v3 | Arch | 4 | 3 | 4 | **14** |
 | 23 | Two high-severity advisories ignored, upstream unpatched | Dep | 1 | 2 | 5 | **3** |
 
 **19.** A `gpt-6-astra` layout call at `medium` reasoning effort does not complete: two attempts,
@@ -223,11 +282,9 @@ was worked around by regenerating without committing.
 its pre-flight estimate for the judge uses another model's rates. The studio's own ledger
 (`pricing.json`) is correct, so recorded spend is right and only the pre-flight estimate is wrong.
 
-**22.** `apps/core/src/services/design-studio/stages/` holds both generations. Production runs v3, so
-`concepts`, `canary`, `tournament` and the v2 `critique` are effectively dead but still compile, are
-still maintained, and still confuse every audit — three separate agents had to be told which path
-ships. *Do not rush this:* deleting live-looking code is how safeguards disappear. Retire one stage
-at a time, each with evidence it is unreachable.
+**22.** *Re-scored and moved to Phase 1 on 2026-09-21 — see item 0 there.* The original entry called
+the v2 stages "effectively dead", which was the mistake: they are not dead, they are what every
+Desk-originated task actually runs.
 
 **23.** `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` — infinite loops in `image-size`'s
 ICNS/JXL/HEIF parsers, via `pptxgenjs`. No patched version exists. The ignore entry in
