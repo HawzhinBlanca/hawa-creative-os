@@ -48,10 +48,21 @@ const REVISION_KEYWORDS = [
   'ڕەنگ', 'فۆنت', 'گەورەتر', 'بچووکتر', 'تۆختر', 'کاڵتر', 'قەبارە'
 ];
 
+const REVISION_ACTION_KEYWORDS = [
+  // Explicit revision actions & comparative judgments
+  'better', 'worse', 'cleaner', 'less boxy', 'too boxy', 'boxy', 'repetitive', 'same design', 'earlier design', 'previous design',
+  'change', 'revise', 'revision', 'redo', 'redesign', 'start over', 'try another', 'different',
+  'fix', 'adjust', 'update', 'replace', 'swap', 'switch', 'move', 'shift', 'resize',
+  'larger', 'smaller', 'bigger', 'darker', 'lighter', 'brighter',
+  // Kurdish revision keywords
+  'دیزاینێکی تر', 'دەستکاری', 'گۆڕانکاری', 'چاککردنەوە', 'جیاواز بێت', 'باشتر بکە',
+  'دیزاینی پێشوو', 'ئەوەی پێشتر', 'هەمان دیزاین', 'بگۆڕە', 'بجوڵێنە', 'گەورەتر', 'بچووکتر', 'تۆختر', 'کاڵتر'
+];
+
 const INSTRUCTION_PATTERNS = [
-  /^(the\s+)?background\s+is\b/i,
+  /^(the\s+)?(background|colors?|colours?|fonts?|texts?|layout|logo)\s+(?:is|are)\b/i,
   /^(i\s+)?want\s+(some\s+kind\s+of|a|more|less)\b/i,
-  /^(can\s+you\s+)?make\s+it\b/i,
+  /^(can\s+you\s+)?make\s+(?:it|the)\b/i,
   /^(please\s+)?(change|adjust|fix|remove|add|replace|update|switch|move)\b/i,
   /^(make\s+it\s+look|looks?\s+(too|really|quite|very)?\s+(basic|cheap|bad|plain|simple|boxy))/i,
   /^(create\s+a\s+new\s+one\s+better|best\s+one\s+u\s+can)/i,
@@ -135,6 +146,11 @@ export function classifyWithHeuristics(
   // Check if text matches instruction-only patterns
   const matchesInstructionPattern = INSTRUCTION_PATTERNS.some((p) => p.test(trimmed));
   const hasRevisionKeyword = REVISION_KEYWORDS.some((kw) => containsKeyword(trimmed, kw));
+  const hasRevisionAction = REVISION_ACTION_KEYWORDS.some((kw) => containsKeyword(trimmed, kw));
+
+  // Detect explicit new design phrasing
+  const hasNewBriefIndicator = /\b(new\s+(?:poster|design|flyer|banner|brief|invitation)|another\s+(?:poster|design|event))\b/i.test(trimmed) || /(دیزاینێکی\s+نوێ|پۆستەری\s+نوێ)/u.test(trimmed);
+  const hasDesignKeyword = /\b(poster|design|flyer|banner|brochure|invitation)\b/i.test(trimmed) || /(دیزاین|پۆستەر|فلایەر|بانەر|بانگهێشت)/u.test(trimmed);
 
   // Detect whether the incoming message is a full structured brief with event body copy
   const hasMultipleParagraphs = trimmed.split(/\n\s*\n/).filter(Boolean).length >= 2;
@@ -144,14 +160,16 @@ export function classifyWithHeuristics(
   const isFullStructuredBrief = hasDivider || hasSectionHeader || (hasMultipleParagraphs && (hasEventIndicators || trimmed.length > 200));
 
   // Explicit revision triggers
-  const explicitRevisionPattern = /^(?:can\s+you\s+)?(?:make\s+it\b|change\b|adjust\b|fix\b|update\b|redo\b|redesign\b|retry\b|start\s+over\b|try\s+another\b|thats?\s+the\s+same\b|looks?\s+(?:too|really|quite|very)?\s*(?:basic|cheap|bad|plain|simple|boxy)|different\s+(?:font|color|layout)|move\s+the|resize\s+the|swap\s+the|remove\s+the|add\s+a|تکایە\s+بگۆڕە|بگۆڕە|دەستکاری|چاککردنەوە|دیزاینێکی\s+تر|ئەوەی\s+پێشتر|هەمان\s+دیزاین)/i;
+  const explicitRevisionPattern = /^(?:can\s+you\s+)?(?:make\s+(?:it|the)\b|change\b|adjust\b|fix\b|update\b|redo\b|redesign\b|retry\b|start\s+over\b|try\s+another\b|thats?\s+the\s+same\b|looks?\s+(?:too|really|quite|very)?\s*(?:basic|cheap|bad|plain|simple|boxy)|different\s+(?:font|color|layout)|move\s+the|resize\s+the|swap\s+the|remove\s+the|add\s+a|تکایە\s+بگۆڕە|بگۆڕە|دەستکاری|چاککردنەوە|دیزاینێکی\s+تر|ئەوەی\s+پێشتر|هەمان\s+دیزاین)/i;
   const isExplicitRevision = explicitRevisionPattern.test(trimmed);
 
   // Directions about how a design should look, rather than copy to set on it.
-  const looksLikeDirective = !isFullStructuredBrief && !hasEventIndicators && (
+  // A brief under 280 chars that mentions a color or styling noun (gold, navy, logo, title) without an
+  // explicit revision action verb is NOT a revision directive.
+  const looksLikeDirective = !isFullStructuredBrief && !hasEventIndicators && !hasNewBriefIndicator && (
     matchesInstructionPattern ||
     isExplicitRevision ||
-    (trimmed.length < 280 && hasRevisionKeyword)
+    (trimmed.length < 280 && hasRevisionAction && !hasDesignKeyword)
   );
   // A message written in several paragraphs carries copy, whatever styling words it also uses.
   // Reading one as instruction-only answered real briefs with "no copy or event details were found
@@ -188,7 +206,6 @@ export function classifyWithHeuristics(
 
   const words = trimmed.split(/\s+/).filter(Boolean);
   const wordCount = words.length;
-  const hasDesignKeyword = /\b(poster|design|flyer|banner|logo|brochure|invitation)\b/i.test(trimmed) || /(دیزاین|پۆستەر|فلایەر|بانەر|لۆگۆ|بانگهێشت)/u.test(trimmed);
   const hasSubstantialBriefContent = hasEventIndicators || (wordCount >= 12 && hasDesignKeyword) || wordCount >= 20;
 
   // 3. Greetings or bot slash-commands. A greeting on the first line of a message is an opening, not chatter:
@@ -220,7 +237,7 @@ export function classifyWithHeuristics(
   }
 
   // 5. Revision directives on recent active task
-  if (hasRecentTask && (isExplicitRevision || (hasRevisionKeyword && looksLikeDirective))) {
+  if (hasRecentTask && !hasNewBriefIndicator && (isExplicitRevision || (hasRevisionAction && looksLikeDirective) || (hasRevisionKeyword && matchesInstructionPattern))) {
     return {
       kind: 'feedback',
       intent: 'revision_feedback',

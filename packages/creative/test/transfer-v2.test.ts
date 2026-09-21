@@ -121,4 +121,26 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
     // 41px x 1.3 = 53.3px = 39.98pt, written in hundredths of a point.
     expect(slide).toContain('<a:lnSpc><a:spcPts val="3998"/></a:lnSpc>');
   });
+
+  it('maps effective bold weight to transfer plan and PowerPoint deck for Playfair Display (Item 17)', async () => {
+    // In preview, Playfair Display always resolves to Bold. The transfer plan and deck
+    // must send bold: true to Canva so Canva sets bold rather than regular.
+    const layout = {
+      ...baseLayout,
+      text: [
+        {
+          ...baseLayout.text[0],
+          fontFamily: 'Playfair Display',
+          bold: false,
+        },
+        baseLayout.text[1],
+      ],
+    };
+    const plan = studioLayoutV2ToTransferPlan(layout as StudioLayoutV2);
+    expect(plan.text[0].bold).toBe(true);
+
+    const res = await encodeStudioTransferV2(layout as StudioLayoutV2, copy);
+    const slide = strFromU8(unzipSync(new Uint8Array(res.bytes))['ppt/slides/slide1.xml']);
+    expect(slide).toContain('b="1"');
+  });
 });

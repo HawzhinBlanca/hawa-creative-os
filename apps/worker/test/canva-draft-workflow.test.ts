@@ -64,6 +64,33 @@ describe('native Canva workflow',()=>{
     await expect(runCanvaDraft(input,new DurableStepJournal(),remote)).rejects.toThrow('HTTP 503');
     expect(remote.mock.calls.some(c=>String(c[0]).includes('/notifications/'))).toBe(false);
   });
+  it('reports DESIGN_SERVER_ERROR to requester when retry attempts are exhausted on persistent 5xx', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const responses = [
+      Response.json({ tenantId: 'tenant', clientId: 'client' }),
+      Response.json({ ok: true }),
+    ];
+    const remote = vi.fn(async () => responses.shift());
+    const exhaustedContext = {
+      run: vi.fn(async (name: string, action: () => Promise<any>) => {
+        if (name === 'canva-create-draft') {
+          const terminalErr = new Error('Canva workflow Core boundary HTTP 500 INTERNAL_SERVER_ERROR');
+          terminalErr.name = 'TerminalError';
+          throw terminalErr;
+        }
+        return action();
+      }),
+      sleep: vi.fn(),
+    };
+    const result = await runCanvaDraft(input, exhaustedContext, remote);
+    expect(result.status).toBe('DESIGN_SERVER_ERROR');
+    expect(remote.mock.calls.some(c => String(c[0]).includes('/notifications/canva-status'))).toBe(true);
+    const notifyCall = remote.mock.calls.find(c => String(c[0]).includes('/notifications/canva-status'));
+    expect(JSON.parse(notifyCall[1].body)).toMatchObject({
+      status: 'DESIGN_SERVER_ERROR',
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  });
   it('drafts the size recorded at intake and falls back to the historical default without one',async()=>{
     vi.stubEnv('HAWA_BEARER_TOKEN','test-only');
     const sized=[Response.json({tenantId:'tenant',clientId:'client'}),Response.json({status:'uncertain',planId:'plan'}),Response.json({ok:true})];

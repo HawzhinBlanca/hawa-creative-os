@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-21T07:24:42Z",
+  "generatedAt": "2026-09-21T10:50:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 238,
+  "fileCount": 239,
   "files": [
     {
       "path": ".dockerignore",
@@ -594,8 +594,8 @@
     },
     {
       "path": "docs/tech-debt-register.md",
-      "sha256": "69be29c008d492dcd221e8fa1da8f0f061ff0cd0dcfff80fd227398b33694247",
-      "bytes": 16902
+      "sha256": "9bf36d9a3c61e9af138ed5ede600ab9fdd7eaea0afc99e568065c04480b387aa",
+      "bytes": 19281
     },
     {
       "path": "evals/fault_injection_matrix.csv",
@@ -1036,6 +1036,11 @@
       "path": "scripts/reconcile_production_tasks.ts",
       "sha256": "4bb501b454ad044ef8b007d4934822101a2475520370ecbf11d43bc998ef5014",
       "bytes": 1491
+    },
+    {
+      "path": "scripts/recover_stranded_canva_jobs.ts",
+      "sha256": "e100ce86d614b200d95a5cd1f730a54349ee877f33c1717ad02c3414c916709b",
+      "bytes": 5801
     },
     {
       "path": "scripts/refresh_manifest.py",

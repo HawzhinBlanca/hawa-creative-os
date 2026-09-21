@@ -26,6 +26,21 @@ describe('Telegram outbound receipts',()=>{
     expect(await bridge.dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_DELIVERY_UNCERTAIN'});
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('distinguishes pre-connection network errors from ambiguous delivery outcomes', async () => {
+    const connError = new TypeError('fetch failed');
+    (connError as any).cause = { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 149.154.167.220:443' };
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(connError);
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: 'Status' })).toEqual({
+      success: false,
+      error: 'TELEGRAM_NETWORK_ERROR',
+    });
+    const photoRes = await bridge.dispatchOutboundPhoto(123, Buffer.from('png-bytes'), 'Photo caption');
+    expect(photoRes).toEqual({
+      success: false,
+      error: 'TELEGRAM_NETWORK_ERROR',
+    });
+  });
   it('does not claim delivery without credentials',async()=>{
     const fetch=vi.spyOn(globalThis,'fetch');
     expect(await new TelegramBridgeDaemon().dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_NOT_CONFIGURED'});

@@ -62,6 +62,26 @@ else
 fi
 echo "✓ postgres volume '$VOLUME_NAME' verified (created at ${VOLUME_CREATED})"
 
+# 1c. Restate volume durability verification: volume must exist and creation timestamp must match
+RESTATE_VOLUME_NAME="hawa-production_restate_data"
+RESTATE_VOLUME_STAMP_FILE="${SCRIPT_DIR}/.restate_volume_created"
+if ! docker volume inspect "$RESTATE_VOLUME_NAME" >/dev/null 2>&1; then
+  echo "ERROR: Restate volume '$RESTATE_VOLUME_NAME' does not exist! Refusing to start or recreate." >&2
+  exit 1
+fi
+RESTATE_VOLUME_CREATED="$(docker volume inspect "$RESTATE_VOLUME_NAME" --format '{{.CreatedAt}}')"
+if [[ -f "$RESTATE_VOLUME_STAMP_FILE" ]]; then
+  EXPECTED_RESTATE_STAMP="$(tr -d '[:space:]' < "$RESTATE_VOLUME_STAMP_FILE")"
+  if [[ "$RESTATE_VOLUME_CREATED" != "$EXPECTED_RESTATE_STAMP" ]]; then
+    echo "ERROR: Restate volume creation timestamp changed! Expected: '$EXPECTED_RESTATE_STAMP', Got: '$RESTATE_VOLUME_CREATED'. Refusing deployment to prevent data loss." >&2
+    exit 1
+  fi
+else
+  echo "$RESTATE_VOLUME_CREATED" > "$RESTATE_VOLUME_STAMP_FILE"
+fi
+echo "✓ restate volume '$RESTATE_VOLUME_NAME' verified (created at ${RESTATE_VOLUME_CREATED})"
+
+
 # 2. Configuration must exist and must be real
 ENV_FILE="${SCRIPT_DIR}/.env.production"
 INTERP_FILE="${SCRIPT_DIR}/.env"

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
-import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm } from './render-layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fontFaceSupports } from './render-layout-v2.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 /**
@@ -129,6 +129,13 @@ export function scrimShapesForBox(box: Box, scrim: NonNullable<ArtConfig['scrim'
   return shapes;
 }
 
+export function effectiveBold(t: { fontFamily: string; bold?: boolean; italic?: boolean }): boolean {
+  if ((t.fontFamily || '').toLowerCase().includes('playfair')) {
+    return fontFaceSupports(t.fontFamily, t.bold, t.italic).bold;
+  }
+  return Boolean(t.bold);
+}
+
 export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
   // The layout's own rtl flag decides direction, with the cursive-script families as a safety net.
   // The previous test — an Arabic-ish family name OR right alignment — got this wrong both ways:
@@ -166,8 +173,8 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       fontFamily: t.fontFamily,
       color: t.color,
       align: t.align,
-      bold: t.bold,
-      italic: t.italic,
+      bold: effectiveBold(t),
+      italic: Boolean(t.italic),
       opacity: t.opacity,
       // The tracking as drawn, in em, not the model's raw request: the plan is both the manifest's
       // record of the delivered design and an input the v1 encoder accepts, and a plan carrying a
@@ -439,8 +446,8 @@ export async function encodeStudioTransferV2(
       // was forced right, so a centred Kurdish title reached Canva flush right (task 8fb76534,
       // 2026-09-19). With rtl="1" the alignment is still absolute: "ctr" centres, "r" is right.
       align: t.align,
-      bold: t.bold || false,
-      italic: t.italic || false,
+      bold: effectiveBold(t),
+      italic: Boolean(t.italic),
       margin: 0,
       lineSpacing: Math.round(t.fontSize * (t.lineHeight || (isArabic ? 1.7 : 1.3)) * 0.75 * 100) / 100,
       breakLine: false,

@@ -99,6 +99,27 @@ By Invitation Only`;
       expect(res.isInstructionOnly).toBe(false);
       expect(res.confidence).toBeGreaterThanOrEqual(0.9);
     });
+
+    it('does not hijack a short brief mentioning passive keywords (gold, navy, title) into a revision when prior task exists', () => {
+      const shortBrief = 'New poster: Gold and Navy Gala, Erbil International Hotel, 8 PM';
+      const res = classifyWithHeuristics(shortBrief, true, false);
+      expect(res.intent).toBe('new_brief');
+      expect(res.kind).toBe('new_brief');
+    });
+
+    it('does not hijack a brand-new design request with color notes into a revision', () => {
+      const newBrief = 'Please design a new flyer for our annual meeting with gold accents and navy background';
+      const res = classifyWithHeuristics(newBrief, true, false);
+      expect(res.intent).toBe('new_brief');
+      expect(res.kind).toBe('new_brief');
+    });
+
+    it('still correctly classifies explicit revision directives on colors or titles as revision_feedback', () => {
+      const revisionDirective = 'make the title larger and gold';
+      const res = classifyWithHeuristics(revisionDirective, true, false);
+      expect(res.intent).toBe('revision_feedback');
+      expect(res.kind).toBe('feedback');
+    });
   });
 
   describe('classifyInboundTelegramMessage with model & fallback', () => {

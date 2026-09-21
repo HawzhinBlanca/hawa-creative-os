@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID }
 import { sql, withRlsContext, CanvaBindingRepository, type Database, type Kysely } from '@hawa/db';
 import { CanvaConnectClient, CanvaCapturePipeline } from '@hawa/integrations';
 
-type Scope = { tenantId: string; actorId: string };
+type Scope = { tenantId: string; actorId: string; role?: string };
 export class CanvaFlowError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }
@@ -69,7 +69,7 @@ export class CanvaConnectService {
       accessToken: token, refreshToken, customFetch: this.options.fetcher });
   }
   private tx<T>(s: Scope, f: (db: Kysely<Database>) => Promise<T>): Promise<T> {
-    return withRlsContext(this.db, { tenantId: s.tenantId, userId: s.actorId, role: 'operator' }, f);
+    return withRlsContext(this.db, { tenantId: s.tenantId, userId: s.actorId, role: s.role || 'operator' }, f);
   }
   async status(s: Scope) {
     const config = this.configuration();
@@ -227,7 +227,7 @@ export class CanvaConnectService {
     const claimed=await this.tx(s,async db=>{
       const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');
-      const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' LIMIT 1`.execute(db)).rows[0];
+      const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' AND status != 'failed' LIMIT 1`.execute(db)).rows[0];
       if(prior){
         if(prior.request_key!==key||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A different creation exists. Inspect it instead of making another document');
         return {id:prior.id,created:false};
@@ -251,10 +251,16 @@ export class CanvaConnectService {
     return this.resumeImport(s,taskId,claimed.id);
   }
   async resumeImport(s:Scope,taskId:string,id:string) {
-    const op=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
+    const op=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND (actor_id=${s.actorId} OR ${s.role}='admin')`.execute(db)).rows[0]);
     if(!op||op.kind!=='create'||op.metadata?.method!=='pptx_import')fail(404,'CANVA_IMPORT_NOT_FOUND','Import operation not found');
     if(op.status==='retrieved'||!op.remote_job_id)return {operationId:id,status:op.status,designId:op.design_id};
-    const result=await (await this.authorizedClient(s)).getImportJob(op.remote_job_id);
+    let result: any;
+    try {
+      result=await (await this.authorizedClient(s)).getImportJob(op.remote_job_id);
+    } catch (err: any) {
+      await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
+      return {operationId:id,status:'failed',message:`Canva import job could not be retrieved: ${err?.message || String(err)}`};
+    }
     if(result.job.status==='in_progress')return {operationId:id,status:'submitted'};
     if(result.job.status==='failed'||result.job.result?.designs.length!==1){
       await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
@@ -271,6 +277,44 @@ export class CanvaConnectService {
       await sql`UPDATE hawa.canva_remote_operations SET status='retrieved',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db);
     });
     return {operationId:id,status:'retrieved',designId:design.id,contentStatus:'imported_editable_draft',qaStatus:'not_run'};
+  }
+  async sweepStrandedOperations(s: Scope, options: { maxAgeMinutes?: number; limit?: number } = {}) {
+    const maxAgeMinutes = options.maxAgeMinutes ?? 10;
+    const limit = options.limit ?? 20;
+    const stranded = await this.tx(s, async db =>
+      (await sql<any>`SELECT id, task_id, remote_job_id, actor_id, status, created_at
+        FROM hawa.canva_remote_operations
+        WHERE tenant_id = ${s.tenantId}::uuid
+          AND kind = 'create'
+          AND status = 'submitted'
+          AND created_at < now() - (interval '1 minute' * ${maxAgeMinutes})
+        ORDER BY created_at ASC
+        LIMIT ${limit}`.execute(db)).rows
+    );
+
+    const settled: Array<{ id: string; taskId: string; status: string; designId?: string; error?: string }> = [];
+    for (const op of stranded) {
+      try {
+        const res = await this.resumeImport({ ...s, actorId: op.actor_id }, op.task_id, op.id);
+        settled.push({
+          id: op.id,
+          taskId: op.task_id,
+          status: res.status,
+          designId: (res as any).designId,
+        });
+      } catch (err: any) {
+        await this.tx(s, db =>
+          sql`UPDATE hawa.canva_remote_operations SET status='failed', updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${op.id}::uuid`.execute(db)
+        );
+        settled.push({
+          id: op.id,
+          taskId: op.task_id,
+          status: 'failed',
+          error: err?.message || String(err),
+        });
+      }
+    }
+    return { sweptCount: stranded.length, settled };
   }
   async startExport(s: Scope, taskId: string, key: string, format: 'png'|'pdf'|'pptx', expectedVersion: number) {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || !['png','pdf','pptx'].includes(format) || !Number.isInteger(expectedVersion)) fail(422,'CANVA_EXPORT_REQUEST_INVALID','Use a stable request key, format and expected binding version');

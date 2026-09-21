@@ -169,4 +169,6 @@ volumes:
   postgres_data:
     name: hawa-production_postgres_data
     external: true
-  restate_data: {}
+  restate_data:
+    name: hawa-production_restate_data
+    external: true

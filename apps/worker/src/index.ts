@@ -38,7 +38,7 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
   const isTerminal = (error: any) => Boolean(error?.terminal || error?.cause?.terminal);
   return {
     key: (ctx as any).key,
-    run: (name, action) => ctx.run(name, async () => {
+    run: (name, action, options) => ctx.run(name, async () => {
       try { return await action(); }
       catch (error: any) {
         if (isTerminal(error)) {
@@ -49,7 +49,7 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
         }
         throw error;
       }
-    }),
+    }, { maxRetryAttempts: 5, ...options }),
     sleep: (millis) => ctx.sleep(millis),
   };
 }

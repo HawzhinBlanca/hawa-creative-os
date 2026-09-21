@@ -545,6 +545,20 @@ export class TelegramBridgeDaemon {
     }
   }
 
+  private isPreConnectionError(error: unknown): boolean {
+    if (!error) return false;
+    const err = error as any;
+    const code = err?.cause?.code || err?.code;
+    if (['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT'].includes(code)) {
+      return true;
+    }
+    const msg = String(err?.cause?.message || err?.message || '');
+    if (/getaddrinfo (ENOTFOUND|EAI_AGAIN)/i.test(msg) || /connect ECONNREFUSED/i.test(msg) || /network is unreachable/i.test(msg)) {
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Dispatches an outbound message to a Telegram chat
    */
@@ -593,7 +607,10 @@ export class TelegramBridgeDaemon {
       }
       this.recordSentMessage({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
       return { success: true, messageId: String(body.result.message_id) };
-    } catch {
+    } catch (err: unknown) {
+      if (this.isPreConnectionError(err)) {
+        return { success: false, error: 'TELEGRAM_NETWORK_ERROR' };
+      }
       // A lost response can follow a successful send. Never automatically resend it.
       return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
     }
@@ -649,7 +666,10 @@ export class TelegramBridgeDaemon {
         }
       }
       return { success: false, error: `TELEGRAM_PHOTO_FAILED_${body?.error_code || res.status}` };
-    } catch {
+    } catch (err: unknown) {
+      if (this.isPreConnectionError(err)) {
+        return { success: false, error: 'TELEGRAM_NETWORK_ERROR' };
+      }
       return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
     }
   }

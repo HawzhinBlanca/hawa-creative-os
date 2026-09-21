@@ -128,9 +128,32 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     return output(status, designId);
   };
 
+  const handleBoundaryError = async (error: unknown, fallbackStatus: string = 'DESIGN_REJECTED', designId?: string) => {
+    const boundary = boundaryOf(error);
+    if (boundary?.terminal) {
+      return finish(fallbackStatus, designId, boundary.code || `HTTP_${boundary.httpStatus}`);
+    }
+    const isExhaustedOrTerminal = Boolean(
+      (error as any)?.name === 'TerminalError' ||
+      (error as any)?.terminal ||
+      (error as any)?.cause?.terminal ||
+      String((error as any)?.name).includes('Terminal') ||
+      String((error as any)?.message).includes('terminal workflow failure')
+    );
+    if (isExhaustedOrTerminal) {
+      return finish('DESIGN_SERVER_ERROR', designId, boundary?.code || (boundary ? `HTTP_${boundary.httpStatus}` : 'RETRY_EXHAUSTED'));
+    }
+    throw error;
+  };
+
   if (!input.canvaAutoGenerate) return finish('MANUAL_DESIGN_REQUIRED');
   if (!input.clientId) return finish('CLIENT_REQUIRED');
-  const task = await ctx.run('canva-verify-task-scope', () => call(''));
+  let task: any;
+  try {
+    task = await ctx.run('canva-verify-task-scope', () => call(''));
+  } catch (error) {
+    return await handleBoundaryError(error, 'DESIGN_REJECTED');
+  }
   if (task.clientId !== input.clientId || task.tenantId !== input.tenantId) throw new WorkflowTerminalError('Workflow task/client/tenant mismatch', 'SCOPE_MISMATCH');
 
   const variant = resolveCanvaVariant(input);
@@ -145,9 +168,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
         call('/canva/studio', studioBody, 'workflow-studio-' + input.taskId)
       );
     } catch (error) {
-      const boundary = boundaryOf(error);
-      if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
-      throw error;
+      return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
     let idlePolls = 0;
     let waitedMs = 0;
@@ -164,9 +185,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
           call('/canva/studio/' + encodeURIComponent(result.runId) + '/resume', {})
         );
       } catch (error) {
-        const boundary = boundaryOf(error);
-        if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
-        throw error;
+        return await handleBoundaryError(error, 'DESIGN_REJECTED');
       }
       if (String(result.status) !== before) {
         idlePolls = 0;
@@ -195,18 +214,14 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     try {
       result = await ctx.run('canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + input.taskId));
     } catch (error) {
-      const boundary = boundaryOf(error);
-      if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
-      throw error;
+      return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
     for (let n = 0; n < 30 && ['planning', 'submitted', 'creating'].includes(result.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       try {
         result = await ctx.run('canva-resume-draft-' + n, () => call('/canva/plans/' + encodeURIComponent(result.planId) + '/resume', {}));
       } catch (error) {
-        const boundary = boundaryOf(error);
-        if (boundary?.terminal) return finish('DESIGN_REJECTED', undefined, boundary.code || `HTTP_${boundary.httpStatus}`);
-        throw error;
+        return await handleBoundaryError(error, 'DESIGN_REJECTED');
       }
     }
     if (result.status !== 'retrieved') return finish('DESIGN_' + String(result.status).toUpperCase());
@@ -215,9 +230,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   try {
     state = await ctx.run('canva-read-binding', () => call('/canva'));
   } catch (error) {
-    const boundary = boundaryOf(error);
-    if (boundary?.terminal) return finish('DESIGN_REJECTED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
-    throw error;
+    return await handleBoundaryError(error, 'DESIGN_REJECTED', result?.designId);
   }
   if (result.status === 'degraded' && !result.designId && state.binding?.designId) {
     result.designId = state.binding.designId;
@@ -232,9 +245,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       capture = await ctx.run('canva-resume-preview-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
     }
   } catch (error) {
-    const boundary = boundaryOf(error);
-    if (boundary?.terminal) return finish('CANVA_PREVIEW_FAILED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
-    throw error;
+    return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
   }
   // Canva may finish settling an import during the first export. A stale capture
   // stays rejected; take at most two new snapshots without regenerating the design.
@@ -244,9 +255,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     try {
       fresh = await ctx.run('canva-preview-refresh-binding-' + attempt, () => call('/canva'));
     } catch (error) {
-      const boundary = boundaryOf(error);
-      if (boundary?.terminal) return finish('CANVA_PREVIEW_FAILED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
-      throw error;
+      return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
     }
     if (fresh.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding changed during preview recovery', 'BINDING_MISMATCH');
     currentBindingVersion = fresh.binding.version;
@@ -257,9 +266,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
         capture = await ctx.run('canva-resume-preview-recovery-' + attempt + '-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
       }
     } catch (error) {
-      const boundary = boundaryOf(error);
-      if (boundary?.terminal) return finish('CANVA_PREVIEW_FAILED', result.designId, boundary.code || `HTTP_${boundary.httpStatus}`);
-      throw error;
+      return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
     }
   }
   if (capture.status !== 'retrieved') return finish('CANVA_PREVIEW_' + String(capture.status).toUpperCase(), result.designId);
@@ -271,9 +278,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       check = await ctx.run('canva-resume-copy-font-check-' + n, () => call('/canva/exports/' + encodeURIComponent(check.operationId) + '/resume', {}));
     }
   } catch (error) {
-    const boundary = boundaryOf(error);
-    if (boundary?.terminal) return finish('CANVA_CHECK_REQUIRED', result.designId);
-    throw error;
+    return await handleBoundaryError(error, 'CANVA_CHECK_REQUIRED', result?.designId);
   }
   if (check.status !== 'retrieved' || !check.artifact?.content_check) return finish('CANVA_CHECK_REQUIRED', result.designId);
   if (!check.artifact.content_check.copyPass) return finish('CANVA_COPY_MISMATCH', result.designId);

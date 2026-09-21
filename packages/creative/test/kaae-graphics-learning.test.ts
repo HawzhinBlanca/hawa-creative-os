@@ -39,7 +39,8 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
   });
 
   it('recursively scans and analyzes all archive reference graphics', () => {
-    if (!fs.existsSync(referencesDir)) {
+    const sampleFile = path.join(referencesDir, 'KAAE_Commences_2026_Cycle_1080x1350.png');
+    if (!fs.existsSync(referencesDir) || !fs.existsSync(sampleFile)) {
       return;
     }
     const knowledge: KaaeLearnedKnowledgeGraph = engine.analyzeDirectory(referencesDir);
@@ -58,7 +59,8 @@ describe('KaaeGraphicsLearningEngine Unit & Integration Test', () => {
   });
 
   it('exports learned knowledge graph to JSON', () => {
-    if (!fs.existsSync(referencesDir)) {
+    const sampleFile = path.join(referencesDir, 'KAAE_Commences_2026_Cycle_1080x1350.png');
+    if (!fs.existsSync(referencesDir) || !fs.existsSync(sampleFile)) {
       return;
     }
     const knowledge = engine.analyzeDirectory(referencesDir);

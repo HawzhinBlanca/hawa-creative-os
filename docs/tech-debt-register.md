@@ -31,14 +31,14 @@ and the guard that protects the database volume was simply never extended to it.
 
 ## Phase 1 — do first (high priority, low effort)
 
-| # | Item | Cat | I | R | E | Pri |
-|---|---|---|---|---|---|---|
-| 1 | Restate data volume has none of the protection the Postgres volume has | Infra | 4 | 5 | 1 | **45** |
-| 2 | Any Core 5xx retries the design workflow forever, silently | Arch | 5 | 5 | 2 | **40** |
-| 3 | Stranded Canva imports permanently brick a task, with no sweeper | Arch | 5 | 5 | 2 | **40** |
-| 4 | Client briefs are discarded by the classifier fallback | Code | 5 | 4 | 2 | **36** |
-| 5 | A network blip dead-letters a delivered design's only link | Code | 4 | 4 | 2 | **32** |
-| 6 | A short new brief becomes a revision of the previous design | Code | 4 | 4 | 2 | **32** |
+| # | Item | Cat | I | R | E | Pri | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | Restate data volume has none of the protection the Postgres volume has | Infra | 4 | 5 | 1 | **45** | **RESOLVED (2026-09-21)** |
+| 2 | Any Core 5xx retries the design workflow forever, silently | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
+| 3 | Stranded Canva imports permanently brick a task, with no sweeper | Arch | 5 | 5 | 2 | **40** | **RESOLVED (2026-09-21)** |
+| 4 | Client briefs are discarded by the classifier fallback | Code | 5 | 4 | 2 | **36** | Open |
+| 5 | A network blip dead-letters a delivered design's only link | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
+| 6 | A short new brief becomes a revision of the previous design | Code | 4 | 4 | 2 | **32** | **RESOLVED (2026-09-21)** |
 
 **1. Restate data volume unprotected** — `infra/docker/docker-compose.prod.yml:172`
 `restate_data: {}` is a plain compose-managed volume holding every in-flight design's journal.
@@ -48,6 +48,7 @@ prune destroys every design being generated, silently. `deploy.sh:134-137` recor
 volume was already lost once, on 2026-09-17, costing a 23-hour outage.
 *Fix:* make it external and extend the existing timestamp guard. Hours, not days.
 *Business case:* the cheapest insurance in this document, against a failure that has already happened.
+*Resolution (2026-09-21):* Declared external volume `restate_data` with name `hawa-production_restate_data` in `docker-compose.prod.yml`, initialized creation marker `infra/docker/.restate_volume_created`, and added pre-flight volume existence and creation timestamp verification in `deploy.sh`. Verified with `deploy.sh pre-flight`.
 
 **2. Unbounded silent retry on 5xx** — `apps/worker/src/canva-draft-workflow.ts:19`
 `CoreBoundaryError.terminal` is `>=400 && <500`, excluding 408/429, so **every** 5xx is treated as
@@ -58,6 +59,7 @@ configures none. `finish()` is never reached, so no Telegram message of any kind
 persistent 5xx — exhausted model account, Canva outage — never escapes.
 *Fix:* bound the retries, and on exhaustion send the client a real message.
 *Business case:* today a bad afternoon looks identical to a working system. The client waits.
+*Resolution (2026-09-21):* Configured `maxRetryAttempts: 5` across worker durable steps via `apps/worker/src/durable-context.ts` and `apps/worker/src/index.ts`. Added terminal error boundary handler in `apps/worker/src/canva-draft-workflow.ts` dispatching `DESIGN_SERVER_ERROR` user notification upon retry exhaustion. Verified with unit test in `canva-draft-workflow.test.ts`.
 
 **3. Stranded Canva imports** — `canva-connect-service.ts:230-234`, `design-studio-service.ts:1366-1381`
 The studio polls the import ~30 times and stops. The run reaches a terminal status, but
@@ -70,6 +72,7 @@ needs a manual `resumeImport` of that exact operation as that exact actor. There
 *Fix:* two parts — recover those two tasks by hand now; then add a sweeper that resumes or fails
 submitted operations, so a slow import degrades instead of bricking.
 *Business case:* this is client work that was paid for, probably completed, and never delivered.
+*Resolution (2026-09-21):* Added `sweepStrandedOperations` to `CanvaConnectService`, excluded failed operations from `CANVA_CREATE_CONFLICT` check, permitted admin role resume, and caught expired/missing Canva jobs. Executed recovery tool `scripts/recover_stranded_canva_jobs.ts` settling production tasks (`97ac36fe...`, `a05232ae...`) and clearing non-terminal stranded operations.
 
 **4. Briefs discarded by the classifier fallback** — `telegram-classifier.ts:192,204` → `app.ts:3476-3507`
 A single-paragraph message starting with `hi|hello|hey|help|status|سڵاو|چۆنی`, or merely ending in
@@ -87,6 +90,7 @@ Core routes that to `markUncertain`, which sets `state='failed'` — a dead lett
 The worker still gets HTTP 200 and completes as success. Plausible on this host: the machine has
 slept and taken the containers with it.
 *Fix:* distinguish "never sent" from "unknown outcome"; only the latter should dead-letter.
+*Resolution (2026-09-21):* Added pre-connection error detection (`ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`) in `packages/integrations/src/telegram-bridge.ts` mapping pre-connection network errors to `TELEGRAM_NETWORK_ERROR` rather than `TELEGRAM_DELIVERY_UNCERTAIN`. Verified with unit tests in `telegram-delivery-receipt.test.ts`.
 
 **6. A short new brief becomes a revision** — `telegram-classifier.ts:151-162` → `app.ts:3858-3879`
 Any message under 280 chars containing a brand word (`gold, navy, title, logo, frame, add, change`…)
@@ -94,6 +98,7 @@ with a recent task becomes feedback. The revision task then copies `rawText`, `h
 from the **prior** task; the client's new sentence survives only as a directive string. The new
 request is never designed and a paid run redraws the old one.
 Heuristic path only (model outage / no recent task), but it spends money and delivers the wrong thing.
+*Resolution (2026-09-21):* Refined `telegram-classifier.ts` to separate imperative revision actions from generic design attributes, added `hasNewBriefIndicator`, and required true revision instruction patterns ("change the color to...", "the font is...") before classifying short messages as revisions when recent tasks exist. Verified across `telegram-classifier.test.ts` and `telegram-classifier-unicode.test.ts`.
 
 ---
 
@@ -142,7 +147,7 @@ admin API was not reachable to read effective settings.
 | 14 | The regression gate cannot see model or prompt changes | Test | 4 | 4 | 3 | **24** |
 | 15 | `awaiting_selection` ends the workflow; nothing drives the transfer afterwards | Arch | 4 | 4 | 3 | **24** |
 | 16 | Font identity spread across three hand-maintained lists | Code | 3 | 3 | 2 | **24** |
-| 17 | Playfair non-bold: drawn bold in the preview, sent regular to Canva | Code | 3 | 3 | 2 | **24** |
+| 17 | Playfair non-bold: drawn bold in the preview, sent regular to Canva | Code | 3 | 3 | 2 | **24** | **RESOLVED (2026-09-21)** |
 | 18 | Layout metric blind spots | Test | 3 | 4 | 3 | **21** |
 
 **12.** `validate-layout-v2.ts:167-171` force-writes every Arabic block to the script font,
@@ -175,8 +180,8 @@ one, which is how it spent a day being drawn from Noto's file. Registry-first re
 
 **17.** `render-layout-v2.ts:318` returns `{bold: !italic}` for Playfair regardless of `t.bold`, and
 there is no regular file to open, while `transfer-v2.ts` writes `bold: t.bold || false`. The preview
-the judge scores is bold; Canva gets regular. *Decision needed:* ship a Playfair regular, or tell the
-transfer the effective weight.
+the judge scores is bold; Canva gets regular.
+*Resolution (2026-09-21):* Updated `packages/creative/src/studio/transfer-v2.ts` with `effectiveBold(t)` that maps Playfair Display to `bold: true` (matching local preview face where only a Bold font file exists), while strictly preserving explicit `bold` and `italic` flags for all other fonts (ensuring Arabic fonts and PPTX italic attributes remain intact). Verified with unit tests in `packages/creative/test/transfer-v2.test.ts`.
 
 **18.** Proved individually: `computeRegularity` discards negative gaps, so four mutually overlapping
 text blocks score a perfect 1.0; composite contrast returns 21.0 (perfect) for a box outside the

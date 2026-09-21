@@ -12,7 +12,7 @@ export interface WorkflowDurableContext {
    * Runs an external side effect or computation step, memoizing its output in the journal.
    * If replaying after a crash/restart, returns the cached result without repeating the effect.
    */
-  run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  run<T>(name: string, action: () => Promise<T>, options?: { maxRetryAttempts?: number }): Promise<T>;
 
   /** Stable workflow execution key / identifier */
   readonly key?: string;
@@ -92,7 +92,7 @@ export class DurableStepJournal implements WorkflowDurableContext {
     return this.journal.get(stepName)?.result as T | undefined;
   }
 
-  async run<T>(name: string, action: () => Promise<T>): Promise<T> {
+  async run<T>(name: string, action: () => Promise<T>, _options?: { maxRetryAttempts?: number }): Promise<T> {
     this.executionTrace.push(`invoked:${name}`);
 
     // Replay check: if already journaled in a previous attempt, return cached result!
