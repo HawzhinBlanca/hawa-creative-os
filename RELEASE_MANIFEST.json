@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-22T07:53:17.893Z",
+  "generatedAt": "2026-09-22T07:53:56.946Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,9 +19,9 @@
     ]
   },
   "build": {
-    "commit": "0e15ad5eb5e6fceffe98ad486dd64cc4c93c1683",
-    "treeClean": false,
-    "commitTimestamp": "2026-09-22T10:44:07+03:00",
+    "commit": "aecce4da99ab3a3e3c9fb2978cf8e934311f4413",
+    "treeClean": true,
+    "commitTimestamp": "2026-09-22T10:53:50+03:00",
     "branch": "review/gemini-merge"
   },
   "migrations": {
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "a76f3c5e44b4f9e34c5e139c01b87a2bec84715b0e86e3a7cd1406b8733418b7"
+  "sha256": "d15d30a0569776d0668a9086701e3568620cfb5f2da7e339528528ddffc6bdbe"
 }
