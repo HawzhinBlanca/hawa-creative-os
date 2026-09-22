@@ -1,3 +1,4 @@
+import * as restate from '@restatedev/restate-sdk';
 import type { UUID } from '@hawa/contracts';
 import type { Database, Kysely } from '@hawa/db';
 import { runCanvaDraft } from './canva-draft-workflow.js';
@@ -70,8 +71,26 @@ export class TaskWorkflowRunner {
 /** Terminal: retrying will not change the answer. The outbox consumer dead-letters it at once. */
 export class WorkflowNotRunnableError extends Error {
   readonly category = 'permanent' as const;
+  /** Read by the Restate adapter: this must not be retried. */
+  readonly terminal = true as const;
   constructor(readonly taskId: UUID, message: string) {
     super(`PERMANENT_REJECTION: ${message}`);
     this.name = 'WorkflowNotRunnableError';
   }
+}
+
+/**
+ * A task that is not a job (a reference image saved for a later request, a brief the cap
+ * declined) is still dispatched to the workflow, and the runner refuses it. The refusal used to be
+ * thrown as a plain error from the handler, outside any durable step, so Restate retried the
+ * invocation without end: on 2026-09-22 two reference-image tasks were re-invoked every few seconds
+ * for the rest of the day. A refusal is final; it is reported to Restate as such.
+ */
+export function asTerminalIfNotRunnable(error: unknown): unknown {
+  if (error instanceof WorkflowNotRunnableError) {
+    const terminal = new restate.TerminalError(error.message, { errorCode: 422 });
+    (terminal as any).cause = error;
+    return terminal;
+  }
+  return error;
 }

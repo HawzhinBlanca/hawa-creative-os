@@ -2,7 +2,7 @@ import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
 import type { WorkflowDurableContext } from './durable-context.js';
 import { withRlsContext, sql, createDb } from '@hawa/db';
-import { TaskWorkflowRunner, type WorkflowInput } from './workflow.js';
+import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 
@@ -64,7 +64,8 @@ const taskService = restate.service({
         return await runCanvaDraft(input, durableContext(ctx));
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
-      return await runner.run(input, durableContext(ctx));
+      try { return await runner.run(input, durableContext(ctx)); }
+      catch (error) { throw asTerminalIfNotRunnable(error); }
     },
   },
 });
@@ -77,7 +78,8 @@ const taskWorkflow = restate.workflow({
         return await runCanvaDraft(input, durableContext(ctx));
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
-      return await runner.run(input, durableContext(ctx));
+      try { return await runner.run(input, durableContext(ctx)); }
+      catch (error) { throw asTerminalIfNotRunnable(error); }
     },
   },
 });

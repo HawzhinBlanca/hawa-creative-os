@@ -30,3 +30,17 @@ describe('TaskWorkflowRunner has one path', () => {
     await expect(new TaskWorkflowRunner().run({ ...input, canvaAutoGenerate: true })).rejects.toThrow(/durable Restate context/);
   });
 });
+
+describe('a refusal is final for Restate', () => {
+  it('turns WorkflowNotRunnableError into a TerminalError and leaves other errors alone', async () => {
+    const { asTerminalIfNotRunnable, WorkflowNotRunnableError } = await import('../src/workflow.js');
+    const restate = await import('@restatedev/restate-sdk');
+    const refusal = new WorkflowNotRunnableError('00000000-0000-4000-8000-000000000001', 'not a job');
+    const converted = asTerminalIfNotRunnable(refusal);
+    expect(converted).toBeInstanceOf(restate.TerminalError);
+    expect((converted as any).message).toMatch(/PERMANENT_REJECTION: not a job/);
+    expect((converted as any).cause).toBe(refusal);
+    const other = new Error('network');
+    expect(asTerminalIfNotRunnable(other)).toBe(other);
+  });
+});
