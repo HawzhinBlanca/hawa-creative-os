@@ -24,6 +24,11 @@ export interface HardQaContext {
   logoAspect: number;
   /** The copy of each block, by copyIndex. With it, a block whose copy wraps taller than its box fails. */
   copyText?: Record<number, string>;
+  /**
+   * The client photographs the request carries. Without it QA read every request as having none
+   * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
+   */
+  photoCount?: number;
 }
 
 export interface HardQaOutcome {
@@ -61,6 +66,7 @@ export function evaluateHardQa(
       logoAspect: ctx.logoAspect || 1.0,
     },
     draftFont: ctx.latinFont || 'Verdana',
+    photoCount: ctx.photoCount ?? 0,
   };
 
   // Explicit check for unreadable font sizes: fail QA, do NOT mutatively rewrite font sizes

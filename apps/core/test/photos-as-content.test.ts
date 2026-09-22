@@ -97,3 +97,14 @@ describe.skipIf(!url)('the request carries every image sent with it', () => {
     expect(await (service() as any).requestImages(scope, other)).toEqual([]);
   });
 });
+
+import { hardQaContextFor } from '../src/services/design-studio/stages/v3.stage.js';
+describe('hard QA knows how many photos the request carries', () => {
+  // Run b7fc5555 (2026-09-22): three candidates placed both portraits correctly, and QA refused all
+  // three with "Design places 2 photo(s); the request has 0", because this context carried no count.
+  it('passes the photo count through', () => {
+    const base = { width: 1080, height: 1350, copyBlocks: [{ text: 'T', script: 'latin' }], latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', referencePack: { palette: ['#0A1628'] }, logoAspect: 1 } as any;
+    expect(hardQaContextFor({ ...base, photos: [contentPhotoFromDataUrl(photo), contentPhotoFromDataUrl(photo)] }).photoCount).toBe(2);
+    expect(hardQaContextFor(base).photoCount).toBe(0);
+  });
+});

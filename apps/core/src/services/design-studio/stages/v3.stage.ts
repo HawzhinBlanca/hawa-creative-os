@@ -110,9 +110,10 @@ export function conceptFromV3Candidate(
 
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
-  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect'>
+  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos'>
 ): HardQaContext {
   return {
+    photoCount: ctx.photos?.length ?? 0,
     width: ctx.width,
     height: ctx.height,
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
