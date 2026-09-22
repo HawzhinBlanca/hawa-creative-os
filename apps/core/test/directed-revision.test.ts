@@ -125,6 +125,24 @@ describe('a revision edits the design the client received', () => {
     expect(inserted.length).toBe(3);
   });
 
+  it("settles an edit whose logo lands in the title's clear space instead of redesigning", async () => {
+    // Live, 2026-09-23: "move the logo to the top-right" failed validation twice (LOGO clear space)
+    // and would have fallen back to a new design.
+    const cramped = { ...parentLayout, logo: { x: 900, y: 72, width: 108, height: 76 } };
+    const { service, run, updated, candidateId, inserted } = harness({ editReply: { layout: cramped, changes: [] }, targets: ['logo'] });
+    await service.resume(scope, run.task_id, run.id);
+    const res = await service.resume(scope, run.task_id, run.id);
+    expect(res.status).toBe('qa');
+    expect(inserted).toHaveLength(1);
+    const saved = updated.find((u) => u.id === candidateId.value && u.layouts);
+    const logo = saved.layouts[0].logo;
+    const title = saved.layouts[0].text[0];
+    const clear = Math.ceil(0.5 * logo.height);
+    const apart = title.y >= logo.y + logo.height + clear || title.x + title.width <= logo.x - clear;
+    expect(apart).toBe(true);
+    expect(logo.y).toBeLessThan(200);
+  });
+
   it('blocks the request does not name keep their colours, whatever the edit did to them', async () => {
     // The live edit of 2026-09-23 turned the date gold on "make MEET KAAE AT gold": a house rule.
     const recoloured = { ...movedLogo, text: movedLogo.text.map((t, i) => (i === 1 ? { ...t, color: '#F7B500', accentColor: '#F7B500' } : t)) };

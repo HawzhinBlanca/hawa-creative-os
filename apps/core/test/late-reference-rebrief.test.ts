@@ -188,3 +188,34 @@ describe('a reference photo that joins the request after the brief', () => {
     expect(lastStoredBrief(writes).referenceRebrief).toBeUndefined();
   });
 });
+
+describe('a picture that joins after the brief classified the others', () => {
+  it('re-reads the brief once with every picture, before any layout', async () => {
+    const two = [photo, photo.replace('2Q==', '2Q=')];
+    const { service, run, writes, completeJson } = harness({
+      stages: { brief: { ...blindBrief, referenceSeen: true, imageRoles: [{ index: 0, role: 'content_photo', notes: '' }, { index: 1, role: 'content_photo', notes: '' }] } },
+    });
+    const three = [...two, photo];
+    (service as any).requestImages = async () => three;
+    completeJson.mockImplementation(async () =>
+      briefReply({
+        imageRoles: [
+          { index: 0, role: 'content_photo', notes: '' },
+          { index: 1, role: 'content_photo', notes: '' },
+          { index: 2, role: 'style_reference', notes: 'follow this' },
+        ],
+      }) as any
+    );
+    await service.resume(scope, run.task_id, run.id);
+    expect(completeJson).toHaveBeenCalledTimes(1);
+    expect(((completeJson.mock.calls[0] as any)[0].images || []).length).toBe(3);
+    const stored = lastStoredBrief(writes);
+    expect(stored).toMatchObject({ imagesRebrief: true, photosSent: 2 });
+    expect(stored.imageRoles).toHaveLength(3);
+
+    // Resumed again, it does not re-read a second time.
+    run.status = 'conceiving';
+    await service.resume(scope, run.task_id, run.id);
+    expect(completeJson).toHaveBeenCalledTimes(1);
+  });
+});

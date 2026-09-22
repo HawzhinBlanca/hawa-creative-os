@@ -141,7 +141,10 @@ export async function findRequestAwaitingReference(
           AND t.client_id IS NOT NULL
         ORDER BY o.created_at DESC LIMIT 1`.execute(trx)
     ).rows[0];
-    if (!row || row.payload?.designStudio !== true || row.payload?.studioOptions?.referenceImageBase64) return null;
+    // A request that came with its own picture takes more: the brief classifies every picture the
+    // request carries. Refusing it answered a reference sent seconds after an album "send the
+    // request text now", when the request had just been sent.
+    if (!row || row.payload?.designStudio !== true) return null;
     const run = (
       await sql<{ status: string }>`SELECT status FROM hawa.design_studio_runs
         WHERE tenant_id = ${tenantId}::uuid AND task_id = ${row.id}::uuid

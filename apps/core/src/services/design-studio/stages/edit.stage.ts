@@ -10,6 +10,8 @@ import {
   hexToLuminance,
   declaredBackgroundColour,
   requiredContrast,
+  conformToHouseRules,
+  settlePhotos,
 } from '@hawa/creative';
 import { StudioBudgetExhaustedError, type StageContext } from '../types.js';
 import { buildP0SystemPrompt } from '../prompts.js';
@@ -48,6 +50,7 @@ export async function runDirectedEditStage(
     ctx.photos?.length ? `all ${ctx.photos.length} client photo(s) stay placed, clear of text and logo` : '',
   ].filter(Boolean).join('; ');
   const copy = ctx.copyBlocks.map((b, i) => `[${i} ${b.script}] ${b.text}`).join('\n');
+  const copyText: Record<number, string> = Object.fromEntries(ctx.copyBlocks.map((b, i) => [i, b.text]));
 
   const validation: LayoutValidationContext = {
     expectedWidth: ctx.width,
@@ -89,14 +92,26 @@ export async function runDirectedEditStage(
       const edited = keepUntouched(parent.layout, carryOver(parent.layout, normalizeCandidateLayout(response.data.layout, ctx.width, ctx.height, ctx.logoAspect || 1.0)), targets);
       // The photos are the client's and were placed already; an edit that drops their boxes is refused
       // below rather than repaired, and the model is told why.
-      const checked = validateLayoutV2(edited, validation);
+      let checked = validateLayoutV2(edited, validation);
+      if (!checked.ok) {
+        // The change is right and its geometry is not (the logo moved into the title's clear space):
+        // the house rules that settle every new design settle this one, and the blocks the request
+        // did not name keep their colours through it.
+        const settled = keepUntouched(
+          parent.layout,
+          settlePhotos(conformToHouseRules(structuredClone(edited), { text: copyText }, ctx.referencePack.palette)),
+          targets
+        );
+        const again = validateLayoutV2(settled, validation);
+        if (again.ok) checked = again;
+      }
       if (!checked.ok) {
         lastError = `${checked.code}: ${checked.message}`;
         feedback = lastError;
         continue;
       }
       const layout = dropUnreadableAccents(checked.layout || edited);
-      const copyMap: Record<number, string> = Object.fromEntries(ctx.copyBlocks.map((b, i) => [i, b.text]));
+      const copyMap = copyText;
       const render = await renderLayoutV2Async(layout, {
         photoDataUris: ctx.photos?.map((p) => p.dataUrl),
         copyText: copyMap,

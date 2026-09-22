@@ -33,14 +33,14 @@ describe.skipIf(!url)('a caption-less photo joins the request it followed', () =
     ).task.id as string;
   const enrolled = (channel: string) => ({ DESIGN_PIPELINE_V3_CHATS: channel }) as NodeJS.ProcessEnv;
 
-  it('finds the latest v3 request in the chat, and nothing for an unenrolled chat or one with its own image', async () => {
+  it('finds the latest v3 request in the chat (also one with its own picture), and nothing for an unenrolled chat', async () => {
     const channel = `late-ref-${randomUUID().slice(0, 8)}`;
     const taskId = await request(channel);
     expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: enrolled(channel) })).toMatchObject({ taskId, clientId });
     expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: {} as NodeJS.ProcessEnv })).toBeNull();
     const withImage = `late-ref-${randomUUID().slice(0, 8)}`;
     await request(withImage, photo);
-    expect(await findRequestAwaitingReference(db, { sourceChannelId: withImage, env: enrolled(withImage) })).toBeNull();
+    expect(await findRequestAwaitingReference(db, { sourceChannelId: withImage, env: enrolled(withImage) })).not.toBeNull();
     expect(await findRequestAwaitingReference(db, { sourceChannelId: channel, env: { ...enrolled(channel), HAWA_REFERENCE_MERGE_MINUTES: '0' } })).toBeNull();
   });
 

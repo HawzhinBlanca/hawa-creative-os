@@ -980,10 +980,27 @@ export class DesignStudioService {
     const images = await this.requestImages(s, run.task_id).catch(() => [] as string[]);
     const roles = briefSoFar?.imageRoles;
     let classified = false;
-    if (roles && images.length > 0 && roles.length === images.length) {
+    if (
+      roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
+      !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
+    ) {
+      // A picture joined the request after its brief was written and before any layout (the
+      // reference sent a few seconds after the album): the brief is written again, once, looking at
+      // every picture, so each is classified instead of guessed from the request's words.
+      ctx.requestImages = images;
+      ctx.attachedImage = undefined;
+      const reread = await runBriefStage(ctx);
+      const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
+      stages.brief = { ...reread, photosSent, imagesRebrief: true };
+      await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+      briefSoFar = stages.brief as LateReferenceBrief;
+      ctx.requestImages = undefined;
+    }
+    const rolesNow = briefSoFar?.imageRoles;
+    if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
       classified = true;
-      ctx.photos = roles.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
-      const ref = roles.find((r) => r.role === 'style_reference');
+      ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
+      const ref = rolesNow.find((r) => r.role === 'style_reference');
       ctx.attachedImage = ref ? images[ref.index] : undefined;
       if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
     } else if (images.length > 1 && run.status === 'briefing') {
