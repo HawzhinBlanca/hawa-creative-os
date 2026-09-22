@@ -1,6 +1,6 @@
 import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
-import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
+import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -590,6 +590,25 @@ export function createApp(options?: CreateAppOptions) {
   const decisions = new Map<string, ApprovalDecision[]>();
   const feedbacks = new Map<string, FeedbackEvent[]>();
   const clientDnas = new Map<string, ClientDNA>();
+  /**
+   * The client's DNA as the office last saved it. PostgreSQL answers first; the map (fixtures at
+   * start-up, hydrated from the database, kept current by the routes that write) answers only when
+   * there is no database, or when it does not know the client. The map is a cache, not a truth:
+   * it is what let a saved Drive folder be ignored by delivery after a restart. Every route that
+   * used to call clientDnas.get() goes through here.
+   */
+  const resolveClientDna = async (clientId: string | undefined | null, identity?: { tenantId?: string; userId?: string; role?: string }, trx?: Kysely<Database>): Promise<ClientDNA | undefined> => {
+    if (!clientId) return undefined;
+    if (db) {
+      try {
+        const fromDb = await loadActiveClientDna(db, { tenantId: identity?.tenantId || defaultTenantId, userId: identity?.userId || operatorUserId, role: identity?.role }, clientId, trx);
+        if (fromDb) return fromDb as unknown as ClientDNA;
+      } catch (err) {
+        console.warn('[core:client_dna] PostgreSQL read failed, answering from memory:', err instanceof Error ? err.message : err);
+      }
+    }
+    return clientDnas.get(clientId);
+  };
 
   interface LocalClientDnaSnapshot extends ClientDnaSnapshot {}
   const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
@@ -2668,22 +2687,7 @@ export function createApp(options?: CreateAppOptions) {
 
     // Only the task's own client DNA names a destination; another client's folder is never a fallback.
     const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-    let client: any = clientDnas.get(task.clientId);
-    if (db && clientRepo && task.clientId) {
-      try {
-        const targetId = isValidUuid(task.clientId)
-          ? task.clientId
-          : (await clientRepo.findByCode(deliveryTenantId, task.clientId))?.id;
-        if (targetId) {
-          const activeDna = await clientRepo.findActiveDna(deliveryTenantId, targetId);
-          if (activeDna?.dna) {
-            client = activeDna.dna;
-          }
-        }
-      } catch (err) {
-        console.warn('[core:publish:client_dna] DB read error, using fallback:', err);
-      }
-    }
+    let client: any = await resolveClientDna(task.clientId, { tenantId: deliveryTenantId });
     const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
     const approval = await findApprovalForDelivery(deliveryTenantId, taskId, task, options?.designRevisionId || task.latestRevisionId, {
       approvalId: options?.approvalId,
@@ -4857,7 +4861,7 @@ export function createApp(options?: CreateAppOptions) {
                   headlineCkb: body.headlineCkb,
                   copyEn: body.copyEn,
                   copyCkb: body.copyCkb,
-                  clientDnaVersion: body.clientDnaVersion || (clientDnas.get(body.clientId)?.version || 1),
+                  clientDnaVersion: body.clientDnaVersion || ((await resolveClientDna(body.clientId, undefined, trx))?.version || 1),
                 },
                 enqueueOutbox: true,
               },
@@ -5144,7 +5148,7 @@ export function createApp(options?: CreateAppOptions) {
               payload.clientDnaVersion ||
               payload.body?.clientDnaVersion ||
               briefs.get(taskId)?.clientDnaVersion ||
-              (dbTask.client_id ? clientDnas.get(dbTask.client_id)?.version : undefined) ||
+              (dbTask.client_id ? (await resolveClientDna(dbTask.client_id))?.version : undefined) ||
               1,
             version: Number(dbTask.version),
             latestRevisionId,
@@ -5596,7 +5600,7 @@ export function createApp(options?: CreateAppOptions) {
         manifest,
         renders: [],
         brief: brief as any,
-        clientDna: (clientDnas.get(currentClientId) as any) || { assets: [] },
+        clientDna: ((await resolveClientDna(currentClientId)) as any) || { assets: [] },
         profile: { name: 'generation', version: '1.0', rules: {} },
         repairCycle: 0,
       }
@@ -7689,7 +7693,7 @@ export function createApp(options?: CreateAppOptions) {
         // Fallback to in-memory
       }
     }
-    const dna = clientDnas.get(clientId);
+    const dna = await resolveClientDna(clientId);
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
     return c.json(dna);
   });
@@ -7705,8 +7709,8 @@ export function createApp(options?: CreateAppOptions) {
     const validation = validateClientDna(body);
     if (!validation.ok) return problem(c, 400, 'Invalid Client DNA', validation.error.message);
 
-    const prevDna = clientDnas.get(clientId);
     const tenantId = auth.tenantId || defaultTenantId;
+    const prevDna = await resolveClientDna(clientId, { tenantId, userId: auth.userId, role: auth.role });
     let targetId: string | undefined = undefined;
     let currentVersion = 0;
 
@@ -7879,7 +7883,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to create client snapshot');
     }
     const clientId = c.req.param('clientId');
-    const dna = clientDnas.get(clientId);
+    const dna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
 
     const body = await c.req.json().catch(() => ({}));
@@ -8499,7 +8503,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // Attach to active client DNA and commit immutable snapshot
-    const currentDna = clientDnas.get(clientId);
+    const currentDna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (currentDna && result.rule) {
       const candidateDna = structuredClone(currentDna);
       if (!candidateDna.guidelines) {
@@ -8670,7 +8674,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // Also remove from active client DNA
-    const currentDna = clientDnas.get(clientId);
+    const currentDna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (currentDna && result.rule && currentDna.guidelines?.layoutRules) {
       const candidateDna = structuredClone(currentDna);
       candidateDna.guidelines.layoutRules = candidateDna.guidelines.layoutRules.filter((r: string) => r !== result.rule?.ruleText);
@@ -8870,7 +8874,7 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 403, 'Forbidden', 'Only art_director, creative_director, or administrator can rollback client DNA');
     }
 
-    const currentDna = clientDnas.get(clientId);
+    const currentDna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (!currentDna) {
       return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
     }
@@ -8976,7 +8980,7 @@ export function createApp(options?: CreateAppOptions) {
     // Index tasks
     for (const [taskId, task] of tasks.entries()) {
       const clientId = task.clientId || defaultClientId;
-      const client = clientDnas.get(clientId);
+      const client = clientDnas.get(clientId); // search labels only; the hydrated cache is current enough
       const brief = briefs.get(taskId);
       const briefText = brief?.objective || (task as any).title || '';
       const rawEv = rawEvents.get((task as any).sourceEventId);
@@ -9100,8 +9104,10 @@ export function createApp(options?: CreateAppOptions) {
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
-    const client = clientDnas.get(task.clientId) || Array.from(clientDnas.values())[0];
-    const recipientPhone = body.phone || (client as any)?.contactChannels?.phone || '+9647501234567';
+    // The review goes to this task's client. It used to fall back to whichever client the map listed
+    // first, then to a phone number written in this file: a stranger's draft to a stranger's phone.
+    const client = await resolveClientDna(task.clientId);
+    const recipientPhone = body.phone || (client as any)?.contactChannels?.phone;
 
     // The client reviews their own copy: a line they did not send is left out of the message, and a
     // task with no headline at all is refused rather than sent with placeholder text.
@@ -9109,6 +9115,7 @@ export function createApp(options?: CreateAppOptions) {
     const headlineCkb = text(task.headlineCkb) || text(body.headlineCkb);
     const headlineEn = text(task.headlineEn) || text(body.headlineEn);
     if (!headlineCkb && !headlineEn) return problem(c, 422, 'COPY_REQUIRED', COPY_REQUIRED_DETAIL);
+    if (!recipientPhone) return problem(c, 422, 'No Review Recipient', 'The client of this task has no review phone number and none was given');
 
     const dispatch = buildOutboundReviewDispatch({
       taskId,
@@ -9322,7 +9329,7 @@ export function createApp(options?: CreateAppOptions) {
     const currentStatus = (task.status || '').toLowerCase();
     const existingReceipt = omnichannelReceipts.get(taskId);
     if (currentStatus === 'complete' && existingReceipt) {
-      const client = clientDnas.get(task.clientId);
+      const client = await resolveClientDna(task.clientId);
       const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
       const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
       return c.json({
@@ -9383,7 +9390,7 @@ export function createApp(options?: CreateAppOptions) {
     const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
     const clientId = task.clientId || defaultClientId;
-    const client = clientDnas.get(clientId);
+    const client = await resolveClientDna(clientId);
 
     const body = await c.req.json().catch(() => ({}));
 

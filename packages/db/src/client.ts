@@ -9,12 +9,13 @@ export interface RlsContext {
   role?: string;
 }
 
-export function createDb(connectionString?: string): Kysely<Database> {
+/** `options.max` bounds the pool; tests use 1 to prove a code path holds no second connection. */
+export function createDb(connectionString?: string, options: { max?: number } = {}): Kysely<Database> {
   const resolved = connectionString || process.env.DATABASE_URL;
   if (!resolved) throw new Error('createDb requires a connection string or DATABASE_URL; there is no default database');
   const pool = new pg.Pool({
     connectionString: resolved,
-    max: 20,
+    max: options.max ?? 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
   });

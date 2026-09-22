@@ -70,3 +70,50 @@ describe('client DNA survives a restart', () => {
     }
   });
 });
+
+import { loadActiveClientDna } from '../src/services/client-dna-hydration.js';
+
+describe('loadActiveClientDna: PostgreSQL answers first, by uuid, code or client-<code>', () => {
+  const db = createDb(process.env.TEST_DATABASE_URL!);
+  const tenantId = '00000000-0000-4000-a000-000000000001';
+  const identity = { tenantId, userId: '00000000-0000-4000-b000-000000000001' };
+  const kaaeId = 'c1000000-0000-4000-8000-000000000002';
+  afterAll(async () => { await db.destroy(); });
+
+  it('finds the same active row under all three spellings', async () => {
+    const byId = await loadActiveClientDna(db, identity, kaaeId);
+    expect(byId).toBeDefined();
+    expect(await loadActiveClientDna(db, identity, 'kaae')).toEqual(byId);
+    expect(await loadActiveClientDna(db, identity, 'client-kaae')).toEqual(byId);
+  });
+
+  it('answers undefined, not a fixture, for a client the database does not know', async () => {
+    expect(await loadActiveClientDna(db, identity, 'client-nova')).toBeUndefined();
+    expect(await loadActiveClientDna(db, identity, randomUUID())).toBeUndefined();
+  });
+
+  it('runs on the caller transaction when given one: no second connection inside an open one', async () => {
+    // A pool of exactly one connection. Inside a transaction that connection is taken; a lookup
+    // that opened a second would wait for it for ever (pg reports a connect timeout after 5 s).
+    const one = createDb(process.env.TEST_DATABASE_URL!, { max: 1 });
+    try {
+      const dna = await withRlsContext(one, { ...identity, role: 'administrator' }, (trx) => loadActiveClientDna(one, identity, kaaeId, trx));
+      expect(dna).toBeDefined();
+      // And the same call without the transaction handle, inside the same situation, is the bug:
+      await expect(
+        withRlsContext(one, { ...identity, role: 'administrator' }, () => loadActiveClientDna(one, identity, kaaeId))
+      ).rejects.toThrow(/timeout exceeded when trying to connect/);
+    } finally {
+      await one.destroy();
+    }
+  }, 30_000);
+
+  it('100 task creates at once no longer exhaust the pool through the DNA lookup', async () => {
+    const app = createApp({ db });
+    const headers = { 'content-type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
+    const results = await Promise.all(Array.from({ length: 100 }, (_, i) =>
+      app.request('/v1/tasks', { method: 'POST', headers, body: JSON.stringify({ title: `Pool check ${i}`, clientId: kaaeId }) }).then((r) => r.status)));
+    const ok = results.filter((s) => s === 201).length;
+    expect(ok).toBe(100);
+  }, 120_000);
+});

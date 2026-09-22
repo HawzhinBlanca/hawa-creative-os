@@ -40,3 +40,39 @@ export async function hydrateClientDnaFromDb(
   }
   return loaded;
 }
+
+/**
+ * The active DNA for a client, from PostgreSQL. `clientId` may be the client's uuid, its code, or
+ * `client-<code>`, the three spellings Core uses. Undefined when the database does not know the
+ * client. Throws when the database cannot answer: a caller that wants to fall back decides so.
+ */
+/**
+ * Pass `trx` when already inside a transaction: the lookup then runs on that connection. Opening a
+ * second connection inside an open transaction is how 100 concurrent task creates exhausted a pool
+ * of 20, each holding one connection while waiting for another.
+ */
+export async function loadActiveClientDna(
+  db: Kysely<Database>,
+  identity: { tenantId: string; userId: string; role?: string },
+  clientId: string,
+  trx?: Kysely<Database>
+): Promise<Record<string, unknown> | undefined> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId);
+  const codes = isUuid ? [] : [clientId, clientId.replace(/^client-/, '')];
+  const rls = { tenantId: identity.tenantId, userId: identity.userId, role: identity.role || 'administrator' };
+  const lookup = async (trx: Kysely<Database>) => {
+    let targetId: string | undefined = isUuid ? clientId : undefined;
+    for (const code of codes) {
+      if (targetId) break;
+      const row = await trx.selectFrom('clients').select('id').where('tenant_id', '=', identity.tenantId).where('code', '=', code).executeTakeFirst();
+      targetId = row?.id;
+    }
+    if (!targetId) return undefined;
+    const row = await trx.selectFrom('client_dna_versions').select('dna')
+      .where('tenant_id', '=', identity.tenantId).where('client_id', '=', targetId).where('status', '=', 'active').executeTakeFirst();
+    if (!row?.dna) return undefined;
+    const dna = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
+    return dna && typeof dna === 'object' ? (dna as Record<string, unknown>) : undefined;
+  };
+  return trx ? lookup(trx) : withRlsContext(db, rls, lookup);
+}
