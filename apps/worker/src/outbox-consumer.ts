@@ -294,15 +294,24 @@ export class OutboxConsumer {
         // A send that may have reached Telegram is never repeated; it is recorded as uncertain.
         const sender = this.telegramSender(botToken);
         const uncertain: string[] = [];
+        // Files a previous attempt already delivered are not sent again: each send is recorded
+        // outside this command's transaction, which a failure later in the delivery rolls back.
+        const alreadySent = await this.sentDeliveryFiles(cmd.tenant_id, cmd.id);
         for (const { file, bytes } of loaded) {
+          if (alreadySent.has(file.artifactId)) continue;
           const sent = await sender.dispatchOutboundDocument(sourceChannelId, bytes, file.filename, {
             mimeType: file.mimeType || (file.format === 'pdf' ? 'application/pdf' : file.format === 'png' ? 'image/png' : undefined),
             caption: file.filename,
           });
           if (!sent.success) {
-            if (/DELIVERY_UNCERTAIN/.test(sent.error || '')) { uncertain.push(file.filename); continue; }
+            if (/DELIVERY_UNCERTAIN/.test(sent.error || '')) {
+              uncertain.push(file.filename);
+              await this.recordDeliveryFile(cmd.tenant_id, cmd.id, file.artifactId, 'uncertain');
+              continue;
+            }
             throw new Error(sent.error || 'TELEGRAM_DOCUMENT_FAILED');
           }
+          await this.recordDeliveryFile(cmd.tenant_id, cmd.id, file.artifactId, 'sent');
         }
 
         const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length });
@@ -320,6 +329,26 @@ export class OutboxConsumer {
         }
       });
     }
+  }
+
+  /** Artifacts of this delivery command already sent (or possibly sent) to the requester. */
+  private async sentDeliveryFiles(tenantId: string, commandId: string): Promise<Set<string>> {
+    const userId = this.options.userId || '00000000-0000-4000-b000-000000000002';
+    const rows = await withRlsContext(this.db, { tenantId, userId, role: 'administrator' }, async (trx) =>
+      (await sql<{ source_event_id: string }>`SELECT source_event_id FROM hawa.inbox_events
+        WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram_delivery'
+          AND source_event_id LIKE ${`${commandId}:%`}`.execute(trx)).rows
+    ).catch(() => [] as Array<{ source_event_id: string }>);
+    return new Set(rows.map((r) => r.source_event_id.slice(commandId.length + 1)));
+  }
+
+  private async recordDeliveryFile(tenantId: string, commandId: string, artifactId: string, outcome: 'sent' | 'uncertain'): Promise<void> {
+    const userId = this.options.userId || '00000000-0000-4000-b000-000000000002';
+    await withRlsContext(this.db, { tenantId, userId, role: 'administrator' }, (trx) =>
+      sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+        VALUES (${tenantId}::uuid, 'telegram_delivery', ${`${commandId}:${artifactId}`}, ${`telegram_document_${outcome}`},
+          ${JSON.stringify({ commandId, artifactId, outcome })}::jsonb, ${`${commandId}:${artifactId}`}, true)`.execute(trx)
+    ).catch((err) => console.warn('[outbox:notify.published] Could not record a delivered file; a retry may send it again:', err?.message || err));
   }
 
   async processBatch(batchSize?: number): Promise<BatchProcessingSummary> {

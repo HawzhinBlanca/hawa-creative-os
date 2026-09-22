@@ -13,6 +13,11 @@ export interface RulesIntakeDeps {
   db: Kysely<Database>;
   tenantId: string;
   userId: string;
+  /**
+   * The sender is one of the office's own people (TELEGRAM_ALLOWED_USERS): a client they name is
+   * taken as named. Anyone else names only a client their chat has asked for designs for.
+   */
+  trustNamedClient?: boolean;
   bridge: {
     dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string }): Promise<unknown>;
     downloadFile(fileId: string): Promise<Buffer | undefined | null>;
@@ -41,7 +46,20 @@ export async function resolveRuleClient(deps: RulesIntakeDeps, sourceChannelId: 
   return withRlsContext(deps.db, scope(deps), async (trx) => {
     const clients = (await sql<{ id: string; code: string; name: string; aliases: string[] | null }>`SELECT id, code, name, aliases FROM hawa.clients WHERE tenant_id = ${deps.tenantId}::uuid`.execute(trx)).rows;
     const named = clients.find((c) => [c.code, c.name, ...(Array.isArray(c.aliases) ? c.aliases : [])].some((w: string) => typeof w === 'string' && word(text, w)));
-    if (named) return { id: String(named.id), name: displayName(named) };
+    // Naming a client in a message would otherwise let any chat read, add or remove that client's
+    // rules; outside the office, the chat must have asked for that client's designs itself.
+    const chatKnows = named
+      ? deps.trustNamedClient ||
+        Boolean(
+          (
+            await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+              WHERE o.tenant_id = ${deps.tenantId}::uuid AND o.command_type = 'task.created'
+                AND o.payload->>'sourceChannelId' = ${sourceChannelId} AND t.client_id = ${named.id}::uuid
+                AND o.created_at > now() - interval '90 days'`.execute(trx)
+          ).rows[0]?.n
+        )
+      : false;
+    if (named && chatKnows) return { id: String(named.id), name: displayName(named) };
     const recent = (
       await sql<{ client_id: string }>`SELECT t.client_id FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
         WHERE o.tenant_id = ${deps.tenantId}::uuid AND o.command_type = 'task.created'
@@ -62,6 +80,15 @@ export async function resolveRuleClient(deps: RulesIntakeDeps, sourceChannelId: 
     }
     return client ? { id: String(client.id), name: displayName(client) } : undefined;
   });
+}
+
+/** A client by id, with the name the office sees; undefined when the tenant has no such client. */
+export async function ruleClientById(deps: RulesIntakeDeps, clientId: string): Promise<RuleClient | undefined> {
+  return withRlsContext(deps.db, scope(deps), async (trx) => {
+    const row = (await sql<{ id: string; code: string; name: string }>`SELECT id, code, name FROM hawa.clients
+      WHERE tenant_id = ${deps.tenantId}::uuid AND id = ${clientId}::uuid`.execute(trx)).rows[0];
+    return row ? { id: String(row.id), name: displayName(row) } : undefined;
+  }).catch(() => undefined);
 }
 
 const noClient = (what: string) => ({
@@ -165,7 +192,12 @@ export async function handleGuidelinesPdf(
     return { accepted: false };
   }
   await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-    text: `📘 <b>Reading ${escapeTelegramHtml(name)}</b> for ${escapeTelegramHtml(client.name)}.\n\n<i>If it is brand guidelines, the rules found are saved and listed here in a minute or two.</i>`,
+    text:
+      `📘 <b>Reading ${escapeTelegramHtml(name)}</b> for ${escapeTelegramHtml(client.name)}.\n\n<i>If it is brand guidelines, the rules found are saved and listed here in a minute or two.</i>` +
+      // A caption that reads like a request is not designed from: the PDF is read as guidelines.
+      (params.caption.trim().length > 120 || params.caption.includes('\n')
+        ? `\n\n<i>The text sent with the PDF was not used as a design request; if it is one, send it as its own message.</i>`
+        : ''),
     parse_mode: 'HTML',
   });
 

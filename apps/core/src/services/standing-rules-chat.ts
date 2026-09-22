@@ -40,7 +40,17 @@ export function formatRulesList(clientName: string, rules: ClientRule[]): string
       `<i>Say one in a message ("From now on, put the logo bottom-right") or send the brand guidelines as a PDF, and every later ${esc(clientName)} design follows it.</i>`
     );
   }
-  const lines = rules.map((r, i) => `${i + 1}. ${esc(r.humanRule)}`);
+  // Whole lines within Telegram's 4096 characters: two guidelines PDFs can hold 50 rules, and a
+  // message over the limit is refused and the sender gets nothing.
+  const all = rules.map((r, i) => `${i + 1}. ${esc(r.humanRule)}`);
+  const lines: string[] = [];
+  for (const line of all) {
+    if (lines.join('\n').length + line.length > 3200) {
+      lines.push(`… and ${all.length - lines.length} more (numbers ${lines.length + 1}–${all.length}; /forget takes them too).`);
+      break;
+    }
+    lines.push(line);
+  }
   return (
     `📌 <b>Standing rules for ${esc(clientName)}</b> (${rules.length})\n\n${lines.join('\n')}\n\n` +
     `<i>Every new ${esc(clientName)} design follows these; a later rule wins over an earlier one, and a request's own instructions win over both. Remove one with /forget and its number, for example /forget 2.</i>`

@@ -170,7 +170,7 @@ import { composeCanvaStatusMessage } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
 import { sniffImageMime } from './services/telegram-media.js';
 import type { GuidelinesModel } from './services/brand-guidelines.js';
-import { handleGuidelinesPdf, handleRulesCommand, saveChatRule, resolveRuleClient, type RulesIntakeDeps } from './services/telegram-rules-intake.js';
+import { handleGuidelinesPdf, handleRulesCommand, saveChatRule, ruleClientById, type RulesIntakeDeps } from './services/telegram-rules-intake.js';
 import { parseRulesCommand, isStandingRule } from './services/standing-rules-chat.js';
 import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
@@ -2924,14 +2924,100 @@ export function createApp(options?: CreateAppOptions) {
         idempotencyKey: publicationKey,
       };
 
+    // Every failure before a file reaches Drive ends the same way: the requester still gets the
+    // design the office approved, and the task goes back to APPROVED so Deliver can be pressed
+    // again. A missing destination and an unrecorded publication intent used to return straight
+    // after the move to PUBLISHING, leaving the task there for good with nothing sent.
+    const failTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
+    const failBeforeDrive = async (failure: { status: number; code: string; message: string }) => {
+      // The Drive archive could not be written, and the requester still gets the design the office
+        // approved: the pinned exports are stored and hash-checked, and the worker sends those bytes.
+        // The archive stays failed here (and in Desk) until Drive works; a later successful delivery
+        // does not send the files twice (same notification key).
+        let requesterNotified = false;
+        try {
+          const notification = await import('./services/delivery-notification.js');
+          const chatId = await notification.resolveRequesterChat(
+            task,
+            db && isValidUuid(taskId)
+              ? () => withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+                  (await sql<{ data: Parameters<typeof notification.requesterChatFromIntake>[0] }>`SELECT data FROM hawa.task_events
+                    WHERE tenant_id = ${failTenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
+                    ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
+              : undefined
+          );
+          const chatOnly = chatId
+            ? notification.buildChatOnlyNotificationPayload({
+                taskId,
+                clientId: task.clientId || null,
+                title: task.title || null,
+                chatId,
+                publicationKey,
+                pins: approval.pinnedExports,
+                files,
+                archiveProblem: failure.code === 'CREDENTIALS_MISSING'
+                  ? 'the office Google account is not connected'
+                  : String(failure.code || 'Drive refused the upload'),
+              })
+            : null;
+          if (chatOnly && outboxRepo && db && isValidUuid(taskId)) {
+            const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
+            await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+              if (await outboxRepo.findByIdempotencyKey(failTenantId, notifyKey, trx)) return;
+              await outboxRepo.enqueue({
+                tenantId: failTenantId,
+                aggregateType: 'task',
+                aggregateId: taskId,
+                commandType: 'notify.published',
+                idempotencyKey: notifyKey,
+                payload: chatOnly as unknown as Record<string, unknown>,
+              }, trx);
+            });
+            requesterNotified = true;
+          }
+        } catch (err) {
+          console.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
+        }
+        // Nothing reached Drive, so the task goes back to APPROVED and Deliver can be pressed again
+        // once Drive works; it used to stay PUBLISHING, which the publish route refuses.
+        if (task.status === 'PUBLISHING') {
+          const back = sm.transition('APPROVED', actor as Parameters<typeof sm.transition>[1], `Delivery failed before Drive: ${failure.code}`);
+          if (back.ok) {
+            task.status = 'APPROVED';
+            events.get(taskId)?.push(back.value);
+          }
+          if (taskRepo && db && isValidUuid(taskId)) {
+            await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+              taskRepo.transitionState({
+                taskId,
+                tenantId: failTenantId,
+                fromState: 'publishing',
+                toState: 'approved',
+                actorType: 'workflow',
+                actorId: 'publisher',
+                reason: `Delivery failed before Drive: ${failure.code}`,
+              }, trx)
+            ).catch((err: unknown) => console.error('[core:omnichannel:publish] Could not return the task to approved:', err));
+          }
+        }
+      return {
+        ok: false as const,
+        status: failure.status,
+        code: failure.code,
+        message: requesterNotified
+          ? `${failure.message} The approved file was sent to the requester in Telegram; the Drive archive is not written.`
+          : failure.message,
+        requesterNotified,
+      };
+    };
+
     const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
     if (!targetFolderId || targetFolderId === 'unauthorized_folder' || targetFolderId.includes('audit-invented') || targetFolderId.includes('nonexistent')) {
-      return {
-        ok: false,
+      return failBeforeDrive({
         status: 400,
         code: 'INVALID_DESTINATION',
         message: `Client '${task.clientId}' has no authorized Google Drive production destination folder configured in Client DNA. Refusing publication to unconfigured destination.`,
-      };
+      });
     }
     // No fallback sheet or Shared Drive: a client without one gets no Sheets row, reported as unsynced.
     const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
@@ -2966,12 +3052,11 @@ export function createApp(options?: CreateAppOptions) {
         }
         if (!dbPub) {
           console.error('[core:omnichannel:intent] Error persisting publication intent:', err);
-          return {
-            ok: false,
+          return failBeforeDrive({
             status: 503,
             code: 'PUBLICATION_INTENT_PERSISTENCE_FAILED',
             message: `Failed to persist publication intent to database before external publish: ${err?.message || String(err)}`,
-          };
+          });
         }
       }
     }
@@ -3027,85 +3112,11 @@ export function createApp(options?: CreateAppOptions) {
     });
 
     if (!publishResult.ok) {
-      // The Drive archive could not be written, and the requester still gets the design the office
-      // approved: the pinned exports are stored and hash-checked, and the worker sends those bytes.
-      // The archive stays failed here (and in Desk) until Drive works; a later successful delivery
-      // does not send the files twice (same notification key).
-      let requesterNotified = false;
-      try {
-        const notification = await import('./services/delivery-notification.js');
-        const chatId = await notification.resolveRequesterChat(
-          task,
-          db && isValidUuid(taskId)
-            ? () => withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-                (await sql<{ data: Parameters<typeof notification.requesterChatFromIntake>[0] }>`SELECT data FROM hawa.task_events
-                  WHERE tenant_id = ${pubTenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
-                  ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
-            : undefined
-        );
-        const chatOnly = chatId
-          ? notification.buildChatOnlyNotificationPayload({
-              taskId,
-              clientId: task.clientId || null,
-              title: task.title || null,
-              chatId,
-              publicationKey,
-              pins: approval.pinnedExports,
-              files,
-              archiveProblem: publishResult.error.code === 'CREDENTIALS_MISSING'
-                ? 'the office Google account is not connected'
-                : String(publishResult.error.code || 'Drive refused the upload'),
-            })
-          : null;
-        if (chatOnly && outboxRepo && db && isValidUuid(taskId)) {
-          const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
-          await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-            if (await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx)) return;
-            await outboxRepo.enqueue({
-              tenantId: pubTenantId,
-              aggregateType: 'task',
-              aggregateId: taskId,
-              commandType: 'notify.published',
-              idempotencyKey: notifyKey,
-              payload: chatOnly as unknown as Record<string, unknown>,
-            }, trx);
-          });
-          requesterNotified = true;
-        }
-      } catch (err) {
-        console.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
-      }
-      // Nothing reached Drive, so the task goes back to APPROVED and Deliver can be pressed again
-      // once Drive works; it used to stay PUBLISHING, which the publish route refuses.
-      if (task.status === 'PUBLISHING') {
-        const back = sm.transition('APPROVED', actor as Parameters<typeof sm.transition>[1], `Delivery failed before Drive: ${publishResult.error.code}`);
-        if (back.ok) {
-          task.status = 'APPROVED';
-          events.get(taskId)?.push(back.value);
-        }
-        if (taskRepo && db && isValidUuid(taskId)) {
-          await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-            taskRepo.transitionState({
-              taskId,
-              tenantId: pubTenantId,
-              fromState: 'publishing',
-              toState: 'approved',
-              actorType: 'workflow',
-              actorId: 'publisher',
-              reason: `Delivery failed before Drive: ${publishResult.error.code}`,
-            }, trx)
-          ).catch((err: unknown) => console.error('[core:omnichannel:publish] Could not return the task to approved:', err));
-        }
-      }
-      return {
-        ok: false,
+      return failBeforeDrive({
         status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : 422,
         code: publishResult.error.code,
-        message: requesterNotified
-          ? `${publishResult.error.message} The approved file was sent to the requester in Telegram; the Drive archive is not written.`
-          : publishResult.error.message,
-        requesterNotified,
-      };
+        message: publishResult.error.message,
+      });
     }
 
     // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
@@ -3657,7 +3668,13 @@ export function createApp(options?: CreateAppOptions) {
 
     const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
     const rulesDeps: RulesIntakeDeps | null = db
-      ? { db, tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, bridge: telegramBridge }
+      ? {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          userId: SYSTEM_AUTOMATION_USER_ID,
+          bridge: telegramBridge,
+          trustNamedClient: telegramAllowedUsers.includes(verifiedSender),
+        }
       : null;
 
     // A document that is not an image. A PDF is read as brand guidelines and its rules saved for the
@@ -3724,7 +3741,10 @@ export function createApp(options?: CreateAppOptions) {
       if (acknowledgedAlbums.size > 500) acknowledgedAlbums.delete(acknowledgedAlbums.values().next().value as string);
       return true;
     })();
-    if (captionless && !msg.reply_to_message && db && sourceChannelId !== 'tg_default') {
+    // An album sent as a reply to a draft carries the reply on every photo: only the first is read
+    // as the change, and the album's other photos join the revision it made (one paid run, one
+    // answer). Each used to start its own revision.
+    if (captionless && (!msg.reply_to_message || (albumId && !firstOfAlbum)) && db && sourceChannelId !== 'tg_default') {
       // A photo from the album whose captioned photo is the request belongs to that request.
       const album = albumId
         ? await findAlbumRequest(db, { sourceChannelId, mediaGroupId: albumId }).catch((err) => {
@@ -3752,7 +3772,7 @@ export function createApp(options?: CreateAppOptions) {
           studioOptions: { referenceFor: target.taskId, referenceImageBase64, ...(albumId ? { mediaGroupId: albumId } : {}) },
         });
         // The album's request was already acknowledged with its first photo.
-        if (!album) {
+        if (!album && firstOfAlbum) {
           await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
             text:
               `🖼️ <b>Picture added to your request</b> "${escapeTelegramHtml(target.title)}"\n\n` +
@@ -4119,18 +4139,26 @@ export function createApp(options?: CreateAppOptions) {
       // question used to be sent and the message forgotten, so "revise" became a change request
       // reading "revise" and the brief itself was lost.
       const pendingClarification = pendingClarifications.get(sourceChannelId);
-      pendingClarifications.delete(sourceChannelId);
       let answeredKind: 'feedback' | 'new_brief' | undefined;
       if (pendingClarification && Date.now() - pendingClarification.at < 3600_000 && rawText.trim().length <= 60) {
         const answer = rawText.trim();
-        if (/\b(new|fresh|separate|another)\b|نوێ|جیاواز/iu.test(answer)) answeredKind = 'new_brief';
-        else if (/\b(revis\w*|change|edit|update|same|previous|modify|fix)\b|دەستکاری|بگۆڕە|پێشوو/iu.test(answer)) answeredKind = 'feedback';
+        // Only an answer to the question counts: a whole short reply, or any reply to the question
+        // itself. "Another poster: Eid Mubarak" is a new message, not the answer "new".
+        const toQuestion = /Clarification needed/i.test(String(msg.reply_to_message?.text || ''));
+        const NEW_ANSWER = /^(new|new one|a new one|new design|a new design|separate|fresh|نوێ|دیزاینی نوێ|دیزاینێکی نوێ)[\s.!]*$/iu;
+        const REVISE_ANSWER = /^(revise|revise it|revision|edit|edit it|change it|update it|the same|same design|previous|the previous one|دەستکاری|دەستکاری بکە|پێشوو|هەمان دیزاین)[\s.!]*$/iu;
+        if (NEW_ANSWER.test(answer) || (toQuestion && /\bnew\b|نوێ/iu.test(answer))) answeredKind = 'new_brief';
+        else if (REVISE_ANSWER.test(answer) || (toQuestion && /\b(revis\w*|change|edit|same|previous)\b|دەستکاری|پێشوو/iu.test(answer))) answeredKind = 'feedback';
         if (answeredKind) {
+          pendingClarifications.delete(sourceChannelId);
           rawText = pendingClarification.rawText;
           if (!referenceImageBase64 && pendingClarification.referenceImageBase64) referenceImageBase64 = pendingClarification.referenceImageBase64;
           if (pendingClarification.task) pendingTasks = [pendingClarification.task];
         }
       }
+      // Any other message means the sender moved on; the question is dropped, not left to capture
+      // a later "new" as its answer.
+      if (pendingClarification && !answeredKind) pendingClarifications.delete(sourceChannelId);
 
       const recentForClassifier = pendingTasks[0]
         ? {
@@ -4171,13 +4199,20 @@ export function createApp(options?: CreateAppOptions) {
 
       // A lasting preference is saved for the client and applies to every later design. On its own
       // it changes nothing now; said with a change to a draft, the draft is revised as well.
-      if (classification.standingRule && (classification.kind === 'standing_rule' || classification.kind === 'feedback')) {
+      // A new brief that also says "and from now on …" is designed, and its rule is saved too.
+      if (classification.standingRule && (classification.kind === 'standing_rule' || classification.kind === 'feedback' || classification.kind === 'new_brief')) {
         if (!rulesDeps) return problem(c, 503, 'Rules unavailable', 'Standing rules need the database');
+        // Said about a design (a reply, or a change to the latest one), the rule is that design's
+        // client's, not whichever client the chat asked for last.
+        const designClient = classification.kind === 'feedback' && pendingTasks[0]?.clientId && isValidUuid(pendingTasks[0].clientId)
+          ? await ruleClientById(rulesDeps, pendingTasks[0].clientId)
+          : undefined;
         const saved = await saveChatRule(rulesDeps, {
           sourceChannelId,
           sourceEventId,
           ruleText: classification.standingRule,
           originalText: rawText,
+          client: designClient,
         });
         standingRuleSaved = saved.saved;
         if (classification.kind === 'standing_rule') {
@@ -4305,7 +4340,7 @@ export function createApp(options?: CreateAppOptions) {
         ruleText: rawText.replace(/^\s*(please\s+)?\w+\s+task\s+[0-9a-f-]{36}\s*:?\s*/i, '').trim() || rawText.trim(),
         originalText: rawText,
         client: feedbackTargetTask.clientId && isValidUuid(feedbackTargetTask.clientId)
-          ? await resolveRuleClient(rulesDeps, sourceChannelId, rawText).then((c) => (c?.id === feedbackTargetTask.clientId ? c : undefined))
+          ? await ruleClientById(rulesDeps, feedbackTargetTask.clientId)
           : undefined,
       });
       standingRuleSaved = saved.saved;
@@ -4554,6 +4589,8 @@ export function createApp(options?: CreateAppOptions) {
               revisionRound: (priorPayload?.studioOptions?.revisionRound || 0) + 1,
               // The change itself: the studio makes it to the design the sender replied to.
               revisionDirective: (classification?.directive || rawText).trim(),
+              // The album this change came in, so its other photos join this revision.
+              ...(albumId ? { mediaGroupId: albumId } : {}),
               referenceImageBase64,
             },
           });
@@ -4563,13 +4600,13 @@ export function createApp(options?: CreateAppOptions) {
           // the worker refuses a task without autoGenerate and no message follows.
           if (persisted.autoGenerateDeclined) {
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-              text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
+              text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText.slice(0, 500))}"\n\n` +
                 `⏳ <i>The daily limit for automatic drafts has been reached for this chat. Your revision is saved and queued for manual review in Hawa Desk.</i>`,
               parse_mode: 'HTML',
             });
           } else {
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-              text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
+              text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText.slice(0, 500))}"\n\n` +
                 `🎨 <b>Preparing an updated Canva draft with a new layout architecture...</b>\n` +
                 `<i>You will receive the editable Canva link in this chat as soon as it is ready.</i>\n\n` +
                 scopeLine,
@@ -4647,7 +4684,7 @@ export function createApp(options?: CreateAppOptions) {
       if (sourceChannelId && sourceChannelId !== 'tg_default') {
         await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
           text:
-            `📝 <b>Design instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
+            `📝 <b>Design instruction received:</b> "${escapeTelegramHtml(rawText.slice(0, 500))}"\n\n` +
             `⚠️ <i>No copy or event details were found in your message. Automatic drafting requires the exact text or announcement details to place on the design.</i>\n\n` +
             `<i>Please send the event title, date, venue, or body copy, and the art director will combine it with your styling preferences.</i>`,
           parse_mode: 'HTML',

@@ -169,6 +169,15 @@ describe('a revision edits the design the client received', () => {
     expect(brief.styleSpec.titleColor).toBe('light');
   });
 
+  it("starts from the parent design's pictures, with a new picture after them", async () => {
+    const { service, run } = harness();
+    const byTask = new Map<string, string[]>([[run.request.directed.parentTaskId, ['a', 'b']], [run.task_id, ['b', 'c']]]);
+    (service as any).requestImages = async (_s: any, taskId: string) => byTask.get(taskId) || [];
+    expect(await (service as any).imagesForRun(scope, run)).toEqual(['a', 'b', 'c']);
+    byTask.set(run.task_id, []);
+    expect(await (service as any).imagesForRun(scope, run)).toEqual(['a', 'b']);
+  });
+
   it('reports only the changes the design still shows', () => {
     const changes = [
       { element: 'text[copyIndex=0]', after: 'MEET KAAE AT gold' },

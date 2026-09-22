@@ -110,6 +110,43 @@ describe('notify.published', () => {
     expect((await record(idempotencyKey))?.state).toBe('delivered');
   });
 
+  it('does not send a file again when a later file failed and the delivery is retried', async () => {
+    const a = new Uint8Array(Array.from({ length: 30 }, (_, i) => i));
+    const b = new Uint8Array(Array.from({ length: 31 }, (_, i) => 200 - i));
+    const aId = randomUUID();
+    const bId = randomUUID();
+    const stored = new Map([[aId, a], [bId, b]]);
+    const chat = String(5000 + Math.floor(Math.random() * 1000));
+    const { idempotencyKey } = await enqueue('notify.published', {
+      taskId: randomUUID(), title: 'Retry', chatId: chat,
+      files: [
+        { artifactId: aId, format: 'png', filename: 'a.png', mimeType: 'image/png', sha256: sha(a), byteSize: a.length },
+        { artifactId: bId, format: 'png', filename: 'b.png', mimeType: 'image/png', sha256: sha(b), byteSize: b.length },
+      ],
+    });
+    const { sender, documents, messages } = recordingSender();
+    let failB = true;
+    const flaky: TelegramSender = {
+      ...sender,
+      async dispatchOutboundDocument(chatId, bytes, filename, options) {
+        if (filename === 'b.png' && failB) { failB = false; return { success: false, error: 'TELEGRAM_NETWORK_ERROR' }; }
+        return sender.dispatchOutboundDocument(chatId, bytes, filename, options);
+      },
+    };
+    const consumer = new OutboxConsumer(db, {
+      tenantId, userId, batchSize: 100, telegramBotToken: botToken, telegramSender: () => flaky,
+      readExportBytes: async (_db, _tenant, _task, artifactId) => stored.get(artifactId) ?? null,
+    });
+    await consumer.processBatch(100);
+    expect(documents.filter((d) => d.chatId === chat).map((d) => d.filename)).toEqual(['a.png']);
+    // Due again now (only this test's own command).
+    await asTenant((trx) => sql`UPDATE hawa.outbox_commands SET available_at = now() - interval '1 second' WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx));
+    await consumer.processBatch(100);
+    expect(documents.filter((d) => d.chatId === chat).map((d) => d.filename)).toEqual(['a.png', 'b.png']);
+    expect(messages.filter((m) => m.chatId === chat)).toHaveLength(1);
+    expect((await record(idempotencyKey))?.state).toBe('delivered');
+  });
+
   it('sends nothing, and is not marked delivered, when a stored file no longer matches its approved hash', async () => {
     const artifactId = randomUUID();
     const { idempotencyKey } = await enqueue('notify.published', {

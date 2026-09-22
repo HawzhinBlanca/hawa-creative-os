@@ -534,9 +534,28 @@ export class DesignStudioService {
     });
   }
 
+  /**
+   * The pictures a run works with. A change to a design starts from that design's pictures, in
+   * their order, with any new picture sent with the change after them: a revision's own lookup
+   * found only its own new picture, or nothing the day after (the inheritance window is a day), and
+   * the edit was refused for photos the design still showed.
+   */
+  private async imagesForRun(s: Scope, run: { task_id: string; request: unknown }): Promise<string[]> {
+    const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
+      | { pipelineV3?: boolean; directed?: { parentTaskId?: string } }
+      | undefined;
+    const own = await this.requestImages(s, run.task_id);
+    const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
+    if (!parentTaskId) return own;
+    const parent = await this.requestImages(s, parentTaskId).catch(() => [] as string[]);
+    return [...parent, ...own.filter((url) => !parent.includes(url))];
+  }
+
   /** The brief of the design a directed revision changes, or undefined when it is not one. */
-  private async parentBrief(s: Scope, run: any): Promise<CreativeBrief | undefined> {
-    const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
+  private async parentBrief(s: Scope, run: { request: unknown }): Promise<CreativeBrief | undefined> {
+    const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
+      | { pipelineV3?: boolean; directed?: { parentTaskId?: string } }
+      | undefined;
     if (!request?.pipelineV3 || !request?.directed?.parentTaskId) return undefined;
     const parent = await this.parentWinner(s, request.directed.parentTaskId).catch(() => undefined);
     if (!parent) return undefined;
@@ -988,7 +1007,7 @@ export class DesignStudioService {
     // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
     let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
     if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
-    const images = await this.requestImages(s, run.task_id).catch(() => [] as string[]);
+    const images = await this.imagesForRun(s, run).catch(() => [] as string[]);
     const roles = briefSoFar?.imageRoles;
     let classified = false;
     if (

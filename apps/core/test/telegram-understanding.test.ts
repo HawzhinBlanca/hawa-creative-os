@@ -18,9 +18,12 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
   const kaae = 'c1000000-0000-4000-8000-000000000002';
   const operator = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' } as const;
   const secret = ['understanding', 'fixture', 'secret'].join('_');
+  // An office member (TELEGRAM_ALLOWED_USERS): a client they name is taken as named.
+  const OFFICE = 91000001;
   const saved = { ...process.env };
   beforeAll(() => {
     process.env.TELEGRAM_WEBHOOK_SECRET = secret;
+    process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
     delete process.env.OPENAI_API_KEY;
   });
   afterAll(async () => {
@@ -28,7 +31,7 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     await db.destroy();
   });
 
-  const setup = (extra: Record<string, unknown> = {}) => {
+  const setup = (extra: Record<string, unknown> = {}, sender = OFFICE) => {
     const dispatch = vi.fn().mockResolvedValue({ success: true });
     const bridge = {
       dispatchOutboundMessage: dispatch,
@@ -46,7 +49,7 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
         headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
         body: JSON.stringify({
           update_id: randomUUID(),
-          ...(Object.keys(top).length ? top : { message: { message_id: Math.floor(Math.random() * 1e6), from: { id: chat, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, ...message } }),
+          ...(Object.keys(top).length ? top : { message: { message_id: Math.floor(Math.random() * 1e6), from: { id: sender, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, ...message } }),
         }),
       });
       return { status: res.status, body: await res.json().catch(() => ({})) };
@@ -78,6 +81,13 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     await send({ text: `/forget ${n}` });
     expect(replies()).toMatch(/No longer applied to KAAE designs/);
     expect((await activeRules()).some((r) => r.humanRule === words)).toBe(false);
+  });
+
+  it('outside the office, naming a client the chat never asked for does not reach its rules', async () => {
+    const { send, replies } = setup({}, 91000999);
+    const res = await send({ text: '/forget 1 KAAE' });
+    expect(res.status).toBe(200);
+    expect(replies()).toMatch(/Which client is this command for/);
   });
 
   it('a rule with no client named, in a chat with no requests, asks which client', async () => {
@@ -192,6 +202,42 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     // The request's own photo keeps its format.
     const own = (await tasksInChat(chat)).find((r: any) => r.aggregate_id === requestId) as any;
     expect(String(own.payload.studioOptions.referenceImageBase64)).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('an album sent in reply to a draft is one revision, with one answer', async () => {
+    const { chat, send, bridge, dispatch } = setup();
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
+    bridge.downloadFile.mockResolvedValue(png);
+    const brief = await send({ text: 'KAAE panel night\n---\nDecember 1, 2026\nErbil' });
+    const draft = { message_id: 98, from: { id: 1, is_bot: true, first_name: 'Hawa' }, chat: { id: chat, type: 'private' }, text: `🎨 Your Canva draft is ready\nTask ID: ${brief.body.task.id}` };
+    const album = `reply-album-${randomUUID().slice(0, 8)}`;
+    const first = await send({ media_group_id: album, photo: [{ file_id: 'r1' }], caption: 'use these two photos of the panelists', reply_to_message: draft });
+    expect(first.body.status).toBe('REVISION_QUEUED');
+    const answered = dispatch.mock.calls.length;
+    const second = await send({ media_group_id: album, photo: [{ file_id: 'r2' }], reply_to_message: draft });
+    expect(second.body.referenceFor).toBe(first.body.revisionTaskId);
+    expect(dispatch.mock.calls.length).toBe(answered);
+  });
+
+  it('a short new message is not mistaken for the answer to an earlier question', async () => {
+    const { send } = setup();
+    expect((await send({ text: 'KAAE forum\n---\nJanuary 5, 2027\nDuhok' })).status).toBe(201);
+    const original = fetch;
+    process.env.OPENAI_API_KEY = ['classifier', 'fixture'].join('-');
+    let answer = { kind: 'new_brief', confidence: 0.55 };
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ...answer, reason: 'r', isInstructionOnly: false, documentKind: 'design_piece', directive: '', standingRule: '' }) } }] }), { status: 200 })) as any;
+    try {
+      expect((await send({ text: 'Quality week' })).body.status).toBe('CLARIFICATION_REQUIRED');
+      answer = { kind: 'new_brief', confidence: 0.95 };
+      const next = await send({ text: 'Another poster: Eid Mubarak' });
+      expect(next.status).toBe(201);
+      expect(JSON.stringify(next.body.task)).toMatch(/Eid Mubarak/);
+      expect(JSON.stringify(next.body.task)).not.toMatch(/Quality week/);
+    } finally {
+      globalThis.fetch = original;
+      delete process.env.OPENAI_API_KEY;
+    }
   });
 
   it('a clarification answer completes the message it was asked about', async () => {
