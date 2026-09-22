@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 
 describe('Core API: Ingress & Task Lifecycle', () => {
   const exports = memoryExportStore();
-  const app = createApp({ deliverableStore: exports.store });
+  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');

@@ -237,6 +237,14 @@ export interface CreateAppOptions {
   qaEngine?: any;
   publisher?: any;
   inMemoryOutbox?: Map<string, any[]>;
+  /**
+   * Test harness only, passed explicitly by a test. `principal`: every request without a bearer
+   * token is this principal (a database-less unit test has no sessions to sign in to).
+   * `roleHeader`: the x-user-role header sets the role, so a test can act as several people.
+   * Production code has no environment switch that turns either on; there is nothing to leave on.
+   */
+  testAuth?: { principal?: { role: string; userId?: string; displayName?: string }; roleHeader?: boolean };
+  /** @deprecated use testAuth.roleHeader */
   allowRoleHeader?: boolean;
   extraBearerTokens?: Record<string, { role: string; email?: string; sub?: string } | string>;
   bypassAuthWithoutDb?: boolean;
@@ -1325,7 +1333,7 @@ export function createApp(options?: CreateAppOptions) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
 
-    const allowRoleOverride = Boolean(options?.allowRoleHeader ?? (process.env.HAWA_ALLOW_ROLE_HEADER === 'true' && !isProduction));
+    const allowRoleOverride = Boolean(options?.testAuth?.roleHeader ?? options?.allowRoleHeader);
     if (allowRoleOverride && c.req.header('x-user-role')) {
       const customRole = c.req.header('x-user-role').toLowerCase().trim();
       return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: `test_${customRole}`, role: customRole, displayName: `Test ${customRole}` };
@@ -1400,9 +1408,11 @@ export function createApp(options?: CreateAppOptions) {
 
     // In-memory harness fallback: when running pure unit test harnesses without DB outside production,
     // permit requests unless explicitly enforcing auth or accessing protected provider endpoints
-    const allowInMemHarness = !isProduction && (options?.bypassAuthWithoutDb ?? !db);
-    if (allowInMemHarness && !db && !c.req.header('x-enforce-auth')) {
-      return { authenticated: true, tenantId: defaultTenantId, userId: operatorUserId, actorId: 'test_harness', role: 'operator', displayName: 'Test Harness' };
+    // A test may supply the principal a token-less request runs as. Nothing else does: there is no
+    // "no database, so everyone is signed in" rule any more, in any environment.
+    const testPrincipal = options?.testAuth?.principal ?? (options?.bypassAuthWithoutDb && !db ? { role: 'operator' } : undefined);
+    if (testPrincipal && !c.req.header('x-enforce-auth')) {
+      return { authenticated: true, tenantId: defaultTenantId, userId: testPrincipal.userId || operatorUserId, actorId: 'test_harness', role: testPrincipal.role, displayName: testPrincipal.displayName || 'Test Harness' };
     }
 
     return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
@@ -6874,19 +6884,9 @@ export function createApp(options?: CreateAppOptions) {
 
     // Actor authority check (FR-043): Strictly derive reviewer role from authenticated server records.
     // Client role assertions (x-user-role header, body.role) are STRICTLY IGNORED in production mode!
-    let effectiveRole: string;
-    if (isProduction) {
-      effectiveRole = (auth.role || 'anonymous').toLowerCase().trim();
-    } else {
-      const clientRole = c.req.header('x-user-role') || body.role;
-      if (clientRole) {
-        effectiveRole = clientRole.toLowerCase().trim();
-      } else if (auth.role && auth.role !== 'operator') {
-        effectiveRole = auth.role.toLowerCase().trim();
-      } else {
-        effectiveRole = 'art_director';
-      }
-    }
+    // The reviewer's role is the authenticated session's role. A test that needs another role signs
+    // in as it (testAuth.roleHeader); the request body never decides who is approving.
+    const effectiveRole = (auth.role || 'anonymous').toLowerCase().trim();
 
     if (effectiveRole === 'operator' || !isAuthorizedReviewerRole(effectiveRole)) {
       return problem(
@@ -7289,7 +7289,7 @@ export function createApp(options?: CreateAppOptions) {
     const actionRevisionId = body.revisionId;
     const currentRevisionId = task.latestRevisionId || 'rev-1';
 
-    const actorRole = (c.req.header('x-user-role') || body.role || auth.role || 'operator').toLowerCase().trim();
+    const actorRole = (auth.role || 'operator').toLowerCase().trim();
     const chatActor = {
       userId: auth.userId,
       displayName: body.displayName || 'Chat Approver',

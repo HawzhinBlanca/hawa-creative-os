@@ -17,6 +17,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const artDirectorUserId = '00000000-0000-4000-b000-000000000002';
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authSessionBearer = `Bearer ${testBearer}`;
@@ -52,7 +53,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     // STAGE 1: AUTHENTICATED INTAKE & DURABLE POSTGRESQL STORAGE
     // -------------------------------------------------------------------------
     const exports = memoryExportStore();
-    let app = createApp({ db, publicationRepo, deliverableStore: exports.store });
+    let app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
 
     // Negative control: unauthenticated intake is rejected with 401
     const unauthRes = await app.request('/v1/tasks', {
@@ -108,7 +109,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
     // Recovery Check 1: Process crash after intake
     // Re-create app instance and verify task recovered directly from PostgreSQL
-    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
+    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const readbackAfterIntake = await app.request(`/v1/tasks/${taskId}`, {
       headers: authHeaders,
     });
@@ -283,7 +284,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     );
 
     // Recovery Check 2: Process crash after revision creation
-    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
+    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const { dbRev, dbDoc } = await withRlsContext(
       db,
       { tenantId, userId: operatorUserId, role: 'operator' },
@@ -319,7 +320,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
     const crossApprove = await app.request(`/tasks/${taskB.id}/revisions/${revisionId}/decisions`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({ decision: 'approved' }),
     });
     expect(crossApprove.status).toBe(400);
@@ -331,7 +332,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     const pinnedExportId = exports.add(taskId, 'png', pinnedBytes);
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
         reason: 'Passed 100% deterministic QA and Kurdish Sorani orthography validation.',
@@ -341,12 +342,13 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     expect(approveRes.status).toBe(201);
     const approveJson = await approveRes.json();
     expect(approveJson.decision).toBe('approved');
-    expect(approveJson.actor.userId).toBe(operatorUserId);
+    // The actor is whoever signed in: the art director, never the body's claimed userId.
+    expect(approveJson.actor.userId).toBe(artDirectorUserId);
     // The approval names the stored QC run it relied on (formerly the literal 'verified_qc_pass').
     expect(approveJson.qcReportHash).toBe(crypto.createHash('sha256').update(JSON.stringify(qaResult.value)).digest('hex'));
 
     // Recovery Check 3: Process crash after approval
-    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
+    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const taskAfterApprove = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const taskAfterApproveJson = await taskAfterApprove.json();
     expect(taskAfterApproveJson.status).toBe('APPROVED');
@@ -461,7 +463,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     });
 
     // Recovery Check 4: Final process restart & PostgreSQL independent verification
-    app = createApp({ db, publicationRepo, deliverableStore: exports.store });
+    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const finalTaskRes = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const finalTaskJson = await finalTaskRes.json();
     expect(finalTaskJson.status).toBe('COMPLETE');

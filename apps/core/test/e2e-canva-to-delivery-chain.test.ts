@@ -42,7 +42,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const canvaService = new CanvaConnectService(db);
     const deliverableStore = canvaDeliverableStore(canvaService);
 
-    const app = createApp({
+    const app = createApp({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
       telegramBridge: mockTelegramBridge as any,
@@ -182,7 +182,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // -------------------------------------------------------------------------
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
       method: 'POST',
-      headers,
+      headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',
@@ -345,7 +345,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {
     const canvaService = new CanvaConnectService(db);
     const deliverableStore = canvaDeliverableStore(canvaService);
-    const app = createApp({
+    const app = createApp({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
     });
@@ -432,7 +432,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // Desk Attempt to Approve MUST BE REFUSED WITH HTTP 412
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
       method: 'POST',
-      headers,
+      headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',

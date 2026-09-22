@@ -5,10 +5,11 @@ import { createDb, withRlsContext } from '@hawa/db';
 describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createApp({ db });
+  const app = createApp({ testAuth: { roleHeader: true },  db });
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const artDirectorUserId = '00000000-0000-4000-b000-000000000002';
   const testBearer = process.env.HAWA_BEARER_TOKEN!;
   const authSessionBearer = `Bearer ${testBearer}`;
   const authHeaders = {
@@ -128,7 +129,7 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
     // Adversarial: attempt to approve Task A's revision using Task B's URL
     const crossRes = await app.request(`/tasks/${taskB.id}/revisions/${revA.revisionId}/decisions`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({ decision: 'approved' }),
     });
     expect(crossRes.status).toBe(400);
@@ -138,7 +139,7 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
     // Negative control: Approval without verified passing QA run is rejected with 412
     const unverifiedApprove = await app.request(`/tasks/${taskA.id}/revisions/${revA.revisionId}/decisions`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({ decision: 'approved', reason: 'Attempting approval without QA' }),
     });
     expect(unverifiedApprove.status).toBe(412);
@@ -169,7 +170,7 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
     // Legitimate Approval on Task A
     const approveRes = await app.request(`/tasks/${taskA.id}/revisions/${revA.revisionId}/decisions`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
         userId: 'spoofed_user_trying_to_impersonate',
@@ -180,7 +181,8 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
     const approveJson = await approveRes.json();
     expect(approveJson.decision).toBe('approved');
     // Verify server-derived identity:
-    expect(approveJson.actor.userId).toBe(operatorUserId);
+    // The actor is whoever signed in: the art director, never the body's claimed userId.
+    expect(approveJson.actor.userId).toBe(artDirectorUserId);
 
     // Direct SQL Readback from PostgreSQL:
     const { dbApproval, dbTaskAfter, dbRevAfter, dbEvents } = await withRlsContext(
@@ -214,7 +216,7 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
 
     expect(dbApproval).toBeDefined();
     expect(dbApproval!.decision).toBe('approved');
-    expect(dbApproval!.decided_by).toBe(operatorUserId);
+    expect(dbApproval!.decided_by).toBe(artDirectorUserId);
     expect(dbTaskAfter!.state).toBe('approved');
     expect(dbRevAfter!.status).toBe('approved');
     expect(dbEvents.length).toBe(1);

@@ -24,7 +24,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('1. Task-scoped feedback ("Make this one brighter") changes only the target task, never creates or promotes permanent rules', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Ingest a task for KAAE
     const intakeRes = await app.request('/api/webhooks/telegram?generate=true', {
@@ -79,7 +79,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('2. Another client\'s feedback cannot change KAAE DNA, rules or files', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Record initial KAAE DNA file hash
     const kaaeDnaPath = path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json');
@@ -141,7 +141,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('3. Explicit future rule creates reviewable version (PROPOSED) and affects scope ONLY after activation', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Ingest initial task
     const intakeRes = await app.request('/api/webhooks/telegram?generate=true', {
@@ -218,7 +218,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('4. Conflicting rules stay pending and are rejected from promotion', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Propose an explicit rule with orientation right
     const ruleRight = globalFeedbackMiner.proposeExplicitRule({
@@ -268,7 +268,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('5. Unknown reply UUID is rejected fail-closed without fabricating tasks or mutating KAAE DNA', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const unknownUuid = '00000000-0000-4000-8000-000000000099';
 
     const unknownReplyRes = await app.request('/api/webhooks/telegram?generate=true', {
@@ -299,7 +299,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('6. Reversible rollback restores prior state and removes rule from generation scope', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     // Propose and promote a test rule
     const testRule = globalFeedbackMiner.proposeExplicitRule({
@@ -336,7 +336,7 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
   });
 
   it('7. Enforces data lineage separation between client-owned assets and restricted Canva items', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
     const lineageRes = await app.request(`/clients/${KAAE_CLIENT_ID}/learning/data-lineage?purpose=client_generation`, {
       method: 'GET',

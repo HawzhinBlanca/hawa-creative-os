@@ -14,14 +14,14 @@ const HEX64 = /^[0-9a-f]{64}$/;
 function approve(app: ReturnType<typeof createApp>, taskId: string, revisionId: string, extra: Record<string, unknown> = {}) {
   return app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
     method: 'POST',
-    headers: auth,
+    headers: { ...auth, Authorization: 'Bearer test_art_director_bearer' },
     body: JSON.stringify({ decision: 'approved', role: 'art_director', ...extra }),
   });
 }
 
 describe('an approval without a QA report', () => {
   it('records no QC hash, and the review desk says QA did not run', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
     const created = await (await app.request('/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'No QA', clientId: 'c1000000-0000-4000-8000-000000000002' }) })).json();
     const taskId: string = created.id || created.task?.id;
     const rev = await (
@@ -51,7 +51,7 @@ describe('an approval without a QA report', () => {
 
 describe('an approval after QA ran', () => {
   it('shows the report\'s own SHA-256; echoing it passes the hash check, and the failing QA then refuses approval', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
@@ -75,7 +75,7 @@ describe('an approval after QA ran', () => {
   });
 
   it('refuses an approval that echoes a different QC hash', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Forged QA' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });

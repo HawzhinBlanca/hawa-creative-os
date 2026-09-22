@@ -4,7 +4,7 @@ import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR-043, FR-044, Invariant #11)', () => {
   const exports = memoryExportStore();
-  const app = createApp({ deliverableStore: exports.store });
+  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   async function createFixtureTask(clientName: string = 'Aster Hotel') {
     const res = await app.request('/api/webhooks/telegram', {
@@ -48,7 +48,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -90,7 +90,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -145,7 +145,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',

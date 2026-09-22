@@ -8,7 +8,7 @@ import { createDb, withRlsContext, OutboxRepository } from '@hawa/db';
 // it, as 'dead', and says who retired it and why.
 describe('retiring an obsolete dead letter', () => {
   const db = createDb(process.env.TEST_DATABASE_URL!);
-  const app = createApp({ db });
+  const app = createApp({ testAuth: { roleHeader: true },  db });
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };

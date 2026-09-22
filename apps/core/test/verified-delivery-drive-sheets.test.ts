@@ -248,7 +248,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
 
     it('enforces Client DNA destination isolation via core omnichannel endpoint', async () => {
       const exports = memoryExportStore();
-      const app = createApp({ deliverableStore: exports.store });
+      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
       // Ingest task with valid client
       const ingestRes = await app.request('/api/webhooks/telegram', {
@@ -280,7 +280,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+          Authorization: `Bearer test_art_director_bearer`,
         },
         body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
@@ -594,7 +594,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   describe('4. FR-051: Notification Failure Independence & Nonexistent File Defense', () => {
     it('notification failure does not undo or roll back valid Google Drive and Sheets publication', async () => {
       const exports = memoryExportStore();
-      const app = createApp({ deliverableStore: exports.store });
+      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
       // A task for a client with a Drive destination (a task without a client is never delivered)
       const createRes = await app.request('/tasks', {
@@ -620,7 +620,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+          Authorization: `Bearer test_art_director_bearer`,
         },
         body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
@@ -647,7 +647,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
     });
 
     it('a successful chat message cannot mark a nonexistent or unapproved file delivered', async () => {
-      const app = createApp();
+      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
 
       // Create an unapproved task
       const createRes = await app.request('/v1/tasks', {

@@ -107,7 +107,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ publisher, deliverableStore: exports.store });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Publish
@@ -159,7 +159,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ publisher, deliverableStore: exports.store });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     const pubRes = await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -298,7 +298,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
 
     const inMemoryOutbox = new Map<string, any[]>();
-    const app = createApp({ publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -354,7 +354,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
 
     const inMemoryOutbox = new Map<string, any[]>();
-    const app = createApp({ publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -427,7 +427,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ publisher, deliverableStore: exports.store });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Before publish

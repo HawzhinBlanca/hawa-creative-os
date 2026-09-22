@@ -20,14 +20,14 @@ const json = (body: unknown) => ({ method: 'POST', headers: { 'Content-Type': 'a
 
 describe('Ingress rehearsal', () => {
   it('refuses a rehearsal with no message instead of inventing one', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const res = await app.request('/v1/ingress/rehearsal', json({ clientId: 'client-drustee' }));
     expect(res.status).toBe(422);
     expect((await res.json()).title).toBe('COPY_REQUIRED');
   });
 
   it('keeps a Kurdish rehearsal Kurdish, with no English headline or body', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const res = await app.request('/v1/ingress/rehearsal', json({ clientId: 'client-drustee', text: 'ڤیتامینی نوێ لە دروستی\nبەردەستە لە هەموو لقەکان' }));
     expect(res.status).toBe(201);
     const { task } = await res.json();
@@ -48,7 +48,7 @@ describe('Vision rubric route', () => {
   }
 
   it('refuses to score without the revision nodes, and stores no report', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const task = await rehearsedTask(app);
 
     const res = await app.request(`/v1/tasks/${task.id}/revisions/rev_no_nodes/evaluate-rubric`, json({ format: 'feed' }));
@@ -58,7 +58,7 @@ describe('Vision rubric route', () => {
   });
 
   it('checks the design against the copy the client sent, with no sample price or phone', async () => {
-    const app = createApp();
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const task = await rehearsedTask(app);
     const url = `/v1/tasks/${task.id}/revisions/rev_client_copy/evaluate-rubric`;
 

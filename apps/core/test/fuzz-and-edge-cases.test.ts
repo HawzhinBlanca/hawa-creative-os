@@ -3,7 +3,7 @@ import { createApp, computeDnaHash } from '../src/app.js';
 import { kaaeClientDNA } from '@hawa/domain';
 
 describe('Phase A Hardening: Core API & State Machine Fuzzing and Reality Checks', () => {
-  const app = createApp();
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
   it('Fuzz Probe 1: Gracefully rejects malformed JSON and garbage payloads without crashing (RFC 7807)', async () => {
     const res = await app.request('/api/v1/tasks', {

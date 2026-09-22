@@ -18,7 +18,7 @@ const auth = { ...json, Authorization: 'Bearer test_bearer' };
 
 async function setup() {
   const exports = memoryExportStore();
-  const app = createApp({ deliverableStore: exports.store });
+  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   // A client whose DNA names a Drive folder but no spreadsheet, so Sheets can never confirm a row.
   const kaaeDna = await (await app.request(`/clients/${KAAE}/dna`)).json();
@@ -44,7 +44,7 @@ async function setup() {
     ).json();
     const approve = await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/decisions`, {
       method: 'POST',
-      headers: auth,
+      headers: { ...auth, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
     });
     expect(approve.status).toBe(201);

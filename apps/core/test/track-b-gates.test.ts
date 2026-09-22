@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
 
 describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & Asset Sandbox', () => {
-  const app = createApp();
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
   // Helper to create an active task
   async function createFixtureTask(clientName: string = 'Kurdish Boutique') {

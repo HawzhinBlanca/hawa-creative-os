@@ -91,7 +91,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
   it('1. Concurrent same-key publication calls return identical receipt with zero duplicate side-effects', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
     const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Fire 3 simultaneous publish requests with identical publication intent
@@ -125,7 +125,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
   it('2. Both API routes (/publish and /publish-omnichannel) use unified publication ledger', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
     const { task, rev, approval, exportId } = await createApprovedTaskWithExport(app, exports);
 
     // Call desk /publish route
@@ -282,7 +282,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
   it('5. Unconfirmed Sheets write leaves task in PUBLISH_RECONCILIATION; retry completes without re-upload', async () => {
     const exports = memoryExportStore();
-    const app = createApp({
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, 
       deliverableStore: exports.store,
       publisher: new GooglePublisher({
         sheetsApiBaseUrl: 'http://127.0.0.1:1', // Simulated unreachable Sheets server

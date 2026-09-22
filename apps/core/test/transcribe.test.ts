@@ -5,7 +5,7 @@ describe('POST /v1/assets/transcribe-brief (FR-013, FR-014)', () => {
   let app: any;
 
   beforeEach(() => {
-    app = createApp();
+    app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
   });
 
   it('transcribes Sorani Kurdish voice note and extracts protected pricing tokens without hallucination', async () => {

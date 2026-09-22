@@ -4,7 +4,7 @@ import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12)', () => {
   const exports = memoryExportStore();
-  const app = createApp({ deliverableStore: exports.store });
+  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   async function createPublishedTask(title: string = 'Aster Hotel') {
     // 1. A task for a client whose DNA names a Drive destination (a task without a client is never delivered)
@@ -37,7 +37,7 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',

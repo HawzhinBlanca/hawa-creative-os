@@ -8,7 +8,7 @@ describe('CV-23: Complete Decommissioning of Figma Bridge and Legacy Editor Runt
   let app: any;
 
   beforeAll(() => {
-    app = createApp();
+    app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
   });
 
   it('1. Verifies Canva Native Studio is the sole active studio and Figma provider fallback is removed', async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
 
 describe('Core API: Security Invariants & Asset Ingestion', () => {
-  const app = createApp();
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
   it('enforces OWASP secure headers on all responses', async () => {
     const res = await app.request('/health');

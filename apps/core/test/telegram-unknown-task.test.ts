@@ -26,7 +26,7 @@ function setup() {
     answers.push(String(text));
     return true as any;
   });
-  const app = createApp({ telegramBridge: bridge });
+  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  telegramBridge: bridge });
 
   const webhook = (body: Record<string, unknown>) =>
     app.request('/api/webhooks/telegram', {

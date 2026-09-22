@@ -104,7 +104,7 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       }),
     } as unknown as DesignStudioService;
 
-    app = createApp({
+    app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, 
       db,
       designStudioService: mockService,
     });

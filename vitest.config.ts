@@ -74,7 +74,6 @@ export default defineConfig({
       HAWA_RETRY_DELAY_MS: '10',
       HISTORICAL_DESIGNS_ARCHIVE_ROOT: resolve(import.meta.dirname, 'node_modules/.cache/historical-designs-test'),
       HAWA_EMULATE_PUBLISHER: 'true',
-      HAWA_ALLOW_ROLE_HEADER: 'true',
       ...databaseEnv,
     },
   },

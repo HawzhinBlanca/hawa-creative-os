@@ -18,7 +18,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   beforeEach(() => {
     exports = memoryExportStore();
-    app = createApp({ deliverableStore: exports.store });
+    app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
     approvalManager = new HumanApprovalManager();
   });
 
@@ -145,8 +145,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
-        'x-user-role': 'art_director',
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({ decision: 'approved', displayName: 'Lead Art Director' }),
     });
@@ -194,7 +193,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({ decision: 'approved' }),
     });
@@ -207,7 +206,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({ decision: 'approved' }),
     });
@@ -242,7 +241,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -257,7 +256,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -287,7 +286,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -301,7 +300,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -371,7 +370,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({
         decision: 'revision_requested',
@@ -430,7 +429,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -511,7 +510,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer test_art_director_bearer`,
       },
       body: JSON.stringify({
         decision: 'approved',
@@ -633,7 +632,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+        Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
       body: JSON.stringify({ action: 'approve' }),
     });
