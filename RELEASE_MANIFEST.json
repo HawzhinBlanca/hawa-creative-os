@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-22T12:35:45.604Z",
+  "generatedAt": "2026-09-22T13:43:36.861Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,9 +19,9 @@
     ]
   },
   "build": {
-    "commit": "2af3508cdc4af6bd934ec973ffdb72851d850924",
+    "commit": "e1452213902e46d4287d6819dad121a1418e8181",
     "treeClean": true,
-    "commitTimestamp": "2026-09-22T15:35:38+03:00",
+    "commitTimestamp": "2026-09-22T16:43:29+03:00",
     "branch": "claude/reliability"
   },
   "migrations": {
@@ -55,7 +55,7 @@
       "service": "worker",
       "image": "hawa-worker:latest",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "2279b0ca1b96d35001db226c42808072599daa1df3d4bc018394ef75e541b3e2"
+        "apps/worker/src/index.ts": "aa0e9393dd42a7d4b0f894ed8ca8f910bf6498e0b109a314f0480b40106ba4eb"
       }
     }
   },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "136d8ef251bc13761ce799e69f56f2d19b6485a526f309ba8db43702bab02df6"
+  "sha256": "4840fda9d63733a1b8c395d2d3bdeb7c9408e633a33191dc05d4dbe61bc5374c"
 }
