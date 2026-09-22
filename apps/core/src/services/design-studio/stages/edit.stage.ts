@@ -128,7 +128,7 @@ export async function runDirectedEditStage(
       }
       return {
         layout,
-        changes: Array.isArray(response.data.changes) ? response.data.changes : [],
+        changes: changesWithin(Array.isArray(response.data.changes) ? response.data.changes : [], targets),
         previewPng: render.png,
         previewSha256: createHash('sha256').update(render.png).digest('hex'),
         compositePng: render.noTextPng,
@@ -250,4 +250,21 @@ export function keepUntouched(parent: StudioLayoutV2, edited: StudioLayoutV2, ta
   });
   if (!targets.includes('background')) edited.background = parent.background;
   return edited;
+}
+
+/**
+ * The changes the edit reports, less those the guard undid: the note to the sender says what the
+ * design now shows, not what the model attempted ("date made gold" after the date was restored).
+ */
+export function changesWithin<T extends { element: string }>(changes: T[], targets: EditTarget[]): T[] {
+  if (targets.includes('all')) return changes;
+  return changes.filter((c) => {
+    const element = String(c.element || '').toLowerCase();
+    const index = element.match(/text\D*(\d+)/)?.[1];
+    if (index !== undefined) return targets.includes(`text:${index}`);
+    if (element.includes('logo')) return targets.includes('logo');
+    if (element.includes('photo')) return targets.includes('photos');
+    if (element.includes('background')) return targets.includes('background');
+    return true;
+  });
 }

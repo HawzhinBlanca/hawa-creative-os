@@ -534,6 +534,17 @@ export class DesignStudioService {
     });
   }
 
+  /** The brief of the design a directed revision changes, or undefined when it is not one. */
+  private async parentBrief(s: Scope, run: any): Promise<CreativeBrief | undefined> {
+    const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
+    if (!request?.pipelineV3 || !request?.directed?.parentTaskId) return undefined;
+    const parent = await this.parentWinner(s, request.directed.parentTaskId).catch(() => undefined);
+    if (!parent) return undefined;
+    const parentRun = await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined);
+    const parentStages = parentRun ? (typeof parentRun.stages === 'string' ? JSON.parse(parentRun.stages) : parentRun.stages) : undefined;
+    return parentStages?.brief || undefined;
+  }
+
   /**
    * The design a revision changes: the winner of the latest finished run of the task the client
    * replied to (or, on resume, the candidate already chosen).
@@ -1030,6 +1041,16 @@ export class DesignStudioService {
     try {
       switch (run.status) {
         case 'briefing': {
+          // A change to a design the client received keeps that design's brief: the same reading of
+          // its pictures (which are photos, which is the reference) and the same style decisions.
+          // Briefing it afresh could sort the pictures differently, and the edit would then be
+          // refused for a photo count that no longer matches the design.
+          const directedBrief = await this.parentBrief(s, run);
+          if (directedBrief) {
+            stages.brief = { ...directedBrief, briefFromParent: true };
+            await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+            return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
+          }
           const brief = await runBriefStage(ctx);
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);

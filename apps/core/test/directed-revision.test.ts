@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC, type StudioLayoutV2 } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
-import { carryOver } from '../src/services/design-studio/stages/edit.stage.js';
+import { carryOver, changesWithin } from '../src/services/design-studio/stages/edit.stage.js';
 import { studioStatusNote } from '../src/services/design-studio/studio-status-note.js';
 
 /**
@@ -52,7 +52,10 @@ const harness = (opts: { parent?: boolean; editReply?: any; targets?: string[] }
   const inserted: any[] = [];
   const updated: any[] = [];
   const repo = {
-    getRunById: async () => run,
+    getRunById: async (id: string) =>
+      id === 'parent-run'
+        ? { id: 'parent-run', stages: JSON.stringify({ brief: { roles: [], readingOrder: [0, 1], imageRoles: [{ index: 0, role: 'content_photo', notes: '' }], styleSpec: { ...NEUTRAL_STYLE_SPEC, titleColor: 'light' } } }) }
+        : run,
     updateRunStatus: async (_id: string, _t: string, status: string, extra: any = {}) => {
       writes.push({ status, ...extra });
       run.status = status;
@@ -153,6 +156,27 @@ describe('a revision edits the design the client received', () => {
     expect(saved.layouts[0].text[1].color).toBe('#FFFFFF');
     expect(saved.layouts[0].text[1].accentColor).toBeUndefined();
     expect(saved.layouts[0].logo).toMatchObject({ x: 72, y: 72 });
+  });
+
+  it("keeps the parent design's brief instead of briefing the revision afresh", async () => {
+    const { service, run, completeJson, writes } = harness();
+    run.status = 'briefing';
+    const res = await service.resume(scope, run.task_id, run.id);
+    expect(res.status).toBe('conceiving');
+    expect(completeJson).not.toHaveBeenCalled();
+    const brief = writes.at(-1).stages.brief;
+    expect(brief).toMatchObject({ briefFromParent: true, imageRoles: [{ index: 0, role: 'content_photo' }] });
+    expect(brief.styleSpec.titleColor).toBe('light');
+  });
+
+  it('reports only the changes the design still shows', () => {
+    const changes = [
+      { element: 'text[copyIndex=0]', after: 'MEET KAAE AT gold' },
+      { element: 'logo', after: 'top-right' },
+      { element: 'text[2]', after: 'date gold' },
+    ];
+    expect(changesWithin(changes, ['text:0', 'logo']).map((c) => c.after)).toEqual(['MEET KAAE AT gold', 'top-right']);
+    expect(changesWithin(changes, ['all'])).toHaveLength(3);
   });
 
   it('carryOver keeps what the edit omitted and what it set', () => {
