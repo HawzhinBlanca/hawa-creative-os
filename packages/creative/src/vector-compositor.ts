@@ -1,4 +1,5 @@
 import type { ComfyWorkflowTemplateId } from './comfy-sandbox.js';
+import { calculateLuminanceContrastRatio, hexToLuminance } from './studio/composite-contrast.js';
 
 export interface VectorBackdropOptions {
   templateId: ComfyWorkflowTemplateId;
@@ -42,6 +43,7 @@ const NAMED_COLORS: Record<string, [number, number, number]> = {
 
 /**
  * Calculates relative luminance for WCAG contrast compliance.
+ * Delegates to canonical composite-contrast implementation.
  */
 export function getRelativeLuminance(hex: string): number {
   if (!hex || typeof hex !== 'string') return 0;
@@ -49,11 +51,8 @@ export function getRelativeLuminance(hex: string): number {
 
   if (NAMED_COLORS[clean]) {
     const [r, g, b] = NAMED_COLORS[clean];
-    const toLinear = (c: number) => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    };
-    return Math.min(1, Math.max(0, 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)));
+    const toHex = (n: number) => n.toString(16).padStart(2, '0');
+    return hexToLuminance(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
   }
 
   let fullHex = clean;
@@ -61,27 +60,17 @@ export function getRelativeLuminance(hex: string): number {
     fullHex = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
   }
 
-  const r = parseInt(fullHex.slice(0, 2), 16) || 0;
-  const g = parseInt(fullHex.slice(2, 4), 16) || 0;
-  const b = parseInt(fullHex.slice(4, 6), 16) || 0;
-
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  const lum = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return isNaN(lum) ? 0 : Math.min(1, Math.max(0, lum));
+  return hexToLuminance(`#${fullHex}`);
 }
 
 /**
  * Calculates contrast ratio between two hex colors according to WCAG 2.1 specs.
+ * Delegates to canonical composite-contrast implementation.
  */
 export function calculateContrastRatio(foregroundHex: string, backgroundHex: string): number {
   const l1 = getRelativeLuminance(foregroundHex);
   const l2 = getRelativeLuminance(backgroundHex);
-  const lighter = Math.max(l1, l2);
-  const darker = Math.min(l1, l2);
-  return (lighter + 0.05) / (darker + 0.05);
+  return calculateLuminanceContrastRatio(l1, l2);
 }
 
 export interface SmartContrastScrimOptions {

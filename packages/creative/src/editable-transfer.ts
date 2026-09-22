@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import { effectiveLetterSpacingEm } from './studio/render-layout-v2.js';
+import { isFontAdmitted } from './font-policy.js';
 
 export interface EditableTransferPlan {
   width: number; height: number; background: string;
@@ -44,13 +45,12 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
   if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new Error('Missing or excessive factual copy');
   if(plan.text.length!==copy.length || new Set(plan.text.map(t=>t.copyIndex)).size!==copy.length ||
     plan.text.some(t=>!Number.isInteger(t.copyIndex)||t.copyIndex<0||t.copyIndex>=copy.length)) throw new Error('Every exact-copy block must appear once');
-  const fonts=['Arial','Georgia','Verdana','Times New Roman','Noto Sans Arabic','Cinzel','Playfair Display','Montserrat','Lora','Bodoni Moda','Cairo','Amiri','Plus Jakarta Sans','Vazirmatn','Inter',...(options.extraFonts||[]).filter(f=>typeof f==='string'&&/^[A-Za-z0-9 ]{2,40}$/.test(f))];
   const bounds=(box:{x:number;y:number;width:number;height:number})=>{
     if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.x<0||box.y<0||box.width<=0||box.height<=0||
       box.x+box.width>plan.width||box.y+box.height>plan.height)throw new Error('Layout exceeds canvas bounds');
   };
   for(const text of plan.text){bounds(text);hex(text.color);
-    if(!fonts.includes(text.fontFamily)||!Number.isFinite(text.fontSize)||text.fontSize<12||text.fontSize>120)throw new Error('Unsupported font or unreadable size');
+    if(!isFontAdmitted(text.fontFamily, options)||!Number.isFinite(text.fontSize)||text.fontSize<12||text.fontSize>120)throw new Error('Unsupported font or unreadable size');
     if(!['left','center','right'].includes(text.align))throw new Error('Invalid text alignment');
   }
   for(let i=0;i<plan.text.length;i++)for(let j=i+1;j<plan.text.length;j++){

@@ -35,6 +35,8 @@ const BASE_CONTEXT: LayoutValidationContext = {
 
 function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[] = []): StudioLayoutV2 {
   const shortEdge = Math.min(width, height);
+  const isStory = height / width >= 1.7;
+  const topMargin = isStory ? 280 : Math.floor(shortEdge * 0.08);
   const margin = Math.floor(shortEdge * 0.08); // 8% safe margin
   const logoWidth = Math.max(100, Math.ceil(0.085 * width));
   const minBody = Math.ceil(0.016 * width);
@@ -43,7 +45,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
   const subtitleSize = Math.ceil(bodySize * 1.4);
   const eyebrowSize = Math.max(12, Math.floor(bodySize * 0.8));
 
-  const logoClearSpaceY = margin + logoWidth + Math.ceil(0.55 * logoWidth);
+  const logoClearSpaceY = topMargin + logoWidth + Math.ceil(0.55 * logoWidth);
   const ruleY = logoClearSpaceY + 10;
   const eyebrowY = ruleY + 15;
   const titleY = eyebrowY + 35;
@@ -76,7 +78,7 @@ function createPassingLayout(width = 1080, height = 1350, arabicIndices: number[
     ],
     logo: {
       x: margin,
-      y: margin,
+      y: topMargin,
       width: logoWidth,
       height: logoWidth,
     },

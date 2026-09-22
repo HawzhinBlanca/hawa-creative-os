@@ -59,7 +59,28 @@ const ADMITTED_DISPLAY_FONTS = new Set([
   'Raleway',
 ]);
 
-const ADMITTED_TYPE_SCALE_RATIOS = [1.125, 1.200, 1.250, 1.333, 1.414, 1.500, 1.618];
+export const ADMITTED_TYPE_SCALE_RATIOS = [1.125, 1.200, 1.250, 1.333, 1.414, 1.500, 1.618];
+
+/**
+ * Medium-aware type scale configuration:
+ * Adapts typographic hierarchy ratios to canvas dimensions and medium constraints:
+ * - 9:16 vertical stories: punchy display ratios (1.250 - 1.618) for mobile readability
+ * - A4 / print documents: compact, high-density ratios (1.125 - 1.333) for structured documents
+ * - 16:9 landscape: balanced ratios (1.200 - 1.414)
+ */
+export function getMediumAwareTypeScaleRatios(width: number, height: number): number[] {
+  const aspect = height / width;
+  if (aspect >= 1.7) {
+    return [1.250, 1.333, 1.414, 1.500, 1.618];
+  }
+  if (width >= 1200 && height >= 1600) {
+    return [1.125, 1.200, 1.250, 1.333, 1.414, 1.500];
+  }
+  if (width / height >= 1.7) {
+    return [1.200, 1.250, 1.333, 1.414];
+  }
+  return ADMITTED_TYPE_SCALE_RATIOS;
+}
 
 // 1. Text Legibility
 export function computeTextLegibility(layout: StudioLayoutV2): MetricResult {
@@ -811,7 +832,8 @@ export function computeTypeScaleConformance(layout: StudioLayoutV2): MetricResul
   let bestConforming = 0;
   let bestRatio = 1.25;
 
-  for (const ratio of ADMITTED_TYPE_SCALE_RATIOS) {
+  const candidateRatios = getMediumAwareTypeScaleRatios(layout.width, layout.height);
+  for (const ratio of candidateRatios) {
     let count = 0;
     for (const t of textElements) {
       let fits = false;

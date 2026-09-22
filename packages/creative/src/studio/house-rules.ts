@@ -35,7 +35,45 @@ export const HOUSE_RULES = {
     /** Largest relative deviation from the official aspect. */
     aspectTolerance: 0.01,
   },
+  /**
+   * Safe margins for 9:16 vertical stories (e.g. 1080x1920).
+   * Platform UI danger zones (header profile, reply bar, swipe controls).
+   */
+  storySafeZone: {
+    topShare: 0.14,    // ~270px on 1920h
+    bottomShare: 0.20, // ~384px on 1920h
+    sideShare: 0.06,
+  },
 } as const;
+
+export function isStoryFormat(width: number, height: number): boolean {
+  return height / width >= 1.7;
+}
+
+export function getSafeZoneBox(
+  width: number,
+  height: number,
+  margin?: number
+): { x: number; y: number; width: number; height: number } {
+  if (isStoryFormat(width, height)) {
+    const top = Math.round(height * HOUSE_RULES.storySafeZone.topShare);
+    const bottom = Math.round(height * HOUSE_RULES.storySafeZone.bottomShare);
+    const side = Math.round(width * HOUSE_RULES.storySafeZone.sideShare);
+    return {
+      x: side,
+      y: top,
+      width: width - 2 * side,
+      height: height - top - bottom,
+    };
+  }
+  const m = margin ?? Math.floor(HOUSE_RULES.safeMarginShare * Math.min(width, height));
+  return {
+    x: m,
+    y: m,
+    width: width - 2 * m,
+    height: height - 2 * m,
+  };
+}
 
 /**
  * Words a generated art prompt may not contain. Image models draw what a prompt names, even in

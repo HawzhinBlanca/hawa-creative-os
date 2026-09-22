@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
-import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast } from './house-rules.js';
+import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox } from './house-rules.js';
 
 export interface ValidationReference {
   rules: {
@@ -85,18 +85,18 @@ export function validateLayoutV2(
   context: LayoutValidationContext
 ): ValidationResult {
   // 1. COUNTS
-  if (layout.text.length > 40) {
+  if ((layout.text?.length ?? 0) > 40) {
     return {
       ok: false,
       code: 'COUNTS',
       message: `Text count ${layout.text.length} exceeds maximum 40`,
     };
   }
-  if (layout.shapes.length > 40) {
+  if ((layout.shapes?.length ?? 0) > 40) {
     return {
       ok: false,
       code: 'COUNTS',
-      message: `Shapes count ${layout.shapes.length} exceeds maximum 40`,
+      message: `Shapes count ${layout.shapes?.length ?? 0} exceeds maximum 40`,
     };
   }
 
@@ -205,7 +205,7 @@ export function validateLayoutV2(
       message: `Art scrim color ${layout.art.scrim.color} is not in reference palette`,
     };
   }
-  for (const s of layout.shapes) {
+  for (const s of (layout.shapes || [])) {
     if (!allowedPalette.has(normalizeHex(s.color))) {
       return {
         ok: false,
@@ -221,7 +221,7 @@ export function validateLayoutV2(
       };
     }
   }
-  for (const t of layout.text) {
+  for (const t of (layout.text || [])) {
     if (!allowedPalette.has(normalizeHex(t.color))) {
       return {
         ok: false,
@@ -243,12 +243,7 @@ export function validateLayoutV2(
   }
 
   const canvasBox: Box = { x: 0, y: 0, width: layout.width, height: layout.height };
-  const safeMarginBox: Box = {
-    x: layout.grid.margin,
-    y: layout.grid.margin,
-    width: layout.width - 2 * layout.grid.margin,
-    height: layout.height - 2 * layout.grid.margin,
-  };
+  const safeMarginBox: Box = getSafeZoneBox(layout.width, layout.height, layout.grid.margin);
 
   if (!layout.logo) {
     return {
@@ -272,20 +267,24 @@ export function validateLayoutV2(
   // Check all text boxes are inside safe margin
   for (const t of (layout.text || [])) {
     if (!boxContains(safeMarginBox, t)) {
+      const isStory = isStoryFormat(layout.width, layout.height);
+      const prefix = isStory ? 'Story safe-zone violation: Text' : 'Text';
       return {
         ok: false,
         code: 'BOUNDS',
-        message: `Text box outside safe margin bounds: {x:${t.x},y:${t.y},w:${t.width},h:${t.height}}`,
+        message: `${prefix} box outside safe margin bounds: {x:${t.x},y:${t.y},w:${t.width},h:${t.height}}`,
       };
     }
   }
 
   // Check logo is inside safe margin
   if (!boxContains(safeMarginBox, layout.logo)) {
+    const isStory = isStoryFormat(layout.width, layout.height);
+    const prefix = isStory ? 'Story safe-zone violation: Logo' : 'Logo';
     return {
       ok: false,
       code: 'BOUNDS',
-      message: `Logo outside safe margin bounds: {x:${layout.logo.x},y:${layout.logo.y},w:${layout.logo.width},h:${layout.logo.height}}`,
+      message: `${prefix} outside safe margin bounds: {x:${layout.logo.x},y:${layout.logo.y},w:${layout.logo.width},h:${layout.logo.height}}`,
     };
   }
 

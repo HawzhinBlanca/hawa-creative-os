@@ -3,6 +3,8 @@
  * Brand standards, palettes, typography pairings, and cryptographic proofs for Erbil & Kurdistan commerce.
  */
 
+import { calculateLuminanceContrastRatio, hexToLuminance } from './studio/composite-contrast.js';
+
 export interface BrandPalette {
   primary: string;
   secondary: string;
@@ -248,10 +250,9 @@ export function getCanonicalBrandKit(id: string): BrandKitDefinition {
 }
 
 export function validateBrandKitContrast(kit: BrandKitDefinition): { isAccessible: boolean; contrastRatio: number } {
-  // Compute approximate contrast against dark backgrounds
-  const textLum = 1.0; // white text
-  const bgLum = 0.05;  // dark background
-  const ratio = (textLum + 0.05) / (bgLum + 0.05);
+  const textLum = hexToLuminance(kit.palette.text.startsWith('#') ? kit.palette.text : '#FFFFFF');
+  const bgLum = hexToLuminance(kit.palette.secondary.startsWith('#') ? kit.palette.secondary : '#0A1628');
+  const ratio = calculateLuminanceContrastRatio(textLum, bgLum);
   return {
     isAccessible: ratio >= 7.0, // AAA standard
     contrastRatio: Math.round(ratio * 10) / 10,
