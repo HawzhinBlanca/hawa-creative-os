@@ -43,6 +43,8 @@ export interface RenderLayoutOptions {
   artImagePath?: string; // local file path or data URI
   logoPath?: string;
   logoDataUri?: string;
+  /** Content photos as data: URIs, by photoIndex. A placed photo with no data draws as a labelled slot. */
+  photoDataUris?: string[];
   fontsDir?: string;
   fontconfigFile?: string;
   rsvgConvertPath?: string;
@@ -1219,6 +1221,26 @@ export function renderLayoutV2ToSvg(
     }
   }
 
+  // Photos Layer: above the art and its scrim, below shapes and text. Drawn with the same
+  // xMidYMid slice the art uses, so the transfer's `cover` sizing matches what the judge scored.
+  for (const p of layout.photos ?? []) {
+    const href = options.photoDataUris?.[p.photoIndex];
+    const clipId = `photo-clip-${p.photoIndex}`;
+    const rx = Math.max(0, Math.min(p.radius ?? 0, Math.min(p.width, p.height) / 2));
+    bodyPartsNoText.push(
+      `<clipPath id="${clipId}"><rect x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" rx="${rx}" ry="${rx}"/></clipPath>`
+    );
+    if (href) {
+      bodyPartsNoText.push(
+        `<image id="photo-${p.photoIndex}" xlink:href="${href}" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
+      );
+    } else {
+      bodyPartsNoText.push(
+        `<rect id="photo-slot-${p.photoIndex}" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" rx="${rx}" ry="${rx}" fill="#888888" opacity="0.5"/>`
+      );
+    }
+  }
+
   // Shapes Layer
   if (layout.shapes.length > 0) {
     bodyPartsNoText.push(renderShapesToSvg(layout.shapes));
@@ -1429,6 +1451,14 @@ export function getLayoutBoxAnnotations(layout: StudioLayoutV2): ElementBoxAnnot
       boxId: `B${annotations.length}`,
       role: `shape (${s.role || s.kind})`,
       box: { x: s.x, y: s.y, width: s.width, height: s.height },
+    });
+  });
+  // 4. Client photos, so the critique can name them
+  (layout.photos ?? []).forEach((p) => {
+    annotations.push({
+      boxId: `B${annotations.length}`,
+      role: `photo (${p.role})`,
+      box: { x: p.x, y: p.y, width: p.width, height: p.height },
     });
   });
   return annotations;

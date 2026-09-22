@@ -24,6 +24,7 @@ export async function runRenderStage(
       copyText: copyMap,
       artImagePath: artDataUri,
       logoDataUri,
+      photoDataUris: ctx.photos?.map((p) => p.dataUrl),
     });
 
     cand.previewPng = renderResult.png;

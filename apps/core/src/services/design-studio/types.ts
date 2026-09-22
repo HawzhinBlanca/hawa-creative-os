@@ -157,12 +157,25 @@ export interface StageContext {
   requestedBackground?: string;
   /** An image the requester attached (data: URL), whatever it shows. The brief says what it is. */
   attachedImage?: string;
+  /**
+   * Photographs the request asked to have in the design ("with these texts and two pictures"),
+   * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
+   */
+  photos?: ContentPhoto[];
   /** The attached image when the brief read it as a style reference, with what to take from it. */
   reference?: import('@hawa/creative').ClientReference;
   /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
   ornament?: import('@hawa/creative').OrnamentSettings;
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
+}
+
+export interface ContentPhoto {
+  dataUrl: string;
+  bytes: Buffer;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+  width?: number;
+  height?: number;
 }
 
 export interface StageExecutionReceipt {

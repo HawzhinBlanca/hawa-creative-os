@@ -19,6 +19,26 @@ export function keepCompoundsWhole(text: string): string {
 
 export interface TransferV2Options extends TransferOptions {
   artBuffer?: Buffer;
+  /** Content photos by photoIndex. A placed photo with no bytes is refused: the deck must show what the client sent. */
+  photos?: Array<{ bytes: Buffer; mimeType: 'image/png' | 'image/jpeg' | 'image/webp' }>;
+}
+
+/** Pixel size of a PNG or a baseline/progressive JPEG, or null. Only the aspect is needed. */
+export function imagePixelSize(buffer: Buffer): { width: number; height: number } | null {
+  const png = pngPixelSize(buffer);
+  if (png) return png;
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < buffer.length) {
+    if (buffer[i] !== 0xff) return null;
+    const marker = buffer[i + 1];
+    const len = buffer.readUInt16BE(i + 2);
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: buffer.readUInt16BE(i + 5), width: buffer.readUInt16BE(i + 7) };
+    }
+    i += 2 + len;
+  }
+  return null;
 }
 
 /**
@@ -358,6 +378,24 @@ export async function encodeStudioTransferV2(
         });
       }
     }
+  }
+
+  // 1b. Client photos, between the art and the shapes as the renderer draws them. `cover` with
+  // the natural pixel size, as for the art, so Canva crops the way the preview did.
+  for (const p of layout.photos ?? []) {
+    const photo = options.photos?.[p.photoIndex];
+    if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
+    const pixels = imagePixelSize(photo.bytes);
+    const rounding = p.radius ? Math.min(1, p.radius / (Math.min(p.width, p.height) / 2)) : 0;
+    slide.addImage({
+      data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
+      x: p.x / 96,
+      y: p.y / 96,
+      w: (pixels ? pixels.width : p.width) / 96,
+      h: (pixels ? pixels.height : p.height) / 96,
+      ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
+      ...(rounding > 0 ? { rounding: true } : {}),
+    });
   }
 
   // 2. Shapes

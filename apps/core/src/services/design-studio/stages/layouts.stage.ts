@@ -146,8 +146,26 @@ export const LAYOUT_SCHEMA = {
           required: ['x', 'y', 'width', 'height'],
           additionalProperties: false,
         },
+        photos: {
+          type: 'array',
+          description: "The client's photographs, one element per photo provided, each placed once. Empty when none were provided.",
+          items: {
+            type: 'object',
+            properties: {
+              photoIndex: { type: 'number' },
+              role: { type: 'string', enum: ['hero', 'portrait', 'inset'] },
+              x: { type: 'number' },
+              y: { type: 'number' },
+              width: { type: 'number' },
+              height: { type: 'number' },
+              radius: { type: 'number' },
+            },
+            required: ['photoIndex', 'role', 'x', 'y', 'width', 'height', 'radius'],
+            additionalProperties: false,
+          },
+        },
       },
-      required: ['version', 'width', 'height', 'grid', 'background', 'shapes', 'text', 'logo'],
+      required: ['version', 'width', 'height', 'grid', 'background', 'shapes', 'text', 'logo', 'photos'],
       additionalProperties: false,
     },
     notes: { type: 'string' },
@@ -268,6 +286,7 @@ export async function runLayoutsStage(
       expectedHeight: ctx.height,
       copyCount: ctx.copyBlocks.length,
       copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
+      photoCount: ctx.photos?.length ?? 0,
       reference: {
         rules: {
           fontFamily: ctx.latinFont,
@@ -336,9 +355,23 @@ function styleSummary(style: StageContext['style']): string {
   return set.length ? `Enforced style (applied after generation): ${set.map(([k, v]) => `${k}=${v}`).join(', ')}` : '';
 }
 
+/** The line that tells the layout model what photographs it has to place, and how. */
+export function photosBrief(photos: StageContext['photos'] | undefined, width: number, height: number): string {
+  if (!photos?.length) return '';
+  const minSide = Math.round(Math.min(width, height) * 0.22);
+  const list = photos
+    .map((p, i) => `${i}: ${p.width && p.height ? `${p.width}x${p.height} (${p.width >= p.height ? 'landscape' : 'portrait'})` : 'size unknown'}`)
+    .join('; ');
+  return (
+    `Client photographs to place (${photos.length}): ${list}. Each appears exactly once in photos[], as content ` +
+    `(a speaker's portrait, a product), at least ${minSide}px on its short side, never under text or the logo, ` +
+    `cropped by cover-fit so plan the box near the photo's aspect. Compose the copy around them; they are the point of the design.`
+  );
+}
+
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'>,
-  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style'>
+  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style' | 'photos' | 'width' | 'height'>
 ): string {
   return (
     [
@@ -347,6 +380,7 @@ export function layoutBriefV3(
       brief.must?.length ? `Must: ${brief.must.join('; ')}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
       ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
+      photosBrief(ctx.photos, ctx.width, ctx.height),
       styleSummary(ctx.style),
     ]
       .filter(Boolean)

@@ -46,6 +46,15 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   if (faces.size > 0) parts.push(`typeface: ${[...faces].join(', ')}`);
   else if (concept?.displayFont) parts.push(`typeface: ${concept.displayFont}`);
 
+  // What became of the photographs the client sent. On 2026-09-22 two portraits sent with "a
+  // graphic with these texts and two pictures" were dropped and the note said nothing about them.
+  const placed = Array.isArray(shipped?.photos) ? shipped.photos.length : 0;
+  const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
+  const asReference = stages.brief?.referenceSeen === true || stages.brief?.referenceRole === 'style_reference';
+  if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
+  else if (placed > 0) parts.push(`${placed} photo${placed === 1 ? '' : 's'} placed`);
+  else if (asReference) parts.push('your image used as a style reference, not placed');
+
   let rungNote = '';
   if (stages.ladderRung && stages.ladderRung > 1) rungNote = ` · ${stages.ladderNotes || `Rung ${stages.ladderRung} fallback`}`;
   else if (run.diagnostic?.includes('Rung')) rungNote = ` · ${run.diagnostic}`;

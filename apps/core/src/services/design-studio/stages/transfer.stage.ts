@@ -21,6 +21,7 @@ export async function runTransferStage(
     ctx.logo,
     {
       artBuffer: winner.artPng || undefined,
+      photos: ctx.photos?.map((p) => ({ bytes: p.bytes, mimeType: p.mimeType })),
       extraFonts: [ctx.latinFont, ctx.arabicFont, 'Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display'],
     }
   );

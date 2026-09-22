@@ -1,0 +1,83 @@
+import { describe, expect, it, afterAll } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { createDb } from '@hawa/db';
+import { persistChatIntake } from '../src/services/chat-intake.js';
+import { DesignStudioService, asksForPictures, contentPhotoFromDataUrl } from '../src/services/design-studio/design-studio-service.js';
+import { photosBrief } from '../src/services/design-studio/stages/layouts.stage.js';
+import { studioStatusNote } from '../src/services/design-studio/studio-status-note.js';
+
+/**
+ * "I need a graphic with these texts and two pictures in it." The two portraits sent with that
+ * request on 2026-09-22 were read as a style reference, the design shipped without them, and the
+ * note to the sender said "checks passed". The request decides what its images are.
+ */
+
+const photo = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHR8eHR0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
+
+describe('what a request says its images are', () => {
+  it('asks for pictures in English, Sorani and Arabic', () => {
+    expect(asksForPictures('I need a graphic with these texts and two pictures in it')).toBe(true);
+    expect(asksForPictures('use the attached photo of the speaker')).toBe(true);
+    expect(asksForPictures('پۆستەرێک لەگەڵ وێنەی قسەکەر')).toBe(true);
+    expect(asksForPictures('follow this style, same colours')).toBe(false);
+    expect(asksForPictures('')).toBe(false);
+  });
+
+  it('decodes a data URL into bytes with its pixel size', () => {
+    const p = contentPhotoFromDataUrl(photo);
+    expect(p.mimeType).toBe('image/jpeg');
+    expect(p.bytes.length).toBeGreaterThan(100);
+    expect(p.width).toBe(1);
+    expect(p.height).toBe(1);
+  });
+
+  it('tells the layout model how many photos to place and how', () => {
+    expect(photosBrief(undefined, 1080, 1350)).toBe('');
+    const line = photosBrief([{ ...contentPhotoFromDataUrl(photo), width: 800, height: 800 }, contentPhotoFromDataUrl(photo)], 1080, 1350);
+    expect(line).toMatch(/Client photographs to place \(2\)/);
+    expect(line).toMatch(/0: 800x800 \(landscape\)/);
+    expect(line).toMatch(/at least 238px/);
+    expect(line).toMatch(/never under text or the logo/);
+  });
+
+  it('the note to the sender says what became of their photos', () => {
+    const run = (photosSent: number, placed: number, referenceSeen = false) => ({
+      run: { stages: JSON.stringify({ brief: { photosSent, referenceSeen }, conceive: { pipeline: 'v3' } }), winner_candidate_id: 'w' },
+      candidates: [{ id: 'w', score: 0.9, layouts: JSON.stringify([{ text: [{ fontFamily: 'Verdana' }], photos: Array.from({ length: placed }, (_, i) => ({ photoIndex: i })) }]), concept: JSON.stringify({ artStrategy: 'procedural', motif: 'gradient-wash' }) }],
+    });
+    expect(studioStatusNote(run(2, 2))).toMatch(/your 2 photos placed/);
+    expect(studioStatusNote(run(2, 0))).toMatch(/⚠️ 0 of your 2 photos placed/);
+    expect(studioStatusNote(run(0, 0, true))).toMatch(/used as a style reference, not placed/);
+    expect(studioStatusNote(run(0, 0))).not.toMatch(/photo/);
+  });
+});
+
+const url = process.env.HAWA_ISOLATED_TEST_DB;
+describe.skipIf(!url)('the request carries every image sent with it', () => {
+  const db = createDb(url || 'postgres://localhost/hawa_repair');
+  const clientId = 'c1000000-0000-4000-8000-000000000002';
+  const scope = { tenantId: '00000000-0000-4000-a000-000000000001', actorId: '00000000-0000-4000-b000-000000000001' };
+  afterAll(() => db.destroy());
+  const service = () => new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: (async () => { throw new Error('no calls'); }) as any });
+
+  it('two photos sent before the brief, then the brief: both are the request\'s images, oldest first', async () => {
+    const channel = `photos-${randomUUID().slice(0, 8)}`;
+    const a = photo.replace('AAD/2wBD', 'AAD/2wBE');
+    for (const img of [a, photo]) {
+      await persistChatIntake(db, {
+        platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId: null,
+        title: 'Sewa: reference image (awaiting request)', rawText: 'reference', designInstructions: '', exactCopy: [],
+        isInstructionOnly: true, autoGenerate: false, studioOptions: { referenceImageBase64: img },
+      });
+    }
+    const taskId = (await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId,
+      title: 'KAAE: Her path, her power', rawText: 'HER PATH, HER POWER\n---\nSeptember 25, 2026',
+      designInstructions: 'I need a graphic with these texts and two pictures in it', exactCopy: [], designStudio: true,
+    })).task.id as string;
+    const images = await (service() as any).requestImages(scope, taskId);
+    expect(images).toEqual([a, photo]);
+    // The brief's reference is the latest image when the request does not ask for pictures.
+    expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
+  });
+});

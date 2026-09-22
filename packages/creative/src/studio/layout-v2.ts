@@ -76,6 +76,20 @@ export interface StudioLayoutV2 {
   text: TextElement[];
   logo: Box;
   typeScale?: TypeScaleConfig;
+  /**
+   * Photographs the client sent to appear in the design (a speaker's portrait, a product), each
+   * placed once. Until 2026-09-22 a photo sent with a request could only be a style reference, so
+   * "a graphic with these texts and two pictures" produced a design with the texts and no pictures.
+   */
+  photos?: PhotoElement[];
+}
+
+export interface PhotoElement extends Box {
+  /** Index into the request's content photos. */
+  photoIndex: number;
+  role: 'hero' | 'portrait' | 'inset';
+  /** Corner radius in px; 0 is square. Round portraits use radius = width / 2. */
+  radius?: number;
 }
 
 export const typeScaleSchema = z.object({
@@ -143,6 +157,12 @@ export const textElementSchema = boxSchema.extend({
   accentColor: hexSchema.optional(),
 }).strict();
 
+export const photoElementSchema = boxSchema.extend({
+  photoIndex: z.number().int().nonnegative(),
+  role: z.enum(['hero', 'portrait', 'inset']),
+  radius: z.number().nonnegative().optional(),
+}).strict();
+
 export const studioLayoutV2Schema = z.object({
   version: z.literal(2),
   width: z.number().int().positive(),
@@ -155,4 +175,5 @@ export const studioLayoutV2Schema = z.object({
   text: z.array(textElementSchema).min(1).max(40),
   logo: boxSchema,
   typeScale: typeScaleSchema.optional(),
+  photos: z.array(photoElementSchema).max(6).optional(),
 }).strict();

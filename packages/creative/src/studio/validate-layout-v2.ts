@@ -17,6 +17,8 @@ export interface LayoutValidationContext {
   expectedHeight: number;
   copyCount: number;
   copyScripts: Array<'latin' | 'arabic' | 'unsupported'>;
+  /** Content photos the request carries; each must be placed exactly once. Absent or 0: none may appear. */
+  photoCount?: number;
   reference: ValidationReference;
   draftFont?: string;
   contrastEvaluator?: (box: Box, fontSize: number, bold: boolean) => number;
@@ -36,6 +38,7 @@ export type ValidationErrorCode =
   | 'LOGO'
   | 'CONTRAST'
   | 'ART_SAFETY'
+  | 'PHOTOS'
   | 'COUNTS';
 
 export interface ValidationFailure {
@@ -286,6 +289,44 @@ export function validateLayoutV2(
       code: 'BOUNDS',
       message: `${prefix} outside safe margin bounds: {x:${layout.logo.x},y:${layout.logo.y},w:${layout.logo.width},h:${layout.logo.height}}`,
     };
+  }
+
+  // 6b. PHOTOS: every content photo placed once, inside the canvas, big enough to read as a
+  // photograph, never under text or the logo. A photo the client sent and the design dropped is
+  // the request not done; a photo the client did not send is invented.
+  const photoCount = context.photoCount ?? 0;
+  const photos = layout.photos ?? [];
+  if (photos.length !== photoCount) {
+    return { ok: false, code: 'PHOTOS', message: `Design places ${photos.length} photo(s); the request has ${photoCount}` };
+  }
+  const seen = new Set<number>();
+  for (const p of photos) {
+    if (p.photoIndex >= photoCount || seen.has(p.photoIndex)) {
+      return { ok: false, code: 'PHOTOS', message: `Photo index ${p.photoIndex} is out of range or placed twice` };
+    }
+    seen.add(p.photoIndex);
+    if (p.x < 0 || p.y < 0 || p.x + p.width > layout.width || p.y + p.height > layout.height) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} leaves the canvas` };
+    }
+    const minSide = Math.round(Math.min(layout.width, layout.height) * (p.role === 'inset' ? 0.12 : 0.22));
+    if (Math.min(p.width, p.height) < minSide) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} (${p.role}) is ${p.width}x${p.height}; at least ${minSide}px a side` };
+    }
+    for (const t of layout.text) {
+      if (boxesIntersect(p, t)) {
+        return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under text copyIndex ${t.copyIndex}` };
+      }
+    }
+    if (boxesIntersect(p, layout.logo)) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under the logo` };
+    }
+  }
+  for (let i = 0; i < photos.length; i++) {
+    for (let j = i + 1; j < photos.length; j++) {
+      if (boxesIntersect(photos[i], photos[j])) {
+        return { ok: false, code: 'PHOTOS', message: `Photos ${photos[i].photoIndex} and ${photos[j].photoIndex} overlap` };
+      }
+    }
   }
 
   // 7. OVERLAP

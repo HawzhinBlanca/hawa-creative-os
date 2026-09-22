@@ -23,7 +23,7 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
-import { resolveOrnamentSettings, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
@@ -43,6 +43,20 @@ const ornamentSettings = (): OrnamentSettings => {
  */
 type LateReferenceBrief = CreativeBrief & { referenceRebrief?: 'applied' | 'too_late' };
 
+/** The request asks for its photographs to appear in the design. */
+export function asksForPictures(instructions: string | undefined): boolean {
+  return /\b(picture|photo|photograph|image|portrait|headshot|pic)s?\b|وێنە|عکس|صورة|صور/i.test(instructions || '');
+}
+
+export function contentPhotoFromDataUrl(dataUrl: string): ContentPhoto {
+  const m = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/);
+  if (!m) throw new Error('Not an image data URL');
+  const mimeType = (m[1] === 'image/jpg' ? 'image/jpeg' : m[1]) as ContentPhoto['mimeType'];
+  const bytes = Buffer.from(m[2], 'base64');
+  const size = imagePixelSize(bytes);
+  return { dataUrl, bytes, mimeType, ...(size ? { width: size.width, height: size.height } : {}) };
+}
+
 /** A run's stage record, whether the driver returned JSON or text. */
 const runStages = (run: { stages?: unknown }): Record<string, any> => {
   if (typeof run.stages !== 'string') return (run.stages as Record<string, any>) || {};
@@ -51,7 +65,7 @@ const runStages = (run: { stages?: unknown }): Record<string, any> => {
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
 import { runsPipelineV3 } from '../chat-intake.js';
-import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult } from './types.js';
+import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -151,8 +165,13 @@ export class DesignStudioService {
   /**
    * Builds the request context from task data, brand reference pack, and logo.
    */
-  /** The image saved with the task at intake, as a data: URL, or undefined. */
-  private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
+  /**
+   * Every image the request carries, oldest first: the one saved with the task at intake, photos
+   * that joined it afterwards (Telegram delivers text and photo as two messages), and photos sent
+   * on their own shortly before it from the same chat with no other request in between.
+   */
+  private async requestImages(s: Scope, taskId: string): Promise<string[]> {
+    const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
     const source = await this.tx(s, async (db) =>
       (
         await sql<any>`SELECT e.data FROM hawa.task_events e
@@ -161,57 +180,77 @@ export class DesignStudioService {
       ).rows[0]?.data
     );
     const payload = source?.payload || source || {};
+    const images: string[] = [];
+
+    // Brand guidelines are sent first and the request after. On 2026-09-22 a client sent two
+    // reference images and then the brief two minutes later; the images became clientless tasks
+    // captioned "Apply the attached visual reference image" and the brief was drafted without them.
+    // Images from the same chat before this request, saved on their own with no client and pointing
+    // at nothing, belong to it, provided no other request from that chat came in between (that one
+    // took them) and they are not older than the cap (a day: guidelines in the morning, the request
+    // after lunch).
+    const channel = payload.sourceChannelId;
+    const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
+    if (typeof channel === 'string' && channel && minutes > 0) {
+      const before = await this.tx(s, async (db) =>
+        (
+          await sql<any>`SELECT e.data FROM hawa.task_events e
+          JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
+          WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created' AND e.task_id <> ${taskId}::uuid
+            AND t.client_id IS NULL
+            AND e.data->'payload'->>'sourceChannelId' = ${channel}
+            AND COALESCE(e.data->'payload'->>'autoGenerate', 'false') <> 'true'
+            AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
+            AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL
+            AND e.occurred_at <= (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+            AND e.occurred_at > (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid) - make_interval(mins => ${minutes})
+            AND NOT EXISTS (
+              SELECT 1 FROM hawa.task_events r JOIN hawa.tasks rt ON rt.id = r.task_id AND rt.tenant_id = r.tenant_id
+              WHERE r.tenant_id = e.tenant_id AND r.event_type = 'task.created' AND r.task_id <> ${taskId}::uuid
+                AND rt.client_id IS NOT NULL
+                AND r.data->'payload'->>'sourceChannelId' = ${channel}
+                AND r.occurred_at > e.occurred_at
+                AND r.occurred_at < (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+            )
+          ORDER BY e.occurred_at ASC LIMIT 6`.execute(db)
+        ).rows.map((r: any) => r.data)
+      );
+      for (const row of before) {
+        const url = row?.payload?.studioOptions?.referenceImageBase64;
+        if (valid(url)) images.push(url);
+      }
+    }
+
     const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
-    const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
-    if (valid(own)) return own;
+    if (valid(own)) images.push(own);
+
     // A photo sent without a caption just after the request is saved as its own instruction-only
     // task pointing here (Telegram delivers the two as separate messages; task 936c5c6f became a
-    // second full design run on 2026-09-19). The latest one is the reference.
+    // second full design run on 2026-09-19).
     const late = await this.tx(s, async (db) =>
       (
         await sql<any>`SELECT e.data FROM hawa.task_events e
         WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created'
           AND e.data->'studioOptions'->>'referenceFor' = ${taskId}
-        ORDER BY e.occurred_at DESC LIMIT 1`.execute(db)
-      ).rows[0]?.data
+        ORDER BY e.occurred_at ASC LIMIT 6`.execute(db)
+      ).rows.map((r: any) => r.data)
     );
-    const url = late?.studioOptions?.referenceImageBase64 || late?.payload?.studioOptions?.referenceImageBase64;
-    if (valid(url)) return url;
-    // Brand guidelines are sent first and the request after. On 2026-09-22 a client sent two
-    // reference images and then the brief two minutes later; the images became clientless tasks
-    // captioned "Apply the attached visual reference image" and the brief was drafted without them.
-    // An image from the same chat before this request, saved on its own with no client and pointing
-    // at nothing, is this request's reference, provided no other request from that chat came in
-    // between (that one took it) and it is not older than the cap (a day: guidelines are sent in
-    // the morning, the request after lunch).
-    const channel = payload.sourceChannelId;
-    const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
-    if (typeof channel !== 'string' || !channel || !(minutes > 0)) return undefined;
-    const before = await this.tx(s, async (db) =>
-      (
-        await sql<any>`SELECT e.data FROM hawa.task_events e
-        JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
-        WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created' AND e.task_id <> ${taskId}::uuid
-          AND t.client_id IS NULL
-          AND e.data->'payload'->>'sourceChannelId' = ${channel}
-          AND COALESCE(e.data->'payload'->>'autoGenerate', 'false') <> 'true'
-          AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
-          AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL
-          AND e.occurred_at <= (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
-          AND e.occurred_at > (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid) - make_interval(mins => ${minutes})
-          AND NOT EXISTS (
-            SELECT 1 FROM hawa.task_events r JOIN hawa.tasks rt ON rt.id = r.task_id AND rt.tenant_id = r.tenant_id
-            WHERE r.tenant_id = e.tenant_id AND r.event_type = 'task.created' AND r.task_id <> ${taskId}::uuid
-              AND rt.client_id IS NOT NULL
-              AND r.data->'payload'->>'sourceChannelId' = ${channel}
-              AND r.occurred_at > e.occurred_at
-              AND r.occurred_at < (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
-          )
-        ORDER BY e.occurred_at DESC LIMIT 1`.execute(db)
-      ).rows[0]?.data
-    );
-    const preceding = before?.payload?.studioOptions?.referenceImageBase64;
-    return valid(preceding) ? preceding : undefined;
+    for (const row of late) {
+      const url = row?.studioOptions?.referenceImageBase64 || row?.payload?.studioOptions?.referenceImageBase64;
+      if (valid(url)) images.push(url);
+    }
+    return images;
+  }
+
+  /** The image the brief reads as a reference: the latest one the request carries, or undefined. */
+  private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
+    const images = await this.requestImages(s, taskId);
+    return images.length ? images[images.length - 1] : undefined;
+  }
+
+  /** The photographs to place, oldest first, when the request asked for pictures. */
+  private async contentPhotos(s: Scope, taskId: string): Promise<string[]> {
+    return this.requestImages(s, taskId);
   }
 
   private async getTaskContext(s: Scope, taskId: string, width: number, height: number) {
@@ -825,7 +864,17 @@ export class DesignStudioService {
     // An image the requester attached reaches the brief, which says what it is; a style reference
     // then reaches the layout generator, the critique and the judge. It was saved with every
     // Telegram task but only the legacy planner ever read it.
-    ctx.attachedImage = await this.attachedImage(s, run.task_id);
+    // The request says what its images are. "A graphic with these texts and two pictures" makes
+    // them content to place; anything else makes the latest one a style reference for the brief.
+    // Until 2026-09-22 every image was a reference, so that request produced a design with the
+    // texts and no pictures, reported as passing.
+    if (asksForPictures(ctx.instructions)) {
+      const images = await this.contentPhotos(s, run.task_id);
+      ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+      ctx.attachedImage = undefined;
+    } else {
+      ctx.attachedImage = await this.attachedImage(s, run.task_id);
+    }
     let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
     // A photo that arrived after the brief ran came without a caption, right after the request, so
     // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
@@ -843,7 +892,8 @@ export class DesignStudioService {
       switch (run.status) {
         case 'briefing': {
           const brief = await runBriefStage(ctx);
-          stages.brief = brief;
+          // Recorded on the run so the requester's note can say what became of their photos.
+          stages.brief = { ...brief, photosSent: ctx.photos?.length ?? 0 };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
         }

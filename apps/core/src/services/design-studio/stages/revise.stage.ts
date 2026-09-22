@@ -59,6 +59,7 @@ export async function runReviseStage(
     expectedHeight: ctx.height,
     copyCount: ctx.copyBlocks.length,
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
+    photoCount: ctx.photos?.length ?? 0,
     reference: {
       rules: {
         fontFamily: ctx.latinFont,
@@ -114,6 +115,7 @@ export async function runReviseStage(
 
         // Re-render
         const renderResult = await renderLayoutV2Async(layoutToUse, {
+          photoDataUris: ctx.photos?.map((p) => p.dataUrl),
           copyText: copyMap,
           artImagePath: artDataUri,
           logoDataUri,
