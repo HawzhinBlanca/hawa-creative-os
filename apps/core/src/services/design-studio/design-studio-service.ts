@@ -191,33 +191,45 @@ export class DesignStudioService {
     // after lunch).
     const channel = payload.sourceChannelId;
     const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
-    if (typeof channel === 'string' && channel && minutes > 0) {
-      const before = await this.tx(s, async (db) =>
+    // Text first, photos after, is as common as the reverse (2026-09-22, 14:36: the brief, then two
+    // portraits 10 and 12 seconds later, saved as "awaiting request" because the run had already
+    // passed the point where intake attaches them). Photos within this many minutes after the
+    // request, with no other request in between, are its photos too.
+    const afterMinutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_AFTER || 15));
+    if (typeof channel === 'string' && channel && (minutes > 0 || afterMinutes > 0)) {
+      const rows = await this.tx(s, async (db) =>
         (
-          await sql<any>`SELECT e.data FROM hawa.task_events e
-          JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
+          await sql<any>`WITH me AS (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+          SELECT e.task_id, e.occurred_at, t.client_id, e.data->'payload'->'studioOptions'->>'referenceImageBase64' AS image
+          FROM hawa.task_events e
+          JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id, me
           WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created' AND e.task_id <> ${taskId}::uuid
-            AND t.client_id IS NULL
             AND e.data->'payload'->>'sourceChannelId' = ${channel}
-            AND COALESCE(e.data->'payload'->>'autoGenerate', 'false') <> 'true'
-            AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
-            AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL
-            AND e.occurred_at <= (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
-            AND e.occurred_at > (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid) - make_interval(mins => ${minutes})
-            AND NOT EXISTS (
-              SELECT 1 FROM hawa.task_events r JOIN hawa.tasks rt ON rt.id = r.task_id AND rt.tenant_id = r.tenant_id
-              WHERE r.tenant_id = e.tenant_id AND r.event_type = 'task.created' AND r.task_id <> ${taskId}::uuid
-                AND rt.client_id IS NOT NULL
-                AND r.data->'payload'->>'sourceChannelId' = ${channel}
-                AND r.occurred_at > e.occurred_at
-                AND r.occurred_at < (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+            AND e.occurred_at > me.created_at - make_interval(mins => ${minutes})
+            AND e.occurred_at <= me.created_at + make_interval(mins => ${afterMinutes})
+            AND (
+              t.client_id IS NOT NULL
+              OR (COALESCE(e.data->'payload'->>'autoGenerate', 'false') <> 'true'
+                  AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
+                  AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL)
             )
-          ORDER BY e.occurred_at ASC LIMIT 6`.execute(db)
-        ).rows.map((r: any) => r.data)
+          ORDER BY e.occurred_at ASC LIMIT 40`.execute(db)
+        ).rows
       );
-      for (const row of before) {
-        const url = row?.payload?.studioOptions?.referenceImageBase64;
-        if (valid(url)) images.push(url);
+      const mine = await this.tx(s, async (db) =>
+        (await sql<any>`SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db)).rows[0]?.created_at
+      );
+      const myTime = mine ? new Date(mine).getTime() : NaN;
+      // Each orphan photo belongs to the request nearest to it in time, this one or another from the
+      // same chat. "Text first, photos after" and "photos first, text after" both resolve this way,
+      // and a photo between two requests goes to one of them, not both.
+      const requests = rows.filter((r: any) => r.client_id).map((r: any) => new Date(r.occurred_at).getTime());
+      for (const r of rows) {
+        if (r.client_id || !valid(r.image)) continue;
+        const at = new Date(r.occurred_at).getTime();
+        const mineDistance = Math.abs(at - myTime);
+        const nearerOther = requests.some((other: number) => Math.abs(at - other) < mineDistance);
+        if (!nearerOther) images.push(r.image);
       }
     }
 

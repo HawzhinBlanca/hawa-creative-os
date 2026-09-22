@@ -122,6 +122,21 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
     }
   });
 
+  it('a photo sent shortly after the request, with no other request in between, is its photo too', async () => {
+    const channel = `after-ref-${randomUUID().slice(0, 8)}`;
+    const taskId = await brief(channel);
+    await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId: null,
+      title: 'Sewa: reference image (awaiting request)', rawText: 'reference', designInstructions: '', exactCopy: [],
+      isInstructionOnly: true, autoGenerate: false, studioOptions: { referenceImageBase64: photo },
+    });
+    expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
+    // A photo belongs to the nearest request in time: a later request does not take it.
+    const later = await brief(channel);
+    expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
+    expect(await (service() as any).attachedImage(scope, later)).toBeUndefined();
+  });
+
   it('the 2026-09-22 shape is still found: a clientless task with the synthetic caption as copy', async () => {
     const channel = `legacy-ref-${randomUUID().slice(0, 8)}`;
     await persistChatIntake(db, {
