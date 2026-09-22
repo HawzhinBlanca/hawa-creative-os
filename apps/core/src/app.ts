@@ -1,5 +1,6 @@
 import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
+import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
@@ -3817,7 +3818,13 @@ export function createApp(options?: CreateAppOptions) {
         occurredAt: new Date().toISOString(),
       });
 
-      const isExplicitPersistentRule = /use this as a future (client )?rule|future (client )?rule|permanent (client )?rule|future guideline/i.test(rawText);
+      // "From now on", "always", "every time" and "for future designs" are how a reviewer says a
+      // rule in chat; the earlier phrase list wanted the words "future rule" and treated everything
+      // else as a one-time change, so a standing preference was applied once and forgotten.
+      const isExplicitPersistentRule =
+        /use this as a future (client )?rule|future (client )?rule|permanent (client )?rule|future guideline/i.test(rawText) ||
+        /\b(from now on|going forward|always|every ?time|for (all )?future designs|in (all )?future designs|as a rule)\b/i.test(rawText) ||
+        /هەمیشە|لەمەودوا|لە داهاتوو|لە هەموو دیزاینەکان/.test(rawText);
       const feedbackScope = isExplicitPersistentRule ? 'client' : 'one_time';
 
       if (db && isValidUuid(targetId) && isValidUuid(clientId)) {
@@ -3896,30 +3903,28 @@ export function createApp(options?: CreateAppOptions) {
         });
       }
 
-      // B. Typography Rule
-      if (/font|typography|cinzel|playfair|cormorant|jakarta|serif|sans|فۆنت/i.test(lowerFb)) {
-        if (/playfair/i.test(lowerFb) && !/cinzel/i.test(lowerFb)) {
-          extractedRules.push({
-            category: 'typography',
-            title: 'Playfair Display Elegant Typography',
-            ruleText: 'Apply Playfair Display serif typography for commanding headlines and titles.',
-            rationale: 'Operator requested Playfair Display for title headlines.',
-          });
-        } else if (/cormorant/i.test(lowerFb) && !/cinzel/i.test(lowerFb)) {
-          extractedRules.push({
-            category: 'typography',
-            title: 'Playfair Display Ceremonial Typography',
-            ruleText: 'Apply Playfair Display italic serif typography for ceremonial prose and salutations.',
-            rationale: 'Operator requested Playfair Display for ceremonial copy.',
-          });
-        } else {
-          extractedRules.push({
-            category: 'typography',
-            title: 'Smart Creative Typographic Hierarchy',
-            ruleText: 'Apply smart, high-design typography: Cinzel for monumental headers, Playfair Display for ceremonial prose, and Plus Jakarta Sans for modern executive copy.',
-            rationale: 'Operator established creative font freedom and smart design font pairings.',
-          });
-        }
+      // B. Typography: the face the sender named, applied when the studio has it and refused
+      // out loud when it does not. A font remark that names no face is passed on as written; the
+      // handler never substitutes a face of its own for the one asked for.
+      const fontRequests = detectFontRequests(rawText);
+      const unavailableFonts = fontRequests.filter((request) => !request.available);
+      for (const request of fontRequests) {
+        if (!request.available) continue;
+        const target = request.script === 'unspecified' ? (request.admittedFor ?? 'unspecified') : request.script;
+        extractedRules.push({
+          category: 'typography',
+          title: `${request.family} for ${scriptLabel(target)} text`,
+          ruleText: `Set ${scriptLabel(target)} text in ${request.family}.`,
+          rationale: `Requested by name in review feedback: "${rawText.trim().slice(0, 120)}"`,
+        });
+      }
+      if (fontRequests.length === 0 && /font|typography|typeface|فۆنت/i.test(lowerFb)) {
+        extractedRules.push({
+          category: 'typography',
+          title: 'Typography feedback',
+          ruleText: rawText.trim(),
+          rationale: 'Typography feedback, as written; no admitted face was named.',
+        });
       }
 
       // C. Canva Review Surface Rule
@@ -3948,8 +3953,10 @@ export function createApp(options?: CreateAppOptions) {
         });
       }
 
-      // E. Fallback if no specific category matched
-      if (extractedRules.length === 0) {
+      // E. Fallback if no specific category matched. A message whose only ask was a face the
+      // studio lacks gets no rule: passing "use Calibri" to the planner would be sanitised back to
+      // the default face and then reported to the sender as applied.
+      if (extractedRules.length === 0 && unavailableFonts.length === 0) {
         extractedRules.push({
           category: 'layout',
           title: 'Operator Design Feedback',
@@ -3980,6 +3987,24 @@ export function createApp(options?: CreateAppOptions) {
           });
         }
       }
+
+      // A face the studio cannot draw is refused to the sender now, before any draft is promised.
+      // Applying it would end in the default face, reported as their preference.
+      if (unavailableFonts.length > 0) {
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text: `⚠️ <b>Font not available</b>\n\n` +
+            unavailableFonts.map((request) => escapeTelegramHtml(unavailableFontNotice(request))).join('\n\n') +
+            `\n\n<i>To add a new typeface, the owner has to install it in the studio first.</i>`,
+          parse_mode: 'HTML',
+        }).catch((err: unknown) => {
+          console.error('[TelegramBridge] Could not send unavailable-font notice:', err);
+        });
+      }
+      const feedbackOutcome = {
+        scope: feedbackScope,
+        proposedRules: isExplicitPersistentRule ? extractedRules.map((r) => r.ruleText) : [],
+        unavailableFonts: unavailableFonts.map((r) => ({ family: r.family, script: r.script, alternatives: r.alternatives })),
+      };
 
       // 4. Dynamic Task Re-generation with Active Client Rules + Immediate Task Directive
       let revisedPhotoSent = false;
@@ -4181,6 +4206,7 @@ export function createApp(options?: CreateAppOptions) {
             status: 'REVISION_QUEUED',
             learnedRule: effectiveTaskRules[0] || 'Operator feedback',
             learnedRules: effectiveTaskRules,
+            ...feedbackOutcome,
             comment: rawText,
           }, 200);
         } catch (revErr) {
@@ -4189,12 +4215,19 @@ export function createApp(options?: CreateAppOptions) {
       }
 
       if (!revisedPhotoSent) {
-        const learnedRuleSummary = effectiveTaskRules.join('; ') || 'Operator preferences';
+        // The sender is told what this message did: what applies to this design, and whether a
+        // standing rule was proposed. "Applied preferences" used to be printed for both, and for
+        // requests that were never applied.
+        const appliedNow = extractedRules.map((r) => r.ruleText).join('; ');
+        const standing = isExplicitPersistentRule && extractedRules.length > 0
+          ? `📌 <b>Proposed as a standing rule for this client</b> — it takes effect for future designs once the creative director approves it in Hawa Desk.\n`
+          : `ℹ️ <i>Applied to this design only. Say "from now on" or "always" to propose it as a standing rule.</i>\n`;
         const ackNotice = {
           text: `✏️ <b>Revision Feedback Recorded for Task</b> <code>${escapeTelegramHtml(targetId)}</code>\n\n` +
             `📝 <b>Feedback Notes:</b> "${escapeTelegramHtml(rawText.slice(0, 300))}"\n` +
-            `🧠 <b>Applied Preferences:</b> "${escapeTelegramHtml(learnedRuleSummary)}"\n\n` +
-            `⚡ Feedback is recorded. Native Canva changes still require a verified edit and capture.`,
+            (appliedNow ? `🧠 <b>Applied to this design:</b> "${escapeTelegramHtml(appliedNow)}"\n` : '') +
+            standing +
+            `\n⚡ Feedback is recorded. Native Canva changes still require a verified edit and capture.`,
           parse_mode: 'HTML',
         };
         await telegramBridge.dispatchOutboundMessage(sourceChannelId, ackNotice);
@@ -4207,6 +4240,7 @@ export function createApp(options?: CreateAppOptions) {
         status: feedbackTargetTask.status,
         learnedRule: effectiveTaskRules[0] || 'Operator feedback',
         learnedRules: effectiveTaskRules,
+        ...feedbackOutcome,
         comment: rawText,
       }, 200);
     }
