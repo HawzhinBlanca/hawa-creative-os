@@ -29,6 +29,11 @@ export interface StyleSpec {
   titleColor: 'as_generated' | 'light' | 'gold' | 'dark';
   /** The title's last line (after its last line break) set in the brand gold. */
   accentLastTitleLine: boolean;
+  /**
+   * The title's first line set in the brand gold ("MEET KAAE AT" above a white "SAGACON 2026").
+   * Optional because specs stored before 2026-09-23 do not carry it.
+   */
+  accentFirstTitleLine?: boolean;
   cta: 'as_generated' | 'plain' | 'gold_button';
   logoCorner: 'as_generated' | 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
   texture: 'as_generated' | 'none' | 'diagonal-lines' | 'sun-rays' | 'guilloche' | 'thin-rules' | 'gradient-wash';
@@ -46,6 +51,7 @@ export const NEUTRAL_STYLE_SPEC: StyleSpec = {
   alignment: 'as_generated',
   titleColor: 'as_generated',
   accentLastTitleLine: false,
+  accentFirstTitleLine: false,
   cta: 'as_generated',
   logoCorner: 'as_generated',
   texture: 'as_generated',
@@ -81,11 +87,15 @@ export const STYLE_SPEC_SCHEMA = {
       type: 'string',
       enum: ['as_generated', 'light', 'gold', 'dark'],
       description:
-        "The colour of the title as a whole in the reference: 'light' for a white or cream title, 'gold' when the whole title is gold, 'dark' for a dark title on a light ground. A gold line inside an otherwise light title is 'light' plus accentLastTitleLine, not 'gold'.",
+        "The colour of the title as a whole in the reference: 'light' for a white or cream title, 'gold' when the whole title is gold, 'dark' for a dark title on a light ground. A gold line inside an otherwise light title is 'light' plus accentFirstTitleLine or accentLastTitleLine, not 'gold'.",
     },
     accentLastTitleLine: {
       type: 'boolean',
       description: 'True when the last line of the title is set in gold (for example an edition line).',
+    },
+    accentFirstTitleLine: {
+      type: 'boolean',
+      description: "True when the first line of the title is set in gold above a light title (for example 'MEET KAAE AT' over the event's name).",
     },
     cta: {
       type: 'string',
@@ -117,7 +127,7 @@ export const STYLE_SPEC_SCHEMA = {
       description: "'spread' when the title sits high, the call to action on the bottom margin and the rest between; 'centered' for one centred stack.",
     },
   },
-  required: ['titleScale', 'titleWeight', 'typeface', 'alignment', 'titleColor', 'accentLastTitleLine', 'cta', 'logoCorner', 'texture', 'dividers', 'panels', 'composition'],
+  required: ['titleScale', 'titleWeight', 'typeface', 'alignment', 'titleColor', 'accentLastTitleLine', 'accentFirstTitleLine', 'cta', 'logoCorner', 'texture', 'dividers', 'panels', 'composition'],
   additionalProperties: false,
 } as const;
 
@@ -281,11 +291,22 @@ export function applyStyleSpec(
   // returned `passed: true, defectCodes: []` on it — the edition line would have shipped unreadable
   // on any cream or white ground. When gold cannot be read, the last line simply stays the title's
   // own colour, which is legible by construction because the block above just checked it.
-  if (title && spec.accentLastTitleLine && (copy.text[title.copyIndex] || '').trim().includes('\n')) {
+  //
+  // The first line takes the accent the same way ("MEET KAAE AT" in gold over a white event name,
+  // the reference of 2026-09-22); when a reference has both, the first line wins, since a title
+  // carries one accent.
+  const accentLine = spec.accentFirstTitleLine ? 'first' : spec.accentLastTitleLine ? 'last' : undefined;
+  if (title && accentLine && (copy.text[title.copyIndex] || '').trim().includes('\n')) {
     const surface = declaredBackgroundColour(layout, title);
     const ratio = calculateLuminanceContrastRatio(hexToLuminance(gold), hexToLuminance(surface));
-    if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) title.accentColor = gold;
-    else delete (title as { accentColor?: string }).accentColor;
+    if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) {
+      title.accentColor = gold;
+      if (accentLine === 'first') title.accentParagraph = 'first';
+      else delete (title as { accentParagraph?: string }).accentParagraph;
+    } else {
+      delete (title as { accentColor?: string }).accentColor;
+      delete (title as { accentParagraph?: string }).accentParagraph;
+    }
   }
 
   // Call to action on a gold button: the text sized to its line, the button its padding around it,
@@ -487,5 +508,5 @@ export function withoutDecision(spec: StyleSpec, key: (typeof MOVEMENT_DECISIONS
  * So they are kept even on the arrangement the generator drew.
  */
 export function colourDecisionsOnly(spec: StyleSpec): StyleSpec {
-  return { ...NEUTRAL_STYLE_SPEC, titleColor: spec.titleColor, accentLastTitleLine: spec.accentLastTitleLine };
+  return { ...NEUTRAL_STYLE_SPEC, titleColor: spec.titleColor, accentLastTitleLine: spec.accentLastTitleLine, accentFirstTitleLine: spec.accentFirstTitleLine === true };
 }

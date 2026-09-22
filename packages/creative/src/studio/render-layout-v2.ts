@@ -1085,17 +1085,19 @@ function renderTextElementToSvg(
   const verticalSlack = Math.max(0, (t.height - inkHeight) / 2);
   const firstLineY = t.y + verticalSlack + inkAbove;
 
-  // An accent colour sets the copy's last paragraph (the lines it wraps to) apart, e.g. a gold
-  // edition line under a white title.
+  // An accent colour sets one paragraph of the copy (the lines it wraps to) apart: the last by
+  // default (a gold edition line under a white title), or the first ("MEET KAAE AT" in gold above
+  // the event's name, the treatment of the reference on 2026-09-22).
   const paragraphs = copyText.split('\n').filter((p) => p.trim());
-  const accentFrom =
-    t.accentColor && paragraphs.length > 1
-      ? lines.length - wrapTextWithFontkit(paragraphs[paragraphs.length - 1], t.width, font, renderFontSize, letterSpacingVal).length
-      : lines.length;
+  const accented = Boolean(t.accentColor) && paragraphs.length > 1;
+  const accentFirst = t.accentParagraph === 'first';
+  const wrapped = (p: string) => wrapTextWithFontkit(p, t.width, font, renderFontSize, letterSpacingVal).length;
+  const accentFrom = accented && !accentFirst ? lines.length - wrapped(paragraphs[paragraphs.length - 1]) : lines.length;
+  const accentUntil = accented && accentFirst ? wrapped(paragraphs[0]) : 0;
   const tspans: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const lineY = firstLineY + i * nominalLineHeight;
-    const fill = i >= accentFrom ? ` fill="${t.accentColor}"` : '';
+    const fill = i >= accentFrom || i < accentUntil ? ` fill="${t.accentColor}"` : '';
     tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}"${fill}>${escapeXml(lines[i])}</tspan>`);
   }
 

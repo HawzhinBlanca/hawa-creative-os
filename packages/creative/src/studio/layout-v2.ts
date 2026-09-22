@@ -57,6 +57,8 @@ export interface TextElement extends Box {
   rtl?: boolean;
   /** The last paragraph of the copy (after its last line break) in this colour, e.g. a gold edition line. */
   accentColor?: Hex;
+  /** Which paragraph accentColor sets apart: the last (default) or the first ("MEET KAAE AT" in gold above the event). */
+  accentParagraph?: 'first' | 'last';
 }
 
 export interface TypeScaleConfig {
@@ -155,6 +157,7 @@ export const textElementSchema = boxSchema.extend({
   opacity: z.number().min(0).max(1).optional(),
   rtl: z.boolean().optional(),
   accentColor: hexSchema.optional(),
+  accentParagraph: z.enum(['first', 'last']).optional(),
 }).strict();
 
 export const photoElementSchema = boxSchema.extend({

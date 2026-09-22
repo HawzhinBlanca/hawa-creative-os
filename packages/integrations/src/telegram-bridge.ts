@@ -11,7 +11,14 @@ export interface TelegramBridgeConfig {
   allowedUserIds?: string[];
   allowedChatIds?: string[];
   actionTokenService?: TelegramActionTokenService;
+  /** Bound on one file download (getFile plus the file body). Defaults to 60 s. */
+  downloadTimeoutMs?: number;
+  /** Bound on one file upload (sendDocument). Defaults to 60 s. */
+  fileUploadTimeoutMs?: number;
 }
+
+/** Default bound on one Telegram file transfer, in either direction. */
+export const TELEGRAM_FILE_TRANSFER_TIMEOUT_MS = 60_000;
 
 export interface TelegramUpdate {
   update_id: number;
@@ -259,13 +266,16 @@ export class TelegramBridgeDaemon {
   async downloadFile(fileId: string): Promise<Buffer | null> {
     if (!this.config.botToken) return null;
     try {
+      // One deadline covers getFile, the file request and reading its body. Without it a single
+      // stalled download held the intake that awaited it indefinitely.
+      const signal = AbortSignal.timeout(this.config.downloadTimeoutMs ?? TELEGRAM_FILE_TRANSFER_TIMEOUT_MS);
       const getFileUrl = `https://api.telegram.org/bot${this.config.botToken}/getFile?file_id=${fileId}`;
-      const res = await fetch(getFileUrl);
+      const res = await fetch(getFileUrl, { signal });
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.ok || !data.result?.file_path) return null;
       const fileUrl = `https://api.telegram.org/file/bot${this.config.botToken}/${data.result.file_path}`;
-      const fileRes = await fetch(fileUrl);
+      const fileRes = await fetch(fileUrl, { signal });
       if (!fileRes.ok) return null;
       const arrayBuffer = await fileRes.arrayBuffer();
       return Buffer.from(arrayBuffer);
@@ -675,6 +685,50 @@ export class TelegramBridgeDaemon {
   }
 
   /**
+   * Sends a file to a chat as a document (multipart sendDocument), so the recipient gets exactly the
+   * bytes that were approved: Telegram recompresses anything sent as a photo. The upload is bounded by
+   * a timeout. A failure after the request may have been written cannot tell whether Telegram kept the
+   * file, so it is reported as uncertain and must not be resent automatically.
+   */
+  async dispatchOutboundDocument(
+    chatId: string | number,
+    fileBytes: Uint8Array,
+    filename: string,
+    options: { mimeType?: string; caption?: string; parseMode?: 'HTML' | 'Markdown'; timeoutMs?: number } = {}
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
+    if (!fileBytes || fileBytes.length === 0) return { success: false, error: 'INVALID_DOCUMENT_BUFFER' };
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('document', new Blob([new Uint8Array(fileBytes)], { type: options.mimeType || 'application/octet-stream' }), filename || 'file');
+    if (options.caption) {
+      form.append('caption', options.caption.length > 1024 ? options.caption.slice(0, 1020) + '…' : options.caption);
+      if (options.parseMode) form.append('parse_mode', options.parseMode);
+    }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${this.config.botToken}/sendDocument`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(options.timeoutMs ?? this.config.fileUploadTimeoutMs ?? TELEGRAM_FILE_TRANSFER_TIMEOUT_MS),
+      });
+      const body = await res.json().catch(() => null) as { ok?: boolean; error_code?: number; result?: { message_id?: number; chat?: { id?: number | string } } } | null;
+      if (!res.ok || body?.ok !== true || !body.result) {
+        return { success: false, error: `TELEGRAM_DOCUMENT_REJECTED_${body?.error_code || res.status}` };
+      }
+      if (!Number.isSafeInteger(body.result.message_id) || Number(body.result.message_id) <= 0 ||
+          String(body.result?.chat?.id) !== String(chatId)) {
+        return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
+      }
+      return { success: true, messageId: String(body.result.message_id) };
+    } catch (err: unknown) {
+      if (this.isPreConnectionError(err)) {
+        return { success: false, error: 'TELEGRAM_NETWORK_ERROR' };
+      }
+      return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+    }
+  }
+
+  /**
    * Handles English bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
    */
   handleCommand(text: string, chatId?: string | number, senderId?: string | number): TelegramCommandResult | null {
@@ -693,10 +747,14 @@ export class TelegramBridgeDaemon {
       return {
         text:
           `👋 *Welcome to Hawa Creative OS Bot*\n\n` +
-          `You can send design requests directly to this bot!\n\n` +
-          `• Send any design brief or text prompt to create an editable design in Canva.\n` +
-          `• Send voice notes in Kurdish or English.\n\n` +
-          `_Note: Official publication to Google Drive & Sheets requires Art Director review and approval in Hawa Desk._`,
+          `• Send the text for a design (English or Kurdish) and get an editable Canva draft.\n` +
+          `• Send photos with it (one by one or as an album): photos to place, or a design to follow.\n` +
+          `• To change a draft, reply to its image with what to change.\n` +
+          `• Say a lasting preference ("From now on, put the logo bottom-right") and every later design follows it.\n` +
+          `• Send brand guidelines as a PDF and their rules are saved the same way.\n` +
+          `• /rules lists the saved rules; /forget 2 removes one.\n` +
+          `• Voice notes in Kurdish or English work too.\n\n` +
+          `_Designs are approved in Hawa Desk; the approved file is then sent here._`,
         parse_mode: 'Markdown',
       };
     }

@@ -84,14 +84,14 @@ export function resolveCanvaVariant(input: Pick<WorkflowInput, 'canvaVariant'>):
   return v && ok(v.width) && ok(v.height) ? { width: v.width, height: v.height } : { ...DEFAULT_CANVA_VARIANT };
 }
 
-/** Restate orchestrates retries; Core journals model charges and Canva side effects. */
-export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<WorkflowOutput> {
-  const output = (status: string, documentId?: string): WorkflowOutput =>
-    ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
+type CoreCall = (path: string, body?: unknown, key?: string) => Promise<any>;
+
+/** The worker's authenticated line to Core for one task. */
+function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch): CoreCall {
   const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
   const token = process.env.HAWA_BEARER_TOKEN;
   if (!token) throw new Error('Worker Core credential is not configured');
-  const call = async (path: string, body?: unknown, key?: string) => {
+  return async (path: string, body?: unknown, key?: string) => {
     const res = await fetcher(base + '/v1/tasks/' + encodeURIComponent(input.taskId) + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
@@ -105,25 +105,91 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     }
     return res.json() as Promise<any>;
   };
+}
+
+/**
+ * Posts a terminal outcome to Core, journalled as one step. Core records it on the task and, unless
+ * told otherwise, messages the requester. A 4xx answer is final and swallowed: a message Core refuses
+ * must never fail (or retry) the workflow.
+ */
+async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepName: string, body: Record<string, unknown>) {
+  return ctx.run(stepName, async () => {
+    try {
+      return await call('/notifications/canva-status', body);
+    } catch (err) {
+      if (err instanceof CoreBoundaryError && err.httpStatus >= 400 && err.httpStatus < 500 && err.httpStatus !== 429) {
+        return { error: 'non_retryable_client_error', status: err.httpStatus };
+      }
+      throw err;
+    }
+  });
+}
+
+/**
+ * The code Core records for a studio run that ended `failed`. It used to be the run's free-text
+ * diagnostic ("Studio v3 failed: Winner failed hard QA: TEXT_OVERFLOW, …"), which Core squashed into
+ * an upper-case token and printed to the requester. The code is now a short, stable name; the
+ * diagnostic travels separately as `detail`, for the task's history and the logs only.
+ */
+export function studioFailureCode(result: { code?: unknown; diagnostic?: unknown; message?: unknown; error?: unknown }): string {
+  if (typeof result.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(result.code)) return result.code;
+  const text = [result.diagnostic, result.message, result.error].filter((v) => typeof v === 'string').join(' ');
+  if (/BUDGET_EXHAUSTED/i.test(text)) return 'BUDGET_EXHAUSTED';
+  if (/hard QA/i.test(text)) return 'HARD_QA_REFUSED';
+  if (/judge|critic/i.test(text) && /unavailable/i.test(text)) return 'MODEL_UNAVAILABLE';
+  return 'STUDIO_FAILED';
+}
+
+const detailOf = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : undefined;
+
+/**
+ * A dispatch the runner refuses (no Canva job: daily cap, no client, instruction only, a reference
+ * image) is reported to Core before the refusal is thrown, so the task leaves RECEIVED for an
+ * operator. Core messages the requester only if intake did not already tell them. Best effort: a
+ * failure here is logged and never replaces the refusal itself.
+ */
+export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<void> {
+  try {
+    const call = coreClient(input, fetcher);
+    await reportOutcome(ctx, call, 'canva-notify-not-runnable', {
+      status: input.clientId ? 'MANUAL_DESIGN_REQUIRED' : 'CLIENT_REQUIRED',
+      notifyRequester: !input.requesterToldAtIntake,
+      detail: 'Dispatched without an automatic Canva job; nothing was generated or spent.',
+    });
+  } catch (err) {
+    console.warn(`[worker] Task ${input.taskId}: the refusal could not be reported to Core: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Restate orchestrates retries; Core journals model charges and Canva side effects. */
+export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<WorkflowOutput> {
+  const output = (status: string, documentId?: string): WorkflowOutput =>
+    ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
+  const call = coreClient(input, fetcher);
+  // A re-drive is a new run of the same task: its keys must not collide with the first run's, or
+  // Core would hand back the first run's (failed) answer instead of starting again.
+  const runKey = Number.isInteger(input.redriveAttempt) && (input.redriveAttempt as number) > 0
+    ? `${input.taskId}-redrive-${input.redriveAttempt}`
+    : input.taskId;
   let result: any;
   // Every terminal outcome is reported to the requester through Core. A failed chat message
   // must never fail (or retry) the workflow, so the notification swallows its own errors.
-  const finish = async (status: string, designId?: string, code?: string, parity?: string) => {
-    await ctx.run('canva-notify-' + status.toLowerCase(), async () => {
-      try {
-        return await call('/notifications/canva-status', {
-          status,
-          designId,
-          code,
-          runId: result?.runId,
-          ...(parity ? { parity, parityError: code } : {}),
-        });
-      } catch (err: any) {
-        if (err instanceof CoreBoundaryError && err.httpStatus >= 400 && err.httpStatus < 500 && err.httpStatus !== 429) {
-          return { error: 'non_retryable_client_error', status: err.httpStatus };
-        }
-        throw err;
-      }
+  const finish = async (
+    status: string,
+    designId?: string,
+    code?: string,
+    parity?: string,
+    extra: { detail?: string; notifyRequester?: boolean } = {}
+  ) => {
+    await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), {
+      status,
+      designId,
+      code,
+      runId: result?.runId,
+      ...(parity ? { parity, parityError: code } : {}),
+      ...(extra.detail ? { detail: extra.detail } : {}),
+      ...(extra.notifyRequester === false ? { notifyRequester: false } : {}),
     });
     return output(status, designId);
   };
@@ -146,7 +212,9 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     throw error;
   };
 
-  if (!input.canvaAutoGenerate) return finish('MANUAL_DESIGN_REQUIRED');
+  if (!input.canvaAutoGenerate) {
+    return finish('MANUAL_DESIGN_REQUIRED', undefined, undefined, undefined, { notifyRequester: !input.requesterToldAtIntake });
+  }
   if (!input.clientId) return finish('CLIENT_REQUIRED');
   let task: any;
   try {
@@ -154,7 +222,14 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   } catch (error) {
     return await handleBoundaryError(error, 'DESIGN_REJECTED');
   }
-  if (task.clientId !== input.clientId || task.tenantId !== input.tenantId) throw new WorkflowTerminalError('Workflow task/client/tenant mismatch', 'SCOPE_MISMATCH');
+  // A mismatch is final: retrying replays the same journalled answer. It used to be thrown outside
+  // any step, as an ordinary error, so Restate retried the invocation without end and the requester,
+  // promised "the link or an explanation", heard nothing. It now ends the run and is reported.
+  if (task.clientId !== input.clientId || task.tenantId !== input.tenantId) {
+    return finish('DESIGN_BLOCKED', undefined, 'SCOPE_MISMATCH', undefined, {
+      detail: 'Workflow task/client/tenant mismatch: the dispatched client or tenant differs from the task record.',
+    });
+  }
 
   const variant = resolveCanvaVariant(input);
   if (input.designStudio) {
@@ -165,7 +240,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     };
     try {
       result = await ctx.run('canva-studio-start', () =>
-        call('/canva/studio', studioBody, 'workflow-studio-' + input.taskId)
+        call('/canva/studio', studioBody, 'workflow-studio-' + runKey)
       );
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
@@ -185,7 +260,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
           call(
             '/canva/studio/' + encodeURIComponent(result.runId) + '/resume',
             {},
-            'workflow-studio-resume-' + input.taskId + '-' + result.runId + '-' + n
+            'workflow-studio-resume-' + runKey + '-' + result.runId + '-' + n
           )
         );
       } catch (error) {
@@ -208,15 +283,16 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       return finish('DESIGN_STUCK', undefined, 'STUCK_IN_' + stuckStage.toUpperCase().replace(/[^A-Z0-9_]/g, '_'));
     }
     if (result.status === 'failed') {
-      const code = result.code || result.diagnostic || result.error || 'STUDIO_FAILED';
-      return finish('DESIGN_FAILED', undefined, code);
+      return finish('DESIGN_FAILED', undefined, studioFailureCode(result), undefined, {
+        detail: detailOf(result.diagnostic) || detailOf(result.message) || detailOf(result.error),
+      });
     }
     if (!['transferred', 'degraded'].includes(result.status)) {
       return finish('DESIGN_' + String(result.status).toUpperCase());
     }
   } else {
     try {
-      result = await ctx.run('canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + input.taskId));
+      result = await ctx.run('canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + runKey));
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
@@ -239,11 +315,17 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   if (result.status === 'degraded' && !result.designId && state.binding?.designId) {
     result.designId = state.binding.designId;
   }
-  if (!result.designId || state.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding differs from imported document', 'BINDING_MISMATCH');
+  // Final, like the scope check above: reported, never retried. No design id is passed on, because
+  // which design belongs to the task is exactly what is in doubt.
+  if (!result.designId || state.binding?.designId !== result.designId) {
+    return finish('DESIGN_BLOCKED', undefined, 'BINDING_MISMATCH', undefined, {
+      detail: `Workflow binding differs from imported document (imported ${result.designId || 'none'}, bound ${state.binding?.designId || 'none'}).`,
+    });
+  }
   let currentBindingVersion = state.binding?.version;
   let capture: any;
   try {
-    capture = await ctx.run('canva-export-preview', () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + input.taskId));
+    capture = await ctx.run('canva-export-preview', () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey));
     for (let n = 0; n < 30 && ['submitted', 'creating'].includes(capture.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       capture = await ctx.run('canva-resume-preview-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
@@ -261,10 +343,14 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     } catch (error) {
       return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
     }
-    if (fresh.binding?.designId !== result.designId) throw new WorkflowTerminalError('Workflow binding changed during preview recovery', 'BINDING_MISMATCH');
+    if (fresh.binding?.designId !== result.designId) {
+      return finish('DESIGN_BLOCKED', undefined, 'BINDING_MISMATCH', undefined, {
+        detail: `Workflow binding changed during preview recovery (imported ${result.designId}, now bound ${fresh.binding?.designId || 'none'}).`,
+      });
+    }
     currentBindingVersion = fresh.binding.version;
     try {
-      capture = await ctx.run('canva-preview-recovery-' + attempt, () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + input.taskId + '-retry-' + attempt));
+      capture = await ctx.run('canva-preview-recovery-' + attempt, () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey + '-retry-' + attempt));
       for (let n = 0; n < 30 && ['submitted', 'creating'].includes(capture.status); n++) {
         if (ctx.sleep) await ctx.sleep(2000);
         capture = await ctx.run('canva-resume-preview-recovery-' + attempt + '-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
@@ -276,7 +362,7 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
   if (capture.status !== 'retrieved') return finish('CANVA_PREVIEW_' + String(capture.status).toUpperCase(), result.designId);
   let check: any;
   try {
-    check = await ctx.run('canva-export-copy-font-check', () => call('/canva/exports', { format: 'pptx', expectedVersion: currentBindingVersion }, 'workflow-check-' + input.taskId));
+    check = await ctx.run('canva-export-copy-font-check', () => call('/canva/exports', { format: 'pptx', expectedVersion: currentBindingVersion }, 'workflow-check-' + runKey));
     for (let n = 0; n < 30 && ['submitted', 'creating'].includes(check.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       check = await ctx.run('canva-resume-copy-font-check-' + n, () => call('/canva/exports/' + encodeURIComponent(check.operationId) + '/resume', {}));

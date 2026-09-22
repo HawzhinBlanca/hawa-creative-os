@@ -240,3 +240,35 @@ describe('Sorani Kurdish round-trip evidence', async () => {
     expect(r.copyPass).toBe(true);
   });
 });
+
+describe('reading direction in a Canva export', () => {
+  // Canva's export writes no rtl attribute; the studio's own deck writes it on every Kurdish paragraph.
+  const kurdish = 'ناونیشانی کوردی';
+  const deck = (opts: { canva: boolean; rtl: boolean[] }) =>
+    zipSync({
+      'ppt/presentation.xml': strToU8('<p:presentation/>'),
+      'docProps/core.xml': strToU8(
+        opts.canva
+          ? '<cp:coreProperties><dc:identifier>DAHVtest123</dc:identifier></cp:coreProperties>'
+          : '<cp:coreProperties><dc:title>Editable Canva transfer (Hawa)</dc:title></cp:coreProperties>'
+      ),
+      'ppt/slides/slide1.xml': strToU8(
+        `<p:sld>${opts.rtl
+          .map((r) => `<p:sp><p:txBody><a:p><a:pPr${r ? ' rtl="1"' : ''}/><a:r><a:rPr><a:cs typeface="Noto Sans Arabic"/><a:latin typeface="Noto Sans Arabic"/></a:rPr><a:t>${kurdish}</a:t></a:r></a:p></p:txBody></p:sp>`)
+          .join('')}</p:sld>`
+      ),
+    });
+
+  it('leaves it to the visual review when a Canva export carries no rtl attribute at all', () => {
+    const r = checkCanvaPptx(deck({ canva: true, rtl: [false] }), [kurdish], 'Noto Sans Arabic');
+    expect(r.source).toBe('canva_exported_pptx');
+    expect(r.rtlPass).toBe(true);
+    expect(r.rtlNote).toMatch(/verified visually/);
+  });
+
+  it('still fails a studio deck, or a Canva export where only some Kurdish paragraphs carry it', () => {
+    expect(checkCanvaPptx(deck({ canva: false, rtl: [false] }), [kurdish], 'Noto Sans Arabic').rtlPass).toBe(false);
+    expect(checkCanvaPptx(deck({ canva: true, rtl: [true, false] }), [kurdish, kurdish], 'Noto Sans Arabic').rtlPass).toBe(false);
+    expect(checkCanvaPptx(deck({ canva: true, rtl: [true, true] }), [kurdish, kurdish], 'Noto Sans Arabic').rtlPass).toBe(true);
+  });
+});

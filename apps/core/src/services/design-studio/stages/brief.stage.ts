@@ -153,9 +153,14 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
       : attached
         ? `${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST} Also fill imageRoles with one entry for it (index 0): 'content_photo' if it is a photograph the client wants placed in the design, otherwise the role that matches referenceRole.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
         : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
+  // Standing rules decide styleSpec values they name (a font, the title's colour, the logo's
+  // corner) the way the request's own words do; this request's words and its reference still win.
+  const rulesPrompt = ctx.clientRules
+    ? `\n\nThe office's standing rules for this client are in the system prompt. Where a rule names a value styleSpec has (typeface, title colour, logo corner, alignment, texture, dividers, panels, call to action), fill it from the rule unless this request's instructions or its reference say otherwise, and list each rule you applied in 'must'.`
+    : '';
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
-    prompt: `${userPrompt}\n\n${imagePrompt}`,
+    prompt: `${userPrompt}\n\n${imagePrompt}${rulesPrompt}`,
     ...(images.length ? { images: images.map((m) => ({ mediaType: m[1], data: m[2] })) } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',

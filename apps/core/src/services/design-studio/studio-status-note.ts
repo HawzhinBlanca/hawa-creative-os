@@ -21,7 +21,17 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   const parts = [v3 ? 'Studio v3' : 'Studio v2'];
   if (models.length > 0) parts.push(`models: ${models.join(', ')}`);
 
-  if (candidates.length > 0) parts.push(`${candidates.length} concept${candidates.length === 1 ? '' : 's'}`);
+  // A revision made to the design the client received says so, and what was changed.
+  const directed = stages.directed && !stages.directedFailed ? stages.directed : undefined;
+  if (directed) {
+    const changed = (Array.isArray(directed.changes) ? directed.changes : [])
+      .map((c: { after?: string; element?: string } | null) => String(c?.after || c?.element || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    parts.push(changed.length ? `your change made to the same design (${changed.join('; ')})` : 'your change made to the same design');
+  } else if (stages.directedFailed) {
+    parts.push('your change could not be made to the same design, so it was designed afresh');
+  } else if (candidates.length > 0) parts.push(`${candidates.length} concept${candidates.length === 1 ? '' : 's'}`);
 
   const revise = stages.revise;
   const rounds = Array.isArray(revise?.rounds) ? revise.rounds.length : typeof revise?.rounds === 'number' ? revise.rounds : undefined;

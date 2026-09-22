@@ -52,18 +52,23 @@ describe('a delivered draft advances the task out of received', () => {
     expect(app).toMatch(/'human_review',[\s\S]{0,200}awaiting visual review/);
   });
 
+  // The move itself lives in services/canva-task-outcome.ts since 2026-09-24 and is exercised against
+  // the database in canva-outcome-task-state.test.ts; these keep the source-level guarantees.
+  const outcome = fs.readFileSync(path.join(here, '../src/services/canva-task-outcome.ts'), 'utf8');
+
   it('only ever moves forward, so a re-sent notification cannot drag back an approved task', () => {
-    const advanceable = app.match(/const advanceable = \[([\s\S]{0,300}?)\];/);
+    const advanceable = outcome.match(/const PRE_OUTCOME_STATES = \[([\s\S]{0,400}?)\];/);
     expect(advanceable).toBeTruthy();
     const list = advanceable![1];
     for (const before of ['received', 'brief_draft', 'qa']) expect(list).toContain(before);
-    for (const after of ['approved', 'complete', 'rejected', 'revision_requested']) {
-      expect(list).not.toContain(after);
+    for (const after of ['approved', 'complete', 'rejected', 'revision_requested', 'human_review']) {
+      expect(list).not.toContain(`'${after}'`);
     }
   });
 
-  it('never fails the delivery over bookkeeping', () => {
+  it('never fails the delivery over bookkeeping, and never hides it either', () => {
     // The Canva link is the thing the owner is waiting for; a failed state write must not cost it.
-    expect(app).toMatch(/Failed to advance task state to human_review/);
+    expect(app).toMatch(/could not record outcome \$\{status\} as state/);
+    expect(app).toMatch(/could NOT be recorded as a Desk revision/);
   });
 });

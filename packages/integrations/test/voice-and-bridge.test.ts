@@ -74,6 +74,32 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
   });
 });
 
+describe('a voice note with a caption', () => {
+  it('is transcribed as well, with no Kurdish language code Whisper refuses, and the caption kept', async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    const originalFetch = globalThis.fetch;
+    process.env.OPENAI_API_KEY = ['voice', 'fixture', 'key'].join('-');
+    let form: FormData | undefined;
+    globalThis.fetch = (async (_url: any, init?: RequestInit) => {
+      form = init?.body as FormData;
+      return new Response(JSON.stringify({ text: 'بانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن' }), { status: 200 });
+    }) as any;
+    try {
+      const res = await new KurdishVoiceTranscriber().transcribe(
+        { audioBuffer: Buffer.from('fake-audio-bytes'), audioMimeType: 'audio/ogg', languageHint: 'ckb' },
+        'KAAE'
+      );
+      expect(form).toBeDefined();
+      expect(form!.get('language')).toBeNull();
+      expect(String(form!.get('prompt'))).toMatch(/سۆرانی/);
+      expect(res.normalizedText).toBe('KAAE\n\nبانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن');
+    } finally {
+      process.env.OPENAI_API_KEY = originalKey;
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe('TelegramBridgeDaemon (FR-001 - FR-004)', () => {
   it('normalizes incoming telegram text and voice message updates into verified Hawa envelopes', async () => {
     const bridge = new TelegramBridgeDaemon({ botToken: 'mock_token' });

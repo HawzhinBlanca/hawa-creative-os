@@ -160,7 +160,7 @@ By Invitation Only`;
       expect(res.isInstructionOnly).toBe(true);
       expect(res.directive).toContain('gradient or texture');
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(passedBody.max_completion_tokens).toBe(300);
+      expect(passedBody.max_completion_tokens).toBe(1200);
       expect(passedBody.max_tokens).toBeUndefined();
       expect(passedBody.temperature).toBeUndefined();
       expect(passedBody.response_format.type).toBe('json_schema');
@@ -213,7 +213,16 @@ By Invitation Only`;
       expect(userMsg.content.some((c: any) => c.type === 'image_url')).toBe(true);
     });
 
-    it('triggers clarification question when confidence is below 0.75', async () => {
+    it('asks, below 0.75, only whether to change the last design or start a new one', async () => {
+      const answering = (kind: string) => vi.fn(async () =>
+        new Response(
+          JSON.stringify({ choices: [{ message: { content: JSON.stringify({ kind, confidence: 0.6, isInstructionOnly: false, directive: '', reason: 'unsure', documentKind: 'design_piece', standingRule: '' }) } }] }),
+          { status: 200 }
+        )
+      );
+      // A doubtful "thanks" or greeting is answered as one, not questioned.
+      const chatter = await classifyInboundTelegramMessage({ messageText: 'hawa', recentTask: activeTask }, { apiKey: 'test-key', fetcher: answering('other') });
+      expect(chatter.needsClarification).toBe(false);
       const mockFetch = vi.fn(async () =>
         new Response(
           JSON.stringify({
@@ -221,7 +230,7 @@ By Invitation Only`;
               {
                 message: {
                   content: JSON.stringify({
-                    kind: 'other',
+                    kind: 'feedback',
                     confidence: 0.6,
                     isInstructionOnly: false,
                     directive: '',

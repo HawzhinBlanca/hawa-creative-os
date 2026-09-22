@@ -443,6 +443,8 @@ export class OpenAiStudioClient {
     schemaName?: string;
     model?: string;
     images?: Array<Buffer | { mediaType?: string; data: string }>;
+    /** Documents the model reads whole (a PDF of brand guidelines), base64 without the data: prefix. */
+    files?: Array<{ filename: string; mediaType: string; data: string }>;
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
@@ -453,9 +455,12 @@ export class OpenAiStudioClient {
     if (params.system) {
       messages.push({ role: 'system', content: params.system });
     }
-    if (params.images && params.images.length > 0) {
+    if ((params.images && params.images.length > 0) || (params.files && params.files.length > 0)) {
       const parts: any[] = [{ type: 'text', text: params.prompt }];
-      for (const img of params.images) {
+      for (const file of params.files || []) {
+        parts.push({ type: 'file', file: { filename: file.filename, file_data: `data:${file.mediaType};base64,${file.data}` } });
+      }
+      for (const img of params.images || []) {
         if (Buffer.isBuffer(img)) {
           parts.push({
             type: 'image_url',

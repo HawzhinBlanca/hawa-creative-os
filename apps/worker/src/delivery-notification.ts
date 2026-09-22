@@ -1,0 +1,119 @@
+import { createHash } from 'node:crypto';
+import { sql, type Database, type Kysely } from '@hawa/db';
+import { escapeTelegramHtml } from '@hawa/integrations';
+
+/**
+ * What the worker sends a requester when their approved design is delivered, and when their request
+ * could not be started at all. Both go to the Telegram chat the request came from.
+ */
+
+export interface TelegramSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+/** The part of the Telegram bridge the outbox handlers use; a test supplies its own. */
+export interface TelegramSender {
+  dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string }): Promise<TelegramSendResult>;
+  dispatchOutboundDocument(
+    chatId: string | number,
+    fileBytes: Uint8Array,
+    filename: string,
+    options?: { mimeType?: string; caption?: string; parseMode?: 'HTML' | 'Markdown'; timeoutMs?: number }
+  ): Promise<TelegramSendResult>;
+}
+
+/** A delivered file as Core names it in the `notify.published` payload. */
+export interface DeliveredFile {
+  artifactId: string;
+  format?: string;
+  filename: string;
+  mimeType?: string;
+  sha256: string;
+  byteSize?: number;
+  driveFileId?: string | null;
+  webViewLink?: string | null;
+}
+
+export type ExportBytesReader = (
+  db: Kysely<Database>,
+  tenantId: string,
+  taskId: string,
+  artifactId: string
+) => Promise<Uint8Array | null>;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The stored bytes of one Canva export, read under the command's tenant. */
+export const readStoredExportBytes: ExportBytesReader = async (db, tenantId, taskId, artifactId) => {
+  if (![tenantId, taskId, artifactId].every((id) => UUID.test(String(id)))) return null;
+  const row = (await sql<{ content: Buffer }>`SELECT content FROM hawa.canva_export_bytes
+    WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND id = ${artifactId}::uuid`.execute(db)).rows[0];
+  return row?.content ? new Uint8Array(row.content) : null;
+};
+
+export const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * The delivery message, in Telegram HTML. Every value that came from a person (the title, file
+ * names, the Sheets problem) is escaped: the old message used Markdown asterisks and was sent with
+ * no parse mode, so the requester saw the asterisks, and an unescaped title could break parsing.
+ */
+export function composeDeliveredMessage(payload: Record<string, unknown> & { title?: string | null; files?: unknown } | null | undefined, options: { filesSent: number }): string {
+  const lines: string[] = ['<b>Your approved design has been delivered.</b>'];
+  if (payload?.title) lines.push(`Request: <b>${escapeTelegramHtml(payload.title)}</b>`);
+
+  const files: DeliveredFile[] = Array.isArray(payload?.files) ? payload.files : [];
+  if (options.filesSent > 0) {
+    lines.push(options.filesSent === 1 ? 'The approved file is attached above.' : `The ${options.filesSent} approved files are attached above.`);
+  }
+  const linked = files.filter((f) => f.webViewLink);
+  if (linked.length > 0) {
+    lines.push(['In Google Drive:', ...linked.map((f) => `• <a href="${escapeTelegramHtml(f.webViewLink)}">${escapeTelegramHtml(f.filename)}</a>`)].join('\n'));
+  } else if (payload?.driveFolderId) {
+    // Commands written before the files were named carry only the folder.
+    lines.push(`In Google Drive: <a href="${escapeTelegramHtml(`https://drive.google.com/drive/folders/${payload.driveFolderId}`)}">delivery folder</a>`);
+  }
+
+  // Older commands were written only after the Sheets row was confirmed, and carry no flag.
+  const sheetsConfirmed = payload?.sheetsConfirmed ?? true;
+  if (sheetsConfirmed && payload?.spreadsheetId && payload?.sheetRowNumber) {
+    const url = `https://docs.google.com/spreadsheets/d/${payload.spreadsheetId}#gid=0&range=A${payload.sheetRowNumber}`;
+    lines.push(`Production log: <a href="${escapeTelegramHtml(url)}">row ${escapeTelegramHtml(payload.sheetRowNumber)}</a> recorded.`);
+  } else if (!sheetsConfirmed) {
+    lines.push(`Production log: not updated yet (${escapeTelegramHtml(payload?.sheetProblem || 'the row was not confirmed')}).`);
+  }
+  return lines.join('\n\n');
+}
+
+/** The requester's notice when a request could not be started. Plain text, no formatting. */
+export function composeIntakeFailedMessage(taskId: string): string {
+  return [
+    'Sorry, we could not process your design request.',
+    'The office has been alerted and will follow up with you.',
+    `Reference: ${String(taskId).slice(0, 8)}`,
+  ].join('\n');
+}
+
+/** The office's alert for the same failure. Plain text, no formatting. */
+export function composeIntakeFailedAlert(taskId: string, chatId: string, attempts: number, error: string): string {
+  return [
+    'Hawa alert: a design request could not be started and was dead-lettered.',
+    `Task: ${taskId}`,
+    `Requesting chat: ${chatId}`,
+    `Attempts: ${attempts}`,
+    `Last error: ${error.slice(0, 500)}`,
+    'The requester has been told. Redrive it from the Desk once the cause is fixed.',
+  ].join('\n');
+}
+
+/** The Telegram chat a `task.created` payload came from, or null. */
+export function intakeChatOf(payload: Record<string, unknown> | null | undefined): string | null {
+  const source = ((payload?.payload as Record<string, unknown> | undefined) || payload || {}) as { sourcePlatform?: unknown; sourceChannelId?: unknown };
+  if (source.sourcePlatform && source.sourcePlatform !== 'telegram') return null;
+  const channel = source.sourceChannelId;
+  if (channel === undefined || channel === null) return null;
+  const id = String(channel).trim();
+  return id && id !== 'tg_default' && id !== 'hawa_desk' ? id : null;
+}

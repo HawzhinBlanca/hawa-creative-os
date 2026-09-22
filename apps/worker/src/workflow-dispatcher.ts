@@ -41,8 +41,18 @@ export class TaskWorkflowDispatcher {
     cmd: OutboxCommandRecord,
     trx?: Kysely<Database>
   ): Promise<WorkflowSubmissionReceipt> {
-    const workflowId = `task-wf-${cmd.aggregate_id}`;
+    // A Restate workflow runs once per key. A re-drive (Core enqueues `task.dispatch` with
+    // redriveAttempt) is a new run of the same task, so it gets its own key; the first run's key
+    // would answer 409 and nothing would run.
+    const redriveAttempt = Number.isInteger(cmd.payload?.redriveAttempt) && cmd.payload.redriveAttempt > 0
+      ? Number(cmd.payload.redriveAttempt)
+      : undefined;
+    const workflowId = `task-wf-${cmd.aggregate_id}${redriveAttempt ? `-redrive-${redriveAttempt}` : ''}`;
     const idempotencyKey = cmd.idempotency_key;
+    // Every Telegram intake path that saves a task without an automatic draft tells the requester so
+    // in its acknowledgement (daily cap, no client, instruction only, reference image). The worker
+    // still reports the outcome for the task's state; this keeps Core from sending a second message.
+    const requesterToldAtIntake = cmd.payload?.autoGenerate !== true;
 
     // 1. Idempotency / Duplicate-Dispatch Check:
     // If already dispatched in this runtime session with confirmed receipt, return immediately.
@@ -79,6 +89,8 @@ export class TaskWorkflowDispatcher {
             sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
             clientId: cmd.payload?.clientId,
             idempotencyKey,
+            ...(redriveAttempt ? { redriveAttempt } : {}),
+            requesterToldAtIntake,
           }),
         });
 
@@ -134,6 +146,8 @@ export class TaskWorkflowDispatcher {
       studioOptions: cmd.payload?.studioOptions,
       sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
       idempotencyKey,
+      ...(redriveAttempt ? { redriveAttempt } : {}),
+      requesterToldAtIntake,
     };
 
     const output: WorkflowOutput = await runner.run(input, journal);

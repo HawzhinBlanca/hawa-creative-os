@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { TaskWorkflowRunner, WorkflowNotRunnableError } from '../src/workflow.js';
 
 /**
@@ -24,6 +24,41 @@ describe('TaskWorkflowRunner has one path', () => {
     // The outbox consumer dead-letters on this marker instead of retrying.
     expect((err as Error).message).toMatch(/^PERMANENT_REJECTION:/);
     expect((err as Error).message).toMatch(/nothing was spent/);
+  });
+
+  it('reports the refusal to Core before throwing it, so the task leaves RECEIVED', async () => {
+    const { DurableStepJournal } = await import('../src/durable-context.js');
+    const previous = process.env.HAWA_BEARER_TOKEN;
+    process.env.HAWA_BEARER_TOKEN = 'test-only';
+    try {
+      const fetcher = vi.fn(async () => Response.json({ ok: true }));
+      const runner = new TaskWorkflowRunner({ fetcher: fetcher as any });
+
+      // Not told at intake: Core is asked to explain it to the requester.
+      const err = await runner
+        .run({ ...input, clientId: '00000000-0000-4000-8000-0000000000c1', canvaAutoGenerate: false, requesterToldAtIntake: false }, new DurableStepJournal())
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(WorkflowNotRunnableError);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(String((fetcher.mock.calls[0] as any)[0])).toContain(`/v1/tasks/${input.taskId}/notifications/canva-status`);
+      expect(JSON.parse((fetcher.mock.calls[0] as any)[1].body)).toMatchObject({ status: 'MANUAL_DESIGN_REQUIRED', notifyRequester: true });
+
+      // Told at intake (daily cap, no client, instruction only): recorded, but no second message.
+      await runner.run({ ...input, canvaAutoGenerate: false, requesterToldAtIntake: true }, new DurableStepJournal()).catch(() => undefined);
+      expect(JSON.parse((fetcher.mock.calls[1] as any)[1].body)).toMatchObject({ status: 'CLIENT_REQUIRED', notifyRequester: false });
+    } finally {
+      if (previous === undefined) delete process.env.HAWA_BEARER_TOKEN;
+      else process.env.HAWA_BEARER_TOKEN = previous;
+    }
+  });
+
+  it('never lets a failed report hide the refusal itself', async () => {
+    const { DurableStepJournal } = await import('../src/durable-context.js');
+    const fetcher = vi.fn(async () => { throw new Error('core down'); });
+    const err = await new TaskWorkflowRunner({ fetcher: fetcher as any })
+      .run({ ...input, canvaAutoGenerate: false }, new DurableStepJournal())
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WorkflowNotRunnableError);
   });
 
   it('a Canva job without a durable context is refused too: no journal, no paid steps', async () => {

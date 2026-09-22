@@ -8,6 +8,7 @@ import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
+import { loadTaskDetail, mergeTaskDetail } from '../services/taskDetail.js';
 
 export interface LiveTask {
   id: string;
@@ -88,6 +89,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   onNewTask,
 }) => {
   const [tasks, setTasks] = useState<LiveTask[]>([]);
+  const [queueLoads, setQueueLoads] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || '');
   useEffect(() => { if (initialTaskId) setSelectedTaskId(initialTaskId); }, [initialTaskId]);
   const [queueState, setQueueState] = useState<'loading' | 'signed_out' | 'unauthorized' | 'error' | 'ready' | 'empty'>('loading');
@@ -135,6 +137,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       const res = await apiClient.tasks.list({ limit: 50, offset: 0 });
       const items: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
       setTasks(items);
+      // The list carries no preview: the selected task's detail is read again after every reload.
+      setQueueLoads((n) => n + 1);
       if (items.length === 0) {
         setQueueState('empty');
       } else {
@@ -166,6 +170,19 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  // `GET /tasks` has no captured preview; `GET /tasks/:id` does. Read the selected task's detail when
+  // it is selected (and after each queue reload), so an existing design is shown without an action.
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    let current = true;
+    void loadTaskDetail<LiveTask>(apiClient.tasks, selectedTaskId).then((detail) => {
+      if (current && detail) setTasks((prev) => mergeTaskDetail(prev, detail));
+    });
+    return () => {
+      current = false;
+    };
+  }, [selectedTaskId, queueLoads]);
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

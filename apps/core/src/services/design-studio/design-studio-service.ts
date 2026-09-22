@@ -8,6 +8,8 @@ import {
   type Database,
   type Kysely,
   DesignStudioRepository,
+  ClientRulesRepository,
+  formatClientRulesForPrompt,
   type DesignStudioStatus,
   type DesignStudioTier,
   type DesignStudioJudgeStatus,
@@ -25,6 +27,7 @@ import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
+import { runDirectedEditStage } from './stages/edit.stage.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -362,6 +365,12 @@ export class DesignStudioService {
     // recorded on the run so every later stage and every resume agrees. The key is omitted rather
     // than written false so a non-v3 run's request hash is unchanged from before it existed.
     const pipelineV3 = runsPipelineV3(taskCtx.task.source?.sourceChannelId);
+    // A change the client asked for on a design they received: the run edits that design.
+    const sourceOptions = (taskCtx.task.source?.payload || taskCtx.task.source || {})?.studioOptions || {};
+    const directed =
+      pipelineV3 && typeof sourceOptions.parentTaskId === 'string' && typeof sourceOptions.revisionDirective === 'string' && sourceOptions.revisionDirective.trim()
+        ? { parentTaskId: sourceOptions.parentTaskId as string, revisionDirective: (sourceOptions.revisionDirective as string).trim().slice(0, 1500) }
+        : undefined;
 
     const requestPayload = {
       width: params.width,
@@ -377,6 +386,7 @@ export class DesignStudioService {
       logoSha256: hash(taskCtx.logo),
       logoAspect: taskCtx.logoAspect,
       ...(pipelineV3 ? { pipelineV3: true } : {}),
+      ...(directed ? { directed } : {}),
     };
 
     const requestHash = hash(JSON.stringify(requestPayload));
@@ -489,6 +499,55 @@ export class DesignStudioService {
 
       return { run, created: true };
     });
+  }
+
+  /**
+   * The design a revision changes: the winner of the latest finished run of the task the client
+   * replied to (or, on resume, the candidate already chosen).
+   */
+  private async parentWinner(
+    s: Scope,
+    parentTaskId?: string,
+    candidateId?: string
+  ): Promise<{ runId: string; candidateId: string; layout: StudioLayoutV2; previewPng?: Buffer; artPng?: Buffer; concept: unknown } | undefined> {
+    const row = await this.tx(s, async (db) =>
+      (
+        await sql<{ run_id: string; candidate_id: string; layouts: unknown; preview_png: Buffer | null; art_png: Buffer | null; concept: unknown }>`SELECT r.id AS run_id, c.id AS candidate_id, c.layouts, c.preview_png, c.art_png, c.concept
+          FROM hawa.design_studio_runs r JOIN hawa.design_studio_candidates c ON c.id = r.winner_candidate_id AND c.tenant_id = r.tenant_id
+          WHERE r.tenant_id = ${s.tenantId}::uuid
+            AND ${candidateId ? sql`c.id = ${candidateId}::uuid` : sql`r.task_id = ${parentTaskId}::uuid AND r.status IN ('transferred', 'degraded')`}
+          ORDER BY r.created_at DESC LIMIT 1`.execute(db)
+      ).rows[0]
+    );
+    if (!row) return undefined;
+    const layouts: StudioLayoutV2[] = (Array.isArray(row.layouts) ? row.layouts : []).map((l: unknown) => (typeof l === 'string' ? JSON.parse(l) : l));
+    const layout = layouts[layouts.length - 1];
+    if (!layout) return undefined;
+    return {
+      runId: String(row.run_id),
+      candidateId: String(row.candidate_id),
+      layout,
+      previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
+      artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+      concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
+    };
+  }
+
+  /**
+   * Adds the office's standing rules for this client, said in chat or read from its guidelines.
+   * Every stage reads promotedRules in its system prompt, so they reach the brief, the layouts, the
+   * critique and the judge alike. A read failure stops the run: designing without rules the office
+   * set is the silent failure this replaced.
+   */
+  private async withClientRules(s: Scope, ctx: StageContext): Promise<StageContext> {
+    // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
+    if (!ctx.clientId || typeof (this.db as { transaction?: unknown })?.transaction !== 'function') return ctx;
+    const rules = await this.tx(s, (db) => new ClientRulesRepository(db).listActive(s.tenantId, ctx.clientId));
+    const text = formatClientRulesForPrompt(rules);
+    if (!text) return ctx;
+    ctx.clientRules = text;
+    ctx.promotedRules = `${ctx.promotedRules}\n\n${text}`;
+    return ctx;
   }
 
   /**
@@ -870,7 +929,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = this.createStageContext(s, run, run.status, budget, onSpendUpdate);
+      ctx = await this.withClientRules(s, this.createStageContext(s, run, run.status, budget, onSpendUpdate));
     } catch (err: any) {
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
@@ -930,6 +989,20 @@ export class DesignStudioService {
 
         case 'conceiving': {
           const brief: CreativeBrief = stages.brief;
+          // A revision edits the design the client received, when that design can be found.
+          const directedRequest = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed;
+          if (ctx.pipelineV3 && directedRequest && !stages.directedFailed) {
+            const parent = await this.parentWinner(s, directedRequest.parentTaskId);
+            if (parent) {
+              const id = randomUUID();
+              await this.repo.insertCandidate({ id, runId: run.id, tenantId: s.tenantId, ordinal: 0, concept: parent.concept as Record<string, unknown>, status: 'draft' });
+              stages.concepts = [];
+              stages.directed = { parentRunId: parent.runId, parentCandidateId: parent.candidateId, candidateId: id, directive: directedRequest.revisionDirective };
+              await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages, budget });
+              return { runId, status: 'laying_out', stage: 'concepts', spentUsd: budget.spentUsd };
+            }
+            console.warn(`[studio] run ${run.id}: no finished design found for parent task ${directedRequest.parentTaskId}; the revision is designed afresh.`);
+          }
           // A v3 run's layout call invents its own three archetypes and never reads these
           // concepts, so it spends nothing here: it reserves a row per layout the generator
           // returns, and each row's concept is filled from what the generator produced.
@@ -956,6 +1029,38 @@ export class DesignStudioService {
         case 'laying_out': {
           const brief: CreativeBrief = stages.brief;
           const concepts: Concept[] = stages.concepts;
+          if (stages.directed && !stages.directedFailed) {
+            const parent = await this.parentWinner(s, undefined, stages.directed.parentCandidateId);
+            try {
+              if (!parent) throw new Error('The design being revised could not be read.');
+              const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive);
+              await this.repo.updateCandidate(stages.directed.candidateId, s.tenantId, {
+                layouts: [edited.layout as unknown as Record<string, unknown>],
+                previewPng: edited.previewPng,
+                previewSha256: edited.previewSha256,
+                compositePng: edited.compositePng ?? null,
+                metrics: edited.metrics as unknown as Record<string, unknown>,
+                artPng: parent.artPng ?? null,
+                status: 'winner',
+                rank: 1,
+              });
+              stages.directed = { ...stages.directed, changes: edited.changes };
+              stages.layouts = { count: 1, directed: true };
+              // The client's own design with their change: no rival layouts to critique or judge.
+              await this.repo.updateRunStatus(runId, s.tenantId, 'qa', { stages, budget, winnerCandidateId: stages.directed.candidateId, judgeStatus: 'SKIPPED' });
+              return { runId, status: 'qa', stage: 'edit', winnerCandidateId: stages.directed.candidateId, spentUsd: budget.spentUsd };
+            } catch (caught) {
+              const err = caught as Error;
+              if (caught instanceof StudioBudgetExhaustedError) throw caught;
+              // The change could not be made to the design as it stands: the revision is designed
+              // afresh with the change in its instructions, which is how every revision used to run.
+              console.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
+              stages.directedFailed = err?.message || String(err);
+              for (let i = 1; i < V3_CANDIDATE_SLOTS; i++) {
+                await this.repo.insertCandidate({ id: randomUUID(), runId: run.id, tenantId: s.tenantId, ordinal: i, concept: pendingV3Concept(i) as unknown as Record<string, unknown>, status: 'draft' });
+              }
+            }
+          }
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
 
           const candidateStates = await runLayoutsStage(

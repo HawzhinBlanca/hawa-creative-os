@@ -12,9 +12,15 @@ export interface StoredExport {
   byte_size: number | string;
 }
 
-/** The newest export is preselected: it is the capture the reviewer just looked at. */
+/**
+ * The newest image is preselected: the PNG the reviewer looked at, else the newest PDF. The deck
+ * (PPTX) is never preselected: the worker exports it after the PNG, so "the newest export" was the
+ * .pptx, and a one-click approval would have delivered a slide file to the client.
+ */
 export function defaultPins(exports: StoredExport[]): string[] {
-  return exports.length > 0 ? [exports[0].id] : [];
+  const kind = (e: StoredExport) => String(e.format).toLowerCase();
+  const pick = exports.find((e) => kind(e) === 'png') || exports.find((e) => kind(e).startsWith('pdf'));
+  return pick ? [pick.id] : [];
 }
 
 export function describeExport(e: StoredExport): string {

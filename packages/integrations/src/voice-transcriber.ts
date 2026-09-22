@@ -57,20 +57,27 @@ export class KurdishVoiceTranscriber {
    * Transcribes Sorani voice audio note and extracts protected factual tokens
    */
   async transcribe(req: VoiceTranscriptionRequest, fallbackText?: string): Promise<VoiceTranscriptionResult> {
-    let rawTranscript = fallbackText;
+    let rawTranscript: string | undefined;
 
-    // 1. Live audio transcription via OpenAI Whisper if audio is supplied and API key exists
+    // 1. Live audio transcription via OpenAI Whisper if audio is supplied and API key exists. The
+    // audio is transcribed whatever caption came with it: a caption used to stand in for the voice
+    // note, so a spoken brief with a one-word caption was reduced to that word.
     const openaiKey = process.env.OPENAI_API_KEY;
     const audioBytes = req.audioBuffer ? Buffer.from(req.audioBuffer) : (req.audioBase64 ? Buffer.from(req.audioBase64, 'base64') : undefined);
 
-    if (!rawTranscript && audioBytes && openaiKey && !openaiKey.startsWith('mock-')) {
+    if (audioBytes && openaiKey && !openaiKey.startsWith('mock-')) {
       try {
         const formData = new FormData();
         const blob = new Blob([audioBytes], { type: req.audioMimeType || 'audio/ogg' });
         formData.append('file', blob, 'audio.ogg');
         formData.append('model', 'whisper-1');
-        if (req.languageHint) {
-          formData.append('language', req.languageHint === 'ckb' ? 'ku' : req.languageHint);
+        // Whisper takes no language code for Kurdish ("ku" was sent and refused), so Sorani is
+        // left to detection and steered to Arabic-script Sorani by a Sorani prompt; English and
+        // Arabic keep their codes.
+        if (req.languageHint === 'en' || req.languageHint === 'ar') {
+          formData.append('language', req.languageHint);
+        } else {
+          formData.append('prompt', 'ئەمە پەیامێکی دەنگییە بە کوردی سۆرانی یان ئینگلیزی دەربارەی دیزاینێک.');
         }
 
         const endpoint = 'https://api.openai.com/v1/audio/transcriptions';
@@ -88,11 +95,17 @@ export class KurdishVoiceTranscriber {
           if (json.text && typeof json.text === 'string') {
             rawTranscript = json.text.trim();
           }
+        } else {
+          console.warn(`[KurdishVoiceTranscriber] transcription refused: HTTP ${response.status} ${(await response.text().catch(() => '')).slice(0, 200)}`);
         }
       } catch (err) {
         console.warn('[KurdishVoiceTranscriber] Live OpenAI audio transcription failed, falling back to rule-based parser:', err);
       }
     }
+
+    // The caption and the spoken words together; either alone when there is only one.
+    const caption = fallbackText?.trim();
+    rawTranscript = [caption, rawTranscript].filter((part) => part && part.length > 0).join('\n\n') || undefined;
 
     if (!rawTranscript) {
       // Nothing was transcribed and no caption was supplied. An empty result is the only honest

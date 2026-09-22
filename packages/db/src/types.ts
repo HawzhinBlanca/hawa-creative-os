@@ -620,8 +620,41 @@ export interface ClientDnaVersionsTable {
   created_at: Generated<Date>;
 }
 
+export interface ClientRulesTable {
+  id: Generated<string>;
+  tenant_id: string;
+  client_id: string;
+  project_id: string | null;
+  dna_version_id: string | null;
+  rule_key: string;
+  category: string;
+  scope: 'one_time' | 'task_type' | 'project' | 'client' | 'office';
+  machine_rule: ColumnType<Record<string, unknown>, string | Record<string, unknown>, string | Record<string, unknown>>;
+  human_rule: string;
+  status: 'draft' | 'active' | 'inactive' | 'superseded' | 'deleted';
+  priority: Generated<number>;
+  effective_from: Date | null;
+  effective_until: Date | null;
+  supersedes_rule_id: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface RuleEvidenceTable {
+  rule_id: string;
+  feedback_event_id: string | null;
+  source_kind: string;
+  source_id: string;
+  weight: Generated<number>;
+  note: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   tenants: TenantsTable;
+  client_rules: ClientRulesTable;
+  rule_evidence: RuleEvidenceTable;
   users: UsersTable;
   clients: ClientsTable;
   client_dna_versions: ClientDnaVersionsTable;

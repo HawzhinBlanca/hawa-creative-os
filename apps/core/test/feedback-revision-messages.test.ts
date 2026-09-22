@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb, sql, withRlsContext, ClientRulesRepository } from '@hawa/db';
 import { createApp } from '../src/app.js';
 
 /**
@@ -44,7 +44,7 @@ describe('revision feedback messages, with a database', () => {
     });
   const texts = (dispatch: ReturnType<typeof vi.fn>) => dispatch.mock.calls.map((c) => String(c[1]?.text ?? ''));
 
-  it('the revision message tells the sender whether a standing rule was proposed', async () => {
+  it('the revision message tells the sender whether the change was also saved as a standing rule', async () => {
     process.env.AUTO_GENERATE_DAILY_CAP_PER_SENDER = '50';
     const dispatch = vi.fn().mockResolvedValue({ success: true });
     const app = createApp({ db, testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
@@ -66,8 +66,15 @@ describe('revision feedback messages, with a database', () => {
     const standing = await post(app, chatId, `revise task ${task.id}: from now on use Amiri for all Kurdish text`);
     expect((await standing.json()).status).toBe('REVISION_QUEUED');
     const standingMsg = texts(dispatch).find((t) => /Revision instruction received/.test(t));
-    expect(standingMsg).toMatch(/Proposed as a standing rule for this client/);
-    expect(standingMsg).toMatch(/approves it in Hawa Desk/);
+    expect(standingMsg).toMatch(/Also saved as a standing rule/);
+    expect(texts(dispatch).join('\n')).toMatch(/Saved as a standing rule for KAAE|Already a standing rule for KAAE/);
+    // Saved for real, in PostgreSQL, where every later KAAE design reads it.
+    const rules = await withRlsContext(db, { tenantId: TENANT, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (trx) =>
+      new ClientRulesRepository(trx).listActive(TENANT, 'c1000000-0000-4000-8000-000000000002'));
+    const rule = rules.find((r) => r.humanRule === 'from now on use Amiri for all Kurdish text');
+    expect(rule).toBeDefined();
+    await withRlsContext(db, { tenantId: TENANT, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (trx) =>
+      new ClientRulesRepository(trx).deactivate(TENANT, 'c1000000-0000-4000-8000-000000000002', rule!.id));
   });
 
   it('a sender over the daily cap is told so, not promised a draft', async () => {

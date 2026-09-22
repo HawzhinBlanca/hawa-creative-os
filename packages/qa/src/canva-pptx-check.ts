@@ -294,7 +294,13 @@ export function checkCanvaPptx(
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
   const copyPass = texts.length === expectedCopy.length && texts.every((t, i) => normalize(t) === normalize(expectedCopy[i]));
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
-  const rtlPass = arabicObjects === 0 || rtlObjects === arabicObjects;
+  // Canva's own export writes no rtl attribute on any paragraph, so for a Canva export with none at
+  // all the file cannot say which way the Kurdish reads, and the visual review decides (rtlNote).
+  // Failing it made the export's QC fail on every design with Kurdish copy, and Approve in Desk
+  // stayed disabled for all of them. A deck made here writes rtl="1" on every Kurdish paragraph,
+  // so there, and for a Canva export where only some carry it, it is still a check.
+  const rtlUnreadable = detectedSource === 'canva_exported_pptx' && arabicObjects > 0 && rtlObjects === 0;
+  const rtlPass = arabicObjects === 0 || rtlObjects === arabicObjects || rtlUnreadable;
   const rtlNote = arabicObjects > 0 && rtlObjects === 0
     ? 'Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.'
     : null;

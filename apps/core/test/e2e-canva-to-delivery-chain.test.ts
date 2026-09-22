@@ -163,7 +163,9 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(taskDetail.latestRevision).toBeDefined();
     expect(taskDetail.latestRevision.id).toBe(revId);
     expect(taskDetail.latestRevision.sha256).toBe(exportSha256);
-    expect(taskDetail.latestRevision.previewUrl).toContain('data:image/png;base64,');
+    // The preview is the newest PNG export; this chain stored only the deck, so there is none to
+    // draw (a deck drawn as a PNG was the broken preview of 2026-09-22).
+    expect(taskDetail.latestRevision.previewUrl).toBeUndefined();
     expect(taskDetail.canvaBinding).toBeDefined();
     expect(taskDetail.canvaBinding.designId).toBe(designId);
 

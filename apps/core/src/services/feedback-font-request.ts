@@ -98,6 +98,21 @@ function drawableFamilies(registryPath?: string): Map<string, FontScript> {
   return out;
 }
 
+/**
+ * The installed family a name refers to (case-insensitive, registry aliases included) and the
+ * script it draws, or undefined when the studio cannot draw it.
+ */
+export function drawableFamily(name: string, options: { registryPath?: string } = {}): { family: string; script: FontScript } | undefined {
+  const drawable = drawableFamilies(options.registryPath);
+  const registry = loadRenderFontRegistry({ registryPath: options.registryPath });
+  const aliases: Record<string, string> = { ...(registry.aliases || {}), ...SHORT_FORMS };
+  const lower = name.trim().toLowerCase();
+  const aliasKey = Object.keys(aliases).find((k) => k.toLowerCase() === lower);
+  const wanted = (aliasKey ? aliases[aliasKey] : name.trim()).toLowerCase();
+  for (const [family, script] of drawable) if (family.toLowerCase() === wanted) return { family, script };
+  return undefined;
+}
+
 /** Installed families for a script, in registry order. */
 function installedFor(script: FontScript, registryPath?: string): string[] {
   return [...drawableFamilies(registryPath).entries()].filter(([, s]) => s === script).map(([name]) => name);

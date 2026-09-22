@@ -205,7 +205,15 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
     const turn2Body = await turn2Res.json();
     expect(turn2Body.feedback).toBe(true);
 
-    // Verify candidate rules were proposed and activate them with authorized director role
+    // Chat rules are saved to PostgreSQL now (telegram-understanding.test.ts); this database-less
+    // run exercises the legacy template lane, whose promoted rules come from the review queue.
+    for (const ruleText of ['use Cinzel for headers', 'Kurdistan Sun Gold #FFD15C for accents']) {
+      globalFeedbackMiner.proposeExplicitRule({
+        clientId: testClientId, taskId: task1Id, title: ruleText, category: 'typography', ruleText,
+        rationale: 'Reviewed', actor: { id: 'op1', role: 'operator' },
+        existingRules: globalFeedbackMiner.getPromotedRules(testClientId),
+      });
+    }
     const candidateRules = globalFeedbackMiner.getCandidateRules(testClientId).filter((r) => r.status === 'PROPOSED');
     expect(candidateRules.length).toBeGreaterThan(0);
     for (const r of candidateRules) {

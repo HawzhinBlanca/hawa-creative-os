@@ -471,7 +471,7 @@ export async function encodeStudioTransferV2(
               breakLine: i < paragraphs.length - 1,
               align: t.align,
               ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
-              ...(i === paragraphs.length - 1 ? { color: hex(t.accentColor!) } : {}),
+              ...(i === (t.accentParagraph === 'first' ? 0 : paragraphs.length - 1) ? { color: hex(t.accentColor!) } : {}),
             },
           }))
         : text;

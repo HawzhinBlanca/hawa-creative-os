@@ -25,6 +25,29 @@ describe('requester-facing Canva outcome messages', () => {
     expect(composeCanvaStatusMessage({ taskId, status: 'CANVA_FONT_MISMATCH', canvaUrl: 'https://www.canva.com/design/DA_x/edit' }).text).toContain('substituted the brand font');
     expect(composeCanvaStatusMessage({ taskId, status: 'CANVA_PREVIEW_FAILED', canvaUrl: 'https://www.canva.com/design/DA_x/edit' }).text).toContain('preview export could not be captured');
   });
+  it('explains a failed run in plain words and says what happens next, never with an internal code', () => {
+    for (const [status, code] of [['DESIGN_FAILED', 'HARD_QA_REFUSED'], ['DESIGN_STUCK', 'STUCK_IN_QA'], ['DESIGN_SERVER_ERROR', 'HTTP_500'], ['CANVA_PREVIEW_RETRIEVED_LATE', undefined]] as const) {
+      const msg = composeCanvaStatusMessage({
+        taskId, title: 'Invitation', status, code,
+        notes: ['Studio v3 · models: gpt-6-astra · 3 concepts · layout score 0.41/1'],
+      });
+      expect(msg.text).toContain('We could not make the automatic draft for this request.');
+      expect(msg.text).toContain('The office has been alerted and will follow up with you here.');
+      if (code) expect(msg.text).not.toContain(code);
+      // Model names and scores of a run that made nothing are internal detail.
+      expect(msg.text).not.toContain('Studio v3');
+      expect(msg.text).not.toMatch(/\([A-Z0-9_]{4,}\)/);
+    }
+  });
+  it('explains a safety stop without naming the check', () => {
+    for (const code of ['SCOPE_MISMATCH', 'BINDING_MISMATCH']) {
+      const msg = composeCanvaStatusMessage({ taskId, status: 'DESIGN_BLOCKED', code });
+      expect(msg.text).toContain('A safety check stopped the automatic draft');
+      expect(msg.text).toContain('The office has been alerted');
+      expect(msg.text).not.toContain(code);
+      expect(msg.reply_markup).toBeUndefined();
+    }
+  });
   it('escapes user-controlled text so Telegram never rejects the message', () => {
     const msg = composeCanvaStatusMessage({ taskId, title: 'A <b>bold</b> & "quoted" title', status: 'DESIGN_FAILED', code: 'MODEL_HTTP_500' });
     expect(msg.parse_mode).toBe('HTML');

@@ -8,6 +8,7 @@ export * from './repositories/revision.repository.js';
 export * from './repositories/publication.repository.js';
 export * from './repositories/canva-binding.repository.js';
 export * from './repositories/feedback.repository.js';
+export * from './repositories/client-rules.repository.js';
 export * from './repositories/design-studio.repository.js';
 export * from './migrate.js';
 export * from './check.js';

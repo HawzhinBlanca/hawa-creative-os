@@ -11,6 +11,17 @@ import {
 import { OfficeTracer } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
+import {
+  composeDeliveredMessage,
+  composeIntakeFailedAlert,
+  composeIntakeFailedMessage,
+  intakeChatOf,
+  readStoredExportBytes,
+  sha256Hex,
+  type DeliveredFile,
+  type ExportBytesReader,
+  type TelegramSender,
+} from './delivery-notification.js';
 
 export interface OutboxCommandRecord {
   id: string;
@@ -57,6 +68,14 @@ export interface OutboxConsumerOptions {
   pollIntervalMs?: number;
   dispatcher?: TaskWorkflowDispatcher;
   handlers?: Record<string, OutboxCommandHandler>;
+  /** Telegram bot token for outbound notices. Undefined reads TELEGRAM_BOT_TOKEN; null means none. */
+  telegramBotToken?: string | null;
+  /** Builds the Telegram sender for a token. Defaults to the Telegram bridge. */
+  telegramSender?: (botToken: string) => TelegramSender;
+  /** Reads a delivered export's stored bytes. Defaults to hawa.canva_export_bytes. */
+  readExportBytes?: ExportBytesReader;
+  /** The office chat alerted about dead-lettered requests. Undefined reads the first TELEGRAM_ALLOWED_USERS entry. */
+  officeAlertChatId?: string | null;
 }
 
 export interface BatchProcessingSummary {
@@ -95,6 +114,54 @@ export class OutboxConsumer {
 
   registerHandler(commandType: string, handler: OutboxCommandHandler) {
     this.handlers.set(commandType, handler);
+  }
+
+  private telegramBotToken(): string | null {
+    if (this.options.telegramBotToken !== undefined) return this.options.telegramBotToken || null;
+    return process.env.TELEGRAM_BOT_TOKEN || null;
+  }
+
+  private telegramSender(botToken: string): TelegramSender {
+    if (this.options.telegramSender) return this.options.telegramSender(botToken);
+    return new TelegramBridge({ botToken }) as unknown as TelegramSender;
+  }
+
+  private officeAlertChatId(): string | null {
+    if (this.options.officeAlertChatId !== undefined) return this.options.officeAlertChatId || null;
+    return (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null;
+  }
+
+  /**
+   * A request that could not be started is dead-lettered after its last attempt. The requester used
+   * to hear nothing at all; now the chat it came from is told in plain English, and the office chat is
+   * alerted. Neither message can change the command's outcome.
+   */
+  private async tellRequesterIntakeFailed(cmd: OutboxCommandRecord, attempts: number, error: string) {
+    try {
+      const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+      const chatId = intakeChatOf(payload);
+      const botToken = this.telegramBotToken();
+      if (!chatId || !botToken) {
+        console.error(
+          `[OutboxConsumer] Request ${cmd.aggregate_id} was dead-lettered and its requester could not be told (${!chatId ? 'no Telegram chat in the command' : 'TELEGRAM_BOT_TOKEN is not set'}).`
+        );
+        return;
+      }
+      const sender = this.telegramSender(botToken);
+      const told = await sender.dispatchOutboundMessage(chatId, { text: composeIntakeFailedMessage(cmd.aggregate_id) });
+      if (!told.success) {
+        console.error(`[OutboxConsumer] Could not tell chat ${chatId} that request ${cmd.aggregate_id} failed: ${told.error}`);
+      }
+      const office = this.officeAlertChatId();
+      if (office && office !== chatId) {
+        const alerted = await sender.dispatchOutboundMessage(office, {
+          text: composeIntakeFailedAlert(cmd.aggregate_id, chatId, attempts, error),
+        });
+        if (!alerted.success) console.error(`[OutboxConsumer] Office alert for request ${cmd.aggregate_id} failed: ${alerted.error}`);
+      }
+    } catch (notifyErr) {
+      console.error(`[OutboxConsumer] Could not notify about dead-lettered request ${cmd.aggregate_id}:`, notifyErr);
+    }
   }
 
   private registerDefaultHandlers() {
@@ -159,14 +226,16 @@ export class OutboxConsumer {
 
     if (!this.handlers.has('notify.published')) {
       this.handlers.set('notify.published', async (cmd, dbTrx) => {
-        // Effect transport: Outbound Telegram / omnichannel delivery notification
+        // Effect transport: the requester receives the approved files and the delivery notice.
         const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
         const taskId = payload?.taskId || cmd.aggregate_id;
 
         let sourceChannelId = payload?.chatId || payload?.sourceChannelId;
         let taskTitle = payload?.title;
 
-        if (!sourceChannelId && dbTrx) {
+        // Commands written before Core named the chat carry only the task: find it from the intake.
+        // A malformed id would abort the transaction the command is marked in, so it is never queried.
+        if ((!sourceChannelId || !taskTitle) && dbTrx && /^[0-9a-f-]{36}$/i.test(String(taskId))) {
           try {
             const row: any = await sql`
               SELECT t.title, e.data
@@ -178,7 +247,7 @@ export class OutboxConsumer {
             if (row.rows[0]) {
               taskTitle = taskTitle || row.rows[0].title;
               const eventData = row.rows[0].data?.payload || row.rows[0].data?.body || row.rows[0].data || {};
-              if (eventData.sourcePlatform === 'telegram' && eventData.sourceChannelId) {
+              if (!sourceChannelId && eventData.sourcePlatform === 'telegram' && eventData.sourceChannelId) {
                 sourceChannelId = String(eventData.sourceChannelId);
               }
             }
@@ -187,28 +256,67 @@ export class OutboxConsumer {
           }
         }
 
-        const driveFolderUrl = payload?.driveFolderId ? `https://drive.google.com/drive/folders/${payload.driveFolderId}` : null;
-        const sheetRowUrl = payload?.spreadsheetId && payload?.sheetRowNumber
-          ? `https://docs.google.com/spreadsheets/d/${payload.spreadsheetId}#gid=0&range=A${payload.sheetRowNumber}`
-          : null;
+        // Nothing was sent, so the command must not be marked delivered: it used to be, whenever the
+        // bot token or the requesting chat was missing, and the requester was never told.
+        const botToken = this.telegramBotToken();
+        if (!botToken) {
+          throw new Error(`TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set, so the delivery notice for task ${taskId} was not sent`);
+        }
+        if (!sourceChannelId) {
+          throw new OutboxDeliveryError(
+            `NO_REQUESTER_CHAT: task ${taskId} has no Telegram chat to send the delivery to`,
+            'permanent',
+            'NO_REQUESTER_CHAT'
+          );
+        }
 
-        const messageText = [
-          `🚀 *Campaign Assets Delivered!*`,
-          taskTitle ? `Task: *${taskTitle}*` : null,
-          driveFolderUrl ? `📁 *Google Drive:* ${driveFolderUrl}` : null,
-          sheetRowUrl ? `📊 *Production Ledger:* ${sheetRowUrl}` : null,
-          `Published ${payload?.filesCount || 1} verified design asset(s).`,
-        ].filter(Boolean).join('\n\n');
-
-        if (sourceChannelId) {
-          const botToken = process.env.TELEGRAM_BOT_TOKEN;
-          if (botToken) {
-            const telegramBridge = new TelegramBridge({ botToken });
-            const res = await telegramBridge.dispatchOutboundMessage(sourceChannelId, { text: messageText });
-            if (!res.success && !/DELIVERY_UNCERTAIN/.test(res.error || '')) {
-              throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
-            }
+        // Every file is read and checked against its approved hash before anything is sent, so a
+        // missing or changed file never leaves the requester with half a delivery.
+        const files: DeliveredFile[] = Array.isArray(payload?.files) ? payload.files : [];
+        const readBytes = this.options.readExportBytes || readStoredExportBytes;
+        const loaded: Array<{ file: DeliveredFile; bytes: Uint8Array }> = [];
+        for (const file of files) {
+          const bytes = await readBytes(dbTrx, cmd.tenant_id, taskId, file.artifactId);
+          if (!bytes) {
+            throw new Error(`DELIVERED_FILE_UNREADABLE: the approved export ${file.artifactId} of task ${taskId} could not be read`);
           }
+          if (sha256Hex(bytes) !== file.sha256) {
+            throw new OutboxDeliveryError(
+              `DELIVERED_FILE_CHANGED: the stored export ${file.artifactId} no longer matches its approved hash`,
+              'permanent',
+              'DELIVERED_FILE_CHANGED'
+            );
+          }
+          loaded.push({ file, bytes });
+        }
+
+        // The files first, as documents: the exact approved bytes (a photo would be recompressed).
+        // A send that may have reached Telegram is never repeated; it is recorded as uncertain.
+        const sender = this.telegramSender(botToken);
+        const uncertain: string[] = [];
+        for (const { file, bytes } of loaded) {
+          const sent = await sender.dispatchOutboundDocument(sourceChannelId, bytes, file.filename, {
+            mimeType: file.mimeType || (file.format === 'pdf' ? 'application/pdf' : file.format === 'png' ? 'image/png' : undefined),
+            caption: file.filename,
+          });
+          if (!sent.success) {
+            if (/DELIVERY_UNCERTAIN/.test(sent.error || '')) { uncertain.push(file.filename); continue; }
+            throw new Error(sent.error || 'TELEGRAM_DOCUMENT_FAILED');
+          }
+        }
+
+        const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length });
+        const res = await sender.dispatchOutboundMessage(sourceChannelId, { text, parse_mode: 'HTML' });
+        if (!res.success) {
+          if (!/DELIVERY_UNCERTAIN/.test(res.error || '')) throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
+          uncertain.push('delivery notice');
+        }
+        if (uncertain.length > 0) {
+          throw new OutboxDeliveryError(
+            `TELEGRAM_DELIVERY_UNCERTAIN: Telegram may or may not have received ${uncertain.join(', ')}; not resent`,
+            'uncertain',
+            'TELEGRAM_DELIVERY_UNCERTAIN'
+          );
         }
       });
     }
@@ -313,6 +421,10 @@ export class OutboxConsumer {
               console.error(
                 `[OutboxConsumer] Command ${cmd.id} (${cmd.command_type}) ${isUncertain ? 'UNCERTAIN' : isPermanent ? 'PERMANENT FAILURE' : 'DEAD-LETTERED'} after ${updated.attempts} attempts: ${errorMessage}`
               );
+              // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
+              if (cmd.command_type === 'task.created' && !isUncertain) {
+                await this.tellRequesterIntakeFailed(cmd, Number(updated.attempts) || 0, errorMessage);
+              }
             } else {
               aggregateSummary.retried++;
               console.warn(

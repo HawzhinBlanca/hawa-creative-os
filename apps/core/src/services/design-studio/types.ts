@@ -151,6 +151,8 @@ export interface StageContext {
   copyBlocks: CopyBlock[];
   referencePack: ReferencePack;
   promotedRules: string;
+  /** The office's standing rules for this client, numbered, as the models read them; '' when none. */
+  clientRules?: string;
   latinFont: string;
   arabicFont: string;
   logoAspect?: number;

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import type { Database, TasksTable, TaskEventsTable, TaskState } from '../types.js';
+import { withRlsContext, type RlsContext } from '../client.js';
 
 export class IdempotencyConflictError extends Error {
   constructor(message: string = 'Idempotency conflict: key already used with different payload') {
@@ -554,34 +555,49 @@ export class TaskRepository {
     actorId: string,
     actorType: string,
     reason: string,
-    payload?: Record<string, unknown>
+    payload?: Record<string, unknown>,
+    /**
+     * Where to run. `tasks` has FORCE ROW LEVEL SECURITY and the runtime role does not bypass it, so a
+     * read outside a tenant context finds no row: without a scope this threw "not found" for every
+     * task in production, and its one caller swallowed that. Pass the caller's transaction (already
+     * in a tenant context) or the tenant identity to open one.
+     */
+    scope?: { trx?: Kysely<Database> } | (RlsContext & { trx?: undefined })
   ) {
-    const task = await this.findById(taskId);
-    if (!task) throw new TaskNotFoundError(`Task ${taskId} not found`);
+    const run = async (client?: Kysely<Database>) => {
+      const task = await this.findById(taskId, scope && 'tenantId' in scope ? scope.tenantId : undefined, client);
+      if (!task) throw new TaskNotFoundError(`Task ${taskId} not found`);
 
-    const validActorTypes = ['user', 'model', 'workflow', 'adapter', 'system'] as const;
-    const resolvedActorType = validActorTypes.includes(actorType as any)
-      ? (actorType as any)
-      : 'system';
+      const validActorTypes = ['user', 'model', 'workflow', 'adapter', 'system'] as const;
+      const resolvedActorType = validActorTypes.includes(actorType as any)
+        ? (actorType as any)
+        : 'system';
 
-    const normalizedToState = toDbTaskState(toStatus);
-    const normalizedFromState = fromStatus ? toDbTaskState(fromStatus) : undefined;
+      const normalizedToState = toDbTaskState(toStatus);
+      const normalizedFromState = fromStatus ? toDbTaskState(fromStatus) : undefined;
 
-    const updated = await this.transitionState({
-      taskId,
-      tenantId: task.tenant_id,
-      expectedVersion: Number(task.version),
-      fromState: normalizedFromState,
-      toState: normalizedToState,
-      actorType: resolvedActorType,
-      actorId,
-      reason,
-      data: payload,
-    });
+      const updated = await this.transitionState({
+        taskId,
+        tenantId: task.tenant_id,
+        expectedVersion: Number(task.version),
+        fromState: normalizedFromState,
+        toState: normalizedToState,
+        actorType: resolvedActorType,
+        actorId,
+        reason,
+        data: payload,
+      }, client);
 
-    return {
-      ...updated,
-      status: toApiTaskStatus(updated.state),
+      return {
+        ...updated,
+        status: toApiTaskStatus(updated.state),
+      };
     };
+    if (scope?.trx) return run(scope.trx);
+    if (scope && 'tenantId' in scope && scope.tenantId) {
+      const { tenantId, userId, role, clientId } = scope;
+      return withRlsContext(this.db, { tenantId, userId, role, clientId }, (trx) => run(trx));
+    }
+    return run();
   }
 }

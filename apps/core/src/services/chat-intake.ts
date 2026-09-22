@@ -36,6 +36,10 @@ export interface ChatIntake {
     referenceImageBase64?: string;
     /** This task only carries a reference image for the named request; it has no design of its own. */
     referenceFor?: string;
+    /** Telegram's media_group_id: the album the request's photo came in, so the album's other photos join it. */
+    mediaGroupId?: string;
+    /** For a revision: the change asked for, which the studio makes to the parent's design. */
+    revisionDirective?: string;
   };
 }
 
@@ -145,6 +149,34 @@ export async function findRequestAwaitingReference(
     ).rows[0];
     if (run && !['briefing', 'conceiving'].includes(run.status)) return null;
     return { taskId: String(row.id), clientId: String(row.client_id), title: String(row.title || 'your request') };
+  });
+}
+
+/**
+ * The request an album photo belongs to. Telegram delivers an album as one message per photo,
+ * sharing a media_group_id, with the caption on one of them. The captioned photo became the
+ * request; the others, captionless, were each saved as "reference image (awaiting request)" and
+ * answered "Send the request text now", because the request already had an image and so was not
+ * "awaiting" one.
+ */
+export async function findAlbumRequest(
+  db: Kysely<Database>,
+  opts: { sourceChannelId: string; mediaGroupId: string; tenantId?: string }
+): Promise<{ taskId: string; clientId: string; title: string } | null> {
+  const tenantId = opts.tenantId || '00000000-0000-4000-a000-000000000001';
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    const row = (
+      await sql<{ id: string; client_id: string; title: string | null }>`SELECT t.id, t.client_id, t.title
+        FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+        WHERE o.tenant_id = ${tenantId}::uuid AND o.command_type = 'task.created'
+          AND o.payload->>'sourceChannelId' = ${opts.sourceChannelId}
+          AND o.payload->'studioOptions'->>'mediaGroupId' = ${opts.mediaGroupId}
+          AND o.created_at > now() - interval '15 minutes'
+          AND COALESCE(o.payload->>'isInstructionOnly', 'false') <> 'true'
+          AND t.client_id IS NOT NULL
+        ORDER BY o.created_at ASC LIMIT 1`.execute(trx)
+    ).rows[0];
+    return row ? { taskId: String(row.id), clientId: String(row.client_id), title: String(row.title || 'your request') } : null;
   });
 }
 

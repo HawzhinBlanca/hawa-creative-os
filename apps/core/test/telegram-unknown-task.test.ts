@@ -73,7 +73,9 @@ describe('Telegram never approves, revises or makes up a task', () => {
         expect((await res.json()).title).toBe('Desk review required');
         expect(await taskExists(unknownId), `${shape} ${command}`).toBe(false);
       }
-      expect(sent).toEqual([]);
+      // The sender is told where approval happens (a typed command used to get no reply at all),
+      // and nothing else: no approval, no revision, no task.
+      expect(sent.filter((t) => !/approved in Hawa Desk, not in chat/.test(t))).toEqual([]);
     });
   }
 

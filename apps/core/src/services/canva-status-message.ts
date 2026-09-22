@@ -20,6 +20,8 @@ export interface TelegramHtmlMessage {
 
 const READY = new Set(['DRAFT_READY', 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW']);
 const DRAFT_EXISTS_BUT_UNVERIFIED = new Set(['CANVA_CHECK_REQUIRED', 'CANVA_COPY_MISMATCH', 'CANVA_FONT_MISMATCH', 'CANVA_PREVIEW_FAILED']);
+/** What happens next when no draft could be made: the task is marked for an operator in Hawa Desk. */
+const ALERTED = 'The office has been alerted and will follow up with you here.';
 
 /**
  * Turns a worker outcome into an honest requester-facing Telegram message.
@@ -70,10 +72,19 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'DESIGN_UNCERTAIN') {
     title = '📥 <b>Request saved, draft not confirmed</b>';
     body = `The automatic draft could not be confirmed and will not be retried automatically to avoid a duplicate. The art director will check the result in Hawa Desk and finish it in Canva.\n`;
+  } else if (status === 'DESIGN_BLOCKED') {
+    title = '📥 <b>Your request is saved</b>';
+    body = `A safety check stopped the automatic draft before anything reached you, so nothing unverified was sent. ${ALERTED}\n`;
   } else {
-    title = '📥 <b>Request saved, manual design</b>';
-    body = `${link}The automatic Canva draft could not be produced${code ? ` (${escapeTelegramHtml(code)})` : ''}. Your request is saved and the art director will design it in Canva.\n`;
+    // Every other ending (a failed or stuck run, a server error, a refused export). The code behind
+    // it (HARD_QA_REFUSED, STUCK_IN_QA, HTTP_500 …) is for the task's history in Hawa Desk and the
+    // logs; it used to be printed here, which told the requester nothing and read like a crash.
+    title = '📥 <b>Your request is saved</b>';
+    body = `${link}We could not make the automatic draft for this request. ${ALERTED}\n`;
   }
-  const notes = (input.notes || []).filter((n) => typeof n === 'string' && n.trim()).map((n) => `ℹ️ ${escapeTelegramHtml(n.trim())}\n`).join('');
+  // Notes describe a draft (its typeface, the studio run that made it). With no draft they are
+  // internal detail: model names and scores of a run that produced nothing.
+  const draftExists = Boolean(input.canvaUrl) && (READY.has(status) || DRAFT_EXISTS_BUT_UNVERIFIED.has(status));
+  const notes = (draftExists ? input.notes || [] : []).filter((n) => typeof n === 'string' && n.trim()).map((n) => `ℹ️ ${escapeTelegramHtml(n.trim())}\n`).join('');
   return { text: header(title) + body + (notes ? notes + '\n' : '') + footer, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
 }

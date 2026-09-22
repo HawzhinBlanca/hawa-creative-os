@@ -55,10 +55,11 @@ const strToU8 = (text: string) => new Uint8Array(Buffer.from(text, 'utf8'));
 const COPY = ['KAAE Summit', 'کۆنفرانسی نیشتمانی'];
 const SENT = { fontsByIndex: ['Cinzel', 'Amiri'] };
 
-function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soraniFont?: string; rtl?: boolean } = {}) {
+function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soraniFont?: string; rtl?: boolean; madeHere?: boolean } = {}) {
   const { title = COPY[0], sorani = COPY[1], titleFont = 'Cinzel', soraniFont = 'Amiri', rtl = true } = opts;
   return zipSync({
     'ppt/presentation.xml': strToU8('<p:presentation/>'),
+    ...(opts.madeHere ? { 'docProps/core.xml': strToU8('<cp:coreProperties><dc:title>Editable Canva transfer (Hawa)</dc:title></cp:coreProperties>') } : {}),
     'ppt/slides/slide1.xml': strToU8(
       '<p:sld>' +
         `<p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${titleFont}"/></a:rPr><a:t>${title}</a:t></a:r></a:p></p:txBody></p:sp>` +
@@ -115,8 +116,14 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     expect(r.qaReport.errors.join(' ')).toMatch(/font/i);
   });
 
-  it('refuses an export whose Sorani paragraph lost its right-to-left flag', () => {
+  it('leaves reading direction to the visual review when a Canva export carries no rtl attribute at all', () => {
+    // Canva's own export never writes it; failing it disabled Approve on every Kurdish design.
     const r = evaluateCanvaExportQc(storedRow(pptx({ rtl: false })), COPY);
+    expect(r.criticalPass).toBe(true);
+  });
+
+  it('refuses a deck made here whose Sorani paragraph lost its right-to-left flag', () => {
+    const r = evaluateCanvaExportQc(storedRow(pptx({ rtl: false, madeHere: true })), COPY);
     expect(r.criticalPass).toBe(false);
     expect(r.qaReport.bidiIsolation).toBe(false);
     expect(r.qaReport.errors.join(' ')).toMatch(/RTL/);

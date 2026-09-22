@@ -165,19 +165,15 @@ describe('Telegram feedback that asks for a font', () => {
     expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length).toBe(before);
   });
 
-  it('"from now on" proposes a standing rule that waits for promotion', async () => {
+  it('"from now on" with a change is never recorded as a canned sentence or an in-memory proposal', async () => {
     const dispatch = vi.fn().mockResolvedValue({ success: true });
     const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
     const { task } = await (await post(app, 910003, 910005, 'KAAE Graduation Ceremony')).json();
 
     const body = await (await post(app, 910003, 910006, `revise task ${task.id}: from now on use IBM Plex Sans Arabic for all Kurdish text`)).json();
-    expect(body.scope).toBe('client');
-    expect(body.proposedRules).toContain('Set Kurdish and Arabic text in IBM Plex Sans Arabic.');
-    // The sender's words are proposed as written, beside the derived font rule; no canned sentence.
-    expect(body.proposedRules).toContain(`revise task ${task.id}: from now on use IBM Plex Sans Arabic for all Kurdish text`);
-    expect(JSON.stringify(body.proposedRules)).not.toMatch(/Cinzel|authentic master brand seal|Direct all design reviews/);
-    const proposed = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).find((r) => r.ruleText === 'Set Kurdish and Arabic text in IBM Plex Sans Arabic.');
-    expect(proposed?.status).toBe('PROPOSED');
-    expect(globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID)).not.toContain(proposed!.ruleText);
+    expect(JSON.stringify(body)).not.toMatch(/Cinzel|authentic master brand seal|Direct all design reviews/);
+    // Standing rules are saved in PostgreSQL (client-rules.test.ts, telegram-understanding.test.ts);
+    // the in-memory proposal queue a restart forgot is no longer written.
+    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).find((r) => r.ruleText === 'Set Kurdish and Arabic text in IBM Plex Sans Arabic.')).toBeUndefined();
   });
 });

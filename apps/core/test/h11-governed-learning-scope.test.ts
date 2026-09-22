@@ -140,46 +140,20 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
     }
   });
 
-  it('3. Explicit future rule creates reviewable version (PROPOSED) and affects scope ONLY after activation', async () => {
+  it('3. A candidate rule proposed for review (Desk queue) affects scope ONLY after activation', async () => {
     const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
 
-    // Ingest initial task
-    const intakeRes = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': telegramSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10003,
-        message: {
-          message_id: 20003,
-          from: { id: 800002, is_bot: false, first_name: 'TestOperator' },
-          chat: { id: 800002, type: 'private' },
-          text: 'KAAE Curriculum Framework',
-        },
-      }),
+    // Rules said in chat by the office are saved as active client rules in PostgreSQL
+    // (telegram-understanding.test.ts). Rules mined from edits still queue here for review.
+    globalFeedbackMiner.proposeExplicitRule({
+      clientId: KAAE_CLIENT_ID,
+      taskId: 'task_h11_03',
+      title: 'Ceremonial prose face',
+      category: 'typography',
+      ruleText: 'Apply Playfair Display for ceremonial prose',
+      rationale: 'Mined from an art director edit',
+      actor: { id: 'op1', role: 'operator' },
     });
-    const { task } = await intakeRes.json();
-
-    // Send explicit future rule instruction:
-    const fbRes = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-bot-api-secret-token': telegramSecret,
-      },
-      body: JSON.stringify({
-        update_id: 10004,
-        message: {
-          message_id: 20004,
-          from: { id: 800002, is_bot: false, first_name: 'TestOperator' },
-          chat: { id: 800002, type: 'private' },
-          text: `revise task ${task.id}: use this as a future client rule: Apply Playfair Display for ceremonial prose`,
-        },
-      }),
-    });
-    expect(fbRes.status).toBe(200);
 
     // Verify candidate rule was PROPOSED (not yet PROMOTED)
     const proposed = globalFeedbackMiner
@@ -292,10 +266,10 @@ describe('H11 — Governed Learning with Scope, Authority & Rollback', () => {
       }),
     });
 
-    // Must be rejected with 404 UNKNOWN_TASK_UUID
-    expect(unknownReplyRes.status).toBe(404);
-    const body = await unknownReplyRes.json();
-    expect(body.error).toBe('UNKNOWN_TASK_UUID');
+    // The reply is read as a message on its own (it used to be dropped with a 404 the poller took
+    // as final, and the sender heard nothing). No task with the unknown id is made up.
+    expect(unknownReplyRes.status).not.toBe(404);
+    expect((await app.request(`/tasks/${unknownUuid}`)).status).toBe(404);
   });
 
   it('6. Reversible rollback restores prior state and removes rule from generation scope', async () => {

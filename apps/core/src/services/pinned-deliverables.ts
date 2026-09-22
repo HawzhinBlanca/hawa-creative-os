@@ -22,13 +22,22 @@ export const EMPTY_DELIVERABLE_STORE: DeliverableStore = {
   read: async () => null,
 };
 
+/**
+ * The delivery format of a stored export. Canva PDF exports are stored as `pdf_standard`
+ * (canva-connect-service), which the delivery maps did not know: such a file went to Drive with no
+ * MIME type and a `.pdf_standard` extension.
+ */
+export function deliverableFormat(format: string): PinnedExport['format'] {
+  return format === 'pdf_standard' ? 'pdf' : (format as PinnedExport['format']);
+}
+
 export function canvaDeliverableStore(service: CanvaConnectService): DeliverableStore {
   return {
     async find(tenantId, userId, taskId, artifactIds) {
       const rows = artifactIds.length > 0
         ? await service.exportsById({ tenantId, actorId: userId }, taskId, artifactIds)
         : await service.allExports({ tenantId, actorId: userId }, taskId);
-      return rows.map((r) => ({ artifactId: r.id, format: r.format, sha256: r.sha256, byteSize: r.byte_size }));
+      return rows.map((r) => ({ artifactId: r.id, format: deliverableFormat(r.format), sha256: r.sha256, byteSize: r.byte_size }));
     },
     async read(tenantId, userId, taskId, artifactId) {
       return service.exportBytes({ tenantId, actorId: userId }, taskId, artifactId);
@@ -92,12 +101,14 @@ export async function loadPinnedDeliverables(
         message: `The stored export ${pin.artifactId} no longer matches what was approved (SHA-256 ${sha256.slice(0, 12)}…, ${bytes.length} bytes), so nothing was delivered.`,
       };
     }
+    // Approvals recorded before the format was normalised can still carry `pdf_standard`.
+    const format = deliverableFormat(pin.format);
     files.push({
       artifactId: pin.artifactId,
-      relativePath: `deliverables/${pin.artifactId}.${pin.format}`,
+      relativePath: `deliverables/${pin.artifactId}.${format}`,
       storageKey: `canva-export:${pin.artifactId}`,
-      filename: `${scope.filePrefix}-${pin.artifactId.slice(0, 8)}.${pin.format}`,
-      mimeType: MIME_TYPES[pin.format],
+      filename: `${scope.filePrefix}-${pin.artifactId.slice(0, 8)}.${format}`,
+      mimeType: MIME_TYPES[format] ?? 'application/octet-stream',
       byteSize: bytes.length,
       sha256,
       content: bytes,

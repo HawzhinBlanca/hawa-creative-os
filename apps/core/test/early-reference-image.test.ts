@@ -76,7 +76,7 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
     expect(JSON.stringify(payload.exactCopy)).not.toMatch(/Apply the attached/);
 
     const texts = dispatch.mock.calls.map((c) => String(c[1]?.text ?? '')).join('\n');
-    expect(texts).toMatch(/Reference image saved/);
+    expect(texts).toMatch(/Picture saved/);
     expect(texts).not.toMatch(/queued for manual design/);
 
     // The request that follows two minutes later gets the image.

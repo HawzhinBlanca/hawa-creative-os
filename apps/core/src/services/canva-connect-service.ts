@@ -209,12 +209,17 @@ export class CanvaConnectService {
       const task=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid`.execute(db)).rows[0];
       if (!task) fail(404,'CANVA_TASK_NOT_FOUND','Task not found');
       const binding = await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId);
+      // The task's operations and exports whoever made them. Both were filtered to the caller's own
+      // actor, and the studio exports as the worker's identity while approval needs a reviewer's,
+      // so the approver saw no export at all and Approve stayed disabled on every studio design.
+      // Exports are limited to the design currently bound, as exportsById limits them.
       const operations=(await sql<any>`SELECT id,kind,status,design_id,remote_job_id,metadata->>'method' AS method,created_at FROM hawa.canva_remote_operations
-        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND actor_id=${s.actorId} ORDER BY created_at DESC LIMIT 20`.execute(db)).rows;
-      const artifacts=(await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
+        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY created_at DESC LIMIT 20`.execute(db)).rows;
+      const artifacts=binding ? (await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
         JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
-        WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.actor_id=${s.actorId}
-        ORDER BY b.created_at DESC LIMIT 20`.execute(db)).rows;
+        WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
+          AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}
+        ORDER BY b.created_at DESC LIMIT 20`.execute(db)).rows : [];
       return { artifacts, binding:binding ? { designId:binding.canva_design_id,version:binding.version,status:binding.status } : null,operations,semanticCapture:'unverified',approvalReady:false };
     });
   }
@@ -408,9 +413,9 @@ export class CanvaConnectService {
   async artifact(s: Scope,taskId: string,id: string): Promise<any> {
     const binding = await this.binding(s,taskId);
     const result = await this.tx(s,async db => (await sql<any>`SELECT a.content,a.format,a.sha256 FROM hawa.canva_export_bytes a JOIN hawa.canva_remote_operations o ON o.id=a.operation_id
-      WHERE a.tenant_id=${s.tenantId}::uuid AND a.task_id=${taskId}::uuid AND a.id=${id}::uuid AND o.actor_id=${s.actorId}
+      WHERE a.tenant_id=${s.tenantId}::uuid AND a.task_id=${taskId}::uuid AND a.id=${id}::uuid
         AND o.status='retrieved' AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}`.execute(db)).rows[0]);
-    if (!result) fail(404,'CANVA_ARTIFACT_NOT_FOUND','Export evidence not found for the current task and actor');
+    if (!result) fail(404,'CANVA_ARTIFACT_NOT_FOUND','Export evidence not found for the current task and design');
     return result;
   }
   /** Retrieved exports of this task with these ids, for pinning to an approval. Unknown ids are left out. */

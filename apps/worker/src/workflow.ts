@@ -1,7 +1,7 @@
 import * as restate from '@restatedev/restate-sdk';
 import type { UUID } from '@hawa/contracts';
 import type { Database, Kysely } from '@hawa/db';
-import { runCanvaDraft } from './canva-draft-workflow.js';
+import { runCanvaDraft, reportNotRunnable } from './canva-draft-workflow.js';
 import type { WorkflowDurableContext } from './durable-context.js';
 
 export interface WorkflowInput {
@@ -24,6 +24,18 @@ export interface WorkflowInput {
     previews?: number;
     holdForSelection?: boolean;
   };
+  /**
+   * Set when an operator or the requester asked for the design again (/redo, Desk re-drive). The run
+   * is a new one, so every idempotency key it sends Core carries the attempt, and Core does not hand
+   * back the first run's answer.
+   */
+  redriveAttempt?: number;
+  /**
+   * True when intake already told the requester that no automatic draft is coming (daily cap, no
+   * client, instruction only, a reference image). The outcome is still reported, for the task's
+   * state, but no second message is sent.
+   */
+  requesterToldAtIntake?: boolean;
 }
 
 export interface WorkflowOutput {
@@ -40,6 +52,8 @@ export interface WorkflowOutput {
 
 export interface TaskWorkflowRunnerOptions {
   db?: Kysely<Database>;
+  /** Transport to Core, for reporting a refusal. Tests inject one; production uses fetch. */
+  fetcher?: typeof fetch;
 }
 
 /**
@@ -58,6 +72,10 @@ export class TaskWorkflowRunner {
 
   async run(input: WorkflowInput, ctx?: WorkflowDurableContext): Promise<WorkflowOutput> {
     if (!input.canvaAutoGenerate) {
+      // The refusal used to end here with nothing reported: the task stayed RECEIVED for good and a
+      // requester who had not been told at intake never heard anything. The outcome now goes to Core
+      // first (best effort: it never hides the refusal), and Core decides whether to message.
+      if (ctx) await reportNotRunnable(input, ctx, this.options.fetcher);
       throw new WorkflowNotRunnableError(
         input.taskId,
         'This task was dispatched without a Canva job (autoGenerate is not set). The only generator is the Canva draft workflow; nothing was run and nothing was spent.'
