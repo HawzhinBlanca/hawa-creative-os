@@ -197,9 +197,10 @@ export class DesignStudioService {
     // request, with no other request in between, are its photos too.
     const afterMinutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_AFTER || 15));
     if (typeof channel === 'string' && channel && (minutes > 0 || afterMinutes > 0)) {
+      type ChatRow = { task_id: string; occurred_at: string; client_id: string | null; image: string | null };
       const rows = await this.tx(s, async (db) =>
         (
-          await sql<any>`WITH me AS (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+          await sql<ChatRow>`WITH me AS (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
           SELECT e.task_id, e.occurred_at, t.client_id, e.data->'payload'->'studioOptions'->>'referenceImageBase64' AS image
           FROM hawa.task_events e
           JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id, me
@@ -217,13 +218,13 @@ export class DesignStudioService {
         ).rows
       );
       const mine = await this.tx(s, async (db) =>
-        (await sql<any>`SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db)).rows[0]?.created_at
+        (await sql<{ created_at: string }>`SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db)).rows[0]?.created_at
       );
       const myTime = mine ? new Date(mine).getTime() : NaN;
       // Each orphan photo belongs to the request nearest to it in time, this one or another from the
       // same chat. "Text first, photos after" and "photos first, text after" both resolve this way,
       // and a photo between two requests goes to one of them, not both.
-      const requests = rows.filter((r: any) => r.client_id).map((r: any) => new Date(r.occurred_at).getTime());
+      const requests = rows.filter((r) => r.client_id).map((r) => new Date(r.occurred_at).getTime());
       for (const r of rows) {
         if (r.client_id || !valid(r.image)) continue;
         const at = new Date(r.occurred_at).getTime();
