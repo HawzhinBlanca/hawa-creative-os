@@ -1,22 +1,7 @@
-import crypto from 'node:crypto';
-import type { RequestContext, Result, AppError, UUID, DesignStudioAdapter } from '@hawa/contracts';
-import { TaskStateMachine, type TaskStatus } from '@hawa/domain';
-import { BriefBuilder, CreativeDirectorRunner, DesignRouter } from '@hawa/creative';
-import { DeterministicQAEngine } from '@hawa/qa';
-import { CanvaDesignStudioAdapter, GooglePublisher, DirectModelGateway } from '@hawa/integrations';
+import type { UUID } from '@hawa/contracts';
+import type { Database, Kysely } from '@hawa/db';
 import { runCanvaDraft } from './canva-draft-workflow.js';
-import { RetrievalService } from '@hawa/retrieval';
-import { OfficeTracer } from '@hawa/observability';
-import {
-  TaskRepository,
-  withRlsContext,
-  type Database,
-  type Kysely,
-} from '@hawa/db';
-import {
-  type WorkflowDurableContext,
-  DurableStepJournal,
-} from './durable-context.js';
+import type { WorkflowDurableContext } from './durable-context.js';
 
 export interface WorkflowInput {
   taskId: UUID;
@@ -54,256 +39,39 @@ export interface WorkflowOutput {
 
 export interface TaskWorkflowRunnerOptions {
   db?: Kysely<Database>;
-  studio?: DesignStudioAdapter;
-  publisher?: GooglePublisher;
-  retrieval?: RetrievalService;
-  briefBuilder?: BriefBuilder;
-  creativeDirector?: CreativeDirectorRunner;
-  qaEngine?: DeterministicQAEngine;
 }
 
+/**
+ * Runs one task's workflow. There is one path: the Canva draft workflow.
+ *
+ * A nine-step generator lived here until 2026-09-22 (brief, creative director, HyCanvas-era studio
+ * compose, QA, publish), the path production ran before the Canva cutover of 2026-09-13. It was
+ * kept for tests, behind a guard that also checked the deployment environment. A later clean-up
+ * dropped the environment half of that guard, so any production task dispatched with autoGenerate
+ * false (the daily cap declines it, for one) ran the retired generator: model calls paid for a
+ * design the approval gate could not use. The generator is gone. A command that is not a Canva
+ * job is refused here, visibly, and the outbox records the reason.
+ */
 export class TaskWorkflowRunner {
-  private tracer = new OfficeTracer();
-  private db?: Kysely<Database>;
-  private briefBuilder: BriefBuilder;
-  private router = new DesignRouter();
-  private creativeDirector: CreativeDirectorRunner;
-  private qaEngine: DeterministicQAEngine;
-  private studio: DesignStudioAdapter;
-  private publisher: GooglePublisher;
-  private modelGateway = new DirectModelGateway();
-  private retrieval: RetrievalService;
-
-  constructor(options: TaskWorkflowRunnerOptions = {}) {
-    this.db = options.db;
-    this.briefBuilder = options.briefBuilder || new BriefBuilder();
-    this.creativeDirector = options.creativeDirector || new CreativeDirectorRunner();
-    this.qaEngine = options.qaEngine || new DeterministicQAEngine();
-    this.studio = options.studio || new CanvaDesignStudioAdapter();
-    this.publisher = options.publisher || new GooglePublisher();
-    this.retrieval = options.retrieval || new RetrievalService();
-  }
+  constructor(private readonly options: TaskWorkflowRunnerOptions = {}) {}
 
   async run(input: WorkflowInput, ctx?: WorkflowDurableContext): Promise<WorkflowOutput> {
-    if (input.canvaAutoGenerate) {
-      if (!ctx) throw new Error('Production Canva workflows require the durable Restate context');
-      return runCanvaDraft(input, ctx);
+    if (!input.canvaAutoGenerate) {
+      throw new WorkflowNotRunnableError(
+        input.taskId,
+        'This task was dispatched without a Canva job (autoGenerate is not set). The only generator is the Canva draft workflow; nothing was run and nothing was spent.'
+      );
     }
-    const span = this.tracer.startSpan('TaskWorkflowRunner.run', undefined, {
-      taskId: input.taskId,
-      tenantId: input.tenantId,
-    });
+    if (!ctx) throw new Error('Production Canva workflows require the durable Restate context');
+    return runCanvaDraft(input, ctx);
+  }
+}
 
-    const durableCtx: WorkflowDurableContext = ctx || new DurableStepJournal(`wf_${input.taskId}`);
-    const executedSteps: string[] = [];
-    const replayedSteps: string[] = [];
-
-    const wrapStep = async <T>(stepId: string, fn: () => Promise<T>): Promise<T> => {
-      const isReplay = typeof (durableCtx as any).hasStep === 'function' && (durableCtx as any).hasStep(stepId);
-      if (isReplay) {
-        replayedSteps.push(stepId);
-      } else {
-        executedSteps.push(stepId);
-      }
-      return await durableCtx.run(stepId, fn);
-    };
-
-    const requestCtx: RequestContext = {
-      tenantId: input.tenantId,
-      taskId: input.taskId,
-      actor: { type: 'workflow', id: 'restate-worker-1' },
-      correlationId: crypto.randomUUID(),
-      deadline: new Date(Date.now() + 180000).toISOString(),
-      idempotencyKey: input.idempotencyKey,
-    };
-
-    let currentStatus: TaskStatus = 'RECEIVED';
-    let sm = new TaskStateMachine(input.taskId, currentStatus);
-
-    // Step 1: Routing Analysis
-    const routingResult = await wrapStep(`task-routing:${input.taskId}`, async () => {
-      sm.transition('ROUTING', requestCtx.actor, 'Begin routing analysis');
-      const clientId = input.clientId || 'client-office-1';
-      return { clientId, status: 'ROUTING' as const };
-    });
-    currentStatus = routingResult.status;
-    const clientId = routingResult.clientId;
-
-    // Step 2: Lock client scope
-    sm = new TaskStateMachine(input.taskId, currentStatus);
-    const lockResult = await wrapStep(`client-scope-lock:${input.taskId}`, async () => {
-      sm.transition('BRIEFING', requestCtx.actor, `Client scope locked to ${clientId}`);
-      return { clientId, locked: true, status: 'BRIEFING' as const };
-    });
-    currentStatus = lockResult.status;
-
-    // Step 3: Context Retrieval
-    const clientCtx = { ...requestCtx, clientId };
-    await wrapStep(`context-retrieval:${input.taskId}`, async () => {
-      return await this.retrieval.retrieve(clientCtx, [
-        { query: input.rawText, kinds: ['rule', 'official_asset', 'template'], topK: 5 },
-      ]);
-    });
-
-    // Step 4: Brief building
-    const brief = await wrapStep(`brief-building:${input.taskId}`, async () => {
-      const briefRes = this.briefBuilder.build({
-        taskId: input.taskId,
-        clientId,
-        clientDnaVersion: 1,
-        objective: 'Campaign Poster',
-        rawRequestText: input.rawText,
-      });
-
-      if (!briefRes.ok) {
-        throw new Error(`Brief generation failed: ${briefRes.error?.message || 'Missing facts'}`);
-      }
-      return briefRes.value;
-    });
-
-    // Step 5: Creative Planning
-    sm = new TaskStateMachine(input.taskId, currentStatus);
-    const planResult = await wrapStep(`creative-planning:${input.taskId}`, async () => {
-      sm.transition('PLANNING', requestCtx.actor, 'Brief approved, beginning creative design plan');
-      const plan = this.creativeDirector.createDesignPlan(brief, ['#0B0F19', '#38BDF8', '#FFFFFF']);
-      return { plan, status: 'PLANNING' as const };
-    });
-    const plan = planResult.plan;
-    currentStatus = planResult.status;
-
-    // Step 6: Studio Composing (High-cost external activity)
-    sm = new TaskStateMachine(input.taskId, currentStatus);
-    const studioResult = await wrapStep(`studio-composing:${input.taskId}`, async () => {
-      sm.transition('COMPOSING', requestCtx.actor, 'Creating studio document with live editable nodes');
-      const docRes = await this.studio.create(requestCtx, {
-        name: `Post - ${brief.objective}`,
-        pages: brief.variants.map((v) => ({
-          id: v.id,
-          name: v.name,
-          width: v.width,
-          height: v.height,
-          unit: 'px',
-          language: brief.primaryLanguage,
-          direction: brief.direction,
-        })),
-        clientDnaVersion: 1,
-      });
-      if (!docRes.ok) throw new Error(`Studio document creation failed: ${docRes.error?.message || 'Unknown error'}`);
-      const docRef = docRes.value;
-
-      const ops = this.creativeDirector.generateStudioOperations(brief, plan, 'sha256_logo_verified_primary');
-      const applyRes = await this.studio.apply(requestCtx, {
-        document: docRef,
-        expectedSourceSha256: docRef.sourceSha256,
-        operationBatchId: `batch_${input.taskId}_compose`,
-        operations: ops,
-        destructiveOperationsAllowed: false,
-      });
-      if (!applyRes.ok) throw new Error(`Failed to apply studio operations: ${applyRes.error?.message || 'Unknown error'}`);
-      return { docRef: applyRes.value, status: 'COMPOSING' as const };
-    });
-    const updatedDocRef = studioResult.docRef;
-    currentStatus = studioResult.status;
-
-    // Step 7: Deterministic QA Evaluation
-    sm = new TaskStateMachine(input.taskId, currentStatus);
-    const qaResult = await wrapStep(`qa-evaluation:${input.taskId}`, async () => {
-      sm.transition('QA', requestCtx.actor, 'Running deterministic hard QA and bidi verification');
-      const manifestRes = await this.studio.getManifest(requestCtx, updatedDocRef);
-      if (!manifestRes.ok) throw new Error('Failed to extract studio manifest');
-
-      const qcRes = await this.qaEngine.run(requestCtx, {
-        taskId: input.taskId,
-        designRevisionId: crypto.randomUUID(),
-        document: updatedDocRef,
-        sourceHash: updatedDocRef.sourceSha256,
-        manifest: manifestRes.value,
-        renders: [],
-        brief: brief as any,
-        clientDna: {
-          assets: [{ role: 'logo_primary', sha256: 'sha256_logo_verified_primary' }],
-        },
-        profile: { name: 'default', version: '1.0', rules: {} },
-        repairCycle: 0,
-      });
-      const qcReport = qcRes.ok ? qcRes.value : undefined;
-      return { qcReport, status: 'QA' as const };
-    });
-    currentStatus = qaResult.status;
-    const qcPassed = qaResult.qcReport ? qaResult.qcReport.criticalPass : false;
-
-    // Step 8: Persist Operational DB State if configured
-    if (this.db) {
-      await wrapStep(`persist-operational-records:${input.taskId}`, async () => {
-        try {
-          const effectiveUserId = (input as any).userId || (input.tenantId.includes('4000-a000') ? input.tenantId.replace('4000-a000', '4000-b000') : undefined);
-          await withRlsContext(
-            this.db!,
-            { tenantId: input.tenantId, userId: effectiveUserId, role: 'administrator' },
-            async (trx) => {
-              const taskRepo = new TaskRepository(trx);
-              const current = await trx
-                .selectFrom('tasks')
-                .select(['state', 'version'])
-                .where('id', '=', input.taskId)
-                .where('tenant_id', '=', input.tenantId)
-                .executeTakeFirst();
-
-              if (current) {
-                await taskRepo.transitionState(
-                  {
-                    taskId: input.taskId,
-                    tenantId: input.tenantId,
-                    fromState: current.state as any,
-                    toState: 'human_review',
-                    actorType: 'workflow',
-                    actorId: 'restate-worker-1',
-                    reason: 'Task workflow passed QA, awaiting office review',
-                    data: {
-                      briefId: brief.briefId,
-                      documentId: updatedDocRef.documentId,
-                      qcPassed,
-                    },
-                  },
-                  trx
-                );
-              }
-            }
-          );
-        } catch (err: any) {
-          // If task is simulated/missing in DB during unit tests, don't break; log real errors
-          if (!err?.message?.includes('not found')) {
-            console.warn(`[TaskWorkflowRunner] Operational task record persistence skipped or encountered non-fatal error:`, err?.message);
-          }
-        }
-        return { persisted: true };
-      });
-    }
-
-    // Step 9: Await Approval Gate
-    sm = new TaskStateMachine(input.taskId, currentStatus);
-    const approvalResult = await wrapStep(`await-approval-gate:${input.taskId}`, async () => {
-      sm.transition('AWAITING_APPROVAL', requestCtx.actor, 'Design composed and passed QA, pausing for office approval in Desk');
-      return { status: 'AWAITING_APPROVAL' as const };
-    });
-    currentStatus = approvalResult.status;
-
-    span.end({
-      status: currentStatus,
-      briefId: brief.briefId,
-      documentId: updatedDocRef.documentId,
-      qcPassed,
-    });
-
-    return {
-      taskId: input.taskId,
-      status: currentStatus,
-      briefId: brief.briefId,
-      documentId: updatedDocRef.documentId,
-      qcPassed,
-      auditEventsCount: 6,
-      executedSteps,
-      replayedSteps,
-    };
+/** Terminal: retrying will not change the answer. The outbox consumer dead-letters it at once. */
+export class WorkflowNotRunnableError extends Error {
+  readonly category = 'permanent' as const;
+  constructor(readonly taskId: UUID, message: string) {
+    super(`PERMANENT_REJECTION: ${message}`);
+    this.name = 'WorkflowNotRunnableError';
   }
 }
