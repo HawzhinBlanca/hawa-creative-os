@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PackageFile, PublishRequest, RequestContext } from '@hawa/contracts';
 import { GooglePublisher } from '../src/google-publisher.js';
-import { startFakeDriveServer } from './fake-drive.js';
+import { startFakeDriveServer } from './fake-drive-server.js';
 
 /**
  * The publisher sends only real bytes. Until 2026-09-19 a file it could not read became

@@ -18,7 +18,7 @@
 import crypto from 'node:crypto';
 import { withRlsContext, type Kysely, type Database } from '@hawa/db';
 
-export interface PolledUpdate { update_id: number; [key: string]: unknown }
+export interface PolledUpdate { update_id: number }
 
 export interface PolledUpdateDispatchDeps<U extends PolledUpdate> {
   /** Hands the update to intake and returns the HTTP status. May throw on a transport failure. */
@@ -53,8 +53,8 @@ export function createPolledUpdateHandler<U extends PolledUpdate>(deps: PolledUp
         return;
       }
       reason = `intake answered HTTP ${status}`;
-    } catch (err: any) {
-      reason = `intake unreachable: ${err?.message || String(err)}`;
+    } catch (err) {
+      reason = `intake unreachable: ${err instanceof Error ? err.message : String(err)}`;
     }
 
     const n = (attempts.get(update.update_id) || 0) + 1;
@@ -65,17 +65,17 @@ export function createPolledUpdateHandler<U extends PolledUpdate>(deps: PolledUp
 
     try {
       await deps.park(update, `${reason} after ${n} attempts`);
-    } catch (parkErr: any) {
+    } catch (parkErr) {
       // Keep the count at the ceiling so the next pass tries to park again, not five more deliveries.
       attempts.set(update.update_id, maxAttempts - 1);
       throw new Error(
-        `[telegram:poll] update ${update.update_id} could not be delivered (${reason}) or parked (${parkErr?.message || parkErr}); intake is blocked until one succeeds`
+        `[telegram:poll] update ${update.update_id} could not be delivered (${reason}) or parked (${parkErr instanceof Error ? parkErr.message : String(parkErr)}); intake is blocked until one succeeds`
       );
     }
     attempts.delete(update.update_id);
     log.error(`[telegram:poll] update ${update.update_id} parked for an operator after ${n} attempts: ${reason}`);
-    await deps.notifySender(update, PARKED_UPDATE_NOTICE).catch((err: any) => {
-      log.warn(`[telegram:poll] could not tell the sender that update ${update.update_id} was parked: ${err?.message || err}`);
+    await deps.notifySender(update, PARKED_UPDATE_NOTICE).catch((err: unknown) => {
+      log.warn(`[telegram:poll] could not tell the sender that update ${update.update_id} was parked: ${err instanceof Error ? err.message : String(err)}`);
     });
   };
 }
@@ -100,8 +100,8 @@ export async function parkTelegramUpdate(
     if (existing) return;
     await trx.insertInto('inbox_events').values({
       tenant_id: identity.tenantId, source_account_id: 'telegram', source_event_id: sourceEventId,
-      event_kind: 'telegram_update_parked', payload: update as any, payload_hash: payloadHash, verified: true,
+      event_kind: 'telegram_update_parked', payload: JSON.parse(JSON.stringify(update)) as Record<string, unknown>, payload_hash: payloadHash, verified: true,
       processing_error: reason.slice(0, 2000),
-    } as any).execute();
+    }).execute();
   });
 }

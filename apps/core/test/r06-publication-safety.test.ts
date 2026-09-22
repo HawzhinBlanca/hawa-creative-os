@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createApp } from '../src/app.js';
 import { GooglePublisher } from '@hawa/integrations';
-import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive.js';
+import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive-server.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 

@@ -6,7 +6,7 @@ import {
   GooglePublisher,
   DirectModelGateway,
 } from '../src/index.js';
-import { startFakeDriveServer } from './fake-drive.js';
+import { startFakeDriveServer } from './fake-drive-server.js';
 import type { RequestContext, PublishRequest } from '@hawa/contracts';
 
 describe('Integrations: Real Adapters & Providers', () => {

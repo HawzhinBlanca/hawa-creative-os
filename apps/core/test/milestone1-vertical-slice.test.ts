@@ -6,7 +6,7 @@ import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createDb, withRlsContext, PublicationRepository } from '@hawa/db';
 import { GooglePublisher } from '@hawa/integrations';
-import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive.js';
+import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive-server.js';
 import { DeterministicQAEngine } from '@hawa/qa';
 
 describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage -> Editable Design -> QA -> Approval -> Delivery & Recovery', () => {

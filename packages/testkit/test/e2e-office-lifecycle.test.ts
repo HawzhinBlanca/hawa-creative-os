@@ -36,7 +36,7 @@ import {
   GooglePublisher,
   DirectModelGateway,
 } from '@hawa/integrations';
-import { startFakeDriveServer } from '../../integrations/test/fake-drive.js';
+import { startFakeDriveServer } from '../../integrations/test/fake-drive-server.js';
 import { RetrievalService } from '@hawa/retrieval';
 import { TaskRepository, IngressRepository, OutboxRepository } from '@hawa/db';
 

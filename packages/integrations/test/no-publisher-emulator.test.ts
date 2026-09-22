@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GooglePublisher } from '../src/google-publisher.js';
-import { startFakeDriveServer } from './fake-drive.js';
+import { startFakeDriveServer } from './fake-drive-server.js';
 import type { RequestContext, PublishRequest } from '@hawa/contracts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

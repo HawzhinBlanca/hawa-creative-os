@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-21T22:17:32Z",
+  "generatedAt": "2026-09-22T07:53:18Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 241,
+  "fileCount": 245,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "9f09db3c518a8cc7a61ff0494209b23f23d398ef71a99be10cbf275d6cd8221c",
-      "bytes": 2893
+      "sha256": "f254190bc31ca30b7049809960220d67e75df1bbbb6147cfb23289a9958cf512",
+      "bytes": 2895
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -968,6 +968,11 @@
       "bytes": 6006
     },
     {
+      "path": "scripts/lint_provider_egress.ts",
+      "sha256": "d1903acbb96cee583a4a15c9de6bd0fadc1f3344d015a74590edd5031b6317b4",
+      "bytes": 2884
+    },
+    {
       "path": "scripts/measure_operations_slo.ts",
       "sha256": "3c2bdb4b02362a5109cfa29b18e664b383a1e58678efeb85435271dd9fe8595c",
       "bytes": 16912
@@ -1041,6 +1046,11 @@
       "path": "scripts/publish_kaae_omnichannel.ts",
       "sha256": "0d3fc797145ad7d3fa43a1eb4868fd96c251e03feaf489c82e507b6d3a11c0ff",
       "bytes": 24216
+    },
+    {
+      "path": "scripts/ratchet_any.ts",
+      "sha256": "7b124d7c993ceb9e3c6885bb9c81ab2f4c2d687994655d6a126bd9022c5c3b8e",
+      "bytes": 2991
     },
     {
       "path": "scripts/reconcile_production_tasks.ts",
@@ -1158,6 +1168,11 @@
       "bytes": 6418
     },
     {
+      "path": "scripts/typecheck_tests.ts",
+      "sha256": "98c3ab99a24a0833693f74c2a6b5cdb4b85d63f09956d38475d4e20a9dfa7c57",
+      "bytes": 1735
+    },
+    {
       "path": "scripts/update_proofs_manifest.ts",
       "sha256": "a94b5755bae6fb9862aa9efab87700c9960c65dc051459ae5cbca021de976b6b",
       "bytes": 3345
@@ -1201,6 +1216,11 @@
       "path": "tsconfig.scripts.json",
       "sha256": "1cd9520eec6389219a1422796c8498f3f069d5fc20e4504da5d4d2a8b0fe3165",
       "bytes": 1712
+    },
+    {
+      "path": "tsconfig.test.json",
+      "sha256": "9b8166517f5a7f71538b3c53945bd709b79bf59a6d88a135b6de3990c7b9c93d",
+      "bytes": 4786
     },
     {
       "path": "ui/design-system.md",
