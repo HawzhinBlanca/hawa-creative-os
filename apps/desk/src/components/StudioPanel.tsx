@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
-import { getAuthToken } from '../services/auth.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -137,10 +136,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
 
   const getMediaUrl = (url?: string | null): string => {
     if (!url) return '';
-    const token = getAuthToken();
-    if (!token) return url;
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}access_token=${encodeURIComponent(token)}`;
+    return url;
   };
 
   const refresh = async () => {

@@ -29,7 +29,11 @@ function browserWithToken(token: string | null) {
       setItem: (key: string, value: string) => void store.set(key, value),
       removeItem: (key: string) => void store.delete(key),
     },
-    sessionStorage: { getItem: () => null, removeItem: () => {} },
+    sessionStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    },
   });
 }
 

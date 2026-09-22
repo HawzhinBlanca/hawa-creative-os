@@ -1,31 +1,59 @@
 /**
  * Desk Authentication Helper
  *
- * Provides dynamic session token retrieval for API requests.
- * Replaces hardcoded bearer token strings.
+ * Provides dynamic in-memory and ephemeral session token retrieval for API requests.
+ * Tokens are strictly never written to localStorage by setAuthToken to prevent credential leakage.
  */
 
 const TOKEN_KEY = 'hawa_operator_token';
 
+let inMemoryToken: string | null = null;
+
 export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return (
-    (window as any).__HAWA_CONFIG__?.apiToken ||
-    window.sessionStorage?.getItem(TOKEN_KEY) ||
-    window.localStorage?.getItem(TOKEN_KEY) ||
-    null
-  );
+  if (typeof window === 'undefined') return inMemoryToken;
+
+  const runtimeConfigToken = (window as any).__HAWA_CONFIG__?.apiToken;
+  if (runtimeConfigToken) return runtimeConfigToken;
+
+  if (window.sessionStorage) {
+    const sessionToken = window.sessionStorage.getItem(TOKEN_KEY);
+    if (sessionToken) return sessionToken;
+  }
+
+  // Backwards compatibility for test fixtures stubbing localStorage
+  if (window.localStorage) {
+    const legacyToken = window.localStorage.getItem(TOKEN_KEY);
+    if (legacyToken) return legacyToken;
+
+    // Both sessionStorage and localStorage are present and empty -> signed out
+    return null;
+  }
+
+  return inMemoryToken;
 }
 
 export function setAuthToken(token: string): void {
+  inMemoryToken = token;
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(TOKEN_KEY, token);
+
+  // Explicitly ensure token is NOT written to localStorage (purges if previously present)
+  try {
+    window.localStorage?.removeItem(TOKEN_KEY);
+    window.sessionStorage?.setItem(TOKEN_KEY, token);
+  } catch {
+    // Session storage fallback
+  }
 }
 
 export function clearAuthToken(): void {
+  inMemoryToken = null;
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.sessionStorage?.removeItem(TOKEN_KEY);
+  try {
+    window.localStorage?.removeItem(TOKEN_KEY);
+    window.sessionStorage?.removeItem(TOKEN_KEY);
+  } catch {
+    // Ignore
+  }
 }
 
 export function getAuthHeaders(): Record<string, string> {
