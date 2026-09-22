@@ -9586,7 +9586,7 @@ export function createApp(options?: CreateAppOptions) {
   // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
   // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
   const clientDnaHydrated: Promise<number> = db
-    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }).then(
+    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
         (n) => { console.log(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
         (err) => {
           console.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);

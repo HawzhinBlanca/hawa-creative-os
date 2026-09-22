@@ -16,7 +16,8 @@ import { withRlsContext, type Kysely, type Database } from '@hawa/db';
 export async function hydrateClientDnaFromDb(
   db: Kysely<Database>,
   map: Map<string, unknown>,
-  identity: { tenantId: string; userId: string }
+  identity: { tenantId: string; userId: string },
+  options?: { dropUnknown?: boolean }
 ): Promise<number> {
   const rows = await withRlsContext(db, { tenantId: identity.tenantId, userId: identity.userId, role: 'administrator' }, async (trx) =>
     trx
@@ -27,16 +28,25 @@ export async function hydrateClientDnaFromDb(
       .where('v.status', '=', 'active')
       .execute()
   );
+  const known = new Set<string>();
   let loaded = 0;
   for (const row of rows) {
     const dna = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
     if (!dna || typeof dna !== 'object') continue;
     map.set(String(row.client_id), dna);
+    known.add(String(row.client_id));
     if (row.code) {
       map.set(String(row.code), dna);
       map.set(`client-${row.code}`, dna);
+      known.add(String(row.code));
+      known.add(`client-${row.code}`);
     }
     loaded++;
+  }
+  // In production a client the database does not know is not a client. The seeds are development
+  // fixtures (six invented offices); one of them once held the fallback destination for a delivery.
+  if (options?.dropUnknown) {
+    for (const key of [...map.keys()]) if (!known.has(key)) map.delete(key);
   }
   return loaded;
 }

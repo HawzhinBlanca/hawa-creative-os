@@ -117,3 +117,26 @@ describe('loadActiveClientDna: PostgreSQL answers first, by uuid, code or client
     expect(ok).toBe(100);
   }, 120_000);
 });
+
+describe('in production, a client the database does not know is not a client', () => {
+  const db = createDb(process.env.TEST_DATABASE_URL!);
+  const identity = { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001' };
+  afterAll(async () => { await db.destroy(); });
+
+  it('drops the invented fixture offices from the map, and keeps every database client', async () => {
+    const map = new Map<string, any>();
+    for (const fake of ['client-aster', 'client-nova', 'client-rona', 'client-office-1']) map.set(fake, { destinations: { productionFolderId: `folder_${fake}` } });
+    map.set('kaae', { destinations: { productionFolderId: 'folder_from_source_fixture' } });
+    const loaded = await hydrateClientDnaFromDb(db, map, identity, { dropUnknown: true });
+    expect(loaded).toBeGreaterThanOrEqual(1);
+    for (const fake of ['client-aster', 'client-nova', 'client-rona', 'client-office-1']) expect(map.has(fake)).toBe(false);
+    expect(map.has('kaae')).toBe(true);
+    expect(map.get('kaae').destinations.productionFolderId).not.toBe('folder_from_source_fixture');
+  });
+
+  it('keeps the fixtures outside production, where tests and development rely on them', async () => {
+    const map = new Map<string, any>([['client-nova', { destinations: { productionFolderId: 'folder_nova_prod' } }]]);
+    await hydrateClientDnaFromDb(db, map, identity);
+    expect(map.has('client-nova')).toBe(true);
+  });
+});
