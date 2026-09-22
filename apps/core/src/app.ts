@@ -1,5 +1,6 @@
 import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
+import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -9574,6 +9575,20 @@ export function createApp(options?: CreateAppOptions) {
     });
     telegramBridge.startPolling(handlePolledUpdate);
   }
+
+  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
+  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
+  const clientDnaHydrated: Promise<number> = db
+    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }).then(
+        (n) => { console.log(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
+        (err) => {
+          console.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
+          if (isProduction) throw err;
+          return 0;
+        }
+      )
+    : Promise.resolve(0);
+  Object.assign(app, { clientDnaHydrated });
 
   return app;
 }
