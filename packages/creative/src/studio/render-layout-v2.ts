@@ -799,12 +799,14 @@ function creativeFilePath(relative: string): string | undefined {
   if (found) return found;
 
   const baseName = path.basename(relative);
-  const systemCandidates = [
-    path.join('/System/Library/Fonts/Supplemental', baseName),
-    path.join('/System/Library/Fonts', baseName),
-    path.join('/Library/Fonts', baseName),
-    path.join('/usr/share/fonts/truetype/msttcorefonts', baseName),
-  ];
+  // macOS ships "Verdana Bold.ttf"; the Debian msttcorefonts package ships "Verdana_Bold.ttf".
+  const spellings = [...new Set([baseName, baseName.replace(/ /g, '_')])];
+  const systemCandidates = spellings.flatMap((name) => [
+    path.join('/System/Library/Fonts/Supplemental', name),
+    path.join('/System/Library/Fonts', name),
+    path.join('/Library/Fonts', name),
+    path.join('/usr/share/fonts/truetype/msttcorefonts', name),
+  ]);
   const systemFound = systemCandidates.find((candidate) => fs.existsSync(candidate));
   if (systemFound) return systemFound;
 
