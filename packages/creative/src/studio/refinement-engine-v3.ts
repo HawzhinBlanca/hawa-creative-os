@@ -423,7 +423,13 @@ Your task is to repair a failing poster layout by applying specific box-grounded
 Strict requirements:
 - Directly fix the issues cited by the critic comments (e.g. shift coordinates, align with column grid, resize boxes to fix proportion/whitespace).
 - Do NOT change text copy, wording, or colors.
-- Ensure all coordinates stay within canvas bounds (${currentLayout.width}x${currentLayout.height}) and snap to margins (${currentLayout.grid.margin}px).
+- Ensure all coordinates stay within canvas bounds (${currentLayout.width}x${currentLayout.height}) and snap to margins (${currentLayout.grid.margin}px).${
+      currentLayout.photos?.length
+        ? `\n- The client's photographs are fixed and stay where they are: ${currentLayout.photos
+            .map((p) => `photo ${p.photoIndex} at x=${p.x} y=${p.y} ${p.width}x${p.height}`)
+            .join('; ')}. Never place or move text, shapes or the logo onto them.`
+        : ''
+    }
 - Return the complete repaired layout matching the StudioLayoutV2 JSON schema.`;
 
     const userPrompt = `CURRENT FAILING LAYOUT:
@@ -479,7 +485,19 @@ Produce the corrected layout repairing these exact flaws.`;
     const repairedLayout: StudioLayoutV2 = {
       ...repairedData.layout,
       art: currentLayout.art ? { ...currentLayout.art } : undefined,
+      // The repair schema has no photographs; they are fixed and carried through as they were.
+      ...(currentLayout.photos?.length ? { photos: currentLayout.photos.map((p) => ({ ...p })) } : {}),
     };
+    const onPhoto = (repairedLayout.photos || []).some((p) =>
+      [...(Array.isArray(repairedLayout.text) ? repairedLayout.text : []), ...(repairedLayout.logo ? [repairedLayout.logo] : [])].some(
+        (b) => b.x < p.x + p.width && b.x + b.width > p.x && b.y < p.y + p.height && b.y + b.height > p.y
+      )
+    );
+    if (onPhoto) {
+      console.warn(`[refinement-engine-v3] Round ${r} put text or the logo on a client photograph; keeping the last good layout.`);
+      stopReason = 'repair_covered_a_photo';
+      break;
+    }
 
     // A repair that is not a usable layout must not become the result: this engine returns
     // finalLayout to its callers. (The "layout.text is not iterable" seen live was most likely the

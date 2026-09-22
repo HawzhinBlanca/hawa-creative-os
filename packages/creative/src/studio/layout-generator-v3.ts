@@ -95,6 +95,15 @@ export interface NormalizedLayoutCandidate {
   art: NormalizedArtConfig | null;
   shapes: NormalizedShapeElement[];
   text: NormalizedTextElement[];
+  /** The client's photographs, placed as content. Absent in candidates from before 2026-09-22. */
+  photos?: NormalizedPhotoElement[];
+}
+
+export interface NormalizedPhotoElement extends NormalizedBox {
+  photoIndex: number;
+  role: 'hero' | 'portrait' | 'inset';
+  /** Corner radius as a fraction of the photo's short side: 0 square, 0.5 round. */
+  radiusFraction: number;
 }
 
 export interface CopyBlockSlotInput {
@@ -424,6 +433,12 @@ export function scaleNormalizedLayoutToV2(
 
   normalizeLayoutGeometry({ shapes, text, height: canvasHeight, width: canvasWidth, grid: scaledGrid, logo });
 
+  const photos = (norm.photos || []).map((p) => {
+    const box = { x: scaleX(p.x), y: scaleY(p.y), width: scaleDimX(p.width), height: scaleDimY(p.height) };
+    const radius = Math.round(clamp(p.radiusFraction ?? 0, 0, 0.5) * Math.min(box.width, box.height));
+    return { photoIndex: Math.max(0, Math.round(p.photoIndex)), role: p.role, ...box, ...(radius > 0 ? { radius } : {}) };
+  });
+
   return {
     version: 2,
     width: canvasWidth,
@@ -436,6 +451,7 @@ export function scaleNormalizedLayoutToV2(
     text,
     logo,
     typeScale: norm.typeScale ? { base: norm.typeScale.base, ratio: norm.typeScale.ratio } : undefined,
+    ...(photos.length ? { photos } : {}),
   };
 }
 
@@ -918,6 +934,25 @@ export const LAYOUT_V3_JSON_SCHEMA = {
             required: ['x', 'y', 'width', 'height'],
             additionalProperties: false,
           },
+          photos: {
+            type: 'array',
+            description:
+              "The client's photographs, one element per photo provided (photoIndex 0..n-1), each placed once as content, in the same 0..1 coordinates as everything else. Empty when no photographs were provided.",
+            items: {
+              type: 'object',
+              properties: {
+                photoIndex: { type: 'number' },
+                role: { type: 'string', enum: ['hero', 'portrait', 'inset'] },
+                x: { type: 'number' },
+                y: { type: 'number' },
+                width: { type: 'number' },
+                height: { type: 'number' },
+                radiusFraction: { type: 'number', description: '0 square corners, 0.5 fully round' },
+              },
+              required: ['photoIndex', 'role', 'x', 'y', 'width', 'height', 'radiusFraction'],
+              additionalProperties: false,
+            },
+          },
           art: {
             type: ['object', 'null'],
             properties: {
@@ -1050,6 +1085,7 @@ export const LAYOUT_V3_JSON_SCHEMA = {
           'grid',
           'background',
           'logo',
+          'photos',
           'art',
           'shapes',
           'text',

@@ -35,8 +35,8 @@ describe('what a request says its images are', () => {
     expect(photosBrief(undefined, 1080, 1350)).toBe('');
     const line = photosBrief([{ ...contentPhotoFromDataUrl(photo), width: 800, height: 800 }, contentPhotoFromDataUrl(photo)], 1080, 1350);
     expect(line).toMatch(/Client photographs to place \(2\)/);
-    expect(line).toMatch(/0: 800x800 \(landscape\)/);
-    expect(line).toMatch(/at least 238px/);
+    expect(line).toMatch(/0: 800x800 \(square, aspect 1.00\)/);
+    expect(line).toMatch(/22% of the canvas's short side \(238px here\)/);
     expect(line).toMatch(/never under text or the logo/);
   });
 

@@ -452,6 +452,15 @@ export function layoutDefectCount(layout: StudioLayoutV2, copy: { text: Record<n
     for (const t of texts) if (intersects(t, zone)) defects++;
     for (const sh of layout.shapes || []) if (sh.role === 'rule' && intersects(sh, zone)) defects++;
   }
+  // The client's photographs: never under text or the logo, never on each other, never off the
+  // canvas. Every guarded pass compares this count, so none of them can slide text onto a portrait.
+  const photos = layout.photos || [];
+  for (const p of photos) {
+    for (const t of texts) if (intersects(p, t)) defects++;
+    if (layout.logo && intersects(p, layout.logo)) defects++;
+    if (p.x < 0 || p.y < 0 || p.x + p.width > W || p.y + p.height > H) defects++;
+  }
+  for (let i = 0; i < photos.length; i++) for (let j = i + 1; j < photos.length; j++) if (intersects(photos[i], photos[j])) defects++;
   return defects;
 }
 

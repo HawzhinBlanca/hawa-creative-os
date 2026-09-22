@@ -124,3 +124,35 @@ describe('photos as content', () => {
     expect(imagePixelSize(jpeg)).toEqual({ width: 1438, height: 560 });
   });
 });
+
+import { scaleNormalizedLayoutToV2, type NormalizedLayoutCandidate } from '../src/studio/layout-generator-v3.js';
+import { layoutDefectCount } from '../src/studio/style-spec.js';
+
+describe('photos in the v3 pipeline (the one production runs)', () => {
+  const norm = (): NormalizedLayoutCandidate => ({
+    id: 'c1', conceptTitle: 'Two speakers', compositionArchetype: 'asymmetric_editorial' as any,
+    typeScale: { base: 20, ratio: 1.25 }, grid: { margin: 0.08, columns: 6, gutter: 0.02, baseline: 0.006 },
+    background: { color: '#0A1628' }, logo: { x: 0.08, y: 0.06, width: 0.11, height: 0.09 }, art: null, shapes: [],
+    text: [{ copyIndex: 0, role: 'title', x: 0.08, y: 0.22, width: 0.84, height: 0.1, fontSize: 44, lineHeight: 1.2, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: true } as any],
+    photos: [
+      { photoIndex: 0, role: 'portrait', x: 0.08, y: 0.4, width: 0.4, height: 0.32, radiusFraction: 0.5 },
+      { photoIndex: 1, role: 'portrait', x: 0.52, y: 0.4, width: 0.4, height: 0.32, radiusFraction: 0 },
+    ],
+  });
+
+  it('scales normalized photos to pixels with their corner radius', () => {
+    const v2 = scaleNormalizedLayoutToV2(norm(), 1080, 1350);
+    expect(v2.photos).toHaveLength(2);
+    expect(v2.photos![0]).toMatchObject({ photoIndex: 0, role: 'portrait', x: 86, y: 540, width: 432, height: 432, radius: 216 });
+    expect(v2.photos![1].radius).toBeUndefined();
+  });
+
+  it('a layout with text on a photo counts as a defect, so no guarded pass can make one', () => {
+    const v2 = scaleNormalizedLayoutToV2(norm(), 1080, 1350);
+    const copy = { text: { 0: 'MEET KAAE AT SAGACON 2026' } };
+    const clean = layoutDefectCount(v2, copy);
+    const covered = JSON.parse(JSON.stringify(v2));
+    covered.text[0].y = covered.photos[0].y + 10;
+    expect(layoutDefectCount(covered, copy)).toBeGreaterThan(clean);
+  });
+});

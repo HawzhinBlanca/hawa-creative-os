@@ -360,12 +360,13 @@ export function photosBrief(photos: StageContext['photos'] | undefined, width: n
   if (!photos?.length) return '';
   const minSide = Math.round(Math.min(width, height) * 0.22);
   const list = photos
-    .map((p, i) => `${i}: ${p.width && p.height ? `${p.width}x${p.height} (${p.width >= p.height ? 'landscape' : 'portrait'})` : 'size unknown'}`)
+    .map((p, i) => `${i}: ${p.width && p.height ? `${p.width}x${p.height} (${p.width > p.height ? 'landscape' : p.width < p.height ? 'portrait' : 'square'}, aspect ${(p.width / p.height).toFixed(2)})` : 'size unknown'}`)
     .join('; ');
   return (
     `Client photographs to place (${photos.length}): ${list}. Each appears exactly once in photos[], as content ` +
-    `(a speaker's portrait, a product), at least ${minSide}px on its short side, never under text or the logo, ` +
-    `cropped by cover-fit so plan the box near the photo's aspect. Compose the copy around them; they are the point of the design.`
+    `(a speaker's portrait, a product), its short side at least 22% of the canvas's short side (${minSide}px here), ` +
+    `never under text or the logo, cropped by cover-fit so give the box close to the photo's aspect. ` +
+    `Compose the copy around them; they are the point of the design.`
   );
 }
 

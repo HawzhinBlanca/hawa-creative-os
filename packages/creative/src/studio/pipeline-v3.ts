@@ -433,6 +433,9 @@ export function conformToHouseRules(
       const blocks: Rect[] = [
         ...layout.text.filter((o) => o !== growing),
         ...(layout.shapes || []).filter((s) => !fullBleed(s)),
+        // Client photographs move with the composition like any other block, so text pushed down
+        // by a grown title never slides onto a portrait.
+        ...(layout.photos || []),
         ...(logo ? [logo] : []),
       ]
         .filter((o) => o.y >= atY && !fixed.has(o))
@@ -534,7 +537,7 @@ export function conformToHouseRules(
     // Mirrors the layout top to bottom, so the same cascade can push blocks up: a block on the
     // bottom margin cannot be pushed down, but what is above it can usually rise.
     const flip = () => {
-      for (const o of [...layout.text, ...(layout.shapes || [])]) o.y = H - o.y - o.height;
+      for (const o of [...layout.text, ...(layout.shapes || []), ...(layout.photos || [])]) o.y = H - o.y - o.height;
       if (layout.logo) layout.logo = { ...layout.logo, y: H - layout.logo.y - layout.logo.height };
     };
     const overlapsX = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
@@ -822,6 +825,8 @@ export function balanceVertically(layout: StudioLayoutV2, copy: PipelineV3Copy):
   const m = layout.grid?.margin ?? 0;
   const texts = layout.text || [];
   if (!texts.length) return layout;
+  // A design built around the client's photographs is composed around them where they stand.
+  if (layout.photos?.length) return layout;
   // One column: no two blocks share a height band.
   const byY = [...texts].sort((a, b) => a.y - b.y);
   for (let i = 1; i < byY.length; i++) if (byY[i].y < byY[i - 1].y + byY[i - 1].height) return layout;

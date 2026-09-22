@@ -159,6 +159,15 @@ function computeRetryDelayMs(attempt: number): number {
   return base + jitter;
 }
 
+/** The reason Node's fetch hid behind "fetch failed", or an empty string. */
+export function describeFetchCause(err: any): string {
+  const cause = err?.cause;
+  if (!cause) return '';
+  const code = cause.code || cause.name || '';
+  const message = typeof cause.message === 'string' ? cause.message : '';
+  return [code, message && message !== code ? message : ''].filter(Boolean).join(': ').slice(0, 200);
+}
+
 export class OpenAiStudioClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -408,8 +417,14 @@ export class OpenAiStudioClient {
         if (err instanceof OpenAiModelHttpError) {
           throw err;
         }
+        // Node's fetch reports every network failure as "fetch failed" and keeps the reason in
+        // err.cause (ECONNRESET, UND_ERR_HEADERS_TIMEOUT, ENOTFOUND, ...). A studio run on
+        // 2026-09-22 failed at layout with only "fetch failed" on record and nothing in the logs.
+        const cause = describeFetchCause(err);
+        console.warn(`[openai] ${model} attempt ${attempt}/${maxAttempts} failed: ${err?.message || err}${cause ? ` (${cause})` : ''}`);
         if (attempt >= maxAttempts) {
           this.breaker.recordFailure();
+          if (cause && err instanceof Error && !err.message.includes(cause)) err.message = `${err.message} (${cause}) after ${attempt} attempts`;
           throw err;
         }
         await sleep(computeRetryDelayMs(attempt));
