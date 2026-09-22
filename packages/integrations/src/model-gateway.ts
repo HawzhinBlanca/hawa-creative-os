@@ -287,7 +287,7 @@ export class ResilientModelGateway implements ModelGateway {
     };
   }
 
-  async generateStructured<T>(_ctx: RequestContext, request: StructuredModelRequest): Promise<Result<StructuredModelResponse<T>, AppError>> {
+  async generateStructured<T>(_ctx: RequestContext, request: StructuredModelRequest, preferredProvider?: string): Promise<Result<StructuredModelResponse<T>, AppError>> {
     const startTime = Date.now();
     const cascade = this.fallbackRegistry[request.role] || [{ provider: 'google', model: 'gemini-3.8-flash' }];
 
@@ -329,6 +329,37 @@ export class ResilientModelGateway implements ModelGateway {
               message: `Visual judge image asset could not be resolved or does not exist: ${img.storageKey || 'unspecified'}`,
               retryable: false,
               safeAction: 'Verify artifact storage path and capture completion before visual evaluation',
+            },
+          };
+        }
+      }
+    }
+
+    if (request.egressPolicy) {
+      if (request.egressPolicy.mode === 'local_only') {
+        if (preferredProvider && preferredProvider !== 'local') {
+          span.end({ 'error.failed': true, 'error.message': 'Egress policy local_only forbids external cloud provider' });
+          return {
+            ok: false,
+            error: {
+              code: 'EGRESS_DISALLOWED',
+              message: `Egress policy mode 'local_only' forbids external cloud provider '${preferredProvider}'`,
+              retryable: false,
+              safeAction: 'Use local model or update tenant egress policy',
+            },
+          };
+        }
+      }
+      if (request.egressPolicy.allowedProviders && request.egressPolicy.allowedProviders.length > 0) {
+        if (preferredProvider && !request.egressPolicy.allowedProviders.includes(preferredProvider) && preferredProvider !== 'local') {
+          span.end({ 'error.failed': true, 'error.message': 'Provider disallowed by egress policy' });
+          return {
+            ok: false,
+            error: {
+              code: 'EGRESS_DISALLOWED',
+              message: `Provider '${preferredProvider}' is not in allowed providers: ${request.egressPolicy.allowedProviders.join(', ')}`,
+              retryable: false,
+              safeAction: 'Select an authorized provider according to egress policy',
             },
           };
         }

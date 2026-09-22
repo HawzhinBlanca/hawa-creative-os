@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-22T00:26:44Z",
+  "generatedAt": "2026-09-22T00:33:44Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 244,
+  "fileCount": 245,
   "files": [
     {
       "path": ".dockerignore",
@@ -966,6 +966,11 @@
       "path": "scripts/launch_hawa_os.sh",
       "sha256": "d1592f8ad3cabd638d173b04611b1c51dbe33ce932a335055d250d645f6e4362",
       "bytes": 6006
+    },
+    {
+      "path": "scripts/lint_provider_egress.ts",
+      "sha256": "d1903acbb96cee583a4a15c9de6bd0fadc1f3344d015a74590edd5031b6317b4",
+      "bytes": 2884
     },
     {
       "path": "scripts/measure_operations_slo.ts",

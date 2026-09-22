@@ -11,3 +11,4 @@ export * from './sanitizer.js';
 export * from './workflow-controller.js';
 export * from './provider-policy.js';
 export * from './fixtures/index.js';
+export * from './retention.js';
