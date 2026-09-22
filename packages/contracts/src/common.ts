@@ -16,6 +16,13 @@ export interface AppError {
   cause?: unknown;
 }
 
+export interface TaskScope {
+  tenantId: UUID;
+  clientId: UUID;
+  projectId: UUID;
+  lockedAt: ISODateTime;
+}
+
 export interface RequestContext {
   tenantId: UUID;
   clientId?: UUID;

@@ -62,6 +62,7 @@ describe('Task 7: Creative Engine Remediation', () => {
         height: 1920,
         grid: { margin: 65, columns: 6, gutter: 20, baseline: 8 },
         background: { color: '#0A1628' },
+        shapes: [],
         logo: { x: 450, y: 70, width: 180, height: 180 }, // In top danger zone (y < 268)
         text: [
           {
@@ -91,12 +92,13 @@ describe('Task 7: Creative Engine Remediation', () => {
             palette: ['#0A1628', '#FFFFFF'],
             scriptFonts: { arabic: 'Cairo' },
           },
+          logoAspect: 1.0,
         },
       });
 
       expect(res.ok).toBe(false);
-      expect(res.code).toBe('BOUNDS');
-      expect(res.message).toMatch(/story/i);
+      expect((res as any).code).toBe('BOUNDS');
+      expect((res as any).message).toMatch(/story/i);
     });
   });
 
@@ -108,6 +110,7 @@ describe('Task 7: Creative Engine Remediation', () => {
         height: 1754,
         grid: { margin: 100, columns: 6, gutter: 20, baseline: 8 },
         background: { color: '#FFFFFF' },
+        shapes: [],
         logo: { x: 100, y: 100, width: 120, height: 120 },
         text: [
           { copyIndex: 0, role: 'title', x: 100, y: 250, width: 1040, height: 60, fontSize: 32, lineHeight: 1.3, color: '#000000', fontFamily: 'Inter', align: 'left' },

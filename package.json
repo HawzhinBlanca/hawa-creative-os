@@ -8,9 +8,12 @@
     "start:all": "bash scripts/launch_hawa_os.sh",
     "dev:all": "bash scripts/launch_hawa_os.sh",
     "build": "tsc -b",
-    "lint": "tsc --noEmit && tsc -p tsconfig.scripts.json",
-    "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
+    "lint": "tsc --noEmit && tsc -p tsconfig.scripts.json && tsx scripts/ratchet_any.ts",
+    "typecheck": "tsc -b && tsc -p tsconfig.scripts.json && tsx scripts/typecheck_tests.ts",
+    "typecheck:tests": "tsx scripts/typecheck_tests.ts",
+    "ratchet:any": "tsx scripts/ratchet_any.ts",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:db": "tsx packages/db/src/provision-isolated-test-db.ts",
     "test:contracts": "vitest run packages/contracts/test/contracts.test.ts",
     "test:integration": "vitest run packages/integrations/test/integrations.test.ts apps/core/test/core.test.ts",
@@ -34,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "@vitest/coverage-v8": "^4.1.11",
     "tsx": "^4.19.2",
     "typescript": "^5.8.2",
     "vitest": "^4.1.11"

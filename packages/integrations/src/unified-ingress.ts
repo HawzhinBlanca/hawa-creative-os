@@ -274,6 +274,7 @@ export interface IngressIntentEvaluation {
 }
 
 import { KAAE_CLIENT_ID } from './waha-ingress.js';
+export { KAAE_CLIENT_ID };
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 
 /**
