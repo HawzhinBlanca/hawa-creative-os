@@ -44,6 +44,7 @@ import {
 import {
   createDb,
   withRlsContext,
+  withSessionAdvisoryLock,
   TaskRepository,
   ClientRepository,
   IngressRepository,
@@ -534,6 +535,31 @@ export function createApp(options?: CreateAppOptions) {
       detail: detail || title,
       instance: c.req.url,
     }, status);
+  }
+
+  /**
+   * One publisher per task at a time, across processes. The Drive lookup makes a retry safe, but two
+   * publishers starting in the same instant both find an empty folder and both upload. The second is
+   * refused and told to retry; by then the first has finished and the lookup adopts its file.
+   * Without a database there is one process and nothing to race.
+   *
+   * Restored 2026-09-23: this helper and its two call sites were dropped by the merge of the Gemini
+   * remediation branch (6790b0e) although that merge said the reliability fixes were kept, and the
+   * concurrency test kept passing because it wrapped the publisher itself instead of calling Core.
+   */
+  async function publishExclusively<T extends { ok: boolean }>(taskId: string, publish: () => Promise<T>): Promise<T | { ok: false; error: { code: string; message: string; retryable: boolean } }> {
+    if (!db) return await publish();
+    const held = await withSessionAdvisoryLock(db, `publish:${taskId}`, publish);
+    if (held.acquired) return held.value;
+    // The same shape a failed publish has, so the caller's error mapping handles it.
+    return {
+      ok: false,
+      error: {
+        code: 'PUBLICATION_IN_PROGRESS',
+        message: 'Another process is delivering this task right now; try again in a moment',
+        retryable: true,
+      },
+    };
   }
 
   // Domain singletons
@@ -2836,29 +2862,55 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err: any) {
-        console.error('[core:omnichannel:intent] Error persisting publication intent:', err);
-        return {
-          ok: false,
-          error: {
+        // Two processes delivering the same task race on this row; the loser's insert fails on the
+        // key. That is not a persistence failure: the row is there, written by the other process.
+        // Read it back and go on to the lock, which decides who delivers.
+        try {
+          dbPub = await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+            publicationRepo.findByKey(publicationKey, pubTenantId, trx));
+        } catch {
+          dbPub = null;
+        }
+        if (!dbPub) {
+          console.error('[core:omnichannel:intent] Error persisting publication intent:', err);
+          return {
+            ok: false,
+            status: 503,
             code: 'PUBLICATION_INTENT_PERSISTENCE_FAILED',
             message: `Failed to persist publication intent to database before external publish: ${err?.message || String(err)}`,
-          },
-        };
+          };
+        }
       }
     }
     if (dbPub && dbPub.state === 'complete') {
+      // Delivered already, by this process before a restart or by another one. This used to return
+      // a publisher-shaped { ok, value } that the routes do not read, so an adopted delivery was
+      // reported as PUBLISH_RECONCILIATION with no receipt.
+      task.status = 'COMPLETE';
+      const receipt = {
+        publicationId: dbPub.id,
+        publicationKey,
+        state: 'complete' as const,
+        driveFiles: [] as any[],
+        sheet: { spreadsheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
+        completedAt: dbPub.completed_at ? new Date(dbPub.completed_at).toISOString() : new Date().toISOString(),
+        detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
+      };
       return {
         ok: true,
-        value: {
-          publicationId: dbPub.id,
-          publicationKey,
-          state: 'complete',
-          detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
-        },
+        taskId,
+        status: 'COMPLETE',
+        complete: true,
+        alreadyCompleted: true,
+        publicationReceipt: receipt,
+        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
+        sheetRowUrl: null,
+        filesCount: files.length,
+        publishedAt: receipt.completedAt,
       };
     }
 
-    const publishResult = await publisher.publish(ctx, {
+    const publishResult: any = await publisher.publish(ctx, {
       taskId,
       clientId: task.clientId || defaultClientId,
       designRevisionId: approval.designRevisionId,
@@ -3083,7 +3135,14 @@ export function createApp(options?: CreateAppOptions) {
       };
     };
 
-    const pubPromise = doPublish();
+    // The lock is taken before any state is written. It used to wrap only the provider call, so
+    // two processes had already both moved the task to PUBLISHING and both tried to insert the
+    // intent row before one of them was refused, and the loser's cached task was left unpublishable.
+    const pubPromise = publishExclusively(taskId, doPublish).then((outcome: any) =>
+      outcome && outcome.ok === false && outcome.error?.code === 'PUBLICATION_IN_PROGRESS'
+        ? { ok: false, status: 409, code: 'PUBLICATION_IN_PROGRESS', message: outcome.error.message }
+        : outcome
+    );
     inFlightPublications.set(publicationKey, pubPromise);
     try {
       return await pubPromise;
@@ -3821,10 +3880,16 @@ export function createApp(options?: CreateAppOptions) {
       // "From now on", "always", "every time" and "for future designs" are how a reviewer says a
       // rule in chat; the earlier phrase list wanted the words "future rule" and treated everything
       // else as a one-time change, so a standing preference was applied once and forgotten.
-      const isExplicitPersistentRule =
-        /use this as a future (client )?rule|future (client )?rule|permanent (client )?rule|future guideline/i.test(rawText) ||
-        /\b(from now on|going forward|always|every ?time|for (all )?future designs|in (all )?future designs|as a rule)\b/i.test(rawText) ||
-        /هەمیشە|لەمەودوا|لە داهاتوو|لە هەموو دیزاینەکان/.test(rawText);
+      // A standing rule is a time word ("from now on", "always", "every time", "for future
+      // designs", لەمەودوا, هەمیشە) together with an instruction verb ("use", "keep", "put",
+      // بەکاربهێنە). Either alone is not one: "the logo always looks cramped" is a complaint about
+      // this design, and the earlier phrase list wanted the literal words "future rule", so a real
+      // preference was applied once and forgotten.
+      const standingTime = /\b(from now on|going forward|always|every ?time|for (all )?future designs|in (all )?future designs|as a rule|future (client )?rule|permanent (client )?rule|future guideline)\b/i.test(rawText)
+        || /لەمەودوا|لە داهاتوو|هەمیشە|لە هەموو دیزاینەکان/.test(rawText);
+      const standingVerb = /\b(use|put|keep|make|set|place|write|add|leave|apply|prefer|should|must|never)\b/i.test(rawText)
+        || /بەکاربهێنە|بەکاربهێنن|دابنێ|دابنێن|با |دەبێت|نابێت/.test(rawText);
+      const isExplicitPersistentRule = standingTime && standingVerb;
       const feedbackScope = isExplicitPersistentRule ? 'client' : 'one_time';
 
       if (db && isValidUuid(targetId) && isValidUuid(clientId)) {
@@ -3893,16 +3958,6 @@ export function createApp(options?: CreateAppOptions) {
         rationale: string;
       }> = [];
 
-      // A. Authentic Seal / Logo Rule
-      if (/logo|seal|emblem|crest|نیشان|لۆگۆ/i.test(lowerFb)) {
-        extractedRules.push({
-          category: 'layout',
-          title: 'Authentic Brand Seal & Emblem Exclusivity',
-          ruleText: `Always use verified authentic master brand seal and emblem (${clientId}); never use synthetic approximations.`,
-          rationale: 'Operator required authentic master brand seal and assets.',
-        });
-      }
-
       // B. Typography: the face the sender named, applied when the studio has it and refused
       // out loud when it does not. A font remark that names no face is passed on as written; the
       // handler never substitutes a face of its own for the one asked for.
@@ -3914,54 +3969,25 @@ export function createApp(options?: CreateAppOptions) {
         extractedRules.push({
           category: 'typography',
           title: `${request.family} for ${scriptLabel(target)} text`,
-          ruleText: `Set ${scriptLabel(target)} text in ${request.family}.`,
+          // An alias is said out loud: "Lora" is drawn as Playfair Display, and the sender is told so.
+          ruleText: `Set ${scriptLabel(target)} text in ${request.family}${request.askedAs ? ` (asked for as ${request.askedAs})` : ''}.`,
           rationale: `Requested by name in review feedback: "${rawText.trim().slice(0, 120)}"`,
         });
       }
-      if (fontRequests.length === 0 && /font|typography|typeface|فۆنت/i.test(lowerFb)) {
-        extractedRules.push({
-          category: 'typography',
-          title: 'Typography feedback',
-          ruleText: rawText.trim(),
-          rationale: 'Typography feedback, as written; no admitted face was named.',
-        });
-      }
 
-      // C. Canva Review Surface Rule
-      if (/canva|review|edit|دەستکاری/i.test(lowerFb)) {
+      // The sender's words, as written, are the rule. Three keyword branches used to stand here
+      // (logo, "canva|review|edit", colour) and each replaced the message with a canned sentence:
+      // "move the logo up" was recorded as "Always use verified authentic master brand seal",
+      // "edit the date" as "Direct all design reviews and final edits to Canva". Three of those
+      // canned sentences are still in kaae.dna.json. A message whose only ask was a face the studio
+      // lacks gets no rule: passing "use Calibri" on would be sanitised to the default face and
+      // then reported as applied.
+      if (unavailableFonts.length === 0 || extractedRules.length > 0) {
         extractedRules.push({
           category: 'layout',
-          title: 'Canva Primary Review & Final Edits Surface',
-          ruleText: 'Direct all design reviews and final edits to Canva with prominent edit link bindings.',
-          rationale: 'Operator mandated Canva as exclusive review and final edits surface.',
-        });
-      }
-
-      // D. Brand Palette / Color Rule
-      if (/color|gold|navy|blue|dark|white|پالێت|#ffd15c|#e8b85c|#160874/i.test(lowerFb)) {
-        let paletteRule = 'Adhere strictly to verified client brand palette tokens and high-contrast combinations.';
-        if (/#ffd15c/i.test(lowerFb)) {
-          paletteRule = 'Use Kurdistan Sun Gold #FFD15C for primary accent highlights and dividers.';
-        } else if (/#160874/i.test(lowerFb)) {
-          paletteRule = 'Use Midnight Navy #160874 for authoritative deep background illumination.';
-        }
-        extractedRules.push({
-          category: 'palette',
-          title: 'Client Brand Palette Fidelity',
-          ruleText: paletteRule,
-          rationale: 'Operator feedback on brand palette fidelity.',
-        });
-      }
-
-      // E. Fallback if no specific category matched. A message whose only ask was a face the
-      // studio lacks gets no rule: passing "use Calibri" to the planner would be sanitised back to
-      // the default face and then reported to the sender as applied.
-      if (extractedRules.length === 0 && unavailableFonts.length === 0) {
-        extractedRules.push({
-          category: 'layout',
-          title: 'Operator Design Feedback',
+          title: 'Feedback, as written',
           ruleText: rawText.trim(),
-          rationale: 'Learned from direct operator feedback during review',
+          rationale: 'Review feedback recorded verbatim',
         });
       }
 
@@ -4000,6 +4026,13 @@ export function createApp(options?: CreateAppOptions) {
           console.error('[TelegramBridge] Could not send unavailable-font notice:', err);
         });
       }
+      // What this message did, said in the message production senders receive (the revision
+      // branch returns before the fallback acknowledgement below, so a line only there is never
+      // sent to a real user). A standing rule is a proposal until it is approved in the Desk, and
+      // until proposals are stored in PostgreSQL a restart forgets it; the line says so.
+      const scopeLine = isExplicitPersistentRule && extractedRules.length > 0
+        ? `📌 <b>Proposed as a standing rule for this client.</b> It applies to future designs only after the creative director approves it in Hawa Desk.\n`
+        : `ℹ️ <i>Applied to this design only. Say "from now on" or "always use …" to propose a standing rule.</i>\n`;
       const feedbackOutcome = {
         scope: feedbackScope,
         proposedRules: isExplicitPersistentRule ? extractedRules.map((r) => r.ruleText) : [],
@@ -4174,7 +4207,10 @@ export function createApp(options?: CreateAppOptions) {
             },
           });
 
-          if ((persisted.task as any)?.payload?.autoGenerateDeclined || (persisted.task as any)?.autoGenerateDeclined) {
+          // The flag is on the intake result. This read it off the task row, where it never is, so
+          // a sender over the daily cap was told a draft was being prepared and then heard nothing:
+          // the worker refuses a task without autoGenerate and no message follows.
+          if (persisted.autoGenerateDeclined) {
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
               text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
                 `⏳ <i>The daily limit for automatic drafts has been reached for this chat. Your revision is saved and queued for manual review in Hawa Desk.</i>`,
@@ -4184,7 +4220,8 @@ export function createApp(options?: CreateAppOptions) {
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
               text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText)}"\n\n` +
                 `🎨 <b>Preparing an updated Canva draft with a new layout architecture...</b>\n` +
-                `<i>You will receive the editable Canva link in this chat as soon as it is ready.</i>`,
+                `<i>You will receive the editable Canva link in this chat as soon as it is ready.</i>\n\n` +
+                scopeLine,
               parse_mode: 'HTML',
             });
           }
@@ -4219,14 +4256,11 @@ export function createApp(options?: CreateAppOptions) {
         // standing rule was proposed. "Applied preferences" used to be printed for both, and for
         // requests that were never applied.
         const appliedNow = extractedRules.map((r) => r.ruleText).join('; ');
-        const standing = isExplicitPersistentRule && extractedRules.length > 0
-          ? `📌 <b>Proposed as a standing rule for this client</b> — it takes effect for future designs once the creative director approves it in Hawa Desk.\n`
-          : `ℹ️ <i>Applied to this design only. Say "from now on" or "always" to propose it as a standing rule.</i>\n`;
         const ackNotice = {
           text: `✏️ <b>Revision Feedback Recorded for Task</b> <code>${escapeTelegramHtml(targetId)}</code>\n\n` +
             `📝 <b>Feedback Notes:</b> "${escapeTelegramHtml(rawText.slice(0, 300))}"\n` +
             (appliedNow ? `🧠 <b>Applied to this design:</b> "${escapeTelegramHtml(appliedNow)}"\n` : '') +
-            standing +
+            scopeLine +
             `\n⚡ Feedback is recorded. Native Canva changes still require a verified edit and capture.`,
           parse_mode: 'HTML',
         };

@@ -24,6 +24,7 @@ describe('detectFontRequests: the face a reviewer named', () => {
     expect(req.available).toBe(false);
     expect(req.alternatives).toContain('Noto Sans Arabic');
     expect(req.alternatives).not.toContain('Verdana');
+    expect(req.alternatives).not.toContain('Cairo');
     expect(req.alternatives).not.toContain('Calibri');
     const notice = unavailableFontNotice(req);
     expect(notice).toMatch(/Calibri is not installed/);
@@ -45,10 +46,33 @@ describe('detectFontRequests: the face a reviewer named', () => {
     expect(req.alternatives).toContain('Amiri');
   });
 
-  it('resolves a registry alias to the admitted family', () => {
+  it('resolves a registry alias to the admitted family, and keeps what was asked for', () => {
     const [req] = detectFontRequests('can we try Cormorant Garamond');
-    expect(req.family).toBe('Cinzel');
-    expect(req.available).toBe(true);
+    expect(req).toMatchObject({ family: 'Cinzel', askedAs: 'Cormorant Garamond', available: true });
+    const [short] = detectFontRequests('use Playfair for the headers');
+    expect(short).toMatchObject({ family: 'Playfair Display', askedAs: 'Playfair', available: true });
+  });
+
+  it('does not read a venue, a name or a broadcaster as a font', () => {
+    expect(detectFontRequests('the venue is in Dubai, move it under the date')).toEqual([]);
+    expect(detectFontRequests('Georgia will attend; add the NRT logo')).toEqual([]);
+    expect(detectFontRequests('inter alia the date is wrong')).toEqual([]);
+    // With a type cue the same word is a font again.
+    expect(detectFontRequests('use the Dubai font for Arabic')[0]).toMatchObject({ family: 'Dubai', available: false });
+  });
+
+  it('offers only faces whose files draw the Kurdish letters', () => {
+    const [req] = detectFontRequests('please use Cairo for Kurdish');
+    // Cairo is admitted by flag but its file lacks ڕ ڵ ۆ ێ ە on this host (registry note, 2026-09-20).
+    expect(req.family).toBe('Cairo');
+    expect(req.available).toBe(false);
+    expect(req.alternatives).not.toContain('Cairo');
+    expect(req.alternatives).toEqual(expect.arrayContaining(['Amiri', 'Noto Sans Arabic', 'IBM Plex Sans Arabic']));
+  });
+
+  it('reads the script from the sender\'s words, not from the family name', () => {
+    const [req] = detectFontRequests('use IBM Plex Sans Arabic for the English text');
+    expect(req).toMatchObject({ family: 'IBM Plex Sans Arabic', script: 'latin', available: false });
   });
 
   it('does not read "Arabic" inside "Noto Sans Arabic" as a second request, and reads Sorani as Kurdish', () => {
@@ -128,6 +152,19 @@ describe('Telegram feedback that asks for a font', () => {
     expect(texts).not.toMatch(/Font not available/);
   });
 
+  it('a complaint that happens to say "always" or "every time" is not a standing rule', async () => {
+    const dispatch = vi.fn().mockResolvedValue({ success: true });
+    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
+    const { task } = await (await post(app, 910004, 910007, 'KAAE Board Meeting')).json();
+    const before = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length;
+    for (const text of ['the logo always looks cramped', 'every time I open it the text overlaps', 'ئەم ناونیشانە هەمیشە زۆر بچووکە']) {
+      const body = await (await post(app, 910004, 910008, `revise task ${task.id}: ${text}`)).json();
+      expect(body.scope).toBe('one_time');
+      expect(body.proposedRules).toEqual([]);
+    }
+    expect(globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).length).toBe(before);
+  });
+
   it('"from now on" proposes a standing rule that waits for promotion', async () => {
     const dispatch = vi.fn().mockResolvedValue({ success: true });
     const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, telegramBridge: { dispatchOutboundMessage: dispatch } as any });
@@ -135,7 +172,10 @@ describe('Telegram feedback that asks for a font', () => {
 
     const body = await (await post(app, 910003, 910006, `revise task ${task.id}: from now on use IBM Plex Sans Arabic for all Kurdish text`)).json();
     expect(body.scope).toBe('client');
-    expect(body.proposedRules).toEqual(['Set Kurdish and Arabic text in IBM Plex Sans Arabic.']);
+    expect(body.proposedRules).toContain('Set Kurdish and Arabic text in IBM Plex Sans Arabic.');
+    // The sender's words are proposed as written, beside the derived font rule; no canned sentence.
+    expect(body.proposedRules).toContain(`revise task ${task.id}: from now on use IBM Plex Sans Arabic for all Kurdish text`);
+    expect(JSON.stringify(body.proposedRules)).not.toMatch(/Cinzel|authentic master brand seal|Direct all design reviews/);
     const proposed = globalFeedbackMiner.getCandidateRules(KAAE_CLIENT_ID).find((r) => r.ruleText === 'Set Kurdish and Arabic text in IBM Plex Sans Arabic.');
     expect(proposed?.status).toBe('PROPOSED');
     expect(globalFeedbackMiner.getPromotedRules(KAAE_CLIENT_ID)).not.toContain(proposed!.ruleText);
