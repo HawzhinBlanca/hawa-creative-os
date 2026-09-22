@@ -28,7 +28,7 @@ const parentLayout: StudioLayoutV2 = {
 
 const movedLogo = { ...parentLayout, logo: { x: 72, y: 72, width: 168, height: 118 }, text: parentLayout.text.map((t) => ({ ...t, y: t.y + 140, accentColor: undefined, accentParagraph: undefined })) };
 
-const harness = (opts: { parent?: boolean; editReply?: any } = {}) => {
+const harness = (opts: { parent?: boolean; editReply?: any; targets?: string[] } = {}) => {
   const candidateId = { value: '' };
   const run: any = {
     id: randomUUID(),
@@ -66,7 +66,10 @@ const harness = (opts: { parent?: boolean; editReply?: any } = {}) => {
     recordCallStart: async () => ({}),
     finalizeCall: async () => ({}),
   };
-  const completeJson = vi.fn(async () => ({ data: opts.editReply ?? { layout: movedLogo, changes: [{ element: 'logo', before: 'bottom-right', after: 'logo top-left', why: 'asked' }] }, receipt: {} }));
+  const completeJson = vi.fn(async (params: any) =>
+    params.schemaName === 'EditTargets'
+      ? { data: { targets: opts.targets ?? ['logo'] }, receipt: {} }
+      : { data: opts.editReply ?? { layout: movedLogo, changes: [{ element: 'logo', before: 'bottom-right', after: 'logo top-left', why: 'asked' }] }, receipt: {} });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
   (service as any).repo = repo;
   (service as any).attachedImage = async () => undefined;
@@ -90,8 +93,8 @@ describe('a revision edits the design the client received', () => {
 
     const second = await service.resume(scope, run.task_id, run.id);
     expect(second.status).toBe('qa');
-    expect(completeJson).toHaveBeenCalledTimes(1);
-    const prompt = (completeJson.mock.calls[0] as any)[0].prompt as string;
+    expect(completeJson).toHaveBeenCalledTimes(2);
+    const prompt = (completeJson.mock.calls.find((c: any) => c[0].schemaName === 'DirectedEdit') as any)[0].prompt as string;
     expect(prompt).toContain('move the logo to the top-left');
     expect(prompt).toContain('"logo":{"x":840');
 
@@ -120,6 +123,18 @@ describe('a revision edits the design the client received', () => {
     const res = await service.resume(scope, run.task_id, run.id);
     expect(res.status).toBe('laying_out');
     expect(inserted.length).toBe(3);
+  });
+
+  it('blocks the request does not name keep their colours, whatever the edit did to them', async () => {
+    // The live edit of 2026-09-23 turned the date gold on "make MEET KAAE AT gold": a house rule.
+    const recoloured = { ...movedLogo, text: movedLogo.text.map((t, i) => (i === 1 ? { ...t, color: '#F7B500', accentColor: '#F7B500' } : t)) };
+    const { service, run, updated, candidateId } = harness({ editReply: { layout: recoloured, changes: [] }, targets: ['logo', 'text:0'] });
+    await service.resume(scope, run.task_id, run.id);
+    await service.resume(scope, run.task_id, run.id);
+    const saved = updated.find((u) => u.id === candidateId.value && u.layouts);
+    expect(saved.layouts[0].text[1].color).toBe('#FFFFFF');
+    expect(saved.layouts[0].text[1].accentColor).toBeUndefined();
+    expect(saved.layouts[0].logo).toMatchObject({ x: 72, y: 72 });
   });
 
   it('carryOver keeps what the edit omitted and what it set', () => {
