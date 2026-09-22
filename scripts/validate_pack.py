@@ -27,7 +27,9 @@ WARNINGS: list[str] = []
 PASSES: list[str] = []
 
 IGNORED_TOP_LEVEL = {
-    ".git", ".claude", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
+    # .worktrees holds other agents' checkouts, each with its own node_modules; the deploy
+    # pre-flight walked into one on 2026-09-22 and reported 10,623 failures against vendor READMEs.
+    ".git", ".claude", ".worktrees", "node_modules", "dist", "coverage", ".turbo", ".next", "build",
     ".pnpm-store", ".cache", "evidence", "apps", "packages", "services", "infra", "vendor", "output",
     "exports", "hawdesign-creative-os-figma-agent-studio", ".tmp_render_figma",
     "scratch", ".hawa-state", "data", "archive"
