@@ -1,7 +1,7 @@
 import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync, spawn } from 'node:child_process';
+import { spawnSync, execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -1320,62 +1320,6 @@ function svgToPng(
   }
 }
 
-async function svgToPngAsync(
-  svgString: string,
-  width: number,
-  height: number,
-  options?: RenderLayoutOptions
-): Promise<Buffer> {
-  const fontconfigFile = resolveFontconfigFile(options);
-  const rsvgBinary = resolveRsvgConvert(options);
-
-  const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'hawa-studio-render-'));
-  const svgFile = path.join(tempDir, 'render.svg');
-
-  try {
-    await fs.promises.writeFile(svgFile, svgString, { mode: 0o600 });
-    return await new Promise<Buffer>((resolve, reject) => {
-      const child = spawn(
-        rsvgBinary,
-        ['-w', String(width), '-h', String(height), '-f', 'png', svgFile],
-        {
-          env: {
-            ...process.env,
-            FONTCONFIG_FILE: fontconfigFile,
-          },
-          stdio: ['ignore', 'pipe', 'pipe'],
-        }
-      );
-
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
-
-      child.stdout.on('data', (chunk) => stdoutChunks.push(Buffer.from(chunk)));
-      child.stderr.on('data', (chunk) => stderrChunks.push(Buffer.from(chunk)));
-
-      child.on('error', (err) => {
-        reject(new Error(`Failed to spawn rsvg-convert: ${err.message}`));
-      });
-
-      child.on('close', (code) => {
-        if (code !== 0) {
-          const stderr = Buffer.concat(stderrChunks).toString('utf-8');
-          reject(new Error(`rsvg-convert rendering failed (status ${code}): ${stderr || 'Unknown error'}`));
-          return;
-        }
-        const stdout = Buffer.concat(stdoutChunks);
-        if (stdout.length < 100) {
-          reject(new Error(`rsvg-convert output truncated: length ${stdout.length}`));
-          return;
-        }
-        resolve(stdout);
-      });
-    });
-  } finally {
-    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
 /**
  * Primary Design Studio v2 Local Renderer:
  * Generates full SVG, no-text composite SVG, renders both to 1x PNG via rsvg-convert,
@@ -1401,29 +1345,48 @@ export function renderLayoutV2(
 }
 
 /**
- * Async Non-Blocking Design Studio v2 Local Renderer:
- * Executes rsvg-convert asynchronously without blocking Node.js event loop,
- * running both SVG renders concurrently via Promise.all.
+ * svgToPng without stopping the process. spawnSync holds the event loop for the whole rasterisation,
+ * about half a second to several seconds a design: while Core rendered, /health, the Desk, Telegram
+ * intake and every other studio run waited. The work is identical; only the waiting differs.
  */
-export async function renderLayoutV2Async(
-  layout: StudioLayoutV2,
-  options: RenderLayoutOptions = {}
-): Promise<RenderLayoutV2Result> {
-  const { svg, noTextSvg, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
+async function svgToPngAsync(svgString: string, width: number, height: number, options?: RenderLayoutOptions): Promise<Buffer> {
+  const fontconfigFile = resolveFontconfigFile(options);
+  const rsvgBinary = resolveRsvgConvert(options);
+  const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'hawa-studio-render-'));
+  const svgFile = path.join(tempDir, 'render.svg');
+  try {
+    await fs.promises.writeFile(svgFile, svgString, { mode: 0o600 });
+    return await new Promise<Buffer>((resolve, reject) => {
+      execFile(
+        rsvgBinary,
+        ['-w', String(width), '-h', String(height), '-f', 'png', svgFile],
+        { env: { ...process.env, FONTCONFIG_FILE: fontconfigFile }, maxBuffer: 64 * 1024 * 1024, timeout: 20000, encoding: 'buffer' },
+        (error, stdout, stderr) => {
+          if (error || !stdout || stdout.length < 100) {
+            const detail = stderr && stderr.length ? stderr.toString('utf-8') : error?.message || 'Unknown error';
+            reject(new Error(`rsvg-convert rendering failed (status ${(error as any)?.code ?? 0}): ${detail}`));
+            return;
+          }
+          resolve(stdout);
+        }
+      );
+    });
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true });
+  }
+}
 
+/**
+ * renderLayoutV2 for a server: the same bytes, without blocking the event loop, and with the two
+ * rasterisations (the design and its no-text composite) running side by side.
+ */
+export async function renderLayoutV2Async(layout: StudioLayoutV2, options: RenderLayoutOptions = {}): Promise<RenderLayoutV2Result> {
+  const { svg, noTextSvg, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
   const [png, noTextPng] = await Promise.all([
     svgToPngAsync(svg, layout.width, layout.height, options),
     svgToPngAsync(noTextSvg, layout.width, layout.height, options),
   ]);
-
-  return {
-    svg,
-    png,
-    noTextSvg,
-    noTextPng,
-    wrappedLines,
-    fontFidelity,
-  };
+  return { svg, png, noTextSvg, noTextPng, wrappedLines, fontFidelity };
 }
 
 export interface ElementBoxAnnotation {

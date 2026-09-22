@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { StudioBudgetExhaustedError, type StageContext, type CandidateState } from '../types.js';
-import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast, type StudioLayoutV2 } from '@hawa/creative';
+import type { StudioLayoutV2 } from '@hawa/creative';
+import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
 import { LAYOUT_SCHEMA, normalizeCandidateLayout } from './layouts.stage.js';
 

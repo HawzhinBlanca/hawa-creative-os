@@ -44,7 +44,6 @@ export async function runCanaryStage(
   brief: CreativeBrief,
   winner: CandidateState
 ): Promise<CanaryResult> {
-
   const systemPrompt = buildP0SystemPrompt({
     referencePackJson: JSON.stringify(ctx.referencePack),
     promotedRules: ctx.promotedRules || 'None',
@@ -62,28 +61,25 @@ export async function runCanaryStage(
     ? `data:${ctx.logo.mimeType};base64,${ctx.logo.bytes.toString('base64')}`
     : undefined;
 
-  // 1 & 2. Render Perturbations concurrently
+  // 1. Render Perturbation 1
   const layoutP1 = createPerturbation1(winner.currentLayout);
-  const layoutP2 = createPerturbation2(winner.currentLayout);
-
-  const [renderP1, renderP2] = await Promise.all([
-    renderLayoutV2Async(layoutP1, {
-      copyText: copyMap,
-      artImagePath: artDataUri,
-      logoDataUri,
-    }),
-    renderLayoutV2Async(layoutP2, {
-      copyText: copyMap,
-      artImagePath: artDataUri,
-      logoDataUri,
-    }),
-  ]);
-
+  const renderP1 = await renderLayoutV2Async(layoutP1, {
+    copyText: copyMap,
+    artImagePath: artDataUri,
+    logoDataUri,
+  });
   const metricsP1 = computeLayoutMetrics(layoutP1, {
     copyText: copyMap,
     measuredLines: renderP1.wrappedLines,
   });
 
+  // 2. Render Perturbation 2
+  const layoutP2 = createPerturbation2(winner.currentLayout);
+  const renderP2 = await renderLayoutV2Async(layoutP2, {
+    copyText: copyMap,
+    artImagePath: artDataUri,
+    logoDataUri,
+  });
   const metricsP2 = computeLayoutMetrics(layoutP2, {
     copyText: copyMap,
     measuredLines: renderP2.wrappedLines,

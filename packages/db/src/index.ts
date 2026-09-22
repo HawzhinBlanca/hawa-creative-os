@@ -13,3 +13,4 @@ export * from './migrate.js';
 export * from './check.js';
 export * from './task-reconciliation.js';
 export { sql, type Kysely } from 'kysely';
+export * from './session-lock.js';

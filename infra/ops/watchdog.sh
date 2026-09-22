@@ -45,6 +45,8 @@ if [[ -z "$core" ]]; then problems+=("core health does not answer on 127.0.0.1:8
 else
   summary="$(printf '%s' "$core" | python3 -c 'import json,sys
 h=json.load(sys.stdin); d=h.get("dependencies",{}); bad={k:v for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","degraded","billing_exhausted")}
+parked=d.get("parkedClientMessages",0)
+if isinstance(parked,int) and parked>0: bad["parkedClientMessages"]=parked
 print(h.get("status","?")+("" if not bad else " "+json.dumps(bad)))' 2>/dev/null || echo "unparseable")"
   [[ "$summary" == healthy* ]] || problems+=("core ${summary}")
 fi
