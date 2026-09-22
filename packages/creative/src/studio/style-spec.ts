@@ -1,5 +1,5 @@
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
-import { measureWrappedLines } from './render-layout-v2.js';
+import { measureWrappedLines, wrappedLinesOf } from './render-layout-v2.js';
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { logoClearZone, requiredContrast } from './house-rules.js';
 import type { OrnamentSettings } from './pipeline-v3.js';
@@ -295,17 +295,34 @@ export function applyStyleSpec(
   // The first line takes the accent the same way ("MEET KAAE AT" in gold over a white event name,
   // the reference of 2026-09-22); when a reference has both, the first line wins, since a title
   // carries one accent.
+  //
+  // A title the client wrote on one line ("MEET KAAE AT SAGACON 2026") has no paragraph to colour;
+  // the words of its first (or last) drawn line are named instead, so the accent survives Canva's
+  // own wrapping. Kurdish titles keep the paragraph accent only.
   const accentLine = spec.accentFirstTitleLine ? 'first' : spec.accentLastTitleLine ? 'last' : undefined;
-  if (title && accentLine && (copy.text[title.copyIndex] || '').trim().includes('\n')) {
+  const titleCopy = title ? (copy.text[title.copyIndex] || '').trim() : '';
+  const lineWords = (() => {
+    if (!title || !accentLine || titleCopy.includes('\n') || rtl(title)) return undefined;
+    try {
+      const lines = wrappedLinesOf(title, titleCopy).filter((l) => l.trim());
+      return lines.length > 1 ? (accentLine === 'first' ? lines[0] : lines[lines.length - 1]) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (title && accentLine && (titleCopy.includes('\n') || lineWords)) {
     const surface = declaredBackgroundColour(layout, title);
     const ratio = calculateLuminanceContrastRatio(hexToLuminance(gold), hexToLuminance(surface));
     if (ratio >= requiredContrast(title.fontSize, Boolean(title.bold))) {
       title.accentColor = gold;
+      if (lineWords) title.accentText = lineWords;
+      else delete (title as { accentText?: string }).accentText;
       if (accentLine === 'first') title.accentParagraph = 'first';
       else delete (title as { accentParagraph?: string }).accentParagraph;
     } else {
       delete (title as { accentColor?: string }).accentColor;
       delete (title as { accentParagraph?: string }).accentParagraph;
+      delete (title as { accentText?: string }).accentText;
     }
   }
 

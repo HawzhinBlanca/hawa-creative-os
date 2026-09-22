@@ -76,6 +76,11 @@ export function composeDeliveredMessage(payload: Record<string, unknown> & { tit
     lines.push(`In Google Drive: <a href="${escapeTelegramHtml(`https://drive.google.com/drive/folders/${payload.driveFolderId}`)}">delivery folder</a>`);
   }
 
+  if (payload?.archiveProblem) {
+    // The files reached the requester; the office's Drive archive is reported, not hidden.
+    lines.push(`Office archive: not saved to Google Drive yet (${escapeTelegramHtml(payload.archiveProblem)}).`);
+    return lines.join('\n\n');
+  }
   // Older commands were written only after the Sheets row was confirmed, and carry no flag.
   const sheetsConfirmed = payload?.sheetsConfirmed ?? true;
   if (sheetsConfirmed && payload?.spreadsheetId && payload?.sheetRowNumber) {

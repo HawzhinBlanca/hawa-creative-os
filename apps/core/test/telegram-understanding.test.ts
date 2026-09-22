@@ -116,6 +116,15 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     await withRlsContext(db, operator, (trx) => new ClientRulesRepository(trx).deactivate(tenantId, kaae, rule!.id));
   });
 
+  it('/status lists this chat’s latest requests and where each one is', async () => {
+    const { send, replies } = setup();
+    expect((await send({ text: 'KAAE open day\n---\nNovember 20, 2026\nErbil' })).status).toBe(201);
+    const res = await send({ text: '/status' });
+    expect(res.body.status).toBe(1);
+    expect(replies()).toMatch(/Your latest requests/);
+    expect(replies()).toMatch(/being designed|draft ready|needs the office/);
+  });
+
   it('an edited message is answered, not silently dropped', async () => {
     const { chat, send, replies } = setup();
     const res = await send({}, { edited_message: { message_id: 5, from: { id: chat, is_bot: false }, chat: { id: chat, type: 'private' }, text: 'corrected date' } });

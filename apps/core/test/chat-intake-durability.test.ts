@@ -94,7 +94,7 @@ describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
     const sent = dispatch.mock.calls[0][1];
     expect(sent.parse_mode).toBe('HTML');
-    expect(sent.text).toContain('No client could be identified');
+    expect(sent.text).toContain('No client was named');
     expect(sent.text).not.toContain('canva.com/design');
     expect(sent.text).toContain('Stranger &lt;b&gt;');
   });

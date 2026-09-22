@@ -265,6 +265,39 @@ export class DesignStudioService {
     return ordered;
   }
 
+  /**
+   * A request that came as an album: Telegram delivers each photo as its own message, a second or
+   * so apart, and the brief could be written before the last ones were saved. The brief waits until
+   * the album has been quiet for a few seconds (at most HAWA_ALBUM_SETTLE_MAX_MS after the request).
+   */
+  private async settleAlbum(s: Scope, taskId: string): Promise<void> {
+    const quietMs = Number(process.env.HAWA_ALBUM_QUIET_MS || 4000);
+    const maxMs = Number(process.env.HAWA_ALBUM_SETTLE_MAX_MS || 20000);
+    const read = () =>
+      this.tx(s, async (db) =>
+        (
+          await sql<{ album: string | null; created_at: Date; photos: number; newest: Date | null }>`
+            SELECT o.payload->'studioOptions'->>'mediaGroupId' AS album, o.created_at,
+              (SELECT count(*)::int FROM hawa.outbox_commands p WHERE p.tenant_id = o.tenant_id AND p.command_type = 'task.created'
+                 AND p.payload->'studioOptions'->>'mediaGroupId' = o.payload->'studioOptions'->>'mediaGroupId') AS photos,
+              (SELECT max(p.created_at) FROM hawa.outbox_commands p WHERE p.tenant_id = o.tenant_id AND p.command_type = 'task.created'
+                 AND p.payload->'studioOptions'->>'mediaGroupId' = o.payload->'studioOptions'->>'mediaGroupId') AS newest
+            FROM hawa.outbox_commands o
+            WHERE o.tenant_id = ${s.tenantId}::uuid AND o.aggregate_id = ${taskId}::uuid AND o.command_type = 'task.created'
+            ORDER BY o.created_at LIMIT 1`.execute(db)
+        ).rows[0]
+      ).catch(() => undefined);
+    let row = await read();
+    if (!row?.album) return;
+    const deadline = new Date(row.created_at).getTime() + maxMs;
+    while (Date.now() < deadline) {
+      const newest = new Date(row.newest || row.created_at).getTime();
+      if (Date.now() - newest >= quietMs) return;
+      await new Promise((r) => setTimeout(r, Math.min(1000, Math.max(100, deadline - Date.now()))));
+      row = (await read()) || row;
+    }
+  }
+
   /** The image the brief reads as a reference: the latest one the request carries, or undefined. */
   private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
     const images = await this.requestImages(s, taskId);
@@ -943,6 +976,7 @@ export class DesignStudioService {
     // and a reference for the graphic" with three images is two photos and one reference; until
     // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
     let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+    if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
     const images = await this.requestImages(s, run.task_id).catch(() => [] as string[]);
     const roles = briefSoFar?.imageRoles;
     let classified = false;

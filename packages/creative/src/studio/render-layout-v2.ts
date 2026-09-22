@@ -1002,6 +1002,26 @@ function renderShapesToSvg(shapes: ShapeElement[]): string {
   return parts.join('\n  ');
 }
 
+/**
+ * The words of `accentText` within the copy, as word indices [from, to): its first occurrence as a
+ * whole-word sequence. Undefined when it is empty or not in the copy.
+ */
+export function accentWordRange(copyText: string, accentText: string | undefined): { from: number; to: number } | undefined {
+  const want = String(accentText || '').split(/\s+/).filter(Boolean);
+  if (!want.length) return undefined;
+  const all = copyText.split(/\s+/).filter(Boolean);
+  for (let a = 0; a + want.length <= all.length; a++) {
+    if (want.every((w, k) => all[a + k] === w)) return { from: a, to: a + want.length };
+  }
+  return undefined;
+}
+
+/** The lines one text element wraps to, as the renderer draws them. */
+export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): string[] {
+  const font = loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
+  return wrapTextWithFontkit(copy, t.width, font, t.fontSize, effectiveLetterSpacingEm(t));
+}
+
 function renderTextElementToSvg(
   t: TextElement,
   copyText: string,
@@ -1094,9 +1114,29 @@ function renderTextElementToSvg(
   const wrapped = (p: string) => wrapTextWithFontkit(p, t.width, font, renderFontSize, letterSpacingVal).length;
   const accentFrom = accented && !accentFirst ? lines.length - wrapped(paragraphs[paragraphs.length - 1]) : lines.length;
   const accentUntil = accented && accentFirst ? wrapped(paragraphs[0]) : 0;
+  // Named words take precedence: the lines wrap on words, so a running word count says which of
+  // each line's words are the accented ones.
+  const wordRange = t.accentColor && !t.rtl && !/[\u0600-\u06FF]/.test(copyText) ? accentWordRange(copyText, t.accentText) : undefined;
   const tspans: string[] = [];
+  let wordAt = 0;
   for (let i = 0; i < lines.length; i++) {
     const lineY = firstLineY + i * nominalLineHeight;
+    if (wordRange) {
+      const words = lines[i].split(/\s+/).filter(Boolean);
+      const segments: Array<{ text: string; accent: boolean }> = [];
+      for (const w of words) {
+        const accent = wordAt >= wordRange.from && wordAt < wordRange.to;
+        const last = segments[segments.length - 1];
+        if (last && last.accent === accent) last.text += ` ${w}`;
+        else segments.push({ text: (last ? '\u00a0' : '') + w, accent });
+        wordAt++;
+      }
+      const parts = segments.map((seg, k) =>
+        `<tspan${k === 0 ? ` x="${textX}" y="${lineY.toFixed(1)}"` : ''}${seg.accent ? ` fill="${t.accentColor}"` : ''}>${escapeXml(seg.text)}</tspan>`
+      );
+      tspans.push(parts.length ? parts.join('') : `<tspan x="${textX}" y="${lineY.toFixed(1)}"></tspan>`);
+      continue;
+    }
     const fill = i >= accentFrom || i < accentUntil ? ` fill="${t.accentColor}"` : '';
     tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}"${fill}>${escapeXml(lines[i])}</tspan>`);
   }

@@ -74,6 +74,18 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
   });
 });
 
+describe('audio file names', () => {
+  it('carry the extension of the format, which the transcription API reads', async () => {
+    const { audioExtension } = await import('../src/voice-transcriber.js');
+    expect(audioExtension('audio/ogg')).toBe('ogg');
+    expect(audioExtension('audio/mpeg')).toBe('mp3');
+    expect(audioExtension('audio/mp4')).toBe('m4a');
+    expect(audioExtension('audio/x-m4a')).toBe('m4a');
+    expect(audioExtension('audio/wav')).toBe('wav');
+    expect(audioExtension(undefined)).toBe('ogg');
+  });
+});
+
 describe('a voice note with a caption', () => {
   it('is transcribed as well, with no Kurdish language code Whisper refuses, and the caption kept', async () => {
     const originalKey = process.env.OPENAI_API_KEY;

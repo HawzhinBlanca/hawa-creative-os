@@ -52,6 +52,17 @@ export function normalizeKurdishSpokenText(spoken: string): string {
   return text;
 }
 
+/** The file extension the transcription API expects for a MIME type; OGG (Telegram voice) by default. */
+export function audioExtension(mimeType?: string): string {
+  const m = String(mimeType || '').toLowerCase();
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
+  if (m.includes('mp4') || m.includes('m4a') || m.includes('aac')) return 'm4a';
+  if (m.includes('wav')) return 'wav';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('flac')) return 'flac';
+  return 'ogg';
+}
+
 export class KurdishVoiceTranscriber {
   /**
    * Transcribes Sorani voice audio note and extracts protected factual tokens
@@ -69,7 +80,9 @@ export class KurdishVoiceTranscriber {
       try {
         const formData = new FormData();
         const blob = new Blob([audioBytes], { type: req.audioMimeType || 'audio/ogg' });
-        formData.append('file', blob, 'audio.ogg');
+        // The name's extension is how the API reads the format: an MP3 or M4A sent as "audio.ogg"
+        // was refused as an invalid file, so only Telegram's own OGG voice notes transcribed.
+        formData.append('file', blob, `audio.${audioExtension(req.audioMimeType)}`);
         formData.append('model', 'whisper-1');
         // Whisper takes no language code for Kurdish ("ku" was sent and refused), so Sorani is
         // left to detection and steered to Arabic-script Sorani by a Sorani prompt; English and

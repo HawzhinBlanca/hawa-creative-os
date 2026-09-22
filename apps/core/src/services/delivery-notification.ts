@@ -24,6 +24,8 @@ export interface DeliveredFileRef {
 }
 
 export interface DeliveredNotificationPayload {
+  /** Set when the files go to the requester although the Drive archive could not be written. */
+  archiveProblem?: string | null;
   taskId: string;
   clientId: string | null;
   title: string | null;
@@ -138,6 +140,57 @@ export function buildDeliveredNotificationPayload(input: {
     sheetRowNumber: sheetsConfirmed && input.receipt.sheet?.rowNumber !== undefined ? input.receipt.sheet.rowNumber : null,
     sheetProblem: sheetsConfirmed ? null : input.receipt.detail?.sheetProblem || 'The Sheets row was not confirmed',
     filesCount: verified.length,
+    files,
+    publishedAt: (input.now ?? new Date()).toISOString(),
+  };
+}
+
+/**
+ * The approved files for the requester when the Drive archive could not be written (no Google
+ * credential, no destination, Drive down). The approval is the office's decision and the files are
+ * the pinned exports already stored and hash-checked, so the person who asked for the design gets
+ * it; the archive is reported, to them and in Desk, as not written yet. Production ran with a
+ * placeholder Google credential on 2026-09-23, so no approved design would ever have reached anyone.
+ */
+export function buildChatOnlyNotificationPayload(input: {
+  taskId: string;
+  clientId?: string | null;
+  title?: string | null;
+  chatId: string | null;
+  publicationKey: string;
+  pins?: PinnedExport[];
+  files: PackageFileLike[];
+  archiveProblem: string;
+  now?: Date;
+}): DeliveredNotificationPayload | null {
+  if (!input.files.length) return null;
+  const files: DeliveredFileRef[] = input.files.map((packaged) => {
+    const pin = input.pins?.find((p) => p.artifactId === packaged.artifactId);
+    const extension = packaged.filename.split('.').pop() || '';
+    return {
+      artifactId: packaged.artifactId,
+      format: deliverableFormat(pin?.format || extension),
+      filename: packaged.filename,
+      mimeType: packaged.mimeType,
+      sha256: packaged.sha256,
+      byteSize: packaged.byteSize,
+      driveFileId: null,
+      webViewLink: null,
+    };
+  });
+  return {
+    archiveProblem: input.archiveProblem,
+    taskId: input.taskId,
+    clientId: input.clientId ?? null,
+    title: input.title ?? null,
+    chatId: input.chatId,
+    publicationKey: input.publicationKey,
+    driveFolderId: '',
+    spreadsheetId: '',
+    sheetsConfirmed: false,
+    sheetRowNumber: null,
+    sheetProblem: null,
+    filesCount: files.length,
     files,
     publishedAt: (input.now ?? new Date()).toISOString(),
   };

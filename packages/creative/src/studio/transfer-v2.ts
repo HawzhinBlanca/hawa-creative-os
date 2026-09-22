@@ -461,8 +461,19 @@ export async function encodeStudioTransferV2(
     // A block with an accent colour is written as runs: its last paragraph in that colour.
     const text = keepCompoundsWhole(copy[t.copyIndex]);
     const paragraphs = text.split('\n').filter((p) => p.trim());
-    const runs =
-      t.accentColor && paragraphs.length > 1
+    // Named words in the accent colour: each paragraph is written as runs split at the words, so
+    // Canva keeps "MEET KAAE AT" gold wherever its own wrapping breaks the line.
+    const accentRuns = t.accentColor && !isArabic ? accentTextRuns(paragraphs, t.accentText) : undefined;
+    const runs = accentRuns
+      ? accentRuns.map((r) => ({
+          text: r.text,
+          options: {
+            breakLine: r.breakLine,
+            align: t.align,
+            ...(r.accent ? { color: hex(t.accentColor!) } : {}),
+          },
+        }))
+      : t.accentColor && paragraphs.length > 1
         ? paragraphs.map((p, i) => ({
             text: p,
             // Paragraph properties come from each run: without rtlMode here the Kurdish title's
@@ -533,4 +544,36 @@ export async function encodeStudioTransferV2(
       version: 2,
     },
   };
+}
+
+/**
+ * Paragraphs as runs, split where the accent words start and end (whole words, first occurrence,
+ * compared with the joiners the deck adds removed). Undefined when the words are not in the copy.
+ */
+export function accentTextRuns(paragraphs: string[], accentText: string | undefined): Array<{ text: string; accent: boolean; breakLine: boolean }> | undefined {
+  const plain = (w: string) => w.replace(/\u2060/g, '');
+  const want = String(accentText || '').split(/\s+/).filter(Boolean);
+  if (!want.length) return undefined;
+  const words = paragraphs.map((p) => p.trim().split(/\s+/).filter(Boolean));
+  const flat = words.flat();
+  let from = -1;
+  for (let a = 0; a + want.length <= flat.length && from < 0; a++) {
+    if (want.every((w, k) => plain(flat[a + k]) === w)) from = a;
+  }
+  if (from < 0) return undefined;
+  const to = from + want.length;
+  const runs: Array<{ text: string; accent: boolean; breakLine: boolean }> = [];
+  let at = 0;
+  words.forEach((ws, pi) => {
+    const start = runs.length;
+    ws.forEach((w, wi) => {
+      const accent = at >= from && at < to;
+      const last = runs.length > start ? runs[runs.length - 1] : undefined;
+      if (last && last.accent === accent) last.text += ` ${w}`;
+      else runs.push({ text: (wi > 0 ? ' ' : '') + w, accent, breakLine: false });
+      at++;
+    });
+    if (pi < words.length - 1 && runs.length > start) runs[runs.length - 1].breakLine = true;
+  });
+  return runs;
 }

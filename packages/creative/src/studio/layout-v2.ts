@@ -59,6 +59,12 @@ export interface TextElement extends Box {
   accentColor?: Hex;
   /** Which paragraph accentColor sets apart: the last (default) or the first ("MEET KAAE AT" in gold above the event). */
   accentParagraph?: 'first' | 'last';
+  /**
+   * The exact words accentColor sets apart, when they are not a paragraph of their own: "MEET KAAE
+   * AT" in a one-line title "MEET KAAE AT SAGACON 2026". Takes precedence over accentParagraph.
+   * Latin text only; a Kurdish block keeps the paragraph accent.
+   */
+  accentText?: string;
 }
 
 export interface TypeScaleConfig {
@@ -158,6 +164,7 @@ export const textElementSchema = boxSchema.extend({
   rtl: z.boolean().optional(),
   accentColor: hexSchema.optional(),
   accentParagraph: z.enum(['first', 'last']).optional(),
+  accentText: z.string().max(400).optional(),
 }).strict();
 
 export const photoElementSchema = boxSchema.extend({

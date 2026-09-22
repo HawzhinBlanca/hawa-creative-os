@@ -133,6 +133,7 @@ export const LAYOUT_SCHEMA = {
               rtl: { type: 'boolean' },
               accentColor: { type: 'string', description: 'One paragraph of this block in this colour (a gold line in a light title).' },
               accentParagraph: { type: 'string', enum: ['first', 'last'] },
+              accentText: { type: 'string', description: "The exact words of this block's copy to set in accentColor (e.g. 'MEET KAAE AT'); the rest keeps color." },
             },
             required: ['x', 'y', 'width', 'height', 'copyIndex', 'role', 'fontSize', 'lineHeight', 'fontFamily', 'color', 'align'],
             additionalProperties: false,
