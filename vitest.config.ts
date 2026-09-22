@@ -50,7 +50,7 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30000,
     include: ['**/*.test.ts', '**/*.spec.ts'],
-    exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**', 'apps/desk/e2e/**'],
+    exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**', '**/.worktrees/**', 'apps/desk/e2e/**'],
     fileParallelism: false,
     // Resolved from this file: `pnpm --filter <pkg> test` runs vitest inside the package, where a
     setupFiles: [
