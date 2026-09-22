@@ -39,6 +39,14 @@ export interface CreativeBrief {
   referenceNotes?: string;
   /** Whether the brief saw an attached image. False when a photo arrived after it ran. */
   referenceSeen?: boolean;
+  /**
+   * What each image the request carries is, by arrival order. The model looks at them: "I attached
+   * the panelists pictures and a reference for the graphic" with three images is two photos to place
+   * and one design to follow, which no keyword can tell apart. Absent before 2026-09-22.
+   */
+  imageRoles?: Array<{ index: number; role: ImageRole; notes: string }>;
+  /** How many content photos the run was given; recorded for the requester's note. */
+  photosSent?: number;
   /** Visual decisions read from the reference and instructions, enforced in preparation. Absent before 2026-09-19. */
   styleSpec?: import('@hawa/creative').StyleSpec;
 }
@@ -162,6 +170,8 @@ export interface StageContext {
    * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
    */
   photos?: ContentPhoto[];
+  /** Every image the request carries, oldest first, for the brief to classify. Set only at briefing. */
+  requestImages?: string[];
   /** The attached image when the brief read it as a style reference, with what to take from it. */
   reference?: import('@hawa/creative').ClientReference;
   /** Brand ornament (texture, gold dividers) added to layouts that lack it; HAWA_DESIGN_*. */
@@ -169,6 +179,8 @@ export interface StageContext {
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
 }
+
+export type ImageRole = 'content_photo' | 'style_reference' | 'logo' | 'unrelated';
 
 export interface ContentPhoto {
   dataUrl: string;

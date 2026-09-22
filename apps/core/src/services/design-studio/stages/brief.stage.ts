@@ -52,6 +52,21 @@ export const CREATIVE_BRIEF_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
     },
+    imageRoles: {
+      type: 'array',
+      description:
+        "One entry per image the client sent, in the order given (index 0 first); empty when none were sent. role: 'content_photo' for a photograph that must appear in the design (a speaker or panelist, a product, a venue); 'style_reference' for an example of the design they want followed (a finished poster, a mock-up, a layout); 'logo' for their logo or emblem; 'unrelated' otherwise. notes: for a style reference, what to take from it concretely (composition, where the photos and text sit, colour, type treatment); for a content photo, who or what it shows; empty otherwise.",
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'integer' },
+          role: { type: 'string', enum: ['content_photo', 'style_reference', 'logo', 'unrelated'] },
+          notes: { type: 'string' },
+        },
+        required: ['index', 'role', 'notes'],
+        additionalProperties: false,
+      },
+    },
     referenceRole: {
       type: 'string',
       enum: ['none', 'logo', 'style_reference'],
@@ -84,6 +99,7 @@ export const CREATIVE_BRIEF_SCHEMA = {
     'kurdishLeads',
     'riskFlags',
     'requestedBackground',
+    'imageRoles',
     'referenceRole',
     'referenceNotes',
     'styleSpec',
@@ -125,24 +141,34 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
     imageryOption,
   });
 
-  const attached = ctx.attachedImage?.match(/^data:([^;]+);base64,(.+)$/);
+  // Several images: the model sees all of them, numbered in the order they arrived, and says what
+  // each is. One image keeps the single-reference wording the late-reference path depends on.
+  const parse = (url: string) => url.match(/^data:([^;]+);base64,(.+)$/);
+  const several = (ctx.requestImages || []).map(parse).filter((m): m is RegExpMatchArray => Boolean(m));
+  const attached = several.length > 1 ? null : ctx.attachedImage?.match(/^data:([^;]+);base64,(.+)$/) || several[0] || null;
+  const images = several.length > 1 ? several : attached ? [attached] : [];
+  const imagePrompt =
+    several.length > 1
+      ? `The client sent the ${several.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
+      : attached
+        ? `${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST} Also fill imageRoles with one entry for it (index 0): 'content_photo' if it is a photograph the client wants placed in the design, otherwise the role that matches referenceRole.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
+        : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
-    prompt: attached
-      ? `${userPrompt}\n\n${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST}\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
-      : `${userPrompt}\n\nFill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else.`,
-    ...(attached ? { images: [{ mediaType: attached[1], data: attached[2] }] } : {}),
+    prompt: `${userPrompt}\n\n${imagePrompt}`,
+    ...(images.length ? { images: images.map((m) => ({ mediaType: m[1], data: m[2] })) } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',
   });
 
   const { brief, dropped } = normalizeBriefRoles(response.data, ctx.copyBlocks.length);
   // Without an image there is nothing to follow, whatever the model answered.
-  if (!attached) {
+  if (!images.length) {
     brief.referenceRole = 'none';
     brief.referenceNotes = '';
   }
-  brief.referenceSeen = Boolean(attached);
+  brief.imageRoles = normalizeImageRoles(brief.imageRoles, images.length);
+  brief.referenceSeen = images.length > 0;
   brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
   if (dropped.length > 0) {
     console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
@@ -192,4 +218,17 @@ export function requestedBackgroundFor(brief: Partial<CreativeBrief> | undefined
   const hex = String(brief?.requestedBackground || '').trim();
   if (!/^#[0-9a-f]{6}$/i.test(hex) || !palette.length) return undefined;
   return palette.find((p) => p.toLowerCase() === hex.toLowerCase()) || nearestPaletteColour(hex, palette);
+}
+
+
+/** One role per image, in order: missing or out-of-range entries become 'unrelated'. */
+export function normalizeImageRoles(
+  roles: CreativeBrief['imageRoles'] | undefined,
+  count: number
+): NonNullable<CreativeBrief['imageRoles']> {
+  const allowed = new Set(['content_photo', 'style_reference', 'logo', 'unrelated']);
+  return Array.from({ length: count }, (_, index) => {
+    const found = (roles || []).find((r) => r && r.index === index && allowed.has(r.role));
+    return found ? { index, role: found.role, notes: String(found.notes || '') } : { index, role: 'unrelated' as const, notes: '' };
+  });
 }

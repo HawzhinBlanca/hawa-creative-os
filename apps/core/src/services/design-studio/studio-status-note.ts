@@ -51,9 +51,11 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   const placed = Array.isArray(shipped?.photos) ? shipped.photos.length : 0;
   const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
   const asReference = stages.brief?.referenceSeen === true || stages.brief?.referenceRole === 'style_reference';
+  const followed = Array.isArray(stages.brief?.imageRoles) && stages.brief.imageRoles.some((r: any) => r?.role === 'style_reference');
   if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
   else if (placed > 0) parts.push(`${placed} photo${placed === 1 ? '' : 's'} placed`);
-  else if (asReference) parts.push('your image used as a style reference, not placed');
+  if (followed) parts.push('your reference design followed');
+  else if (!(sent && sent > 0) && placed === 0 && asReference) parts.push('your image used as a style reference, not placed');
 
   let rungNote = '';
   if (stages.ladderRung && stages.ladderRung > 1) rungNote = ` · ${stages.ladderNotes || `Rung ${stages.ladderRung} fallback`}`;

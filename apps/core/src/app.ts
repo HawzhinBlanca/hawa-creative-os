@@ -1,6 +1,7 @@
 import { persistChatIntake, findRequestAwaitingReference, splitBilingualRequest } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
+import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
@@ -2042,6 +2043,12 @@ export function createApp(options?: CreateAppOptions) {
     if (envelope.copy !== payloadText.trim()) {
       payloadText = envelope.copy;
       if (envelope.trailing) clientInstructions = [clientInstructions, envelope.trailing].filter(Boolean).join('\n');
+    }
+    // "I attached the panelists pictures and a reference" at the end is addressed to us, not copy.
+    const peeled = peelTrailingRemarks(payloadText);
+    if (peeled.remarks) {
+      payloadText = peeled.copy;
+      clientInstructions = [clientInstructions, peeled.remarks].filter(Boolean).join('\n');
     }
 
     const payloadLines = payloadText.split('\n').map((l) => l.trim()).filter(Boolean);

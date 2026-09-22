@@ -7,6 +7,7 @@ import { encodeEditableTransfer, creativeAssetPath, type EditableTransferPlan } 
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
+import { isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
 
 type Scope={tenantId:string;actorId:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
@@ -83,14 +84,25 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     }
     const envelope=unwrapCopyEnvelope(raw.slice(divider.index+divider[0].length));
     if(envelope.trailing)instructions=[instructions,envelope.trailing].filter(Boolean).join('\n');
-    const copy=envelope.copy.split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean);
+    // A closing remark to the designer ("I attached the pictures…") is an instruction, as at intake.
+    const peeled=peelTrailingRemarks(envelope.copy);
+    if(peeled.remarks)instructions=[instructions,peeled.remarks].filter(Boolean).join('\n');
+    const copy=peeled.copy.split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean);
     // A divider with nothing after it is a request without copy, not copy the transfer cannot set.
     if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','Nothing follows the divider, so the request carries no design copy. Send the exact text to set; no placeholder copy will be invented.');
     return {instructions,copy};
   }
   const blocks=body.copyBlocks||p.exactCopy;
-  if(Array.isArray(blocks)&&blocks.length&&blocks.every(b=>typeof b.text==='string'&&b.text.trim()))
-    return {copy:blocks.map(b=>b.text),instructions:String(p.designInstructions||body.designInstructions||'')};
+  if(Array.isArray(blocks)&&blocks.length&&blocks.every(b=>typeof b.text==='string'&&b.text.trim())){
+    // Requests saved before 2026-09-22 kept a closing remark to the designer ("I attached the
+    // panelists pictures and a reference for the graphic") as their last copy block. It is read as
+    // an instruction here, by the same rule intake now applies, so those requests are fixed too.
+    const texts=blocks.map(b=>b.text);
+    const remarks:string[]=[];
+    while(texts.length>1&&isDesignerRemark(texts[texts.length-1]))remarks.unshift(texts.pop()!.trim());
+    const instructions=[String(p.designInstructions||body.designInstructions||''),...remarks].filter(Boolean).join('\n');
+    return {copy:texts,instructions};
+  }
   if(body.headlineEn&&typeof body.copyEn==='string')return {copy:[body.headlineEn,body.copyEn].filter(Boolean),instructions:String(body.designInstructions||'')};
   throw new CanvaFlowError(422,'COPY_REQUIRED','Separate the exact design copy from instructions before generating. No placeholder copy will be invented.');
 }

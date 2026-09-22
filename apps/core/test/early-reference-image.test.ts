@@ -30,7 +30,7 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
 
   const service = () => new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: (async () => { throw new Error('no calls'); }) as any });
 
-  const brief = async (channel: string) =>
+  const brief = async (channel: string, rawText = 'HER PATH, HER POWER\n---\nSeptember 25, 2026') =>
     (
       await persistChatIntake(db, {
         platform: 'telegram',
@@ -38,12 +38,13 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
         sourceChannelId: channel,
         clientId,
         title: 'KAAE: Her path, her power',
-        rawText: 'HER PATH, HER POWER\n---\nSeptember 25, 2026',
+        rawText,
         designInstructions: '',
         exactCopy: [],
         designStudio: true,
       })
     ).task.id as string;
+  const different = 'ANOTHER EVENT\n---\nOctober 2, 2026';
 
   it('is saved as an instruction-only reference with no copy, and the sender is told what to do next', async () => {
     const channel = 80000000 + Math.floor(Math.random() * 1000000);
@@ -106,9 +107,12 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
     const elsewhere = await brief(`other-${randomUUID().slice(0, 8)}`);
     expect(await (service() as any).attachedImage(scope, elsewhere)).toBeUndefined();
 
-    // A second request from the same chat does not get it: the first request took it.
-    const second = await brief(channel);
+    // A different request from the same chat does not get it: the first request took it.
+    const second = await brief(channel, different);
     expect(await (service() as any).attachedImage(scope, second)).toBeUndefined();
+    // The same words re-sent are the same request, and carry its image.
+    const resent = await brief(channel);
+    expect(await (service() as any).attachedImage(scope, resent)).toBe(photo);
 
     // Outside the window it is not this request's reference (events are append-only, so the
     // window is closed instead of the event being aged).
@@ -131,8 +135,8 @@ describe.skipIf(!url)('a reference image sent before the request', () => {
       isInstructionOnly: true, autoGenerate: false, studioOptions: { referenceImageBase64: photo },
     });
     expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
-    // A photo belongs to the nearest request in time: a later request does not take it.
-    const later = await brief(channel);
+    // A photo belongs to the nearest request in time: a later, different request does not take it.
+    const later = await brief(channel, different);
     expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
     expect(await (service() as any).attachedImage(scope, later)).toBeUndefined();
   });

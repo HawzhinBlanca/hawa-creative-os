@@ -166,42 +166,44 @@ export class DesignStudioService {
    * Builds the request context from task data, brand reference pack, and logo.
    */
   /**
-   * Every image the request carries, oldest first: the one saved with the task at intake, photos
-   * that joined it afterwards (Telegram delivers text and photo as two messages), and photos sent
-   * on their own shortly before it from the same chat with no other request in between.
+   * Every image the request carries, in the order they arrived: photos sent on their own from the
+   * same chat around it (each belongs to the nearest request in time), the one saved with the task
+   * at intake, and photos that joined it afterwards (Telegram delivers text and photo as two
+   * messages). A request re-sent as text alone, the same words as one sent with images earlier the
+   * same day, carries that one's images: on 2026-09-22 a client re-sent the brief at 14:49 without
+   * re-attaching the portraits sent with it at 14:36, and the design got none.
    */
-  private async requestImages(s: Scope, taskId: string): Promise<string[]> {
+  private async requestImages(s: Scope, taskId: string, depth = 0): Promise<string[]> {
     const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
     const source = await this.tx(s, async (db) =>
       (
-        await sql<any>`SELECT e.data FROM hawa.task_events e
+        await sql<{ data: any; created_at: string }>`SELECT e.data, t.created_at FROM hawa.task_events e
+        JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
         WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
         ORDER BY e.aggregate_version LIMIT 1`.execute(db)
-      ).rows[0]?.data
+      ).rows[0]
     );
-    const payload = source?.payload || source || {};
-    const images: string[] = [];
+    const payload = source?.data?.payload || source?.data || {};
+    const myTime = source?.created_at ? new Date(source.created_at).getTime() : NaN;
+    const found: Array<{ at: number; url: string }> = [];
 
-    // Brand guidelines are sent first and the request after. On 2026-09-22 a client sent two
-    // reference images and then the brief two minutes later; the images became clientless tasks
-    // captioned "Apply the attached visual reference image" and the brief was drafted without them.
-    // Images from the same chat before this request, saved on their own with no client and pointing
-    // at nothing, belong to it, provided no other request from that chat came in between (that one
-    // took them) and they are not older than the cap (a day: guidelines in the morning, the request
-    // after lunch).
+    const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
+    if (valid(own)) found.push({ at: myTime, url: own });
+
     const channel = payload.sourceChannelId;
     const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
     // Text first, photos after, is as common as the reverse (2026-09-22, 14:36: the brief, then two
-    // portraits 10 and 12 seconds later, saved as "awaiting request" because the run had already
-    // passed the point where intake attaches them). Photos within this many minutes after the
-    // request, with no other request in between, are its photos too.
+    // images 10 and 12 seconds later, saved as "awaiting request").
     const afterMinutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_AFTER || 15));
+    type ChatRow = { task_id: string; occurred_at: string; client_id: string | null; image: string | null; raw: string | null };
+    let rows: ChatRow[] = [];
     if (typeof channel === 'string' && channel && (minutes > 0 || afterMinutes > 0)) {
-      type ChatRow = { task_id: string; occurred_at: string; client_id: string | null; image: string | null };
-      const rows = await this.tx(s, async (db) =>
+      rows = await this.tx(s, async (db) =>
         (
           await sql<ChatRow>`WITH me AS (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
-          SELECT e.task_id, e.occurred_at, t.client_id, e.data->'payload'->'studioOptions'->>'referenceImageBase64' AS image
+          SELECT e.task_id, e.occurred_at, t.client_id,
+                 e.data->'payload'->'studioOptions'->>'referenceImageBase64' AS image,
+                 e.data->'payload'->>'rawRequestText' AS raw
           FROM hawa.task_events e
           JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id, me
           WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created' AND e.task_id <> ${taskId}::uuid
@@ -217,53 +219,53 @@ export class DesignStudioService {
           ORDER BY e.occurred_at ASC LIMIT 40`.execute(db)
         ).rows
       );
-      const mine = await this.tx(s, async (db) =>
-        (await sql<{ created_at: string }>`SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db)).rows[0]?.created_at
-      );
-      const myTime = mine ? new Date(mine).getTime() : NaN;
-      // Each orphan photo belongs to the request nearest to it in time, this one or another from the
-      // same chat. "Text first, photos after" and "photos first, text after" both resolve this way,
-      // and a photo between two requests goes to one of them, not both.
+      // Each orphan photo belongs to the request nearest to it in time, this one or another from
+      // the same chat, so a photo between two requests goes to one of them, not both.
       const requests = rows.filter((r) => r.client_id).map((r) => new Date(r.occurred_at).getTime());
       for (const r of rows) {
         if (r.client_id || !valid(r.image)) continue;
         const at = new Date(r.occurred_at).getTime();
         const mineDistance = Math.abs(at - myTime);
-        const nearerOther = requests.some((other: number) => Math.abs(at - other) < mineDistance);
-        if (!nearerOther) images.push(r.image);
+        if (!requests.some((other) => Math.abs(at - other) < mineDistance)) found.push({ at, url: r.image });
       }
     }
 
-    const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
-    if (valid(own)) images.push(own);
-
     // A photo sent without a caption just after the request is saved as its own instruction-only
-    // task pointing here (Telegram delivers the two as separate messages; task 936c5c6f became a
-    // second full design run on 2026-09-19).
+    // task pointing here (task 936c5c6f became a second full design run on 2026-09-19).
     const late = await this.tx(s, async (db) =>
       (
-        await sql<any>`SELECT e.data FROM hawa.task_events e
+        await sql<{ data: any; occurred_at: string }>`SELECT e.data, e.occurred_at FROM hawa.task_events e
         WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created'
           AND e.data->'studioOptions'->>'referenceFor' = ${taskId}
         ORDER BY e.occurred_at ASC LIMIT 6`.execute(db)
-      ).rows.map((r: any) => r.data)
+      ).rows
     );
     for (const row of late) {
-      const url = row?.studioOptions?.referenceImageBase64 || row?.payload?.studioOptions?.referenceImageBase64;
-      if (valid(url)) images.push(url);
+      const url = row.data?.studioOptions?.referenceImageBase64 || row.data?.payload?.studioOptions?.referenceImageBase64;
+      if (valid(url)) found.push({ at: new Date(row.occurred_at).getTime(), url });
     }
-    return images;
+
+    const ordered = found.sort((a, b) => a.at - b.at).map((f) => f.url).filter((u, i, all) => all.indexOf(u) === i);
+    if (ordered.length || depth > 0) return ordered;
+
+    // No image of its own: the same request sent earlier today from this chat, if it had some.
+    const words = (t: unknown) => String(t || '').replace(/\s+/g, ' ').trim();
+    const mine = words(payload.rawRequestText);
+    if (!mine) return ordered;
+    const earlier = rows
+      .filter((r) => r.client_id && words(r.raw) === mine && new Date(r.occurred_at).getTime() < myTime)
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+    for (const r of earlier) {
+      const inherited = await this.requestImages(s, r.task_id, depth + 1);
+      if (inherited.length) return inherited;
+    }
+    return ordered;
   }
 
   /** The image the brief reads as a reference: the latest one the request carries, or undefined. */
   private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
     const images = await this.requestImages(s, taskId);
     return images.length ? images[images.length - 1] : undefined;
-  }
-
-  /** The photographs to place, oldest first, when the request asked for pictures. */
-  private async contentPhotos(s: Scope, taskId: string): Promise<string[]> {
-    return this.requestImages(s, taskId);
   }
 
   private async getTaskContext(s: Scope, taskId: string, width: number, height: number) {
@@ -877,27 +879,41 @@ export class DesignStudioService {
     // An image the requester attached reaches the brief, which says what it is; a style reference
     // then reaches the layout generator, the critique and the judge. It was saved with every
     // Telegram task but only the legacy planner ever read it.
-    // The request says what its images are. "A graphic with these texts and two pictures" makes
-    // them content to place; anything else makes the latest one a style reference for the brief.
-    // Until 2026-09-22 every image was a reference, so that request produced a design with the
-    // texts and no pictures, reported as passing.
-    if (asksForPictures(ctx.instructions)) {
-      const images = await this.contentPhotos(s, run.task_id);
-      ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+    // What each image is, the model decides by looking at it: the brief classifies every image the
+    // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
+    // and a reference for the graphic" with three images is two photos and one reference; until
+    // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
+    let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+    const images = await this.requestImages(s, run.task_id).catch(() => [] as string[]);
+    const roles = briefSoFar?.imageRoles;
+    let classified = false;
+    if (roles && images.length > 0 && roles.length === images.length) {
+      classified = true;
+      ctx.photos = roles.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
+      const ref = roles.find((r) => r.role === 'style_reference');
+      ctx.attachedImage = ref ? images[ref.index] : undefined;
+      if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
+    } else if (images.length > 1 && run.status === 'briefing') {
+      // The brief below looks at all of them.
+      ctx.requestImages = images;
       ctx.attachedImage = undefined;
+    } else if (images.length > 1) {
+      // A brief written before images were classified, or images that arrived after it: the request's
+      // own words decide, as before.
+      if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+      else ctx.attachedImage = images[images.length - 1];
     } else {
       ctx.attachedImage = await this.attachedImage(s, run.task_id);
     }
-    let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
     // A photo that arrived after the brief ran came without a caption, right after the request, so
     // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
     const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
     // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
-    if (ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
+    if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
       briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
     }
     // Only the brief calling the photo the client's own logo stops the run from following it.
-    if (ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
+    if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
       ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
     }
 
@@ -906,7 +922,8 @@ export class DesignStudioService {
         case 'briefing': {
           const brief = await runBriefStage(ctx);
           // Recorded on the run so the requester's note can say what became of their photos.
-          stages.brief = { ...brief, photosSent: ctx.photos?.length ?? 0 };
+          const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
+          stages.brief = { ...brief, photosSent };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
           return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
         }

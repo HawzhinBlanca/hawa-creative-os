@@ -79,5 +79,21 @@ describe.skipIf(!url)('the request carries every image sent with it', () => {
     expect(images).toEqual([a, photo]);
     // The brief's reference is the latest image when the request does not ask for pictures.
     expect(await (service() as any).attachedImage(scope, taskId)).toBe(photo);
+
+    // The same words re-sent later without images carry the earlier request's images.
+    const resent = (await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId,
+      title: 'KAAE: Her path, her power', rawText: 'HER PATH, HER POWER\n---\nSeptember 25, 2026',
+      designInstructions: 'I need a graphic with these texts and two pictures in it', exactCopy: [], designStudio: true,
+    })).task.id as string;
+    expect(await (service() as any).requestImages(scope, resent)).toEqual([a, photo]);
+
+    // Different words from the same chat do not.
+    const other = (await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId,
+      title: 'KAAE: Something else', rawText: 'ANOTHER EVENT\n---\nOctober 2, 2026',
+      designInstructions: '', exactCopy: [], designStudio: true,
+    })).task.id as string;
+    expect(await (service() as any).requestImages(scope, other)).toEqual([]);
   });
 });
