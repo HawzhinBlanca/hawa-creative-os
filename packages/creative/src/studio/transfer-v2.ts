@@ -380,24 +380,6 @@ export async function encodeStudioTransferV2(
     }
   }
 
-  // 1b. Client photos, between the art and the shapes as the renderer draws them. `cover` with
-  // the natural pixel size, as for the art, so Canva crops the way the preview did.
-  for (const p of layout.photos ?? []) {
-    const photo = options.photos?.[p.photoIndex];
-    if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
-    const pixels = imagePixelSize(photo.bytes);
-    const rounding = p.radius ? Math.min(1, p.radius / (Math.min(p.width, p.height) / 2)) : 0;
-    slide.addImage({
-      data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
-      x: p.x / 96,
-      y: p.y / 96,
-      w: (pixels ? pixels.width : p.width) / 96,
-      h: (pixels ? pixels.height : p.height) / 96,
-      ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
-      ...(rounding > 0 ? { rounding: true } : {}),
-    });
-  }
-
   // 2. Shapes
   for (const shape of layout.shapes) {
     const kind = shape.kind || 'rect';
@@ -446,6 +428,24 @@ export async function encodeStudioTransferV2(
           }
         : { color: hex(shape.color), transparency: 100 },
       ...(kind === 'roundRect' && shape.radius ? { rectRadius: shape.radius / 96 } : {}),
+    });
+  }
+
+  // 2b. Client photos, above the shapes and below the text, as the renderer draws them. `cover` with
+  // the natural pixel size, as for the art, so Canva crops the way the preview did.
+  for (const p of layout.photos ?? []) {
+    const photo = options.photos?.[p.photoIndex];
+    if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
+    const pixels = imagePixelSize(photo.bytes);
+    const rounding = p.radius ? Math.min(1, p.radius / (Math.min(p.width, p.height) / 2)) : 0;
+    slide.addImage({
+      data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
+      x: p.x / 96,
+      y: p.y / 96,
+      w: (pixels ? pixels.width : p.width) / 96,
+      h: (pixels ? pixels.height : p.height) / 96,
+      ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
+      ...(rounding > 0 ? { rounding: true } : {}),
     });
   }
 

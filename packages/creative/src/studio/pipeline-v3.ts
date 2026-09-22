@@ -750,7 +750,7 @@ export function prepareGeneratedLayoutV3(
     : conformToHouseRules(fonted, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
-  const finish = (l: StudioLayoutV2) => balanceLineBreaks(compose(l), copy);
+  const finish = (l: StudioLayoutV2) => settlePhotos(balanceLineBreaks(compose(l), copy));
   const compose = (l: StudioLayoutV2) => {
     if (!spread) return balance ? balanceVertically(l, copy) : l;
     // The reference's composition, kept unless it adds a real defect. The measure here is the hard
@@ -771,6 +771,98 @@ export function prepareGeneratedLayoutV3(
   const ornamented = addBrandOrnament(conformed, copy, canvas.ornament, canvas.palette || []);
   if (!ornamentAddsDefect(plain, ornamented, copy)) return finish(ornamented);
   return finish(addBrandOrnament(plain, copy, { ...canvas.ornament, dividers: false }, canvas.palette || []));
+}
+
+/**
+ * Re-seats the client's photographs when the passes above left text or the logo on one.
+ *
+ * The layout model places photos and copy together, and then typography grows the title and the
+ * reference's spread composition moves the blocks, with no knowledge of the photos. On 2026-09-22
+ * all three candidates for a two-portrait request placed both photos, and all three came out of
+ * preparation with a text block on a portrait, which hard QA refused. Moving the copy back would
+ * undo the choices those passes enforce; the photos are what can move.
+ *
+ * Deterministic: the page's text and logo (with its clear space) are obstacles; the free horizontal
+ * bands between them are measured inside the margins; the photos go side by side in the free band
+ * nearest where the model put them that fits them at their minimum size (22% of the canvas's short
+ * side, 12% for an inset), keeping each photo's aspect and order, as large as the band allows, aligned
+ * the way the copy is aligned. A layout with no conflict, or no band that fits, is returned as it is:
+ * hard QA then refuses it rather than a photo being shrunk into a thumbnail.
+ */
+export function settlePhotos(layout: StudioLayoutV2): StudioLayoutV2 {
+  const photos = layout.photos || [];
+  if (!photos.length) return layout;
+  const W = layout.width;
+  const H = layout.height;
+  const m = Math.max(0, layout.grid?.margin ?? 0);
+  const gap = Math.max(16, Math.round(Math.min(W, H) * 0.02));
+  const hit = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  const texts: Rect[] = [...(layout.text || [])];
+  const logoZone = layout.logo && layout.logo.width > 0 ? logoClearZone(layout.logo) : undefined;
+  const obstacles = [...texts, ...(logoZone ? [logoZone] : [])];
+  const conflict =
+    photos.some((p) => obstacles.some((o) => hit(p, o)) || p.x < 0 || p.y < 0 || p.x + p.width > W || p.y + p.height > H) ||
+    photos.some((p, i) => photos.some((q, j) => j > i && hit(p, q)));
+  if (!conflict) return layout;
+
+  // Free bands between the text blocks, inside the margins. Text runs the width of a column, so
+  // it is treated as a full-width obstacle; the logo is checked in two dimensions below, so a row
+  // of photos can sit beside it.
+  const covered = texts
+    .map((o) => [Math.max(m, o.y - gap), Math.min(H - m, o.y + o.height + gap)] as const)
+    .filter(([a, b]) => b > a)
+    .sort((a, b) => a[0] - b[0]);
+  const bands: Array<{ top: number; bottom: number }> = [];
+  let cursor = m;
+  for (const [a, b] of covered) {
+    if (a > cursor) bands.push({ top: cursor, bottom: a });
+    cursor = Math.max(cursor, b);
+  }
+  if (H - m > cursor) bands.push({ top: cursor, bottom: H - m });
+
+  const minSide = photos.map((p) => Math.round(Math.min(W, H) * (p.role === 'inset' ? 0.12 : 0.22)));
+  // Photos are cover-cropped, so a box may be squarer than the photo: a tall portrait keeps a
+  // portrait box down to 3:4, never a sliver.
+  const aspects = photos.map((p) => Math.max(0.75, Math.min(1.5, p.width / Math.max(1, p.height))));
+  const aligns = (layout.text || []).map((t) => t.align);
+  const left = aligns.filter((a) => a === 'left').length;
+  const right = aligns.filter((a) => a === 'right').length;
+  const centred = aligns.length - left - right;
+  const preferred: 'left' | 'right' | 'center' = left > right && left > centred ? 'left' : right > left && right > centred ? 'right' : 'center';
+  const centre = photos.reduce((a, p) => a + p.y + p.height / 2, 0) / photos.length;
+  const ordered = [...bands].sort(
+    (a, b) => Math.abs((a.top + a.bottom) / 2 - centre) - Math.abs((b.top + b.bottom) / 2 - centre)
+  );
+
+  for (const band of ordered) {
+    const maxH = Math.floor(Math.min(band.bottom - band.top, H * 0.42));
+    for (let h = maxH; h >= Math.max(...minSide); h -= 4) {
+      const widths = aspects.map((a, i) => Math.max(minSide[i], Math.round(h * a)));
+      if (widths.some((w, i) => Math.min(w, h) < minSide[i])) continue;
+      const rowWidth = widths.reduce((a, b) => a + b, 0) + gap * (photos.length - 1);
+      if (rowWidth > W - 2 * m) continue;
+      const y = Math.round(band.top + (band.bottom - band.top - h) / 2);
+      const starts = { left: m, right: W - m - rowWidth, center: Math.round((W - rowWidth) / 2) };
+      const order = [preferred, ...(['left', 'center', 'right'] as const).filter((o) => o !== preferred)];
+      for (const o of order) {
+        let x = starts[o];
+        const boxes = widths.map((w) => {
+          const b = { x, y, width: w, height: h };
+          x += w + gap;
+          return b;
+        });
+        if (logoZone && boxes.some((b) => hit(b, logoZone))) continue;
+        photos.forEach((p, i) => {
+          const radius = p.radius ? Math.round((p.radius / Math.max(1, Math.min(p.width, p.height))) * Math.min(boxes[i].width, h)) : undefined;
+          Object.assign(p, boxes[i]);
+          if (radius) p.radius = radius;
+          else delete p.radius;
+        });
+        return layout;
+      }
+    }
+  }
+  return layout;
 }
 
 /**

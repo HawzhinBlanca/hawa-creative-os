@@ -1221,7 +1221,13 @@ export function renderLayoutV2ToSvg(
     }
   }
 
-  // Photos Layer: above the art and its scrim, below shapes and text. Drawn with the same
+  // Shapes Layer
+  if (layout.shapes.length > 0) {
+    bodyPartsNoText.push(renderShapesToSvg(layout.shapes));
+  }
+
+  // Photos Layer: above the art, its scrim and the shapes, below the logo and text. Panels are
+  // card backgrounds; drawn over a photo they hid it (2026-09-22, both portraits under a navy card). Drawn with the same
   // xMidYMid slice the art uses, so the transfer's `cover` sizing matches what the judge scored.
   for (const p of layout.photos ?? []) {
     const href = options.photoDataUris?.[p.photoIndex];
@@ -1241,10 +1247,6 @@ export function renderLayoutV2ToSvg(
     }
   }
 
-  // Shapes Layer
-  if (layout.shapes.length > 0) {
-    bodyPartsNoText.push(renderShapesToSvg(layout.shapes));
-  }
 
   // Logo Layer
   let logoHref = options.logoDataUri;

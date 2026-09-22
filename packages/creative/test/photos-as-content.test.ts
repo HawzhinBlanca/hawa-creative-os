@@ -156,3 +156,51 @@ describe('photos in the v3 pipeline (the one production runs)', () => {
     expect(layoutDefectCount(covered, copy)).toBeGreaterThan(clean);
   });
 });
+
+import { settlePhotos } from '../src/studio/pipeline-v3.js';
+
+describe('settlePhotos: the photos move, not the copy', () => {
+  // Candidate 4f4e82d6 of run f54b0388 (2026-09-22) as it left preparation: the subtitle on portrait 0.
+  const failing = (): StudioLayoutV2 => ({
+    ...base(),
+    grid: { margin: 65, columns: 6, gutter: 20, baseline: 8 },
+    logo: { x: 486, y: 361, width: 108, height: 108 },
+    text: [
+      { copyIndex: 0, role: 'title', x: 65, y: 537, width: 950, height: 248, fontSize: 88, lineHeight: 1.2, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: true },
+      { copyIndex: 1, role: 'subtitle', x: 65, y: 785, width: 792, height: 90, fontSize: 30, lineHeight: 1.3, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: true },
+    ],
+    photos: [
+      { photoIndex: 0, role: 'portrait', x: 170, y: 802, width: 313, height: 470 },
+      { photoIndex: 1, role: 'portrait', x: 527, y: 888, width: 383, height: 383 },
+    ],
+  });
+  const ctx2 = { ...context(2), copyCount: 2 };
+
+  it('re-seats photos that text covers into a free band, at a valid size, aligned with the copy', () => {
+    expect(validateLayoutV2(failing(), ctx2)).toMatchObject({ ok: false, code: 'PHOTOS' });
+    const settled = settlePhotos(failing());
+    expect(validateLayoutV2(settled, ctx2).ok).toBe(true);
+    expect(settled.photos![0].x).toBe(settled.grid.margin); // left-aligned copy, left-aligned row
+    expect(settled.text[1].y).toBe(785); // the copy did not move
+  });
+
+  it('leaves a layout with no conflict exactly as it is', () => {
+    const ok = twoPortraits();
+    expect(settlePhotos(JSON.parse(JSON.stringify(ok)))).toEqual(ok);
+  });
+
+  it('does not shrink photos into thumbnails when no band fits: QA refuses instead', () => {
+    const crowded = failing();
+    crowded.text.push({ copyIndex: 2, role: 'body', x: 65, y: 900, width: 950, height: 380, fontSize: 20, lineHeight: 1.4, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left' } as any);
+    crowded.text[0].y = 120;
+    const before = JSON.stringify(crowded.photos);
+    expect(JSON.stringify(settlePhotos(crowded).photos)).toBe(before);
+  });
+
+  it('draws photos above panels (card backgrounds), below the copy', () => {
+    const l = twoPortraits();
+    l.shapes = [{ kind: 'rect', role: 'panel', x: 60, y: 400, width: 960, height: 640, color: '#1E3A5F' } as any];
+    const svg = renderLayoutV2(l, { copyText: { 0: 'Title', 1: 'Body' }, photoDataUris: [`data:image/png;base64,${tinyPng(2, 2).toString('base64')}`, `data:image/png;base64,${tinyPng(2, 2).toString('base64')}`] }).svg;
+    expect(svg.indexOf('fill="#1E3A5F"')).toBeLessThan(svg.indexOf('id="photo-0"'));
+  });
+});
