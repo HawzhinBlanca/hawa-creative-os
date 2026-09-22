@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { createApp } from '../../../apps/core/src/app.js';
 import { createDb } from '@hawa/db';
 import {
@@ -367,7 +368,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
       })),
     };
 
-    const outputDir = path.resolve(process.cwd(), 'output/drills');
+    const outputDir = process.env.PILOT_OUTPUT_DIR || path.resolve(tmpdir(), 'hawa-drills');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     const jsonPath = path.join(outputDir, '2026-09-11-three-client-pilot-qualification.json');

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import pg from 'pg';
 
 // The container pg_dump and psql run in. It defaults to the test server; vitest.config.ts refuses a
@@ -212,7 +213,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
   });
 
   it('6. Records authentic drill evidence artifact to output/drills/ directory', () => {
-    const drillDir = resolve(process.cwd(), 'output/drills');
+    const drillDir = process.env.DRILL_OUTPUT_DIR || resolve(tmpdir(), 'hawa-drills');
     if (!existsSync(drillDir)) {
       mkdirSync(drillDir, { recursive: true });
     }

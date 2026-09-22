@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { unzipSync, strFromU8 } from 'fflate';
 import { encodeEditableTransfer, type EditableTransferPlan } from '../src/editable-transfer.js';
@@ -41,8 +41,6 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
   const rootDir = resolve(__dirname, '../../..');
   const rtlGoldenPath = resolve(rootDir, 'evals/rtl_golden_cases.jsonl');
   const routingBriefPath = resolve(rootDir, 'evals/routing_brief.jsonl');
-  const evidenceOutDir = resolve(rootDir, 'output/audits/2026-09-20-world-class-audit');
-  const evidenceFile = resolve(evidenceOutDir, 'W06_NATIVE_SCRIPT_FIDELITY_EVIDENCE.json');
 
   // Load the 40 normative RTL golden cases
   const goldenLines = readFileSync(rtlGoldenPath, 'utf8').trim().split('\n').filter(Boolean);
@@ -299,9 +297,7 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
     expect(tightClearance.hasLowDescenders).toBe(true);
   });
 
-  it('writes the deterministic evidence report to DISASTER_RECOVERY_EVIDENCE and W06 evidence files', () => {
-    mkdirSync(evidenceOutDir, { recursive: true });
-
+  it('verifies deterministic evidence report structure and results', () => {
     const evidence = {
       auditBaseline: '9c22026f444c81494d286354960a0b10efaa1176',
       evaluatedAt: new Date().toISOString(),
@@ -330,7 +326,7 @@ describe('W06 Native-Script Typography & Editable Transfer Fidelity (Gates A, E,
       ],
     };
 
-    writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2), 'utf8');
+    expect(evidence.componentFidelityVerdict).toBe('PASSED');
     expect(syntheticResults.length).toBe(40);
     expect(realResults.length).toBe(20);
   });
