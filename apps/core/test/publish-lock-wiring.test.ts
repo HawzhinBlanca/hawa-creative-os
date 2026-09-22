@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
@@ -56,11 +56,8 @@ async function approvedTask(db: any, app: any, headers: Record<string, string>) 
 describe('delivery through Core holds the per-task publish lock', () => {
   const db = createDb(process.env.TEST_DATABASE_URL!);
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` };
-  beforeAll(async () => {
-    await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'administrator' }, async (trx) => {
-      await sql`DELETE FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid`.execute(trx);
-    });
-  });
+  // No outbox cleanup here: test files run in parallel against one database, and deleting the
+  // tenant's commands removed the delivery notification the e2e chain test was waiting for.
   afterAll(async () => { await db.destroy(); });
 
   it('two simultaneous deliveries of one task reach the publisher once; the other is refused with 409', async () => {
