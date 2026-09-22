@@ -12,6 +12,7 @@ import {
   validateLayoutV2,
   computeLayoutMetrics,
   encodeStudioTransferV2,
+  getSafeZoneBox,
   type StudioLayoutV2,
   type LayoutValidationContext,
 } from '@hawa/creative';
@@ -57,11 +58,13 @@ export class OfflineRunner {
     const minLogoWidth = Math.max(100, Math.round(0.08 * width));
     const logoWidth = minLogoWidth;
 
+    const safeBox = getSafeZoneBox(width, height, margin);
+
     // Clear space: 0.5 * logo.height free of text and rules
     const cs = Math.ceil(0.55 * logoWidth);
-    const logoClearSpaceY = margin + logoWidth + cs;
-    const availableHeight = height - logoClearSpaceY - margin - 20;
-    const contentWidth = width - 2 * margin;
+    const logoClearSpaceY = safeBox.y + logoWidth + cs;
+    const availableHeight = safeBox.y + safeBox.height - logoClearSpaceY - 20;
+    const contentWidth = safeBox.width;
 
     const blockCount = brief.copyBlocks.length;
     const slotHeight = Math.floor(availableHeight / (blockCount + 0.5));
@@ -102,7 +105,7 @@ export class OfflineRunner {
       textElements.push({
         copyIndex: block.copyIndex,
         role: role as any,
-        x: margin,
+        x: safeBox.x,
         y: currentY,
         width: contentWidth,
         height: boxHeight,
@@ -118,12 +121,12 @@ export class OfflineRunner {
       currentY += boxHeight + gap;
     }
 
-    const ruleY = Math.min(currentY + 4, height - margin - 5);
+    const ruleY = Math.min(currentY + 4, safeBox.y + safeBox.height - 5);
     const shapes: StudioLayoutV2['shapes'] = [
       {
         kind: 'line',
         role: 'rule',
-        x: margin,
+        x: safeBox.x,
         y: ruleY,
         width: Math.min(contentWidth, 300),
         height: 2,
@@ -143,11 +146,11 @@ export class OfflineRunner {
         motif: concept.motif,
         box: { x: 0, y: 0, width, height },
         opacity: 0.15,
-        calmRegion: { x: margin, y: margin, width: contentWidth, height: height - 2 * margin },
+        calmRegion: { x: safeBox.x, y: safeBox.y, width: contentWidth, height: safeBox.height },
       },
       logo: {
-        x: margin,
-        y: margin,
+        x: safeBox.x,
+        y: safeBox.y,
         width: logoWidth,
         height: logoWidth,
       },
