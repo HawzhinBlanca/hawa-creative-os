@@ -176,7 +176,42 @@ export class DesignStudioService {
       ).rows[0]?.data
     );
     const url = late?.studioOptions?.referenceImageBase64 || late?.payload?.studioOptions?.referenceImageBase64;
-    return valid(url) ? url : undefined;
+    if (valid(url)) return url;
+    // Brand guidelines are sent first and the request after. On 2026-09-22 a client sent two
+    // reference images and then the brief two minutes later; the images became clientless tasks
+    // captioned "Apply the attached visual reference image" and the brief was drafted without them.
+    // An image from the same chat before this request, saved on its own with no client and pointing
+    // at nothing, is this request's reference, provided no other request from that chat came in
+    // between (that one took it) and it is not older than the cap (a day: guidelines are sent in
+    // the morning, the request after lunch).
+    const channel = payload.sourceChannelId;
+    const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
+    if (typeof channel !== 'string' || !channel || !(minutes > 0)) return undefined;
+    const before = await this.tx(s, async (db) =>
+      (
+        await sql<any>`SELECT e.data FROM hawa.task_events e
+        JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
+        WHERE e.tenant_id=${s.tenantId}::uuid AND e.event_type='task.created' AND e.task_id <> ${taskId}::uuid
+          AND t.client_id IS NULL
+          AND e.data->'payload'->>'sourceChannelId' = ${channel}
+          AND COALESCE(e.data->'payload'->>'autoGenerate', 'false') <> 'true'
+          AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
+          AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL
+          AND e.occurred_at <= (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+          AND e.occurred_at > (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid) - make_interval(mins => ${minutes})
+          AND NOT EXISTS (
+            SELECT 1 FROM hawa.task_events r JOIN hawa.tasks rt ON rt.id = r.task_id AND rt.tenant_id = r.tenant_id
+            WHERE r.tenant_id = e.tenant_id AND r.event_type = 'task.created' AND r.task_id <> ${taskId}::uuid
+              AND rt.client_id IS NOT NULL
+              AND r.data->'payload'->>'sourceChannelId' = ${channel}
+              AND r.occurred_at > e.occurred_at
+              AND r.occurred_at < (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
+          )
+        ORDER BY e.occurred_at DESC LIMIT 1`.execute(db)
+      ).rows[0]?.data
+    );
+    const preceding = before?.payload?.studioOptions?.referenceImageBase64;
+    return valid(preceding) ? preceding : undefined;
   }
 
   private async getTaskContext(s: Scope, taskId: string, width: number, height: number) {

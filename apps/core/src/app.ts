@@ -3473,6 +3473,31 @@ export function createApp(options?: CreateAppOptions) {
         broadcast('task:created', persisted.task);
         return c.json({ ok: true, referenceFor: target.taskId, task: persisted.task }, 201);
       }
+      // No request to attach to yet: the image is kept as a reference for the request that follows.
+      // It used to fall through to intake as a brief whose copy was the sentence "Apply the attached
+      // visual reference image…" (two such tasks on 2026-09-22), which a design would then print.
+      const persisted = await persistChatIntake(db, {
+        platform: 'telegram',
+        sourceEventId,
+        sourceChannelId,
+        rawText,
+        rawJson: json,
+        clientId: null,
+        title: `${[msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'Client'}: reference image (awaiting request)`,
+        designInstructions: rawText,
+        exactCopy: [],
+        isInstructionOnly: true,
+        autoGenerate: false,
+        studioOptions: { referenceImageBase64 },
+      });
+      await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+        text:
+          `🖼️ <b>Reference image saved.</b>\n\n` +
+          `<i>Send the request text now and the design will follow this image. Nothing is designed from the image alone.</i>`,
+        parse_mode: 'HTML',
+      });
+      broadcast('task:created', persisted.task);
+      return c.json({ ok: true, referenceAwaitingRequest: true, task: persisted.task }, 201);
     }
 
     // Handle bot slash commands (/start, /status, /help, /review, /approve, /publish, /revise, /reject)
