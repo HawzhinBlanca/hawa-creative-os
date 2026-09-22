@@ -41,7 +41,11 @@ process.on('uncaughtException', (err: Error) => {
   process.exit(1);
 });
 
-const app = createApp();
+// The production process is the one that polls Telegram. Commit 36f6958 moved this from an
+// environment check to an option and did not set it here, so the 2026-09-22 deploy started with
+// the bridge idle (adapters/telegram/status: active=false) and nothing from the two client chats
+// reached intake for 80 minutes. production-entrypoint.test.ts pins it.
+const app = createApp({ enableTelegramPolling: true });
 const port = Number(process.env.PORT || 3001);
 const hostname = process.env.HOST || '0.0.0.0';
 
