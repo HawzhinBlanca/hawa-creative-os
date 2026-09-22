@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-22T00:13:55Z",
+  "generatedAt": "2026-09-22T00:21:34Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 241,
+  "fileCount": 244,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "7b0bac1df52c2e17b1fd540badc555633c8032433bafed87655b07ed89072170",
+      "sha256": "6b1d8de32e30bf37f3e8c11b7b14f0483a89aad400248ff6dbb529faa5842c32",
       "bytes": 2898
     },
     {
@@ -1043,6 +1043,11 @@
       "bytes": 24216
     },
     {
+      "path": "scripts/ratchet_any.ts",
+      "sha256": "7b124d7c993ceb9e3c6885bb9c81ab2f4c2d687994655d6a126bd9022c5c3b8e",
+      "bytes": 2991
+    },
+    {
       "path": "scripts/reconcile_production_tasks.ts",
       "sha256": "4bb501b454ad044ef8b007d4934822101a2475520370ecbf11d43bc998ef5014",
       "bytes": 1491
@@ -1158,6 +1163,11 @@
       "bytes": 6418
     },
     {
+      "path": "scripts/typecheck_tests.ts",
+      "sha256": "98c3ab99a24a0833693f74c2a6b5cdb4b85d63f09956d38475d4e20a9dfa7c57",
+      "bytes": 1735
+    },
+    {
       "path": "scripts/update_proofs_manifest.ts",
       "sha256": "a94b5755bae6fb9862aa9efab87700c9960c65dc051459ae5cbca021de976b6b",
       "bytes": 3345
@@ -1201,6 +1211,11 @@
       "path": "tsconfig.scripts.json",
       "sha256": "1cd9520eec6389219a1422796c8498f3f069d5fc20e4504da5d4d2a8b0fe3165",
       "bytes": 1712
+    },
+    {
+      "path": "tsconfig.test.json",
+      "sha256": "9b8166517f5a7f71538b3c53945bd709b79bf59a6d88a135b6de3990c7b9c93d",
+      "bytes": 4786
     },
     {
       "path": "ui/design-system.md",
