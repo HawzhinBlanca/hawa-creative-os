@@ -6658,7 +6658,10 @@ export function createApp(options?: CreateAppOptions) {
           return c.json({ events: mapped });
         }
       } catch (err) {
+        // Answered with the in-memory events (usually none), a failed read showed the Desk's History
+        // tab as "no recorded events" (review of 2026-09-24).
         console.error('[core:tasks:timeline] DB timeline error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The task history could not be read; try again');
       }
     }
 

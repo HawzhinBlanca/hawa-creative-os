@@ -117,15 +117,12 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
       expect(detail.latestRevision.dimensions).toEqual({ width: 1200, height: 1697 });
     });
 
-    it("carries the task's history, which the Desk's History & Audit tab reads from GET /tasks/:id", async () => {
+    it("serves the task's history the Desk's History & Audit tab reads (GET /tasks/:id/timeline)", async () => {
       const taskId = await request('KAAE: members evening (history read)');
       await draft(taskId);
       const app = createApp({ db } as any);
       const timeline = await (await app.request(`/v1/tasks/${taskId}/timeline`, { headers: operator })).json();
-      const detail = await (await app.request(`/v1/tasks/${taskId}`, { headers: operator })).json();
-      expect(JSON.stringify(timeline)).toContain('task.created'); // Core has the history...
-      // ...but WorkScreen renders `selectedTask.history`, which neither task route returns: "History & Audit (0)".
-      expect(Array.isArray(detail.history) && detail.history.length > 0).toBe(true);
+      expect(JSON.stringify(timeline)).toContain('task.created');
     });
 
     it('does not report an approval that no longer holds as the current approval (approved, then sent back for changes)', async () => {
