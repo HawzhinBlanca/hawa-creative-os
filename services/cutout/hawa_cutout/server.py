@@ -3,7 +3,8 @@
 POST /v1/faces           body: the photo's bytes -> {"faces": [...], "focus": {"x", "y"}} (no matting; fast)
 POST /v1/cutout          body: the photo's bytes; query: people=<n> (optional)
                          200 {"ok": true, "passed": bool, "png": base64, "shadow": {...}, "gates": {...}, ...}
-                         400 when the body is not a picture; 503 while the model is loading
+                         400 when the body is not a picture, or one too large to cut out; 503 while
+                         the model is loading
 GET  /health             {"status": "healthy" | "loading" | "failed", "model": ..., "modelSha256": ...}
 
 One cut at a time: an inference takes about 8 GB at 1024 x 1024, so a second request waits for the
@@ -20,12 +21,17 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .core import Cutter
+from .core import Cutter, UnreadablePhoto
 
 MAX_BODY = 25 * 1024 * 1024
 
 state: dict[str, object] = {'status': 'loading', 'cutter': None, 'error': None}
 lock = threading.Lock()
+
+
+def bad_picture(err: Exception) -> bool:
+    """Whether a failure is the photo's (400) rather than the service's (500)."""
+    return isinstance(err, UnreadablePhoto) or 'cannot identify image' in str(err) or 'image file is truncated' in str(err)
 
 
 def load() -> None:
@@ -85,8 +91,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self.reply(200, {'ok': True, **cutter.focus(data)})
             except Exception as err:
-                bad_picture = 'cannot identify image' in str(err) or 'image file is truncated' in str(err)
-                return self.reply(400 if bad_picture else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
+                return self.reply(400 if bad_picture(err) else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
         people = parse_qs(url.query).get('people', [None])[0]
         expected = int(people) if people and people.isdigit() else None
         waited = time.time()
@@ -96,8 +101,7 @@ class Handler(BaseHTTPRequestHandler):
                 r = cutter.cut(data, expected_people=expected)
             except Exception as err:
                 traceback.print_exc()
-                bad_picture = 'cannot identify image' in str(err) or 'image file is truncated' in str(err)
-                return self.reply(400 if bad_picture else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
+                return self.reply(400 if bad_picture(err) else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
         self.reply(200, {
             'ok': True,
             'passed': r.passed,

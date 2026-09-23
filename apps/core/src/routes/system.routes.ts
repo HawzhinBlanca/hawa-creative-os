@@ -1,7 +1,13 @@
 import type { RouteContext } from './types.js';
-import { withRlsContext } from '@hawa/db';
+import { sql, withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
+
+/**
+ * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
+ * (apps/worker/src/outbox-consumer.ts), and Core's own inline sends (canvaStatusHandler).
+ */
+const OUTBOX_UNCERTAIN_SEND = 'DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE';
 
 export function registerSystemRoutes(ctx: RouteContext) {
   const {
@@ -163,22 +169,41 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
   // Dead-lettered outbox commands (state = failed) can be requeued by an administrator after the
   // cause recorded in last_error is fixed. Nothing is re-run silently; the response lists the ids.
+  //
+  // A send that may have arrived (DELIVERY_UNCERTAIN, TELEGRAM_RECEIPT_INVALID, the consumer's other
+  // after-send failures) is dead-lettered so that it is never sent twice, and this route put it back
+  // to pending with the rest, which deploy.sh suggests after every deploy (2026-09-24). Such a row is
+  // requeued only when it is named in `ids` and `confirmUncertainReplay` is true, as the per-task
+  // redrive asks; `{"all":true}` leaves it dead-lettered and lists it under `keptUncertain`.
   registerRoute('post', '/system/outbox/requeue', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
     if (!db) return problem(c, 503, 'Database Required', 'Outbox requeue requires durable storage');
     const body = await c.req.json().catch(() => ({}));
     const ids: string[] = Array.isArray(body.ids) ? body.ids.filter((v: unknown) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)) : [];
     if (!ids.length && body.all !== true) return problem(c, 422, 'Nothing Selected', 'Pass {"ids":[…]} or {"all":true}');
+    const replayUncertain = ids.length > 0 && body.confirmUncertainReplay === true;
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    const rows: Array<{ id: string; aggregate_id: string; command_type: string }> = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+    const uncertain = sql<boolean>`coalesce(last_error, '') ~* ${OUTBOX_UNCERTAIN_SEND}`;
+    const { rows, kept } = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
       let query = trx.updateTable('outbox_commands')
         .set({ state: 'pending', attempts: 0, available_at: new Date(), leased_until: null } as any)
         .where('state', '=', 'failed');
       if (ids.length) query = query.where('id', 'in', ids);
-      return (await query.returning(['id', 'aggregate_id', 'command_type']).execute()) as any;
+      if (!replayUncertain) query = query.where(sql<boolean>`NOT ${uncertain}`);
+      const requeued = (await query.returning(['id', 'aggregate_id', 'command_type']).execute()) as Array<{ id: string; aggregate_id: string; command_type: string }>;
+      let keptQuery = trx.selectFrom('outbox_commands').select(['id', 'aggregate_id', 'command_type', 'last_error'])
+        .where('state', '=', 'failed').where(uncertain);
+      if (ids.length) keptQuery = keptQuery.where('id', 'in', ids);
+      return { rows: requeued, kept: replayUncertain ? [] : await keptQuery.execute() };
     });
-    return c.json({ ok: true, requeued: rows.length, commands: rows }, 200);
+    return c.json({
+      ok: true,
+      requeued: rows.length,
+      commands: rows,
+      keptUncertain: kept,
+      ...(kept.length ? { keptUncertainReason: 'These may already have reached their recipient. Check first, then name each in "ids" with "confirmUncertainReplay": true to send it again.' } : {}),
+    }, 200);
   });
 
   // Real-time Server-Sent Events (SSE) Stream

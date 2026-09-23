@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { runCanvaDraft } from '../src/canva-draft-workflow.js';
+import { runCanvaDraft, OUTCOME_REPORT_RETRY_MS } from '../src/canva-draft-workflow.js';
 import type { WorkflowInput } from '../src/workflow.js';
 
 /**
@@ -26,11 +26,11 @@ const BUSY_WINDOW_MS = 15 * 60 * 1000;
 /** Records the journalled steps, their options and every timer; a journal handed in is replayed. */
 function recordingContext(journal: Map<string, unknown> = new Map()) {
   const steps: string[] = [];
-  const options = new Map<string, { maxRetryAttempts?: number } | undefined>();
+  const options = new Map<string, { maxRetryAttempts?: number; maxRetryDuration?: number } | undefined>();
   const sleeps: number[] = [];
   const ctx = {
     key: 'wf-busy-test',
-    run: async <T>(name: string, action: () => Promise<T>, opts?: { maxRetryAttempts?: number }): Promise<T> => {
+    run: async <T>(name: string, action: () => Promise<T>, opts?: { maxRetryAttempts?: number; maxRetryDuration?: number }): Promise<T> => {
       steps.push(name);
       options.set(name, opts);
       if (journal.has(name)) return journal.get(name) as T;
@@ -145,14 +145,16 @@ describe('a busy studio', () => {
 });
 
 describe('step retry options', () => {
-  it('leaves every Core step on the adapter default (the restart window) except the paid parity check', async () => {
+  it('leaves every Core step on the adapter default (the restart window) except the paid parity check and the outcome report', async () => {
     vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
     const { ctx, options } = recordingContext();
     await runCanvaDraft(input, ctx, busyCore({ busyStarts: 0 }));
 
     expect(options.get('canva-parity-check')).toEqual({ maxRetryAttempts: 5 });
-    const others = [...options.entries()].filter(([name]) => name !== 'canva-parity-check');
-    expect(others.map(([name]) => name)).toEqual(expect.arrayContaining(['canva-studio-start', 'canva-studio-resume-0', 'canva-notify-canva_draft_ready_for_visual_review']));
+    // The report waits an hour for Core, then the worker records the outcome itself (2026-09-24).
+    expect(options.get('canva-notify-canva_draft_ready_for_visual_review')).toEqual({ maxRetryDuration: OUTCOME_REPORT_RETRY_MS });
+    const others = [...options.entries()].filter(([name]) => name !== 'canva-parity-check' && !name.startsWith('canva-notify-'));
+    expect(others.map(([name]) => name)).toEqual(expect.arrayContaining(['canva-studio-start', 'canva-studio-resume-0']));
     expect(others.filter(([, opts]) => opts !== undefined)).toEqual([]);
   });
 });

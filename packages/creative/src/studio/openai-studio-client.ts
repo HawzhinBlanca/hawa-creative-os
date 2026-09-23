@@ -155,6 +155,30 @@ export class OpenAiModelTruncatedError extends StudioModelError {
 }
 
 /**
+ * The model answered, and the call was billed, but with no answer: a safety refusal
+ * (`message.refusal`, `content: null`) or no content at all. It used to become the string '{}' and
+ * be returned as a successful, empty answer (2026-09-24). Like a reply that is not JSON, it is not
+ * retried: the same question is refused the same way.
+ */
+export class OpenAiModelRefusalError extends StudioModelError {
+  readonly model: string;
+  readonly responseId?: string;
+  readonly costUsd: number;
+  constructor(model: string, refused: boolean, billed: { responseId?: string; costUsd?: number } = {}) {
+    super(
+      refused
+        ? `OpenAI ${model} refused to answer; not retried, the call was billed`
+        : `OpenAI ${model} replied with no content; not retried, the call was billed`,
+      'MODEL_REFUSED'
+    );
+    this.name = 'OpenAiModelRefusalError';
+    this.model = model;
+    this.responseId = billed.responseId;
+    this.costUsd = billed.costUsd ?? 0;
+  }
+}
+
+/**
  * The response headers arrived and then the body could not be read (the socket dropped mid-body,
  * or the body was not JSON). OpenAI has most likely already done, and billed, the work, so asking
  * again would pay twice for one answer: it is reported as uncertain rather than retried.
@@ -495,7 +519,13 @@ export class OpenAiStudioClient {
           : null;
         const toolCallArg = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
 
-        const rawContent = data.choices?.[0]?.message?.content ??
+        // A refusal, or a message with neither content nor a tool call, is no answer (see OpenAiModelRefusalError).
+        const message = data.choices?.[0]?.message;
+        if (message && (message.refusal || (message.content == null && !toolCallArg))) {
+          throw new OpenAiModelRefusalError(model, Boolean(message.refusal), { responseId, costUsd });
+        }
+
+        const rawContent = message?.content ??
           (Array.isArray(data.content)
             ? data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
             : (typeof data.content === 'string' ? data.content : '{}'));

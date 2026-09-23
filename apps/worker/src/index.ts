@@ -1,6 +1,6 @@
 import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
-import type { WorkflowDurableContext } from './durable-context.js';
+import type { WorkflowDurableContext, WorkflowStepRetry } from './durable-context.js';
 import { withRlsContext, sql, createDb } from '@hawa/db';
 import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
@@ -21,6 +21,7 @@ process.on('uncaughtException', (err: Error) => {
   process.exit(1);
 });
 import { runCanvaDraft } from './canva-draft-workflow.js';
+import { outcomeRecorder } from './outcome-without-core.js';
 export * from './workflow.js';
 export * from './canva-draft-workflow.js';
 export * from './outbox-consumer.js';
@@ -42,6 +43,9 @@ const sharedDb = dbUrl ? createDb(dbUrl) : undefined;
  *
  * A step that pays for work Core does not deduplicate (the parity check's model call) passes its own
  * options and keeps the old bound of five quick attempts.
+ *
+ * A step that names its own duration keeps this schedule and only stretches it: the outcome report
+ * waits an hour for Core, since a report lost with Core is the requester's only answer (2026-09-24).
  */
 const CORE_STEP_RETRY = {
   initialRetryInterval: 2000,
@@ -49,6 +53,11 @@ const CORE_STEP_RETRY = {
   maxRetryInterval: 30000,
   maxRetryDuration: 10 * 60 * 1000,
 };
+const stepRetry = (options?: WorkflowStepRetry) =>
+  !options ? CORE_STEP_RETRY : options.maxRetryDuration !== undefined ? { ...CORE_STEP_RETRY, ...options } : { maxRetryAttempts: 5, ...options };
+
+/** Outcomes Core would not take are written to the outbox through the worker's own database. */
+const recordOutcome = sharedDb ? outcomeRecorder(sharedDb) : undefined;
 
 /**
  * Wraps a Restate context so that errors the workflow marks as terminal (refused request,
@@ -70,7 +79,7 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
         }
         throw error;
       }
-    }, options ? { maxRetryAttempts: 5, ...options } : CORE_STEP_RETRY),
+    }, stepRetry(options)),
     sleep: (millis) => ctx.sleep(millis),
   };
 }
@@ -80,7 +89,7 @@ const taskService = restate.service({
   handlers: {
     runTask: async (ctx: restate.Context, input: WorkflowInput) => {
       if (input.canvaAutoGenerate) {
-        return await runCanvaDraft(input, durableContext(ctx));
+        return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       try { return await runner.run(input, durableContext(ctx)); }
@@ -94,7 +103,7 @@ const taskWorkflow = restate.workflow({
   handlers: {
     run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => {
       if (input.canvaAutoGenerate) {
-        return await runCanvaDraft(input, durableContext(ctx));
+        return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       try { return await runner.run(input, durableContext(ctx)); }
