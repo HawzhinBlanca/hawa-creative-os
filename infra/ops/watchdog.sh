@@ -33,7 +33,16 @@ if [[ ${#problems[@]} -eq 0 ]]; then
   if [[ "$running" -lt 7 ]]; then
     if [[ "$MODE" != "--status" ]]; then
       export HAWA_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
-      "${COMPOSE[@]}" up -d --no-build >/dev/null 2>&1 || problems+=("compose up failed")
+      # Existing containers first, exactly as they were deployed. `up` then only creates what is
+      # missing and never recreates a running one: this checkout can be ahead of the deploy (merged,
+      # its gate not yet passed), and on 2026-09-23 `up -d` rebuilt Core from the newer compose file
+      # while the deploy that would have migrated for it had stopped at its test gate.
+      "${COMPOSE[@]}" start >/dev/null 2>&1 || true
+      sleep 10
+      running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
+      if [[ "$running" -lt 7 ]]; then
+        "${COMPOSE[@]}" up -d --no-build --no-recreate >/dev/null 2>&1 || problems+=("compose up failed")
+      fi
       sleep 20
       running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
     fi
