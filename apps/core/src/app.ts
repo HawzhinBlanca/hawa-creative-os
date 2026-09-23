@@ -175,6 +175,10 @@ import {
   composeReplacedDraft,
   composeRequesterApprovedAlert,
   composeDesignerHandoff,
+  composeAnswerTaken,
+  composeSizeStarted,
+  answerIndex,
+  sizeOf,
   type RequesterAction,
   type AskRecord,
 } from './services/requester-actions.js';
@@ -188,6 +192,7 @@ import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { revisionMetrics } from './services/revision-metrics.js';
+import { askLedger } from './services/ask-ledger.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -3521,11 +3526,12 @@ export function createApp(options?: CreateAppOptions) {
     }
     const scope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
     const facts = await withRlsContext(db, scope, async (trx) =>
-      (await sql<{ title: string | null; chat: string | null; newer: string | null; canva: string | null; done: boolean }>`SELECT t.title,
-          o.payload->>'sourceChannelId' AS chat,
+      (await sql<{ title: string | null; chat: string | null; newer: string | null; canva: string | null; done: boolean; payload: TaskCreatedPayload }>`SELECT t.title,
+          o.payload->>'sourceChannelId' AS chat, o.payload,
           (SELECT ct.id::text FROM hawa.tasks ct JOIN hawa.outbox_commands co ON co.aggregate_id = ct.id AND co.command_type = 'task.created'
              WHERE ct.tenant_id = t.tenant_id AND co.payload->'studioOptions'->>'parentTaskId' = ${rq.taskId}
-               AND ct.state NOT IN ('cancelled', 'rejected', 'failed_operator')
+               AND ct.state NOT IN ('cancelled', 'rejected', 'failed_operator', 'paused')
+               AND COALESCE(co.payload->'studioOptions'->>'reformat', '') = ''
              ORDER BY ct.created_at DESC LIMIT 1) AS newer,
           (SELECT n.payload->>'canvaUrl' FROM hawa.outbox_commands n WHERE n.tenant_id = t.tenant_id AND n.aggregate_id = t.id
              AND n.command_type = 'notify.telegram' AND n.payload ? 'canvaUrl' ORDER BY n.created_at DESC LIMIT 1) AS canva,
@@ -3537,7 +3543,35 @@ export function createApp(options?: CreateAppOptions) {
       await answer('This button belongs to a design made for another chat.', true);
       return c.json({ ok: false, reason: 'NOT_THIS_CHAT', taskId: rq.taskId }, 200);
     }
+    const chosen = answerIndex(rq.action);
+    if (chosen !== undefined) {
+      const pending = await pendingQuestion(rq.taskId, chat);
+      const option = pending?.options[chosen];
+      if (!pending || !option) {
+        await answer('This question was already answered.');
+        return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId, already: true }, 200);
+      }
+      const taken = await answerQuestion({ chat, pending, answer: option, updateId, rawJson: { callback: cb.id, action: rq.action, taskId: rq.taskId } });
+      await answer(taken.ok ? '👍 Got it' : 'Saved; the office will follow up');
+      return c.json({ ok: taken.ok, requesterAction: rq.action, taskId: rq.taskId, revisionTaskId: taken.revisionTaskId }, 200);
+    }
     const record = { taskId: rq.taskId, actorId: String(cb?.from?.id || '') };
+    const size = sizeOf(rq.action);
+    if (size) {
+      // Another size of this design (plan 4.3): once per size, as its own task and draft.
+      if (facts.done) {
+        await answer(`The ${size.label} version is already being made.`);
+        return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId, already: true }, 200);
+      }
+      const made = await makeOtherSize({ chat, taskId: rq.taskId, title: facts.title, payload: facts.payload || {}, size, updateId, action: rq.action });
+      if (!made.ok) {
+        await answer('This could not be started just now. Please try again in a minute.', true);
+        return c.json({ ok: false, requesterAction: rq.action, taskId: rq.taskId }, 200);
+      }
+      await markTelegramUpdateHandled(chat, updateId, `telegram_requester_${rq.action}`, { ...record, sizeTaskId: made.sizeTaskId });
+      await answer(`📐 Making the ${size.label} version`);
+      return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId, sizeTaskId: made.sizeTaskId }, 200);
+    }
     if (facts.newer && rq.action !== 'dsg') {
       await answer('A newer version of this design exists.');
       await send(composeReplacedDraft(facts.newer));
@@ -3549,7 +3583,8 @@ export function createApp(options?: CreateAppOptions) {
         await answer('You already approved this design. The art director is on it.');
         return c.json({ ok: true, requesterAction: 'ok', taskId: rq.taskId, already: true }, 200);
       }
-      await send(composeRequesterApproved(rq.taskId));
+      const variant = (facts.payload?.variant || {}) as { width?: number; height?: number };
+      await send(composeRequesterApproved(rq.taskId, { width: variant.width ?? 1080, height: variant.height ?? 1350 }));
       await enqueueOfficeAlert(rq.taskId, `requester-approved:${rq.taskId}`, composeRequesterApprovedAlert({ taskId: rq.taskId, title: facts.title, canvaUrl: facts.canva || undefined }), chat);
       await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_ok', record);
       broadcast('task:requester_approved', { taskId: rq.taskId, source: 'telegram' });
@@ -3569,6 +3604,178 @@ export function createApp(options?: CreateAppOptions) {
       await answer('A designer will take over');
     }
     return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId }, 200);
+  }
+
+  /** The parts of a task's task.created payload a revision or another size of it is made from (chat-intake.ts). */
+  interface TaskCreatedPayload {
+    sourceChannelId?: string;
+    rawRequestText?: string;
+    clientId?: string | null;
+    headlineEn?: string | null;
+    headlineCkb?: string | null;
+    copyEn?: string | null;
+    copyCkb?: string | null;
+    designInstructions?: string;
+    exactCopy?: unknown[];
+    variant?: { width: number; height: number };
+    designStudio?: boolean;
+    studioOptions?: Record<string, unknown>;
+  }
+
+  /**
+   * The same design in another size: a new task from the design's own task.created payload (its copy,
+   * photos, reference and client), sized to the format, whose run lays the approved design out again
+   * (edit stage, reformat). Its draft comes to the chat on its own, with its own buttons.
+   */
+  async function makeOtherSize(input: {
+    chat: string;
+    taskId: string;
+    title: string | null;
+    payload: TaskCreatedPayload;
+    size: { label: string; width: number; height: number };
+    updateId: string;
+    action: string;
+  }): Promise<{ ok: boolean; sizeTaskId?: string }> {
+    const { payload, size } = input;
+    type Outbound = Parameters<NonNullable<typeof telegramBridge>['dispatchOutboundMessage']>[1];
+    const send = (message: { text: string; parse_mode: 'HTML' }) => telegramBridge?.dispatchOutboundMessage(input.chat, message as Outbound).catch(() => undefined);
+    // The design's own options, less what made it a change: this is a format of it, not a round.
+    const { parentTaskId: _p, revisionDirective: _d, clarified: _c, reformat: _r, ...kept } = (payload.studioOptions || {}) as Record<string, unknown>;
+    try {
+      const persisted = await persistChatIntake(db!, {
+        platform: 'telegram',
+        sourceEventId: `${input.updateId}_size_${input.action}_${input.taskId}`,
+        sourceChannelId: input.chat,
+        rawText: String(payload.rawRequestText || input.title || 'Design'),
+        rawJson: { callback: input.action, taskId: input.taskId },
+        clientId: typeof payload.clientId === 'string' ? payload.clientId : null,
+        title: `${String(input.title || 'Design').replace(/ \((Revision|story|square post|landscape banner)[^)]*\)/g, '')} (${size.label})`,
+        headlineEn: payload.headlineEn || undefined,
+        headlineCkb: payload.headlineCkb || undefined,
+        copyEn: payload.copyEn || undefined,
+        copyCkb: payload.copyCkb || undefined,
+        designInstructions: String(payload.designInstructions || ''),
+        exactCopy: Array.isArray(payload.exactCopy) ? payload.exactCopy : [],
+        autoGenerate: true,
+        variant: { width: size.width, height: size.height },
+        ...(typeof payload.designStudio === 'boolean' ? { designStudio: payload.designStudio } : {}),
+        studioOptions: {
+          ...kept,
+          parentTaskId: input.taskId,
+          revisionDirective: `The same design as a ${size.label} (${size.width}x${size.height}).`,
+          reformat: size.label,
+        },
+      });
+      if (persisted.autoGenerateDeclined) {
+        await send({
+          text: `📐 <b>The ${escapeTelegramHtml(size.label)} version is saved.</b>\n\n⏳ <i>The daily limit for automatic drafts has been reached for this chat, so the art director will make it in Hawa Desk.</i>\n\n🆔 Task ID: <code>${escapeTelegramHtml(persisted.task.id)}</code>`,
+          parse_mode: 'HTML',
+        });
+      } else {
+        await send(composeSizeStarted(size.label, size.width, size.height, persisted.task.id));
+      }
+      broadcast('task:created', persisted.task);
+      return { ok: true, sizeTaskId: persisted.task.id };
+    } catch (err) {
+      console.error(`[Core] Task ${input.taskId}: the ${size.label} version could not be started:`, err);
+      return { ok: false };
+    }
+  }
+
+  interface PendingQuestion {
+    taskId: string;
+    title: string | null;
+    /** The waiting revision's own task.created payload: everything a revision of the same design needs. */
+    payload: TaskCreatedPayload;
+    question: string;
+    options: string[];
+  }
+
+  /**
+   * The question a task is waiting on (edit stage, NEEDS_CLARIFICATION): its latest studio run
+   * stopped to ask it, the task is paused for the answer, and the task came from this chat. Null
+   * otherwise, including once it has been answered (the task is then closed).
+   */
+  async function pendingQuestion(taskId: string, chat: string): Promise<PendingQuestion | null> {
+    if (!db || !isValidUuid(taskId) || !chat) return null;
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ title: string | null; state: string; payload: unknown; stages: unknown }>`SELECT t.title, t.state::text AS state, o.payload, r.stages
+        FROM hawa.tasks t
+        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.tenant_id = t.tenant_id AND o.command_type = 'task.created'
+        JOIN LATERAL (SELECT stages FROM hawa.design_studio_runs x WHERE x.tenant_id = t.tenant_id AND x.task_id = t.id ORDER BY x.created_at DESC LIMIT 1) r ON true
+        WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND t.id = ${taskId}::uuid
+        ORDER BY o.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+    if (!row || row.state !== 'paused') return null;
+    const payload = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload || {}) as TaskCreatedPayload;
+    const stages = (typeof row.stages === 'string' ? JSON.parse(row.stages) : row.stages || {}) as { directed?: { refused?: unknown; clarify?: { question?: unknown; options?: unknown } } };
+    const clarify = stages?.directed?.refused === 'NEEDS_CLARIFICATION' ? stages.directed.clarify : undefined;
+    if (!clarify || typeof clarify.question !== 'string' || !Array.isArray(clarify.options)) return null;
+    if (String(payload.sourceChannelId || '') !== chat) return null;
+    const options = payload.studioOptions || {};
+    if (typeof options.parentTaskId !== 'string' || typeof options.revisionDirective !== 'string') return null;
+    return {
+      taskId,
+      title: row.title,
+      payload,
+      question: clarify.question,
+      options: clarify.options.filter((o: unknown): o is string => typeof o === 'string' && o.trim() !== ''),
+    };
+  }
+
+  /**
+   * The requester's answer to a question asked before their change was made: the change starts again
+   * with the answer in it, as a new revision of the same design (the waiting task's own payload, so
+   * it carries the same copy, photos, reference and round), and is never asked about again. The
+   * waiting task is closed. The answer is a tapped option or their own words in reply.
+   */
+  async function answerQuestion(input: { chat: string; pending: PendingQuestion; answer: string; updateId: string; rawJson: unknown }): Promise<{ ok: boolean; revisionTaskId?: string }> {
+    const { pending, chat } = input;
+    type Outbound = Parameters<NonNullable<typeof telegramBridge>['dispatchOutboundMessage']>[1];
+    const send = (message: { text: string; parse_mode: 'HTML' }) => telegramBridge?.dispatchOutboundMessage(chat, message as Outbound).catch(() => undefined);
+    const answer = input.answer.replace(/\s+/g, ' ').trim().slice(0, 500);
+    const payload = pending.payload;
+    const options = payload.studioOptions as Record<string, unknown>;
+    const directive = `${String(options.revisionDirective).trim()}\n\nAsked "${pending.question}", the client answered: ${answer}`;
+    try {
+      const persisted = await persistChatIntake(db!, {
+        platform: 'telegram',
+        sourceEventId: `${input.updateId}_answer_${pending.taskId}`,
+        sourceChannelId: chat,
+        rawText: String(payload.rawRequestText || pending.title || 'Design'),
+        rawJson: input.rawJson,
+        clientId: typeof payload.clientId === 'string' ? payload.clientId : null,
+        title: pending.title || 'Design (Revision)',
+        headlineEn: payload.headlineEn || undefined,
+        headlineCkb: payload.headlineCkb || undefined,
+        copyEn: payload.copyEn || undefined,
+        copyCkb: payload.copyCkb || undefined,
+        designInstructions: `${String(payload.designInstructions || '')}\nAnswer to "${pending.question}": ${answer}`.trim(),
+        exactCopy: Array.isArray(payload.exactCopy) ? payload.exactCopy : [],
+        autoGenerate: true,
+        ...(payload.variant ? { variant: payload.variant } : {}),
+        ...(typeof payload.designStudio === 'boolean' ? { designStudio: payload.designStudio } : {}),
+        studioOptions: { ...options, revisionDirective: directive, clarified: true },
+      });
+      if (persisted.autoGenerateDeclined) {
+        await send({
+          text: `👍 <b>Got it:</b> ${escapeTelegramHtml(answer.slice(0, 300))}\n\n⏳ <i>The daily limit for automatic drafts has been reached for this chat. Your change is saved and queued for the art director in Hawa Desk.</i>\n\n🆔 Task ID: <code>${escapeTelegramHtml(persisted.task.id)}</code>`,
+          parse_mode: 'HTML',
+        });
+      } else {
+        await send(composeAnswerTaken(answer, persisted.task.id));
+      }
+      const { closeAnsweredQuestion } = await import('./services/canva-task-outcome.js');
+      await withRlsContext(db!, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        closeAnsweredQuestion(trx, { tenantId: DEFAULT_TENANT_ID, taskId: pending.taskId, revisionTaskId: persisted.task.id })
+      ).catch((err) => console.warn(`[Core] Task ${pending.taskId}: answered, but could not be closed:`, err));
+      await markTelegramUpdateHandled(chat, input.updateId, 'telegram_requester_answer', { taskId: pending.taskId, revisionTaskId: persisted.task.id });
+      broadcast('task:created', persisted.task);
+      return { ok: true, revisionTaskId: persisted.task.id };
+    } catch (err) {
+      console.error(`[Core] Task ${pending.taskId}: the answer to its question could not be saved:`, err);
+      await send({ text: `⚠️ Your answer could not be saved just now. Please tap it again in a minute.`, parse_mode: 'HTML' });
+      return { ok: false };
+    }
   }
 
   // A studio run counts as being made only while it moves: a run left mid-stage by a restart stays
@@ -3597,6 +3804,7 @@ export function createApp(options?: CreateAppOptions) {
         JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
         WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid
           AND o.payload->'studioOptions'->>'parentTaskId' = ${parentTaskId}
+          AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''
           AND t.created_at > now() - interval '2 hours'
           AND (NOT EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id)
                AND t.created_at > now() - interval '5 minutes'
@@ -4333,6 +4541,17 @@ export function createApp(options?: CreateAppOptions) {
           // or a test). The message is read as if it were not a reply, rather than dropped.
           console.warn(`[Core] Telegram reply referenced unknown task UUID ${uuidMatch[1]}; reading the message on its own.`);
         }
+      }
+    }
+
+    // A reply to a question asked before a change was made is its answer, in the requester's own
+    // words, whatever it says: read as a new change request, it would revise a task that has no design.
+    if (replyTarget && db && sourceChannelId && sourceChannelId !== 'tg_default' && rawText.trim()) {
+      const pending = await pendingQuestion(String(replyTarget.id), sourceChannelId).catch(() => null);
+      if (pending) {
+        const taken = await answerQuestion({ chat: sourceChannelId, pending, answer: rawText, updateId: sourceEventId, rawJson: json });
+        if (!taken.ok) return problem(c, 503, 'Answer not saved', 'The answer could not be saved; the message will be retried');
+        return c.json({ ok: true, status: 'QUESTION_ANSWERED', taskId: pending.taskId, revisionTaskId: taken.revisionTaskId }, 200);
       }
     }
 
@@ -7051,6 +7270,10 @@ export function createApp(options?: CreateAppOptions) {
     let studioSummary: string | undefined;
     // What a change asked for that no edit of the design can make: the requester is told, and the office.
     let notPossible: Array<{ ask: string; reason: string }> = [];
+    // The question asked before a change is made (edit stage, NEEDS_CLARIFICATION), and whether the
+    // request read as the sender losing patience: the first goes to the requester, the second to the office.
+    let question: { question: string; options: string[] } | undefined;
+    let frustrated = false;
     let studioRun: any = null;
     let studioCandidates: any[] = [];
     try {
@@ -7089,6 +7312,11 @@ export function createApp(options?: CreateAppOptions) {
         notPossible = (recordedAsks as Array<{ ask?: unknown; status?: unknown; reason?: unknown } | null>)
           .filter((a) => a?.status === 'not_possible' && typeof a?.ask === 'string' && a.ask.trim())
           .map((a) => ({ ask: String(a!.ask).trim(), reason: typeof a!.reason === 'string' ? a!.reason.trim() : '' }));
+        const clarify = runStages?.directed?.refused === 'NEEDS_CLARIFICATION' ? runStages.directed.clarify : undefined;
+        if (clarify && typeof clarify.question === 'string' && Array.isArray(clarify.options)) {
+          question = { question: clarify.question, options: clarify.options.filter((o: unknown): o is string => typeof o === 'string' && o.trim() !== '') };
+        }
+        frustrated = runStages?.directed?.frustrated === true;
       }
     } catch { /* courtesy note; do not fail status */ }
 
@@ -7100,10 +7328,15 @@ export function createApp(options?: CreateAppOptions) {
     const { outcomeHasDraft, bridgeCanvaDraftRevision, transitionTaskForOutcome } = await import('./services/canva-task-outcome.js');
     const outcomeScope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
     const hasDraft = outcomeHasDraft(status, designId);
-    let outcomeState: 'human_review' | 'failed_operator' = hasDraft ? 'human_review' : 'failed_operator';
+    // A question to the requester is not a failure: the task waits for the answer (paused), which
+    // starts the change again as a new revision; an operator has nothing to follow up yet.
+    const waitingForAnswer = !hasDraft && code === 'NEEDS_CLARIFICATION' && Boolean(question);
+    let outcomeState: 'human_review' | 'failed_operator' | 'paused' = hasDraft ? 'human_review' : waitingForAnswer ? 'paused' : 'failed_operator';
     let outcomeReason = hasDraft
       ? `Canva draft delivered (${status})${designId ? ` as ${designId}` : ''}; awaiting visual review.`
-      : `Automatic draft ended ${status}${code ? ` (${code})` : ''}${detail ? `: ${detail}` : ''}. An operator has to follow up.`;
+      : waitingForAnswer
+        ? `A question was sent to the requester before the change is made: ${question!.question}`
+        : `Automatic draft ended ${status}${code ? ` (${code})` : ''}${detail ? `: ${detail}` : ''}. An operator has to follow up.`;
     if (hasDraft && revisionRepo) {
       try {
         const bridged = await withRlsContext(db, outcomeScope, (trx) =>
@@ -7143,8 +7376,9 @@ export function createApp(options?: CreateAppOptions) {
         }));
       if (moved.changed) {
         const memTask = tasks.get(taskId);
-        if (memTask) memTask.status = outcomeState === 'failed_operator' ? 'OPERATOR_REQUIRED' : (memTask.status === 'CHANGES_REQUESTED' ? memTask.status : 'AWAITING_APPROVAL');
-        broadcast('task:transitioned', { taskId, fromStatus: moved.fromState.toUpperCase(), toStatus: outcomeState === 'failed_operator' ? 'OPERATOR_REQUIRED' : 'AWAITING_APPROVAL' });
+        const deskStatus = outcomeState === 'failed_operator' ? 'OPERATOR_REQUIRED' : outcomeState === 'paused' ? 'PAUSED' : 'AWAITING_APPROVAL';
+        if (memTask) memTask.status = outcomeState === 'human_review' && memTask.status === 'CHANGES_REQUESTED' ? memTask.status : deskStatus;
+        broadcast('task:transitioned', { taskId, fromStatus: moved.fromState.toUpperCase(), toStatus: deskStatus });
       }
       if (outcomeState === 'failed_operator') {
         console.warn(`[canvaStatusHandler] Task ${taskId} needs an operator: ${outcomeReason}`);
@@ -7158,7 +7392,7 @@ export function createApp(options?: CreateAppOptions) {
     let notificationError: string | undefined;
     let notificationCommandId: string | undefined;
     if (sourceChannelId && notifyRequester) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible });
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question });
       const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
       // The worker's finish() swallows its own notification errors so a failed message cannot fail
       // a design (canva-draft-workflow.ts), and this was a single fire-and-forget send: a Telegram
@@ -7264,6 +7498,17 @@ export function createApp(options?: CreateAppOptions) {
           taskId,
           `change-needs-designer:${taskId}:${runKey}`,
           composeChangeNeedsDesignerAlert({ taskId, title: task.title, asks: notPossible, draftSent: hasDraft }),
+          sourceChannelId
+        );
+      }
+      // A requester losing patience (repeating an ask, "still wrong", asking for a person) is a
+      // designer's cue to step in before they give up (ADR-032 §2.4): once per design.
+      if (frustrated) {
+        const history = await askHistory(taskId).catch(() => ({ asks: [] as AskRecord[], rounds: 0 }));
+        await enqueueOfficeAlert(
+          taskId,
+          `frustrated:${taskId}`,
+          composeDesignerHandoff({ taskId, title: task.title, canvaUrl, asks: history.asks, rounds: history.rounds, why: 'frustrated' }),
           sourceChannelId
         );
       }
@@ -8815,6 +9060,18 @@ export function createApp(options?: CreateAppOptions) {
     broadcast('dna:snapshot_created', { clientId, version: newVersion, sha256: hash, snapshotId: snap.snapshotId });
 
     return c.json(snap, 201);
+  });
+
+  // What the requester asked of a design, round by round, and what became of it (services/ask-ledger.ts):
+  // what the art director reads in Hawa Desk before approving a design or taking it over.
+  registerRoute('get', '/tasks/:taskId/asks', async (c: Context) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || auth.role === 'adapter') return problem(c, 401, 'Authentication Required');
+    const taskId = c.req.param('taskId') || '';
+    if (!isValidUuid(taskId)) return problem(c, 400, 'Invalid task id');
+    if (!db) return problem(c, 503, 'Database Unavailable');
+    const rounds = await askLedger(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: String(auth.role) }, taskId);
+    return c.json({ taskId, rounds });
   });
 
   // How the revision loop is doing (services/revision-metrics.ts): for the art director and the owner.

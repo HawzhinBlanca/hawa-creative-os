@@ -3,6 +3,8 @@
 // reads with the draft, in plain words. Every figure comes from the run's own record; a figure the
 // run did not record is left out.
 
+import { coverCrop } from '@hawa/creative';
+
 const parse = (value: unknown): any => {
   if (typeof value !== 'string') return value;
   try { return JSON.parse(value); } catch { return undefined; }
@@ -39,6 +41,12 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
     if (changed.length) parts.push(`your change made to the same design (${changed.join('; ')})`);
     else if (directed.unchanged !== true) parts.push('your change made to the same design');
     if (unmade.length) parts.push(`⚠️ could not be made: ${unmade.join('; ')}`);
+    // The visual check is advice for the office (edit.stage visualCheck): where it disagrees with the
+    // recorded outcome, the art director looks first.
+    const seen = (Array.isArray(directed.asks) ? directed.asks : []).filter((a: { seen?: { made?: unknown } }) => typeof a?.seen?.made === 'boolean');
+    const doubted = seen.filter((a: { status?: unknown; seen: { made: boolean } }) => a.status === 'done' && !a.seen.made);
+    const agree = seen.filter((a: { status?: unknown; seen: { made: boolean } }) => a.seen.made === (a.status === 'done')).length;
+    if (seen.length) parts.push(`visual check: ${agree} of ${seen.length} agree${doubted.length ? `; ⚠️ not seen made: ${doubted.map((a: { ask?: unknown }) => String(a.ask ?? '').slice(0, 60)).join('; ')}` : ''}`);
   } else if (stages.directedFailed) {
     parts.push('your change could not be made to the same design, so it was designed afresh');
   } else if (candidates.length > 0) parts.push(`${candidates.length} concept${candidates.length === 1 ? '' : 's'}`);
@@ -91,6 +99,7 @@ interface RecordedAsk {
   ask?: unknown;
   status?: unknown;
   reason?: unknown;
+  assumption?: unknown;
 }
 
 const plain = (value: unknown, max = 160) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -109,13 +118,23 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
   const stages = parse(run.stages) || {};
   const notes: string[] = [];
   const directed = stages.directed && !stages.directedFailed ? stages.directed : undefined;
-  if (directed) {
+  if (directed && typeof directed.reformat === 'string') {
+    // Another size of an approved design: not a change, so no list of asks.
+    const size = directed.size && Number.isFinite(directed.size.width) ? ` (${directed.size.width}×${directed.size.height})` : '';
+    notes.push(`📐 Your approved design as a ${plain(directed.reformat, 40)}${size}, laid out again for the format.`);
+  } else if (directed) {
     const asks: RecordedAsk[] = Array.isArray(directed.asks) ? directed.asks : [];
-    const done = asks.filter((a) => a?.status === 'done').map((a) => plain(a.ask)).filter(Boolean);
+    // A done ask that was open to reading says how it was read, so a wrong reading is caught in one look.
+    const done = asks
+      .filter((a) => a?.status === 'done' && plain(a.ask))
+      .map((a) => `${plain(a.ask)}${plain(a.assumption, 200) ? ` (read as: ${plain(a.assumption, 200).replace(/\.$/, '')})` : ''}`);
     const notDone = asks.filter((a) => a?.status === 'not_done').map((a) => plain(a.ask)).filter(Boolean);
     const impossible = asks.filter((a) => a?.status === 'not_possible').filter((a) => plain(a.ask));
     if (asks.length) {
       for (const ask of done) notes.push(`✅ Done: ${ask}.`);
+      // What moved without being asked, because it had to make room; everything else stayed put.
+      const moved = (Array.isArray(directed.sideEffects) ? directed.sideEffects : []).map((m: unknown) => plain(m, 60)).filter(Boolean);
+      if (moved.length) notes.push(`To make room, ${moved.length === 1 ? 'this also moved' : 'these also moved'}: ${moved.join(', ')}. Nothing else changed.`);
       for (const ask of notDone) notes.push(`⚠️ Not done: ${ask}. It could not be fitted into this design; the art director will look at it.`);
       for (const a of impossible) {
         const reason = plain(a.reason, 200).replace(/\.$/, '');
@@ -150,6 +169,7 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
     if (shippedPhotos.some((p) => p?.photoIndex === o.photoIndex && p?.treatment === 'cutout')) continue;
     notes.push(`⚠️ Photo ${o.photoIndex + 1} could not be cut out cleanly (${plain(o.reason) || 'it did not pass the checks'}), so it is shown as you sent it.`);
   }
+  notes.push(...softPhotoNotes(shippedPhotos, stages.photoSizes));
   const roles: Array<{ role?: unknown; notes?: unknown } | null> = Array.isArray(stages.brief?.imageRoles) ? stages.brief.imageRoles : [];
   const reference = roles.find((r) => r?.role === 'style_reference');
   if (reference) {
@@ -161,6 +181,34 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
     const toldAlready = Array.isArray(directed?.asks) && directed.asks.some((a: RecordedAsk) => a?.status === 'not_possible');
     if (photosCut && !toldAlready) notes.push('⚠️ Your reference shows the people cut out of their photos. This draft shows your photos as you sent them, because cut-outs cannot be made automatically yet; the art director can make them in Canva.');
     else if (!photosCut) notes.push('Styled after the reference design you sent.');
+  }
+  return notes;
+}
+
+/** A framed photo shown this many times larger than its own pixels looks soft on the design. */
+export const SOFT_PHOTO_SCALE = 1.6;
+
+/**
+ * A warning per framed photo the design shows much larger than its own pixels (plan 4.4), so the
+ * requester can send a larger one. No model makes the missing detail up: on a person's photo that
+ * would invent their face (ADR-032). The scale is the box over the part of the photo it shows.
+ */
+export function softPhotoNotes(photos: Array<Record<string, unknown> | null>, sizes: unknown): string[] {
+  const known: Array<{ width?: unknown; height?: unknown } | null> = Array.isArray(sizes) ? sizes : [];
+  const notes: string[] = [];
+  for (const p of photos) {
+    if (!p || typeof p.photoIndex !== 'number' || p.treatment === 'cutout') continue;
+    const size = known[p.photoIndex];
+    const image = { width: Number(size?.width), height: Number(size?.height) };
+    const box = { width: Number(p.width), height: Number(p.height) };
+    if (!(image.width > 0 && image.height > 0 && box.width > 0 && box.height > 0)) continue;
+    const focus = p.focus && typeof p.focus === 'object' ? (p.focus as { x: number; y: number }) : undefined;
+    const zoom = typeof p.zoom === 'number' && p.zoom > 1 ? p.zoom : 1;
+    const crop = coverCrop(box, image, focus);
+    const scale = (box.width / crop.sw) * zoom;
+    if (scale >= SOFT_PHOTO_SCALE) {
+      notes.push(`⚠️ Photo ${p.photoIndex + 1} is small for its place on the design (${image.width}×${image.height} pixels, shown about ${scale.toFixed(1)} times larger), so it may look soft. Send a larger version if you have one.`);
+    }
   }
   return notes;
 }

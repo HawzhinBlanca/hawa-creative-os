@@ -25,6 +25,9 @@ describe.skipIf(!url)('messages that must not start a paid design', () => {
   beforeAll(() => {
     process.env.TELEGRAM_WEBHOOK_SECRET = secret;
     process.env.TELEGRAM_ALLOWED_USERS = String(OFFICE);
+    // The test database keeps every run's tasks of the day, so the office-wide daily cap on automatic
+    // drafts (200) is reached by the tests themselves; it is not what these tests are about.
+    process.env.AUTO_GENERATE_DAILY_CAP_GLOBAL = '1000000';
     delete process.env.OPENAI_API_KEY;
   });
   afterAll(async () => {

@@ -315,6 +315,15 @@ export function validateLayoutV2(
     if (p.treatment === 'cutout' ? p.height < minSide * 1.5 : Math.min(p.width, p.height) < minSide) {
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} (${p.role}) is ${p.width}x${p.height}; at least ${p.treatment === 'cutout' ? `${Math.round(minSide * 1.5)}px tall` : `${minSide}px a side`}` };
     }
+    // A mask shapes a framed photo's rectangle; a cut-out has none, only the person's own edge. An
+    // outline or a glow follows a person's silhouette; a framed photo has only its rectangle, and
+    // the renderer would draw neither, so the design would not be the one described.
+    if (p.treatment === 'cutout' && p.mask) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} is a cut-out and cannot take the ${p.mask} mask; a mask shapes a framed photo` };
+    }
+    if (p.treatment !== 'cutout' && (p.outline || p.glow)) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} is framed and cannot take ${p.outline ? 'an outline' : 'a glow'}; it follows a cut-out person's silhouette` };
+    }
     for (const t of layout.text) {
       if (boxesIntersect(p, t)) {
         return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under text copyIndex ${t.copyIndex}` };

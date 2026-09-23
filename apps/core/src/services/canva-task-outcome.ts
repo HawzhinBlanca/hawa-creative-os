@@ -29,7 +29,12 @@ const PRE_OUTCOME_STATES = [
   'design_planning', 'asset_production', 'studio_composition', 'qa', 'auto_repair', 'failed_retryable',
 ];
 
-export type OutcomeState = 'human_review' | 'failed_operator';
+/**
+ * `paused`: no draft yet, because a question was sent to the requester before the change is made
+ * (edit stage, NEEDS_CLARIFICATION). Their answer starts the change again as a new revision, and
+ * this task is then closed (`closeAnsweredQuestion`).
+ */
+export type OutcomeState = 'human_review' | 'failed_operator' | 'paused';
 
 /** Whether this outcome left a design a person can review. */
 export function outcomeHasDraft(status: string, designId?: string): boolean {
@@ -40,6 +45,33 @@ export interface OutcomeTransition {
   changed: boolean;
   fromState: string;
   toState: string;
+}
+
+/**
+ * Closes a task that was waiting for the requester's answer (`paused`), once the answer has started
+ * the change again as `revisionTaskId`. Only a paused task is moved; anything else is left alone.
+ */
+export async function closeAnsweredQuestion(
+  trx: Kysely<Database>,
+  params: { tenantId: string; taskId: string; revisionTaskId: string; actorId?: string | null }
+): Promise<OutcomeTransition> {
+  const repo = new TaskRepository(trx);
+  const task = await repo.findById(params.taskId, params.tenantId, trx);
+  if (!task) throw new Error(`Task ${params.taskId} is not visible in tenant ${params.tenantId}`);
+  const from = String(task.state);
+  if (from !== 'paused') return { changed: false, fromState: from, toState: from };
+  await repo.transitionState({
+    taskId: params.taskId,
+    tenantId: params.tenantId,
+    expectedVersion: Number(task.version),
+    fromState: 'paused',
+    toState: 'cancelled',
+    actorType: 'workflow',
+    actorId: params.actorId || null,
+    reason: `The requester answered the question; the change continues as task ${params.revisionTaskId}.`,
+    data: { answeredBy: params.revisionTaskId },
+  }, trx);
+  return { changed: true, fromState: from, toState: 'cancelled' };
 }
 
 /**

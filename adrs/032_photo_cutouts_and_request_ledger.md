@@ -67,3 +67,12 @@ Items 2 and 3 were fixed the same day. This ADR decides how the missing means ar
   - Memory pressure on Postgres if the model runs beside it without limits.
 
   Mitigations are in the plan: a bake-off, QA gates, one inference at a time, and a container memory limit.
+
+## Implementation decisions (2026-09-23, after acceptance)
+
+- **The ledger lives on the runs, not in a new table.** Each run records its asks (`stages.directed.asks`: the ask, its kind from the operation catalogue, outcome, reason, how it was read, the visual check) and the ledger is read along the revision chain. A table would duplicate what the run already holds, and every reader (the requester's note, the office alert, Desk, the metrics) reads the same record.
+- **One question, before anything is paid for.** An ask that could mean visibly different designs stops the edit after the analysis call, the requester gets one question with two or three answers as buttons, and the task is paused rather than marked for an operator. The answer, tapped or typed, starts the change again as a new revision of the same design, which is never asked again. An ask read one way is acted on and the requester is told the reading.
+- **The visual check is advice.** A yes/no look at before and after never changes the outcome the requester reads. Its disagreements go to the office, Desk and the metrics until its agreement with the art director is measured on real asks.
+- **Nothing unasked moves without being said.** Anything not named that moved is put back if the design still passes its checks; what had to move to make room stays and is named to the requester.
+- **No upscaling model on photos of people.** Real-ESRGAN and similar models invent detail, which on a face means inventing the person. A photo shown far beyond its own resolution is named to the requester instead, so a larger one can be sent.
+- **Other sizes are laid out again, not stretched.** The same design in another format is a run of the edit with the new canvas and the approved design as its parent, checked by the same gates, delivered as its own draft.

@@ -40,6 +40,10 @@ export interface ChatIntake {
     mediaGroupId?: string;
     /** For a revision: the change asked for, which the studio makes to the parent's design. */
     revisionDirective?: string;
+    /** The directive carries the requester's answer to a question about it: none is asked again. */
+    clarified?: boolean;
+    /** The same design as the parent's, in another size (the variant): a format, not a change. */
+    reformat?: string;
   };
 }
 

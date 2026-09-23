@@ -11,12 +11,25 @@ export interface RevisionMetrics {
   asks: { done: number; notDone: number; notPossible: number };
   /** The asks most often not possible, in the words the analysis gave them. */
   notPossibleTop: Array<{ ask: string; count: number }>;
+  /** The same, by kind of change (the operation catalogue's roadmap): asks and how many were not possible. */
+  byOp: Array<{ op: string; asks: number; notPossible: number }>;
   /** Revisions by round: how many first changes, second changes, third and later. */
   revisionsByRound: { first: number; second: number; thirdOrLater: number };
   requesterApprovals: { total: number; firstDraft: number };
   designerHandoffs: { requesterAsked: number; notPossible: number; afterThreeRounds: number };
   reminders: number;
   cutouts: { made: number; passed: number; passRate: number | null };
+  /** Questions asked before a change was made, and how many the requester answered. */
+  questions: { asked: number; answered: number };
+  /** Edits that moved something the request did not name, because it had to make room. */
+  editsWithSideEffects: number;
+  /**
+   * The visual check against the recorded outcome: asks it looked at, where it agreed, and asks
+   * recorded done that it did not see made (the claimed-but-not-done rate, target 0, once trusted).
+   */
+  visualCheck: { checked: number; agreed: number; doneButNotSeen: number };
+  /** Requesters who sounded frustrated (the office was told each time). */
+  frustrated: number;
 }
 
 export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: string; userId: string }, days = 30): Promise<RevisionMetrics> {
@@ -35,6 +48,13 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
         FROM hawa.design_studio_runs r, jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a
         WHERE r.tenant_id = ${scope.tenantId}::uuid AND r.created_at > ${since} AND a->>'status' = 'not_possible'
         GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10`.execute(trx)
+    ).rows;
+    const byOp = (
+      await sql<{ op: string; asks: number; notPossible: number }>`SELECT COALESCE(a->>'op', 'unclassified') AS op, count(*)::int AS asks,
+          count(*) FILTER (WHERE a->>'status' = 'not_possible')::int AS "notPossible"
+        FROM hawa.design_studio_runs r, jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a
+        WHERE r.tenant_id = ${scope.tenantId}::uuid AND r.created_at > ${since}
+        GROUP BY 1 ORDER BY 3 DESC, 2 DESC, 1 LIMIT 30`.execute(trx)
     ).rows;
     const rounds = (
       await sql<{ first: number; second: number; later: number }>`SELECT
@@ -58,9 +78,24 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
           count(*) FILTER (WHERE idempotency_key LIKE 'notify.office:designer-asked:%')::int AS asked,
           count(*) FILTER (WHERE idempotency_key LIKE 'notify.office:change-needs-designer:%')::int AS impossible,
           count(*) FILTER (WHERE idempotency_key LIKE 'notify.office:rounds:%')::int AS rounds,
-          count(*) FILTER (WHERE idempotency_key LIKE 'notify.telegram:reminder%')::int AS reminders
+          count(*) FILTER (WHERE idempotency_key ~ '^notify\.telegram:(question-)?reminder')::int AS reminders
         FROM hawa.outbox_commands
         WHERE tenant_id = ${scope.tenantId}::uuid AND created_at > ${since}`.execute(trx)
+    ).rows[0];
+    const loop = (
+      await sql<{ asked: number; answered: number; side: number; checked: number; agreed: number; unseen: number; frustrated: number }>`SELECT
+          count(*) FILTER (WHERE r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION')::int AS asked,
+          (SELECT count(*)::int FROM hawa.outbox_commands o WHERE o.tenant_id = ${scope.tenantId}::uuid AND o.command_type = 'task.created'
+             AND o.created_at > ${since} AND o.payload->'studioOptions'->>'clarified' = 'true') AS answered,
+          count(*) FILTER (WHERE jsonb_array_length(COALESCE(r.stages->'directed'->'sideEffects', '[]'::jsonb)) > 0)::int AS side,
+          COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a WHERE a ? 'seen')), 0)::int AS checked,
+          COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a
+            WHERE a ? 'seen' AND (a->'seen'->>'made')::boolean = (a->>'status' = 'done'))), 0)::int AS agreed,
+          COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a
+            WHERE a->>'status' = 'done' AND (a->'seen'->>'made')::boolean IS FALSE)), 0)::int AS unseen,
+          count(*) FILTER (WHERE r.stages->'directed'->>'frustrated' = 'true')::int AS frustrated
+        FROM hawa.design_studio_runs r
+        WHERE r.tenant_id = ${scope.tenantId}::uuid AND r.created_at > ${since}`.execute(trx)
     ).rows[0];
     const cut = (
       await sql<{ made: number; passed: number }>`SELECT count(*)::int AS made, count(*) FILTER (WHERE passed)::int AS passed
@@ -70,11 +105,16 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
       days: window,
       asks: { done: count('done'), notDone: count('not_done'), notPossible: count('not_possible') },
       notPossibleTop,
+      byOp,
       revisionsByRound: { first: rounds?.first ?? 0, second: rounds?.second ?? 0, thirdOrLater: rounds?.later ?? 0 },
       requesterApprovals: { total: approvals?.total ?? 0, firstDraft: approvals?.first ?? 0 },
       designerHandoffs: { requesterAsked: alerts?.asked ?? 0, notPossible: alerts?.impossible ?? 0, afterThreeRounds: alerts?.rounds ?? 0 },
       reminders: alerts?.reminders ?? 0,
       cutouts: { made: cut?.made ?? 0, passed: cut?.passed ?? 0, passRate: cut?.made ? Math.round((1000 * cut.passed) / cut.made) / 1000 : null },
+      questions: { asked: loop?.asked ?? 0, answered: loop?.answered ?? 0 },
+      editsWithSideEffects: loop?.side ?? 0,
+      visualCheck: { checked: loop?.checked ?? 0, agreed: loop?.agreed ?? 0, doneButNotSeen: loop?.unseen ?? 0 },
+      frustrated: loop?.frustrated ?? 0,
     };
   });
 }

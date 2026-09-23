@@ -3,9 +3,19 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
-import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fontFaceSupports } from './render-layout-v2.js';
+import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fontFaceSupports, svgToPngAsync } from './render-layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
-import { coverCrop, imagePixelSize, pngPixelSize, type CoverCropRect } from './photo-crop.js';
+import { coverCrop, imagePixelSize, photoZoomFactor, pngPixelSize, type CoverCropRect } from './photo-crop.js';
+import {
+  cutoutEffectFragment,
+  cutoutPersonFragment,
+  cutoutPersonTreated,
+  framedPhotoFragment,
+  framedPhotoTreated,
+  photoBakePixelSize,
+  photoFragmentDocument,
+  type PhotoFragment,
+} from './photo-treatments.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 /**
@@ -28,6 +38,8 @@ export interface TransferV2Options extends TransferOptions {
    * for a photo placed with `treatment: 'cutout'`; such a photo with no cut-out here goes framed.
    */
   photoCutouts?: Array<PhotoCutoutAsset | undefined>;
+  /** The rsvg-convert that bakes treated photos, as the renderer takes it; found as the renderer finds it when absent. */
+  rsvgConvertPath?: string;
 }
 
 // The pixel-size readers live in photo-crop.ts, which the renderer can import without an import
@@ -67,6 +79,16 @@ function focusedPicture(box: Box, pixels: { width: number; height: number }, cro
       h: pptxEmu(box.height),
     },
   };
+}
+
+/**
+ * A treated photo's fragment rasterised alone, by the renderer's own rsvg-convert, at
+ * `photoBakePixelSize`: the same markup the preview inlined, so the same pixels, on a transparent
+ * ground that Canva keeps on import.
+ */
+async function bakePhotoFragment(fragment: PhotoFragment, rsvgConvertPath: string | undefined): Promise<Buffer> {
+  const size = photoBakePixelSize(fragment);
+  return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {});
 }
 
 /** One flat piece of the scrim, in layout pixels. */
@@ -451,8 +473,35 @@ export async function encodeStudioTransferV2(
   // focus point is cropped explicitly to the rectangle the preview drew around it (see coverCrop).
   // The layers come in the preview's order (every cut-out shadow, then the photos), so the deck
   // stacks them as the judge saw them.
+  //
+  // A treated photo (a mask, a fade or a filter; a cut-out's glow or outline) is the preview's own
+  // fragment baked into a PNG and placed at the fragment's rect with no further crop, so the deck
+  // shows the pixels the judge scored. Canva keeps the PNG's alpha, so the mask and fade survive.
+  const placeBaked = (fragment: PhotoFragment, png: Buffer, objectName: string) => {
+    slide.addImage({
+      data: `image/png;base64,${png.toString('base64')}`,
+      x: fragment.rect.x / 96,
+      y: fragment.rect.y / 96,
+      w: fragment.rect.width / 96,
+      h: fragment.rect.height / 96,
+      objectName,
+    });
+  };
   for (const layer of photoLayers(layout.photos ?? [], options.photoCutouts)) {
     const p = layer.photo;
+    // A glow or an outline is a picture of its own under the person, so the person stays the
+    // untouched cut-out and the client can delete the effect in Canva.
+    if (layer.kind === 'cutout-glow' || layer.kind === 'cutout-outline') {
+      const kind = layer.kind === 'cutout-glow' ? 'glow' : 'outline';
+      const effect = cutoutEffectFragment(kind, p, layer.png, layer.rect, layout);
+      if (effect) placeBaked(effect, await bakePhotoFragment(effect, options.rsvgConvertPath), `Photo ${p.photoIndex} ${kind}`);
+      continue;
+    }
+    if (layer.kind === 'cutout-person' && cutoutPersonTreated(p)) {
+      const person = cutoutPersonFragment(p, layer.png, layer.rect);
+      placeBaked(person, await bakePhotoFragment(person, options.rsvgConvertPath), `Photo ${p.photoIndex}`);
+      continue;
+    }
     // A cut-out is its shadow and the person, each its own picture at the rect the preview drew, so
     // the client can move or delete the shadow in Canva. The PNGs already have the rects' aspect, so
     // there is no sizing and no crop; the person's transparency is the edge.
@@ -470,9 +519,16 @@ export async function encodeStudioTransferV2(
     const photo = options.photos?.[p.photoIndex];
     if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
     const pixels = imagePixelSize(photo.bytes);
+    if (framedPhotoTreated(p)) {
+      const framed = framedPhotoFragment(p, `data:${photo.mimeType};base64,${photo.bytes.toString('base64')}`, pixels);
+      placeBaked(framed, await bakePhotoFragment(framed, options.rsvgConvertPath), `Photo ${p.photoIndex}`);
+      continue;
+    }
     const rounding = p.radius ? Math.min(1, p.radius / (Math.min(p.width, p.height) / 2)) : 0;
-    // A photo whose size cannot be read (WebP) has no crop to compute, and goes as it always did.
-    const focused = pixels && p.focus ? focusedPicture(p, pixels, coverCrop(p, pixels, p.focus)) : undefined;
+    // A focus point or a zoom is cropped natively, so the client can still re-crop in Canva. A photo
+    // whose size cannot be read (WebP) has no crop to compute, and goes as it always did.
+    const cropped = Boolean(p.focus) || photoZoomFactor(p.zoom) > 1;
+    const focused = pixels && cropped ? focusedPicture(p, pixels, coverCrop(p, pixels, p.focus, p.zoom)) : undefined;
     slide.addImage({
       data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
       x: p.x / 96,

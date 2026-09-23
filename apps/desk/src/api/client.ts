@@ -324,6 +324,8 @@ class HawaApiClient {
       method: 'POST', body: JSON.stringify({ editUrl }),
     }),
     redrive: (taskId: string) => this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST' }),
+    /** What the requester asked of this design, round by round (Core: GET /tasks/:taskId/asks). */
+    asks: (taskId: string) => this.request<{ taskId: string; rounds: import('../components/AskLedger.js').LedgerRound[] }>(`/tasks/${encodeURIComponent(taskId)}/asks`),
     sweepFailed: () => this.request<any>('/tasks/sweep-failed', { method: 'POST' }),
     list: async <T = any>(params?: TaskListParams): Promise<TaskListResponse<T>> => {
       const q = new URLSearchParams();

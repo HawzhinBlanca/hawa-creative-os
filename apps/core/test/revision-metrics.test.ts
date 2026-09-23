@@ -20,7 +20,20 @@ describe.skipIf(!url)('revision metrics (PostgreSQL)', () => {
     const marker = `ask-${randomUUID().slice(0, 8)}`;
     await withRlsContext(db, scope, async (trx) => {
       await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, state) VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Metrics check', 'human_review')`.execute(trx);
-      const stages = { directed: { asks: [{ ask: 'move the logo', status: 'done' }, { ask: marker, status: 'not_possible', reason: 'x' }, { ask: 'spread the text', status: 'not_done' }] } };
+      const stages = {
+        directed: {
+          asks: [
+            { ask: 'move the logo', op: 'logo_move_or_scale', status: 'done', seen: { made: false, why: 'still right' } },
+            { ask: marker, op: 'photo_retouch', status: 'not_possible', reason: 'x' },
+            { ask: 'spread the text', op: 'align_or_spacing', status: 'not_done', seen: { made: false, why: 'same' } },
+          ],
+          sideEffects: ['the date'],
+          frustrated: true,
+        },
+      };
+      const asked = { directed: { refused: 'NEEDS_CLARIFICATION', asks: [{ ask: 'less empty space', status: 'asked' }], clarify: { ask: 'less empty space', question: 'q', options: ['a', 'b'] } } };
+      await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${userId}, ${'metrics_' + randomUUID()}, 'h', '{}'::jsonb, 'standard', 'failed', ${JSON.stringify(asked)}::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${userId}, ${'metrics_' + randomUUID()}, 'h', '{}'::jsonb, 'standard', 'transferred', ${JSON.stringify(stages)}::jsonb)`.execute(trx);
       await sql`INSERT INTO hawa.photo_cutouts (tenant_id, source_sha256, model, model_sha256, passed, png, width, height, report)
@@ -34,5 +47,14 @@ describe.skipIf(!url)('revision metrics (PostgreSQL)', () => {
     expect(after.cutouts.made - before.cutouts.made).toBe(1);
     expect(after.cutouts.passed - before.cutouts.passed).toBe(0);
     expect(after.days).toBe(1);
+    const op = (list: typeof after.byOp, name: string) => list.find((o) => o.op === name) ?? { asks: 0, notPossible: 0 };
+    expect(op(after.byOp, 'photo_retouch').notPossible - op(before.byOp, 'photo_retouch').notPossible).toBe(1);
+    expect(after.questions.asked - before.questions.asked).toBe(1);
+    expect(after.editsWithSideEffects - before.editsWithSideEffects).toBe(1);
+    // Two asks checked: the logo recorded done and not seen made (a disagreement), the text not done and not seen (agreement).
+    expect(after.visualCheck.checked - before.visualCheck.checked).toBe(2);
+    expect(after.visualCheck.agreed - before.visualCheck.agreed).toBe(1);
+    expect(after.visualCheck.doneButNotSeen - before.visualCheck.doneButNotSeen).toBe(1);
+    expect(after.frustrated - before.frustrated).toBe(1);
   });
 });

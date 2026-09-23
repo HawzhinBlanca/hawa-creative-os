@@ -1,5 +1,5 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
-import { requesterButtons, type InlineButton } from './requester-actions.js';
+import { requesterButtons, questionButtons, type InlineButton } from './requester-actions.js';
 
 export interface CanvaStatusMessageInput {
   taskId: string;
@@ -13,6 +13,8 @@ export interface CanvaStatusMessageInput {
   notes?: string[];
   /** What a change asked for that no edit of the design can make (code CHANGE_NOT_SUPPORTED). Plain text; escaped here. */
   notPossible?: Array<{ ask: string; reason?: string }>;
+  /** The question asked before a change is made (code NEEDS_CLARIFICATION), with its answers. Plain text; escaped here. */
+  question?: { question: string; options: string[] };
 }
 
 export interface TelegramHtmlMessage {
@@ -39,7 +41,10 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   const canvaRow: InlineButton[][] = input.canvaUrl ? [[{ text: '🎨 Open & Edit in Canva', url: input.canvaUrl }]] : [];
   // A ready draft carries the requester's three buttons (requester-actions.ts): approve, change, a designer.
   const readyRows = READY.has(status) && input.canvaUrl ? requesterButtons(input.taskId) : [];
-  const button = canvaRow.length || readyRows.length ? { inline_keyboard: [...canvaRow, ...readyRows] } : undefined;
+  const asking = code === 'NEEDS_CLARIFICATION' && input.question && input.question.question.trim() && input.question.options.length >= 2 ? input.question : undefined;
+  const answerRows = asking ? questionButtons(input.taskId, asking.options) : [];
+  const rows = [...canvaRow, ...readyRows, ...answerRows];
+  const button = rows.length ? { inline_keyboard: rows } : undefined;
   const link = input.canvaUrl ? `✏️ <b>Open in Canva:</b> ${escapeTelegramHtml(input.canvaUrl)}\n\n` : '';
 
   let body: string;
@@ -78,6 +83,18 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'DESIGN_UNCERTAIN') {
     title = '📥 <b>Request saved, draft not confirmed</b>';
     body = `The automatic draft could not be confirmed and will not be retried automatically to avoid a duplicate. The art director will check the result in Hawa Desk and finish it in Canva.\n`;
+  } else if (asking) {
+    // Nothing was made or paid for: the change waits for the answer, and the previous draft stands.
+    title = '❓ <b>One question before I make your change</b>';
+    const asks = (input.notPossible || []).filter((a) => a && typeof a.ask === 'string' && a.ask.trim()).slice(0, 5);
+    const list = asks
+      .map((a) => `• ${escapeTelegramHtml(a.ask.trim())}${a.reason && a.reason.trim() ? ` (${escapeTelegramHtml(a.reason.trim().replace(/\.$/, ''))})` : ''}\n`)
+      .join('');
+    body =
+      `${escapeTelegramHtml(asking.question.trim())}\n\n` +
+      asking.options.slice(0, 3).map((o, i) => `${i + 1}. ${escapeTelegramHtml(o.trim())}\n`).join('') +
+      `\nTap an answer below, or reply to this message in your own words. Everything else you asked for is made in the same draft.\n` +
+      (asks.length ? `\nThis part cannot be done automatically yet, and the office has been told:\n${list}` : '');
   } else if (code === 'CHANGE_NOT_SUPPORTED') {
     // The run stopped before anything was paid for the edit: nothing it could do was asked for.
     title = '✋ <b>This change needs a designer</b>';

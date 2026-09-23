@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely } from '@hawa/db';
-import { cutoutPlacement, type PhotoCutoutAsset, type StudioLayoutV2 } from '@hawa/creative';
+import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
 import type { ContentPhoto } from './types.js';
+import { SOFT_PHOTO_SCALE } from './studio-status-note.js';
 
 /**
  * People cut out of the client's photos (ADR-032), made by the cut-out service (services/cutout) and
@@ -164,9 +165,9 @@ export class PhotoCutouts {
    * service could not read, or every photo when it is not configured or not answering: those are
    * cropped from the centre, as before.
    */
-  async focusFor(photos: ContentPhoto[]): Promise<Array<{ x: number; y: number } | undefined>> {
+  async focusFor(photos: ContentPhoto[]): Promise<Array<PhotoFaces | undefined>> {
     if (!this.url) return photos.map(() => undefined);
-    const out: Array<{ x: number; y: number } | undefined> = [];
+    const out: Array<PhotoFaces | undefined> = [];
     for (const photo of photos) {
       try {
         const res = await this.fetcher(`${this.url}/v1/faces`, {
@@ -175,13 +176,26 @@ export class PhotoCutouts {
           body: new Uint8Array(photo.bytes),
           signal: AbortSignal.timeout(30000),
         });
-        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; orientation?: unknown; focus?: { x?: unknown; y?: unknown } };
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          orientation?: unknown;
+          height?: unknown;
+          faces?: Array<{ height?: unknown }>;
+          focus?: { x?: unknown; y?: unknown };
+        };
         const x = Number(body.focus?.x);
         const y = Number(body.focus?.y);
         // The point is in the upright photo, but the crop is of the stored pixels; a photo stored on
         // its side (EXIF orientation other than 1) keeps the centred crop rather than a wrong one.
         const upright = body.orientation === undefined || body.orientation === 1;
-        out.push(res.ok && body.ok && upright && Number.isFinite(x) && Number.isFinite(y) ? { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) } : undefined);
+        if (!(res.ok && body.ok && upright && Number.isFinite(x) && Number.isFinite(y))) {
+          out.push(undefined);
+          continue;
+        }
+        // The tallest face as a share of the photo's height: what matching heads across photos needs.
+        const tallest = Math.max(0, ...(Array.isArray(body.faces) ? body.faces : []).map((f) => Number(f?.height) || 0));
+        const faceShare = Number(body.height) > 0 && tallest > 0 ? Math.min(1, tallest / Number(body.height)) : undefined;
+        out.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), ...(faceShare ? { faceShare: Math.round(faceShare * 10000) / 10000 } : {}) });
       } catch {
         out.push(undefined);
       }
@@ -257,7 +271,14 @@ type Rect = { x: number; y: number; width: number; height: number };
  */
 export function arrangeCutouts(layout: StudioLayoutV2, assets: Array<PhotoCutoutAsset | undefined>, outcomes: CutoutOutcome[] = []): StudioLayoutV2 {
   const photos = layout.photos ?? [];
-  for (const p of photos) if (p.treatment === 'cutout' && !assets[p.photoIndex]) p.treatment = 'framed';
+  // A cut-out that could not be made shows its photo framed, without what only a silhouette carries.
+  for (const p of photos) {
+    if (p.treatment === 'cutout' && !assets[p.photoIndex]) {
+      p.treatment = 'framed';
+      delete p.outline;
+      delete p.glow;
+    }
+  }
   const cut = photos.filter((p) => p.treatment === 'cutout' && assets[p.photoIndex]);
   if (!cut.length) return layout;
   const W = layout.width;
@@ -325,6 +346,60 @@ export function arrangeCutouts(layout: StudioLayoutV2, assets: Array<PhotoCutout
   for (const { p, rect } of placed) {
     Object.assign(p, rect);
     delete p.radius;
+  }
+  return layout;
+}
+
+/** Where the people are in a photo: the focus point for its crop, and the tallest face's share of its height. */
+export interface PhotoFaces {
+  x: number;
+  y: number;
+  faceShare?: number;
+}
+
+/** Heads of photos set side by side match within this, as a designer would see it. */
+const HEAD_MATCH_TOLERANCE = 1.08;
+
+/**
+ * Framed portraits set side by side show their people's heads at one size, as a designer sets a row
+ * of speakers (the research's `align_heads`; cut-outs are matched in arrangeCutouts). Each photo in a
+ * row is cropped tighter around its faces (zoom) until its face is as tall as the largest one, and
+ * never so tight that it is shown beyond SOFT_PHOTO_SCALE of its own pixels or past PHOTO_ZOOM_MAX.
+ * A row is photos of about the same height whose middles are level. Only which of the photograph's
+ * own pixels show changes.
+ */
+export function alignFramedHeads(
+  layout: StudioLayoutV2,
+  faces: Array<PhotoFaces | null | undefined>,
+  sizes: Array<{ width: number; height: number } | null | undefined>
+): StudioLayoutV2 {
+  const framed = (layout.photos ?? [])
+    .filter((p) => p.treatment !== 'cutout' && !p.mask)
+    .map((p) => {
+      const face = faces[p.photoIndex];
+      const size = sizes[p.photoIndex];
+      if (!face?.faceShare || !size || !(size.width > 0 && size.height > 0)) return undefined;
+      const crop = coverCrop(p, size, p.focus);
+      // The face's height on the design at the plain cover crop, and how far the crop may tighten.
+      const shown = ((face.faceShare * size.height) / crop.sh) * p.height;
+      const soft = SOFT_PHOTO_SCALE / (p.width / crop.sw);
+      return { p, shown, most: Math.min(PHOTO_ZOOM_MAX, Math.max(1, soft)) };
+    })
+    .filter((r): r is { p: PhotoElement; shown: number; most: number } => Boolean(r));
+  const rows: Array<typeof framed> = [];
+  for (const r of framed) {
+    const row = rows.find((g) =>
+      g.every((o) => Math.abs(o.p.height - r.p.height) <= 0.15 * Math.max(o.p.height, r.p.height) && Math.abs(o.p.y + o.p.height / 2 - (r.p.y + r.p.height / 2)) <= 0.25 * r.p.height)
+    );
+    if (row) row.push(r);
+    else rows.push([r]);
+  }
+  for (const row of rows.filter((g) => g.length >= 2)) {
+    const target = Math.max(...row.map((r) => r.shown));
+    for (const r of row) {
+      const zoom = Math.min(r.most, target / r.shown);
+      if (zoom > HEAD_MATCH_TOLERANCE) r.p.zoom = Math.round(zoom * 100) / 100;
+    }
   }
   return layout;
 }

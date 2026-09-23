@@ -28,7 +28,7 @@ import { resolveModel, resolveImageSettings } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
-import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts } from './photo-cutouts.js';
+import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -411,7 +411,14 @@ export class DesignStudioService {
     const sourceOptions = (taskCtx.task.source?.payload || taskCtx.task.source || {})?.studioOptions || {};
     const directed =
       pipelineV3 && typeof sourceOptions.parentTaskId === 'string' && typeof sourceOptions.revisionDirective === 'string' && sourceOptions.revisionDirective.trim()
-        ? { parentTaskId: sourceOptions.parentTaskId as string, revisionDirective: (sourceOptions.revisionDirective as string).trim().slice(0, 1500) }
+        ? {
+            parentTaskId: sourceOptions.parentTaskId as string,
+            revisionDirective: (sourceOptions.revisionDirective as string).trim().slice(0, 2000),
+            // The requester has answered a question about this change: it is not asked again.
+            ...(sourceOptions.clarified === true ? { clarified: true } : {}),
+            // The same design in another size (the task's variant), not a change.
+            ...(typeof sourceOptions.reformat === 'string' && sourceOptions.reformat.trim() ? { reformat: sourceOptions.reformat.trim().slice(0, 40) } : {}),
+          }
         : undefined;
 
     const requestPayload = {
@@ -1197,6 +1204,11 @@ export class DesignStudioService {
         if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
           stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
         }
+        // Each photo's own pixel size, so the requester can be told when one is shown much larger than
+        // it is and will look soft (plan 4.4); nothing invents the missing detail on a person's photo.
+        if (run.status === 'laying_out' && !Array.isArray(stages.photoSizes)) {
+          stages.photoSizes = ctx.photos.map((p) => (p.width && p.height ? { width: p.width, height: p.height } : null));
+        }
       }
 
       // The copy as this run changed it (a change of wording, or one an earlier round made): every
@@ -1284,7 +1296,10 @@ export class DesignStudioService {
               const parentStages = parentRun ? (typeof parentRun.stages === 'string' ? JSON.parse(parentRun.stages) : parentRun.stages) : undefined;
               const inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
               if (inherited) ctx.copyBlocks = inherited;
-              const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive, earlier);
+              const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive, earlier, {
+                mayAsk: directedRequest?.clarified !== true,
+                ...(typeof directedRequest?.reformat === 'string' ? { reformat: directedRequest.reformat } : {}),
+              });
               if (inherited || edited.copyEdits.length) stages.effectiveCopy = edited.copyBlocks;
               if (edited.copyEdits.length) stages.directed = { ...stages.directed, copyEdits: edited.copyEdits };
               await this.repo.updateCandidate(stages.directed.candidateId, s.tenantId, {
@@ -1298,7 +1313,16 @@ export class DesignStudioService {
                 rank: 1,
               });
               // What the design shows of the request, and what it does not: the sender's note reads both.
-              stages.directed = { ...stages.directed, changes: edited.changes, unmade: edited.unmade, unchanged: edited.unchanged, asks: edited.asks };
+              stages.directed = {
+                ...stages.directed,
+                changes: edited.changes,
+                unmade: edited.unmade,
+                unchanged: edited.unchanged,
+                asks: edited.asks,
+                ...(typeof directedRequest?.reformat === 'string' ? { reformat: directedRequest.reformat, size: { width: ctx.width, height: ctx.height } } : {}),
+                ...(edited.sideEffects.length ? { sideEffects: edited.sideEffects } : {}),
+                ...(edited.frustrated ? { frustrated: true } : {}),
+              };
               stages.layouts = { count: 1, directed: true };
               // The client's own design with their change: no rival layouts to critique or judge.
               await this.repo.updateRunStatus(runId, s.tenantId, 'qa', { stages, budget, winnerCandidateId: stages.directed.candidateId, judgeStatus: 'SKIPPED' });
@@ -1310,8 +1334,18 @@ export class DesignStudioService {
                 // Nothing asked for is within the edit's means, or the design's photos are missing: a
                 // design made afresh has the same means and the same photos, so the run ends here, before
                 // the edit is paid for, and the sender is told plainly what needs a designer.
-                const diagnostic = `Studio v3 failed at stage laying_out: ${caught.message} It was not designed afresh.`;
-                stages.directed = { ...stages.directed, asks: caught.asks, refused: caught.code };
+                // A question is not a failure of the design: the run ends here and the requester's answer
+                // starts the change again, as a new revision of the same design.
+                const diagnostic = caught.code === 'NEEDS_CLARIFICATION'
+                  ? `Studio v3 stopped at stage laying_out: ${caught.message}`
+                  : `Studio v3 failed at stage laying_out: ${caught.message} It was not designed afresh.`;
+                stages.directed = {
+                  ...stages.directed,
+                  asks: caught.asks,
+                  refused: caught.code,
+                  ...(caught.clarify ? { clarify: caught.clarify } : {}),
+                  ...(caught.frustrated ? { frustrated: true } : {}),
+                };
                 await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
                 return { runId, status: 'failed', stage: 'edit', diagnostic, message: diagnostic, code: caught.code, spentUsd: budget.spentUsd };
               }
@@ -1343,19 +1377,28 @@ export class DesignStudioService {
             concepts,
             candidateRows.map((r) => ({ id: r.id, ordinal: r.ordinal }))
           );
-          // A framed photo is cropped around its faces (stages.photoFocus); the layout model does not set it.
-          const focus: Array<{ x: number; y: number } | null> = Array.isArray(stages.photoFocus) ? stages.photoFocus : [];
+          // A framed photo is cropped around its faces (stages.photoFocus), and framed portraits side by
+          // side show their heads at one size (alignFramedHeads); the layout model sets neither.
+          const focus: Array<PhotoFaces | null> = Array.isArray(stages.photoFocus) ? stages.photoFocus : [];
+          const sizes: Array<{ width: number; height: number } | null> = Array.isArray(stages.photoSizes) ? stages.photoSizes : [];
           for (const cand of candidateStates) {
             for (const p of cand.currentLayout.photos ?? []) {
               const f = focus[p.photoIndex];
-              if (f && p.treatment !== 'cutout') p.focus = f;
+              if (f && p.treatment !== 'cutout') p.focus = { x: f.x, y: f.y };
             }
+            alignFramedHeads(cand.currentLayout, focus, sizes);
           }
           // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
           if (ctx.photoCutouts?.some(Boolean)) {
             for (const cand of candidateStates) {
-              for (const p of cand.currentLayout.photos ?? []) if (ctx.photoCutouts[p.photoIndex]) p.treatment = 'cutout';
+              // A person cut out has their own edge: a frame's mask and crop no longer apply.
+              for (const p of cand.currentLayout.photos ?? []) {
+                if (!ctx.photoCutouts[p.photoIndex]) continue;
+                p.treatment = 'cutout';
+                delete p.mask;
+                delete p.zoom;
+              }
               cand.currentLayout = settlePhotos(arrangeCutouts(cand.currentLayout, ctx.photoCutouts, ctx.cutoutOutcomes));
             }
           }

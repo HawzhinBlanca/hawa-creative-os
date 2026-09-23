@@ -114,12 +114,84 @@ export interface PhotoElement extends Box {
    * framed photo had before. A cut-out ignores it.
    */
   focus?: PhotoFocus;
+  /**
+   * How much tighter than the cover crop a framed photo is cropped, around its focus: 1 is the cover
+   * crop, 2 keeps half of it on each side (PHOTO_ZOOM_MIN..PHOTO_ZOOM_MAX). It only chooses which
+   * of the photograph's own pixels show. A cut-out ignores it.
+   */
+  zoom?: number;
+  /**
+   * A shape a framed photo is cut to instead of its rectangle: `circle` is the ellipse inscribed in
+   * the box, `arch` a rectangle whose top is a half-ellipse as wide as the box. It replaces the
+   * corner radius. A cut-out already has the person's own edge and refuses one (validation).
+   */
+  mask?: PhotoMask;
+  /** The photo fading into the design's background toward one edge. Framed or cut-out. */
+  fade?: PhotoFade;
+  /** A colour treatment of the photograph's own pixels. Framed or cut-out. */
+  filter?: PhotoFilter;
+  /** A line of colour around a cut-out person's silhouette, drawn under them. Cut-outs only. */
+  outline?: PhotoOutline;
+  /** A soft halo of colour around a cut-out person's silhouette, drawn under them. Cut-outs only. */
+  glow?: PhotoGlow;
 }
 
 /** A point of a photo as a share (0..1) of its width and height, from the top-left. */
 export interface PhotoFocus {
   x: number;
   y: number;
+}
+
+/**
+ * The limits of the designer treatments. They are deterministic: each one crops, masks, recolours
+ * or draws around the photograph's own pixels, and none of them regenerates a person (ADR-032).
+ */
+export const PHOTO_ZOOM_MIN = 1;
+export const PHOTO_ZOOM_MAX = 3;
+/** Share of the box the fade runs over. Under 5% it is a hard edge, which a mask already draws. */
+export const PHOTO_FADE_LENGTH_MIN = 0.05;
+export const PHOTO_FADE_LENGTH_MAX = 1;
+/** Outline width in layout pixels. */
+export const PHOTO_OUTLINE_WIDTH_MIN = 1;
+export const PHOTO_OUTLINE_WIDTH_MAX = 24;
+/** Glow reach in layout pixels. */
+export const PHOTO_GLOW_RADIUS_MIN = 2;
+export const PHOTO_GLOW_RADIUS_MAX = 60;
+
+export const PHOTO_MASKS = ['circle', 'arch'] as const;
+export type PhotoMask = (typeof PHOTO_MASKS)[number];
+
+export const PHOTO_FADE_EDGES = ['top', 'bottom', 'left', 'right'] as const;
+export type PhotoFadeEdge = (typeof PHOTO_FADE_EDGES)[number];
+
+/**
+ * Alpha falls linearly from opaque to fully transparent over the last `length` share of the photo's
+ * drawn rectangle toward `edge`, so the background shows through.
+ */
+export interface PhotoFade {
+  edge: PhotoFadeEdge;
+  length: number;
+}
+
+/**
+ * `bw`: Rec. 709 luminance grey. `duotone`: luminance 0..1 mapped onto dark..light. `tint`: each
+ * pixel mixed toward `color` by `strength` (0..1).
+ */
+export type PhotoFilter =
+  | { kind: 'bw' }
+  | { kind: 'duotone'; dark: Hex; light: Hex }
+  | { kind: 'tint'; color: Hex; strength: number };
+
+export interface PhotoOutline {
+  color: Hex;
+  /** Layout pixels the silhouette is grown by. */
+  width: number;
+}
+
+export interface PhotoGlow {
+  color: Hex;
+  /** Layout pixels the glow reaches beyond the silhouette. */
+  radius: number;
 }
 
 export const typeScaleSchema = z.object({
@@ -196,12 +268,39 @@ export const photoFocusSchema = z.object({
   y: z.number().min(0).max(1),
 }).strict();
 
+export const photoFadeSchema = z.object({
+  edge: z.enum(PHOTO_FADE_EDGES),
+  length: z.number().min(PHOTO_FADE_LENGTH_MIN).max(PHOTO_FADE_LENGTH_MAX),
+}).strict();
+
+export const photoFilterSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('bw') }).strict(),
+  z.object({ kind: z.literal('duotone'), dark: hexSchema, light: hexSchema }).strict(),
+  z.object({ kind: z.literal('tint'), color: hexSchema, strength: z.number().min(0).max(1) }).strict(),
+]);
+
+export const photoOutlineSchema = z.object({
+  color: hexSchema,
+  width: z.number().min(PHOTO_OUTLINE_WIDTH_MIN).max(PHOTO_OUTLINE_WIDTH_MAX),
+}).strict();
+
+export const photoGlowSchema = z.object({
+  color: hexSchema,
+  radius: z.number().min(PHOTO_GLOW_RADIUS_MIN).max(PHOTO_GLOW_RADIUS_MAX),
+}).strict();
+
 export const photoElementSchema = boxSchema.extend({
   photoIndex: z.number().int().nonnegative(),
   role: z.enum(['hero', 'portrait', 'inset']),
   radius: z.number().nonnegative().optional(),
   treatment: photoTreatmentSchema.optional(),
   focus: photoFocusSchema.optional(),
+  zoom: z.number().min(PHOTO_ZOOM_MIN).max(PHOTO_ZOOM_MAX).optional(),
+  mask: z.enum(PHOTO_MASKS).optional(),
+  fade: photoFadeSchema.optional(),
+  filter: photoFilterSchema.optional(),
+  outline: photoOutlineSchema.optional(),
+  glow: photoGlowSchema.optional(),
 }).strict();
 
 export const studioLayoutV2Schema = z.object({

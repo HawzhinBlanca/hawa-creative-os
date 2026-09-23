@@ -1,4 +1,4 @@
-import type { PhotoFocus } from './layout-v2.js';
+import { PHOTO_ZOOM_MAX, PHOTO_ZOOM_MIN, type PhotoFocus } from './layout-v2.js';
 
 /**
  * Where a framed photo is cropped. A framed photo fills its box with the largest part of the
@@ -30,10 +30,25 @@ function share(n: number): number {
 }
 
 /**
+ * A zoom a caller or a model supplied, held to PHOTO_ZOOM_MIN..PHOTO_ZOOM_MAX; anything that is not
+ * a finite number is no zoom. Under 1 the crop would be larger than the image, which cover cannot
+ * show.
+ */
+export function photoZoomFactor(zoom: number | undefined): number {
+  if (zoom === undefined || !Number.isFinite(zoom)) return PHOTO_ZOOM_MIN;
+  return Math.min(PHOTO_ZOOM_MAX, Math.max(PHOTO_ZOOM_MIN, zoom));
+}
+
+/**
  * The part of an image that cover-fits a box: the box's aspect, as large as the image allows, and
  * placed so the focus point (a share of the image's width and height) is as near its centre as the
  * image's edges let it be. With no focus it is the centred crop, which is what SVG's
  * `xMidYMid slice` and pptxgenjs's `cover` sizing draw.
+ *
+ * A zoom above 1 keeps the cover rectangle divided by the zoom on both axes, placed by the same
+ * rule, so a zoom of 2 shows the quarter of the cover crop around the focus. The kept rectangle
+ * still has the box's aspect, and it only chooses which of the photograph's own pixels show. A zoom
+ * of 1, or none, is exactly the cover crop.
  *
  * A box or an image without a positive, finite size throws: there is nothing to crop, and drawing
  * the photo some other way would hide that.
@@ -41,14 +56,16 @@ function share(n: number): number {
 export function coverCrop(
   box: { width: number; height: number },
   image: { width: number; height: number },
-  focus?: { x: number; y: number }
+  focus?: { x: number; y: number },
+  zoom?: number
 ): CoverCropRect {
   if (!positiveSize(box)) throw new RangeError(`Photo box has no usable size: ${box.width}x${box.height}`);
   if (!positiveSize(image)) throw new RangeError(`Photo has no usable size: ${image.width}x${image.height}`);
   // Compared cross-multiplied, so an image with exactly the box's aspect keeps all of itself.
   const wider = image.width * box.height > image.height * box.width;
-  const sw = wider ? Math.min(image.width, (image.height * box.width) / box.height) : image.width;
-  const sh = wider ? image.height : Math.min(image.height, (image.width * box.height) / box.width);
+  const factor = photoZoomFactor(zoom);
+  const sw = (wider ? Math.min(image.width, (image.height * box.width) / box.height) : image.width) / factor;
+  const sh = (wider ? image.height : Math.min(image.height, (image.width * box.height) / box.width)) / factor;
   const place = (extent: number, kept: number, at: number | undefined) =>
     at === undefined ? (extent - kept) / 2 : Math.min(extent - kept, Math.max(0, share(at) * extent - kept / 2));
   return { sx: place(image.width, sw, focus?.x), sy: place(image.height, sh, focus?.y), sw, sh };

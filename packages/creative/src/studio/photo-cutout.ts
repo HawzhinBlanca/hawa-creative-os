@@ -98,11 +98,13 @@ export function cutoutPlacement(box: Box, asset: PhotoCutoutGeometry): CutoutPla
 
 /**
  * One thing the photo layer draws, bottom first. A framed photo is drawn as it always was; a cut-out
- * is a shadow and a person, each a PNG at an exact rect from `cutoutPlacement`.
+ * is a shadow and a person, each a PNG at an exact rect from `cutoutPlacement`. A cut-out with a glow
+ * or an outline has that effect as a layer of its own under the person; its `png` is the person's
+ * and its `rect` the person's rect, and the effect reaches beyond it (see `cutoutEffectFragment`).
  */
 export type PhotoLayer =
   | { kind: 'framed'; photo: PhotoElement }
-  | { kind: 'cutout-shadow' | 'cutout-person'; photo: PhotoElement; png: Buffer; rect: Box };
+  | { kind: 'cutout-shadow' | 'cutout-glow' | 'cutout-outline' | 'cutout-person'; photo: PhotoElement; png: Buffer; rect: Box };
 
 /**
  * The photo layer in drawing order, for both the preview and the Canva transfer, so the two stack
@@ -111,6 +113,10 @@ export type PhotoLayer =
  * Every cut-out's shadow goes down before any photo, then the photos in layout order. Cut-out
  * people in a group may overlap (see photosMayOverlap), and with each shadow drawn just under its
  * own person, the right-hand person's shadow would fall across the legs of the person beside them.
+ *
+ * A glow and an outline go just under their own person, glow lowest, unlike the shadows: they trace
+ * the person's silhouette, and where two people overlap the outline of the one in front is what
+ * separates them, as it does on a sticker-style group poster.
  *
  * A photo placed as a cut-out with no cut-out supplied is drawn framed, as it would have been
  * before cut-outs existed.
@@ -128,8 +134,11 @@ export function photoLayers(
     if (asset?.shadowPng && placed?.shadow) layers.push({ kind: 'cutout-shadow', photo, png: asset.shadowPng, rect: placed.shadow });
   }
   for (const { photo, asset, placed } of drawn) {
-    if (asset && placed) layers.push({ kind: 'cutout-person', photo, png: asset.png, rect: placed.person });
-    else layers.push({ kind: 'framed', photo });
+    if (asset && placed) {
+      if (photo.glow) layers.push({ kind: 'cutout-glow', photo, png: asset.png, rect: placed.person });
+      if (photo.outline) layers.push({ kind: 'cutout-outline', photo, png: asset.png, rect: placed.person });
+      layers.push({ kind: 'cutout-person', photo, png: asset.png, rect: placed.person });
+    } else layers.push({ kind: 'framed', photo });
   }
   return layers;
 }

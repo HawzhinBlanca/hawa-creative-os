@@ -1,6 +1,6 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { sql, withRlsContext, type Database, type Kysely, type OutboxRepository } from '@hawa/db';
-import { requesterButtons, type InlineButton } from './requester-actions.js';
+import { requesterButtons, questionButtons, type InlineButton } from './requester-actions.js';
 
 /**
  * A draft the requester has not answered is asked about once a day after it was sent, and once more
@@ -36,6 +36,75 @@ export function composeDraftReminder(taskId: string, title: string | null, day: 
     parse_mode: 'HTML',
     reply_markup: { inline_keyboard: requesterButtons(taskId) },
   };
+}
+
+/**
+ * A question asked before a change (edit stage, NEEDS_CLARIFICATION) that the requester has not
+ * answered: the change waits on it, so it is asked again with its answers, like an unanswered draft.
+ */
+export interface QuestionToRemind {
+  taskId: string;
+  chat: string;
+  ageHours: number;
+  question: string;
+  options: string[];
+}
+
+export function composeQuestionReminder(taskId: string, question: string, options: string[], day: 1 | 5): {
+  text: string;
+  parse_mode: 'HTML';
+  reply_markup: { inline_keyboard: InlineButton[][] };
+} {
+  const lead = day === 1 ? '👋 <b>Your change is waiting for one answer</b>' : '👋 <b>Still waiting for your answer</b>';
+  return {
+    text:
+      `${lead}\n\n${escapeTelegramHtml(question)}\n\n` +
+      options.slice(0, 3).map((o, i) => `${i + 1}. ${escapeTelegramHtml(o)}\n`).join('') +
+      `\nTap an answer, reply in your own words, or ask for a designer.\n\n` +
+      `🆔 Task ID: <code>${escapeTelegramHtml(taskId)}</code>`,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: questionButtons(taskId, options) },
+  };
+}
+
+export async function questionsToRemind(db: Kysely<Database>, tenantId: string, userId: string, from: string = REMINDERS_FROM): Promise<QuestionToRemind[]> {
+  const rows = await withRlsContext(db, { tenantId, userId, role: 'operator' }, async (trx) =>
+    (
+      await sql<{ task_id: string; chat: string; age_hours: number; clarify: { question?: unknown; options?: unknown } | null }>`SELECT t.id::text AS task_id,
+          o.payload->>'sourceChannelId' AS chat,
+          (extract(epoch FROM now() - n.created_at) / 3600)::float8 AS age_hours,
+          r.stages->'directed'->'clarify' AS clarify
+        FROM hawa.tasks t
+        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.tenant_id = t.tenant_id AND o.command_type = 'task.created'
+        JOIN LATERAL (SELECT x.stages FROM hawa.design_studio_runs x WHERE x.tenant_id = t.tenant_id AND x.task_id = t.id ORDER BY x.created_at DESC LIMIT 1) r ON true
+        JOIN LATERAL (
+          SELECT d.created_at FROM hawa.outbox_commands d
+          WHERE d.tenant_id = t.tenant_id AND d.aggregate_id = t.id AND d.command_type = 'notify.telegram'
+            AND d.state = 'delivered' AND d.idempotency_key NOT LIKE 'notify.telegram:%reminder%'
+          ORDER BY d.created_at DESC LIMIT 1
+        ) n ON true
+        WHERE t.tenant_id = ${tenantId}::uuid AND t.state = 'paused'
+          AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
+          AND o.payload->>'sourcePlatform' = 'telegram' AND o.payload->>'sourceChannelId' ~ '^-?[0-9]+$'
+          AND n.created_at > ${from}::timestamptz
+          AND n.created_at < now() - interval '24 hours' AND n.created_at > now() - interval '14 days'
+          AND NOT EXISTS (
+            SELECT 1 FROM hawa.inbox_events e
+            WHERE e.tenant_id = t.tenant_id AND e.source_account_id = 'telegram'
+              AND e.source_event_id LIKE (o.payload->>'sourceChannelId') || ':%' AND e.received_at > n.created_at)
+        ORDER BY n.created_at
+        LIMIT 50`.execute(trx)
+    ).rows
+  );
+  return rows
+    .map((r) => ({
+      taskId: r.task_id,
+      chat: r.chat,
+      ageHours: Number(r.age_hours),
+      question: typeof r.clarify?.question === 'string' ? r.clarify.question : '',
+      options: Array.isArray(r.clarify?.options) ? r.clarify.options.filter((o): o is string => typeof o === 'string' && o.trim() !== '') : [],
+    }))
+    .filter((q) => q.question && q.options.length >= 2);
 }
 
 /** Whether a moment falls in office hours in Erbil (UTC+3): 09:00 to 20:00. */
@@ -112,6 +181,24 @@ export async function remindUnansweredDrafts(input: {
       written++;
     } catch {
       // Already written for this draft and day: the key is unique, which is the point.
+    }
+  }
+  for (const q of await questionsToRemind(input.db, input.tenantId, input.userId, input.from ?? REMINDERS_FROM)) {
+    const day: 1 | 5 = q.ageHours >= 5 * 24 ? 5 : 1;
+    try {
+      await withRlsContext(input.db, { tenantId: input.tenantId, userId: input.userId, role: 'operator' }, (trx) =>
+        input.outbox.enqueue({
+          tenantId: input.tenantId,
+          aggregateType: 'task',
+          aggregateId: q.taskId,
+          commandType: 'notify.telegram',
+          idempotencyKey: `notify.telegram:question-reminder${day}:${q.taskId}`,
+          payload: { chatId: q.chat, taskId: q.taskId, status: `QUESTION_REMINDER_DAY_${day}`, message: composeQuestionReminder(q.taskId, q.question, q.options, day) },
+        }, trx)
+      );
+      written++;
+    } catch {
+      // Already written for this question and day.
     }
   }
   if (written) console.log(`[draft-reminders] ${written} reminder(s) written`);

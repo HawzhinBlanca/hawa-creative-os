@@ -72,6 +72,36 @@ describe.skipIf(!url)('draft reminders (PostgreSQL)', () => {
     expect(await reminders(wrote.taskId)).toEqual([]);
   });
 
+  it('a question left unanswered a day is asked again with its answers; answered, it is not', async () => {
+    const ask = async (hoursAgo: number) => {
+      const { taskId, chat } = await draft(hoursAgo);
+      const stages = { directed: { refused: 'NEEDS_CLARIFICATION', clarify: { question: 'Fill the space with what?', options: ['bigger photos', 'bigger text'] } } };
+      await withRlsContext(db, operator, async (trx) => {
+        await sql`UPDATE hawa.tasks SET state = 'paused' WHERE id = ${taskId}::uuid`.execute(trx);
+        await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
+          VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${userId}, ${'reminder_' + taskId}, 'h', '{}'::jsonb, 'standard', 'failed', ${JSON.stringify(stages)}::jsonb)`.execute(trx);
+      });
+      return { taskId, chat };
+    };
+    const open = await ask(27);
+    const answered = await ask(27);
+    await withRlsContext(db, operator, async (trx) => {
+      await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+        VALUES (${tenantId}::uuid, 'telegram', ${`${answered.chat}:${randomUUID()}`}, 'telegram_update', '{}'::jsonb, 'z', true)`.execute(trx);
+    });
+    await pass();
+    await pass();
+    const keys = async (taskId: string) =>
+      (await withRlsContext(db, operator, async (trx) => (await sql<{ key: string; message: any }>`SELECT idempotency_key AS key, payload->'message' AS message FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND idempotency_key LIKE 'notify.telegram:question-reminder%'`.execute(trx)).rows));
+    const sent = await keys(open.taskId);
+    expect(sent.map((k) => k.key)).toEqual([`notify.telegram:question-reminder1:${open.taskId}`]);
+    expect(sent[0].message.text).toContain('Fill the space with what?');
+    expect(JSON.stringify(sent[0].message.reply_markup)).toContain(`rq:a2:${open.taskId}`);
+    expect(await keys(answered.taskId)).toEqual([]);
+    // A paused question is not a draft: no draft reminder for it.
+    expect(await reminders(open.taskId)).toEqual([]);
+  });
+
   it('never at night, and never for drafts sent before reminders existed', async () => {
     const { taskId } = await draft(30);
     expect(await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: new Date('2026-09-24T21:00:00Z'), from: '2026-01-01T00:00:00Z' })).toBe(0);

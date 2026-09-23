@@ -2,9 +2,23 @@ import { clientReferenceInstruction, clientReferencePart, type ClientReference }
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
 import { fitLogoToAspect, resolveRadius, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
-import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, PhotoFocus, PhotoTreatment } from './layout-v2.js';
+import type {
+  StudioLayoutV2,
+  TextElement,
+  ShapeElement,
+  ArtConfig,
+  Box,
+  PhotoFade,
+  PhotoFilter,
+  PhotoFocus,
+  PhotoGlow,
+  PhotoMask,
+  PhotoOutline,
+  PhotoTreatment,
+} from './layout-v2.js';
 import { studioLayoutV2Schema, PHOTO_TREATMENTS } from './layout-v2.js';
 import { photoFocusOrUndefined } from './photo-crop.js';
+import { photoTreatmentFields } from './photo-treatments.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import {
   admittedFontFace,
@@ -109,6 +123,16 @@ export interface NormalizedPhotoElement extends NormalizedBox {
   treatment?: PhotoTreatment;
   /** The point of the photo a framed crop keeps in view. Not asked of the model either; a caller that sets it keeps it. */
   focus?: PhotoFocus;
+  /**
+   * The designer treatments (see PhotoElement). None is asked of the model; a caller that sets one
+   * keeps it, held to its range, and a malformed one is dropped.
+   */
+  zoom?: number;
+  mask?: PhotoMask;
+  fade?: PhotoFade;
+  filter?: PhotoFilter;
+  outline?: PhotoOutline;
+  glow?: PhotoGlow;
 }
 
 export interface CopyBlockSlotInput {
@@ -444,7 +468,9 @@ export function scaleNormalizedLayoutToV2(
     // A treatment the schema does not know is dropped rather than carried: the schema check below
     // would otherwise discard the whole candidate over one field. A focus point is held to the
     // photo, or dropped when it is not a point, for the same reason. It is a share of the photo,
-    // not of the canvas, so it is not scaled.
+    // not of the canvas, so it is not scaled. The designer treatments are held to their ranges or
+    // dropped the same way; their pixel sizes (outline width, glow radius) are layout pixels a
+    // caller chose for the canvas, and are not scaled either.
     const treatment = PHOTO_TREATMENTS.find((t) => t === p.treatment);
     const focus = photoFocusOrUndefined(p.focus);
     return {
@@ -454,6 +480,7 @@ export function scaleNormalizedLayoutToV2(
       ...(radius > 0 ? { radius } : {}),
       ...(treatment ? { treatment } : {}),
       ...(focus ? { focus } : {}),
+      ...photoTreatmentFields(p),
     };
   });
 
