@@ -1,6 +1,6 @@
 # Designer-grade revisions: cut-outs, a request ledger, and a loop that stays until approval
 
-**Date:** 2026-09-23 · **Decision record:** `adrs/032_photo_cutouts_and_request_ledger.md` (Proposed) · **Research:** `output/research/2026-09-23-cutouts-and-revision-loop/`
+**Date:** 2026-09-23 · **Decision record:** `adrs/032_photo_cutouts_and_request_ledger.md` (Accepted 2026-09-23) · **Research:** `output/research/2026-09-23-cutouts-and-revision-loop/`
 
 ## Goal
 
@@ -88,3 +88,26 @@ Always a designer's job (listed in the research): retouching faces or bodies, ad
 4. For Sewa's current request, one of two routes:
    - Now: the art director opens the latest draft in Canva (task 5261e3ec; the space for the photos was kept), adds both photos and uses Canva's BG Remover. A fresh export is then captured before approval, or delivery would send the file exported before the edit.
    - Later: wait for Phase 1 and replay her request.
+
+## Status, 2026-09-23 evening (owner approved ADR-032; Docker VM raised to about 21.7 GB)
+
+| Item | State | Where / proof |
+|---|---|---|
+| 1.1 Bake-off | Done on 32 images (26 Commons, 6 from requests). Every real portrait passed; drawings, posters, heads cut off at the top and tiny figures refused. BiRefNet-portrait chosen. BiRefNet_lite-matting and BEN2 were **not** tried: the stock lite and full models already separate cleanly | `CUTOUT_TRIAL_EVIDENCE.md` |
+| 1.2 Cut-out service | Done and deployed: its own container (`hawa-cutout:1`), 12 GB limit, internal network only, model pinned by sha256; each photo cut once and stored (`hawa.photo_cutouts`) | `services/cutout`, migration 014, `photo-cutouts.test.ts` |
+| 1.3 QA gates | Done: person found, face whole, area, pieces, haze, head not cut, resolution, expected people; pixel-faithful by construction. The two-model agreement and halo gates were **not** built: foreground estimation removes the halo, and one model is loaded | `services/cutout/tests` (run in the image by the deploy) |
+| 1.4 Layout treatment | Done: people stand on the bottom edge, heads matched by face size, side by side, clear of the text; the checks hold a cut-out to its height | `photo-cutout.ts`, `arrangeCutouts` |
+| 1.5 Canva transfer | Done and proved live: a transparent figure imported through the pipeline's PPTX path came back from Canva with the background showing through its transparent pixels (sampled 10,42,107 = the navy background). Test design "Hawa test: cut-out transparency" left in the office's Canva | `canva-alpha-probe`, 2026-09-23 |
+| 1.6 Brief and edit | Done and proved live: Sewa's own message on her own design (production pipeline, nothing sent) gave both panelists cut out, standing on the bottom edge, text spread; both asks recorded done | `change-request-honesty.test.ts`; before/after/reference image |
+| 1.7 Owner | Done: ADR approved, Docker memory raised | |
+| 2.1 Ledger | Changed from the plan: the asks are recorded on each run (`stages.directed.asks`) and read along the revision chain, not in a new table | `askHistory`, `earlierAsks` |
+| 2.2 Operation catalogue | Partly done: **wording changes** added (the new words must be written out in the request and the old ones found once on the design, so nothing is invented or translated). Other operations are still layout edits proposed by the model and held by deterministic guards, not a typed op list | `applyCopyEdits` |
+| 2.3 Structural diff | Partly done: colours and type of anything not asked about are restored; positions may still move to make room | `keepUntouched` |
+| 2.4 Carry-forward | Done: every later round is told what earlier rounds made, and keeps any wording an earlier round changed | `earlierAsks`, `effectiveCopy` |
+| 2.5 Semantic check | **Not done** | |
+| 3 Buttons | Done: Approve, Change something, Ask a designer, under every ready draft; none approves a design (the Desk still does) | `requester-buttons.test.ts` |
+| 3 Escalation | Done: a change that is not possible, "Ask a designer", and round 3 of changes each alert the office with what was asked | `composeDesignerHandoff` |
+| 3 Reminders | Done: day 1 and day 5, office hours only, never for an answered or replaced draft, only for drafts sent after 2026-09-24 06:00 UTC | `draft-reminders.test.ts` |
+| 3 Clarifying questions | **Not done** | |
+| 4 Treatments | Started: the cut-out service finds faces and a focus point (`/v1/faces`) for face-aware cropping; renderer and transfer support are next. Fades, masks, duotone, other sizes and upscaling **not started** | |
+| 5 Measurement | **Not started**: dashboard, blinded comparison with the office designer | |

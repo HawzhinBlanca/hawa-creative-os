@@ -1,5 +1,6 @@
 """The cut-out service: one HTTP endpoint in front of core.Cutter, on the internal network only.
 
+POST /v1/faces           body: the photo's bytes -> {"faces": [...], "focus": {"x", "y"}} (no matting; fast)
 POST /v1/cutout          body: the photo's bytes; query: people=<n> (optional)
                          200 {"ok": true, "passed": bool, "png": base64, "shadow": {...}, "gates": {...}, ...}
                          400 when the body is not a picture; 503 while the model is loading
@@ -70,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         url = urlparse(self.path)
-        if url.path != '/v1/cutout':
+        if url.path not in ('/v1/cutout', '/v1/faces'):
             return self.reply(404, {'ok': False, 'error': 'not found'})
         cutter = state['cutter']
         if not isinstance(cutter, Cutter):
@@ -79,6 +80,13 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0 or length > MAX_BODY:
             return self.reply(400, {'ok': False, 'error': 'send the photo as the request body (at most 25 MB)'})
         data = self.rfile.read(length)
+        if url.path == '/v1/faces':
+            # Face detection only: milliseconds, and no need to wait behind a cut.
+            try:
+                return self.reply(200, {'ok': True, **cutter.focus(data)})
+            except Exception as err:
+                bad_picture = 'cannot identify image' in str(err) or 'image file is truncated' in str(err)
+                return self.reply(400 if bad_picture else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
         people = parse_qs(url.query).get('people', [None])[0]
         expected = int(people) if people and people.isdigit() else None
         waited = time.time()

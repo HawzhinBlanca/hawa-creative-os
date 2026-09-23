@@ -145,6 +145,23 @@ class Cutter:
             faces.append({'x': round(x), 'y': round(y), 'width': round(fw), 'height': round(fh), 'score': round(float(f[14]), 3)})
         return faces
 
+    def focus(self, data: bytes) -> dict[str, Any]:
+        """Where the people are in a photo, for cropping it into a frame without cutting heads: the
+        faces, and a focus point (0..1 of the photo) a little above the centre of all of them, so a
+        crop keeps headroom. No faces: the upper third of a portrait, the centre of anything else."""
+        image = load_image(data)
+        h, w = image.shape[:2]
+        faces = self.faces(image)
+        if faces:
+            x0 = min(f['x'] for f in faces)
+            x1 = max(f['x'] + f['width'] for f in faces)
+            y0 = min(f['y'] for f in faces)
+            y1 = max(f['y'] + f['height'] for f in faces)
+            fx, fy = (x0 + x1) / 2 / w, max(0.0, (y0 + y1) / 2 - 0.15 * (y1 - y0)) / h
+        else:
+            fx, fy = 0.5, (0.36 if h > w * 1.1 else 0.5)
+        return {'width': w, 'height': h, 'faces': faces, 'focus': {'x': round(min(1.0, max(0.0, fx)), 4), 'y': round(min(1.0, max(0.0, fy)), 4)}}
+
     # --- the whole cut ------------------------------------------------------------------------
 
     def cut(self, data: bytes, expected_people: int | None = None) -> CutResult:

@@ -7,7 +7,7 @@ import { probeRestate } from './services/restate-probe.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import type {
@@ -167,6 +167,17 @@ import { registerClientsRoutes } from './routes/clients.routes.js';
 import { registerEvalsRoutes } from './routes/evals.routes.js';
 import { registerIngressRoutes } from './routes/ingress.routes.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
+import {
+  parseRequesterAction,
+  composeRequesterApproved,
+  composeChangePrompt,
+  composeDesignerTakesOver,
+  composeReplacedDraft,
+  composeRequesterApprovedAlert,
+  composeDesignerHandoff,
+  type RequesterAction,
+  type AskRecord,
+} from './services/requester-actions.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
 import { sniffImageMime } from './services/telegram-media.js';
 import type { GuidelinesModel } from './services/brand-guidelines.js';
@@ -175,6 +186,7 @@ import { parseRulesCommand, isStandingRule } from './services/standing-rules-cha
 import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
+import { remindUnansweredDrafts } from './services/draft-reminders.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -261,6 +273,8 @@ export interface CreateAppOptions {
   enableBillingProbeSchedule?: boolean;
   skipTelegramProbe?: boolean;
   enableTelegramPolling?: boolean;
+  /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
+  enableDraftReminders?: boolean;
   /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
   guidelinesModel?: GuidelinesModel;
   persistDnaToDisk?: boolean;
@@ -3423,6 +3437,139 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
+  /**
+   * A message to the office chat (the first TELEGRAM_ALLOWED_USERS entry), written to the outbox like
+   * every other message and sent once per key. Not sent when the office chat is the requester's own:
+   * they read the requester's message already.
+   */
+  async function enqueueOfficeAlert(taskId: string, key: string, message: { text: string; parse_mode: 'HTML' }, requesterChat?: string): Promise<boolean> {
+    const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+    if (!db || !outboxRepo || !office || office === requesterChat) {
+      console.warn(`[office-alert] ${key}: not sent (${!db || !outboxRepo ? 'no database' : !office ? 'no office chat configured' : "the office chat is the requester's own"})`);
+      return false;
+    }
+    const outbox = outboxRepo;
+    try {
+      await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        outbox.enqueue({
+          tenantId: DEFAULT_TENANT_ID,
+          aggregateType: 'task',
+          aggregateId: taskId,
+          commandType: 'notify.telegram',
+          idempotencyKey: `notify.office:${key}`,
+          payload: { chatId: office, taskId, message },
+        }, trx));
+      return true;
+    } catch (err) {
+      // The key is unique: a second alert for the same thing ends here, which is the point.
+      console.warn(`[office-alert] ${key}: not written (${(err as Error)?.message || err})`);
+      return false;
+    }
+  }
+
+  /**
+   * What was asked of a design and of every design it was a change to, oldest first, from the runs'
+   * records (edit.stage.ts AskOutcome), with how many rounds of changes it has had.
+   */
+  async function askHistory(taskId: string): Promise<{ asks: AskRecord[]; rounds: number }> {
+    if (!db || !isValidUuid(taskId)) return { asks: [], rounds: 0 };
+    const rows = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ asks: unknown; depth: number }>`WITH RECURSIVE chain(id, depth) AS (
+          SELECT ${taskId}::uuid, 0
+          UNION ALL
+          SELECT (o.payload->'studioOptions'->>'parentTaskId')::uuid, chain.depth + 1
+          FROM chain JOIN hawa.outbox_commands o ON o.aggregate_id = chain.id AND o.command_type = 'task.created'
+          WHERE o.tenant_id = ${DEFAULT_TENANT_ID}::uuid
+            AND o.payload->'studioOptions'->>'parentTaskId' ~ '^[0-9a-f-]{36}$' AND chain.depth < 12
+        )
+        SELECT r.stages->'directed'->'asks' AS asks, chain.depth FROM chain
+        LEFT JOIN hawa.design_studio_runs r ON r.task_id = chain.id AND r.tenant_id = ${DEFAULT_TENANT_ID}::uuid
+        ORDER BY chain.depth DESC, r.created_at`.execute(trx)).rows);
+    const asks: AskRecord[] = [];
+    for (const row of rows) {
+      for (const a of Array.isArray(row.asks) ? (row.asks as Array<Record<string, unknown>>) : []) {
+        if (typeof a?.ask === 'string' && a.ask.trim()) asks.push({ ask: a.ask.trim(), status: String(a.status || ''), ...(typeof a.reason === 'string' && a.reason ? { reason: a.reason } : {}) });
+      }
+    }
+    return { asks, rounds: rows.reduce((m, r) => Math.max(m, Number(r.depth) || 0), 0) };
+  }
+
+  /**
+   * The requester's buttons under a draft (services/requester-actions.ts). None of them approves a
+   * design: Approve records the requester's sign-off and tells the office, whose approval in Hawa Desk
+   * still delivers (ADR-022). A button works only in the chat the design was made for.
+   */
+  async function handleRequesterAction(
+    c: Context,
+    cb: { id: string; from?: { id?: number | string }; message?: { chat?: { id?: number | string } } },
+    rq: { action: RequesterAction; taskId: string },
+    updateId: string
+  ) {
+    const chat = String(cb?.message?.chat?.id ?? cb?.from?.id ?? '');
+    const answer = (text: string, alert = false) => telegramBridge?.answerCallbackQuery(cb.id, text, alert).catch(() => false);
+    type Outbound = Parameters<NonNullable<typeof telegramBridge>['dispatchOutboundMessage']>[1];
+    const send = (message: { text: string; parse_mode: 'HTML'; reply_markup?: unknown }) =>
+      telegramBridge?.dispatchOutboundMessage(chat, message as Outbound).catch(() => undefined);
+    if (!db) {
+      await answer('This is not available right now. Please try again in a minute.', true);
+      return problem(c, 503, 'Database Unavailable', 'The requester action could not be recorded');
+    }
+    if (await telegramUpdateHandled(chat, updateId).catch(() => false)) {
+      await answer('Done');
+      return c.json({ ok: true, duplicate: true, updateId }, 200);
+    }
+    const scope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+    const facts = await withRlsContext(db, scope, async (trx) =>
+      (await sql<{ title: string | null; chat: string | null; newer: string | null; canva: string | null; done: boolean }>`SELECT t.title,
+          o.payload->>'sourceChannelId' AS chat,
+          (SELECT ct.id::text FROM hawa.tasks ct JOIN hawa.outbox_commands co ON co.aggregate_id = ct.id AND co.command_type = 'task.created'
+             WHERE ct.tenant_id = t.tenant_id AND co.payload->'studioOptions'->>'parentTaskId' = ${rq.taskId}
+               AND ct.state NOT IN ('cancelled', 'rejected', 'failed_operator')
+             ORDER BY ct.created_at DESC LIMIT 1) AS newer,
+          (SELECT n.payload->>'canvaUrl' FROM hawa.outbox_commands n WHERE n.tenant_id = t.tenant_id AND n.aggregate_id = t.id
+             AND n.command_type = 'notify.telegram' AND n.payload ? 'canvaUrl' ORDER BY n.created_at DESC LIMIT 1) AS canva,
+          EXISTS (SELECT 1 FROM hawa.inbox_events e WHERE e.tenant_id = t.tenant_id AND e.event_kind = ${`telegram_requester_${rq.action}`}
+             AND e.payload->>'taskId' = ${rq.taskId}) AS done
+        FROM hawa.tasks t JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+        WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND t.id = ${rq.taskId}::uuid LIMIT 1`.execute(trx)).rows[0]);
+    if (!facts || String(facts.chat || '') !== chat) {
+      await answer('This button belongs to a design made for another chat.', true);
+      return c.json({ ok: false, reason: 'NOT_THIS_CHAT', taskId: rq.taskId }, 200);
+    }
+    const record = { taskId: rq.taskId, actorId: String(cb?.from?.id || '') };
+    if (facts.newer && rq.action !== 'dsg') {
+      await answer('A newer version of this design exists.');
+      await send(composeReplacedDraft(facts.newer));
+      await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_replaced', { ...record, newer: facts.newer });
+      return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId, replacedBy: facts.newer }, 200);
+    }
+    if (rq.action === 'ok') {
+      if (facts.done) {
+        await answer('You already approved this design. The art director is on it.');
+        return c.json({ ok: true, requesterAction: 'ok', taskId: rq.taskId, already: true }, 200);
+      }
+      await send(composeRequesterApproved(rq.taskId));
+      await enqueueOfficeAlert(rq.taskId, `requester-approved:${rq.taskId}`, composeRequesterApprovedAlert({ taskId: rq.taskId, title: facts.title, canvaUrl: facts.canva || undefined }), chat);
+      await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_ok', record);
+      broadcast('task:requester_approved', { taskId: rq.taskId, source: 'telegram' });
+      await answer('✅ Thank you!');
+    } else if (rq.action === 'chg') {
+      await send(composeChangePrompt(rq.taskId));
+      await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_chg', record);
+      await answer('Reply with what to change');
+    } else {
+      const history = await askHistory(rq.taskId);
+      await send(composeDesignerTakesOver(rq.taskId));
+      if (!facts.done) {
+        await enqueueOfficeAlert(rq.taskId, `designer-asked:${rq.taskId}`, composeDesignerHandoff({ taskId: rq.taskId, title: facts.title, canvaUrl: facts.canva || undefined, asks: history.asks, rounds: history.rounds, why: 'asked' }), chat);
+      }
+      await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_dsg', record);
+      broadcast('task:designer_requested', { taskId: rq.taskId, source: 'telegram' });
+      await answer('A designer will take over');
+    }
+    return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId }, 200);
+  }
+
   // A studio run counts as being made only while it moves: a run left mid-stage by a restart stays
   // non-terminal for ever (one from 2026-09-14 still read 'briefing' on 2026-09-23).
   const LIVE_RUN = sql`r.status NOT IN ('transferred', 'degraded', 'failed', 'abandoned') AND r.updated_at > now() - interval '30 minutes'`;
@@ -3550,6 +3697,10 @@ export function createApp(options?: CreateAppOptions) {
     if (isProduction && !isIntakeOpen && (!telegramIntakeUsers.length || !telegramIntakeUsers.includes(verifiedSender))) {
       return problem(c, 403, 'Forbidden', 'Sender is not in the configured office allowlist');
     }
+    // The requester's own buttons under a draft come first; every other button is refused below.
+    const requesterAction = json.callback_query ? parseRequesterAction(json.callback_query.data) : null;
+    if (requesterAction) return handleRequesterAction(c, json.callback_query, requesterAction, sourceEventId);
+
     // Chat actions never approve or modify a design (ADR-022). The command text is read from every
     // place the command dispatcher below reads it: checking only message.text let a channel post or a
     // bare-text body through to /approve, which then created the named task out of nothing.
@@ -4825,6 +4976,18 @@ export function createApp(options?: CreateAppOptions) {
                 `\n🆔 Task ID: <code>${escapeTelegramHtml(persisted.task.id)}</code>`,
               parse_mode: 'HTML',
             });
+            // Three rounds of changes on one design: the office is told, so a designer can step in
+            // before the requester gives up (ADR-032 §2.4). Once per round.
+            const round = (priorPayload?.studioOptions?.revisionRound || 0) + 1;
+            if (round >= 3) {
+              const history = await askHistory(targetId).catch(() => ({ asks: [] as AskRecord[], rounds: round - 1 }));
+              await enqueueOfficeAlert(
+                persisted.task.id,
+                `rounds:${persisted.task.id}`,
+                composeDesignerHandoff({ taskId: persisted.task.id, title: revisionTitle, asks: [...history.asks, { ask: rawText.trim().slice(0, 200), status: 'open' }], rounds: round, why: 'rounds' }),
+                sourceChannelId
+              );
+            }
           }
 
           broadcast('task:created', persisted.task);
@@ -7096,24 +7259,12 @@ export function createApp(options?: CreateAppOptions) {
       // A part of the change no edit can make goes to a designer: the requester was told the office
       // knows, so the office is told, once per run, through the outbox like every other message.
       if (notPossible.length > 0) {
-        const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
-        if (office && office !== sourceChannelId) {
-          try {
-            await withRlsContext(db, scope, (trx) =>
-              outboxRepo.enqueue({
-                tenantId: auth.tenantId!,
-                aggregateType: 'task',
-                aggregateId: taskId,
-                commandType: 'notify.telegram',
-                idempotencyKey: `notify.office:change-needs-designer:${taskId}:${runKey}`,
-                payload: { chatId: office, taskId, message: composeChangeNeedsDesignerAlert({ taskId, title: task.title, asks: notPossible, draftSent: hasDraft }) },
-              }, trx));
-          } catch (alertErr) {
-            console.error(`[canvaStatusHandler] Task ${taskId}: the office could not be alerted that a change needs a designer:`, alertErr);
-          }
-        } else {
-          console.warn(`[canvaStatusHandler] Task ${taskId}: a change needs a designer (${notPossible.map((a) => a.ask).join('; ')}); no separate office chat to alert.`);
-        }
+        await enqueueOfficeAlert(
+          taskId,
+          `change-needs-designer:${taskId}:${runKey}`,
+          composeChangeNeedsDesignerAlert({ taskId, title: task.title, asks: notPossible, draftSent: hasDraft }),
+          sourceChannelId
+        );
       }
 
       // Photo Delivery via dispatchOutboundPhoto
@@ -10259,6 +10410,18 @@ export function createApp(options?: CreateAppOptions) {
     if (key.length <= 8) return '********';
     return key.substring(0, 4) + '...' + key.substring(key.length - 4);
   };
+
+  // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
+  // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
+  if (db && outboxRepo && process.env.TELEGRAM_BOT_TOKEN && options?.enableDraftReminders) {
+    const reminderDb = db;
+    const reminderOutbox = outboxRepo;
+    const pass = () =>
+      remindUnansweredDrafts({ db: reminderDb, outbox: reminderOutbox, tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID })
+        .catch((err) => console.warn('[draft-reminders] pass failed:', (err as Error)?.message || err));
+    setInterval(pass, 15 * 60_000).unref?.();
+    setTimeout(pass, 90_000).unref?.();
+  }
 
   // Autonomous Background Inbound Polling for Telegram Bot in live server mode
   if (

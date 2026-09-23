@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC, type StudioLayoutV2 } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
-import { askOutcomes, keepUntouched } from '../src/services/design-studio/stages/edit.stage.js';
+import { askOutcomes, keepUntouched, applyCopyEdits } from '../src/services/design-studio/stages/edit.stage.js';
 import { requesterDraftNotes } from '../src/services/design-studio/studio-status-note.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from '../src/services/canva-status-message.js';
 
@@ -36,7 +36,7 @@ const withPhotos = {
   ],
 } as any as StudioLayoutV2;
 
-type Ask = { ask: string; elements: string[]; restyle: boolean; possible: boolean; reason: string };
+type Ask = { ask: string; elements: string[]; restyle: boolean; possible: boolean; reason: string; copyEdits?: Array<{ copyIndex: number; from: string; to: string }> };
 
 const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: string[]; editReply?: any; photos?: unknown[] } = {}) => {
   const candidateId = { value: '' };
@@ -267,5 +267,52 @@ describe('with cut-outs made, "cut them out" is a change the edit makes', () => 
     for (const p of saved.photos) expect(p.y + p.height).toBe(1350);
     expect(saved.photos[0].height).toBe(saved.photos[1].height);
     expect(JSON.parse(run.stages).directed.asks).toEqual([{ ask: 'cut the panelists out of their photos', status: 'done' }]);
+  });
+});
+
+describe('a change of wording uses only the client\'s own words', () => {
+  const blocks = [{ text: 'MEET KAAE AT\nSAGACON 2026', script: 'latin' }, { text: 'September 25, 2026', script: 'latin' }, { text: 'کۆبوونەوەی ئەندامان', script: 'arabic' }];
+  const ask = (copyEdits: Array<{ copyIndex: number; from: string; to: string }>, text = 'change the date'): any => ({ ask: text, elements: ['text:1'], restyle: false, possible: true, reason: '', copyEdits });
+
+  it('replaces words on the design with words written out in the request', () => {
+    const out = applyCopyEdits(blocks, [ask([{ copyIndex: 1, from: 'September 25', to: 'September 26' }])], 'please change the date to September 26');
+    expect(out.blocks[1].text).toBe('September 26, 2026');
+    expect(out.asks[0].possible).toBe(true);
+    expect(out.applied).toHaveLength(1);
+    expect(blocks[1].text).toBe('September 25, 2026');
+  });
+
+  it('refuses new words the request does not contain, and never guesses', () => {
+    const out = applyCopyEdits(blocks, [ask([{ copyIndex: 1, from: 'September 25, 2026', to: 'September 26, 2026' }])], 'make it the 26th');
+    expect(out.asks[0]).toMatchObject({ possible: false });
+    expect(out.asks[0].reason).toMatch(/written out exactly in your message/);
+    expect(out.blocks[1].text).toBe('September 25, 2026');
+  });
+
+  it('refuses words that are not on the design, or are on it twice', () => {
+    expect(applyCopyEdits(blocks, [ask([{ copyIndex: 1, from: 'October 1', to: 'October 2' }])], 'change October 1 to October 2').asks[0].reason).toMatch(/not on the design/);
+    const twice = [{ text: '2026 and 2026', script: 'latin' }];
+    expect(applyCopyEdits(twice, [ask([{ copyIndex: 0, from: '2026', to: '2027' }])], 'change 2026 to 2027').asks[0].reason).toMatch(/more than once/);
+  });
+
+  it('keeps Sorani letter for letter, from the request', () => {
+    const out = applyCopyEdits(blocks, [ask([{ copyIndex: 2, from: 'ئەندامان', to: 'مامۆستایان' }])], 'بیکە بە مامۆستایان');
+    expect(out.blocks[2].text).toBe('کۆبوونەوەی مامۆستایان');
+    const invented = applyCopyEdits(blocks, [ask([{ copyIndex: 2, from: 'ئەندامان', to: 'مامۆستاکان' }])], 'بیکە بە مامۆستایان');
+    expect(invented.asks[0].possible).toBe(false);
+  });
+
+  it('a change of wording goes through the edit, and every later stage carries the new words', async () => {
+    const dateAsk: Ask = { ask: 'change the date to September 26, 2026', elements: ['text:1'], restyle: false, possible: true, reason: '', copyEdits: [{ copyIndex: 1, from: 'September 25, 2026', to: 'September 26, 2026' }] };
+    const { service, run, completeJson } = harness({ asks: [dateAsk], targets: ['text:1'], editReply: { layout: parentLayout, changes: [] } });
+    run.request.directed.revisionDirective = 'change the date to September 26, 2026 please';
+    await service.resume(scope, run.task_id, run.id);
+    const res: any = await service.resume(scope, run.task_id, run.id);
+    expect(res.status).toBe('qa');
+    const prompt = (completeJson.mock.calls.find((c: any) => c[0].schemaName === 'DirectedEdit') as any)[0].prompt as string;
+    expect(prompt).toContain('[1 latin] September 26, 2026');
+    const stages = JSON.parse(run.stages);
+    expect(stages.effectiveCopy[1].text).toBe('September 26, 2026');
+    expect(stages.directed.asks).toEqual([{ ask: 'change the date to September 26, 2026', status: 'done' }]);
   });
 });

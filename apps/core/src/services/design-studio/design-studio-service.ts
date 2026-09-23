@@ -612,6 +612,33 @@ export class DesignStudioService {
     return Boolean(parent?.layout.photos?.some((p) => p.treatment === 'cutout'));
   }
 
+  /**
+   * What the earlier rounds of changes to a design asked for and made, oldest first: the asks each
+   * run recorded as done, along the chain of revisions back to the first design.
+   */
+  private async earlierAsks(s: Scope, parentTaskId: string | undefined): Promise<string[]> {
+    const chain: string[] = [];
+    for (let id = parentTaskId; id && chain.length < 12 && !chain.includes(id); id = await this.parentTaskOf(s, id).catch(() => undefined)) chain.push(id);
+    if (!chain.length) return [];
+    const rows = await this.tx(s, async (db) =>
+      (
+        await sql<{ task_id: string; asks: unknown }>`SELECT r.task_id::text AS task_id, r.stages->'directed'->'asks' AS asks
+          FROM hawa.design_studio_runs r
+          WHERE r.tenant_id = ${s.tenantId}::uuid AND r.task_id = ANY(${chain}::uuid[]) AND r.status IN ('transferred', 'degraded')
+          ORDER BY r.created_at`.execute(db)
+      ).rows
+    );
+    const done: string[] = [];
+    for (const id of [...chain].reverse()) {
+      for (const row of rows.filter((r) => r.task_id === id)) {
+        for (const a of Array.isArray(row.asks) ? (row.asks as Array<{ ask?: unknown; status?: unknown }>) : []) {
+          if (a?.status === 'done' && typeof a.ask === 'string' && a.ask.trim() && !done.includes(a.ask.trim())) done.push(a.ask.trim());
+        }
+      }
+    }
+    return done;
+  }
+
   /** The brief of the design a directed revision changes, or undefined when it is not one. */
   private async parentBrief(s: Scope, run: { request: unknown }): Promise<CreativeBrief | undefined> {
     const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
@@ -1167,6 +1194,10 @@ export class DesignStudioService {
         }
       }
 
+      // The copy as this run changed it (a change of wording, or one an earlier round made): every
+      // stage after the edit renders, checks and transfers these words, not the request's.
+      if (Array.isArray(stages.effectiveCopy) && stages.effectiveCopy.length === ctx.copyBlocks.length) ctx.copyBlocks = stages.effectiveCopy;
+
       switch (run.status) {
         case 'briefing': {
           // A change to a design the client received keeps that design's brief: the same reading of
@@ -1240,7 +1271,17 @@ export class DesignStudioService {
             const parent = await this.parentWinner(s, undefined, stages.directed.parentCandidateId);
             try {
               if (!parent) throw new Error('The design being revised could not be read.');
-              const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive);
+              const directedRequest = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed;
+              const earlier = await this.earlierAsks(s, directedRequest?.parentTaskId).catch(() => [] as string[]);
+              // The copy of the design being changed, with any wording an earlier round changed: a
+              // revision's task carries the first request's copy, and would put the old words back.
+              const parentRun = await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined);
+              const parentStages = parentRun ? (typeof parentRun.stages === 'string' ? JSON.parse(parentRun.stages) : parentRun.stages) : undefined;
+              const inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
+              if (inherited) ctx.copyBlocks = inherited;
+              const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive, earlier);
+              if (inherited || edited.copyEdits.length) stages.effectiveCopy = edited.copyBlocks;
+              if (edited.copyEdits.length) stages.directed = { ...stages.directed, copyEdits: edited.copyEdits };
               await this.repo.updateCandidate(stages.directed.candidateId, s.tenantId, {
                 layouts: [edited.layout as unknown as Record<string, unknown>],
                 previewPng: edited.previewPng,

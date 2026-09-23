@@ -108,6 +108,16 @@ class CutoutEngineTest(unittest.TestCase):
         self.assertFalse(r.gates['people_expected'].ok)
         self.assertFalse(r.passed)
 
+    def test_focus_sits_just_above_the_faces(self):
+        img, alpha = synthetic()
+        f = FakeCutter(alpha).focus(jpeg(img))
+        # The fake face is at x 0.4-0.6, y 0.22-0.38 of the photo.
+        self.assertAlmostEqual(f['focus']['x'], 0.5, places=2)
+        self.assertLess(f['focus']['y'], 0.30)
+        self.assertGreater(f['focus']['y'], 0.2)
+        no_face = FakeCutter(alpha, faces=[]).focus(jpeg(img))
+        self.assertEqual(no_face['focus'], {'x': 0.5, 'y': 0.36})
+
     def test_shadow_is_soft_and_offset(self):
         a = np.zeros((200, 100), np.uint8)
         a[20:200, 20:80] = 255

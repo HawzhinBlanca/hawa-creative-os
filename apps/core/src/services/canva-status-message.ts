@@ -1,4 +1,5 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
+import { requesterButtons, type InlineButton } from './requester-actions.js';
 
 export interface CanvaStatusMessageInput {
   taskId: string;
@@ -17,7 +18,7 @@ export interface CanvaStatusMessageInput {
 export interface TelegramHtmlMessage {
   text: string;
   parse_mode: 'HTML';
-  reply_markup?: { inline_keyboard: Array<Array<{ text: string; url: string }>> };
+  reply_markup?: { inline_keyboard: InlineButton[][] };
 }
 
 const READY = new Set(['DRAFT_READY', 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW']);
@@ -35,7 +36,10 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   const code = (input.code || '').toUpperCase();
   const header = (line: string) => `${line}\n\n📌 <b>Task ID:</b> <code>${escapeTelegramHtml(input.taskId)}</code>\n📜 <b>Title:</b> ${escapeTelegramHtml(input.title || 'Campaign Design')}\n\n`;
   const footer = `<i>Every design is reviewed by the art director in Hawa Desk before release.</i>`;
-  const button = input.canvaUrl ? { inline_keyboard: [[{ text: '🎨 Open & Edit in Canva', url: input.canvaUrl }]] } : undefined;
+  const canvaRow: InlineButton[][] = input.canvaUrl ? [[{ text: '🎨 Open & Edit in Canva', url: input.canvaUrl }]] : [];
+  // A ready draft carries the requester's three buttons (requester-actions.ts): approve, change, a designer.
+  const readyRows = READY.has(status) && input.canvaUrl ? requesterButtons(input.taskId) : [];
+  const button = canvaRow.length || readyRows.length ? { inline_keyboard: [...canvaRow, ...readyRows] } : undefined;
   const link = input.canvaUrl ? `✏️ <b>Open in Canva:</b> ${escapeTelegramHtml(input.canvaUrl)}\n\n` : '';
 
   let body: string;
