@@ -142,8 +142,17 @@ describe.skipIf(!url)('pressing a requester button (webhook, PostgreSQL)', () =>
     await withRlsContext(db, operator, (trx) =>
       sql`UPDATE hawa.outbox_commands SET payload = jsonb_set(payload, '{studioOptions}', COALESCE(payload->'studioOptions', '{}'::jsonb) || jsonb_build_object('parentTaskId', ${task}::text))
         WHERE aggregate_id = ${child}::uuid AND command_type = 'task.created'`.execute(trx));
+    // While the newer version is still being made there is no newer draft to point to.
+    const early = await press(`rq:ok:${task}`);
+    expect(early.body).toMatchObject({ replacedBy: child, newerReady: false });
+    expect(String(dispatch.mock.calls.at(-1)?.[1]?.text)).toContain('Your change to this design is still being made');
+    // Once its draft has been sent, the buttons point to it.
+    await withRlsContext(db, operator, (trx) =>
+      sql`INSERT INTO hawa.outbox_commands (tenant_id, aggregate_type, aggregate_id, command_type, idempotency_key, payload, state)
+        VALUES (${operator.tenantId}::uuid, 'task', ${child}::uuid, 'notify.telegram', ${`notify.telegram:test-ready:${child}`},
+          ${JSON.stringify({ chatId: String(chat), status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' })}::jsonb, 'delivered')`.execute(trx));
     const replaced = await press(`rq:ok:${task}`);
-    expect(replaced.body).toMatchObject({ replacedBy: child });
+    expect(replaced.body).toMatchObject({ replacedBy: child, newerReady: true });
     expect(String(dispatch.mock.calls.at(-1)?.[1]?.text)).toContain('A newer version of this design exists');
   });
 });

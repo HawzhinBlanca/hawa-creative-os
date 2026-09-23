@@ -82,7 +82,7 @@ describe.skipIf(!url)('an approved design when Drive cannot be written', () => {
     // Delivered to the requester, archive not written: not an error, and the Desk can say which.
     expect(deliver.status).toBe(202);
     expect(body).toMatchObject({ status: 'DELIVERED_TO_CHAT_ONLY', code: 'CREDENTIALS_MISSING', requesterNotified: true });
-    expect(body.message).toMatch(/\. The approved file was sent to the requester in Telegram/);
+    expect(body.message).toMatch(/\. The approved file is queued for the requester in Telegram/);
 
     const notify = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) =>
       (await sql<any>`SELECT payload FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows);

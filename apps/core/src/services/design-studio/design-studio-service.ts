@@ -68,7 +68,7 @@ const runStages = (run: { stages?: unknown }): Record<string, any> => {
 };
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
-import { runsPipelineV3 } from '../chat-intake.js';
+import { runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
 import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
 import {
   runBriefStage,
@@ -272,6 +272,27 @@ export class DesignStudioService {
       if (inherited.length) return inherited;
     }
     return ordered;
+  }
+
+  /**
+   * A change's words with the captions of its album's later photos. An album sent in reply to a draft
+   * can carry its caption on a later photo; the first photo, with none, started the change as a
+   * picture-only one. The captions are read here, after the album has settled (briefing), and replace
+   * the picture-only sentence, or follow the change's own words.
+   */
+  private async directiveWithAlbumCaptions(s: Scope, taskId: string, directive: string): Promise<string> {
+    const captions = await this.tx(s, async (db) =>
+      (
+        await sql<{ caption: string }>`SELECT e.data->'studioOptions'->>'albumCaption' AS caption FROM hawa.task_events e
+          WHERE e.tenant_id = ${s.tenantId}::uuid AND e.event_type = 'task.created'
+            AND e.data->'studioOptions'->>'referenceFor' = ${taskId}
+            AND COALESCE(e.data->'studioOptions'->>'albumCaption', '') <> ''
+          ORDER BY e.occurred_at ASC LIMIT 6`.execute(db)
+      ).rows.map((r) => r.caption.trim()).filter(Boolean)
+    ).catch(() => [] as string[]);
+    if (!captions.length) return directive;
+    const own = directive.trim() === PICTURE_ONLY_DIRECTIVE ? '' : directive.trim();
+    return [own, ...captions].filter(Boolean).join('\n\n').slice(0, 2000);
   }
 
   /**
@@ -584,23 +605,44 @@ export class DesignStudioService {
   private async revisionChainImages(s: Scope, taskId: string, depth = 0): Promise<string[]> {
     const own = await this.requestImages(s, taskId);
     const parentTaskId = depth < 10 ? await this.parentTaskOf(s, taskId).catch(() => undefined) : undefined;
-    if (!parentTaskId || parentTaskId === taskId) return own;
-    const parent = await this.revisionChainImages(s, parentTaskId, depth + 1).catch(() => [] as string[]);
-    return [...parent, ...own.filter((url) => !parent.includes(url))];
+    // A version that answered a question carries the photos filed under the question's task (an album
+    // sent with the change), as imagesForRun gives them to its own run. Left out here, a later change
+    // or size of that version lost them and its layout pointed at a photo that was not there (review
+    // of 2026-09-24).
+    const answersTask = depth < 10 ? await this.answersOf(s, taskId).catch(() => undefined) : undefined;
+    const answered = answersTask ? await this.requestImages(s, answersTask).catch(() => [] as string[]) : [];
+    const parent = parentTaskId && parentTaskId !== taskId ? await this.revisionChainImages(s, parentTaskId, depth + 1).catch(() => [] as string[]) : [];
+    const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
+    return [...before, ...own.filter((url) => !before.includes(url))];
   }
 
+  /**
+   * The task a revision task changes (undefined for a first design), and the task whose question it
+   * answers, if any, from the request that created it.
+   */
   /** The task a revision task changes, from the request that created it; undefined for a first design. */
   private async parentTaskOf(s: Scope, taskId: string): Promise<string | undefined> {
+    return (await this.chainLinksOf(s, taskId)).parent;
+  }
+
+  /** The task whose question a revision task answers, if it answers one. */
+  private async answersOf(s: Scope, taskId: string): Promise<string | undefined> {
+    return (await this.chainLinksOf(s, taskId)).answers;
+  }
+
+  private async chainLinksOf(s: Scope, taskId: string): Promise<{ parent?: string; answers?: string }> {
     const row = await this.tx(s, async (db) =>
       (
-        await sql<{ parent: string | null }>`SELECT COALESCE(e.data->'payload'->'studioOptions'->>'parentTaskId', e.data->'studioOptions'->>'parentTaskId') AS parent
+        await sql<{ parent: string | null; answers: string | null }>`SELECT
+            COALESCE(e.data->'payload'->'studioOptions'->>'parentTaskId', e.data->'studioOptions'->>'parentTaskId') AS parent,
+            COALESCE(e.data->'payload'->'studioOptions'->>'answers', e.data->'studioOptions'->>'answers') AS answers
           FROM hawa.task_events e
           WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
           ORDER BY e.aggregate_version LIMIT 1`.execute(db)
       ).rows[0]
     );
-    const parent = row?.parent;
-    return typeof parent === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parent) ? parent : undefined;
+    const uuid = (v: string | null | undefined) => (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : undefined);
+    return { parent: uuid(row?.parent), answers: uuid(row?.answers) };
   }
 
   /**
@@ -1183,7 +1225,9 @@ export class DesignStudioService {
         if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
         else ctx.attachedImage = images[images.length - 1];
       } else {
-        ctx.attachedImage = await this.attachedImage(s, run.task_id);
+        // Upright and renderable like the run's other images: this one image went to the brief sideways.
+        const own = await this.attachedImage(s, run.task_id);
+        ctx.attachedImage = own ? await uprightPhotoDataUrl(own).catch(() => own) : undefined;
       }
       // A photo that arrived after the brief ran came without a caption, right after the request, so
       // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
@@ -1261,7 +1305,7 @@ export class DesignStudioService {
               const id = randomUUID();
               await this.repo.insertCandidate({ id, runId: run.id, tenantId: s.tenantId, ordinal: 0, concept: parent.concept as Record<string, unknown>, status: 'draft' });
               stages.concepts = [];
-              stages.directed = { parentRunId: parent.runId, parentCandidateId: parent.candidateId, candidateId: id, directive: directedRequest.revisionDirective };
+              stages.directed = { parentRunId: parent.runId, parentCandidateId: parent.candidateId, candidateId: id, directive: await this.directiveWithAlbumCaptions(s, run.task_id, directedRequest.revisionDirective) };
               await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages, budget });
               return { runId, status: 'laying_out', stage: 'concepts', spentUsd: budget.spentUsd };
             }

@@ -360,15 +360,38 @@ export const MAX_IMAGE_PIXELS = 16_000_000;
  * at 40 megapixels took 3.5 s of Core's only thread and 1.2 GB, 2026-09-24 review) and for a tagged
  * wide-gamut profile, whose pixels would be shown to judges as sRGB with shifted colours.
  */
+/** sRGB's white point and primaries as a PNG cHRM chunk writes them (x and y times 100000). */
+const SRGB_CHRM = [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000];
+
 export function pngHeaderProblem(bytes: Buffer, what: string): string | undefined {
   const bitDepth = bytes[24];
   if (bitDepth > 8) return `The ${what} is a ${bitDepth}-bit PNG. Export it as an 8-bit PNG (the usual setting).`;
+  // An sRGB chunk settles the colour space, and the PNG spec recommends gAMA and cHRM beside it with
+  // sRGB's own values (ImageMagick writes them by default): such a file was refused as not sRGB
+  // (review of 2026-09-24).
+  let declaresSrgb = false;
+  for (let at = 8; at + 8 <= bytes.length; ) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.toString('latin1', at + 4, at + 8);
+    if (type === 'IDAT' || type === 'IEND') break;
+    if (type === 'sRGB') declaresSrgb = true;
+    at += 12 + length;
+  }
   for (let at = 8; at + 8 <= bytes.length; ) {
     const length = bytes.readUInt32BE(at);
     const type = bytes.toString('latin1', at + 4, at + 8);
     const data = bytes.subarray(at + 8, at + 8 + length);
     if (type === 'IDAT' || type === 'IEND') break;
-    if (type === 'cHRM') return `The ${what} carries its own colour primaries. Export it in sRGB.`;
+    if (declaresSrgb && (type === 'cHRM' || type === 'gAMA')) {
+      at += 12 + length;
+      continue;
+    }
+    if (type === 'cHRM') {
+      const values = data.length >= 32 ? SRGB_CHRM.map((_, i) => data.readUInt32BE(i * 4)) : [];
+      if (values.length !== 8 || values.some((v, i) => Math.abs(v - SRGB_CHRM[i]) > 1000)) {
+        return `The ${what} carries its own colour primaries. Export it in sRGB.`;
+      }
+    }
     if (type === 'iCCP' && !/srgb/i.test(data.toString('latin1', 0, Math.min(80, data.indexOf(0) < 0 ? 80 : data.indexOf(0))))) {
       return `The ${what} carries a colour profile other than sRGB. Export it in sRGB, or judges would see its colours shifted.`;
     }
@@ -712,6 +735,17 @@ export async function lockStudy(db: Kysely<Database>, scope: ComparisonScope, st
     ).rows[0];
     if (Number(counts.pairs) < 2) throw new ComparisonError(422, `Judging needs at least 2 pairs; this study has ${Number(counts.pairs)}.`);
     if (Number(counts.judges) < 1) throw new ComparisonError(422, 'Judging needs at least one judge; add the judges first.');
+    // Pairs and judges are fixed once judging starts, so a study locked short of its own plan could
+    // never reach a result, and the office found out only at the close (review of 2026-09-24).
+    const plan = (
+      await sql<{ preregistration: Preregistration }>`SELECT preregistration FROM hawa.comparison_studies WHERE id = ${studyId}::uuid`.execute(trx)
+    ).rows[0]?.preregistration;
+    if (plan && Number(counts.pairs) < plan.plannedPairs) {
+      throw new ComparisonError(422, `The plan is ${plan.plannedPairs} pairs; this study has ${Number(counts.pairs)}. Add the rest before judging starts, since pairs cannot be added after.`);
+    }
+    if (plan && Number(counts.judges) < plan.minJudgesPerPair) {
+      throw new ComparisonError(422, `The plan is at least ${plan.minJudgesPerPair} judges on every pair; this study has ${Number(counts.judges)}. Add them before judging starts, since judges cannot be added after.`);
+    }
     await sql`UPDATE hawa.comparison_studies SET status = 'judging', locked_at = now() WHERE id = ${studyId}::uuid`.execute(trx);
   });
   return getStudy(db, scope, studyId);

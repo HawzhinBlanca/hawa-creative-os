@@ -69,8 +69,13 @@ export function toDbTaskState(status: string): TaskState {
     case 'COMPLETE': return 'complete';
     case 'OPERATOR_REQUIRED': return 'failed_operator';
     case 'CANCELLED': return 'cancelled';
+    // Waiting for the requester's answer, and delivered with its Sheets row unconfirmed (the database
+    // keeps that as publishing): both fell to 'received', so filtering the Desk by them listed new
+    // requests instead (review of 2026-09-24).
+    case 'PAUSED': return 'paused';
+    case 'PUBLISH_RECONCILIATION': return 'publishing';
     default:
-      if (['received', 'routing', 'brief_draft', 'brief_review', 'design_planning', 'asset_production', 'studio_composition', 'qa', 'auto_repair', 'human_review', 'revision_requested', 'approved', 'publishing', 'complete', 'rejected', 'failed_operator', 'cancelled'].includes(status.toLowerCase())) {
+      if (['received', 'routing', 'brief_draft', 'brief_review', 'design_planning', 'asset_production', 'studio_composition', 'qa', 'auto_repair', 'human_review', 'revision_requested', 'approved', 'publishing', 'complete', 'rejected', 'failed_operator', 'cancelled', 'paused'].includes(status.toLowerCase())) {
         return status.toLowerCase() as TaskState;
       }
       return 'received';

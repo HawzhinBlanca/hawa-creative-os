@@ -401,4 +401,28 @@ describe('pixel sizes and orientation (2026-09-24 review)', () => {
     const untouched = `data:image/jpeg;base64,${withoutApp1.toString('base64')}`;
     expect(await uprightPhotoDataUrl(untouched)).toBe(untouched);
   });
+
+  it('a photo too large to embed comes back small enough to render, the same picture (review of 2026-09-24)', async () => {
+    const { uprightPhotoDataUrl, PHOTO_DATA_URL_MAX, UPRIGHT_MAX_SIDE } = await import('../src/studio/photo-upright.js');
+    const { PNG: Png } = await import('pngjs');
+    // Noise barely compresses: 1800x1800 is a PNG of about 10 MB, over rsvg's 10 MB attribute limit as a
+    // data URL, which failed every render of the design it was in.
+    const png = new Png({ width: 1800, height: 1800 });
+    let seed = 7;
+    for (let i = 0; i < png.data.length; i += 4) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      png.data.set([seed & 255, (seed >> 8) & 255, (seed >> 16) & 255, 255], i);
+    }
+    // A red square in the top left corner, to see it is the same picture the same way up.
+    for (let y = 0; y < 300; y++) for (let x = 0; x < 300; x++) png.data.set([255, 0, 0, 255], (y * 1800 + x) * 4);
+    const big = `data:image/png;base64,${Png.sync.write(png).toString('base64')}`;
+    expect(big.length).toBeGreaterThan(PHOTO_DATA_URL_MAX);
+    const out = await uprightPhotoDataUrl(big);
+    expect(out.length).toBeLessThanOrEqual(PHOTO_DATA_URL_MAX);
+    const pixels = Png.sync.read(Buffer.from(out.split(',')[1], 'base64'));
+    expect(Math.max(pixels.width, pixels.height)).toBeLessThanOrEqual(UPRIGHT_MAX_SIDE);
+    expect(pixels.width).toBe(pixels.height);
+    const corner = (Math.round(pixels.height * 0.05) * pixels.width + Math.round(pixels.width * 0.05)) * 4;
+    expect([...pixels.data.subarray(corner, corner + 3)]).toEqual([255, 0, 0]);
+  }, 60000);
 });

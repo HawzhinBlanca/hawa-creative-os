@@ -1505,13 +1505,24 @@ export function renderLayoutV2(
  * Exported for the Canva transfer, which rasterises a treated photo's fragment with it: the deck's
  * baked photo then comes from the same rasteriser as the preview the judge scored.
  */
-export async function svgToPngAsync(svgString: string, width: number, height: number, options?: RenderLayoutOptions): Promise<Buffer> {
+export async function svgToPngAsync(
+  svgString: string,
+  width: number,
+  height: number,
+  options?: RenderLayoutOptions,
+  /** Files written beside the SVG, which it can reference by name (rsvg reads files in its own folder). */
+  files?: Record<string, Buffer>
+): Promise<Buffer> {
   const fontconfigFile = resolveFontconfigFile(options);
   const rsvgBinary = resolveRsvgConvert(options);
   const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'hawa-studio-render-'));
   const svgFile = path.join(tempDir, 'render.svg');
   try {
     await fs.promises.writeFile(svgFile, svgString, { mode: 0o600 });
+    for (const [name, bytes] of Object.entries(files || {})) {
+      if (!/^[a-z0-9-]+\.[a-z]+$/i.test(name)) throw new Error(`svgToPngAsync: unsafe file name ${name}`);
+      await fs.promises.writeFile(path.join(tempDir, name), bytes, { mode: 0o600 });
+    }
     return await new Promise<Buffer>((resolve, reject) => {
       execFile(
         rsvgBinary,

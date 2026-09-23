@@ -46,8 +46,13 @@ export interface ChatIntake {
     reformat?: string;
     /** The task whose question this revision answers: its photos join this one, and it counts as answered. */
     answers?: string;
+    /** On an album part (referenceFor): the caption this photo of the album carried, which is the change asked for. */
+    albumCaption?: string;
   };
 }
+
+/** What a photo sent with no words is read as. A change that is only this has no words of its own. */
+export const PICTURE_ONLY_DIRECTIVE = 'Apply the attached visual reference image as a design style, layout, and composition guide.';
 
 function canonicalStringify(obj: any): string {
   if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);

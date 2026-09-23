@@ -8,10 +8,12 @@ RUN corepack enable
 # (its licence permits redistribution of the unmodified installer, which is what the Debian
 # package fetches). Without it the studio has no admitted Latin body face and refuses every
 # design with English copy, which is what production did from 2026-09-20 to 2026-09-22.
+# webp-pixbuf-loader lets librsvg draw WebP: without it a WebP photo was blank in every preview and
+# transparent in the Canva deck, while tests on a Mac (librsvg 2.62, WebP built in) passed (2026-09-24).
 RUN sed -i 's/^Components: main$/Components: main contrib/' /etc/apt/sources.list.d/debian.sources \
     && echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' | debconf-set-selections \
     && apt-get update \
-    && apt-get install -y --no-install-recommends librsvg2-bin fonts-dejavu-core cabextract ttf-mscorefonts-installer \
+    && apt-get install -y --no-install-recommends librsvg2-bin webp-pixbuf-loader fonts-dejavu-core cabextract ttf-mscorefonts-installer \
     && rm -rf /var/lib/apt/lists/* \
     && test -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf
 WORKDIR /app

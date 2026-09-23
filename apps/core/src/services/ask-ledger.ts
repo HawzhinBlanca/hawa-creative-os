@@ -4,7 +4,10 @@ import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
  * What the requester asked of a design, round by round, and what became of each ask (ADR-032 §2.3,
  * plan 2.1): the ledger the art director reads in Hawa Desk before approving or taking a design
  * over. It is read from the runs' own records along the revision chain (the design, the change to
- * it, the change to that…), oldest first, so it shows exactly what the requester was told.
+ * it, the change to that…), oldest first, so it shows exactly what the requester was told. Changes
+ * asked after the design (not cancelled, rejected or failed) follow it, marked `after`: the ledger of
+ * a design being approved showed nothing of the change the requester was still waiting for (review of
+ * 2026-09-24).
  */
 export interface LedgerAsk {
   ask: string;
@@ -37,6 +40,8 @@ export interface LedgerRound {
   /** The run's state: transferred, failed, … ; absent when no design was started. */
   runStatus?: string;
   taskState: string;
+  /** A change asked after the design this ledger is for, still open. */
+  after?: true;
 }
 
 /** A run's record of a change, as the edit stage writes it; every field is read with care. */
@@ -61,10 +66,25 @@ export async function askLedger(db: Kysely<Database>, scope: { tenantId: string;
           WHERE o.tenant_id = ${scope.tenantId}::uuid
             AND o.payload->'studioOptions'->>'parentTaskId' ~ '^[0-9a-f-]{36}$' AND chain.depth < 12
         )
+        , below(id, depth) AS (
+          SELECT t.id, -1
+          FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+          WHERE o.tenant_id = ${scope.tenantId}::uuid AND o.command_type = 'task.created'
+            AND o.payload->'studioOptions'->>'parentTaskId' = ${taskId}
+            AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''
+            AND t.state NOT IN ('cancelled', 'rejected', 'failed_operator')
+          UNION ALL
+          SELECT t.id, below.depth - 1
+          FROM below JOIN hawa.outbox_commands o ON o.command_type = 'task.created' AND o.payload->'studioOptions'->>'parentTaskId' = below.id::text
+          JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+          WHERE o.tenant_id = ${scope.tenantId}::uuid AND below.depth > -12
+            AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''
+            AND t.state NOT IN ('cancelled', 'rejected', 'failed_operator')
+        ), everything AS (SELECT id, depth FROM chain UNION ALL SELECT id, depth FROM below)
         SELECT t.id::text AS id, chain.depth, t.title, t.state::text AS state,
           (SELECT o.payload->'studioOptions' FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'task.created' ORDER BY o.created_at DESC LIMIT 1) AS options,
           r.stages, r.status
-        FROM chain JOIN hawa.tasks t ON t.id = chain.id AND t.tenant_id = ${scope.tenantId}::uuid
+        FROM everything chain JOIN hawa.tasks t ON t.id = chain.id AND t.tenant_id = ${scope.tenantId}::uuid
         LEFT JOIN LATERAL (SELECT stages, status FROM hawa.design_studio_runs x WHERE x.tenant_id = t.tenant_id AND x.task_id = t.id ORDER BY x.created_at DESC LIMIT 1) r ON true
         ORDER BY chain.depth DESC`.execute(trx)
     ).rows
@@ -109,6 +129,7 @@ export async function askLedger(db: Kysely<Database>, scope: { tenantId: string;
       frustrated: directed.frustrated === true,
       ...(row.status ? { runStatus: row.status } : {}),
       taskState: row.state,
+      ...(Number(row.depth) < 0 ? { after: true as const } : {}),
     };
   });
 }

@@ -44,7 +44,7 @@ export function describeDelivery(delivery: unknown, refreshedStatus: string | un
   if (d.status === 'DELIVERED_TO_CHAT_ONLY') {
     // Core's message ends by restating that the file went to Telegram; the notice already says it.
     const reason = String(d.message || 'no reason reported')
-      .replace(/\s*The approved file was sent to the requester in Telegram[^.]*\.?\s*$/i, '')
+      .replace(/\s*The approved file (?:was sent|is queued) (?:to|for) the requester in Telegram[^.]*\.?\s*$/i, '')
       .replace(/[.\s]+$/, '');
     return {
       tone: 'info',

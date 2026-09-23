@@ -341,6 +341,17 @@ export async function runDirectedEditStage(
     const undone = 'result' in byRules ? ruled.filter((a) => !verifyOp(parent.layout, byRules.result.layout, a.op, a.params ?? {}, opCtx)) : ruled;
     if ('result' in byRules && !undone.length) return finish(byRules.result, []);
     console.info(`[edit.stage] the rules' change ${'error' in byRules ? `did not pass (${byRules.error})` : `was undone by the checks (${undone.map((a) => a.ask).join('; ')})`}; the edit model makes it.`);
+    if ('result' in byRules) {
+      // An ask the checks undid is the edit model's to make: listed for it as a change, not shown as
+      // already made on a layout that still carries it, and not re-applied to its answer. It was sent
+      // as "already made", with an empty list of changes, so the paid call could not help (review of
+      // 2026-09-24).
+      const kept = ruled.filter((a) => !undone.includes(a));
+      ruled.length = 0;
+      ruled.push(...kept);
+      byRule = structuredClone(parent.layout);
+      for (const a of ruled) applyOp(byRule, a.op, a.params ?? {}, opCtx, parent.layout);
+    }
   }
 
   let feedback = '';
@@ -836,11 +847,18 @@ export async function analyseRequest(
     const valid = (list: unknown) => (Array.isArray(list) ? list : []).filter((t): t is string => typeof t === 'string' && TARGET_PATTERN.test(t));
     const asks: RequestAsk[] = (Array.isArray(data?.asks) ? data.asks : [])
       .filter((a) => a && typeof a.ask === 'string' && a.ask.trim())
-      .map((a) => ({
+      .map((a) => {
+        const params = a.params ? opParams(a.params) : undefined;
+        // The analysis names photos only as 'photos'; an ask about some of them (its params name them)
+        // is about those, so the others stay guarded one by one. Otherwise no photo was ever guarded
+        // and another could move unreported (review of 2026-09-24).
+        const some = typeof a.op === 'string' && a.op.startsWith('photo_') && Array.isArray(params?.photos) && params.photos.length ? params.photos : undefined;
+        const elements = some ? [...new Set(valid(a.elements).flatMap((e) => (e === 'photos' ? some.map((i) => `photo:${i}`) : [e])))] : valid(a.elements);
+        return {
         ask: a.ask.replace(/\s+/g, ' ').trim().slice(0, 160),
         ...(EDIT_OPS.includes(a.op as EditOp) ? { op: a.op } : {}),
-        ...(a.params ? { params: opParams(a.params) } : {}),
-        elements: valid(a.elements),
+        ...(params ? { params } : {}),
+        elements,
         restyle: a.restyle === true,
         possible: a.possible !== false,
         reason: typeof a.reason === 'string' ? a.reason.replace(/\s+/g, ' ').trim().slice(0, 200) : '',
@@ -850,7 +868,8 @@ export async function analyseRequest(
         question: plain(a.question, 200),
         options: (Array.isArray(a.options) ? a.options : []).map((o) => plain(o, 60)).filter(Boolean).slice(0, 3),
         assumption: plain(a.assumption, 200),
-      }));
+      };
+      });
     // One question, about the first possible ask that has one with at least two answers.
     const asked = mayAsk ? asks.find((a) => a.possible && a.question && (a.options?.length ?? 0) >= 2) : undefined;
     const clarify = asked ? { ask: asked.ask, question: asked.question!, options: asked.options! } : undefined;

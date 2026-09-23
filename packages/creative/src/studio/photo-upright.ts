@@ -8,8 +8,20 @@ import { svgToPngAsync, type RenderLayoutOptions } from './render-layout-v2.js';
  * the renderer ignored the tag, so the photo was drawn and baked sideways (2026-09-24 review).
  *
  * Only a JPEG whose tag says to turn it is redrawn, through the same rasteriser the renderer uses, as
- * a PNG of the upright size; every other photo is returned as it came.
+ * a PNG; every other photo is returned as it came, unless it is too large to render (below).
+ *
+ * A redrawn photo is kept small enough to embed: rsvg refuses any attribute over 10,000,000 bytes, and
+ * a 12 MP phone photo redrawn full size as PNG came to 16.7 MB, so every render of its design failed and
+ * the run with them (review of 2026-09-24). The long side is held to UPRIGHT_MAX_SIDE, and smaller again
+ * until the data URL fits PHOTO_DATA_URL_MAX. A photo sent as a large file that needs no turn is shrunk
+ * the same way: embedded as it came it failed the renders too. The photo is read from a file beside the
+ * SVG, not embedded in it, so a large one can be read at all.
  */
+
+/** The longest side of a redrawn photo: a design uses a photo at most about this big. */
+export const UPRIGHT_MAX_SIDE = 2048;
+/** The largest photo data URL passed on to the renderer, well under rsvg's 10 MB attribute limit. */
+export const PHOTO_DATA_URL_MAX = 7 * 1024 * 1024;
 
 /** Where stored pixel (x, y) goes in the upright picture, per EXIF orientation, as an SVG matrix. */
 function orientationMatrix(orientation: number, w: number, h: number): string | undefined {
@@ -26,20 +38,31 @@ function orientationMatrix(orientation: number, w: number, h: number): string | 
 }
 
 export async function uprightPhotoDataUrl(dataUrl: string, options?: RenderLayoutOptions): Promise<string> {
-  const m = /^data:image\/(jpe?g);base64,(.+)$/i.exec(dataUrl);
+  const m = /^data:image\/(jpe?g|png);base64,(.+)$/i.exec(dataUrl);
   if (!m) return dataUrl;
+  const isJpeg = m[1].toLowerCase() !== 'png';
   const bytes = Buffer.from(m[2], 'base64');
-  const orientation = jpegOrientation(bytes);
   const size = imagePixelSize(bytes);
-  const matrix = size ? orientationMatrix(orientation, size.width, size.height) : undefined;
-  if (!size || !matrix) return dataUrl;
+  if (!size) return dataUrl;
+  const orientation = isJpeg ? jpegOrientation(bytes) : 1;
+  const matrix = orientationMatrix(orientation, size.width, size.height);
+  if (!matrix && dataUrl.length <= PHOTO_DATA_URL_MAX) return dataUrl;
   const turned = orientation >= 5;
   const width = turned ? size.height : size.width;
   const height = turned ? size.width : size.height;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<image xlink:href="${dataUrl}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="none" transform="${matrix}"/>` +
-    `</svg>`;
-  const png = await svgToPngAsync(svg, width, height, options);
-  return `data:image/png;base64,${png.toString('base64')}`;
+  const file = isJpeg ? 'photo.jpg' : 'photo.png';
+  for (const side of [UPRIGHT_MAX_SIDE, 1536, 1024]) {
+    const scale = Math.min(1, side / Math.max(width, height));
+    const w = Math.max(1, Math.round(width * scale));
+    const h = Math.max(1, Math.round(height * scale));
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${width} ${height}">` +
+      `<image xlink:href="${file}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="none"${matrix ? ` transform="${matrix}"` : ''}/>` +
+      `</svg>`;
+    const png = await svgToPngAsync(svg, w, h, options, { [file]: bytes });
+    const out = `data:image/png;base64,${png.toString('base64')}`;
+    if (out.length <= PHOTO_DATA_URL_MAX) return out;
+  }
+  // Nothing small enough: the photo as it came, which renders unless it is itself too large.
+  return dataUrl;
 }

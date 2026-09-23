@@ -315,7 +315,8 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     expect((await call('GET', '/v1/comparisons', undefined, null)).status).toBe(401);
     expect((await call('POST', '/v1/comparisons', { name: 'No plan' })).status).toBe(400);
 
-    const created = await call('POST', '/v1/comparisons', { name: `Office designer, September ${randomUUID().slice(0, 6)}`, preregistration: PREREGISTRATION });
+    // A plan this test can fill: judging starts only once the study has the pairs and judges it planned.
+    const created = await call('POST', '/v1/comparisons', { name: `Office designer, September ${randomUUID().slice(0, 6)}`, preregistration: { ...PREREGISTRATION, plannedPairs: 3, minJudgesPerPair: 3 } });
     expect(created.status).toBe(201);
     const study = created.json;
     expect(study).toMatchObject({ status: 'draft', pairs: 0, judges: 0, lockedAt: null });
@@ -529,7 +530,7 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     expect(results.json.position).toMatchObject({ shown: 6, decisive: 5 });
     expect(results.json.perPair.map((p: { label: string }) => p.label)).toEqual(['P01', 'P02', 'X-9']);
     expect(results.json.claim).toMatchObject({ holds: false, closed: true, sampleComplete: false });
-    expect(results.json.preregistration).toEqual(PREREGISTRATION);
+    expect(results.json.preregistration).toEqual({ ...PREREGISTRATION, plannedPairs: 3, minJudgesPerPair: 3 });
 
     // ---- Closing: no more picks, no more images; the results stand ----
     expect((await call('POST', `/v1/comparisons/${id}/close`)).status).toBe(409);
@@ -551,7 +552,7 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
 
   it('keeps each tenant’s judges to their own tenant, and the office of one tenant cannot open another’s study', async () => {
     const other = { tenantId: otherTenant, userId, role: 'administrator', actorId: 'other_admin' };
-    const study = await createStudy(db, other, { name: 'Other office', preregistration: PREREGISTRATION });
+    const study = await createStudy(db, other, { name: 'Other office', preregistration: { ...PREREGISTRATION, plannedPairs: 2, minJudgesPerPair: 1 } });
     await addPair(db, other, study.id, { hawaPng: makePng(8, 8, [1, 100, 1]), designerPng: makePng(8, 8, [100, 1, 1]) });
     await addPair(db, other, study.id, { hawaPng: makePng(8, 8, [1, 1, 100]), designerPng: makePng(8, 8, [100, 100, 1]) });
     const { token } = await addJudge(db, other, study.id, { name: 'Their requester', kind: 'requester' });

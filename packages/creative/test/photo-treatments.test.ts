@@ -379,6 +379,18 @@ describe('the preview draws each treatment', () => {
     expect(at(png, 340, 800)).toEqual(at(plain.png, 340, 800));
   });
 
+  it('glow with an outline: the halo starts at the outline\'s outer edge instead of hiding under it', async () => {
+    const asset = person();
+    const outlined = await preview(withPhotos(cutout({ outline: { color: GOLD, width: 24 } })), [redPhoto()], [asset]);
+    const both = await preview(withPhotos(cutout({ outline: { color: GOLD, width: 24 }, glow: { color: '#FFFFFF', radius: 30 } })), [redPhoto()], [asset]);
+    // Inside the outline nothing changes; just past it the white halo shows over the background.
+    expect(at(both.png, BODY.left - 12, 700)).toEqual(at(outlined.png, BODY.left - 12, 700));
+    expect(at(outlined.png, BODY.left - 30, 700)).toEqual(BG);
+    const past = at(both.png, BODY.left - 30, 700);
+    expect(past[0]).toBeGreaterThan(BG[0] + 60);
+    expect(at(both.png, BODY.left - 30 - 40, 700)).toEqual(BG);
+  });
+
   it('a cut-out\'s fade takes the person and their outline out together, into the background', async () => {
     const { png } = await preview(withPhotos(cutout({ fade: { edge: 'bottom', length: 0.25 }, outline: { color: GOLD, width: 8 } })), [redPhoto()], [person()]);
     // The fade runs over the person's rect (440..1040), so its last quarter is 890..1040.

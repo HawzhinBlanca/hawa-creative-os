@@ -137,6 +137,19 @@ export function composeDesignerTakesOver(taskId: string): TelegramReply {
 }
 
 /** To the requester, when the button is on a draft that a newer one replaced. */
+/**
+ * A button on a draft whose change is still being made. "Use the buttons on the newest draft" pointed
+ * at a draft that did not exist yet, and the approval was dropped (review of 2026-09-24).
+ */
+export function composeChangeInProgress(newerTaskId: string): TelegramReply {
+  return {
+    text:
+      `⏳ <b>Your change to this design is still being made.</b>\n\n` +
+      `The new version will arrive here with its own buttons: use those.\n\n🆔 Task ID: <code>${escapeTelegramHtml(newerTaskId)}</code>`,
+    parse_mode: 'HTML',
+  };
+}
+
 export function composeReplacedDraft(newerTaskId: string): TelegramReply {
   return {
     text:

@@ -176,14 +176,16 @@ export function applyOp(
         if (width > layout.width - 2 * m || height > layout.height - 2 * m) return fail('the logo would not fit inside the margins');
         // A logo against a margin stays against it as it grows or shrinks, as a designer resizes it
         // from its corner; one in open space keeps its centre. Either way it stays inside the margins
-        // (scaled from its centre, a corner logo crossed the margin and the edit was refused).
+        // (scaled from its centre, a corner logo crossed the margin and the edit was refused). Only the
+        // size is measured from the parent; where the logo is, is where it is now, so a move made in the
+        // same edit (a rule's corner, or the model's) is kept (review of 2026-09-24).
         const near = 2;
-        const atLeft = from.x <= m + near;
-        const atRight = from.x + from.width >= layout.width - m - near;
-        const atTop = from.y <= m + near;
-        const atBottom = from.y + from.height >= layout.height - m - near;
-        const x = atRight ? from.x + from.width - width : atLeft ? from.x : from.x + (from.width - width) / 2;
-        const y = atBottom ? from.y + from.height - height : atTop ? from.y : from.y + (from.height - height) / 2;
+        const atLeft = logo.x <= m + near;
+        const atRight = logo.x + logo.width >= layout.width - m - near;
+        const atTop = logo.y <= m + near;
+        const atBottom = logo.y + logo.height >= layout.height - m - near;
+        const x = atRight ? logo.x + logo.width - width : atLeft ? logo.x : logo.x + (logo.width - width) / 2;
+        const y = atBottom ? logo.y + logo.height - height : atTop ? logo.y : logo.y + (logo.height - height) / 2;
         logo.width = width;
         logo.height = height;
         logo.x = Math.round(Math.min(layout.width - m - width, Math.max(m, x)));
@@ -356,7 +358,14 @@ export function verifyOp(parent: StudioLayoutV2, final: StudioLayoutV2, op: Edit
     case 'photo_crop': {
       const was = (i: number) => parent.photos?.find((q) => q.photoIndex === i)?.zoom ?? 1;
       const framed = photos.filter((ph) => ph.treatment !== 'cutout');
-      return framed.length > 0 && framed.every((ph) => (p.zoom === 'in' ? (ph.zoom ?? 1) > was(ph.photoIndex) : (ph.zoom ?? 1) < was(ph.photoIndex)));
+      if (!framed.length) return false;
+      if (p.zoom === 'in') return framed.every((ph) => (ph.zoom ?? 1) > was(ph.photoIndex));
+      // Wider: every photo that was cropped shows more, and one already whole stays whole. Heads matched
+      // across portraits often leave one at zoom 1, and requiring it to go lower still reported a made
+      // change as not done and paid for an edit call (review of 2026-09-24).
+      const cropped = framed.filter((ph) => was(ph.photoIndex) > 1);
+      return cropped.length > 0 && cropped.every((ph) => (ph.zoom ?? 1) < was(ph.photoIndex)) &&
+        framed.filter((ph) => was(ph.photoIndex) <= 1).every((ph) => (ph.zoom ?? 1) <= 1);
     }
     case 'background_colour':
       return Boolean(p.colour && final.background?.color?.toUpperCase() === nearestBrand(p.colour, ctx.palette));

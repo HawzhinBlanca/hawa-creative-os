@@ -396,11 +396,30 @@ export function outlineMorphologySteps(width: number): number[] {
   return Array.from({ length: count }, (_, i) => (i < larger ? small + 1 : small));
 }
 
-/** How far an effect reaches beyond the person's rect, in layout pixels. */
+/** How far an effect reaches beyond the person's rect, in layout pixels. A glow around an outline starts at its outer edge. */
 function effectReach(kind: CutoutEffectKind, outline: PhotoOutline | undefined, glow: PhotoGlow | undefined): number {
   if (kind === 'outline') return outlineWidthPx(outline) + OUTLINE_REGION_MARGIN_PX;
   const radius = clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX);
-  return Math.ceil(radius * GLOW_SIGMA_PER_RADIUS * GLOW_REGION_SIGMAS);
+  return (outline ? outlineWidthPx(outline) : 0) + Math.ceil(radius * GLOW_SIGMA_PER_RADIUS * GLOW_REGION_SIGMAS);
+}
+
+/**
+ * Filter primitives that dilate SourceAlpha by `width` whole pixels into `result`. A square dilation
+ * is a row pass then a column pass: the same pixels (checked on librsvg 2.54 and 2.62, 2026-09-24) at
+ * a fraction of the cost. As one square pass per step, a 24 px outline baked at 2x took 23 s and the
+ * Canva deck timed out at 20 s.
+ */
+function dilateAlpha(width: number, result: string): string {
+  return outlineMorphologySteps(width)
+    .map((step, i, steps) => {
+      const input = i === 0 ? 'SourceAlpha' : `${result}-${i - 1}`;
+      const out = i === steps.length - 1 ? result : `${result}-${i}`;
+      return (
+        `<feMorphology in="${input}" operator="dilate" radius="${step} 0" result="${out}-rows"/>` +
+        `<feMorphology in="${out}-rows" operator="dilate" radius="0 ${step}" result="${out}"/>`
+      );
+    })
+    .join('');
 }
 
 /**
@@ -434,6 +453,9 @@ export function cutoutEffectRect(
  *
  *   outline  the person's alpha dilated by the outline's width (feMorphology), filled with its colour;
  *   glow     the person's alpha blurred (feGaussianBlur, sigma half the radius), filled with its colour;
+ *            with an outline too, the alpha is first grown by the outline's width, so the glow lights
+ *            the outline's outer edge (drawn from the person alone, a 24 px outline covered a 30 px
+ *            glow entirely: proof render in Core, 2026-09-24);
  *
  * each less the person's opaque core (feComposite "out"; see CORE_SLOPE), so none of it lies under
  * the opaque person. The first proof sheet (2026-09-23) drew the whole grown silhouette, and a person
@@ -456,6 +478,7 @@ export function cutoutEffectFragment(
   const outline = kind === 'outline' ? photo.outline : undefined;
   const glow = kind === 'glow' ? photo.glow : undefined;
   if (!outline && !glow) return undefined;
+  const glowAround = glow && photo.outline ? outlineWidthPx(photo.outline) : 0;
   const region = cutoutEffectRect(kind, photo, personRect, canvas);
   if (!region) return undefined;
   const index = photo.photoIndex;
@@ -464,20 +487,9 @@ export function cutoutEffectFragment(
   const fadeId = `photo-${kind}-fade-${index}`;
   const colour = outline?.color ?? glow?.color;
   const spread = outline
-    ? outlineMorphologySteps(outlineWidthPx(outline))
-        .map((step, i, steps) => {
-          const input = i === 0 ? 'SourceAlpha' : `grown-${i - 1}`;
-          const result = i === steps.length - 1 ? 'silhouette' : `grown-${i}`;
-          // A square dilation is a row pass then a column pass: the same pixels (checked on librsvg
-          // 2.54 and 2.62, 2026-09-24) at a fraction of the cost. As one square pass per step, a
-          // 24 px outline baked at 2x took 23 s and the Canva deck timed out at 20 s.
-          return (
-            `<feMorphology in="${input}" operator="dilate" radius="${step} 0" result="${result}-rows"/>` +
-            `<feMorphology in="${result}-rows" operator="dilate" radius="0 ${step}" result="${result}"/>`
-          );
-        })
-        .join('')
-    : `<feGaussianBlur in="SourceAlpha" stdDeviation="${n(clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX) * GLOW_SIGMA_PER_RADIUS)}" result="silhouette"/>`;
+    ? dilateAlpha(outlineWidthPx(outline), 'silhouette')
+    : (glowAround ? dilateAlpha(glowAround, 'outlined') : '') +
+      `<feGaussianBlur in="${glowAround ? 'outlined' : 'SourceAlpha'}" stdDeviation="${n(clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX) * GLOW_SIGMA_PER_RADIUS)}" result="silhouette"/>`;
   const filter =
     `<filter id="${filterId}" filterUnits="userSpaceOnUse" x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" color-interpolation-filters="sRGB">` +
     spread +

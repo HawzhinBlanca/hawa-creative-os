@@ -169,9 +169,24 @@ docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/model
   -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
   || { echo "ERROR: the cut-out service's tests failed in its image"; exit 1; }
 echo "✓ cut-out engine tests passed in the shipped image"
+# nginx.conf is a single-file bind mount. Compose does not recreate nginx when only the file changed,
+# and on Docker Desktop a running container keeps the copy git replaced: a reload reads nothing new and
+# `nginx -t` inside finds no file. On 2026-09-24 the judge-token masking deployed this way was not live
+# until nginx was restarted. The new file is checked first in a one-off container (it mounts the file
+# afresh), so a broken file never replaces a working one; then nginx is reloaded if it sees the new
+# file, or restarted so that it binds it, and must see it afterwards.
+NGINX_WANT="$(shasum -a 256 "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
+nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true; }
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
+  || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
-# nginx.conf is bind-mounted: compose does not recreate nginx when only the file changed, so reload it explicitly.
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null 2>&1 && echo "✓ nginx configuration reloaded" || echo "! nginx reload skipped (container not running yet?)"
+if [[ "$(nginx_seen)" == "$NGINX_WANT" ]]; then
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null && echo "✓ nginx configuration reloaded"
+else
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" restart nginx >/dev/null
+  [[ "$(nginx_seen)" == "$NGINX_WANT" ]] || { echo "ERROR: nginx does not see the deployed nginx.conf even after a restart"; exit 1; }
+  echo "✓ nginx restarted onto the new configuration"
+fi
 echo "✓ containers started"
 
 # 7b. Register the worker's services with Restate. Its registry lives in the restate_data volume, and
