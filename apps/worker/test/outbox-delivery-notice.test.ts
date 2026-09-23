@@ -235,13 +235,22 @@ describe('notify.published', () => {
       }
     });
 
-    it('does not alert the office about a send that may have arrived', async () => {
+    it('alerts the office about a send that may have arrived, and does not tell the requester it was delivered', async () => {
+      // 2026-09-24: an uncertain send was closed with no office alert while the requester read
+      // "Your approved design has been delivered." Nobody knew whether they had the file.
       const { taskId, chat, messages, row } = await deliverRefused('TELEGRAM_DELIVERY_UNCERTAIN', '9191');
       expect(row?.state).toBe('failed');
       expect(row?.last_error).toContain('DELIVERY_UNCERTAIN');
-      // The requester's notice goes out as before; the office hears nothing about this task.
-      expect(messages.filter((m) => m.chatId === chat)).toHaveLength(1);
-      expect(messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId))).toHaveLength(0);
+      const toRequester = messages.filter((m) => m.chatId === chat);
+      expect(toRequester).toHaveLength(1);
+      expect(toRequester[0].text).not.toContain('has been delivered');
+      expect(toRequester[0].text).toContain('Telegram did not confirm that it arrived');
+      expect(toRequester[0].text).toContain('The office will check');
+      const toOffice = messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId));
+      expect(toOffice).toHaveLength(1);
+      expect(toOffice[0].text).toContain('did not confirm');
+      expect(toOffice[0].text).toContain(`Requesting chat: ${chat}`);
+      expect(toOffice[0].text).toContain('Nothing was sent twice');
     });
   });
 

@@ -1038,28 +1038,45 @@ export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayo
   return wrapTextWithFontkit(copy, t.width, font, t.fontSize, effectiveLetterSpacingEm(t));
 }
 
+/**
+ * The size and tracking a text element is drawn at, and the lines it wraps to.
+ *
+ * Invariant: an eyebrow NEVER wraps onto multiple lines. One that would is drawn without its
+ * tracking and, while that is not enough, a pixel smaller at a time down to 10 px. The autofit used
+ * to shrink a local copy and throw it away, so a shrunk eyebrow was still emitted at t.fontSize and
+ * overflowed the box it had just been fitted into. The transfer reads the size and tracking from here
+ * too (fittedTextOf): it wrote the layout's own, so Canva wrapped a shrunk eyebrow onto a second
+ * line the approved preview did not have (2026-09-24).
+ */
+function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadFont>): { fontSize: number; letterSpacingEm: number; lines: string[] } {
+  let letterSpacingEm = effectiveLetterSpacingEm(t);
+  let fontSize = t.fontSize;
+  let lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, letterSpacingEm);
+  if (t.role === 'eyebrow' && lines.length > 1) {
+    letterSpacingEm = effectiveLetterSpacingEm(t, { eyebrowShrunkToFit: true });
+    lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+    while (lines.length > 1 && fontSize > 10) {
+      fontSize -= 1;
+      lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+    }
+  }
+  return { fontSize, letterSpacingEm, lines };
+}
+
+/** The size (px) and tracking (em) the renderer draws one text element at, for the transfer. */
+export function fittedTextOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): { fontSize: number; letterSpacingEm: number } {
+  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)));
+  return { fontSize, letterSpacingEm };
+}
+
 function renderTextElementToSvg(
   t: TextElement,
   copyText: string,
   fontsDir: string
 ): { svgSnippet: string; lineCount: number } {
   const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
-  let letterSpacingVal = effectiveLetterSpacingEm(t);
-  // The size the text is actually measured and drawn at. The eyebrow autofit below used to shrink
-  // a local copy and throw it away, so a shrunk eyebrow was still emitted at t.fontSize and
-  // overflowed the box it had just been fitted into.
-  let renderFontSize = t.fontSize;
-  let lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, letterSpacingVal);
-
-  // Invariant: Eyebrows must NEVER wrap onto multiple lines
-  if (t.role === 'eyebrow' && lines.length > 1) {
-    letterSpacingVal = effectiveLetterSpacingEm(t, { eyebrowShrunkToFit: true });
-    lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, 0);
-    while (lines.length > 1 && renderFontSize > 10) {
-      renderFontSize -= 1;
-      lines = wrapTextWithFontkit(copyText, t.width, font, renderFontSize, 0);
-    }
-  }
+  // The size and tracking the text is actually measured and drawn at (fitText).
+  const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font);
 
   if (lines.length === 0) {
     return { svgSnippet: '', lineCount: 0 };

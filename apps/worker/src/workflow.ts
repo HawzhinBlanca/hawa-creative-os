@@ -3,6 +3,7 @@ import type { UUID } from '@hawa/contracts';
 import type { Database, Kysely } from '@hawa/db';
 import { runCanvaDraft, reportNotRunnable } from './canva-draft-workflow.js';
 import type { WorkflowDurableContext } from './durable-context.js';
+import { outcomeRecorder } from './outcome-without-core.js';
 
 export interface WorkflowInput {
   taskId: UUID;
@@ -82,7 +83,7 @@ export class TaskWorkflowRunner {
       );
     }
     if (!ctx) throw new Error('Production Canva workflows require the durable Restate context');
-    return runCanvaDraft(input, ctx);
+    return runCanvaDraft(input, ctx, this.options.fetcher, this.options.db ? outcomeRecorder(this.options.db) : undefined);
   }
 }
 

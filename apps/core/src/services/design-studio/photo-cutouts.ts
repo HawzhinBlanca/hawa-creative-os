@@ -80,6 +80,14 @@ export function reasonFor(failed: string[]): string {
 export const CUTOUT_WORDS =
   /cut[\s-]?outs?\b|cutting (?:them |the people |the persons? )?out|(?:remove|removing|without|no|drop|take off|delete)\s+(?:the\s+|their\s+|its\s+|a\s+)?(?:photo'?s?\s+)?backgrounds?|backgrounds?\s+removed|green[\s-]?screen|transparent background|isolated (?:figures|portraits|people|persons)|png (?:people|portraits)/i;
 
+/** The service answered about one photo and would not cut it; `reason` is in the requester's words. */
+class CutoutRefusedError extends Error {
+  constructor(message: string, readonly reason: string) {
+    super(message);
+    this.name = 'CutoutRefusedError';
+  }
+}
+
 export class PhotoCutouts {
   private readonly url: string | undefined;
   private readonly fetcher: typeof fetch;
@@ -122,16 +130,27 @@ export class PhotoCutouts {
       const photo = photos[photoIndex];
       const sourceSha256 = createHash('sha256').update(photo.bytes).digest('hex');
       let row = await this.stored(tx, sourceSha256);
+      // Why the service would not cut this one photo (it could not read it, or failed on it).
+      let refused: string | undefined;
       if (!row && options.compute && !unavailable) {
         try {
           row = await this.make(tx, tenantId, photo, sourceSha256);
         } catch (err) {
-          unavailable = (err as Error)?.message || String(err);
-          console.warn(`[cutouts] photo ${photoIndex} could not be cut out: ${unavailable}`);
+          const message = (err as Error)?.message || String(err);
+          console.warn(`[cutouts] photo ${photoIndex} could not be cut out: ${message}`);
+          // Any failure used to mean "the service is down": one photo it refused stopped every later
+          // photo from being sent, and each was said to have no cut-out because the service was not
+          // available (2026-09-24). Only no answer, or 503 (the model loading), means that now.
+          if (err instanceof CutoutRefusedError) refused = err.reason;
+          else unavailable = message;
         }
       }
       if (!row) {
-        outcomes.push({ photoIndex, passed: false, reason: unavailable ? 'the cut-out service is not available right now' : 'no cut-out has been made yet' });
+        outcomes.push({
+          photoIndex,
+          passed: false,
+          reason: refused ?? (unavailable ? 'the cut-out service is not available right now' : 'no cut-out has been made yet'),
+        });
         assets.push(undefined);
         continue;
       }
@@ -221,7 +240,17 @@ export class PhotoCutouts {
       signal: AbortSignal.timeout(this.timeoutMs),
     });
     const reply = (await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))) as ServiceReply;
-    if (!res.ok || !reply.ok) throw new Error(`cut-out service answered ${res.status}: ${reply.error || 'no detail'}`);
+    if (!res.ok || !reply.ok) {
+      const detail = `cut-out service answered ${res.status}: ${reply.error || 'no detail'}`;
+      // 503 is the service itself not ready; any other answer is about this photo.
+      if (res.status === 503) throw new Error(detail);
+      const reason = res.status >= 500
+        ? 'the cut-out failed on this photo'
+        : /at most|too large|pixels/i.test(reply.error || '')
+          ? 'the photo is too large to cut out'
+          : 'the photo could not be read as a picture';
+      throw new CutoutRefusedError(detail, reason);
+    }
     const failed = Object.entries(reply.gates || {}).filter(([, g]) => g.hard && !g.ok).map(([name]) => name);
     const [x0, y0] = reply.bbox || [0, 0];
     // The people's faces in the cut-out's own pixels; the largest sets the head size that is matched.

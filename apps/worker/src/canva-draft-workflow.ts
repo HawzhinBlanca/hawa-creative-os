@@ -1,5 +1,6 @@
 import type { WorkflowDurableContext } from './durable-context.js';
 import type { WorkflowInput, WorkflowOutput } from './workflow.js';
+import type { OutcomeRecorder } from './outcome-without-core.js';
 
 /**
  * A failure that retrying can never fix (rejected request, scope mismatch). The Restate
@@ -10,15 +11,41 @@ export class WorkflowTerminalError extends Error {
   constructor(message: string, readonly code?: string) { super(message); this.name = 'WorkflowTerminalError'; }
 }
 
+/**
+ * Refusals another request clears by itself. Core answers 409 CANVA_RECONNECT_REQUIRED to every Canva
+ * call that arrives while another call is rotating the shared token, and the draft of a design that
+ * existed in Canva ended as CANVA_PREVIEW_FAILED over it (2026-09-24). Such a refusal is retried like
+ * an outage, within the step's own retry window (index.ts CORE_STEP_RETRY: at most 10 minutes), and
+ * reported as the refusal it was only when that window is spent: a connection that really needs the
+ * owner to reconnect Canva still says so.
+ */
+const RETRIED_REFUSALS = new Set(['CANVA_RECONNECT_REQUIRED']);
+
 /** Core answered with an HTTP error. 4xx (except 408/429) is terminal: the request itself was refused. */
 export class CoreBoundaryError extends Error {
   readonly terminal: boolean;
+  /** A 409 that is retried before it is believed (RETRIED_REFUSALS). */
+  readonly retriedRefusal: boolean;
   constructor(readonly httpStatus: number, readonly code?: string) {
     super(`Canva workflow Core boundary HTTP ${httpStatus}${code ? ` ${code}` : ''}`);
     this.name = 'CoreBoundaryError';
-    this.terminal = httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429;
+    this.retriedRefusal = httpStatus === 409 && Boolean(code && RETRIED_REFUSALS.has(code));
+    this.terminal = httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429 && !this.retriedRefusal;
   }
 }
+
+/**
+ * Whether a step has given up: Restate spent its retries (or the action was refused for good) and
+ * handed back a TerminalError. Anything else is still being retried by the engine and is rethrown.
+ */
+const stepGaveUp = (error: unknown): boolean =>
+  Boolean(
+    (error as any)?.name === 'TerminalError' ||
+    (error as any)?.terminal ||
+    (error as any)?.cause?.terminal ||
+    String((error as any)?.name).includes('Terminal') ||
+    String((error as any)?.message).includes('terminal workflow failure')
+  );
 
 const BOUNDARY_MESSAGE = /^Canva workflow Core boundary HTTP (\d{3})(?: ([A-Z0-9_]+))?$/;
 /**
@@ -108,6 +135,14 @@ function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch)
 }
 
 /**
+ * How long the outcome report keeps asking a Core that does not answer. It had the ten minutes of
+ * every other step, which the step that failed had usually just spent on the same dead Core, so the
+ * outcome was lost and the requester waited for good (2026-09-24). An hour outlasts a restart, a
+ * deploy and a rolled-back deploy; past it the worker records the outcome in the outbox itself.
+ */
+export const OUTCOME_REPORT_RETRY_MS = 60 * 60 * 1000;
+
+/**
  * Posts a terminal outcome to Core, journalled as one step. Core records it on the task and, unless
  * told otherwise, messages the requester. A 4xx answer is final and swallowed: a message Core refuses
  * must never fail (or retry) the workflow.
@@ -122,7 +157,7 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
       }
       throw err;
     }
-  });
+  }, { maxRetryDuration: OUTCOME_REPORT_RETRY_MS });
 }
 
 /**
@@ -202,8 +237,17 @@ export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurab
   }
 }
 
-/** Restate orchestrates retries; Core journals model charges and Canva side effects. */
-export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableContext, fetcher: typeof fetch = fetch): Promise<WorkflowOutput> {
+/**
+ * Restate orchestrates retries; Core journals model charges and Canva side effects. `recordOutcome`
+ * writes an outcome Core would not take to the outbox instead (outcome-without-core.ts); without it
+ * such an outcome is only logged.
+ */
+export async function runCanvaDraft(
+  input: WorkflowInput,
+  ctx: WorkflowDurableContext,
+  fetcher: typeof fetch = fetch,
+  recordOutcome?: OutcomeRecorder
+): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
   const call = coreClient(input, fetcher);
@@ -213,6 +257,57 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     ? `${input.taskId}-redrive-${input.redriveAttempt}`
     : input.taskId;
   let result: any;
+
+  /**
+   * A studio run the workflow stops following used to be left at its stage: nothing abandoned it,
+   * and Core refuses a new run for the task while one is unfinished, so a re-drive was refused as
+   * "still being made" for good (2026-09-24). A run that has not settled when the workflow finishes
+   * is one it gave up on (stuck, its resume step exhausted, still busy, refused), so it is abandoned
+   * first, as a step of its own. A refusal (a run Core already settled) needs nothing more; a Core
+   * that does not answer is left to Core's own handling of stale runs.
+   */
+  const abandonUnsettledRun = async (status: string, code?: string) => {
+    if (typeof result?.runId !== 'string' || STUDIO_SETTLED.includes(String(result.status))) return;
+    const runId: string = result.runId;
+    try {
+      await ctx.run('canva-studio-abandon', async () => {
+        try {
+          return await call('/canva/studio/' + encodeURIComponent(runId) + '/abandon', {
+            reason: `The workflow stopped following this run: ${status}${code ? ` (${code})` : ''}.`,
+          });
+        } catch (err) {
+          if (err instanceof CoreBoundaryError && err.terminal) return { abandoned: false, status: err.httpStatus, code: err.code };
+          throw err;
+        }
+      });
+    } catch (err) {
+      if (!stepGaveUp(err)) throw err;
+      console.warn(`[worker] Task ${input.taskId}: studio run ${runId} could not be abandoned: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  /**
+   * The report Core would not take, past the report step's own hour. The finished work used to end
+   * there with nothing written anywhere, the task `received` and the requester waiting for good
+   * (2026-09-24). The worker has the database: the requester's message, an office alert and the
+   * report itself (sent again until Core takes it) go to the outbox, under keys per task and outcome.
+   */
+  const recordWithoutCore = async (status: string, report: Record<string, unknown>) => {
+    if (!recordOutcome) {
+      console.error(`[worker] Task ${input.taskId}: outcome ${status} could not be reported to Core, and there is no database to record it in.`);
+      return;
+    }
+    try {
+      const recorded = await ctx.run('canva-outcome-without-core-' + status.toLowerCase(), () =>
+        recordOutcome({ tenantId: input.tenantId, taskId: input.taskId, report })
+      );
+      console.error(`[worker] Task ${input.taskId}: Core did not take outcome ${status}; recorded in the outbox instead: ${JSON.stringify(recorded)}`);
+    } catch (err) {
+      if (!stepGaveUp(err)) throw err;
+      console.error(`[worker] Task ${input.taskId}: outcome ${status} was recorded neither by Core nor in the outbox: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   // Every terminal outcome is reported to the requester through Core. A failed chat message
   // must never fail (or retry) the workflow, so the notification swallows its own errors.
   const finish = async (
@@ -222,7 +317,8 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     parity?: string,
     extra: { detail?: string; notifyRequester?: boolean } = {}
   ) => {
-    await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), {
+    await abandonUnsettledRun(status, code);
+    const report = {
       status,
       designId,
       code,
@@ -230,7 +326,13 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       ...(parity ? { parity, parityError: code } : {}),
       ...(extra.detail ? { detail: extra.detail } : {}),
       ...(extra.notifyRequester === false ? { notifyRequester: false } : {}),
-    });
+    };
+    try {
+      await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
+    } catch (error) {
+      if (!stepGaveUp(error)) throw error;
+      await recordWithoutCore(status, report);
+    }
     return output(status, designId);
   };
 
@@ -239,14 +341,9 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
     if (boundary?.terminal) {
       return finish(fallbackStatus, designId, boundary.code || `HTTP_${boundary.httpStatus}`);
     }
-    const isExhaustedOrTerminal = Boolean(
-      (error as any)?.name === 'TerminalError' ||
-      (error as any)?.terminal ||
-      (error as any)?.cause?.terminal ||
-      String((error as any)?.name).includes('Terminal') ||
-      String((error as any)?.message).includes('terminal workflow failure')
-    );
-    if (isExhaustedOrTerminal) {
+    if (stepGaveUp(error)) {
+      // A refusal retried to the end of the step's window is reported as that refusal, as it was before.
+      if (boundary?.retriedRefusal) return finish(fallbackStatus, designId, boundary.code);
       return finish('DESIGN_SERVER_ERROR', designId, boundary?.code || (boundary ? `HTTP_${boundary.httpStatus}` : 'RETRY_EXHAUSTED'));
     }
     throw error;
@@ -432,15 +529,33 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       // Every other step here keeps retrying through a Core restart (index.ts). Parity pays a vision
       // model on every call and Core keeps no earlier answer, so it keeps the short bound: a restart
       // costs this courtesy check, reported as unavailable, not a model bill per retry.
-      const pRes = await ctx.run('canva-parity-check', () =>
-        call('/canva/parity-check', { runId: result?.runId }),
-        { maxRetryAttempts: 5 }
-      );
-      parity = pRes?.parity || 'match';
+      //
+      // An answer from Core (a 5xx) or no answer within the call's timeout means Core ran the check,
+      // which is where the model is paid: the five quick attempts were five vision calls for one
+      // question (2026-09-24). Such a failure is final; only a Core that never answered is retried.
+      const pRes = await ctx.run('canva-parity-check', async () => {
+        try {
+          return await call('/canva/parity-check', { runId: result?.runId });
+        } catch (err) {
+          const answered = err instanceof CoreBoundaryError && err.httpStatus >= 500;
+          const timedOut = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError';
+          if (answered || timedOut) throw new WorkflowTerminalError((err as Error).message, err instanceof CoreBoundaryError ? err.code : 'PARITY_TIMEOUT');
+          throw err;
+        }
+      }, { maxRetryAttempts: 5 });
+      // An answer without a verdict is not a match: it used to be counted as one (2026-09-24).
+      if (typeof pRes?.parity === 'string' && pRes.parity.trim()) {
+        parity = pRes.parity;
+      } else {
+        parity = 'unavailable';
+        parityError = 'PARITY_NO_VERDICT';
+      }
     } catch (err: any) {
       const boundary = boundaryOf(err);
       parity = 'unavailable';
-      parityError = boundary?.code || err?.code || (boundary?.httpStatus ? `HTTP_${boundary.httpStatus}` : 'PARITY_ERROR');
+      // Restate's TerminalError carries a numeric `code` (its HTTP status); the workflow's own code is on its cause.
+      const named = [err?.code, err?.cause?.code].find((v) => typeof v === 'string');
+      parityError = boundary?.code || named || (boundary?.httpStatus ? `HTTP_${boundary.httpStatus}` : 'PARITY_ERROR');
     }
   }
 

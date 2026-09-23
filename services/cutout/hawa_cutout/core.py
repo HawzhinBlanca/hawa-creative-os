@@ -66,9 +66,27 @@ class CutResult:
     timings: dict[str, float] = field(default_factory=dict)
 
 
+class UnreadablePhoto(ValueError):
+    """A photo the service will not read; the server answers 400 with this message."""
+
+
 def load_image(data: bytes) -> np.ndarray:
     """RGB uint8, upright (EXIF orientation applied), at most MAX_SIDE on its long side."""
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    try:
+        img = Image.open(io.BytesIO(data))
+    except Image.DecompressionBombError as err:
+        # Pillow refuses a picture of more than twice MAX_IMAGE_PIXELS (about 179 MP) before decoding
+        # it, since a small file can unpack to gigabytes. That was answered 500, as if the service had
+        # failed (2026-09-24); it is the photo that is refused.
+        # Pillow's own words say how large and what the limit is ("Image size (400000000 pixels)
+        # exceeds limit of 178956970 pixels"); the rest of its sentence is for developers.
+        raise UnreadablePhoto(f'the photo is too large to cut out: {str(err).split(",")[0]}') from err
+    img = ImageOps.exif_transpose(img)
+    if img.mode.startswith('I;16') or img.mode == 'I':
+        # 16-bit greyscale (a scanner, a RAW export). convert('RGB') clips every value above 255, so
+        # such a photo came out almost white (2026-09-24): it is scaled to 8 bits first.
+        img = Image.fromarray((np.clip(np.asarray(img, dtype=np.int64), 0, 65535) >> 8).astype(np.uint8))
+    img = img.convert('RGB')
     if max(img.size) > MAX_SIDE:
         scale = MAX_SIDE / max(img.size)
         img = img.resize((round(img.width * scale), round(img.height * scale)), Image.LANCZOS)

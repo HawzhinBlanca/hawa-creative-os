@@ -3,8 +3,9 @@ import { sql, type Database, type Kysely } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 
 /**
- * What the worker sends a requester when their approved design is delivered, and when their request
- * could not be started at all. Both go to the Telegram chat the request came from.
+ * What the worker sends a requester when their approved design is delivered, when their request
+ * could not be started at all, and when its outcome could not reach Core. All go to the Telegram chat
+ * the request came from.
  */
 
 export interface TelegramSendResult {
@@ -78,13 +79,28 @@ function describeArchiveProblem(problem: unknown): string {
  * names, the Sheets problem) is escaped: the old message used Markdown asterisks and was sent with
  * no parse mode, so the requester saw the asterisks, and an unescaped title could break parsing.
  */
-export function composeDeliveredMessage(payload: Record<string, unknown> & { title?: string | null; files?: unknown } | null | undefined, options: { filesSent: number }): string {
-  const lines: string[] = ['<b>Your approved design has been delivered.</b>'];
+export function composeDeliveredMessage(
+  payload: Record<string, unknown> & { title?: string | null; files?: unknown } | null | undefined,
+  options: { filesSent: number; filesUncertain?: number }
+): string {
+  // A file whose upload Telegram did not confirm may or may not be above. The notice said "has been
+  // delivered" all the same (2026-09-24); it now says what is known, and the office is alerted.
+  const uncertain = options.filesUncertain ?? 0;
+  const lines: string[] = [
+    uncertain > 0 ? '<b>Your approved design was sent, but Telegram did not confirm that it arrived.</b>' : '<b>Your approved design has been delivered.</b>',
+  ];
   if (payload?.title) lines.push(`Request: <b>${escapeTelegramHtml(payload.title)}</b>`);
 
   const files: DeliveredFile[] = Array.isArray(payload?.files) ? payload.files : [];
   if (options.filesSent > 0) {
     lines.push(options.filesSent === 1 ? 'The approved file is attached above.' : `The ${options.filesSent} approved files are attached above.`);
+  }
+  if (uncertain > 0) {
+    lines.push(
+      uncertain === 1
+        ? 'The office will check that the approved file reached you, and send it again if it did not.'
+        : `The office will check that the ${uncertain} approved files reached you, and send again any that did not.`
+    );
   }
   const linked = files.filter((f) => f.webViewLink);
   if (linked.length > 0) {
@@ -140,6 +156,59 @@ export function composeDeliveryFailedAlert(taskId: string, chatId: string | null
     `Attempts: ${attempts}`,
     `Last error: ${error.slice(0, 500)}`,
     'The requester has not been told. Files sent before the failure stay sent; check the chat and follow up with them directly.',
+  ].join('\n');
+}
+
+/**
+ * The requester's notice when their workflow finished but Core, which records the outcome and
+ * composes the usual message, did not answer (outcome-without-core.ts). It says only what the worker
+ * knows. Plain text, no formatting.
+ */
+export function composeOutcomeUnrecordedMessage(input: { taskId: string; title?: string | null; draftMade: boolean; officeAlerted: boolean }): string {
+  return [
+    input.draftMade
+      ? 'Your design was made in Canva, but Hawa could not record it, because one of its services was not answering.'
+      : "Your design request could not be finished automatically, because one of Hawa's services was not answering.",
+    ...(input.title ? [`Request: ${input.title}`] : []),
+    input.officeAlerted ? 'The office has been alerted and will follow up with you here.' : 'The office will follow up with you here.',
+    `Reference: ${String(input.taskId).slice(0, 8)}`,
+  ].join('\n');
+}
+
+/** The office's alert for the same outcome. Plain text, no formatting. */
+export function composeOutcomeUnrecordedAlert(input: {
+  taskId: string;
+  status: string;
+  code?: string;
+  designId?: string;
+  requesterChat: string | null;
+  requesterTold: boolean;
+}): string {
+  return [
+    'Hawa alert: a design workflow finished while Core was not answering, so its outcome is not recorded on the task yet.',
+    `Task: ${input.taskId}`,
+    `Outcome: ${input.status}${input.code ? ` (${input.code})` : ''}`,
+    ...(input.designId ? [`Canva design: ${input.designId}`] : []),
+    `Requesting chat: ${input.requesterChat || 'unknown'}`,
+    input.requesterTold
+      ? 'The requester has been told that the office will follow up.'
+      : 'The requester has not been told.',
+    'The outcome is sent to Core again until Core takes it. Check the task in the Desk once Core is back.',
+  ].join('\n');
+}
+
+/**
+ * The office's alert when Telegram did not confirm that an approved file or the delivery notice
+ * reached the requester. It is not resent, so it cannot arrive twice; a person has to look. Plain
+ * text, no formatting.
+ */
+export function composeDeliveryUncertainAlert(taskId: string, chatId: string | null, error: string): string {
+  return [
+    'Hawa alert: Telegram did not confirm that an approved design, or its delivery notice, reached the requester.',
+    `Task: ${taskId}`,
+    `Requesting chat: ${chatId || 'unknown'}`,
+    `Last error (it names what was not confirmed): ${error.slice(0, 500)}`,
+    'Nothing was sent twice. Look in the requester\'s chat, and send by hand whatever is not there.',
   ].join('\n');
 }
 

@@ -14,6 +14,7 @@ import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import {
   composeDeliveredMessage,
   composeDeliveryFailedAlert,
+  composeDeliveryUncertainAlert,
   composeIntakeFailedAlert,
   composeIntakeFailedMessage,
   intakeChatOf,
@@ -86,6 +87,8 @@ export interface OutboxConsumerOptions {
   readExportBytes?: ExportBytesReader;
   /** The office chat alerted about dead-lettered requests. Undefined reads the first TELEGRAM_ALLOWED_USERS entry. */
   officeAlertChatId?: string | null;
+  /** Transport to Core for `task.outcome`. Defaults to fetch. */
+  coreFetcher?: typeof fetch;
 }
 
 export interface BatchProcessingSummary {
@@ -180,8 +183,11 @@ export class OutboxConsumer {
    * The office chat is alerted. The requester is not messaged again: the chat that failed may be
    * theirs. With no bot token or office chat, or an office chat that is the requester's own, the
    * failure is logged with the task and the reason instead.
+   *
+   * A send Telegram did not confirm (`uncertain`) is alerted too. It was skipped, although nobody
+   * knows whether the requester has the file and it is never resent (2026-09-24).
    */
-  private async alertOfficeDeliveryFailed(cmd: OutboxCommandRecord, attempts: number, error: string) {
+  private async alertOfficeDeliveryFailed(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain = false) {
     let taskId = cmd.aggregate_id;
     try {
       const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
@@ -196,7 +202,7 @@ export class OutboxConsumer {
         return;
       }
       const alerted = await this.telegramSender(botToken).dispatchOutboundMessage(office, {
-        text: composeDeliveryFailedAlert(taskId, requesterChat, attempts, error),
+        text: uncertain ? composeDeliveryUncertainAlert(taskId, requesterChat, error) : composeDeliveryFailedAlert(taskId, requesterChat, attempts, error),
       });
       if (!alerted.success) {
         console.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}), and so did the office alert: ${alerted.error}`);
@@ -256,6 +262,30 @@ export class OutboxConsumer {
         if (!res.success) {
           throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
         }
+      });
+    }
+
+    if (!this.handlers.has('task.outcome')) {
+      this.handlers.set('task.outcome', async (cmd) => {
+        // A workflow's outcome Core did not take while it was down (outcome-without-core.ts), sent
+        // again until it is: Core records it on the task as the workflow's own report would have. The
+        // requester's message was written under Core's key, so Core does not send a second one.
+        const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+        const taskId = String(payload?.taskId || cmd.aggregate_id);
+        const token = process.env.HAWA_BEARER_TOKEN;
+        if (!token) throw new Error('CORE_NOT_CONFIGURED: HAWA_BEARER_TOKEN is not set, so the outcome was not sent to Core');
+        const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
+        const res = await (this.options.coreFetcher || fetch)(`${base}/v1/tasks/${encodeURIComponent(taskId)}/notifications/canva-status`, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload?.report || {}),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (res.ok) return;
+        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+          throw new OutboxDeliveryError(`CORE_REFUSED_OUTCOME: Core answered HTTP ${res.status} for task ${taskId}`, 'permanent', 'CORE_REFUSED_OUTCOME');
+        }
+        throw new Error(`CORE_UNAVAILABLE: Core answered HTTP ${res.status} for task ${taskId}`);
       });
     }
 
@@ -356,7 +386,7 @@ export class OutboxConsumer {
           await this.recordDeliveryFile(cmd.tenant_id, cmd.id, file.artifactId, 'sent');
         }
 
-        const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length });
+        const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length, filesUncertain: uncertain.length });
         const res = await sender.dispatchOutboundMessage(sourceChannelId, { text, parse_mode: 'HTML' });
         if (!res.success) {
           if (!/DELIVERY_UNCERTAIN/.test(res.error || '')) throw new Error(res.error || 'TELEGRAM_SEND_FAILED');
@@ -497,8 +527,8 @@ export class OutboxConsumer {
               if (cmd.command_type === 'task.created' && !isUncertain) {
                 await this.tellRequesterIntakeFailed(cmd, Number(updated.attempts) || 0, errorMessage);
               }
-              if (cmd.command_type === 'notify.published' && !isUncertain) {
-                await this.alertOfficeDeliveryFailed(cmd, Number(updated.attempts) || 0, errorMessage);
+              if (cmd.command_type === 'notify.published') {
+                await this.alertOfficeDeliveryFailed(cmd, Number(updated.attempts) || 0, errorMessage, isUncertain);
               }
             } else {
               aggregateSummary.retried++;
