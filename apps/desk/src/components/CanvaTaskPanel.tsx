@@ -10,6 +10,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
   const exportRequests=useRef<Record<string,{format:string;key:string}>>({});
   const refresh=async()=>{const [task,account,planning]=await Promise.all([apiClient.canva.taskState(taskId),apiClient.canva.status(),apiClient.canva.plans(taskId)]);if(activeTask.current!==taskId)return;setState(task);setPlans(planning.plans);setConnected(account.authorized===true);setResults(v=>({...v,...Object.fromEntries((task.artifacts||[]).map((a:any)=>[a.operation_id,{operationId:a.operation_id,status:'retrieved',artifact:a}]))}));};
   useEffect(()=>{setState(null);setPlans([]);setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
+  // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
   const latestPng=state?.artifacts?.find((a:any)=>a.format==='png');
   const latestCheck=state?.artifacts?.find((a:any)=>a.content_check)?.content_check;

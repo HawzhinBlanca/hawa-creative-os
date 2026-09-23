@@ -12,7 +12,10 @@ if (url && new URL(url).pathname !== '/hawa_repair') {
 
 describe('a task replaced by a revision, or past approval, is not approved', () => {
   it('names why for each state that cannot be approved, and nothing for one that can', () => {
-    expect(unapprovableTaskReason('t', 'r', 'revision_requested')).toMatch(/^Cannot approve stale revision r: task t was replaced by a newer revision; approve the latest revision instead$/);
+    // No newer revision need exist after changes are requested, so the refusal does not claim one (2026-09-24).
+    expect(unapprovableTaskReason('t', 'r', 'revision_requested')).toBe(
+      'Cannot approve task t: changes were requested on revision r, so it can no longer be approved; approve the revision made with the changes once it is recorded'
+    );
     expect(unapprovableTaskReason('t', 'r', 'publishing')).toMatch(/already approved and being delivered/);
     expect(unapprovableTaskReason('t', 'r', 'complete')).toMatch(/already approved and delivered/);
     expect(unapprovableTaskReason('t', 'r', 'cancelled')).toBe('Cannot approve task t: it was cancelled');
@@ -57,7 +60,7 @@ describe.skipIf(!url)('approval refuses a task in a state past review (PostgreSQ
 
   it('refuses a task a newer revision replaced, and one already delivering, delivered, cancelled or rejected', async () => {
     const replaced = await reviewedTask('revision_requested');
-    await expect(approve(replaced)).rejects.toThrow(/was replaced by a newer revision; approve the latest revision instead/);
+    await expect(approve(replaced)).rejects.toThrow(/changes were requested on revision .*, so it can no longer be approved/);
     for (const state of ['publishing', 'complete', 'cancelled', 'rejected'] as const) {
       const t = await reviewedTask(state);
       await expect(approve(t)).rejects.toThrow(state === 'publishing' || state === 'complete' ? /already approved/ : new RegExp(`it was ${state}`));
@@ -76,5 +79,31 @@ describe.skipIf(!url)('approval refuses a task in a state past review (PostgreSQ
       const row = await db.selectFrom('tasks').select('state').where('id', '=', t.taskId).executeTakeFirstOrThrow();
       expect(row.state).toBe('approved');
     }
+  });
+
+  // 2026-09-24: the invalidation and the new revision shared one aggregate version, which the unique
+  // key (task_id, aggregate_version) refused, so no revision could follow an approval.
+  it('records a new revision after an approval, each event with its own version and the task at the last', async () => {
+    const t = await reviewedTask('human_review');
+    await approve(t);
+    const before = await db.selectFrom('tasks').select('version').where('id', '=', t.taskId).executeTakeFirstOrThrow();
+    const next = await repo.createRevision({ tenantId, taskId: t.taskId, neutralManifest: { nodes: [{ id: 'n1', type: 'text', text: 'KAAE, corrected' }] } });
+    const events = await db
+      .selectFrom('task_events')
+      .select(['event_type', 'aggregate_version'])
+      .where('task_id', '=', t.taskId)
+      .where('aggregate_version', '>', Number(before.version))
+      .orderBy('aggregate_version')
+      .execute();
+    expect(events.map((e) => [e.event_type, Number(e.aggregate_version)])).toEqual([
+      ['approval.invalidated', Number(before.version) + 1],
+      ['design.revision_created', Number(before.version) + 2],
+    ]);
+    const after = await db.selectFrom('tasks').select(['version', 'state', 'current_design_revision_id']).where('id', '=', t.taskId).executeTakeFirstOrThrow();
+    expect({ version: Number(after.version), state: after.state, revision: after.current_design_revision_id }).toEqual({
+      version: Number(before.version) + 2,
+      state: 'human_review',
+      revision: next.id,
+    });
   });
 });

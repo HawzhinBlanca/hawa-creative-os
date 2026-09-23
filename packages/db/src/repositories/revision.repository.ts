@@ -37,8 +37,12 @@ export interface RecordApprovalParams {
 /** Why a task in this state cannot be approved, or undefined when it can (received, human_review, …). */
 export function unapprovableTaskReason(taskId: string, revisionId: string, state: string): string | undefined {
   switch (state) {
+    // Changes were asked for on this revision (in the Desk, or by the requester in Telegram). No newer
+    // revision need exist: the message said "replaced by a newer revision", which after a Desk
+    // request sent the art director looking for one that was never made (2026-09-24). A capture of
+    // the changed design is not a revision; it must be recorded as one, with its own QC, first.
     case 'revision_requested':
-      return `Cannot approve stale revision ${revisionId}: task ${taskId} was replaced by a newer revision; approve the latest revision instead`;
+      return `Cannot approve task ${taskId}: changes were requested on revision ${revisionId}, so it can no longer be approved; approve the revision made with the changes once it is recorded`;
     case 'publishing':
       return `Task ${taskId} is already approved and being delivered; it cannot be approved again`;
     case 'complete':
@@ -163,20 +167,6 @@ export class RevisionRepository {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      // 5. Update task with current_design_revision_id, reset state to in_review, increment version
-      const nextTaskVersion = Number(task.version) + 1;
-      await dbClient
-        .updateTable('tasks')
-        .set({
-          current_design_revision_id: revision.id,
-          state: 'human_review',
-          version: nextTaskVersion,
-          updated_at: new Date(),
-        })
-        .where('id', '=', task.id)
-        .where('tenant_id', '=', params.tenantId)
-        .execute();
-
       // Invalidate downstream permission on edits (FR-043, R05)
       // hawa.approvals is append-only by trigger forbid_update_delete();
       // invalidation of prior approval must be recorded by appending to task_events rather than mutating approvals.
@@ -189,6 +179,24 @@ export class RevisionRepository {
         .orderBy('created_at', 'desc')
         .executeTakeFirst();
 
+      // 5. Update task with current_design_revision_id, reset state to in_review, and advance its
+      // version past every event appended below. Each event takes its own aggregate version: the
+      // invalidation and the new revision used to share one, which the unique key (task_id,
+      // aggregate_version) refused, so no revision could follow an approval (2026-09-24).
+      const invalidationVersion = Number(task.version) + 1;
+      const nextTaskVersion = Number(task.version) + (priorApproval ? 2 : 1);
+      await dbClient
+        .updateTable('tasks')
+        .set({
+          current_design_revision_id: revision.id,
+          state: 'human_review',
+          version: nextTaskVersion,
+          updated_at: new Date(),
+        })
+        .where('id', '=', task.id)
+        .where('tenant_id', '=', params.tenantId)
+        .execute();
+
       if (priorApproval) {
         await dbClient
           .insertInto('task_events')
@@ -197,7 +205,7 @@ export class RevisionRepository {
             task_id: params.taskId,
             event_type: 'approval.invalidated',
             schema_version: 1,
-            aggregate_version: nextTaskVersion,
+            aggregate_version: invalidationVersion,
             actor_type: params.authorType === 'workflow' ? 'workflow' : 'user',
             actor_id: params.authorId || null,
             correlation_id: params.correlationId || crypto.randomUUID(),

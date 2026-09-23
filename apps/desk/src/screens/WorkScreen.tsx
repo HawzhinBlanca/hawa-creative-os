@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { eventStream } from '../services/eventStream.js';
+import { eventStream, TASK_EVENTS } from '../services/eventStream.js';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
 import { VectorInspector } from '../components/VectorInspector.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
-import { apiClient, ApiError, type ApiSessionUser } from '../api/client.js';
+import { apiClient, ApiError, type ApiSessionUser, type TaskTimelineEvent } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
-import { loadTaskDetail, mergeTaskDetail } from '../services/taskDetail.js';
+import { keepLoadedDetail, loadTaskDetail, mergeTaskDetail, queueEntryChanged } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
+import { inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
+
+/** How often the queue is read again while the tab is visible. */
+const QUEUE_REFRESH_MS = 30_000;
 
 export interface LiveTask {
   id: string;
@@ -26,6 +30,7 @@ export interface LiveTask {
   sourcePlatform?: string;
   createdAt?: string;
   updatedAt?: string;
+  version?: number;
   latestRevisionId?: string;
   latestRevision?: {
     id: string;
@@ -68,13 +73,6 @@ export interface LiveTask {
     fontCoverage: boolean;
     errors?: string[];
   };
-  history?: Array<{
-    id: string;
-    type: string;
-    actor: string;
-    summary: string;
-    timestamp: string;
-  }>;
 }
 
 interface WorkScreenProps {
@@ -101,7 +99,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const [canvaLinkInput, setCanvaLinkInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [filter, setFilter] = useState<'all' | 'needs_action' | 'in_progress' | 'review' | 'complete'>('all');
+  const [filter, setFilter] = useState<QueueFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'brief' | 'brand' | 'qa' | 'history'>('brief');
   const [mobilePane, setMobilePane] = useState<'queue' | 'detail'>('queue');
@@ -127,10 +125,35 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  // Fetch canonical task list from server using typed API client (H01)
-  const fetchTasks = async () => {
-    setQueueState('loading');
-    setQueueError(null);
+  // Current values for the timer and the live-event handlers, which are registered once.
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const selectedTaskIdRef = useRef(selectedTaskId);
+  selectedTaskIdRef.current = selectedTaskId;
+  const queueStateRef = useRef(queueState);
+  queueStateRef.current = queueState;
+
+  // Signing out, and a session Core no longer accepts, end the same way (2026-09-24): the queue and
+  // the open task are cleared (their panels stop polling), the live stream is closed, and the
+  // sign-in prompt says why.
+  const showSignedOut = (message: string | null) => {
+    eventStream.disconnect();
+    setSessionUser(null);
+    setTasks([]);
+    setQueueState('signed_out');
+    setQueueError(message);
+  };
+
+  // Fetch canonical task list from server using typed API client (H01). Every page is read, so the
+  // queue, its filters and its search see every task: it read the newest 50 once, and older tasks
+  // awaiting approval never appeared (2026-09-24). `quiet` is a background refresh: the queue stays
+  // on screen while it reads, and a failure is reported above it instead of replacing it. This reads
+  // no state directly (only setters and refs), so the timer may call the first render's copy.
+  const fetchTasks = async (quiet = false) => {
+    if (!quiet) {
+      setQueueState('loading');
+      setQueueError(null);
+    }
     try {
       try {
         const session = await apiClient.auth.getSession();
@@ -139,11 +162,34 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         }
       } catch {}
 
-      const res = await apiClient.tasks.list({ limit: 50, offset: 0 });
-      const items: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
-      setTasks(items);
-      // The list carries no preview: the selected task's detail is read again after every reload.
-      setQueueLoads((n) => n + 1);
+      const items: LiveTask[] = [];
+      const seen = new Set<string>();
+      for (let offset = 0; ; ) {
+        const res = await apiClient.tasks.list({ limit: 200, offset });
+        const page: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
+        // Newest first by offset: a task created while paging pushes one already read onto the next page.
+        for (const t of page) {
+          if (!seen.has(t.id)) {
+            seen.add(t.id);
+            items.push(t);
+          }
+        }
+        offset += page.length;
+        if (Array.isArray(res) || page.length === 0 || offset >= Number(res.total ?? 0)) break;
+      }
+      setQueueError(null);
+      if (quiet) {
+        // A background refresh keeps the preview already loaded and reads the selected task's detail
+        // again only when the list shows it changed, rather than downloading its preview every 30 s.
+        const selectedId = selectedTaskIdRef.current;
+        const changed = queueEntryChanged(tasksRef.current.find((t) => t.id === selectedId), items.find((t) => t.id === selectedId));
+        setTasks((prev) => keepLoadedDetail(prev, items));
+        if (changed) setQueueLoads((n) => n + 1);
+      } else {
+        setTasks(items);
+        // The list carries no preview: the selected task's detail is read again after every reload.
+        setQueueLoads((n) => n + 1);
+      }
       if (items.length === 0) {
         setQueueState('empty');
       } else {
@@ -154,11 +200,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         });
       }
     } catch (err: any) {
-      if (err instanceof ApiError) {
-        if (err.status === 401) {
-          setQueueState('signed_out');
-          setQueueError('Authentication required: Sign in to access the active work queue.');
-        } else if (err.status === 403) {
+      if (err instanceof ApiError && err.status === 401) {
+        // The API client has already shown the sign-in prompt with Core's reason.
+        setQueueState('signed_out');
+        setQueueError((prev) => prev || 'Authentication required: Sign in to access the active work queue.');
+      } else if (quiet) {
+        setQueueError(`The queue could not be refreshed (${err?.message || 'network error'}). It shows the last list read.`);
+      } else if (err instanceof ApiError) {
+        if (err.status === 403) {
           setQueueState('unauthorized');
           setQueueError(err.message || 'Access Denied: Legitimate reviewer or operator role required.');
         } else {
@@ -172,8 +221,53 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     }
   };
 
+  // Every 401, from any panel, ends in the same sign-in prompt (2026-09-24). Only the queue used to
+  // notice; after the 24-hour session expired, the rest of the screen went on showing stale data.
+  useEffect(
+    () =>
+      apiClient.auth.onSessionEnded((reason, hadSession) => {
+        if (queueStateRef.current === 'signed_out') return;
+        showSignedOut(
+          hadSession
+            ? `Your session has ended (Core answered: ${reason}). Sign in again to continue.`
+            : 'Authentication required: Sign in to access the active work queue.'
+        );
+      }),
+    []
+  );
+
   useEffect(() => {
     fetchTasks();
+  }, []);
+
+  // Background refresh (2026-09-24): the queue was read once, so a task created or finished
+  // elsewhere appeared only after a page reload. It is read again every 30 s while the tab is
+  // visible, when the tab comes back, and shortly after any task event. A refresh asked for while
+  // one runs is run once more after it, so no event is missed.
+  const refreshRun = useRef({ running: false, again: false });
+  const refreshQueueQuietly = () => {
+    if (queueStateRef.current !== 'ready' && queueStateRef.current !== 'empty') return;
+    if (refreshRun.current.running) {
+      refreshRun.current.again = true;
+      return;
+    }
+    refreshRun.current = { running: true, again: false };
+    void fetchTasks(true).finally(() => {
+      const again = refreshRun.current.again;
+      refreshRun.current = { running: false, again: false };
+      if (again) refreshQueueQuietly();
+    });
+  };
+  useEffect(() => {
+    const onTick = () => {
+      if (!document.hidden) refreshQueueQuietly();
+    };
+    const timer = setInterval(onTick, QUEUE_REFRESH_MS);
+    document.addEventListener('visibilitychange', onTick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onTick);
+    };
   }, []);
 
   // `GET /tasks` has no captured preview; `GET /tasks/:id` does. Read the selected task's detail when
@@ -198,6 +292,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       const session = await apiClient.auth.login({ key: authKeyInput.trim() });
       if (session.user) setSessionUser(session.user);
       setAuthKeyInput('');
+      // The live stream carries the token it was opened with: open it again with the new session.
+      eventStream.disconnect();
+      eventStream.connect();
       await fetchTasks();
       showToast(`Signed in as ${session.user?.displayName || session.user?.role || 'user'}`, 'success');
     } catch (err: any) {
@@ -208,70 +305,69 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     }
   };
 
+  // Ends the session on the server too; the tab is signed out whether or not Core answers.
   const handleSignOut = () => {
-    apiClient.auth.logout();
-    setSessionUser(null);
-    setTasks([]);
-    setQueueState('signed_out');
+    void apiClient.auth.logout();
+    showSignedOut(null);
     showToast('Signed out', 'info');
   };
 
-  // Live real-time updates via EventStream
+  // Live updates via EventStream (2026-09-24). Every task event re-reads what it names: the open
+  // task's detail and history at once, and the queue shortly after. The screen used to apply only
+  // task:transitioned's own status (Telegram's says IN_PROGRESS where Core records
+  // REVISION_REQUESTED), ignored approvals, and never re-read the task open on screen.
+  const [timelineReads, setTimelineReads] = useState(0);
   useEffect(() => {
-    const unsubCreated = eventStream.on('task:created', (data: any) => {
-      const taskObj = data?.task || (data?.id ? data : null);
-      if (taskObj) {
-        setTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== taskObj.id)]);
-        showToast(`New task received: ${taskObj.title || taskObj.headlineEn || taskObj.id}`, 'info');
+    let queued: ReturnType<typeof setTimeout> | undefined;
+    const onTaskEvent = (data: any) => {
+      const taskId = data?.taskId || data?.task?.id || data?.id;
+      if (taskId && taskId === selectedTaskIdRef.current) {
+        void loadTaskDetail<LiveTask>(apiClient.tasks, taskId).then((detail) => {
+          if (detail) setTasks((prev) => mergeTaskDetail(prev, detail));
+        });
+        setTimelineReads((n) => n + 1);
       }
-    });
+      clearTimeout(queued);
+      queued = setTimeout(refreshQueueQuietly, 1000);
+    };
 
-    const unsubTransitioned = eventStream.on('task:transitioned', (data: any) => {
-      const targetId = data?.taskId || data?.task?.id || data?.id;
-      const targetStatus = data?.toStatus || data?.status || data?.state;
-      if (targetId && targetStatus) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === targetId ? { ...t, status: targetStatus, updatedAt: new Date().toISOString() } : t
-          )
-        );
-      }
-    });
-
-    const unsubPublished = eventStream.on('task:published', () => {
-      // A notification is not a delivery receipt. Reload authoritative task evidence.
-      void fetchTasks();
-    });
+    const unsubscribers = TASK_EVENTS.filter((name) => name !== 'task:created').map((name) => eventStream.on(name, onTaskEvent));
+    unsubscribers.push(
+      eventStream.on('task:created', (data: any) => {
+        const taskObj = data?.task || (data?.id ? data : null);
+        if (taskObj) {
+          // A database row carries `state`, not the Desk's status; the queue read below brings it.
+          if (typeof taskObj.status === 'string') {
+            setTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== taskObj.id)]);
+            // The first task on an empty queue was added to a list the screen did not show.
+            setQueueState((state) => (state === 'empty' ? 'ready' : state));
+            setSelectedTaskId((prev) => prev || taskObj.id);
+          }
+          showToast(`New task received: ${taskObj.title || taskObj.headlineEn || taskObj.id}`, 'info');
+        }
+        onTaskEvent(data);
+      })
+    );
 
     return () => {
-      unsubCreated();
-      unsubTransitioned();
-      unsubPublished();
+      clearTimeout(queued);
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, []);
 
-  // Filtered tasks
+  // Filtered tasks. The filters come from the same status groups as the labels (taskStatus.ts), and
+  // search folds the Arabic-keyboard ي and ك into Sorani ی and ک (2026-09-24).
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       // Status Filter
-      if (filter === 'needs_action') {
-        if (task.status !== 'AWAITING_APPROVAL' && task.status !== 'IN_PROGRESS' && task.status !== 'RECEIVED') return false;
-      } else if (filter === 'in_progress') {
-        if (task.status !== 'IN_PROGRESS') return false;
-      } else if (filter === 'review') {
-        if (task.status !== 'AWAITING_APPROVAL') return false;
-      } else if (filter === 'complete') {
-        if (task.status !== 'COMPLETE') return false;
-      }
+      if (!inQueueFilter(task.status, filter)) return false;
 
       // Search Query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = task.title.toLowerCase().includes(q);
-        const matchClient = (task.clientName || '').toLowerCase().includes(q);
-        const matchId = task.id.toLowerCase().includes(q);
-        const matchCopy = (task.copyEn || '').toLowerCase().includes(q) || (task.copyCkb || '').includes(q);
-        return matchTitle || matchClient || matchId || matchCopy;
+        const q = searchFold(searchQuery.trim());
+        return [task.title, task.clientName, task.id, task.headlineEn, task.headlineCkb, task.copyEn, task.copyCkb].some((field) =>
+          searchFold(field).includes(q)
+        );
       }
 
       return true;
@@ -282,6 +378,22 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const selectedTask = useMemo(() => {
     return tasks.find((t) => t.id === selectedTaskId) || filteredTasks[0] || tasks[0];
   }, [tasks, selectedTaskId, filteredTasks]);
+
+  // History & Audit reads the task's recorded events (GET /tasks/:id/timeline). It read `history`
+  // from the task, which no task route returns, so it always showed none (2026-09-24).
+  const [timeline, setTimeline] = useState<{ taskId: string; reading: Reading<TaskTimelineEvent[]> } | null>(null);
+  const selectedId = selectedTask?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    let current = true;
+    void read(async () => (await apiClient.tasks.timeline(selectedId))?.events ?? []).then((reading) => {
+      if (current) setTimeline({ taskId: selectedId, reading });
+    });
+    return () => {
+      current = false;
+    };
+  }, [selectedId, queueLoads, timelineReads]);
+  const timelineReading: Reading<TaskTimelineEvent[]> = timeline && timeline.taskId === selectedId ? timeline.reading : { state: 'loading' };
 
   // Keyboard navigation (j/k or ArrowUp/ArrowDown for queue navigation, / for search)
   useEffect(() => {
@@ -355,33 +467,44 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     }
   };
 
-  // Primary Action 3: Request revision (FR-078, CV-15, H02, H03)
+  // Primary Action 3: Request revision (FR-078, CV-15, H02, H03). A request is recorded on a design
+  // revision. With none, the call used to be skipped while the Desk still reported "Task transitioned
+  // to REVISION_REQUESTED" and cleared the notes (2026-09-24). Nothing is claimed now that Core did
+  // not record, and the notes stay until Core has them.
   const handleSendRevisionRequest = async () => {
     if (!selectedTask || !revisionNotes.trim()) return;
-    setActionLoading(true);
-    try {
-      if (selectedTask.latestRevisionId) {
-        await apiClient.tasks.recordDecision(
-          selectedTask.id,
-          selectedTask.latestRevisionId,
-          {
-            action: 'revision_requested',
-            revisionRequest: {
-              comment: revisionNotes.trim(),
-            },
-          }
-        );
-      }
-      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
-      setIsRevisionModalOpen(false);
-      setRevisionNotes('');
-      showToast(`Revision request logged. Task transitioned to REVISION_REQUESTED.`, 'info');
-    } catch (err: any) {
-      showToast(`Revision request failed: ${err.message || 'Server error'}`, 'error');
-    } finally {
-      setActionLoading(false);
+    const taskId = selectedTask.id;
+    const revisionId = selectedTask.latestRevisionId;
+    if (!revisionId) {
+      showToast('Nothing sent: this task has no design revision to request changes on. Your notes are kept.', 'error');
+      return;
     }
+    setActionLoading(true);
+    let decisionRes: { decisionId?: string } | null;
+    try {
+      decisionRes = await apiClient.tasks.recordDecision<{ decisionId?: string } | null>(taskId, revisionId, {
+        action: 'revision_requested',
+        revisionRequest: {
+          comment: revisionNotes.trim(),
+        },
+      });
+    } catch (err: any) {
+      showToast(`Revision request failed: ${err.message || 'Server error'}. Your notes are kept.`, 'error');
+      setActionLoading(false);
+      return;
+    }
+    setIsRevisionModalOpen(false);
+    setRevisionNotes('');
+    // Core recorded the request; a failed refresh after it is not a failed request.
+    const refreshedTask = await apiClient.tasks.get<LiveTask>(taskId).catch(() => null);
+    if (refreshedTask) setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...refreshedTask } : t)));
+    showToast(
+      refreshedTask
+        ? `Revision request recorded. Core now reports this task as ${taskStatusView(refreshedTask.status).pill}.`
+        : `Revision request recorded (decision ${decisionRes?.decisionId || 'id not returned'}). Refresh the page to see the task's status.`,
+      'success'
+    );
+    setActionLoading(false);
   };
 
   // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
@@ -459,55 +582,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     setActionLoading(false);
   };
 
-  // Helper: Next action prompt
-  const getNextActionPrompt = (task: LiveTask) => {
-    if (task.status === 'COMPLETE') {
-      return {
-        pill: 'COMPLETE',
-        pillClass: 'pill-complete',
-        message: 'Task is marked complete. Check its delivery receipt and audit history for destination evidence.',
-        primaryButton: 'deliver_again',
-      };
-    }
-    if (task.status === 'PUBLISH_RECONCILIATION') {
-      return {
-        pill: 'SHEETS ROW PENDING',
-        pillClass: 'pill-action',
-        message: 'The approved files are in Google Drive, but the Sheets row is not confirmed. Deliver again to retry only the row.',
-        primaryButton: 'deliver',
-      };
-    }
-    if (task.latestApproval) {
-      return {
-        pill: 'APPROVED',
-        pillClass: 'pill-approved',
-        message: 'An approval is recorded. Delivery still requires the server’s current revision and publication checks.',
-        primaryButton: 'deliver',
-      };
-    }
-    if (task.status === 'AWAITING_APPROVAL') {
-      return {
-        pill: 'NEEDS APPROVAL',
-        pillClass: 'pill-action',
-        message: 'Review requested. Inspect the captured files and current QA result before approving.',
-        primaryButton: 'approve',
-      };
-    }
-    if (task.status === 'IN_PROGRESS') {
-      return {
-        pill: 'IN DESIGN',
-        pillClass: 'pill-progress',
-        message: 'Design work is in progress. Capture for Review stores a PNG export of the linked Canva design; it runs no QA and approves nothing.',
-        primaryButton: 'capture',
-      };
-    }
-    return {
-      pill: 'RECEIVED',
-      pillClass: 'pill-received',
-      message: 'Your request is saved. Use the Canva controls below to design, edit and check it.',
-      primaryButton: 'edit',
-    };
-  };
+  // Helper: Next action prompt. The status decides, never an older approval: a task sent back for
+  // changes after an approval was labelled APPROVED (2026-09-24). Every status has its own label.
+  const getNextActionPrompt = (task: LiveTask) => taskStatusView(task.status);
 
   const nextAction = selectedTask ? getNextActionPrompt(selectedTask) : null;
 
@@ -521,7 +598,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           aria-live="polite"
         >
           <span>{toastMessage.type === 'success' ? '✓' : toastMessage.type === 'error' ? '⚠' : 'ℹ'}</span>
-          <span>{toastMessage.text}</span>
+          <span dir="auto">{toastMessage.text}</span>
         </div>
       )}
 
@@ -533,7 +610,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           className={`btn ${mobilePane === 'queue' ? 'primary' : ''}`}
           onClick={() => setMobilePane('queue')}
         >
-          📋 Queue ({filteredTasks.length})
+          📋 Queue ({filteredTasks.length === tasks.length ? tasks.length : `${filteredTasks.length} of ${tasks.length}`})
         </button>
         <button
           role="tab"
@@ -560,7 +637,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>Work Queue</h2>
-                <span className="queue-count-badge">{filteredTasks.length}</span>
+                <span
+                  className="queue-count-badge"
+                  title={filteredTasks.length === tasks.length ? `${tasks.length} tasks` : `${filteredTasks.length} shown of ${tasks.length} tasks`}
+                >
+                  {filteredTasks.length === tasks.length ? tasks.length : `${filteredTasks.length} / ${tasks.length}`}
+                </span>
                 {sessionUser && (
                   <span
                     style={{ fontSize: 11, padding: '2px 6px', background: 'var(--blue)', color: 'var(--blue-text)', borderRadius: 4, fontWeight: 500 }}
@@ -689,7 +771,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <div className="auth-prompt-card" role="region" aria-label="Sign In Required">
                 <span style={{ fontSize: 24 }}>🔒</span>
                 <h4>Authentication Required</h4>
-                <p>Sign in with a valid reviewer or operator key to access the live task queue.</p>
+                <p>{queueError || 'Sign in with a valid reviewer or operator key to access the live task queue.'}</p>
                 <form onSubmit={handleLogin} className="auth-inline-form">
                   <input
                     type="password"
@@ -726,7 +808,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 <span style={{ fontSize: 24 }}>⚠️</span>
                 <h4>Failed to Load Queue</h4>
                 <p>{queueError || 'Could not connect to the canonical task API.'}</p>
-                <button className="btn primary btn-sm" onClick={fetchTasks}>
+                <button className="btn primary btn-sm" onClick={() => void fetchTasks()}>
                   🔄 Retry Connection
                 </button>
               </div>
@@ -735,9 +817,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             {queueState === 'empty' && (
               <div className="queue-empty-state">
                 <p>No tasks currently pending in the work queue.</p>
-                <button className="btn btn-sm" onClick={fetchTasks}>
+                <button className="btn btn-sm" onClick={() => void fetchTasks()}>
                   🔄 Refresh Queue
                 </button>
+              </div>
+            )}
+
+            {(queueState === 'ready' || queueState === 'empty') && queueError && (
+              <div className="queue-error-state" role="status" style={{ padding: '8px 12px' }}>
+                <p style={{ margin: 0 }}>{queueError}</p>
               </div>
             )}
 
@@ -781,11 +869,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                       </span>
                     </div>
 
-                    <div className="card-title" title={task.title}>
+                    <div className="card-title" dir="auto" title={task.title}>
                       {task.title}
                     </div>
 
-                    <div className="card-snippet">
+                    <div className="card-snippet" dir="auto">
                       {task.headlineCkb || task.headlineEn || task.copyEn || 'No copy snippet'}
                     </div>
 
@@ -833,7 +921,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                         {selectedTask.id}
                       </span>
                     </div>
-                    <h1 className="detail-title">{selectedTask.title}</h1>
+                    <h1 className="detail-title" dir="auto">{selectedTask.title}</h1>
                   </div>
 
                   {nextAction && (
@@ -907,13 +995,17 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     <span>Capture for Review</span>
                   </button>
 
-                  {/* Action 3: Request revision */}
+                  {/* Action 3: Request revision. A request is recorded on a design revision; without one there is nothing to send it to. */}
                   <button
                     id="btn-request-revision"
                     className="action-btn revision-btn"
                     onClick={() => setIsRevisionModalOpen(true)}
-                    disabled={actionLoading}
-                    title="Request revision and log structured operator instructions (FR-078)"
+                    disabled={actionLoading || !selectedTask.latestRevisionId}
+                    title={
+                      selectedTask.latestRevisionId
+                        ? 'Request revision and log structured operator instructions (FR-078)'
+                        : 'Not available: this task has no design revision to request changes on yet'
+                    }
                   >
                     <span className="btn-icon" aria-hidden="true">✏️</span>
                     <span>Request Revision</span>
@@ -924,7 +1016,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-approve-captured"
                     className="action-btn approve-btn"
                     onClick={openApprovalModal}
-                    disabled={actionLoading || !selectedTask.latestRevisionId || selectedTask.qaReport?.passed !== true || selectedTask.status === 'COMPLETE'}
+                    disabled={actionLoading || !selectedTask.latestRevisionId || selectedTask.qaReport?.passed !== true || nextAction?.canApprove !== true}
                     title="Record human approval bound to captured revision (FR-041, FR-078)"
                   >
                     <span className="btn-icon" aria-hidden="true">✅</span>
@@ -936,13 +1028,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-deliver-approved"
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
-                    disabled={actionLoading || !selectedTask.latestApproval || selectedTask.status === 'COMPLETE'}
+                    disabled={actionLoading || !selectedTask.latestApproval || nextAction?.primaryButton !== 'deliver'}
                     title="Publish approved files to Google Drive and Google Sheets (FR-046, FR-078)"
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
                     <span>Deliver Approved Files</span>
                   </button>
                 </div>
+                {!selectedTask.latestRevisionId && (
+                  <p className="capture-availability" role="note">
+                    Request Revision and approval need a recorded design revision; this task has none yet.
+                  </p>
+                )}
               </div>
 
               {/* =================================================================== */}
@@ -1062,7 +1159,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
                     onClick={() => setActiveTab('history')}
                   >
-                    📜 History & Audit ({selectedTask.history?.length || 0})
+                    📜 History & Audit ({timelineReading.state === 'known' ? timelineReading.value.length : timelineReading.state === 'loading' ? '…' : '?'})
                   </button>
                 </div>
 
@@ -1186,24 +1283,46 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     </div>
                   )}
 
-                  {/* TAB 4: HISTORY & AUDIT TRAIL */}
+                  {/* TAB 4: HISTORY & AUDIT TRAIL (GET /tasks/:id/timeline) */}
                   {activeTab === 'history' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Task History">
+                      {timelineReading.state === 'loading' && <p style={{ fontSize: 12, color: 'var(--muted)' }}>Reading the task's history…</p>}
+                      {timelineReading.state === 'unknown' && (
+                        <p role="alert" style={{ fontSize: 12 }}>The task's history could not be read: {timelineReading.reason}</p>
+                      )}
+                      {timelineReading.state === 'known' && timelineReading.value.length === 0 && (
+                        <p style={{ fontSize: 12, color: 'var(--muted)' }}>Core has no recorded events for this task.</p>
+                      )}
                       <div className="history-timeline">
-                        {(selectedTask.history || []).map((h, i) => (
-                          <div key={h.id || i} className="timeline-item">
-                            <div className="timeline-marker" />
-                            <div className="timeline-content">
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <strong style={{ fontSize: 13 }}>{h.actor}</strong>
-                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                  {new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
+                        {(timelineReading.state === 'known' ? timelineReading.value : []).map((h, i) => {
+                          const what = h.eventType
+                            ? h.eventType.replace(/[._]/g, ' ')
+                            : h.toStatus
+                            ? `${h.fromStatus || '—'} → ${h.toStatus}`
+                            : 'event';
+                          const data = (h.data && typeof h.data === 'object' ? h.data : {}) as Record<string, unknown>;
+                          const why = h.reason || (typeof data.reason === 'string' ? data.reason : '') || (typeof data.comment === 'string' ? data.comment : '');
+                          const who = h.actor ? h.actor.displayName || [h.actor.type, h.actor.id].filter(Boolean).join(' ') : '';
+                          return (
+                            <div key={h.eventId || i} className="timeline-item">
+                              <div className="timeline-marker" />
+                              <div className="timeline-content">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                  <strong style={{ fontSize: 13 }}>{what}</strong>
+                                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                    {h.occurredAt ? new Date(h.occurredAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'time not recorded'}
+                                  </span>
+                                </div>
+                                {who && <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--muted)' }}>{who}</p>}
+                                {why && (
+                                  <p dir="auto" style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--ink)' }}>
+                                    {why}
+                                  </p>
+                                )}
                               </div>
-                              <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--ink)' }}>{h.summary}</p>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1227,7 +1346,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           <div className="hawa-modal-box">
             <h3 id="modal-rev-title" style={{ marginTop: 0 }}>Request Revision</h3>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-              Provide clear, structured feedback notes. The task will transition back to IN_PROGRESS.
+              {/* The task never went back to IN_PROGRESS, as this used to say (2026-09-24): Core marks it REVISION_REQUESTED. */}
+              Provide clear, structured feedback notes. Core records them on revision v{selectedTask?.latestRevision?.version ?? '?'} and
+              marks the task Changes requested (after repeated requests it may hand the task to a designer instead). Nothing is
+              redesigned automatically, and this revision can no longer be approved: approval opens again once a new revision with
+              the changes is recorded.
             </p>
 
             <textarea
