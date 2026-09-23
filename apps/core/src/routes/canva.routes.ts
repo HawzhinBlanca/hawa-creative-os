@@ -2,11 +2,12 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import type { RouteContext } from './types.js';
 import { CanvaConnectService, CanvaFlowError, type CanvaServiceOptions } from '../services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
+import { withRlsContext } from '@hawa/db';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
   const planner = ctx.db && service ? new CanvaDesignPlanner(ctx.db,service) : null;
-  const protect = (fn: (c: any,s: {tenantId:string;actorId:string},api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
+  const protect = (fn: (c: any,s: {tenantId:string;actorId:string;role?:string},api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
     c.header('Cache-Control','no-store');
     const auth=ctx.verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId || !auth.userId) return ctx.problem(c,401,'Authentication Required','Sign in to Hawa first');
@@ -15,7 +16,9 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     for (const name of ['taskId','operationId','artifactId']) {
       const value=c.req.param(name); if (value && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return ctx.problem(c,422,'Invalid Identifier','Use a valid task or operation identifier');
     }
-    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId},service); }
+    // The role travels with the actor: the service lets an art director or administrator act on
+    // another actor's import or source for the task, and the role never reached it (2026-09-24).
+    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role},service); }
     catch (error) {
       if (error instanceof CanvaFlowError) return ctx.problem(c,error.status,error.code,error.message);
       // Never echo provider bodies, OAuth tokens or signed download URLs.
@@ -58,12 +61,42 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     const result=await api.createDesign(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.width,body.height);
     return c.json(result,result.status==='retrieved'?201:202);
   }));
+  /**
+   * A copy-and-font check retrieved here (the Desk's "Check copy & fonts", or the worker's own) becomes
+   * the draft's latest QC run when the task already has its Desk revision, so capturing again after a
+   * failed or timed-out check unblocks approval; after a revision request it becomes the new revision
+   * (recordCheckedExportQc). Nothing recorded it until 2026-09-24. The evaluator lives in app.ts,
+   * which has loaded by the time a request arrives.
+   */
+  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }) => {
+    if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
+    try {
+      const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../app.js')]);
+      const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
+      // The Desk's view of the task in memory follows, as it does for the worker's report: approval
+      // reads the latest revision from it.
+      const memTask = ctx.tasks.get(taskId);
+      if (recorded.recorded && memTask) {
+        memTask.latestRevisionId = recorded.revisionId;
+        memTask.qaReport = recorded.qc.qaReport;
+        memTask.status = recorded.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
+      }
+      if (recorded.recorded && recorded.revisionCreated) ctx.broadcastEvent('task:transitioned', { taskId, fromStatus: 'REVISION_REQUESTED', toStatus: 'AWAITING_APPROVAL', revisionId: recorded.revisionId });
+    } catch (err) {
+      console.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
+    }
+  };
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{
     const body=await c.req.json().catch(()=>({}));
-    return c.json(await api.startExport(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.format,body.expectedVersion),202);
+    const result=await api.startExport(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.format,body.expectedVersion);
+    await recordCheck(s,c.req.param('taskId'),result);
+    return c.json(result,202);
   }));
-  ctx.registerRoute('post','/tasks/:taskId/canva/exports/:operationId/resume',protect(async(c,s,api)=>
-    c.json(await api.exportStatus(s,c.req.param('taskId'),c.req.param('operationId')))));
+  ctx.registerRoute('post','/tasks/:taskId/canva/exports/:operationId/resume',protect(async(c,s,api)=>{
+    const result=await api.exportStatus(s,c.req.param('taskId'),c.req.param('operationId'));
+    await recordCheck(s,c.req.param('taskId'),result);
+    return c.json(result);
+  }));
   ctx.registerRoute('get','/tasks/:taskId/canva/artifacts/:artifactId',protect(async(c,s,api)=>{
     const file=await api.artifact(s,c.req.param('taskId'),c.req.param('artifactId'));
     c.header('Content-Type',file.format==='png'?'image/png':file.format==='pptx'?'application/vnd.openxmlformats-officedocument.presentationml.presentation':'application/pdf');

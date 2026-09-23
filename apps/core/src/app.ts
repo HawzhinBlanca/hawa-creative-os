@@ -282,6 +282,8 @@ export interface CreateAppOptions {
   enableTelegramPolling?: boolean;
   /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
   enableDraftReminders?: boolean;
+  /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
+  enableCanvaSweeper?: boolean;
   /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
   guidelinesModel?: GuidelinesModel;
   persistDnaToDisk?: boolean;
@@ -2510,11 +2512,41 @@ export function createApp(options?: CreateAppOptions) {
         });
         await telegramBridge?.dispatchOutboundMessage(channelId, existsMsg);
       }
+      // The design's exports and checks are run again, and the draft recorded as the Desk's revision
+      // or its check as a new QC run (canva-task-outcome.ts). Until 2026-09-24 this was the whole
+      // answer, so a draft whose check had timed out, or whose preview Canva had refused once, could
+      // never be approved: the office's re-drive was the only button left and it did nothing.
+      let recheck: import('./services/canva-task-outcome.js').DraftRecheckResult | { error: string } | undefined;
+      if (canvaConnectService && revisionRepo) {
+        const { recheckBoundDraft } = await import('./services/canva-task-outcome.js');
+        try {
+          const done = await recheckBoundDraft(db, { canva: canvaConnectService, revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
+            tenantId, taskId, actorId, designId: existingBinding.canva_design_id, bindingVersion: Number(existingBinding.version),
+            canvaUrl: existingBinding.edit_url, fallbackCopy: taskData.payload?.exactCopy,
+          });
+          recheck = done;
+          const memTask = tasks.get(taskId);
+          if (memTask && done.revisionId) {
+            memTask.latestRevisionId = done.revisionId;
+            if (done.qc) {
+              memTask.qaReport = done.qc.qaReport;
+              if (['AWAITING_APPROVAL', 'CHANGES_REQUESTED', 'OPERATOR_REQUIRED', 'RECEIVED'].includes(memTask.status)) {
+                memTask.status = done.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
+              }
+            }
+          }
+          broadcast('task:transitioned', { taskId, action: 'recheck', revisionId: done.revisionId });
+        } catch (err) {
+          console.error(`[redrive] Task ${taskId}: re-checking bound Canva draft ${existingBinding.canva_design_id} failed:`, err);
+          recheck = { error: String((err as Error)?.message || err).slice(0, 300) };
+        }
+      }
       return {
         ok: true,
         status: 'ALREADY_BOUND',
         designId: existingBinding.canva_design_id,
         canvaUrl: existingBinding.edit_url,
+        ...(recheck ? { recheck } : {}),
       };
     }
 
@@ -2527,14 +2559,25 @@ export function createApp(options?: CreateAppOptions) {
     if (runsPipelineV3(String(taskData.payload?.sourceChannelId || channelId)) || taskData.payload?.designStudio === true) {
       if (!outboxRepo) throw new Error('Durable outbox required for a studio re-drive');
       const queued = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const unfinishedRun = (await sql<any>`SELECT id FROM hawa.design_studio_runs
+        // `stale`: not live by the Desk's own rule (LIVE_RUN), 30 minutes without progress.
+        const unfinishedRun = (await sql<any>`SELECT id, status, updated_at <= now() - interval '30 minutes' AS stale FROM hawa.design_studio_runs
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
             AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')
           LIMIT 1`.execute(trx)).rows[0];
         const redrives = (await sql<any>`SELECT state FROM hawa.outbox_commands
           WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid
             AND command_type = 'task.dispatch' AND payload->>'redriveAttempt' IS NOT NULL`.execute(trx)).rows;
-        if (unfinishedRun || redrives.some((r: any) => r.state === 'pending' || r.state === 'leased')) return null;
+        if ((unfinishedRun && !unfinishedRun.stale) || redrives.some((r: any) => r.state === 'pending' || r.state === 'leased')) return null;
+        // A run nothing has advanced for 30 minutes was given up on (the worker stopped following it,
+        // or a restart cut it off mid-stage): it is abandoned, as the studio's abandon does, and a new
+        // one queued. Until 2026-09-24 such a run counted as in progress for ever, and /redo answered
+        // "still being made" for a design that would never arrive.
+        if (unfinishedRun) {
+          await sql`UPDATE hawa.design_studio_runs
+            SET status = 'abandoned', diagnostic = ${`Abandoned by ${actorId}: no progress at '${unfinishedRun.status}' for 30 minutes; re-driven`}, updated_at = now()
+            WHERE tenant_id = ${tenantId}::uuid AND id = ${unfinishedRun.id}::uuid
+              AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned') AND updated_at <= now() - interval '30 minutes'`.execute(trx);
+        }
         const attempt = redrives.length + 1;
         await outboxRepo.enqueue({
           tenantId,
@@ -10776,6 +10819,32 @@ export function createApp(options?: CreateAppOptions) {
         .catch((err) => console.warn('[draft-reminders] pass failed:', (err as Error)?.message || err));
     setInterval(pass, 15 * 60_000).unref?.();
     setTimeout(pass, 90_000).unref?.();
+  }
+
+  // Canva operations nobody follows any more (an import still settling when the studio stopped
+  // polling, an export the worker ran out of polls for, a call cut off by a restart) are settled
+  // every five minutes, so none blocks its task for good. Nothing ran the sweeper before 2026-09-24.
+  // A check export it retrieves is recorded as the draft's QC run, as a Desk capture is.
+  if (db && canvaConnectService && options?.enableCanvaSweeper) {
+    const sweepDb = db;
+    const sweeper = canvaConnectService;
+    const scope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' };
+    const pass = async () => {
+      try {
+        const swept = await sweeper.sweepStrandedOperations({ tenantId: DEFAULT_TENANT_ID, actorId: SYSTEM_AUTOMATION_USER_ID });
+        if (swept.sweptCount) console.log(`[canva-sweeper] settled ${swept.sweptCount} operation(s):`, JSON.stringify(swept.settled));
+        const { recordCheckedExportQc } = await import('./services/canva-task-outcome.js');
+        const checked = new Set(swept.settled.filter((o) => o.kind === 'export' && o.format === 'pptx' && o.status === 'retrieved').map((o) => o.taskId));
+        for (const taskId of checked) {
+          await withRlsContext(sweepDb, scope, (trx) => recordCheckedExportQc(trx, evaluateCanvaExportQc, { tenantId: DEFAULT_TENANT_ID, taskId }))
+            .catch((err) => console.warn(`[canva-sweeper] task ${taskId}: check not recorded:`, (err as Error)?.message || err));
+        }
+      } catch (err) {
+        console.warn('[canva-sweeper] pass failed:', (err as Error)?.message || err);
+      }
+    };
+    setInterval(pass, 5 * 60_000).unref?.();
+    setTimeout(pass, 120_000).unref?.();
   }
 
   // Autonomous Background Inbound Polling for Telegram Bot in live server mode

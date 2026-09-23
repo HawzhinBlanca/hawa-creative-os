@@ -58,6 +58,19 @@ export class CanvaNotConfiguredError extends Error {
 }
 
 /**
+ * Canva answered with an HTTP error, so the request reached Canva and was refused: nothing was created.
+ * A transport failure (no answer at all) is a plain Error and may have been acted on. Callers tell
+ * the two apart by this class (2026-09-24): a 429 on POST /exports used to be recorded as an
+ * uncertain export that blocked the format for good. `oauthError` is the token endpoint's `error`.
+ */
+export class CanvaHttpError extends Error {
+  constructor(message: string, readonly status: number, readonly oauthError?: string) {
+    super(message);
+    this.name = 'CanvaHttpError';
+  }
+}
+
+/**
  * Authentic Canva Connect REST API client (CV-22, R01, Phase 3).
  * Connects to official Canva Connect Cloud API (https://api.canva.com/rest/v1).
  * Fails closed with typed CANVA_NOT_CONFIGURED if environment credentials are absent.
@@ -238,7 +251,10 @@ export class CanvaConnectClient {
         });
 
         if (!res.ok) {
-              throw new Error(`Canva token refresh failed (HTTP ${res.status})`);
+          // The OAuth error says whether the refresh token itself was refused (invalid_grant).
+          const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+          const oauthError = typeof body?.error === 'string' ? body.error : undefined;
+          throw new CanvaHttpError(`Canva token refresh failed (HTTP ${res.status})`, res.status, oauthError);
         }
 
         const data = this.validateTokens(await res.json());
@@ -344,7 +360,7 @@ export class CanvaConnectClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Canva createDesign failed (HTTP ${res.status})`);
+      throw new CanvaHttpError(`Canva createDesign failed (HTTP ${res.status})`, res.status);
     }
 
     return validateCanvaDesignResponse(await res.json());
@@ -354,7 +370,7 @@ export class CanvaConnectClient {
     const res = await this.readWithRetry(`${this.baseUrl}/designs/${encodeURIComponent(designId)}`);
 
     if (!res.ok) {
-      throw new Error(`Canva getDesign failed (HTTP ${res.status})`);
+      throw new CanvaHttpError(`Canva getDesign failed (HTTP ${res.status})`, res.status);
     }
 
     return validateCanvaDesignResponse(await res.json());
@@ -367,13 +383,13 @@ export class CanvaConnectClient {
       'Import-Metadata': JSON.stringify({ title_base64: Buffer.from(title.slice(0, 50)).toString('base64'),
         mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }),
     }, body: new Uint8Array(bytes) });
-    if (!response.ok) throw new Error(`Canva import failed (HTTP ${response.status})`);
+    if (!response.ok) throw new CanvaHttpError(`Canva import failed (HTTP ${response.status})`, response.status);
     return this.validateImport(await response.json());
   }
 
   public async getImportJob(id: string) {
     const response = await this.readWithRetry(`${this.baseUrl}/imports/${encodeURIComponent(id)}`);
-    if (!response.ok) throw new Error(`Canva import status failed (HTTP ${response.status})`);
+    if (!response.ok) throw new CanvaHttpError(`Canva import status failed (HTTP ${response.status})`, response.status);
     return this.validateImport(await response.json());
   }
 
@@ -401,7 +417,7 @@ export class CanvaConnectClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Canva createExportJob failed (HTTP ${res.status})`);
+      throw new CanvaHttpError(`Canva createExportJob failed (HTTP ${res.status})`, res.status);
     }
 
     return validateCanvaExportJob(await res.json());
@@ -411,7 +427,7 @@ export class CanvaConnectClient {
     const res = await this.readWithRetry(`${this.baseUrl}/exports/${encodeURIComponent(exportId)}`);
 
     if (!res.ok) {
-      throw new Error(`Canva getExportJob failed (HTTP ${res.status})`);
+      throw new CanvaHttpError(`Canva getExportJob failed (HTTP ${res.status})`, res.status);
     }
 
     return validateCanvaExportJob(await res.json());

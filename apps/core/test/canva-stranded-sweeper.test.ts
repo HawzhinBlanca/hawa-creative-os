@@ -189,4 +189,41 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
     expect(res.operationId).not.toBe(priorOpId);
     expect(res.status).toBe('retrieved');
   });
+  it('fails creating and uncertain operations with no Canva job to follow, and leaves recent ones alone (2026-09-24)', async () => {
+    const taskId = randomUUID();
+    const oldImport = randomUUID();
+    const oldExport = randomUUID();
+    const recentImport = randomUUID();
+    const namedDesign = randomUUID();
+    await withRlsContext(db, { tenantId, userId: actorId, role: 'administrator' }, async (trx) => {
+      await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
+        VALUES (${taskId}::uuid, ${tenantId}::uuid, ${clientId}::uuid, 'Stranded uncertain task', 'Brief', 'received', 3, 1, now(), now())`.execute(trx);
+      const op = (id: string, key: string, kind: string, status: string, designId: string | null, metadata: string, age: string) =>
+        sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+          VALUES (${id}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${actorId}, ${key}, 'hash123', ${kind}, ${status}, ${designId},
+            ${kind === 'export' ? 1 : null}, ${metadata}::jsonb, now() - ${age}::interval, now() - ${age}::interval)`.execute(trx);
+      // The answer to POST /imports was lost (long ago, so this sweep reaches it first): nothing to ask Canva about.
+      await op(oldImport, `lost-import-${taskId}`, 'create', 'uncertain', null, '{"method":"pptx_import"}', '3650 days');
+      // Core stopped in the middle of POST /exports: the format would stay blocked for good.
+      await op(oldExport, `lost-export-${taskId}`, 'export', 'creating', 'DA_sweep_export', '{"format":"pptx"}', '3650 days');
+      // Still inside the window: whoever made it may be finishing it.
+      await op(recentImport, `recent-import-${taskId}`, 'create', 'uncertain', null, '{"method":"pptx_import"}', '1 minute');
+      // A creation that names its design needs a person to bind it, not a sweep.
+      await op(namedDesign, `named-create-${taskId}`, 'create', 'uncertain', 'DA_named_design', '{}', '3650 days');
+    });
+
+    const service = new CanvaConnectService(db, options);
+    const sweepRes = await service.sweepStrandedOperations(scope, { maxAgeMinutes: 10 });
+    const statusOf = (id: string) => sweepRes.settled.find((s) => s.id === id)?.status;
+    expect({ oldImport: statusOf(oldImport), oldExport: statusOf(oldExport), recentImport: statusOf(recentImport), namedDesign: statusOf(namedDesign) })
+      .toEqual({ oldImport: 'failed', oldExport: 'failed', recentImport: undefined, namedDesign: undefined });
+
+    const rows = await withRlsContext(db, { tenantId, userId: actorId, role: 'administrator' }, async (trx) =>
+      (await sql<any>`SELECT id, status FROM hawa.canva_remote_operations WHERE task_id = ${taskId}::uuid`.execute(trx)).rows);
+    const stored = Object.fromEntries(rows.map((r: any) => [r.id, r.status]));
+    expect(stored).toEqual({ [oldImport]: 'failed', [oldExport]: 'failed', [recentImport]: 'uncertain', [namedDesign]: 'uncertain' });
+    // Nothing tenant-wide is left for other suites: the two untouched rows are this test's own.
+    await withRlsContext(db, { tenantId, userId: actorId, role: 'administrator' }, (trx) =>
+      sql`UPDATE hawa.canva_remote_operations SET status = 'failed' WHERE task_id = ${taskId}::uuid AND status <> 'failed'`.execute(trx));
+  });
 });

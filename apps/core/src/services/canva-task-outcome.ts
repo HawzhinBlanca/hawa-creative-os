@@ -17,11 +17,9 @@
  *    never dragged back by a late or repeated notification.
  */
 import crypto from 'node:crypto';
-import { sql, TaskRepository, type Kysely, type Database, type TaskState, type CreateRevisionParams } from '@hawa/db';
+import { sql, withRlsContext, TaskRepository, RevisionRepository, type Kysely, type Database, type TaskState, type CreateRevisionParams } from '@hawa/db';
 
 export const DRAFT_READY_STATUSES = new Set(['DRAFT_READY', 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW']);
-/** A Canva design exists, but an automatic check did not pass or could not run. */
-export const DRAFT_NEEDS_CHECK_STATUSES = new Set(['CANVA_CHECK_REQUIRED', 'CANVA_COPY_MISMATCH', 'CANVA_FONT_MISMATCH', 'CANVA_PREVIEW_FAILED']);
 
 /** The states a task is in before its first design outcome. Nothing else is moved by one. */
 const PRE_OUTCOME_STATES = [
@@ -36,9 +34,14 @@ const PRE_OUTCOME_STATES = [
  */
 export type OutcomeState = 'human_review' | 'failed_operator' | 'paused';
 
-/** Whether this outcome left a design a person can review. */
+/**
+ * Whether this outcome left a design a person can review. The worker names the design only once it
+ * is bound to the task, so a design id is a draft whatever the status says. Until 2026-09-24 only a
+ * list of status names counted: a preview export Canva refused once (CANVA_PREVIEW_UNCERTAIN, _STALE,
+ * _SUBMITTED) left a bound design with no Desk revision, and the task with nothing to approve.
+ */
 export function outcomeHasDraft(status: string, designId?: string): boolean {
-  return DRAFT_READY_STATUSES.has(status) || (DRAFT_NEEDS_CHECK_STATUSES.has(status) && Boolean(designId));
+  return DRAFT_READY_STATUSES.has(status) || Boolean(designId);
 }
 
 export interface OutcomeTransition {
@@ -171,8 +174,88 @@ export interface BridgeParams {
 }
 
 export type BridgeResult =
-  | { created: false; reason: 'REVISION_EXISTS' }
+  | { created: false; reason: 'REVISION_EXISTS'; qcRecorded: boolean }
   | { created: true; revisionId: string; qc: CanvaQcEvaluation; transition: OutcomeTransition };
+
+export type ExportQcResult =
+  | { recorded: false; reason: 'NO_REVISION' | 'NO_NEWER_CHECKED_EXPORT' | 'REVISION_REQUESTED' }
+  | { recorded: true; revisionId: string; revisionCreated: boolean; qc: CanvaQcEvaluation };
+
+/**
+ * Records a QC run for the task's current revision from a copy-and-font check (a PPTX export of the
+ * bound design, with its check) retrieved after that revision's latest QC run. The draft's first QC
+ * run is written once, with the revision, so a check that timed out or failed then left approval
+ * blocked for good: nothing wrote another, however the office captured again (2026-09-24). Called
+ * when an export is retrieved, when the worker reports again, and on a re-drive; it writes nothing
+ * when no newer checked export exists, so calling it twice records one run.
+ *
+ * A task whose revision had changes requested (`revision_requested`) cannot approve that revision
+ * again. A check captured through the Canva routes after the request (`rework`: the Desk's capture,
+ * not a sweep, a report or a re-drive) is the changed design: it is recorded as a new revision, with
+ * its QC run, and the task goes back to review. Nothing recorded one until 2026-09-24, so a Desk
+ * "Request Revision" left the task unapprovable for good.
+ */
+export async function recordCheckedExportQc(
+  trx: Kysely<Database>,
+  evaluateQc: BridgeDeps['evaluateQc'],
+  p: { tenantId: string; taskId: string; fallbackCopy?: string[]; actorId?: string | null; rework?: boolean }
+): Promise<ExportQcResult> {
+  const task = await new TaskRepository(trx).findById(p.taskId, p.tenantId, trx);
+  let revisionId = task?.current_design_revision_id;
+  if (!task || !revisionId) return { recorded: false, reason: 'NO_REVISION' };
+  if (task.state === 'revision_requested' && !p.rework) return { recorded: false, reason: 'REVISION_REQUESTED' };
+  // Changes requested: only a check made after the request (the task's last update) shows them.
+  const reworkedSince = task.state === 'revision_requested' ? task.updated_at : null;
+  const exportRow = (await sql<ExportRow>`SELECT b.sha256, b.format, b.content, b.content_check FROM hawa.canva_export_bytes b
+    JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+    JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
+      AND g.canva_design_id = o.design_id AND g.version = o.binding_version
+    WHERE b.tenant_id = ${p.tenantId}::uuid AND b.task_id = ${p.taskId}::uuid AND b.format = 'pptx' AND b.content_check IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM hawa.qc_runs q WHERE q.tenant_id = b.tenant_id AND q.design_revision_id = ${revisionId}::uuid AND q.started_at >= b.created_at)
+      AND (${reworkedSince}::timestamptz IS NULL OR b.created_at > ${reworkedSince}::timestamptz)
+    ORDER BY b.created_at DESC LIMIT 1`.execute(trx)).rows[0];
+  if (!exportRow) return { recorded: false, reason: 'NO_NEWER_CHECKED_EXPORT' };
+  const copy = (await sql<{ copy: string[] | null }>`SELECT result->'manifest'->'copy' AS copy FROM hawa.canva_design_plans
+    WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
+    ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.copy;
+  const qc = evaluateQc(exportRow, copy || p.fallbackCopy);
+  if (reworkedSince) {
+    // The move is recorded as an event first, as the bridge does; createRevision then points the
+    // task at the new revision. The new revision keeps the changed revision's document.
+    const prior = (await sql<{ neutral_manifest: Record<string, unknown> | null }>`SELECT neutral_manifest FROM hawa.design_revisions
+      WHERE tenant_id = ${p.tenantId}::uuid AND id = ${revisionId}::uuid`.execute(trx)).rows[0]?.neutral_manifest;
+    await new TaskRepository(trx).transitionState({
+      taskId: p.taskId, tenantId: p.tenantId, expectedVersion: Number(task.version), fromState: 'revision_requested', toState: 'human_review',
+      actorType: 'workflow', actorId: p.actorId || null,
+      reason: 'The requested changes were captured from Canva with a copy-and-font check; the capture is the revision to review.',
+      data: { changedRevisionId: revisionId, exportSha256: exportRow.sha256 },
+    }, trx);
+    const newId = crypto.randomUUID();
+    const revision = await new RevisionRepository(trx).createRevision({
+      id: newId, tenantId: p.tenantId, taskId: p.taskId, studio: 'canva',
+      sourceStorageKey: `tasks/${p.taskId}/revisions/${newId}/source.json`, sourceSha256: exportRow.sha256,
+      neutralManifest: { ...(prior || {}), revisedFrom: revisionId },
+      authorType: p.actorId ? 'user' : 'workflow', authorId: p.actorId || 'canva_capture', status: 'review',
+    }, trx);
+    revisionId = revision?.id || newId;
+  }
+  const profileId = await resolveQcProfileId(trx, p.tenantId);
+  // A revision's runs under one profile are numbered (UNIQUE design_revision_id, qc_profile_id, attempt).
+  const attempt = Number((await sql<{ n: number | string | null }>`SELECT max(attempt) AS n FROM hawa.qc_runs
+    WHERE tenant_id = ${p.tenantId}::uuid AND design_revision_id = ${revisionId}::uuid AND qc_profile_id = ${profileId}::uuid`.execute(trx)).rows[0]?.n || 0) + 1;
+  await trx.insertInto('qc_runs').values({
+    tenant_id: p.tenantId,
+    task_id: p.taskId,
+    design_revision_id: revisionId,
+    qc_profile_id: profileId,
+    attempt,
+    status: qc.status as 'passed' | 'failed',
+    critical_pass: qc.criticalPass,
+    report: qc.qaReport,
+    report_sha256: crypto.createHash('sha256').update(JSON.stringify(qc.qaReport)).digest('hex'),
+  }).execute();
+  return { recorded: true, revisionId, revisionCreated: Boolean(reworkedSince), qc };
+}
 
 /**
  * Records a Canva draft as the task's Desk revision, with its QC run, and moves the task to review
@@ -182,7 +265,11 @@ export type BridgeResult =
 export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: BridgeDeps, p: BridgeParams): Promise<BridgeResult> {
   const task = await new TaskRepository(trx).findById(p.taskId, p.tenantId, trx);
   if (!task) throw new Error(`Task ${p.taskId} is not visible in tenant ${p.tenantId}; the Canva draft cannot be recorded`);
-  if (task.current_design_revision_id) return { created: false, reason: 'REVISION_EXISTS' };
+  if (task.current_design_revision_id) {
+    // The draft is already the Desk's revision. A check captured since its last QC run is recorded now.
+    const recheck = await recordCheckedExportQc(trx, deps.evaluateQc, { tenantId: p.tenantId, taskId: p.taskId, fallbackCopy: p.fallbackCopy });
+    return { created: false, reason: 'REVISION_EXISTS', qcRecorded: recheck.recorded };
+  }
 
   const manifest = (await sql<{ manifest: ({ nodes?: unknown[]; copy?: string[] } & Record<string, unknown>) | null }>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
@@ -246,4 +333,99 @@ export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: Brid
   }).execute();
 
   return { created: true, revisionId: finalRevisionId, qc, transition };
+}
+
+type ExportFormat = 'png' | 'pptx';
+type CanvaScope = { tenantId: string; actorId: string };
+
+export interface DraftRecheckDeps extends BridgeDeps {
+  canva: {
+    startExport(s: CanvaScope, taskId: string, key: string, format: ExportFormat, expectedVersion: number): Promise<{ operationId?: string; status: string }>;
+    exportStatus(s: CanvaScope, taskId: string, id: string): Promise<{ status: string }>;
+  };
+  /** Between two reads of an export Canva is still making. */
+  wait?: (ms: number) => Promise<void>;
+}
+
+export interface DraftRecheckResult {
+  /** Each format's export as it ended here: retrieved, submitted (left to the sweeper), failed, or the refusal. */
+  exports: Record<ExportFormat, string>;
+  revisionId?: string;
+  revisionCreated: boolean;
+  qc?: CanvaQcEvaluation;
+}
+
+/**
+ * A re-drive of a task whose design is already in Canva runs that draft's exports and checks again
+ * (the preview PNG and the copy-and-font PPTX), then records the draft as the Desk's revision if it is
+ * not one yet, or the new check as its QC run. Nothing is designed again. It answered ALREADY_BOUND
+ * and did nothing until 2026-09-24, which left a draft whose automatic check had timed out, or whose
+ * preview Canva had refused once, with no way to be approved.
+ *
+ * The exports are made with the Canva connection that made the design, and a pending export of a
+ * format (the worker's, which ran out of polls) is followed rather than refused as CANVA_EXPORT_PENDING.
+ */
+export async function recheckBoundDraft(
+  db: Kysely<Database>,
+  deps: DraftRecheckDeps,
+  p: { tenantId: string; taskId: string; actorId: string; designId: string; bindingVersion: number; canvaUrl?: string; fallbackCopy?: string[]; polls?: number }
+): Promise<DraftRecheckResult> {
+  const scope = { tenantId: p.tenantId, userId: p.actorId, role: 'operator' };
+  const wait = deps.wait || ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const owner = (await withRlsContext(db, scope, async (trx) =>
+    (await sql<{ actor_id: string }>`SELECT actor_id FROM hawa.canva_remote_operations
+      WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND kind = 'create' AND design_id = ${p.designId}
+      ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.actor_id)) || p.actorId;
+  const canvaScope = { tenantId: p.tenantId, actorId: owner };
+
+  const rerun = async (format: ExportFormat): Promise<string> => {
+    let res: { operationId?: string; status: string };
+    try {
+      res = await deps.canva.startExport(canvaScope, p.taskId, `recheck-${format}-${crypto.randomUUID()}`, format, p.bindingVersion);
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'CANVA_EXPORT_PENDING') return `refused: ${(err as { code?: string })?.code || (err as Error)?.message || err}`;
+      const pending = await withRlsContext(db, scope, async (trx) =>
+        (await sql<{ id: string }>`SELECT id FROM hawa.canva_remote_operations
+          WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND kind = 'export' AND design_id = ${p.designId}
+            AND metadata->>'format' = ${format} AND status = 'submitted' AND actor_id = ${owner}
+          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.id);
+      if (!pending) return 'refused: CANVA_EXPORT_PENDING';
+      res = { operationId: pending, status: 'submitted' };
+    }
+    try {
+      for (let n = 0; n < (p.polls ?? 8) && res.status === 'submitted' && res.operationId; n++) {
+        await wait(2000);
+        res = { ...res, ...(await deps.canva.exportStatus(canvaScope, p.taskId, res.operationId)) };
+      }
+    } catch (err) {
+      return `refused: ${(err as { code?: string })?.code || (err as Error)?.message || err}`;
+    }
+    return res.status;
+  };
+  const [png, pptx] = await Promise.all([rerun('png'), rerun('pptx')]);
+
+  return withRlsContext(db, scope, async (trx) => {
+    const task = await new TaskRepository(trx).findById(p.taskId, p.tenantId, trx);
+    if (!task) throw new Error(`Task ${p.taskId} is not visible in tenant ${p.tenantId}; its draft cannot be re-checked`);
+    if (task.current_design_revision_id) {
+      const recorded = await recordCheckedExportQc(trx, deps.evaluateQc, { tenantId: p.tenantId, taskId: p.taskId, fallbackCopy: p.fallbackCopy, actorId: p.actorId });
+      return recorded.recorded
+        ? { exports: { png, pptx }, revisionId: recorded.revisionId, revisionCreated: recorded.revisionCreated, qc: recorded.qc }
+        : { exports: { png, pptx }, revisionId: task.current_design_revision_id, revisionCreated: false };
+    }
+    // No revision yet: the draft becomes one, its QC run from whatever check the bound design has.
+    const checked = (await sql<{ id: string }>`SELECT b.id FROM hawa.canva_export_bytes b
+      JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+      WHERE b.tenant_id = ${p.tenantId}::uuid AND b.task_id = ${p.taskId}::uuid AND b.format = 'pptx' AND b.content_check IS NOT NULL
+        AND o.design_id = ${p.designId} AND o.binding_version = ${p.bindingVersion}
+      LIMIT 1`.execute(trx)).rows[0];
+    const status = checked ? 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' : 'CANVA_CHECK_REQUIRED';
+    const bridged = await bridgeCanvaDraftRevision(trx, deps, {
+      tenantId: p.tenantId, taskId: p.taskId, actorId: p.actorId, status, designId: p.designId, canvaUrl: p.canvaUrl, fallbackCopy: p.fallbackCopy,
+      reason: `Canva draft ${p.designId} re-checked by a re-drive (${status}); awaiting visual review.`,
+    });
+    return bridged.created
+      ? { exports: { png, pptx }, revisionId: bridged.revisionId, revisionCreated: true, qc: bridged.qc }
+      : { exports: { png, pptx }, revisionCreated: false };
+  });
 }
