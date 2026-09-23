@@ -477,11 +477,13 @@ export class DesignStudioService {
       }
 
       // 3. Check for existing run by request_key OR in-flight active run for this task.
-      // A task keeps at most one unfinished run however old (unique index design_studio_one_active_run):
-      // it is resumed or abandoned, never silently replaced.
+      // A task keeps at most one unfinished run (unique index design_studio_one_active_run): it is
+      // resumed or abandoned, never silently replaced. `stale`: the run has not moved for as long as
+      // the Desk and /redo count a run as live (LIVE_RUN in app.ts).
+      const staleMinutes = this.options.staleRunMinutes ?? 30;
       const prior = (
-        await sql<any>`SELECT * FROM hawa.design_studio_runs 
-        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid 
+        await sql<any>`SELECT *, updated_at <= now() - make_interval(mins => ${staleMinutes}) AS stale FROM hawa.design_studio_runs
+        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid
           AND (request_key=${key} OR status NOT IN ('transferred', 'degraded', 'failed', 'abandoned'))
         ORDER BY created_at DESC LIMIT 1`.execute(db)
       ).rows[0];
@@ -495,11 +497,20 @@ export class DesignStudioService {
         }
 
         // Different key, but an active run is in flight
-        throw new CanvaFlowError(
-          409,
-          'STUDIO_RUN_IN_PROGRESS',
-          'A studio run is already in progress for this task. Resume or abandon it before starting another.'
-        );
+        if (!prior.stale) {
+          throw new CanvaFlowError(
+            409,
+            'STUDIO_RUN_IN_PROGRESS',
+            'A studio run is already in progress for this task. Resume or abandon it before starting another.'
+          );
+        }
+        // A run nothing has advanced for that long was given up on (the worker stopped following it,
+        // or a restart cut it off mid-stage). It is abandoned, as abandon() does, and the new run
+        // starts. It refused every new run for ever until 2026-09-24, so /redo promised a design that
+        // never came.
+        await this.repo.updateRunStatus(prior.id, s.tenantId, 'abandoned', {
+          diagnostic: `Abandoned by ${s.actorId}: no progress at '${prior.status}' for ${staleMinutes} minutes; a new run was requested`,
+        }, db);
       }
 
       // 4. Verify task is not already bound to Canva
@@ -513,7 +524,6 @@ export class DesignStudioService {
       // 5. Concurrency check: max 2 active studio runs per tenant.
       // A whole run takes minutes and writes on every stage. One left unadvanced (a Desk run nobody
       // resumed, a run cut off by a crash) stops holding a tenant slot, so it cannot block other tasks.
-      const staleMinutes = this.options.staleRunMinutes ?? 30;
       const activeRuns = (
         await sql<any>`SELECT count(*) AS n FROM hawa.design_studio_runs 
         WHERE tenant_id=${s.tenantId}::uuid AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')
@@ -857,15 +867,20 @@ export class DesignStudioService {
           await onSpendUpdate(cost);
           return result;
         } catch (err: any) {
+          // A reply cut off at the token cap or not JSON was answered and billed: the error carries
+          // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
+          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
+            responseId: err?.responseId,
             inputTokens: 0,
             outputTokens: 0,
-            usdEstimate: 0,
+            usdEstimate: billedUsd,
             status: 'error',
             errorCode: err.message || 'CALL_FAILED',
           });
+          if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
         }
       },
@@ -909,15 +924,19 @@ export class DesignStudioService {
           await onSpendUpdate(cost);
           return result;
         } catch (err: any) {
+          // Billed failures carry their cost, as in completeJson above.
+          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
+            responseId: err?.responseId,
             inputTokens: 0,
             outputTokens: 0,
-            usdEstimate: 0,
+            usdEstimate: billedUsd,
             status: 'error',
             errorCode: err.message || 'CALL_FAILED',
           });
+          if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
         }
       },
@@ -1900,77 +1919,97 @@ export class DesignStudioService {
         }
 
         case 'transferring': {
-          const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
-          const activeRows = candidateRows.filter(
-            (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+          // A transfer resumed after Canva was slow, or after a restart, continues with its own plan and
+          // its own import. Until 2026-09-24 every attempt rendered a new deck and imported it under a
+          // new key, which Canva Connect refused (409 CANVA_CREATE_CONFLICT) while the first import was
+          // still settling, and a second attempt's plan row could not be written at all.
+          const planKey = 'studio-' + run.request_key;
+          const ownPlan = await this.tx(s, async (db) =>
+            (await sql<{ id: string; source_content: Buffer; source_sha256: string; result: string | { manifest?: Record<string, unknown> } | null }>`SELECT id, source_content, source_sha256, result FROM hawa.canva_design_plans
+              WHERE tenant_id=${s.tenantId}::uuid AND task_id=${run.task_id}::uuid AND request_key=${planKey} AND status='planned'`.execute(db)).rows[0]
           );
-          const winnerRow = activeRows.find((r) => r.id === run.winner_candidate_id) || activeRows[0];
-          if (!winnerRow) {
-            return this.executeRung4Fallback(s, run, 'No valid candidate found for transfer stage');
-          }
-          const layouts = (winnerRow.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
-
-          const winnerState: CandidateState = {
-            id: winnerRow.id,
-            ordinal: winnerRow.ordinal,
-            concept: typeof winnerRow.concept === 'string' ? JSON.parse(winnerRow.concept) : winnerRow.concept,
-            layouts,
-            currentLayout: layouts[layouts.length - 1],
-            metrics: typeof winnerRow.metrics === 'string' ? JSON.parse(winnerRow.metrics) : winnerRow.metrics,
-            previewPng: winnerRow.preview_png ? Buffer.from(winnerRow.preview_png) : undefined,
-            compositePng: winnerRow.composite_png ? Buffer.from(winnerRow.composite_png) : undefined,
-            artPng: winnerRow.art_png ? Buffer.from(winnerRow.art_png) : undefined,
-            critiques: [],
-            status: 'winner',
-          };
-
-          const transferResult = await runTransferStage(ctx, winnerState);
-
-          // Hard QA verification on v2 PPTX bytes
-          const pptxCheck = checkCanvaPptx(
-            new Uint8Array(transferResult.pptxBytes),
-            ctx.copyBlocks.map((b) => b.text),
-            ctx.latinFont || 'Verdana',
-            {
-              documentKind: (ctx as any).documentKind || 'design_piece',
-              scriptFonts: { arabic: ctx.arabicFont || 'Noto Sans Arabic' },
+          let planId: string;
+          let source: { bytes: Buffer; sha256: string; manifest: Record<string, unknown> };
+          if (ownPlan) {
+            const result: { manifest?: Record<string, unknown> } | null = typeof ownPlan.result === 'string' ? JSON.parse(ownPlan.result) : ownPlan.result;
+            planId = ownPlan.id;
+            source = { bytes: Buffer.from(ownPlan.source_content), sha256: ownPlan.source_sha256, manifest: result?.manifest || {} };
+          } else {
+            const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
+            const activeRows = candidateRows.filter(
+              (row) => row.status !== 'eliminated' && Array.isArray(row.layouts) && row.layouts.length > 0
+            );
+            const winnerRow = activeRows.find((r) => r.id === run.winner_candidate_id) || activeRows[0];
+            if (!winnerRow) {
+              return this.executeRung4Fallback(s, run, 'No valid candidate found for transfer stage');
             }
-          );
+            const layouts = (winnerRow.layouts as any[]).map((l) => (typeof l === 'string' ? JSON.parse(l) : l));
 
-          if (!pptxCheck.copyPass) {
-            throw new Error('PPTX_TRANSFER_CORRUPTED: copyPass failed on generated PPTX');
+            const winnerState: CandidateState = {
+              id: winnerRow.id,
+              ordinal: winnerRow.ordinal,
+              concept: typeof winnerRow.concept === 'string' ? JSON.parse(winnerRow.concept) : winnerRow.concept,
+              layouts,
+              currentLayout: layouts[layouts.length - 1],
+              metrics: typeof winnerRow.metrics === 'string' ? JSON.parse(winnerRow.metrics) : winnerRow.metrics,
+              previewPng: winnerRow.preview_png ? Buffer.from(winnerRow.preview_png) : undefined,
+              compositePng: winnerRow.composite_png ? Buffer.from(winnerRow.composite_png) : undefined,
+              artPng: winnerRow.art_png ? Buffer.from(winnerRow.art_png) : undefined,
+              critiques: [],
+              status: 'winner',
+            };
+
+            const transferResult = await runTransferStage(ctx, winnerState);
+
+            // Hard QA verification on v2 PPTX bytes
+            const pptxCheck = checkCanvaPptx(
+              new Uint8Array(transferResult.pptxBytes),
+              ctx.copyBlocks.map((b) => b.text),
+              ctx.latinFont || 'Verdana',
+              {
+                documentKind: (ctx as any).documentKind || 'design_piece',
+                scriptFonts: { arabic: ctx.arabicFont || 'Noto Sans Arabic' },
+              }
+            );
+
+            if (!pptxCheck.copyPass) {
+              throw new Error('PPTX_TRANSFER_CORRUPTED: copyPass failed on generated PPTX');
+            }
+
+            // Save plan row in hawa.canva_design_plans
+            planId = randomUUID();
+            const evidence = {
+              manifest: transferResult.manifest,
+              receipt: {
+                source: 'design_studio_v2',
+                runId: run.id,
+                winnerCandidateId: winnerRow.id,
+                completedAt: new Date().toISOString(),
+              },
+            };
+
+            await this.tx(s, async (db) => {
+              // An earlier studio run's plan for this task (that run has ended: a task has one unfinished
+              // run) is retired, so this run's plan can be written (canva_one_active_plan).
+              await sql`UPDATE hawa.canva_design_plans SET status='abandoned', diagnostic=${`Superseded by studio run ${run.id}`}, updated_at=now()
+                WHERE tenant_id=${s.tenantId}::uuid AND task_id=${run.task_id}::uuid AND status IN ('planned','uncertain')
+                  AND request_key LIKE 'studio-%' AND request_key <> ${planKey}`.execute(db);
+              await sql`INSERT INTO hawa.canva_design_plans(
+                id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request,
+                status, result, source_content, source_sha256
+              ) VALUES(
+                ${planId}::uuid, ${s.tenantId}::uuid, ${run.task_id}::uuid, ${run.client_id}::uuid, ${s.actorId},
+                ${planKey}, ${run.request_hash}, ${JSON.stringify(transferResult.plan)}::jsonb,
+                'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}
+              )`.execute(db);
+            });
+            source = { bytes: transferResult.pptxBytes, sha256: transferResult.sha256, manifest: transferResult.manifest };
           }
-
-          // Save plan row in hawa.canva_design_plans
-          const planId = randomUUID();
-          const evidence = {
-            manifest: transferResult.manifest,
-            receipt: {
-              source: 'design_studio_v2',
-              runId: run.id,
-              winnerCandidateId: winnerRow.id,
-              completedAt: new Date().toISOString(),
-            },
-          };
-
-          await this.tx(s, async (db) => {
-            await sql`INSERT INTO hawa.canva_design_plans(
-              id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request,
-              status, result, source_content, source_sha256
-            ) VALUES(
-              ${planId}::uuid, ${s.tenantId}::uuid, ${run.task_id}::uuid, ${run.client_id}::uuid, ${s.actorId},
-              ${'studio-' + run.request_key}, ${run.request_hash}, ${JSON.stringify(transferResult.plan)}::jsonb,
-              'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}
-            )`.execute(db);
-          });
 
           let designId: string | undefined;
           if (this.canva) {
-            let imported = await this.canva.importEditableDesign(s, run.task_id, 'studio-' + planId, {
-              bytes: transferResult.pptxBytes,
-              sha256: transferResult.sha256,
-              manifest: transferResult.manifest as any,
-            });
+            // Keyed by the run, so every attempt of this run's transfer follows the same import.
+            let imported = await this.canva.importEditableDesign(s, run.task_id, 'studio-' + run.id, source);
             const opId = (imported as any).operationId;
             let attempts = 0;
             while (
@@ -1985,6 +2024,21 @@ export class DesignStudioService {
               imported = await this.canva.resumeImport(s, run.task_id, opId);
             }
             if (imported.status !== 'retrieved' && !(imported as any).designId) {
+              if (imported.status === 'submitted') {
+                // Canva is still importing: not a failure. The run stays at this stage and the next
+                // resume follows the same import. It used to fail the run here, and the requester was
+                // told the design failed while Canva was still making it.
+                stages.transfer = { planId, importOperationId: opId, completed: false };
+                await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', { stages, budget });
+                return {
+                  runId,
+                  status: 'transferring',
+                  stage: 'transfer',
+                  planId,
+                  spentUsd: budget.spentUsd,
+                  message: 'Canva is still importing the editable design; resume to follow it.',
+                };
+              }
               throw new Error(
                 `Canva PPTX import did not settle: status=${imported.status} ${'message' in imported ? (imported as any).message : ''}`
               );
@@ -2504,9 +2558,19 @@ export class DesignStudioService {
     );
 
     const budget = typeof run.budget === 'string' ? JSON.parse(run.budget) : (run.budget || { maxUsd: 5.0, maxCalls: 30, spentUsd: 0, calls: 0 });
+    // The parity call's cost reaches the run's stored budget, as every stage's does (doResume's
+    // onSpendUpdate). It was added to this in-memory copy only until 2026-09-24, and counted as a
+    // second call on top of the ledger wrapper's own count. The budget alone is written: the run's
+    // status and liveness (updated_at) are not the parity check's to change. A completed run is
+    // immutable (trigger immutable_design_studio_run), so a transferred run's parity cost stays on the
+    // calls ledger (design_studio_calls), which the Desk's total adds up.
     const stageCtx = this.createStageContext(s, run, 'parity', budget, async (cost) => {
       budget.spentUsd += cost;
-      budget.calls += 1;
+      await this.tx(s, (db) =>
+        sql`UPDATE hawa.design_studio_runs SET budget = ${JSON.stringify(budget)}::jsonb
+          WHERE tenant_id = ${s.tenantId}::uuid AND id = ${runId}::uuid
+            AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')`.execute(db)
+      );
     });
     const parityResult = await runParityStage(
       stageCtx,

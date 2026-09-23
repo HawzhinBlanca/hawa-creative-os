@@ -1,7 +1,7 @@
 import { checkCanvaPptx } from '@hawa/qa';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql, withRlsContext, CanvaBindingRepository, type Database, type Kysely } from '@hawa/db';
-import { CanvaConnectClient, CanvaCapturePipeline } from '@hawa/integrations';
+import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError } from '@hawa/integrations';
 
 type Scope = { tenantId: string; actorId: string; role?: string };
 export class CanvaFlowError extends Error {
@@ -9,6 +9,27 @@ export class CanvaFlowError extends Error {
 }
 const fail = (status: number, code: string, message: string): never => { throw new CanvaFlowError(status, code, message); };
 const hash = (v: string | Buffer) => createHash('sha256').update(v).digest('hex');
+/**
+ * The roles that act on another actor's Canva work for the same task: the studio's resume and abandon
+ * allow the same two. The import override checked for 'admin', a role no principal has (2026-09-24).
+ */
+const OVERRIDE_ROLES = ['administrator', 'art_director'];
+const overrides = (s: Scope) => OVERRIDE_ROLES.includes(s.role || '');
+/** Network errors raised before a connection to Canva existed: the request never left. */
+const PRE_SEND_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
+const notSent = (err: unknown) => {
+  const code = (err as { cause?: { code?: unknown } } | null)?.cause?.code;
+  return typeof code === 'string' && PRE_SEND_CODES.has(code);
+};
+/**
+ * A failed create call that certainly created nothing: Canva answered with an error, or the request
+ * never left. Only a loss after the request was sent leaves the outcome unknown ('uncertain'). A 429
+ * on POST /exports was recorded as uncertain and then blocked every later export of the format with
+ * CANVA_EXPORT_PENDING (2026-09-24).
+ */
+const createdNothing = (err: unknown) => err instanceof CanvaHttpError || notSent(err);
+/** A Canva connection row as the token refresh reads it. */
+type ConnectionRow = { status: string; generation: string; encrypted_tokens: string; expires_at: Date; claimedRefresh?: boolean; refresh_abandoned?: boolean };
 export class CanvaTokenCipher {
   private key: Buffer;
   constructor(hex: string) {
@@ -124,7 +145,7 @@ export class CanvaConnectService {
   }
   async authorizedClient(s: Scope): Promise<CanvaConnectClient> {
     if (!this.configuration().configured) fail(503,'CANVA_SETUP_REQUIRED','Configure and authorize Canva in Settings');
-    const row = await this.tx(s, async db => {
+    let row = await this.tx(s, async db => {
       const r = (await sql<any>`SELECT * FROM hawa.canva_connections WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId} FOR UPDATE`.execute(db)).rows[0];
       if (!r || r.status !== 'active') return r;
       if (new Date(r.expires_at).getTime() <= Date.now()+60000) {
@@ -134,20 +155,72 @@ export class CanvaConnectService {
       }
       return r;
     });
+    // Another call is rotating the token: this one waits for it and uses the new token. It was
+    // refused with 409 CANVA_RECONNECT_REQUIRED, which the worker treats as final, whenever two
+    // designs reached Canva during the same refresh (2026-09-24).
+    if (row?.status === 'refreshing') {
+      row = await this.awaitRefresh(s);
+      // A refresh that ended without a new token (Canva was unavailable) leaves this caller nothing to use yet.
+      if (row?.status === 'active' && new Date(row.expires_at).getTime() <= Date.now()+60000) fail(503,'CANVA_TEMPORARILY_UNAVAILABLE','Canva could not refresh the connection just now; retry shortly');
+    }
     if (!row || row.status !== 'active') fail(409,'CANVA_RECONNECT_REQUIRED','Connect Canva; a missing or uncertain token rotation cannot be replayed');
     const tokens = this.cipher().open(row.encrypted_tokens,this.aad(s));
     if (!row.claimedRefresh) return this.client(tokens.access_token);
+    const release = (status: 'active' | 'reconnect_required') => this.tx(s, db => sql`UPDATE hawa.canva_connections SET status=${status},updated_at=now()
+      WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId} AND generation=${row.generation}::uuid AND status='refreshing'`.execute(db));
+    let fresh: Awaited<ReturnType<CanvaConnectClient['refreshAccessToken']>>;
     try {
-      const fresh = await this.client(undefined,tokens.refresh_token).refreshAccessToken();
+      fresh = await this.client(undefined,tokens.refresh_token).refreshAccessToken();
+    } catch (err) {
+      // Canva refused without taking the refresh token (a rate limit, an outage), or the request never
+      // left: the connection is as good as before, so it stays active and the caller may retry. Only a
+      // refused grant, or a loss after the request was sent (Canva may have rotated the token and the
+      // answer is gone), needs a person to reconnect. Every failure did until 2026-09-24, a Canva 503
+      // on the token endpoint included.
+      const status = err instanceof CanvaHttpError ? err.status : undefined;
+      const grantRefused = err instanceof CanvaHttpError && err.oauthError === 'invalid_grant';
+      if (!grantRefused && (status !== undefined || notSent(err))) {
+        await release('active');
+        if (status === undefined || status === 429 || status >= 500) fail(503,'CANVA_TEMPORARILY_UNAVAILABLE','Canva could not refresh the connection just now; retry shortly');
+        fail(502,'CANVA_TOKEN_REFRESH_REFUSED',`Canva refused the token refresh (HTTP ${status}); check the Canva integration settings`);
+      }
+      await release('reconnect_required');
+      return fail(409,'CANVA_RECONNECT_REQUIRED','Token rotation could not be confirmed; reconnect Canva');
+    }
+    try {
+      // Canva answered, so the old refresh token is spent: without the rotated one, or without saving
+      // it, the connection cannot be used again.
       if (!fresh.refresh_token) throw new Error('Missing rotated refresh token');
       const count = await this.tx(s, async db => (await sql`UPDATE hawa.canva_connections SET encrypted_tokens=${this.cipher().seal(fresh,this.aad(s))},expires_at=${new Date(Date.now()+fresh.expires_in*1000)},status='active',updated_at=now()
         WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId} AND generation=${row.generation}::uuid AND status='refreshing'`.execute(db)).numAffectedRows);
       if (count !== 1n) fail(409,'CANVA_CONNECTION_CHANGED','Canva connection changed during refresh; retry with the current connection');
       return this.client(fresh.access_token);
     } catch {
-      await this.tx(s, db => sql`UPDATE hawa.canva_connections SET status='reconnect_required',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId} AND generation=${row.generation}::uuid AND status='refreshing'`.execute(db));
+      await release('reconnect_required');
       return fail(409,'CANVA_RECONNECT_REQUIRED','Token rotation could not be confirmed; reconnect Canva');
     }
+  }
+  /**
+   * The connection once another call's token refresh has finished. The refresh request is limited to
+   * 15 s, so a claim still open after 20 s is slow; one untouched for two minutes belongs to a process
+   * that died during the refresh, and whether Canva rotated the token is unknown: it needs a reconnect.
+   */
+  private async awaitRefresh(s: Scope): Promise<ConnectionRow | undefined> {
+    const read = () => this.tx(s, async db => (await sql<ConnectionRow>`SELECT *, (status='refreshing' AND updated_at < now() - interval '2 minutes') AS refresh_abandoned
+      FROM hawa.canva_connections WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
+    const deadline = Date.now() + 20000;
+    let row = await read();
+    while (row?.status === 'refreshing' && !row.refresh_abandoned && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      row = await read();
+    }
+    if (row?.status !== 'refreshing') return row;
+    if (row.refresh_abandoned) {
+      await this.tx(s, db => sql`UPDATE hawa.canva_connections SET status='reconnect_required',updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND actor_id=${s.actorId} AND generation=${row.generation}::uuid AND status='refreshing'`.execute(db));
+      return { ...row, status: 'reconnect_required' };
+    }
+    return fail(503,'CANVA_TOKEN_REFRESHING','The Canva connection is being refreshed; retry shortly');
   }
   async binding(s: Scope, taskId: string) {
     return this.tx(s, async db => {
@@ -232,9 +305,21 @@ export class CanvaConnectService {
     const claimed=await this.tx(s,async db=>{
       const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');
+      // This key's own operation, whatever became of it: a failed one is reported, never sent again
+      // under the same key (the key is unique, and a second INSERT failed with a database error).
+      const own=(await sql<{ id: string; kind: string; request_hash: string; actor_id: string; metadata: { method?: string } | null }>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0];
+      if(own){
+        if(own.kind!=='create'||own.request_hash!==requestHash||own.actor_id!==s.actorId||own.metadata?.method!=='pptx_import')fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to another request');
+        return {id:own.id,created:false};
+      }
       const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' AND status != 'failed' LIMIT 1`.execute(db)).rows[0];
       if(prior){
-        if(prior.request_key!==key||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A different creation exists. Inspect it instead of making another document');
+        // The same document from the same actor under another key (a studio transfer retried after a
+        // restart, or re-driven) is the same import: while Canva has a job for it, it is followed, never
+        // sent a second time. Refused with 409 CANVA_CREATE_CONFLICT until 2026-09-24, which stranded
+        // the task while the first import was still settling. One with no job to follow (creating,
+        // uncertain) is still refused, until the sweeper settles it.
+        if(!prior.remote_job_id||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A different creation exists. Inspect it instead of making another document');
         return {id:prior.id,created:false};
       }
       if(await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId))fail(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design');
@@ -249,22 +334,33 @@ export class CanvaConnectService {
     try {
       const result=await client.createImportJob(source.bytes,task.title);
       await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET remote_job_id=${result.job.id},status='submitted',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
-    } catch {
+    } catch (err) {
+      if(createdNothing(err)){
+        await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
+        return {operationId:claimed.id,status:'failed',message:`Canva did not accept the import (${(err as Error)?.message || 'not sent'}); nothing was created, and it may be sent again.`};
+      }
       await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='uncertain',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
       return {operationId:claimed.id,status:'uncertain',message:'Import result is unconfirmed. Source is retained; do not create another copy.'};
     }
     return this.resumeImport(s,taskId,claimed.id);
   }
   async resumeImport(s:Scope,taskId:string,id:string) {
-    const op=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND (actor_id=${s.actorId} OR ${s.role}='admin')`.execute(db)).rows[0]);
-    if(!op||op.kind!=='create'||op.metadata?.method!=='pptx_import')fail(404,'CANVA_IMPORT_NOT_FOUND','Import operation not found');
+    const op=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
+    if(!op||(op.actor_id!==s.actorId&&!overrides(s))||op.kind!=='create'||op.metadata?.method!=='pptx_import')fail(404,'CANVA_IMPORT_NOT_FOUND','Import operation not found');
     if(op.status==='retrieved'||!op.remote_job_id)return {operationId:id,status:op.status,designId:op.design_id};
     let result: any;
     try {
-      result=await (await this.authorizedClient(s)).getImportJob(op.remote_job_id);
+      // Read with the connection that made the import: a Canva job is visible to that account only.
+      result=await (await this.authorizedClient({...s,actorId:op.actor_id})).getImportJob(op.remote_job_id);
     } catch (err: any) {
-      await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
-      return {operationId:id,status:'failed',message:`Canva import job could not be retrieved: ${err?.message || String(err)}`};
+      // Only Canva saying it has no such job settles the import. A failed read (a 503, a rate limit,
+      // a connection to refresh) says nothing about the import itself: it was marked failed until
+      // 2026-09-24, and the retry then sent the deck to Canva a second time.
+      if(err instanceof CanvaHttpError&&err.status===404){
+        await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
+        return {operationId:id,status:'failed',message:'Canva has no record of this import job. Original source is retained.'};
+      }
+      return {operationId:id,status:'submitted',message:`Canva import status could not be read just now (${err?.message || String(err)}); the import is kept and checked again.`};
     }
     if(result.job.status==='in_progress')return {operationId:id,status:'submitted'};
     if(result.job.status==='failed'||result.job.result?.designs.length!==1){
@@ -283,40 +379,61 @@ export class CanvaConnectService {
     });
     return {operationId:id,status:'retrieved',designId:design.id,contentStatus:'imported_editable_draft',qaStatus:'not_run'};
   }
-  async sweepStrandedOperations(s: Scope, options: { maxAgeMinutes?: number; limit?: number } = {}) {
+  /**
+   * Settles Canva operations nobody is following any more, so none blocks the task for good (Core
+   * runs this on an interval since 2026-09-24; nothing called it before, and a slow import left the
+   * task refusing every later design with 409 CANVA_CREATE_CONFLICT).
+   *  - a submitted import or export is asked about again, with the connection that made it;
+   *  - one Canva still has not settled after `giveUpMinutes` is failed, so the task can move on;
+   *  - an operation left 'creating' (Core stopped mid-call) or 'uncertain' (the answer was lost) has
+   *    no Canva job to ask about. It is failed, unless it is a creation that names its design, which a
+   *    person must bind. A failed export leaves nothing at Canva; a failed import may leave an unbound
+   *    copy there.
+   */
+  async sweepStrandedOperations(s: Scope, options: { maxAgeMinutes?: number; giveUpMinutes?: number; limit?: number } = {}) {
     const maxAgeMinutes = options.maxAgeMinutes ?? 10;
+    const giveUpMinutes = options.giveUpMinutes ?? 24 * 60;
     const limit = options.limit ?? 20;
     const stranded = await this.tx(s, async db =>
-      (await sql<any>`SELECT id, task_id, remote_job_id, actor_id, status, created_at
+      (await sql<any>`SELECT id, task_id, remote_job_id, actor_id, kind, status, metadata->>'format' AS format,
+          created_at < now() - (interval '1 minute' * ${giveUpMinutes}) AS expired
         FROM hawa.canva_remote_operations
         WHERE tenant_id = ${s.tenantId}::uuid
-          AND kind = 'create'
-          AND status = 'submitted'
-          AND created_at < now() - (interval '1 minute' * ${maxAgeMinutes})
+          AND ((status = 'submitted' AND created_at < now() - (interval '1 minute' * ${maxAgeMinutes})
+                AND ((kind = 'create' AND metadata->>'method' = 'pptx_import') OR kind = 'export'))
+            OR (status IN ('creating', 'uncertain') AND (kind = 'export' OR design_id IS NULL) AND updated_at < now() - (interval '1 minute' * ${maxAgeMinutes})))
         ORDER BY created_at ASC
         LIMIT ${limit}`.execute(db)).rows
     );
 
-    const settled: Array<{ id: string; taskId: string; status: string; designId?: string; error?: string }> = [];
+    const settled: Array<{ id: string; taskId: string; kind: string; format?: string; status: string; designId?: string; error?: string }> = [];
+    const markFailed = (id: string, from: string) =>
+      this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='failed', updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status=${from}`.execute(db));
     for (const op of stranded) {
+      const base = { id: op.id, taskId: op.task_id, kind: op.kind, ...(op.format ? { format: op.format } : {}) };
+      if (op.status !== 'submitted') {
+        await markFailed(op.id, op.status);
+        settled.push({ ...base, status: 'failed', error: `Left ${op.status} with no Canva job to ask about` });
+        continue;
+      }
+      const owner = { ...s, actorId: op.actor_id };
       try {
-        const res = await this.resumeImport({ ...s, actorId: op.actor_id }, op.task_id, op.id);
-        settled.push({
-          id: op.id,
-          taskId: op.task_id,
-          status: res.status,
-          designId: (res as any).designId,
-        });
+        const res: { status: string; designId?: string } = op.kind === 'export'
+          ? await this.exportStatus(owner, op.task_id, op.id)
+          : await this.resumeImport(owner, op.task_id, op.id);
+        if (res.status === 'submitted' && op.expired) {
+          await markFailed(op.id, 'submitted');
+          settled.push({ ...base, status: 'failed', error: `Canva had not settled it after ${giveUpMinutes} minutes` });
+        } else {
+          settled.push({ ...base, status: res.status, designId: res.designId });
+        }
       } catch (err: any) {
-        await this.tx(s, db =>
-          sql`UPDATE hawa.canva_remote_operations SET status='failed', updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${op.id}::uuid`.execute(db)
-        );
-        settled.push({
-          id: op.id,
-          taskId: op.task_id,
-          status: 'failed',
-          error: err?.message || String(err),
-        });
+        // A refusal that cannot change (the binding moved on, the import is not this task's, Canva
+        // has no such job) settles the operation; a failed read is asked again on the next pass.
+        const final = (err instanceof CanvaFlowError && err.status >= 400 && err.status < 500 && err.status !== 429)
+          || (err instanceof CanvaHttpError && err.status === 404);
+        if (final || op.expired) await markFailed(op.id, 'submitted');
+        settled.push({ ...base, status: final || op.expired ? 'failed' : 'submitted', error: err?.message || String(err) });
       }
     }
     return { sweptCount: stranded.length, settled };
@@ -325,7 +442,7 @@ export class CanvaConnectService {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || !['png','pdf','pptx'].includes(format) || !Number.isInteger(expectedVersion)) fail(422,'CANVA_EXPORT_REQUEST_INVALID','Use a stable request key, format and expected binding version');
     const binding = await this.binding(s,taskId);
     if (binding.version !== expectedVersion) fail(409,'CANVA_BINDING_STALE','Refresh the task binding before exporting');
-    if(format==='pptx'){const source=await this.tx(s,async db=>(await sql`SELECT id FROM hawa.canva_editable_sources WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);if(!source)fail(422,'SOURCE_REQUIRED','Copy and font checking requires a Hawa-generated source for this task');}
+    if(format==='pptx'){const source=await this.editableSource(s,taskId,binding.client_id,binding.canva_design_id);if(!source)fail(422,'SOURCE_REQUIRED','Copy and font checking requires a Hawa-generated source for this task');}
     const requestHash = hash(JSON.stringify({ designId:binding.canva_design_id,format,expectedVersion }));
     const existing = await this.tx(s, async db => (await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0]);
     if (existing) { this.checkReplay(existing,s,requestHash); return this.exportStatus(s,taskId,existing.id); }
@@ -351,11 +468,28 @@ export class CanvaConnectService {
     try {
       const job = await client.createExportJob(design.id,format);
       await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='submitted',remote_job_id=${job.job.id},updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
-    } catch {
+    } catch (err) {
+      if (createdNothing(err)) {
+        await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
+        return { operationId:id,status:'failed',message:`Canva did not accept the export (${(err as Error)?.message || 'not sent'}); request it again.`,qaStatus:'not_run' };
+      }
       await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='uncertain',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
       return { operationId:id,status:'uncertain',message:'Export submission could not be confirmed. Do not create another request until reconciled.',qaStatus:'not_run' };
     }
     return { operationId:id,status:'submitted',qaStatus:'not_run' };
+  }
+  /**
+   * The Hawa-made source a PPTX export of this task is checked against: the caller's own, or for an
+   * art director or administrator the task's, whoever made it. The studio imports as the worker's
+   * identity, so the Desk's "Check copy & fonts" failed SOURCE_REQUIRED on every studio design until
+   * 2026-09-24. The source the exported design was imported from comes first.
+   */
+  private editableSource(s: Scope, taskId: string, clientId: string, designId: string) {
+    return this.tx(s, async db => (await sql<any>`SELECT e.id, e.manifest FROM hawa.canva_editable_sources e
+      LEFT JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id
+      WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.client_id=${clientId}::uuid
+        AND (e.actor_id=${s.actorId} OR ${overrides(s)})
+      ORDER BY (o.design_id IS NOT DISTINCT FROM ${designId}) DESC, e.created_at DESC LIMIT 1`.execute(db)).rows[0]);
   }
   private checkReplay(row: any,s: Scope,requestHash: string) {
     if (!row || row.actor_id !== s.actorId || row.request_hash !== requestHash || row.kind !== 'export') fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to a different request or actor');
@@ -376,7 +510,7 @@ export class CanvaConnectService {
         const validator = new CanvaCapturePipeline();
         let contentCheck:any=null;
         if(row.metadata.format==='pptx'){
-          const source=await this.tx(s,async db=>(await sql<any>`SELECT manifest FROM hawa.canva_editable_sources WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND client_id=${row.client_id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
+          const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
           // A studio design carries no reference pack: it chooses a face per block, recorded in its plan,
           // and Canva must keep each one. Every studio transfer failed SOURCE_REQUIRED here until
           // 2026-09-18, the first live pilot, because only the planner's single-font check existed.

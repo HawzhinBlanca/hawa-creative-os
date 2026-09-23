@@ -350,13 +350,19 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     });
     const run3 = await service.createOrGetRun(scope, taskId3, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 });
     expect(run3.created).toBe(true);
-    await expect(
-      service.createOrGetRun(scope, taskId1, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 })
-    ).rejects.toMatchObject({ code: 'STUDIO_RUN_IN_PROGRESS' });
+    // Its own task no longer waits on it either (2026-09-24): a run nothing advanced for 30 minutes
+    // was given up on, so a new run for the task abandons it and starts, where it used to be refused
+    // with STUDIO_RUN_IN_PROGRESS for ever.
+    const run4 = await service.createOrGetRun(scope, taskId1, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350 });
+    expect(run4.created).toBe(true);
+    const run1Now = await withRlsContext(db, scope, async (tx) =>
+      (await sql<any>`SELECT status, diagnostic FROM hawa.design_studio_runs WHERE id = ${run1.run.id}::uuid`.execute(tx)).rows[0]);
+    expect(run1Now.status).toBe('abandoned');
+    expect(run1Now.diagnostic).toContain('no progress');
 
     await withRlsContext(db, scope, async (tx) => {
       await sql`UPDATE hawa.design_studio_runs SET status = 'abandoned'
-        WHERE id IN (${run1.run.id}::uuid, ${run2.run.id}::uuid, ${run3.run.id}::uuid)`.execute(tx);
+        WHERE id IN (${run2.run.id}::uuid, ${run3.run.id}::uuid, ${run4.run.id}::uuid)`.execute(tx);
     });
   });
 
@@ -653,6 +659,43 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(planRow.source_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(planRow.source_content).toBeDefined();
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+  }, 30000);
+
+  it('6c. an import Canva has not settled leaves the run at transfer; the next resume follows the same import (2026-09-24)', async () => {
+    const taskId = await createTask();
+    const operationId = randomUUID();
+    let canvaDone = false;
+    const mockCanvaService = {
+      importEditableDesign: vi.fn().mockResolvedValue({ operationId, status: 'submitted' }),
+      resumeImport: vi.fn(async () => (canvaDone ? { operationId, status: 'retrieved', designId: 'DAFSLOWIMPORT1' } : { operationId, status: 'submitted' })),
+    } as unknown as CanvaConnectService;
+    const service = new DesignStudioService(db, mockCanvaService, { apiKey: 'test-key', fetcher: createMockFetch(), defaultTier: 'standard' });
+    // The transfer stage polls every 1.5 s, 30 times; this test does not wait for real.
+    const realSetTimeout = globalThis.setTimeout;
+    const timers = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: (...a: unknown[]) => void, ms?: number, ...rest: unknown[]) =>
+      realSetTimeout(fn, ms === 1500 ? 0 : ms, ...rest)) as typeof setTimeout);
+    try {
+      const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+      let step: any = { status: run.status };
+      for (let n = 0; n < 15 && step.stage !== 'transfer' && !['transferred', 'failed', 'degraded'].includes(step.status); n++) {
+        step = await service.resume(scope, taskId, run.id);
+      }
+      // Canva is still importing: the run waits at its stage instead of failing.
+      expect({ status: step.status, stage: step.stage }).toEqual({ status: 'transferring', stage: 'transfer' });
+
+      canvaDone = true;
+      const done = await service.resume(scope, taskId, run.id);
+      expect({ status: done.status, designId: done.designId }).toEqual({ status: 'transferred', designId: 'DAFSLOWIMPORT1' });
+
+      // Both attempts imported the same deck under the run's own key, from the one plan row.
+      const calls = (mockCanvaService.importEditableDesign as any).mock.calls;
+      expect(calls.map((c: any[]) => c[2])).toEqual([`studio-${run.id}`, `studio-${run.id}`]);
+      expect(calls[1][3].sha256).toBe(calls[0][3].sha256);
+      const plans = (await sql<any>`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+      expect(plans).toHaveLength(1);
+    } finally {
+      timers.mockRestore();
+    }
   }, 30000);
 
   it('6b. a pilot chat\'s run goes through the shared v3 stages, records every judgement, and transfers', async () => {
