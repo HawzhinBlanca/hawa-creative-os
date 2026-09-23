@@ -1192,6 +1192,11 @@ export class DesignStudioService {
           ctx.cutoutOutcomes = loaded.outcomes;
           if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
         }
+        // Where the people are in each photo, so a framed photo is cropped around faces rather than
+        // from its centre (a tall portrait in a square box lost the heads). Found once, at the layout.
+        if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
+          stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
+        }
       }
 
       // The copy as this run changed it (a change of wording, or one an earlier round made): every
@@ -1338,6 +1343,14 @@ export class DesignStudioService {
             concepts,
             candidateRows.map((r) => ({ id: r.id, ordinal: r.ordinal }))
           );
+          // A framed photo is cropped around its faces (stages.photoFocus); the layout model does not set it.
+          const focus: Array<{ x: number; y: number } | null> = Array.isArray(stages.photoFocus) ? stages.photoFocus : [];
+          for (const cand of candidateStates) {
+            for (const p of cand.currentLayout.photos ?? []) {
+              const f = focus[p.photoIndex];
+              if (f && p.treatment !== 'cutout') p.focus = f;
+            }
+          }
           // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
           if (ctx.photoCutouts?.some(Boolean)) {

@@ -187,6 +187,7 @@ import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
+import { revisionMetrics } from './services/revision-metrics.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -8814,6 +8815,17 @@ export function createApp(options?: CreateAppOptions) {
     broadcast('dna:snapshot_created', { clientId, version: newVersion, sha256: hash, snapshotId: snap.snapshotId });
 
     return c.json(snap, 201);
+  });
+
+  // How the revision loop is doing (services/revision-metrics.ts): for the art director and the owner.
+  registerRoute('get', '/system/revision-metrics', async (c: Context) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    if (!['administrator', 'art_director', 'creative_director'].includes(String(auth.role))) return problem(c, 403, 'Forbidden', 'Art director or administrator required');
+    if (!db) return problem(c, 503, 'Database Unavailable');
+    const days = Number(c.req.query('days') || 30);
+    const metrics = await revisionMetrics(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID }, Number.isFinite(days) ? days : 30);
+    return c.json(metrics);
   });
 
   // Selected provider and measured readiness are separate concepts (ADR 022).

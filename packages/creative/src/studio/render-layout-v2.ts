@@ -9,6 +9,7 @@ import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
+import { coverCrop, dataUriPixelSize, type CoverCropRect } from './photo-crop.js';
 import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
 
 export { PNG };
@@ -1191,6 +1192,32 @@ function cutoutImageSvg(id: string, png: Buffer, r: Box): string {
 }
 
 /**
+ * A framed photo cropped to exactly `crop`, the part of the picture `coverCrop` keeps around its
+ * focus point. A nested viewport at the photo's box has that rectangle, in the photo's own pixels,
+ * as its viewBox and holds the whole picture at its natural size, so only the crop shows and it
+ * fills the box. It carries the id `photo-<index>` a framed photo has, with the box's geometry; the
+ * clip-path (the box with its corner radius) is on a group around it, so it applies in the canvas's
+ * coordinates as it does for an unfocused photo.
+ */
+function focusedPhotoSvg(
+  id: string,
+  clipId: string,
+  href: string,
+  box: Box,
+  pixels: { width: number; height: number },
+  crop: CoverCropRect
+): string {
+  // Kept to a thousandth of a source pixel, so a division's float tail is not written into the markup.
+  const n = (v: number) => Math.round(v * 1000) / 1000;
+  return (
+    `<g clip-path="url(#${clipId})">` +
+    `<svg id="${id}" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" viewBox="${n(crop.sx)} ${n(crop.sy)} ${n(crop.sw)} ${n(crop.sh)}" preserveAspectRatio="none">` +
+    `<image xlink:href="${href}" x="0" y="0" width="${pixels.width}" height="${pixels.height}" preserveAspectRatio="none"/>` +
+    `</svg></g>`
+  );
+}
+
+/**
  * Builds SVG markup for both full layout and no-text composite.
  */
 export function renderLayoutV2ToSvg(
@@ -1286,7 +1313,8 @@ export function renderLayoutV2ToSvg(
 
   // Photos Layer: above the art, its scrim and the shapes, below the logo and text. Panels are
   // card backgrounds; drawn over a photo they hid it (2026-09-22, both portraits under a navy card). Drawn with the same
-  // xMidYMid slice the art uses, so the transfer's `cover` sizing matches what the judge scored.
+  // xMidYMid slice the art uses, so the transfer's `cover` sizing matches what the judge scored; a
+  // photo with a focus point is drawn as the crop `coverCrop` gives, which the transfer crops to too.
   // A cut-out person keeps the id `photo-<index>` a framed photo has, so code that finds a photo by
   // id finds it; its shadow is `photo-shadow-<index>`.
   for (const layer of photoLayers(layout.photos ?? [], options.photoCutouts)) {
@@ -1302,7 +1330,12 @@ export function renderLayoutV2ToSvg(
     bodyPartsNoText.push(
       `<clipPath id="${clipId}"><rect x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" rx="${rx}" ry="${rx}"/></clipPath>`
     );
-    if (href) {
+    // A focus point moves the crop to keep that part of the photo in view; a photo without one, or
+    // whose size cannot be read from its data (WebP), is the centred slice it always was.
+    const pixels = href && p.focus ? dataUriPixelSize(href) : null;
+    if (href && pixels && p.focus) {
+      bodyPartsNoText.push(focusedPhotoSvg(`photo-${p.photoIndex}`, clipId, href, p, pixels, coverCrop(p, pixels, p.focus)));
+    } else if (href) {
       bodyPartsNoText.push(
         `<image id="photo-${p.photoIndex}" xlink:href="${href}" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
       );

@@ -117,6 +117,18 @@ class CutoutEngineTest(unittest.TestCase):
         self.assertGreater(f['focus']['y'], 0.2)
         no_face = FakeCutter(alpha, faces=[]).focus(jpeg(img))
         self.assertEqual(no_face['focus'], {'x': 0.5, 'y': 0.36})
+        self.assertEqual(f['orientation'], 1)
+
+    def test_focus_reports_a_rotated_photo(self):
+        alpha = np.zeros((200, 150), np.float32)
+        img = Image.fromarray(np.full((200, 150, 3), 128, np.uint8))
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        buf = io.BytesIO()
+        img.save(buf, 'JPEG', exif=exif.tobytes())
+        f = FakeCutter(alpha, faces=[]).focus(buf.getvalue())
+        self.assertEqual(f['orientation'], 6)
+        self.assertEqual((f['width'], f['height']), (200, 150))
 
     def test_shadow_is_soft_and_offset(self):
         a = np.zeros((200, 100), np.uint8)

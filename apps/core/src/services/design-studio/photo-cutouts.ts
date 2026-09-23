@@ -158,6 +158,37 @@ export class PhotoCutouts {
     return { assets, outcomes, ...(unavailable ? { unavailable } : {}) };
   }
 
+  /**
+   * Where the people are in each photo, as a focus point (0..1 of the photo) for cropping it into a
+   * frame without cutting heads: face detection only, milliseconds a photo. Undefined for a photo the
+   * service could not read, or every photo when it is not configured or not answering: those are
+   * cropped from the centre, as before.
+   */
+  async focusFor(photos: ContentPhoto[]): Promise<Array<{ x: number; y: number } | undefined>> {
+    if (!this.url) return photos.map(() => undefined);
+    const out: Array<{ x: number; y: number } | undefined> = [];
+    for (const photo of photos) {
+      try {
+        const res = await this.fetcher(`${this.url}/v1/faces`, {
+          method: 'POST',
+          headers: { 'Content-Type': photo.mimeType },
+          body: new Uint8Array(photo.bytes),
+          signal: AbortSignal.timeout(30000),
+        });
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; orientation?: unknown; focus?: { x?: unknown; y?: unknown } };
+        const x = Number(body.focus?.x);
+        const y = Number(body.focus?.y);
+        // The point is in the upright photo, but the crop is of the stored pixels; a photo stored on
+        // its side (EXIF orientation other than 1) keeps the centred crop rather than a wrong one.
+        const upright = body.orientation === undefined || body.orientation === 1;
+        out.push(res.ok && body.ok && upright && Number.isFinite(x) && Number.isFinite(y) ? { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) } : undefined);
+      } catch {
+        out.push(undefined);
+      }
+    }
+    return out;
+  }
+
   private async stored(tx: Tx, sourceSha256: string): Promise<StoredRow | undefined> {
     return tx(async (db) =>
       (

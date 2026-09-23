@@ -108,6 +108,18 @@ export interface PhotoElement extends Box {
   radius?: number;
   /** Absent is framed, as every photo was drawn before cut-outs existed. */
   treatment?: PhotoTreatment;
+  /**
+   * The point of the source photo to keep in view when a framed photo is cover-cropped into its
+   * box, such as the middle of the faces in it (see `coverCrop`). Absent is the centred crop every
+   * framed photo had before. A cut-out ignores it.
+   */
+  focus?: PhotoFocus;
+}
+
+/** A point of a photo as a share (0..1) of its width and height, from the top-left. */
+export interface PhotoFocus {
+  x: number;
+  y: number;
 }
 
 export const typeScaleSchema = z.object({
@@ -179,11 +191,17 @@ export const textElementSchema = boxSchema.extend({
 
 export const photoTreatmentSchema = z.enum(PHOTO_TREATMENTS);
 
+export const photoFocusSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+}).strict();
+
 export const photoElementSchema = boxSchema.extend({
   photoIndex: z.number().int().nonnegative(),
   role: z.enum(['hero', 'portrait', 'inset']),
   radius: z.number().nonnegative().optional(),
   treatment: photoTreatmentSchema.optional(),
+  focus: photoFocusSchema.optional(),
 }).strict();
 
 export const studioLayoutV2Schema = z.object({

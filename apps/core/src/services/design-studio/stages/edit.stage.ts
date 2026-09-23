@@ -337,8 +337,10 @@ export function carryOver(parent: StudioLayoutV2, edited: StudioLayoutV2, target
       if (!was) return p;
       const kept = { ...p };
       if (p.radius === undefined && was.radius !== undefined) kept.radius = was.radius;
-      // A photo shown cut out stays cut out unless the answer says otherwise.
+      // A photo shown cut out stays cut out unless the answer says otherwise, and a framed one keeps
+      // the crop around its faces.
       if (p.treatment === undefined && was.treatment !== undefined) kept.treatment = was.treatment;
+      if (p.focus === undefined && was.focus !== undefined) kept.focus = was.focus;
       return kept;
     });
   }

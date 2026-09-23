@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
 import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fontFaceSupports } from './render-layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
+import { coverCrop, imagePixelSize, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 /**
@@ -29,35 +30,43 @@ export interface TransferV2Options extends TransferOptions {
   photoCutouts?: Array<PhotoCutoutAsset | undefined>;
 }
 
-/** Pixel size of a PNG or a baseline/progressive JPEG, or null. Only the aspect is needed. */
-export function imagePixelSize(buffer: Buffer): { width: number; height: number } | null {
-  const png = pngPixelSize(buffer);
-  if (png) return png;
-  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
-  let i = 2;
-  while (i + 9 < buffer.length) {
-    if (buffer[i] !== 0xff) return null;
-    const marker = buffer[i + 1];
-    const len = buffer.readUInt16BE(i + 2);
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { height: buffer.readUInt16BE(i + 5), width: buffer.readUInt16BE(i + 7) };
-    }
-    i += 2 + len;
-  }
-  return null;
+// The pixel-size readers live in photo-crop.ts, which the renderer can import without an import
+// cycle; they are exported from here too, for the callers that import them from the transfer.
+export { imagePixelSize, pngPixelSize };
+
+/** EMU per layout pixel: 914400 per inch at 96 pixels per inch. */
+const EMU_PER_PX = 9525;
+
+/**
+ * A layout length as EMU for pptxgenjs, which reads any number under 100 as inches and any larger
+ * one as EMU. In inches, a photo scaled past 9600px (a wide picture cropped into a narrow box) would
+ * be read as EMU; in EMU, an offset under 100 (about a hundredth of a pixel) would be read as
+ * inches, so it is written as none.
+ */
+function pptxEmu(px: number): number {
+  const emu = Math.round(px * EMU_PER_PX);
+  return emu < 100 ? 0 : emu;
 }
 
 /**
- * The pixel size in a PNG's IHDR chunk, or null when the buffer is not a PNG. Read from the header
- * rather than decoded, because the only thing the deck needs from the art is its aspect.
+ * The picture size and `crop` sizing that show exactly `crop` of a photo in its box. pptxgenjs
+ * writes a crop as srcRect, each edge a share of the picture's size, and gives the picture the
+ * crop box's extent; so the picture is scaled until the crop is the size of the box, and the crop's
+ * offsets are scaled with it.
  */
-export function pngPixelSize(buffer: Buffer): { width: number; height: number } | null {
-  if (buffer.length < 24) return null;
-  if (buffer.readUInt32BE(0) !== 0x89504e47 || buffer.readUInt32BE(4) !== 0x0d0a1a0a) return null;
-  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return null;
-  const width = buffer.readUInt32BE(16);
-  const height = buffer.readUInt32BE(20);
-  return width > 0 && height > 0 ? { width, height } : null;
+function focusedPicture(box: Box, pixels: { width: number; height: number }, crop: CoverCropRect) {
+  const scale = box.width / crop.sw;
+  return {
+    w: pptxEmu(pixels.width * scale),
+    h: pptxEmu(pixels.height * scale),
+    sizing: {
+      type: 'crop',
+      x: pptxEmu(crop.sx * scale),
+      y: pptxEmu(crop.sy * scale),
+      w: pptxEmu(box.width),
+      h: pptxEmu(box.height),
+    },
+  };
 }
 
 /** One flat piece of the scrim, in layout pixels. */
@@ -438,7 +447,8 @@ export async function encodeStudioTransferV2(
   }
 
   // 2b. Client photos, above the shapes and below the text, as the renderer draws them. `cover` with
-  // the natural pixel size, as for the art, so Canva crops the way the preview did.
+  // the natural pixel size, as for the art, so Canva crops the way the preview did; a photo with a
+  // focus point is cropped explicitly to the rectangle the preview drew around it (see coverCrop).
   // The layers come in the preview's order (every cut-out shadow, then the photos), so the deck
   // stacks them as the judge saw them.
   for (const layer of photoLayers(layout.photos ?? [], options.photoCutouts)) {
@@ -461,13 +471,17 @@ export async function encodeStudioTransferV2(
     if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
     const pixels = imagePixelSize(photo.bytes);
     const rounding = p.radius ? Math.min(1, p.radius / (Math.min(p.width, p.height) / 2)) : 0;
+    // A photo whose size cannot be read (WebP) has no crop to compute, and goes as it always did.
+    const focused = pixels && p.focus ? focusedPicture(p, pixels, coverCrop(p, pixels, p.focus)) : undefined;
     slide.addImage({
       data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
       x: p.x / 96,
       y: p.y / 96,
-      w: (pixels ? pixels.width : p.width) / 96,
-      h: (pixels ? pixels.height : p.height) / 96,
-      ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
+      ...(focused ?? {
+        w: (pixels ? pixels.width : p.width) / 96,
+        h: (pixels ? pixels.height : p.height) / 96,
+        ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
+      }),
       ...(rounding > 0 ? { rounding: true } : {}),
     });
   }

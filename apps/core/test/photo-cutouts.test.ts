@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, sql } from '@hawa/db';
 import { type StudioLayoutV2, type PhotoCutoutAsset } from '@hawa/creative';
 import { PhotoCutouts, arrangeCutouts, CUTOUT_WORDS, reasonFor } from '../src/services/design-studio/photo-cutouts.js';
-import { editMeans } from '../src/services/design-studio/stages/edit.stage.js';
+import { editMeans, carryOver } from '../src/services/design-studio/stages/edit.stage.js';
 import { photosBrief } from '../src/services/design-studio/stages/layouts.stage.js';
 import { requesterDraftNotes } from '../src/services/design-studio/studio-status-note.js';
 
@@ -114,6 +114,39 @@ describe('the requester is told what became of their photos', () => {
     const mixed = requesterDraftNotes({ run: run([{ photoIndex: 0, passed: true }, { photoIndex: 1, passed: false, reason: 'the top of the head is cut off in the photo' }], []), candidates: cand(['cutout', 'framed']) });
     expect(mixed).toContain('⚠️ Photo 2 could not be cut out cleanly (the top of the head is cut off in the photo), so it is shown as you sent it.');
     expect(mixed.join(' ')).not.toContain('cannot be made automatically yet');
+  });
+});
+
+describe('a framed photo is cropped around its faces', () => {
+  const photo = (tag: string) => ({ dataUrl: '', bytes: Buffer.from(`photo ${tag}`), mimeType: 'image/jpeg' as const });
+  const faces = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+  it('asks the service where the faces are in each photo, and keeps the point inside the photo', async () => {
+    const replies = [faces({ ok: true, orientation: 1, focus: { x: 0.42, y: 0.18 } }), faces({ ok: true, focus: { x: 1.2, y: -0.1 } })];
+    const fetcher = vi.fn(async () => replies.shift()!);
+    const out = await new PhotoCutouts({ url: 'http://cutout:8090/', fetcher: fetcher as unknown as typeof fetch }).focusFor([photo('a'), photo('b')]);
+    expect(out).toEqual([{ x: 0.42, y: 0.18 }, { x: 1, y: 0 }]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String((fetcher.mock.calls[0] as unknown[])[0])).toBe('http://cutout:8090/v1/faces');
+  });
+
+  it('crops from the centre, as before, a photo stored on its side, one it could not read, or all when it is down', async () => {
+    const replies = [faces({ ok: true, orientation: 6, focus: { x: 0.5, y: 0.2 } }), faces({ ok: false, error: 'not a picture' }, 400)];
+    const answered = await new PhotoCutouts({ url: 'http://cutout:8090', fetcher: vi.fn(async () => replies.shift()!) as unknown as typeof fetch }).focusFor([photo('a'), photo('b')]);
+    expect(answered).toEqual([undefined, undefined]);
+    const down = await new PhotoCutouts({ url: 'http://cutout:8090', fetcher: vi.fn(async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch }).focusFor([photo('a')]);
+    expect(down).toEqual([undefined]);
+    const never = vi.fn();
+    expect(await new PhotoCutouts({ url: '', fetcher: never as unknown as typeof fetch }).focusFor([photo('a')])).toEqual([undefined]);
+    expect(never).not.toHaveBeenCalled();
+  });
+
+  it('keeps the crop through an edit that did not change it', () => {
+    const parent = layout();
+    parent.photos = [{ ...parent.photos![0], treatment: undefined, focus: { x: 0.4, y: 0.2 } }];
+    const edited = layout();
+    edited.photos = [{ ...edited.photos![0], treatment: undefined }];
+    expect(carryOver(parent, edited).photos?.[0].focus).toEqual({ x: 0.4, y: 0.2 });
   });
 });
 

@@ -2,8 +2,9 @@ import { clientReferenceInstruction, clientReferencePart, type ClientReference }
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
 import { fitLogoToAspect, resolveRadius, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
-import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, PhotoTreatment } from './layout-v2.js';
+import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, PhotoFocus, PhotoTreatment } from './layout-v2.js';
 import { studioLayoutV2Schema, PHOTO_TREATMENTS } from './layout-v2.js';
+import { photoFocusOrUndefined } from './photo-crop.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import {
   admittedFontFace,
@@ -106,6 +107,8 @@ export interface NormalizedPhotoElement extends NormalizedBox {
   radiusFraction: number;
   /** Framed (absent) or cut out. The model's schema does not ask for it; a caller that sets it keeps it. */
   treatment?: PhotoTreatment;
+  /** The point of the photo a framed crop keeps in view. Not asked of the model either; a caller that sets it keeps it. */
+  focus?: PhotoFocus;
 }
 
 export interface CopyBlockSlotInput {
@@ -439,14 +442,18 @@ export function scaleNormalizedLayoutToV2(
     const box = { x: scaleX(p.x), y: scaleY(p.y), width: scaleDimX(p.width), height: scaleDimY(p.height) };
     const radius = Math.round(clamp(p.radiusFraction ?? 0, 0, 0.5) * Math.min(box.width, box.height));
     // A treatment the schema does not know is dropped rather than carried: the schema check below
-    // would otherwise discard the whole candidate over one field.
+    // would otherwise discard the whole candidate over one field. A focus point is held to the
+    // photo, or dropped when it is not a point, for the same reason. It is a share of the photo,
+    // not of the canvas, so it is not scaled.
     const treatment = PHOTO_TREATMENTS.find((t) => t === p.treatment);
+    const focus = photoFocusOrUndefined(p.focus);
     return {
       photoIndex: Math.max(0, Math.round(p.photoIndex)),
       role: p.role,
       ...box,
       ...(radius > 0 ? { radius } : {}),
       ...(treatment ? { treatment } : {}),
+      ...(focus ? { focus } : {}),
     };
   });
 
