@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-23T18:13:09.207Z",
+  "generatedAt": "2026-09-23T18:26:41.773Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,10 +19,10 @@
     ]
   },
   "build": {
-    "commit": "a4a705c641e532d07447dcba571ae36352b4d5a1",
+    "commit": "29daf3d879ce87490e5d21358a396d6dce596332",
     "treeClean": true,
-    "commitTimestamp": "2026-09-23T21:13:02+03:00",
-    "branch": "HEAD"
+    "commitTimestamp": "2026-09-23T21:26:34+03:00",
+    "branch": "claude/reliability"
   },
   "migrations": {
     "targetVersion": "014_photo_cutouts",
@@ -38,8 +38,8 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "acf847a80c82a8105fd0ab4d56b532728324fa9833be73cbcc4b8a7f81b75eec",
-        "apps/core/src/index.ts": "3496e8323ca4b3f63b9ce65bec8a575d6f35d2d748818f805caf72aefa382df8",
+        "apps/core/src/app.ts": "38aaa98d2b10f115523de8cfce75ccfbaf73f653043f4138fe7996c667b3c34f",
+        "apps/core/src/index.ts": "30ed2f84e4234c132df144d885e36f7d65349e2c2d0b8a4ddb0fd2bfd75b6322",
         "packages/integrations/src/google-publisher.ts": "b82e7ea5c04ab4c609b332b2d80753cc4be8366fdeb1e1fdd5dd46c6f574cdb1"
       }
     },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "ced42c5470c8fbf7bff86eb7ee6dc7011f5b01f6bfcb0de9164b9a8f63c0bc62"
+  "sha256": "8a6ed293b1ef5226ea438c8484772fbde6a6c9d38cf04fd680749120adab6cdd"
 }
