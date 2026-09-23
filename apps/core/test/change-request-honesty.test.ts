@@ -125,7 +125,7 @@ describe('a change the edit cannot make is said, not replaced by other changes',
     const stages = JSON.parse(run.stages);
     expect(stages.directed.asks).toEqual([
       { ask: 'cut the panelists out of their photos', status: 'not_possible', reason: 'the people need cutting out of their photo backgrounds' },
-      { ask: 'move the logo to the left', status: 'done' },
+      { ask: 'move the logo to the left', status: 'done', by: 'model' },
     ]);
   });
 
@@ -266,7 +266,7 @@ describe('with cut-outs made, "cut them out" is a change the edit makes', () => 
     expect(saved.photos.map((p: any) => p.treatment)).toEqual(['cutout', 'cutout']);
     for (const p of saved.photos) expect(p.y + p.height).toBe(1350);
     expect(saved.photos[0].height).toBe(saved.photos[1].height);
-    expect(JSON.parse(run.stages).directed.asks).toEqual([{ ask: 'cut the panelists out of their photos', status: 'done' }]);
+    expect(JSON.parse(run.stages).directed.asks).toEqual([{ ask: 'cut the panelists out of their photos', status: 'done', by: 'model' }]);
   });
 });
 
@@ -302,17 +302,39 @@ describe('a change of wording uses only the client\'s own words', () => {
     expect(invented.asks[0].possible).toBe(false);
   });
 
-  it('a change of wording goes through the edit, and every later stage carries the new words', async () => {
+  it('a change of wording that fits is made without the edit model, and every later stage carries the new words', async () => {
     const dateAsk: Ask = { ask: 'change the date to September 26, 2026', elements: ['text:1'], restyle: false, possible: true, reason: '', copyEdits: [{ copyIndex: 1, from: 'September 25, 2026', to: 'September 26, 2026' }] };
     const { service, run, completeJson } = harness({ asks: [dateAsk], targets: ['text:1'], editReply: { layout: parentLayout, changes: [] } });
     run.request.directed.revisionDirective = 'change the date to September 26, 2026 please';
     await service.resume(scope, run.task_id, run.id);
     const res: any = await service.resume(scope, run.task_id, run.id);
     expect(res.status).toBe('qa');
-    const prompt = (completeJson.mock.calls.find((c: any) => c[0].schemaName === 'DirectedEdit') as any)[0].prompt as string;
-    expect(prompt).toContain('[1 latin] September 26, 2026');
+    expect(completeJson.mock.calls.map((c: any) => c[0].schemaName)).toEqual(['EditTargets']);
     const stages = JSON.parse(run.stages);
     expect(stages.effectiveCopy[1].text).toBe('September 26, 2026');
-    expect(stages.directed.asks).toEqual([{ ask: 'change the date to September 26, 2026', status: 'done' }]);
+    expect(stages.directed.asks).toEqual([{ ask: 'change the date to September 26, 2026', status: 'done', by: 'rule' }]);
+  });
+
+  it('longer new words get a taller box from the house rules, still without the edit model', async () => {
+    const long = 'September 26, 2026 at the Erbil International Conference Centre, Hall B, from nine in the morning until the evening';
+    const dateAsk: Ask = { ask: 'change the date line', elements: ['text:1'], restyle: false, possible: true, reason: '', copyEdits: [{ copyIndex: 1, from: 'September 25, 2026', to: long }] };
+    const { service, run, completeJson, updated } = harness({ asks: [dateAsk], targets: ['text:1'], editReply: { layout: parentLayout, changes: [] } });
+    run.request.directed.revisionDirective = `change the date to ${long}`;
+    await service.resume(scope, run.task_id, run.id);
+    await service.resume(scope, run.task_id, run.id);
+    expect(completeJson.mock.calls.map((c: any) => c[0].schemaName)).toEqual(['EditTargets']);
+    const date = updated.find((u: any) => u.layouts).layouts[0].text.find((t: any) => t.copyIndex === 1);
+    expect(date.height).toBeGreaterThan(60);
+    expect(date.fontSize).toBe(40);
+  });
+
+  it('a rule whose result does not pass the checks goes to the edit model', async () => {
+    // Navy text on the navy background is not readable: hard QA refuses the rule's result.
+    const navyDate = { ask: 'make the date navy', op: 'text_colour', params: { text: 1, colour: '#0A1628' }, elements: ['text:1'], restyle: true, possible: true, reason: '' } as unknown as Ask;
+    const { service, run, completeJson } = harness({ asks: [navyDate], targets: ['text:1'], editReply: { layout: parentLayout, changes: [] } });
+    run.request.directed.revisionDirective = 'make the date navy';
+    await service.resume(scope, run.task_id, run.id);
+    await service.resume(scope, run.task_id, run.id);
+    expect(completeJson.mock.calls.map((c: any) => c[0].schemaName)).toContain('DirectedEdit');
   });
 });

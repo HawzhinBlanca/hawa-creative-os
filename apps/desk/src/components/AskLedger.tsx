@@ -6,6 +6,7 @@ export interface LedgerAsk {
   ask: string;
   status: string;
   op?: string;
+  by?: 'rule' | 'model';
   reason?: string;
   assumption?: string;
   seen?: { made: boolean; why: string };
@@ -63,7 +64,7 @@ export function AskLedgerView({ rounds }: { rounds: LedgerRound[] }) {
               const doubt = a.seen && a.seen.made !== (a.status === 'done');
               return (
                 <li key={i} className="copy-value-en">
-                  {status.sign} {a.ask} <span style={{ opacity: 0.7 }}>({status.words}{a.op ? `, ${a.op.replace(/_/g, ' ')}` : ''})</span>
+                  {status.sign} {a.ask} <span style={{ opacity: 0.7 }}>({status.words}{a.op ? `, ${a.op.replace(/_/g, ' ')}` : ''}{a.by === 'rule' ? ', made by rule' : ''})</span>
                   {a.reason ? <div style={{ opacity: 0.8 }}>Why: {a.reason}</div> : null}
                   {a.assumption ? <div style={{ opacity: 0.8 }}>Read as: {a.assumption}</div> : null}
                   {doubt ? <div role="note">🔍 The visual check did not agree: {a.seen!.why || (a.seen!.made ? 'it saw it made' : 'it did not see it made')}</div> : null}

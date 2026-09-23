@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../services/i18n.js';
 
-export type ScreenId = 'work' | 'clients' | 'settings' | 'inbox' | 'review' | 'dna' | 'library' | 'ops' | 'eval';
+export type ScreenId = 'work' | 'clients' | 'settings' | 'inbox' | 'review' | 'dna' | 'library' | 'ops' | 'eval' | 'comparison';
 
 interface SidebarProps {
   currentScreen: ScreenId;
@@ -103,6 +103,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
           title="Channel bridges, honest health probes, and audit logs"
         >
           <span>⚙️</span> {t.screens.settings}
+        </button>
+
+        {/* 4. Blinded comparison with the office designer */}
+        <button
+          id="nav-comparison"
+          className={currentScreen === 'comparison' ? 'active' : ''}
+          onClick={() => onNavigate('comparison')}
+          aria-current={currentScreen === 'comparison' ? 'page' : undefined}
+          title="Hawa and the office designer, judged blind by requesters and outside designers"
+        >
+          <span>⚖️</span> {t.screens.comparison}
         </button>
       </nav>
 

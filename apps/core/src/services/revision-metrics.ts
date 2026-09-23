@@ -30,6 +30,8 @@ export interface RevisionMetrics {
   visualCheck: { checked: number; agreed: number; doneButNotSeen: number };
   /** Requesters who sounded frustrated (the office was told each time). */
   frustrated: number;
+  /** Asks made, by rule (exact, no model call) and by the edit model. */
+  madeBy: { rule: number; model: number };
 }
 
 export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: string; userId: string }, days = 30): Promise<RevisionMetrics> {
@@ -83,7 +85,7 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
         WHERE tenant_id = ${scope.tenantId}::uuid AND created_at > ${since}`.execute(trx)
     ).rows[0];
     const loop = (
-      await sql<{ asked: number; answered: number; side: number; checked: number; agreed: number; unseen: number; frustrated: number }>`SELECT
+      await sql<{ asked: number; answered: number; side: number; checked: number; agreed: number; unseen: number; frustrated: number; rule: number; model: number }>`SELECT
           count(*) FILTER (WHERE r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION')::int AS asked,
           (SELECT count(*)::int FROM hawa.outbox_commands o WHERE o.tenant_id = ${scope.tenantId}::uuid AND o.command_type = 'task.created'
              AND o.created_at > ${since} AND o.payload->'studioOptions'->>'clarified' = 'true') AS answered,
@@ -93,7 +95,9 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
             WHERE a ? 'seen' AND (a->'seen'->>'made')::boolean = (a->>'status' = 'done'))), 0)::int AS agreed,
           COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a
             WHERE a->>'status' = 'done' AND (a->'seen'->>'made')::boolean IS FALSE)), 0)::int AS unseen,
-          count(*) FILTER (WHERE r.stages->'directed'->>'frustrated' = 'true')::int AS frustrated
+          count(*) FILTER (WHERE r.stages->'directed'->>'frustrated' = 'true')::int AS frustrated,
+          COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a WHERE a->>'status' = 'done' AND a->>'by' = 'rule')), 0)::int AS rule,
+          COALESCE(sum((SELECT count(*) FROM jsonb_array_elements(COALESCE(r.stages->'directed'->'asks', '[]'::jsonb)) a WHERE a->>'status' = 'done' AND a->>'by' = 'model')), 0)::int AS model
         FROM hawa.design_studio_runs r
         WHERE r.tenant_id = ${scope.tenantId}::uuid AND r.created_at > ${since}`.execute(trx)
     ).rows[0];
@@ -115,6 +119,7 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
       editsWithSideEffects: loop?.side ?? 0,
       visualCheck: { checked: loop?.checked ?? 0, agreed: loop?.agreed ?? 0, doneButNotSeen: loop?.unseen ?? 0 },
       frustrated: loop?.frustrated ?? 0,
+      madeBy: { rule: loop?.rule ?? 0, model: loop?.model ?? 0 },
     };
   });
 }

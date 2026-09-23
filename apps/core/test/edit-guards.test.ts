@@ -142,7 +142,7 @@ describe('the visual check', () => {
     const call = completeJson.mock.calls.find((c: any) => c[0].schemaName === 'VisualCheck') as any;
     expect(call[0].images).toHaveLength(2);
     expect(call[0].prompt).toContain('1. move the logo to the left');
-    expect(stages.directed.asks).toEqual([{ ask: 'move the logo to the left', status: 'done', seen: { made: false, why: 'the logo is still on the right' } }]);
+    expect(stages.directed.asks).toEqual([{ ask: 'move the logo to the left', status: 'done', by: 'model', seen: { made: false, why: 'the logo is still on the right' } }]);
     const office = studioStatusNote({ run, candidates: [] } as any);
     expect(office).toContain('visual check: 0 of 1 agree; ⚠️ not seen made: move the logo to the left');
     // The requester's note reads the outcome, not the advice.
@@ -155,7 +155,7 @@ describe('the visual check', () => {
     const { go } = harness({ layout: reply, changes: [] });
     const { stages, layout } = await go();
     expect(layout?.logo).toMatchObject({ x: 72 });
-    expect(stages.directed.asks).toEqual([{ ask: 'move the logo to the left', status: 'done' }]);
+    expect(stages.directed.asks).toEqual([{ ask: 'move the logo to the left', status: 'done', by: 'model' }]);
   });
 });
 

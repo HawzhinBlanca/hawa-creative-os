@@ -10,6 +10,8 @@ export interface LedgerAsk {
   ask: string;
   status: string;
   op?: string;
+  /** Made by a rule (exact, no model) or by the edit model. */
+  by?: 'rule' | 'model';
   reason?: string;
   /** How an open ask was read, as the requester was told it. */
   assumption?: string;
@@ -39,7 +41,7 @@ export interface LedgerRound {
 
 /** A run's record of a change, as the edit stage writes it; every field is read with care. */
 interface RecordedDirected {
-  asks?: Array<{ ask?: unknown; status?: unknown; op?: unknown; reason?: unknown; assumption?: unknown; seen?: { made?: unknown; why?: unknown } } | null>;
+  asks?: Array<{ ask?: unknown; status?: unknown; op?: unknown; by?: unknown; reason?: unknown; assumption?: unknown; seen?: { made?: unknown; why?: unknown } } | null>;
   refused?: unknown;
   clarify?: { question?: unknown; options?: unknown[] };
   sideEffects?: unknown[];
@@ -81,6 +83,7 @@ export async function askLedger(db: Kysely<Database>, scope: { tenantId: string;
         ask: text(a.ask, 160),
         status: text(a.status, 20),
         ...(text(a.op, 40) ? { op: text(a.op, 40) } : {}),
+        ...(a.by === 'rule' || a.by === 'model' ? { by: a.by } : {}),
         ...(text(a.reason) ? { reason: text(a.reason) } : {}),
         ...(text(a.assumption) ? { assumption: text(a.assumption) } : {}),
         ...(typeof made === 'boolean' ? { seen: { made, why: text(a.seen?.why, 160) } } : {}),

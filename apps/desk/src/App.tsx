@@ -6,6 +6,7 @@ import { ClientsScreen } from './screens/ClientsScreen.js';
 import { SettingsScreen } from './screens/SettingsScreen.js';
 import { OpsScreen } from './screens/OpsScreen.js';
 import { EvalScreen } from './screens/EvalScreen.js';
+import { ComparisonScreen } from './screens/ComparisonScreen.js';
 import { GuidedTour } from './components/GuidedTour.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
@@ -19,7 +20,7 @@ export const App: React.FC = () => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (hash === 'adapters') return 'settings';
-      const validScreens: ScreenId[] = ['work', 'clients', 'settings', 'inbox', 'review', 'dna', 'library', 'ops', 'eval'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'settings', 'inbox', 'review', 'dna', 'library', 'ops', 'eval', 'comparison'];
       if (validScreens.includes(hash as ScreenId)) return hash as ScreenId;
       const path = window.location.pathname.replace(/^\//, '').split('/')[0];
       if (path === 'adapters') return 'settings';
@@ -81,7 +82,7 @@ export const App: React.FC = () => {
         setCurrentScreen('settings');
         return;
       }
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (validScreens.includes(hash as ScreenId)) {
         setCurrentScreen(hash as ScreenId);
       }
@@ -89,7 +90,7 @@ export const App: React.FC = () => {
 
     const handleCustomNav = (e: any) => {
       const targetScreen = e.detail;
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval'];
+      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (targetScreen && validScreens.includes(targetScreen as ScreenId)) {
         window.location.hash = `#/${targetScreen}`;
         setCurrentScreen(targetScreen as ScreenId);
@@ -261,6 +262,7 @@ export const App: React.FC = () => {
           {currentScreen === 'settings' && <SettingsScreen />}
           {currentScreen === 'ops' && <OpsScreen />}
           {currentScreen === 'eval' && <EvalScreen />}
+          {currentScreen === 'comparison' && <ComparisonScreen />}
         </div>
       </main>
 

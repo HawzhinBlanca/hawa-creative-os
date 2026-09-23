@@ -229,6 +229,42 @@ class HawaApiClient {
     run: (name: string) => this.request<any>('/evaluations/runs', { method: 'POST', body: JSON.stringify({ name }) }),
   };
 
+  // The blinded comparison with the office designer (Core: routes/comparison.routes.ts). The judges'
+  // own pages are served by Core under /api/judge/ and never go through this client.
+  public readonly comparisons = {
+    list: () => this.request<{ studies: import('../services/comparison.js').StudySummary[] }>('/comparisons'),
+    get: (id: string) => this.request<import('../services/comparison.js').StudyDetail>(`/comparisons/${encodeURIComponent(id)}`),
+    create: (body: { name: string; preregistration: import('../services/comparison.js').Preregistration }) =>
+      this.request<import('../services/comparison.js').StudySummary>('/comparisons', { method: 'POST', body: JSON.stringify(body) }),
+    addPair: (id: string, body: import('../services/comparison.js').AddPairBody) =>
+      this.request<import('../services/comparison.js').PairSummary>(`/comparisons/${encodeURIComponent(id)}/pairs`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    addJudge: (id: string, body: { name: string; kind: 'requester' | 'designer' }) =>
+      this.request<import('../services/comparison.js').AddedJudge>(`/comparisons/${encodeURIComponent(id)}/judges`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    revokeJudge: (id: string, judgeId: string) =>
+      this.request<{ revokedAt: string; already: boolean }>(
+        `/comparisons/${encodeURIComponent(id)}/judges/${encodeURIComponent(judgeId)}`,
+        { method: 'DELETE' }
+      ),
+    lock: (id: string) => this.request<import('../services/comparison.js').StudyDetail>(`/comparisons/${encodeURIComponent(id)}/lock`, { method: 'POST' }),
+    close: (id: string) => this.request<import('../services/comparison.js').StudyDetail>(`/comparisons/${encodeURIComponent(id)}/close`, { method: 'POST' }),
+    results: (id: string) => this.request<import('../services/comparison.js').StudyResults>(`/comparisons/${encodeURIComponent(id)}/results`),
+    /** One arm's stored PNG, fetched with the session header rather than a token in the address. */
+    pairImage: async (id: string, pairId: string, arm: 'hawa' | 'designer'): Promise<Blob> => {
+      const response = await fetch(
+        `${this.basePrefix}/comparisons/${encodeURIComponent(id)}/pairs/${encodeURIComponent(pairId)}/${arm}.png`,
+        { headers: this.getHeaders() }
+      );
+      if (!response.ok) throw new ApiError(response.status, 'The design could not be loaded');
+      return response.blob();
+    },
+  };
+
   public readonly fonts = {
     inspect: (body: { fontBase64: string; fontName: string }) =>
       this.request<any>('/fonts/inspect', { method: 'POST', body: JSON.stringify(body) }),

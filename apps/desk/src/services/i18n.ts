@@ -13,6 +13,7 @@ export interface TranslationSchema {
     library: string;
     ops: string;
     eval: string;
+    comparison: string;
   };
   screenSubtitles: {
     work: string;
@@ -24,6 +25,7 @@ export interface TranslationSchema {
     library: string;
     ops: string;
     eval: string;
+    comparison: string;
   };
   sidebar: {
     brandSubtitle: string;
@@ -86,6 +88,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       library: 'Creative Library & Retrieval Evidence',
       ops: 'Actionable Operations & Health',
       eval: 'Model Evaluations & Canary Tournaments',
+      comparison: 'Blinded Comparison',
     },
     screenSubtitles: {
       work: 'Actionable creative queue, Canva Studio handoff, and verified delivery gate',
@@ -97,6 +100,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       library: 'Verified vector assets, SHA-256 fingerprints, and retrieval embeddings',
       ops: 'Real-time SLO latencies, circuit breakers, and storage reconciliation audits',
       eval: 'Adversarial red-team safety benchmarks, copy-guard, and golden suites',
+      comparison: 'Hawa and the office designer, judged by people who cannot tell which design is which',
     },
     sidebar: {
       brandSubtitle: 'Private Creative OS',
@@ -157,6 +161,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       library: 'کتێبخانەی داهێنەرانە و بەڵگەکان',
       ops: 'تەندروستی کردارەکی و چاودێری',
       eval: 'هەڵسەنگاندنی مۆدێلەکان و تاقیکردنەوەکان',
+      comparison: 'بەراوردکردنی دیزاین',
     },
     screenSubtitles: {
       work: 'سندووقی ئەرکەکان، دەستکاریکردن لە کانڤا و بڵاوکردنەوەی سەلمێنراو',
@@ -168,6 +173,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       library: 'ئاسێتە ڤێکتۆرییەکان، کۆدی ئاسایش و بەڵگەنامەکان',
       ops: 'خێرایی کارکردن و هەماهەنگی کۆگاکانی درایڤ و شیتس',
       eval: 'تاقیکردنەوەی ئاسایش لە بەرامبەر هێرش و تێکدان',
+      comparison: 'هاوا و دیزاینەری ئۆفیس، هەڵسەنگێنراو لەلایەن کەسانێک کە نازانن کام دیزاین هی کێیە',
     },
     sidebar: {
       brandSubtitle: 'سیستەمی کارگێڕی دیزاین',

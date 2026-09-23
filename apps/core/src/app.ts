@@ -165,6 +165,7 @@ import { registerSystemRoutes } from './routes/system.routes.js';
 import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerClientsRoutes } from './routes/clients.routes.js';
 import { registerEvalsRoutes } from './routes/evals.routes.js';
+import { registerComparisonRoutes } from './routes/comparison.routes.js';
 import { registerIngressRoutes } from './routes/ingress.routes.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import {
@@ -1962,6 +1963,7 @@ export function createApp(options?: CreateAppOptions) {
   registerAuthRoutes(routeContext);
   registerClientsRoutes(routeContext);
   registerEvalsRoutes(routeContext);
+  registerComparisonRoutes(routeContext);
   registerIngressRoutes(routeContext);
 
   // Autonomous Inbound Chat Ingress & Vector Composition Engine (Invariants #1, #2, #4, #8, #10)

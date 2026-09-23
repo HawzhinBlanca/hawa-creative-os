@@ -19,7 +19,7 @@ describe('the ask ledger in the task view', () => {
             taskId: 'b',
             directive: 'cut the panelists out and less empty space',
             asks: [
-              { ask: 'cut the panelists out', status: 'done', op: 'photo_cutout' },
+              { ask: 'cut the panelists out', status: 'done', op: 'photo_cutout', by: 'rule' },
               { ask: 'less empty space', status: 'done', assumption: 'bigger photos', seen: { made: false, why: 'the gaps look the same' } },
               { ask: 'retouch her face', status: 'not_possible', reason: 'a designer is needed' },
             ],
@@ -32,7 +32,7 @@ describe('the ask ledger in the task view', () => {
     );
     expect(html).toContain('What the requester asked (2 rounds)');
     expect(html).toContain('✅ cut the panelists out');
-    expect(html).toContain('photo cutout');
+    expect(html).toContain('photo cutout, made by rule');
     expect(html).toContain('Read as: bigger photos');
     expect(html).toContain('🔍 The visual check did not agree: the gaps look the same');
     expect(html).toContain('❌ retouch her face');

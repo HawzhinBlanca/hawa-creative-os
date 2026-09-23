@@ -35,6 +35,10 @@ const PUBLIC: Array<{ method: string; path: RegExp; statuses: number[]; why: str
   { method: 'POST', path: /^\/webhooks\/whatsapp\/actions$/, statuses: [400, 401, 403], why: 'signed action callback' },
   // Provider webhooks authenticate by shared secret or signature, configured below.
   { method: 'POST', path: /^\/webhooks\/(telegram|whatsapp)$/, statuses: [401, 403], why: 'provider webhook; secret required' },
+  // A blinded-comparison judge has no account: the random token in the link is the credential, and
+  // an unknown or revoked token answers 404 exactly like a path that does not exist.
+  { method: 'GET', path: /^\/judge\/[^/]+(\/next|\/image\/[^/]+\/[^/]+)?$/, statuses: [404], why: "judge's link; its path token is the credential" },
+  { method: 'POST', path: /^\/judge\/[^/]+\/judgments$/, statuses: [404], why: "judge's pick; its path token is the credential" },
 ];
 
 const FIGMA_GONE = /figma/;

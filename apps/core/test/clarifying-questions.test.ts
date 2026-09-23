@@ -127,7 +127,7 @@ describe('an ask that could mean different designs is asked about once, before a
     const { run, go } = harness({ asks: [{ ...readAs, elements: ['logo'] }] });
     await go();
     const stages = JSON.parse(run.stages);
-    expect(stages.directed.asks).toEqual([{ ask: 'less empty space', status: 'done', assumption: 'the logo made bigger to fill the space' }]);
+    expect(stages.directed.asks).toEqual([{ ask: 'less empty space', status: 'done', by: 'model', assumption: 'the logo made bigger to fill the space' }]);
     expect(requesterDraftNotes({ run, candidates: [] } as any)).toContain('✅ Done: less empty space (read as: the logo made bigger to fill the space).');
   });
 
