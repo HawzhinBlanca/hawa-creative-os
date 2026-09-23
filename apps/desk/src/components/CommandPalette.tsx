@@ -36,25 +36,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // Static Local Items for instant sub-millisecond response
   const baseItems: SearchItem[] = [
-    // Quick Actions
-    {
-      id: 'act-export',
-      category: 'Actions',
-      title: 'Export 4-in-1 Campaign (.zip)',
-      subtitle: 'Generate Feed, Story, Square, Landscape Retina PNG, SVG, and .hyc bundles',
-      badge: 'Export',
-      actionId: 'export_4in1',
-      screen: 'review',
-    },
-    {
-      id: 'act-comfy',
-      category: 'Actions',
-      title: 'Synthesize Sandboxed Vector Backdrop',
-      subtitle: 'Render allowlisted ComfyUI/SDXL vector SVG backdrop with smart contrast scrim',
-      badge: 'ComfyUI',
-      actionId: 'synthesize_comfy',
-      screen: 'review',
-    },
+    // Quick Actions. "Export 4-in-1 Campaign" and "Synthesize Sandboxed Vector Backdrop" were
+    // removed (2026-09-24): no handler existed for either, so choosing one only switched screens.
     {
       id: 'act-tour',
       category: 'Actions',

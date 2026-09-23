@@ -69,8 +69,22 @@ export interface DecisionPayload {
   };
 }
 
+/** An entry of GET /tasks/:taskId/timeline: a task_events row, or an in-memory transition. */
+export interface TaskTimelineEvent {
+  eventId?: string;
+  eventType?: string;
+  aggregateVersion?: number;
+  actor?: { type?: string; id?: string | null; displayName?: string };
+  data?: unknown;
+  fromStatus?: string;
+  toStatus?: string;
+  reason?: string;
+  occurredAt?: string;
+}
+
 class HawaApiClient {
   private basePrefix = '/v1';
+  private sessionEndedListeners = new Set<(reason: string, hadSession: boolean) => void>();
 
   private getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
@@ -122,6 +136,20 @@ class HawaApiClient {
         } catch {}
       }
 
+      // Every 401 is a session Core no longer accepts (expired after 24 hours, revoked, or never
+      // signed in), whoever asked. Only the queue used to notice; a panel that swallowed it left the
+      // Desk frozen on stale data after the session expired (2026-09-24). The sign-in call's own
+      // 401 is a wrong key, which the sign-in form reports.
+      if (response.status === 401 && !url.endsWith('/auth/session')) {
+        this.sessionEndedListeners.forEach((listener) => {
+          try {
+            listener(errorMsg, Boolean(headers.Authorization));
+          } catch (err) {
+            console.error('Error in session-ended listener:', err);
+          }
+        });
+      }
+
       throw new ApiError(response.status, errorMsg, problem);
     }
 
@@ -158,8 +186,26 @@ class HawaApiClient {
       return res;
     },
 
-    logout: (): void => {
+    /**
+     * Ends the session on the server as well as in this tab. Clearing the token alone left it valid
+     * for 24 hours (2026-09-24). The token is cleared first, so a failed call still signs this tab out.
+     */
+    logout: async (): Promise<void> => {
+      const token = getAuthToken();
       clearAuthToken();
+      if (!token) return;
+      await this.request('/auth/session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+    },
+
+    /**
+     * Called whenever a request is refused with 401, with Core's reason and whether a session token
+     * was sent. Returns the unsubscribe.
+     */
+    onSessionEnded: (listener: (reason: string, hadSession: boolean) => void): (() => void) => {
+      this.sessionEndedListeners.add(listener);
+      return () => {
+        this.sessionEndedListeners.delete(listener);
+      };
     },
   };
 
@@ -384,6 +430,10 @@ class HawaApiClient {
     get: async <T = any>(taskId: string): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}`, { method: 'GET' });
     },
+
+    /** The task's recorded events, oldest first as Core stores them (History & Audit). */
+    timeline: (taskId: string) =>
+      this.request<{ events: TaskTimelineEvent[] }>(`/tasks/${encodeURIComponent(taskId)}/timeline`),
 
     create: async <T = any>(body: any): Promise<T> => {
       return this.request<T>('/tasks', {

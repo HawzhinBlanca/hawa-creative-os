@@ -9,6 +9,22 @@ export interface SystemEventPayload<T = any> {
   timestamp: string;
 }
 
+/** Every task event Core broadcasts (apps/core/src/app.ts `broadcast('task:…')`). */
+export const TASK_EVENTS = [
+  'task:created',
+  'task:transitioned',
+  'task:qa_completed',
+  'task:approved',
+  'task:requester_approved',
+  'task:designer_requested',
+  'task:revision_requested',
+  'task:revision_created',
+  'task:rejected',
+  'task:comment_added',
+  'task:published',
+  'task:publish_reconciliation',
+] as const;
+
 export type EventHandler<T = any> = (data: T, rawEvent: MessageEvent) => void;
 export type StatusHandler = (status: StreamConnectionStatus) => void;
 
@@ -64,14 +80,11 @@ class EventStreamService {
         this.emit('system:ping', this.safeParse(event.data), event);
       });
 
-      // Domain & task events
+      // Domain & task events. An EventSource hears only the names listed here: the task events Core
+      // broadcast beyond the six listed before (a requester's approval in Telegram, a new revision,
+      // …) never reached the Desk (2026-09-24).
       const domainEvents = [
-        'task:created',
-        'task:transitioned',
-        'task:qa_completed',
-        'task:approved',
-        'task:revision_requested',
-        'task:published',
+        ...TASK_EVENTS,
         'webhook:received',
         'dna:updated',
         'asset:ingested',
