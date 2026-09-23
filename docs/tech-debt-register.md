@@ -306,6 +306,13 @@ This also silently erases the `typeface` and centred-title decisions read from t
 dumps into the same directory. `~/.hawa/snapshots_archive` currently holds 62 `.sql` files, 15 GB.
 The comment at line 79 says the archive "used to grow without limit" — the fix missed a path.
 *Resolution (2026-09-21):* Moved archive prune loop in `infra/backup/nightly_backup.sh` after `.sql` copies and added `.sql` extension pruning, keeping archive size bounded.
+*Reopened and resolved (2026-09-23):* that fix pruned the nightly job's archive destination (an iCloud
+folder, set by the launch agent), but `deploy.sh` moved its aged-out dumps to `~/.hawa/snapshots_archive`
+under a different variable, which nothing pruned: 86 plain dumps, 26 GB, and the disk reached 98%.
+The nightly job could also copy plain, unencrypted `.sql` dumps to the off-host destination. Now the
+deploy writes compressed custom-format dumps (`predeploy_*.dump`, about 40 MB instead of 550 MB) and
+archives nothing; `infra/ops/disk_cleanup.sh` keeps ten of them, one a day for 30 days of the old
+archive, and Docker's build cache under 8 GB; no plain dump is copied off the machine.
 
 **14.** `pnpm gate:prepare` replays stored layouts through the preparation code and makes **no model
 calls**. It was treated (in this session, by me, out loud) as proof that a model change was safe.

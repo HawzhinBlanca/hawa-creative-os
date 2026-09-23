@@ -141,16 +141,17 @@ umask 077   # dumps hold briefs, chat ids and sealed tokens: owner-only from the
 BACKUP_DIR="${ROOT_DIR}/infra/backup/snapshots"; mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d postgres
 until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/dev/null 2>&1; do sleep 1; done
-docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 pg_dump -U hawa_owner hawa > "${BACKUP_DIR}/hawa_${STAMP}.sql"
-echo "✓ backup written: infra/backup/snapshots/hawa_${STAMP}.sql ($(wc -c < "${BACKUP_DIR}/hawa_${STAMP}.sql") bytes)"
-
-# Archive older snapshots off checkout to prevent disk exhaustion
-ARCHIVE_DIR="${HAWA_BACKUP_ARCHIVE_DIR:-$HOME/.hawa/snapshots_archive}"
-mkdir -p "$ARCHIVE_DIR" && chmod 700 "$ARCHIVE_DIR"
-ls -1t "$BACKUP_DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
-  cp "$old" "$ARCHIVE_DIR/" 2>/dev/null || true
-  rm -f "$old"
-done
+# Custom format with zstd's long-distance matching: a dump repeats the same images many times, so it
+# is about 40 MB instead of 550 MB of plain SQL, in a second instead of thirteen. Restore it with
+# pg_restore (docs/25_OPERATIONS_RUNBOOK.md, Backups). disk_cleanup.sh keeps the newest ten.
+BACKUP="${BACKUP_DIR}/predeploy_${STAMP}.dump"
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 pg_dump -U hawa_owner -Fc --compress=zstd:long hawa > "$BACKUP"
+BACKUP_BYTES="$(wc -c < "$BACKUP" | tr -d ' ')"
+[[ "$BACKUP_BYTES" -gt 100000 ]] || { echo "ERROR: the backup is only ${BACKUP_BYTES} bytes"; exit 1; }
+docker exec -i hawa-production-postgres-1 pg_restore --list < "$BACKUP" >/dev/null \
+  || { echo "ERROR: the backup's table of contents cannot be read"; exit 1; }
+shasum -a 256 "$BACKUP" | awk '{print $1}' > "$BACKUP.sha256"
+echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACKUP_BYTES} bytes)"
 
 # 6. Versioned schema upgrades (idempotent; checksums of applied files are verified)
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
@@ -209,5 +210,8 @@ WORKER="$(docker exec hawa-production-worker-1 node -e "fetch('http://localhost:
 echo "worker: ${WORKER:-unavailable}"
 CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "cutout: ${CUTOUT:-unavailable}"
+
+# 9. Hawa's own disk use: older pre-deploy dumps, Docker's build cache (a full disk is an outage).
+bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"
 echo ""
 echo "=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator) ==="

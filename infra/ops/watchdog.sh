@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Hawa watchdog: starts Docker and the stack after a login or reboot, checks core and worker health,
 # and tells the operator on Telegram when something is wrong (once per 30 minutes) and when it recovers.
+# A nearly full disk is cleaned first (Hawa's own old backups and build cache, disk_cleanup.sh); what
+# is left is reported every 6 hours, with how much of it is Hawa's, so it is not mistaken for an outage.
 #
 #   bash infra/ops/watchdog.sh              # one pass (what the launch agent runs every 5 minutes)
 #   bash infra/ops/watchdog.sh --status     # print the assessment only, never alert
@@ -10,8 +12,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 PROD="$ROOT/infra/docker/.env.production"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 STATE="$STATE_DIR/state"; COOLDOWN=1800; NOW="$(date +%s)"; MODE="${1:-}"
 COMPOSE=(docker compose -f "$ROOT/infra/docker/docker-compose.prod.yml" -f "$ROOT/infra/docker/canva-release.override.yml" --env-file "$ROOT/infra/docker/.env")
-last_status=""; last_alert=0; [[ -f "$STATE" ]] && source "$STATE"
-save() { printf 'last_status=%q\nlast_alert=%q\n' "$1" "$2" > "$STATE"; }
+last_status=""; last_alert=0; last_disk_alert=0; last_cleanup=0; last_msg=""; [[ -f "$STATE" ]] && source "$STATE"
+save() {
+  printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\n' \
+    "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" > "$STATE"
+}
 notify() {
   local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2-)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1)"
   [[ -n "$token" && -n "$chat" ]] || return 0
@@ -67,9 +72,16 @@ else
   [[ "$wsum" == healthy* ]] || problems+=("worker ${wsum}")
 fi
 
-# 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting)
-used="$(df -P "$ROOT" | awk 'NR==2{gsub("%","",$5); print $5}')"
-[[ "${used:-0}" -lt 90 ]] || problems+=("disk ${used}% used")
+# 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting). From 88% Hawa
+#    cleans up after itself, at most hourly; from 90% what is left is reported (below).
+disk_used() { df -P "$ROOT" | awk 'NR==2{gsub("%","",$5); print $5}'; }
+used="$(disk_used)"
+if [[ "${used:-0}" -ge 88 && "$MODE" != "--status" ]] && (( NOW - last_cleanup >= 3600 )); then
+  mkdir -p "$HOME/.hawa/logs"
+  { date -u +%FT%TZ; bash "$ROOT/infra/ops/disk_cleanup.sh"; } >> "$HOME/.hawa/logs/disk_cleanup.log" 2>&1 || true
+  last_cleanup="$NOW"; used="$(disk_used)"
+fi
+disk_full=0; [[ "${used:-0}" -lt 90 ]] || disk_full=1
 newest="$(ls -t "$ROOT"/infra/backup/snapshots/hawa_*.dump 2>/dev/null | head -1 || true)"
 if [[ -n "$newest" ]]; then
   age=$(( NOW - $(stat -f '%m' "$newest" 2>/dev/null || stat -c '%Y' "$newest") ))
@@ -78,13 +90,35 @@ else
   problems+=("no nightly backup found in infra/backup/snapshots")
 fi
 
-if [[ ${#problems[@]} -eq 0 ]]; then
+if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   echo "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
-  [[ -n "$last_status" && "$last_status" != "healthy" ]] && notify "✅ Hawa recovered: core and worker healthy again ($(date '+%H:%M'))."
-  save healthy "$last_alert"; exit 0
+  if [[ -n "$last_status" && "$last_status" != "healthy" ]]; then
+    notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
+  fi
+  last_msg=""; save healthy; exit 0
 fi
-msg="$(printf '%s; ' "${problems[@]}")"; echo "PROBLEM: $msg"
+
+if [[ "$disk_full" -eq 1 ]]; then
+  free="$(df -h "$ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/')"
+  backups="$(du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
+  cache="$(docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
+  disk_msg="The Mac's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?} and Docker's build cache ${cache:-?}. The rest is other files on this Mac, so please free some space (System Settings, General, Storage)."
+fi
+if [[ ${#problems[@]} -eq 0 ]]; then
+  # Only the disk: a reminder every 6 hours, hourly past 97%, instead of every 30 minutes.
+  echo "PROBLEM: disk ${used}% used"; last_msg="disk ${used}% full"
+  [[ "$MODE" == "--status" ]] && exit 1
+  every=21600; [[ "${used:-0}" -lt 97 ]] || every=3600
+  if (( NOW - last_disk_alert >= every )); then
+    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"
+  fi
+  save problem; exit 1
+fi
+msg="$(printf '%s; ' "${problems[@]}")"; echo "PROBLEM: $msg"; last_msg="${msg%; }"
 [[ "$MODE" == "--status" ]] && exit 1
-if (( NOW - last_alert >= COOLDOWN )); then notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg}"; last_alert="$NOW"; fi
-save problem "$last_alert"; exit 1
+if (( NOW - last_alert >= COOLDOWN )); then
+  notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; last_alert="$NOW"
+  [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
+fi
+save problem; exit 1

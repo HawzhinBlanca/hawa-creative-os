@@ -106,13 +106,24 @@ encrypted location or delete them yourself.
 ## Backups
 
 `infra/backup/nightly_backup.sh` runs every night at 03:30 (launch agent `design.hawa.nightly-backup`)
-and on demand. It takes a `pg_dump` in custom format, writes a SHA-256 sidecar, restores the dump into a
-scratch database on the same server to prove it loads and holds the live task count, drops the scratch
-database, keeps the 14 newest dumps, and sends a Telegram alert to the operator chat only on failure.
-`--list` shows what exists; `backup.log` in `infra/backup/snapshots/` records every run. The deploy
-script also writes a plain SQL snapshot before every migration. Both live under the gitignored,
-owner-only `infra/backup/snapshots/`. Restore: `pg_restore -U hawa_owner -d hawa --clean --if-exists
-<file>` inside the postgres container, after stopping core and worker.
+and on demand. It takes a `pg_dump` in custom format compressed with zstd (`--compress=zstd:long`:
+about 41 MB, against 319 MB with the default compression, because the dump repeats the same images),
+writes a SHA-256 sidecar, restores the dump into a scratch database on the same server to prove it
+loads and holds the live task count, drops the scratch database, keeps the 14 newest dumps, copies an
+encrypted one to the archive destination, and sends a Telegram alert to the operator chat only on
+failure. `--list` shows what exists; `backup.log` in `infra/backup/snapshots/` records every run.
+
+The deploy script writes `predeploy_<stamp>.dump` (same format, with its table of contents checked)
+before every migration. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
+either: `pg_restore -U hawa_owner -d hawa --clean --if-exists <file>` inside the postgres container,
+after stopping core and worker. Pre-deploy dumps from before 2026-09-23 are plain SQL compressed as
+`.sql.zst`: `zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -U hawa_owner -d hawa`.
+
+`infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten pre-deploy dumps; one dump a
+day for 30 days in the old deploy archive `~/.hawa/snapshots_archive` (nothing writes there any more);
+Docker's build cache held to 8 GB and images nothing uses. The deploy runs it after health passes, the
+nightly backup runs its dump part, and the watchdog runs it when the disk passes 88%. `--report` only
+prints what Hawa holds.
 
 ## Watchdog and self-healing
 
@@ -120,7 +131,8 @@ owner-only `infra/backup/snapshots/`. Restore: `pg_restore -U hawa_owner -d hawa
 Docker Desktop is not configured to start at login, so the watchdog starts it, brings the stack up
 with `compose up -d --no-build` when fewer than six containers run, then checks core `/v1/health` and
 the worker health. Any problem is sent to the operator chat at most once per 30 minutes; recovery is
-announced once. `--status` prints the assessment without acting; `--announce` proves the alert path.
+announced once, saying what it was. A disk over 90% full after Hawa's own cleanup is reported with how
+much of it is Hawa's, every 6 hours (hourly past 97%), since the rest is other files on the Mac. `--status` prints the assessment without acting; `--announce` proves the alert path.
 Agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
 Install or refresh both agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
 

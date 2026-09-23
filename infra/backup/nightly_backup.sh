@@ -23,7 +23,9 @@ notify() { # Telegram, operator chat; values read at call time, never logged
 fail() { echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit 1; }
 
 docker exec "$PG" pg_isready -U hawa_owner -d hawa >/dev/null 2>&1 || fail "postgres container not ready"
-docker exec "$PG" pg_dump -U hawa_owner -Fc --no-owner hawa > "$OUT" || fail "pg_dump exited non-zero"
+# zstd with long-distance matching: the dump repeats the same images many times, so it is about an
+# eighth of the default compression's size (41 MB against 319 MB on 2026-09-23), and faster.
+docker exec "$PG" pg_dump -U hawa_owner -Fc --no-owner --compress=zstd:long hawa > "$OUT" || fail "pg_dump exited non-zero"
 SIZE="$(stat -f '%z' "$OUT" 2>/dev/null || stat -c '%s' "$OUT")"
 [[ "$SIZE" -gt 100000 ]] || fail "dump is only ${SIZE} bytes"
 shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256"
@@ -79,10 +81,9 @@ fi
 [[ -n "$ARCHIVE_KEYFILE" ]] && rm -f "$OUT.enc" "$OUT.enc.sha256"
 
 ls -1t "$DIR"/hawa_*.dump 2>/dev/null | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256"; done
-ls -1t "$DIR"/hawa_*.sql 2>/dev/null | tail -n +15 | while read -r old; do
-  [[ -d "$ARCHIVE_DEST" ]] && cp "$old" "$ARCHIVE_DEST/" 2>/dev/null || true
-  rm -f "$old"
-done
+# Pre-deploy dumps have their own retention (the newest ten, compressed). They were once copied,
+# unencrypted, into the archive destination, which is off this machine: never again.
+bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNING: disk_cleanup.sh --backups did not finish" >&2
 
 # Prune archive destination after all new and moved files have arrived
 if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then

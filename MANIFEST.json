@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-23T18:47:47Z",
+  "generatedAt": "2026-09-23T19:10:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -564,8 +564,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "60b0f70783e4c448238d60ab8079ac50cb77acbfaa5e5f3ab6bb8366c5c14af0",
-      "bytes": 12682
+      "sha256": "e0afb6848dd69867930e05838089a228a0f316f070c4ff3b5c0884637fb9a6c3",
+      "bytes": 13736
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -609,8 +609,8 @@
     },
     {
       "path": "docs/tech-debt-register.md",
-      "sha256": "f3da19defa08cb85dbbb5fcb49a7001ed83127dc1af0a0bd5c192fac595ed6e1",
-      "bytes": 31375
+      "sha256": "3eeac54d64a61c9c8da3d39ad4e8c100f88fc1b95141ddc35f8b8d80eb6e9061",
+      "bytes": 32070
     },
     {
       "path": "evals/fault_injection_matrix.csv",
