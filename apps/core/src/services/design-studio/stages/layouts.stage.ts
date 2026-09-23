@@ -360,23 +360,32 @@ function styleSummary(style: StageContext['style']): string {
 }
 
 /** The line that tells the layout model what photographs it has to place, and how. */
-export function photosBrief(photos: StageContext['photos'] | undefined, width: number, height: number): string {
+export function photosBrief(photos: StageContext['photos'] | undefined, width: number, height: number, cutouts?: StageContext['photoCutouts']): string {
   if (!photos?.length) return '';
   const minSide = Math.round(Math.min(width, height) * 0.22);
   const list = photos
     .map((p, i) => `${i}: ${p.width && p.height ? `${p.width}x${p.height} (${p.width > p.height ? 'landscape' : p.width < p.height ? 'portrait' : 'square'}, aspect ${(p.width / p.height).toFixed(2)})` : 'size unknown'}`)
     .join('; ');
+  const cut = (cutouts ?? []).map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+  // People cut out of their photos stand on the design itself (ADR-032): the copy is composed above
+  // them, and the boxes are fitted to each person and set on the bottom edge afterwards.
+  const cutLine = cut.length
+    ? ` Photos ${cut.join(', ')} are people cut out of their backgrounds (no rectangle, no photo background): ` +
+      `give each a tall box in the lower part of the canvas, side by side, reaching the bottom edge, and keep all text ` +
+      `and the logo above them or beside them, never on them; they may overlap each other a little.`
+    : '';
   return (
     `Client photographs to place (${photos.length}): ${list}. Each appears exactly once in photos[], as content ` +
     `(a speaker's portrait, a product), its short side at least 22% of the canvas's short side (${minSide}px here), ` +
     `never under text or the logo, cropped by cover-fit so give the box close to the photo's aspect. ` +
-    `Compose the copy around them; they are the point of the design.`
+    `Compose the copy around them; they are the point of the design.` +
+    cutLine
   );
 }
 
 export function layoutBriefV3(
   brief: Pick<CreativeBrief, 'occasion' | 'audience' | 'toneWords' | 'must'>,
-  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style' | 'photos' | 'width' | 'height'>
+  ctx: Pick<StageContext, 'instructions' | 'requestedBackground' | 'reference' | 'style' | 'photos' | 'photoCutouts' | 'width' | 'height'>
 ): string {
   return (
     [
@@ -385,7 +394,7 @@ export function layoutBriefV3(
       brief.must?.length ? `Must: ${brief.must.join('; ')}` : '',
       ctx.requestedBackground ? `Background: ${ctx.requestedBackground}, as the client asked` : '',
       ctx.reference ? `Client reference image (attached): ${ctx.reference.notes || 'follow its design'}` : '',
-      photosBrief(ctx.photos, ctx.width, ctx.height),
+      photosBrief(ctx.photos, ctx.width, ctx.height, ctx.photoCutouts),
       styleSummary(ctx.style),
     ]
       .filter(Boolean)

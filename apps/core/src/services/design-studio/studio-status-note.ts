@@ -74,6 +74,8 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   const followed = Array.isArray(stages.brief?.imageRoles) && stages.brief.imageRoles.some((r: any) => r?.role === 'style_reference');
   if (sent !== undefined && sent > 0) parts.push(placed === sent ? `your ${sent} photo${sent === 1 ? '' : 's'} placed` : `⚠️ ${placed} of your ${sent} photos placed`);
   else if (placed > 0) parts.push(`${placed} photo${placed === 1 ? '' : 's'} placed`);
+  const cutShipped = Array.isArray(shipped?.photos) ? (shipped.photos as Array<{ treatment?: unknown } | null>).filter((p) => p?.treatment === 'cutout').length : 0;
+  if (Array.isArray(stages.cutouts)) parts.push(`cut-outs: ${cutShipped} of ${stages.cutouts.length} placed`);
   if (followed) parts.push('your reference design followed');
   else if (!(sent && sent > 0) && placed === 0 && asReference) parts.push('your image used as a style reference, not placed');
 
@@ -134,15 +136,27 @@ export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteIn
   const shipped = parse(Array.isArray(layouts) ? layouts[layouts.length - 1] : undefined);
   const placed = Array.isArray(shipped?.photos) ? shipped.photos.length : 0;
   const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
+  const shippedPhotos: Array<{ photoIndex?: unknown; treatment?: unknown } | null> = Array.isArray(shipped?.photos) ? shipped.photos : [];
+  const cutCount = shippedPhotos.filter((p) => p?.treatment === 'cutout').length;
   if (sent !== undefined && sent > 0) {
-    notes.push(placed >= sent ? `Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.` : `⚠️ Only ${placed} of your ${sent} photos ${placed === 1 ? 'is' : 'are'} on the design.`);
+    if (placed < sent) notes.push(`⚠️ Only ${placed} of your ${sent} photos ${placed === 1 ? 'is' : 'are'} on the design.`);
+    else if (cutCount > 0 && cutCount === placed) notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design, the people cut out of their backgrounds.`);
+    else notes.push(`Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.`);
+  }
+  // A cut-out that failed its checks leaves its photo framed: the requester is told which, and why.
+  const cutouts: Array<{ photoIndex?: unknown; passed?: unknown; reason?: unknown } | null> = Array.isArray(stages.cutouts) ? stages.cutouts : [];
+  for (const o of cutouts) {
+    if (!o || o.passed !== false || typeof o.photoIndex !== 'number') continue;
+    if (shippedPhotos.some((p) => p?.photoIndex === o.photoIndex && p?.treatment === 'cutout')) continue;
+    notes.push(`⚠️ Photo ${o.photoIndex + 1} could not be cut out cleanly (${plain(o.reason) || 'it did not pass the checks'}), so it is shown as you sent it.`);
   }
   const roles: Array<{ role?: unknown; notes?: unknown } | null> = Array.isArray(stages.brief?.imageRoles) ? stages.brief.imageRoles : [];
   const reference = roles.find((r) => r?.role === 'style_reference');
   if (reference) {
     // The design places photos whole, in boxes. A reference with its people cut out cannot be
     // followed in that, and the requester is told so rather than "your reference design followed".
-    const photosCut = CUTOUT_REFERENCE.test(String(reference.notes || '')) && placed > 0 && !(shipped.photos as Array<{ treatment?: unknown } | null>).some((p) => p?.treatment === 'cutout');
+    // Cut-outs tried and failed are already explained photo by photo above.
+    const photosCut = CUTOUT_REFERENCE.test(String(reference.notes || '')) && placed > 0 && cutCount === 0 && cutouts.length === 0;
     // A change already reported as not possible says it; the same thing is not said twice.
     const toldAlready = Array.isArray(directed?.asks) && directed.asks.some((a: RecordedAsk) => a?.status === 'not_possible');
     if (photosCut && !toldAlready) notes.push('⚠️ Your reference shows the people cut out of their photos. This draft shows your photos as you sent them, because cut-outs cannot be made automatically yet; the art director can make them in Canva.');

@@ -22,6 +22,7 @@ export async function runTransferStage(
     {
       artBuffer: winner.artPng || undefined,
       photos: ctx.photos?.map((p) => ({ bytes: p.bytes, mimeType: p.mimeType })),
+      photoCutouts: ctx.photoCutouts,
       extraFonts: [ctx.latinFont, ctx.arabicFont, 'Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display'],
     }
   );

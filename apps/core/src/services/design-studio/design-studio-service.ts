@@ -25,9 +25,10 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
+import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts } from './photo-cutouts.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -154,6 +155,8 @@ export interface StudioResumeResult {
 export class DesignStudioService {
   private repo: DesignStudioRepository;
   private inFlightResumes = new Map<string, Promise<StudioResumeResult>>();
+  /** People cut out of client photos (ADR-032); unconfigured without CUTOUT_URL, and then photos stay framed. */
+  private cutouts = new PhotoCutouts();
 
   constructor(
     private db: Kysely<Database>,
@@ -585,6 +588,28 @@ export class DesignStudioService {
     );
     const parent = row?.parent;
     return typeof parent === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parent) ? parent : undefined;
+  }
+
+  /**
+   * Whether this run shows the people in the client's photos cut out of their backgrounds: the
+   * request or the change asks for it, the brief read the reference as cut-out portraits, or the
+   * design being changed already shows them cut out.
+   */
+  private async cutoutsWanted(s: Scope, run: { request: unknown }, ctx: StageContext, stages: { brief?: unknown }): Promise<boolean> {
+    const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as { directed?: { parentTaskId?: string; revisionDirective?: string } } | undefined;
+    const brief = (stages.brief || {}) as { referenceNotes?: string; must?: string[]; imageRoles?: Array<{ role?: string; notes?: string }> };
+    const words = [
+      ctx.instructions,
+      request?.directed?.revisionDirective,
+      brief.referenceNotes,
+      ...(brief.must || []),
+      ...(brief.imageRoles || []).filter((r) => r.role === 'style_reference').map((r) => r.notes),
+    ];
+    if (words.some((w) => typeof w === 'string' && CUTOUT_WORDS.test(w))) return true;
+    const parentTaskId = request?.directed?.parentTaskId;
+    if (!parentTaskId) return false;
+    const parent = await this.parentWinner(s, parentTaskId).catch(() => undefined);
+    return Boolean(parent?.layout.photos?.some((p) => p.treatment === 'cutout'));
   }
 
   /** The brief of the design a directed revision changes, or undefined when it is not one. */
@@ -1128,6 +1153,20 @@ export class DesignStudioService {
         ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
       }
 
+      // People cut out of their photos (ADR-032), when the request, the brief's reading of the
+      // reference, or the design being changed calls for them. They are made once, at the layout
+      // stage, and read back from the store at every stage after it, so the design a run shows never
+      // changes under it. A photo whose cut-out failed its checks stays framed, and the note says why.
+      if (ctx.photos?.length && this.cutouts.configured && run.status !== 'briefing') {
+        if (stages.cutoutsWanted === undefined) stages.cutoutsWanted = await this.cutoutsWanted(s, run, ctx, stages);
+        if (stages.cutoutsWanted) {
+          const loaded = await this.cutouts.forPhotos((fn) => this.tx(s, fn), s.tenantId, ctx.photos, { compute: run.status === 'laying_out' });
+          ctx.photoCutouts = loaded.assets;
+          ctx.cutoutOutcomes = loaded.outcomes;
+          if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
+        }
+      }
+
       switch (run.status) {
         case 'briefing': {
           // A change to a design the client received keeps that design's brief: the same reading of
@@ -1258,6 +1297,14 @@ export class DesignStudioService {
             concepts,
             candidateRows.map((r) => ({ id: r.id, ordinal: r.ordinal }))
           );
+          // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
+          // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
+          if (ctx.photoCutouts?.some(Boolean)) {
+            for (const cand of candidateStates) {
+              for (const p of cand.currentLayout.photos ?? []) if (ctx.photoCutouts[p.photoIndex]) p.treatment = 'cutout';
+              cand.currentLayout = settlePhotos(arrangeCutouts(cand.currentLayout, ctx.photoCutouts, ctx.cutoutOutcomes));
+            }
+          }
           const artCandidates = await runArtStage(ctx, candidateStates);
 
           for (const row of candidateRows) {

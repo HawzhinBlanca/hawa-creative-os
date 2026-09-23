@@ -4,6 +4,7 @@ const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
 import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fontFaceSupports } from './render-layout-v2.js';
+import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
 
 /**
@@ -21,6 +22,11 @@ export interface TransferV2Options extends TransferOptions {
   artBuffer?: Buffer;
   /** Content photos by photoIndex. A placed photo with no bytes is refused: the deck must show what the client sent. */
   photos?: Array<{ bytes: Buffer; mimeType: 'image/png' | 'image/jpeg' | 'image/webp' }>;
+  /**
+   * The person cut out of each content photo, by photoIndex, as the renderer takes them. Used only
+   * for a photo placed with `treatment: 'cutout'`; such a photo with no cut-out here goes framed.
+   */
+  photoCutouts?: Array<PhotoCutoutAsset | undefined>;
 }
 
 /** Pixel size of a PNG or a baseline/progressive JPEG, or null. Only the aspect is needed. */
@@ -433,7 +439,24 @@ export async function encodeStudioTransferV2(
 
   // 2b. Client photos, above the shapes and below the text, as the renderer draws them. `cover` with
   // the natural pixel size, as for the art, so Canva crops the way the preview did.
-  for (const p of layout.photos ?? []) {
+  // The layers come in the preview's order (every cut-out shadow, then the photos), so the deck
+  // stacks them as the judge saw them.
+  for (const layer of photoLayers(layout.photos ?? [], options.photoCutouts)) {
+    const p = layer.photo;
+    // A cut-out is its shadow and the person, each its own picture at the rect the preview drew, so
+    // the client can move or delete the shadow in Canva. The PNGs already have the rects' aspect, so
+    // there is no sizing and no crop; the person's transparency is the edge.
+    if (layer.kind !== 'framed') {
+      slide.addImage({
+        data: `image/png;base64,${layer.png.toString('base64')}`,
+        x: layer.rect.x / 96,
+        y: layer.rect.y / 96,
+        w: layer.rect.width / 96,
+        h: layer.rect.height / 96,
+        objectName: layer.kind === 'cutout-shadow' ? `Photo ${p.photoIndex} shadow` : `Photo ${p.photoIndex}`,
+      });
+      continue;
+    }
     const photo = options.photos?.[p.photoIndex];
     if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
     const pixels = imagePixelSize(photo.bytes);

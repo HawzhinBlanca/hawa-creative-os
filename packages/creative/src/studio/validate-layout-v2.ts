@@ -1,4 +1,5 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
+import { photosMayOverlap } from './photo-cutout.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth as houseMinLogoWidth, logoClearZone, requiredContrast, isStoryFormat, getSafeZoneBox } from './house-rules.js';
 
 export interface ValidationReference {
@@ -309,8 +310,10 @@ export function validateLayoutV2(
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} leaves the canvas` };
     }
     const minSide = Math.round(Math.min(layout.width, layout.height) * (p.role === 'inset' ? 0.12 : 0.22));
-    if (Math.min(p.width, p.height) < minSide) {
-      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} (${p.role}) is ${p.width}x${p.height}; at least ${minSide}px a side` };
+    // A person cut out of their photo is as wide as they are: a standing figure is narrow by nature,
+    // so a cut-out is held to its height (ADR-032). A framed photo keeps the rule on both sides.
+    if (p.treatment === 'cutout' ? p.height < minSide * 1.5 : Math.min(p.width, p.height) < minSide) {
+      return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} (${p.role}) is ${p.width}x${p.height}; at least ${p.treatment === 'cutout' ? `${Math.round(minSide * 1.5)}px tall` : `${minSide}px a side`}` };
     }
     for (const t of layout.text) {
       if (boxesIntersect(p, t)) {
@@ -321,9 +324,10 @@ export function validateLayoutV2(
       return { ok: false, code: 'PHOTOS', message: `Photo ${p.photoIndex} sits under the logo` };
     }
   }
+  // Two cut-out people may stand a little into each other, as a group does; see photosMayOverlap.
   for (let i = 0; i < photos.length; i++) {
     for (let j = i + 1; j < photos.length; j++) {
-      if (boxesIntersect(photos[i], photos[j])) {
+      if (boxesIntersect(photos[i], photos[j]) && !photosMayOverlap(photos[i], photos[j])) {
         return { ok: false, code: 'PHOTOS', message: `Photos ${photos[i].photoIndex} and ${photos[j].photoIndex} overlap` };
       }
     }

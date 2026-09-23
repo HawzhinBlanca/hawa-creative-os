@@ -116,6 +116,7 @@ export async function runReviseStage(
         // Re-render
         const renderResult = await renderLayoutV2Async(layoutToUse, {
           photoDataUris: ctx.photos?.map((p) => p.dataUrl),
+          photoCutouts: ctx.photoCutouts,
           copyText: copyMap,
           artImagePath: artDataUri,
           logoDataUri,

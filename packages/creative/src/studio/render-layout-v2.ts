@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
-import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig } from './layout-v2.js';
+import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
+import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
 
 export { PNG };
@@ -45,6 +46,11 @@ export interface RenderLayoutOptions {
   logoDataUri?: string;
   /** Content photos as data: URIs, by photoIndex. A placed photo with no data draws as a labelled slot. */
   photoDataUris?: string[];
+  /**
+   * The person cut out of each content photo, by photoIndex. Used only for a photo placed with
+   * `treatment: 'cutout'`; such a photo with no cut-out here is drawn framed from photoDataUris.
+   */
+  photoCutouts?: Array<PhotoCutoutAsset | undefined>;
   fontsDir?: string;
   fontconfigFile?: string;
   rsvgConvertPath?: string;
@@ -1175,6 +1181,16 @@ function renderTextElementToSvg(
 }
 
 /**
+ * One part of a cut-out photo (its shadow or the person) as an SVG image at the exact rect from
+ * `cutoutPlacement`, with preserveAspectRatio="none". The rect already has the PNG's aspect, and the
+ * transfer places the same rect, so neither side crops or fits anything itself. No clip-path and no
+ * corner radius: the person's own transparency is the edge, and the shadow may reach beyond the box.
+ */
+function cutoutImageSvg(id: string, png: Buffer, r: Box): string {
+  return `<image id="${id}" xlink:href="data:image/png;base64,${png.toString('base64')}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" preserveAspectRatio="none"/>`;
+}
+
+/**
  * Builds SVG markup for both full layout and no-text composite.
  */
 export function renderLayoutV2ToSvg(
@@ -1271,7 +1287,15 @@ export function renderLayoutV2ToSvg(
   // Photos Layer: above the art, its scrim and the shapes, below the logo and text. Panels are
   // card backgrounds; drawn over a photo they hid it (2026-09-22, both portraits under a navy card). Drawn with the same
   // xMidYMid slice the art uses, so the transfer's `cover` sizing matches what the judge scored.
-  for (const p of layout.photos ?? []) {
+  // A cut-out person keeps the id `photo-<index>` a framed photo has, so code that finds a photo by
+  // id finds it; its shadow is `photo-shadow-<index>`.
+  for (const layer of photoLayers(layout.photos ?? [], options.photoCutouts)) {
+    const p = layer.photo;
+    if (layer.kind !== 'framed') {
+      const id = layer.kind === 'cutout-shadow' ? `photo-shadow-${p.photoIndex}` : `photo-${p.photoIndex}`;
+      bodyPartsNoText.push(cutoutImageSvg(id, layer.png, layer.rect));
+      continue;
+    }
     const href = options.photoDataUris?.[p.photoIndex];
     const clipId = `photo-clip-${p.photoIndex}`;
     const rx = Math.max(0, Math.min(p.radius ?? 0, Math.min(p.width, p.height) / 2));

@@ -234,3 +234,38 @@ describe('the messages for a change that needs a designer', () => {
     expect(alert.text).toContain('before approving it');
   });
 });
+
+describe('with cut-outs made, "cut them out" is a change the edit makes', () => {
+  const ONE_PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const photo = { dataUrl: `data:image/png;base64,${ONE_PIXEL}`, bytes: Buffer.from(ONE_PIXEL, 'base64'), mimeType: 'image/png' as const, width: 1, height: 1 };
+  const cutAsset = { png: Buffer.from(ONE_PIXEL, 'base64'), width: 300, height: 450, shadowPng: Buffer.from(ONE_PIXEL, 'base64'), shadowWidth: 330, shadowHeight: 480, shadowX: -12, shadowY: -12 };
+  const cutAsk: Ask = { ask: 'cut the panelists out of their photos', elements: ['photos'], restyle: false, possible: true, reason: '' };
+
+  it('shows the people cut out, standing on the bottom edge, heads matched, and reports it done', async () => {
+    const answer = structuredClone(withPhotos);
+    for (const p of answer.photos!) p.treatment = 'cutout';
+    const { service, run, updated, candidateId, completeJson } = harness({
+      parentLayout: withPhotos,
+      asks: [cutAsk],
+      targets: ['photos'],
+      photos: [photo, photo],
+      editReply: { layout: answer, changes: [{ element: 'photos', before: 'framed', after: 'cut out', why: 'asked' }] },
+    });
+    const ctxFactory = (service as any).createStageContext;
+    (service as any).createStageContext = (s: any, r: any) => ({
+      ...ctxFactory(s, r),
+      photoCutouts: [cutAsset, cutAsset],
+      cutoutOutcomes: [{ photoIndex: 0, passed: true, faceHeight: 60 }, { photoIndex: 1, passed: true, faceHeight: 60 }],
+    });
+    await service.resume(scope, run.task_id, run.id);
+    const res: any = await service.resume(scope, run.task_id, run.id);
+    expect(res.status).toBe('qa');
+    const analysis = (completeJson.mock.calls.find((c: any) => c[0].schemaName === 'EditTargets') as any)[0].prompt as string;
+    expect(analysis).toContain('show the person in photos 0, 1 cut out');
+    const saved = updated.find((u) => u.id === candidateId.value && u.layouts).layouts[0];
+    expect(saved.photos.map((p: any) => p.treatment)).toEqual(['cutout', 'cutout']);
+    for (const p of saved.photos) expect(p.y + p.height).toBe(1350);
+    expect(saved.photos[0].height).toBe(saved.photos[1].height);
+    expect(JSON.parse(run.stages).directed.asks).toEqual([{ ask: 'cut the panelists out of their photos', status: 'done' }]);
+  });
+});

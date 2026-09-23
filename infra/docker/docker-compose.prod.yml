@@ -61,6 +61,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
       HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
+      # People cut out of client photos (ADR-032). Optional: without it a photo is placed framed.
+      CUTOUT_URL: http://cutout:8090
     extra_hosts:
       - "api.telegram.org:149.154.167.99"
     networks:
@@ -106,6 +108,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Person cut-outs (ADR-032): a matting model and a face detector on the internal network only.
+  # The model files are mounted read-only from the host and pinned by sha256; one cut takes about
+  # 8 GB at its peak, so the service has its own limit and a spike cannot take Core down with it.
+  cutout:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.cutout
+    image: hawa-cutout:1
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      CUTOUT_MODEL: /models/BiRefNet-portrait-epoch_150.onnx
+      CUTOUT_MODEL_SHA256: 1ba1c8ff5a7bbfadc8d8d13fb11d7be793f91f23d9d466549e37a854f6668f99
+      CUTOUT_FACE_MODEL: /models/face_detection_yunet_2023mar.onnx
+      CUTOUT_THREADS: "4"
+    volumes:
+      - ${HAWA_MODELS_DIR:-${HOME}/.hawa/models}:/models:ro
+    mem_limit: 12g
+    networks:
+      - core
 
   postgres:
     image: pgvector/pgvector:pg17

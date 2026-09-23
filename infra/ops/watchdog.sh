@@ -29,14 +29,15 @@ fi
 # 2. Stack containers
 if [[ ${#problems[@]} -eq 0 ]]; then
   running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
-  if [[ "$running" -lt 6 ]]; then
+  # nginx, desk, core, worker, postgres, restate and cutout (ADR-032)
+  if [[ "$running" -lt 7 ]]; then
     if [[ "$MODE" != "--status" ]]; then
       export HAWA_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       "${COMPOSE[@]}" up -d --no-build >/dev/null 2>&1 || problems+=("compose up failed")
       sleep 20
       running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
     fi
-    [[ "$running" -ge 6 ]] || problems+=("only ${running}/6 containers running")
+    [[ "$running" -ge 7 ]] || problems+=("only ${running}/7 containers running")
   fi
 fi
 # 3. Core and worker health

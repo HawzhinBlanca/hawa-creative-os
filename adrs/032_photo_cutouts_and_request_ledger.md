@@ -1,7 +1,7 @@
 # ADR-032: Pixel-Faithful Photo Treatments and a Request Ledger That Stays Open Until Approval
 
 **Date:** 2026-09-23
-**Status:** Proposed. Needs the owner's approval before Phase 1 of the plan starts.
+**Status:** Accepted by the owner on 2026-09-23 ("approved … start phase 1"). Model chosen after the trial: BiRefNet-portrait (sha256 `1ba1c8ff…6f99`), with the YuNet face detector (sha256 `8f2383e4…52fa4`), served by `services/cutout` in its own container (`infra/docker/Dockerfile.cutout`).
 **Amends:** ADR-030 §2.1 ("local LLM/image services are disabled in production"), narrowly: see §2.1 below.
 **Plan:** `output/plans/2026-09-23-designer-grade-revisions/PLAN.md`
 **Research:** `output/research/2026-09-23-cutouts-and-revision-loop/` (three reports and the cut-out trial evidence)

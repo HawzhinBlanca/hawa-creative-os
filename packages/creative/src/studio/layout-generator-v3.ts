@@ -2,8 +2,8 @@ import { clientReferenceInstruction, clientReferencePart, type ClientReference }
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
 import { fitLogoToAspect, resolveRadius, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
-import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
-import { studioLayoutV2Schema } from './layout-v2.js';
+import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box, PhotoTreatment } from './layout-v2.js';
+import { studioLayoutV2Schema, PHOTO_TREATMENTS } from './layout-v2.js';
 import { resolveModel, modelSupportsReasoningEffort } from '@hawa/domain';
 import {
   admittedFontFace,
@@ -104,6 +104,8 @@ export interface NormalizedPhotoElement extends NormalizedBox {
   role: 'hero' | 'portrait' | 'inset';
   /** Corner radius as a fraction of the photo's short side: 0 square, 0.5 round. */
   radiusFraction: number;
+  /** Framed (absent) or cut out. The model's schema does not ask for it; a caller that sets it keeps it. */
+  treatment?: PhotoTreatment;
 }
 
 export interface CopyBlockSlotInput {
@@ -436,7 +438,16 @@ export function scaleNormalizedLayoutToV2(
   const photos = (norm.photos || []).map((p) => {
     const box = { x: scaleX(p.x), y: scaleY(p.y), width: scaleDimX(p.width), height: scaleDimY(p.height) };
     const radius = Math.round(clamp(p.radiusFraction ?? 0, 0, 0.5) * Math.min(box.width, box.height));
-    return { photoIndex: Math.max(0, Math.round(p.photoIndex)), role: p.role, ...box, ...(radius > 0 ? { radius } : {}) };
+    // A treatment the schema does not know is dropped rather than carried: the schema check below
+    // would otherwise discard the whole candidate over one field.
+    const treatment = PHOTO_TREATMENTS.find((t) => t === p.treatment);
+    return {
+      photoIndex: Math.max(0, Math.round(p.photoIndex)),
+      role: p.role,
+      ...box,
+      ...(radius > 0 ? { radius } : {}),
+      ...(treatment ? { treatment } : {}),
+    };
   });
 
   return {

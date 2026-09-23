@@ -35,3 +35,54 @@ The two panelist portraits from the 2026-09-23 request (task 00d06b2e, SAGACON 2
 - Quality is sufficient for the office's typical portraits, with foreground estimation mandatory.
 - Memory, not speed, is the constraint: at about 8 GB peak the model cannot run inside the current 8.3 GB Docker VM beside Postgres, Restate, Core and the worker. Either Docker gets 16 GB, or a leaner export (native `DeformConv`, reported to cut memory and time; `CUTOUT_MODELS.md` §2) must be proved first.
 - The trial covers two photos. The bake-off in the plan (30–50 office photos, BiRefNet_lite-matting and BEN2 added) decides the model.
+
+
+## Bake-off, 32 images (2026-09-23, after the owner approved ADR-032)
+
+26 freely licensed images from Wikimedia Commons (`BAKEOFF_PHOTO_SOURCES.json`: title, licence, source), plus the 6 distinct images in production requests: two portraits, a reference poster and three designs or screenshots. The set holds single portraits, dark and busy backgrounds, groups of two and three, full-length figures, hijab and hair, close-ups with the top of the head cut off, very small people at a panel table, and paintings, drawings and designs. The last three categories must be refused or kept framed. Each image went through the full engine: matte, cleaning, foreground estimation, face detection and gates, via `services/cutout/hawa_cutout/core.py`.
+
+| Measure | portrait | lite |
+|---|---|---|
+| Passed gates | 22 of 32 | 23 of 32 |
+| Mean time per image, host CPU, 4 threads | 8.7 s | 5.6 s |
+| Peak memory | 8.8 GB | 9.1 GB |
+
+- **Verdicts:** every real single or group portrait passed with both models. Failures were the two close-ups whose head is cut off at the top (`head_not_cut`), the panel with tiny people (`resolution`), drawings (`person_found`, `haze`), and posters and screenshots (`person_found`). The two models disagreed on one image: a daguerreotype in its frame, refused as hazy by portrait and passed by lite.
+- **Visual check:** the contact sheets (kept in the session scratchpad, since they show client and third-party faces) showed clean hair, veils and hands. At poster size the two models are nearly indistinguishable; portrait is slightly finer on hair.
+- **Decision: BiRefNet-portrait.** It has the best published portrait scores and the cleanest training provenance (P3M-10k), and 3 s more per photo does not matter in a run of minutes. Lite stays on disk as a spare.
+- **In the shipped container** (`hawa-cutout:1`, Docker VM with 8 CPUs): 10–11 s per photo; 2.2 GB resident when idle. Sewa's two portraits and a two-person photo passed; a drawing was refused with `person_found`. The engine's 9 tests pass inside the image against the pinned model.
+
+| Image | portrait | lite |
+|---|---|---|
+| c00 | fail: person_found, faces_whole, area, head_not_cut | fail: person_found, faces_whole, area, head_not_cut |
+| c01 | pass | pass |
+| c02 | pass | pass |
+| c03 | pass | pass |
+| c04 | pass | pass |
+| c05 | pass | pass |
+| c06 | fail: person_found, faces_whole, haze | fail: person_found, faces_whole, area |
+| c07 | fail: person_found, faces_whole, pieces, haze | fail: person_found, faces_whole, area |
+| c08 | pass | pass |
+| c09 | fail: person_found, faces_whole, pieces, haze | fail: person_found, faces_whole, haze |
+| c10 | pass | pass |
+| c11 | fail: resolution | fail: pieces |
+| c12 | pass | pass |
+| c13 | pass | pass |
+| c14 | pass | pass |
+| c15 | pass | pass |
+| c16 | fail: person_found, faces_whole, head_not_cut | fail: person_found, faces_whole, head_not_cut |
+| c17 | pass | pass |
+| c18 | fail: haze | pass |
+| c19 | pass | pass |
+| c20 | pass | pass |
+| c21 | pass | pass |
+| c22 | pass | pass |
+| c23 | pass | pass |
+| c24 | pass | pass |
+| c25 | pass | pass |
+| request 21fd05 | fail: person_found, faces_whole, haze | fail: person_found, faces_whole, haze |
+| request 8b94af | pass | pass |
+| request a1cdce | pass | pass |
+| request b67ac2 | fail: person_found, faces_whole, haze | fail: person_found, faces_whole, area, pieces, haze |
+| request c9b48b | pass | pass |
+| request f2ed48 | fail: person_found, faces_whole, area, resolution | fail: person_found, faces_whole, pieces, haze |

@@ -21,6 +21,7 @@ import { HOUSE_RULES, FORBIDDEN_ART_WORDS, minLogoWidth, logoClearZone, required
 import { calculateLuminanceContrastRatio, declaredBackgroundColour, hexToLuminance } from './composite-contrast.js';
 import { normalizeHex } from './validate-layout-v2.js';
 import { applyStyleSpec, colourDecisionsOnly, composeStyleSpec, layoutDefectCount, MOVEMENT_DECISIONS, ornamentForStyle, withoutDecision, type StyleSpec } from './style-spec.js';
+import { photosMayOverlap } from './photo-cutout.js';
 
 /**
  * The v3 pipeline's decisions, in one place, for both of its callers.
@@ -800,9 +801,10 @@ export function settlePhotos(layout: StudioLayoutV2): StudioLayoutV2 {
   const texts: Rect[] = [...(layout.text || [])];
   const logoZone = layout.logo && layout.logo.width > 0 ? logoClearZone(layout.logo) : undefined;
   const obstacles = [...texts, ...(logoZone ? [logoZone] : [])];
+  // Cut-out people standing a little into each other are a group, not a conflict; see photosMayOverlap.
   const conflict =
     photos.some((p) => obstacles.some((o) => hit(p, o)) || p.x < 0 || p.y < 0 || p.x + p.width > W || p.y + p.height > H) ||
-    photos.some((p, i) => photos.some((q, j) => j > i && hit(p, q)));
+    photos.some((p, i) => photos.some((q, j) => j > i && hit(p, q) && !photosMayOverlap(p, q)));
   if (!conflict) return layout;
 
   // Free bands between the text blocks, inside the margins. Text runs the width of a column, so

@@ -172,6 +172,14 @@ export interface StageContext {
    * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
    */
   photos?: ContentPhoto[];
+  /**
+   * The people in each photo cut out of its background (ADR-032), by photoIndex; present only for a
+   * cut-out that passed its checks. Set when the request, the reference or the design being changed
+   * calls for cut-outs.
+   */
+  photoCutouts?: Array<import('@hawa/creative').PhotoCutoutAsset | undefined>;
+  /** What became of each photo's cut-out, passed or not and why, by photoIndex. */
+  cutoutOutcomes?: import('./photo-cutouts.js').CutoutOutcome[];
   /** Every image the request carries, oldest first, for the brief to classify. Set only at briefing. */
   requestImages?: string[];
   /** The attached image when the brief read it as a style reference, with what to take from it. */

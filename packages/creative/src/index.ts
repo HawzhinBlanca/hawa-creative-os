@@ -15,6 +15,7 @@ export * from './vdp-personalizer.js';
 export * from './editable-transfer.js';
 export * from './font-policy.js';
 export * from './studio/layout-v2.js';
+export * from './studio/photo-cutout.js';
 export * from './studio/validate-layout-v2.js';
 export * from './studio/layout-metrics.js';
 export * from './studio/line-geometry.js';

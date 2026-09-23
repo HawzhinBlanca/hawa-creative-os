@@ -92,12 +92,22 @@ export interface StudioLayoutV2 {
   photos?: PhotoElement[];
 }
 
+/**
+ * How a placed photo is drawn. `framed`: the whole picture, cover-cropped into its box. `cutout`:
+ * the person cut out of the picture's background, standing on the design's own background at the
+ * bottom of the box (see `cutoutPlacement`), as panelists stand on requesters' reference posters.
+ */
+export const PHOTO_TREATMENTS = ['framed', 'cutout'] as const;
+export type PhotoTreatment = (typeof PHOTO_TREATMENTS)[number];
+
 export interface PhotoElement extends Box {
   /** Index into the request's content photos. */
   photoIndex: number;
   role: 'hero' | 'portrait' | 'inset';
-  /** Corner radius in px; 0 is square. Round portraits use radius = width / 2. */
+  /** Corner radius in px; 0 is square. Round portraits use radius = width / 2. A cut-out has no corners and ignores it. */
   radius?: number;
+  /** Absent is framed, as every photo was drawn before cut-outs existed. */
+  treatment?: PhotoTreatment;
 }
 
 export const typeScaleSchema = z.object({
@@ -167,10 +177,13 @@ export const textElementSchema = boxSchema.extend({
   accentText: z.string().max(400).optional(),
 }).strict();
 
+export const photoTreatmentSchema = z.enum(PHOTO_TREATMENTS);
+
 export const photoElementSchema = boxSchema.extend({
   photoIndex: z.number().int().nonnegative(),
   role: z.enum(['hero', 'portrait', 'inset']),
   radius: z.number().nonnegative().optional(),
+  treatment: photoTreatmentSchema.optional(),
 }).strict();
 
 export const studioLayoutV2Schema = z.object({

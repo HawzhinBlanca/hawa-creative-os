@@ -132,7 +132,11 @@ async function provisionDatabase(root: string, credentials: Credentials, name: (
   try {
     const exists = (await maint.query('SELECT 1 FROM pg_database WHERE datname = $1', [name])).rowCount === 1;
     if (exists && !recreate) {
-      console.log(`${name} already exists; pass --recreate to drop and rebuild it.`);
+      // An existing database still takes the versioned upgrades added since it was built: a new
+      // migration (014_photo_cutouts, 2026-09-23) otherwise never reached the tests that need it.
+      const { upgradeCanvaSchema } = await import('./upgrade.js');
+      const result = await upgradeCanvaSchema(testUrl(OWNER_ROLE, credentials.ownerPassword, name));
+      console.log(`${name} already exists; versioned upgrades applied=${result.applied.length} verified=${result.verified.length}. Pass --recreate to drop and rebuild it.`);
       return;
     }
     if (exists) {

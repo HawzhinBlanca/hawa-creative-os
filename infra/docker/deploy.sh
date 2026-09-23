@@ -104,6 +104,14 @@ for key in POSTGRES_PASSWORD DATABASE_URL; do
 done
 echo "✓ configuration present, no placeholders, no duplicate credential lines"
 
+# 2b. The cut-out service's model files (ADR-032) live on the host, outside the repository, and are
+# mounted read-only. The service refuses a file whose sha256 differs from the one pinned in compose.
+MODELS_DIR="${HAWA_MODELS_DIR:-${HOME}/.hawa/models}"
+for model in BiRefNet-portrait-epoch_150.onnx face_detection_yunet_2023mar.onnx; do
+  [[ -s "${MODELS_DIR}/${model}" ]] || { echo "ERROR: ${MODELS_DIR}/${model} is missing (see adrs/032_photo_cutouts_and_request_ledger.md)"; exit 1; }
+done
+echo "✓ cut-out model files present in ${MODELS_DIR}"
+
 # 3. Compose topology with the real interpolation file
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" config --quiet
 echo "✓ compose topology valid"
@@ -149,7 +157,12 @@ done
 echo "✓ schema upgrades applied or verified"
 
 # 7. Build and start
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" build core worker desk
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" build core worker desk cutout
+# The cut-out engine's own tests, run in the image that ships, against the pinned model.
+docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/models:ro" \
+  -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
+  || { echo "ERROR: the cut-out service's tests failed in its image"; exit 1; }
+echo "✓ cut-out engine tests passed in the shipped image"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
 # nginx.conf is bind-mounted: compose does not recreate nginx when only the file changed, so reload it explicitly.
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null 2>&1 && echo "✓ nginx configuration reloaded" || echo "! nginx reload skipped (container not running yet?)"
@@ -194,5 +207,7 @@ if bad: print("ERROR: unhealthy dependencies:", bad); sys.exit(1)
 '
 WORKER="$(docker exec hawa-production-worker-1 node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "worker: ${WORKER:-unavailable}"
+CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
+echo "cutout: ${CUTOUT:-unavailable}"
 echo ""
 echo "=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator) ==="

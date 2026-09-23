@@ -174,6 +174,7 @@ import { handleGuidelinesPdf, handleRulesCommand, saveChatRule, ruleClientById, 
 import { parseRulesCommand, isStandingRule } from './services/standing-rules-chat.js';
 import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
+import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -1646,6 +1647,7 @@ export function createApp(options?: CreateAppOptions) {
     return status;
   };
 
+  const healthCutouts = new PhotoCutouts();
   const honestHealthHandler = async (c: any) => {
     const dbStatus = await probeDatabase(db);
 
@@ -1714,6 +1716,9 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // Production without a database handle keeps state in process memory only: that is an outage.
+    // People cut out of client photos (ADR-032). Down, photos are placed framed and the requester is
+    // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
+    const cutoutStatus = await healthCutouts.health();
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
@@ -1778,6 +1783,7 @@ export function createApp(options?: CreateAppOptions) {
         modelProvider: modelProviderStatus,
         telegramApi: telegramApiStatus,
         funnel: funnelStatus,
+        cutout: cutoutStatus,
         ...(funnelMetrics?.alert ? { funnelAlert: funnelMetrics.alert } : {}),
         ...(bridgeStatus?.lastError ? { telegramLastError: bridgeStatus.lastError.code } : {}),
       },

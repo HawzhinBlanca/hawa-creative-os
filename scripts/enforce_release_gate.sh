@@ -210,6 +210,9 @@ else
   T_START=$(date +%s)
   TEST_RUN_LOG="${OUTPUT_DIR}/FULL_TEST_SUITE_RUN.log"
   TEST_EXIT=0
+  # The isolated test databases take the versioned upgrades added since they were built, so a new
+  # migration is under test before it reaches production.
+  pnpm test:db > "${OUTPUT_DIR}/TEST_DB_PROVISION.log" 2>&1 || { echo "FATAL: the isolated test database could not be brought up to date. See ${OUTPUT_DIR}/TEST_DB_PROVISION.log"; exit 1; }
   pnpm test > "${TEST_RUN_LOG}" 2>&1 || TEST_EXIT=$?
   T_END=$(date +%s)
   
