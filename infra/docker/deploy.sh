@@ -234,4 +234,4 @@ echo "cutout: ${CUTOUT:-unavailable}"
 # 9. Hawa's own disk use: older pre-deploy dumps, Docker's build cache (a full disk is an outage).
 bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"
 echo ""
-echo "=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator) ==="
+echo "=== Deployment complete. Next: requeue dead-lettered commands if any (POST /v1/system/outbox/requeue as administrator with {\"all\":true}). Uncertain Telegram sends stay dead-lettered and are listed as keptUncertain: check the requester's chat, and requeue one only if it did not arrive, by id with \"confirmUncertainReplay\":true ==="

@@ -78,7 +78,7 @@ outside the checkout.
 
 ## Dead-lettered outbox commands
 
-- Worker `/health` reports `outbox.failed` and `outbox.staleOver5m`. Read `last_error` on the failed rows, fix the cause, then `POST /v1/system/outbox/requeue` with `{"all":true}` or `{"ids":[…]}` as an administrator.
+- Worker `/health` reports `outbox.failed` and `outbox.staleOver5m`. Read `last_error` on the failed rows, fix the cause, then `POST /v1/system/outbox/requeue` with `{"all":true}` or `{"ids":[…]}` as an administrator. A Telegram send that may already have arrived (`DELIVERY_UNCERTAIN`, `TELEGRAM_RECEIPT_INVALID` and the like) is never requeued by `all`: the answer lists it under `keptUncertain`. Check the requester's chat, and requeue one only if it did not arrive, by id with `"confirmUncertainReplay": true`.
 
 ## Stuck automatic drafts
 

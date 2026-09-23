@@ -454,6 +454,8 @@ const MODEL_TRANSPORT_ERRORS = new Set([
   'OpenAiModelParseError',
   'OpenAiModelTruncatedError',
   'OpenAiModelResponseError',
+  // A refusal is no answer: read as feedback it was asked again, another billed call (2026-09-24).
+  'OpenAiModelRefusalError',
   'OpenAiCircuitBreakerOpenError',
   'StudioModelTimeoutError',
   'StudioModelHttpError',
