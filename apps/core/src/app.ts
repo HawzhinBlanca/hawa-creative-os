@@ -2761,7 +2761,8 @@ export function createApp(options?: CreateAppOptions) {
       await telegramBridge?.dispatchOutboundMessage(channelId, statusMsg);
     }
 
-    broadcast('task:transitioned', { taskId, status: 'HUMAN_REVIEW', action: 'redrive' });
+    // The API's name for human_review (the Desk showed 'HUMAN_REVIEW' as RECEIVED; review of 2026-09-24).
+    broadcast('task:transitioned', { taskId, status: 'AWAITING_APPROVAL', toStatus: 'AWAITING_APPROVAL', action: 'redrive' });
 
     return {
       ok: true,
