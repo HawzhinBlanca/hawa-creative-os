@@ -1,5 +1,7 @@
-// The one-line studio summary sent to the requester with the Canva result.
-// Every figure comes from the run's own record; a figure the run did not record is left out.
+// The studio's account of a run. `studioStatusNote` is the one-line summary for the office and the
+// logs (models, score, imagery, the edit's own words); `requesterDraftNotes` is what the requester
+// reads with the draft, in plain words. Every figure comes from the run's own record; a figure the
+// run did not record is left out.
 
 const parse = (value: unknown): any => {
   if (typeof value !== 'string') return value;
@@ -80,4 +82,71 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
   else if (run.diagnostic?.includes('Rung')) rungNote = ` · ${run.diagnostic}`;
 
   return parts.join(' · ') + rungNote + parityNote;
+}
+
+/** An ask as the run recorded it (edit.stage.ts AskOutcome). */
+interface RecordedAsk {
+  ask?: unknown;
+  status?: unknown;
+  reason?: unknown;
+}
+
+const plain = (value: unknown, max = 160) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/** A reference design whose people are cut out of their photos, as the brief described it. */
+const CUTOUT_REFERENCE = /cut-?\s?outs?\b|background(?:s)? removed|without (?:their |a |the )?backgrounds?|isolated (?:figures|portraits|people)/i;
+
+/**
+ * The lines the requester reads with a draft, in plain words: what their change did and did not
+ * do, what became of their photos, and what of their reference the draft could not follow. No
+ * coordinates, model names or scores: the note sent until 2026-09-23 read "your change made to the
+ * same design (312 × 326.42 at (65, 672). Cutout processing remains required.)" for a change that
+ * was not made.
+ */
+export function requesterDraftNotes({ run, candidates }: Pick<StudioStatusNoteInput, 'run' | 'candidates'>): string[] {
+  const stages = parse(run.stages) || {};
+  const notes: string[] = [];
+  const directed = stages.directed && !stages.directedFailed ? stages.directed : undefined;
+  if (directed) {
+    const asks: RecordedAsk[] = Array.isArray(directed.asks) ? directed.asks : [];
+    const done = asks.filter((a) => a?.status === 'done').map((a) => plain(a.ask)).filter(Boolean);
+    const notDone = asks.filter((a) => a?.status === 'not_done').map((a) => plain(a.ask)).filter(Boolean);
+    const impossible = asks.filter((a) => a?.status === 'not_possible').filter((a) => plain(a.ask));
+    if (asks.length) {
+      for (const ask of done) notes.push(`✅ Done: ${ask}.`);
+      for (const ask of notDone) notes.push(`⚠️ Not done: ${ask}. It could not be fitted into this design; the art director will look at it.`);
+      for (const a of impossible) {
+        const reason = plain(a.reason, 200).replace(/\.$/, '');
+        notes.push(`❌ Not possible automatically: ${plain(a.ask)}${reason ? ` (${reason})` : ''}. The office has been told, and a designer will do it.`);
+      }
+    } else {
+      // A run recorded before asks were: its own list of what does not show, said plainly.
+      const unmade = (Array.isArray(directed.unmade) ? directed.unmade : []).map((u: unknown) => plain(u)).filter(Boolean).slice(0, 3);
+      if (directed.unchanged !== true) notes.push('✅ Your change was made to the same design.');
+      for (const u of unmade) notes.push(`⚠️ Not done: ${u}.`);
+    }
+  } else if (stages.directedFailed) {
+    notes.push('Your change could not be made to the same design, so the design was made again with your change.');
+  }
+
+  const winner = candidates.find((c) => c.id === run.winner_candidate_id) || candidates[0];
+  const layouts = parse(winner?.layouts);
+  const shipped = parse(Array.isArray(layouts) ? layouts[layouts.length - 1] : undefined);
+  const placed = Array.isArray(shipped?.photos) ? shipped.photos.length : 0;
+  const sent = typeof stages.brief?.photosSent === 'number' ? stages.brief.photosSent : undefined;
+  if (sent !== undefined && sent > 0) {
+    notes.push(placed >= sent ? `Your ${sent === 1 ? 'photo is' : `${sent} photos are`} on the design.` : `⚠️ Only ${placed} of your ${sent} photos ${placed === 1 ? 'is' : 'are'} on the design.`);
+  }
+  const roles: Array<{ role?: unknown; notes?: unknown } | null> = Array.isArray(stages.brief?.imageRoles) ? stages.brief.imageRoles : [];
+  const reference = roles.find((r) => r?.role === 'style_reference');
+  if (reference) {
+    // The design places photos whole, in boxes. A reference with its people cut out cannot be
+    // followed in that, and the requester is told so rather than "your reference design followed".
+    const photosCut = CUTOUT_REFERENCE.test(String(reference.notes || '')) && placed > 0 && !(shipped.photos as Array<{ treatment?: unknown } | null>).some((p) => p?.treatment === 'cutout');
+    // A change already reported as not possible says it; the same thing is not said twice.
+    const toldAlready = Array.isArray(directed?.asks) && directed.asks.some((a: RecordedAsk) => a?.status === 'not_possible');
+    if (photosCut && !toldAlready) notes.push('⚠️ Your reference shows the people cut out of their photos. This draft shows your photos as you sent them, because cut-outs cannot be made automatically yet; the art director can make them in Canva.');
+    else if (!photosCut) notes.push('Styled after the reference design you sent.');
+  }
+  return notes;
 }

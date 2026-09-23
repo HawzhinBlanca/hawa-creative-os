@@ -10,6 +10,8 @@ export interface CanvaStatusMessageInput {
   canvaUrl?: string;
   /** Honest caveats about this particular draft, e.g. a provisional Kurdish typeface. Plain text; escaped here. */
   notes?: string[];
+  /** What a change asked for that no edit of the design can make (code CHANGE_NOT_SUPPORTED). Plain text; escaped here. */
+  notPossible?: Array<{ ask: string; reason?: string }>;
 }
 
 export interface TelegramHtmlMessage {
@@ -72,6 +74,14 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'DESIGN_UNCERTAIN') {
     title = '📥 <b>Request saved, draft not confirmed</b>';
     body = `The automatic draft could not be confirmed and will not be retried automatically to avoid a duplicate. The art director will check the result in Hawa Desk and finish it in Canva.\n`;
+  } else if (code === 'CHANGE_NOT_SUPPORTED') {
+    // The run stopped before anything was paid for the edit: nothing it could do was asked for.
+    title = '✋ <b>This change needs a designer</b>';
+    const asks = (input.notPossible || []).filter((a) => a && typeof a.ask === 'string' && a.ask.trim()).slice(0, 5);
+    const list = asks
+      .map((a) => `• ${escapeTelegramHtml(a.ask.trim())}${a.reason && a.reason.trim() ? ` (${escapeTelegramHtml(a.reason.trim().replace(/\.$/, ''))})` : ''}\n`)
+      .join('');
+    body = `${asks.length ? `This cannot be done automatically yet:\n${list}\n` : 'The change you asked for cannot be done automatically yet.\n'}The office has been told, and a designer will make it. Your previous draft stays as it was, and you can still reply to it with any other change.\n`;
   } else if (status === 'DESIGN_BLOCKED') {
     title = '📥 <b>Your request is saved</b>';
     body = `A safety check stopped the automatic draft before anything reached you, so nothing unverified was sent. ${ALERTED}\n`;
@@ -85,6 +95,31 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   // Notes describe a draft (its typeface, the studio run that made it). With no draft they are
   // internal detail: model names and scores of a run that produced nothing.
   const draftExists = Boolean(input.canvaUrl) && (READY.has(status) || DRAFT_EXISTS_BUT_UNVERIFIED.has(status));
-  const notes = (draftExists ? input.notes || [] : []).filter((n) => typeof n === 'string' && n.trim()).map((n) => `ℹ️ ${escapeTelegramHtml(n.trim())}\n`).join('');
+  // A note that opens with its own sign (✅ done, ⚠️ not done) keeps it; any other gets ℹ️.
+  const notes = (draftExists ? input.notes || [] : [])
+    .filter((n) => typeof n === 'string' && n.trim())
+    .map((n) => `${/^\p{Extended_Pictographic}/u.test(n.trim()) ? '' : 'ℹ️ '}${escapeTelegramHtml(n.trim())}\n`)
+    .join('');
   return { text: header(title) + body + (notes ? notes + '\n' : '') + footer, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
+}
+
+/**
+ * The office's alert that a requester asked for a change no edit of the design can make, so a
+ * designer makes it. `draftSent` says whether the rest of the change went out as a new draft.
+ */
+export function composeChangeNeedsDesignerAlert(input: { taskId: string; title?: string | null; asks: Array<{ ask: string; reason?: string }>; draftSent: boolean }): TelegramHtmlMessage {
+  const list = input.asks
+    .filter((a) => a && typeof a.ask === 'string' && a.ask.trim())
+    .slice(0, 5)
+    .map((a) => `• ${escapeTelegramHtml(a.ask.trim())}${a.reason && a.reason.trim() ? ` (${escapeTelegramHtml(a.reason.trim().replace(/\.$/, ''))})` : ''}`)
+    .join('\n');
+  const after = input.draftSent
+    ? 'The rest of the change went out as a new draft, now in Hawa Desk. Make the part above in Canva before approving it.'
+    : 'Nothing was made; the requester was told a designer will do it, and their previous draft stands.';
+  return {
+    text:
+      `✋ <b>A change needs a designer</b>\n\n📌 <b>Task ID:</b> <code>${escapeTelegramHtml(input.taskId)}</code>\n📜 <b>Title:</b> ${escapeTelegramHtml(input.title || 'Campaign Design')}\n\n` +
+      `The requester asked for something the automatic editor cannot do yet:\n${list}\n\n${after}`,
+    parse_mode: 'HTML',
+  };
 }

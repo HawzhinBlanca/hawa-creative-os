@@ -150,7 +150,7 @@ import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
 import { type DesignStudioServiceOptions, DesignStudioService } from './services/design-studio/index.js';
-import { studioStatusNote } from './services/design-studio/studio-status-note.js';
+import { studioStatusNote, requesterDraftNotes } from './services/design-studio/studio-status-note.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
 import { manifestFromOperations } from './services/generated-manifest.js';
@@ -166,7 +166,7 @@ import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerClientsRoutes } from './routes/clients.routes.js';
 import { registerEvalsRoutes } from './routes/evals.routes.js';
 import { registerIngressRoutes } from './routes/ingress.routes.js';
-import { composeCanvaStatusMessage } from './services/canva-status-message.js';
+import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
 import { sniffImageMime } from './services/telegram-media.js';
 import type { GuidelinesModel } from './services/brand-guidelines.js';
@@ -6878,6 +6878,9 @@ export function createApp(options?: CreateAppOptions) {
     } catch { /* the note is a courtesy; the status message must still go out */ }
 
     // Studio summary: only what the run recorded (concepts, revisions, score, imagery, typeface, ladder, parity).
+    let studioSummary: string | undefined;
+    // What a change asked for that no edit of the design can make: the requester is told, and the office.
+    let notPossible: Array<{ ask: string; reason: string }> = [];
     let studioRun: any = null;
     let studioCandidates: any[] = [];
     try {
@@ -6906,8 +6909,16 @@ export function createApp(options?: CreateAppOptions) {
           (await sql<any>`SELECT model, count(*)::int AS n FROM hawa.design_studio_calls
             WHERE tenant_id = ${auth.tenantId}::uuid AND run_id = ${studioRun.id}::uuid AND status = 'ok'
             GROUP BY model ORDER BY n DESC, model`.execute(trx)).rows)).map((row: any) => String(row.model));
-        const studioNote = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote, models });
-        notes.push(studioNote);
+        // The requester reads plain words about their draft; the studio's own summary (models, score,
+        // the edit's coordinates) is for the office, in the log and on the notification's record.
+        studioSummary = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote, models });
+        console.log(`[canvaStatusHandler] Task ${taskId} studio summary: ${studioSummary}`);
+        notes.push(...requesterDraftNotes({ run: studioRun, candidates: studioCandidates }));
+        const runStages = typeof studioRun.stages === 'string' ? JSON.parse(studioRun.stages || '{}') : studioRun.stages || {};
+        const recordedAsks = Array.isArray(runStages?.directed?.asks) ? runStages.directed.asks : [];
+        notPossible = (recordedAsks as Array<{ ask?: unknown; status?: unknown; reason?: unknown } | null>)
+          .filter((a) => a?.status === 'not_possible' && typeof a?.ask === 'string' && a.ask.trim())
+          .map((a) => ({ ask: String(a!.ask).trim(), reason: typeof a!.reason === 'string' ? a!.reason.trim() : '' }));
       }
     } catch { /* courtesy note; do not fail status */ }
 
@@ -6977,7 +6988,7 @@ export function createApp(options?: CreateAppOptions) {
     let notificationError: string | undefined;
     let notificationCommandId: string | undefined;
     if (sourceChannelId && notifyRequester) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes });
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible });
       const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
       // The worker's finish() swallows its own notification errors so a failed message cannot fail
       // a design (canva-draft-workflow.ts), and this was a single fire-and-forget send: a Telegram
@@ -7030,6 +7041,7 @@ export function createApp(options?: CreateAppOptions) {
               ...(code ? { code } : {}),
               ...(designId ? { designId } : {}),
               ...(canvaUrl ? { canvaUrl } : {}),
+              ...(studioSummary ? { studioSummary } : {}),
             },
             availableAt: new Date(Date.now() + 60_000),
           }, trx));
@@ -7073,6 +7085,29 @@ export function createApp(options?: CreateAppOptions) {
             // The repository's defaults, which the worker's consumer also applies to later attempts, so
             // the schedule does not change hands halfway.
             : outboxRepo.retryOrDeadLetter(command.id, reason, undefined, undefined, trx));
+      }
+
+      // A part of the change no edit can make goes to a designer: the requester was told the office
+      // knows, so the office is told, once per run, through the outbox like every other message.
+      if (notPossible.length > 0) {
+        const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+        if (office && office !== sourceChannelId) {
+          try {
+            await withRlsContext(db, scope, (trx) =>
+              outboxRepo.enqueue({
+                tenantId: auth.tenantId!,
+                aggregateType: 'task',
+                aggregateId: taskId,
+                commandType: 'notify.telegram',
+                idempotencyKey: `notify.office:change-needs-designer:${taskId}:${runKey}`,
+                payload: { chatId: office, taskId, message: composeChangeNeedsDesignerAlert({ taskId, title: task.title, asks: notPossible, draftSent: hasDraft }) },
+              }, trx));
+          } catch (alertErr) {
+            console.error(`[canvaStatusHandler] Task ${taskId}: the office could not be alerted that a change needs a designer:`, alertErr);
+          }
+        } else {
+          console.warn(`[canvaStatusHandler] Task ${taskId}: a change needs a designer (${notPossible.map((a) => a.ask).join('; ')}); no separate office chat to alert.`);
+        }
       }
 
       // Photo Delivery via dispatchOutboundPhoto

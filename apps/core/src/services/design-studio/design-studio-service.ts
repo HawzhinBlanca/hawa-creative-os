@@ -27,7 +27,7 @@ import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
-import { runDirectedEditStage, isModelTransportError } from './stages/edit.stage.js';
+import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -555,8 +555,36 @@ export class DesignStudioService {
     const own = await this.requestImages(s, run.task_id);
     const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
     if (!parentTaskId) return own;
-    const parent = await this.requestImages(s, parentTaskId).catch(() => [] as string[]);
+    const parent = await this.revisionChainImages(s, parentTaskId).catch(() => [] as string[]);
     return [...parent, ...own.filter((url) => !parent.includes(url))];
+  }
+
+  /**
+   * The pictures of a design and of every design it was a change to, back to the request that
+   * brought them, in that order. A change to a change looked one design back, to a revision with no
+   * pictures of its own and a look-back window long past, found none, and the edit removed both
+   * portraits (2026-09-23, "0 of your 2 photos placed").
+   */
+  private async revisionChainImages(s: Scope, taskId: string, depth = 0): Promise<string[]> {
+    const own = await this.requestImages(s, taskId);
+    const parentTaskId = depth < 10 ? await this.parentTaskOf(s, taskId).catch(() => undefined) : undefined;
+    if (!parentTaskId || parentTaskId === taskId) return own;
+    const parent = await this.revisionChainImages(s, parentTaskId, depth + 1).catch(() => [] as string[]);
+    return [...parent, ...own.filter((url) => !parent.includes(url))];
+  }
+
+  /** The task a revision task changes, from the request that created it; undefined for a first design. */
+  private async parentTaskOf(s: Scope, taskId: string): Promise<string | undefined> {
+    const row = await this.tx(s, async (db) =>
+      (
+        await sql<{ parent: string | null }>`SELECT COALESCE(e.data->'payload'->'studioOptions'->>'parentTaskId', e.data->'studioOptions'->>'parentTaskId') AS parent
+          FROM hawa.task_events e
+          WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
+          ORDER BY e.aggregate_version LIMIT 1`.execute(db)
+      ).rows[0]
+    );
+    const parent = row?.parent;
+    return typeof parent === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parent) ? parent : undefined;
   }
 
   /** The brief of the design a directed revision changes, or undefined when it is not one. */
@@ -1185,7 +1213,7 @@ export class DesignStudioService {
                 rank: 1,
               });
               // What the design shows of the request, and what it does not: the sender's note reads both.
-              stages.directed = { ...stages.directed, changes: edited.changes, unmade: edited.unmade, unchanged: edited.unchanged };
+              stages.directed = { ...stages.directed, changes: edited.changes, unmade: edited.unmade, unchanged: edited.unchanged, asks: edited.asks };
               stages.layouts = { count: 1, directed: true };
               // The client's own design with their change: no rival layouts to critique or judge.
               await this.repo.updateRunStatus(runId, s.tenantId, 'qa', { stages, budget, winnerCandidateId: stages.directed.candidateId, judgeStatus: 'SKIPPED' });
@@ -1193,6 +1221,15 @@ export class DesignStudioService {
             } catch (caught) {
               const err = caught as Error;
               if (caught instanceof StudioBudgetExhaustedError) throw caught;
+              if (caught instanceof DirectedEditRefusal) {
+                // Nothing asked for is within the edit's means, or the design's photos are missing: a
+                // design made afresh has the same means and the same photos, so the run ends here, before
+                // the edit is paid for, and the sender is told plainly what needs a designer.
+                const diagnostic = `Studio v3 failed at stage laying_out: ${caught.message} It was not designed afresh.`;
+                stages.directed = { ...stages.directed, asks: caught.asks, refused: caught.code };
+                await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+                return { runId, status: 'failed', stage: 'edit', diagnostic, message: diagnostic, code: caught.code, spentUsd: budget.spentUsd };
+              }
               if (isModelTransportError(caught)) {
                 // A timeout, an HTTP error or an exhausted quota says nothing about whether the change
                 // fits the design, and the three new layouts would go to the same provider: every edit
