@@ -351,3 +351,34 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(result.imageBuffer.length).toBeGreaterThan(100);
   });
 });
+
+describe('Image requests are bounded (2026-09-23)', () => {
+  it('sends every image generation request, Google and OpenAI, with a timeout signal', async () => {
+    const signals: Array<AbortSignal | null | undefined> = [];
+    const fakeFetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      signals.push(init?.signal);
+      return new Response('unavailable', { status: 503 });
+    }) as unknown as typeof fetch;
+
+    for (const settings of [
+      { provider: 'google' as const, model: 'gemini-3.1-flash-lite-image', size: '1K', quality: 'auto', aspectRatio: '1:1' },
+      { provider: 'openai' as const, model: 'gpt-image-2.5-sunburst', size: '1024x1024', quality: 'auto', aspectRatio: '1:1' },
+    ]) {
+      const result = await generateArtImage({
+        artPrompt: 'Minimalist backdrop',
+        palette: ['#0A1628', '#1E3A5F'],
+        geminiApiKey: 'mock-key',
+        openaiApiKey: 'mock-key',
+        fetchFn: fakeFetcher,
+        settings,
+      });
+      expect(result.receipt.artFallback).toBe('procedural');
+    }
+
+    expect(signals).toHaveLength(4);
+    for (const signal of signals) {
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal?.aborted).toBe(false);
+    }
+  });
+});

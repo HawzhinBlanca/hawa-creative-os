@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isStandingRule, parseRulesCommand, formatRulesList, formatRuleSaved } from '../src/services/standing-rules-chat.js';
+import { isStandingRule, parseRulesCommand, formatRulesList, formatRuleSaved, ruleNumber } from '../src/services/standing-rules-chat.js';
+import { brandMatchesClient } from '../src/services/telegram-rules-intake.js';
 import { normalizeGuidelines, fontCaveat, readBrandGuidelines } from '../src/services/brand-guidelines.js';
 
 describe('standing rules said in chat', () => {
@@ -29,6 +30,27 @@ describe('standing rules said in chat', () => {
     expect(parseRulesCommand('rules')).toBeNull();
   });
 
+  it('reads /forget with the digits a Kurdish or Arabic keyboard types', () => {
+    // On 2026-09-23 "/forget ١" was read as NaN and answered with the usage reply.
+    expect(parseRulesCommand('/forget ١')).toEqual({ kind: 'forget', numbers: [1] });
+    expect(parseRulesCommand('/forget ۱')).toEqual({ kind: 'forget', numbers: [1] });
+    expect(parseRulesCommand('/forget ١٢')).toEqual({ kind: 'forget', numbers: [12] });
+    expect(parseRulesCommand('/forget ٢، ۵ 3')).toEqual({ kind: 'forget', numbers: [2, 5, 3] });
+    expect(parseRulesCommand('/forget ٠')).toEqual({ kind: 'forget_usage' });
+  });
+
+  it('says which number a saved rule has, the one /rules shows and /forget takes', () => {
+    const active = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(ruleNumber(active, 'c')).toBe(3);
+    expect(ruleNumber(active, 'z')).toBeUndefined();
+    const saved = formatRuleSaved('KAAE', 'Logo bottom-right', true, 3, 3);
+    expect(saved).toContain('Saved as a standing rule for KAAE (number 3):');
+    expect(saved).toContain('/forget 3 removes it');
+    expect(formatRuleSaved('KAAE', 'Logo bottom-right', false, 3, 2)).toContain('Already a standing rule for KAAE (number 2):');
+    // Without a number the reply reads as it did.
+    expect(formatRuleSaved('KAAE', 'x', true, 1)).toContain('Saved as a standing rule for KAAE:</b>');
+  });
+
   it('lists rules numbered, escaped for Telegram HTML', () => {
     const rules = [
       { id: 'a', clientId: 'c', humanRule: 'Put the logo bottom-right', category: 'logo', machineRule: {}, createdAt: new Date() },
@@ -44,6 +66,18 @@ describe('standing rules said in chat', () => {
 });
 
 describe('brand guidelines', () => {
+  it("is this client's only when the brand it names is the client's code, name, alias or initials", () => {
+    const kaae = ['kaae', 'Kurdistan Accrediting Association for Education'];
+    expect(brandMatchesClient('KAAE', kaae)).toBe(true);
+    expect(brandMatchesClient('K.A.A.E.', kaae)).toBe(true);
+    expect(brandMatchesClient('Kurdistan Accrediting Association for Education (KAAE)', kaae)).toBe(true);
+    expect(brandMatchesClient('Kurdistan Accrediting Association', kaae)).toBe(true);
+    expect(brandMatchesClient('Kurdistan Accrediting Association for Education', ['kaae'])).toBe(true);
+    expect(brandMatchesClient('FastPay', kaae)).toBe(false);
+    expect(brandMatchesClient('Drustee Brand', kaae)).toBe(false);
+    expect(brandMatchesClient('  ', kaae)).toBe(true);
+  });
+
   it('keeps only real rules, with valid hex codes, and nothing for a document that is not guidelines', () => {
     const read = normalizeGuidelines({
       isBrandGuidelines: true,

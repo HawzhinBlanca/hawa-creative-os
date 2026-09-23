@@ -126,14 +126,47 @@ export function startsWithWord(text: string, words: string[]): boolean {
   return new RegExp(`^(?:${words.map(wordPattern).join('|')})${NOT_BEFORE_WORD}`, 'iu').test(text);
 }
 
-const ACKNOWLEDGEMENT =
-  /^(?:(?:ok(?:ay)?|thanks?|thank you|thx|ty|great|perfect|nice|good|cool|got it|received|noted|done|super|excellent|wonderful|amazing|love it|سوپاس|زۆر سوپاس|سوپاس بۆ تۆ|باشە|زۆر باشە|دەستت خۆش|ناوازەیە|جوانە|زۆر جوانە)[\s!.،,]*|[\p{Extended_Pictographic}\u200d\ufe0f\s]+)+$/iu;
+/**
+ * Thanks, praise and OKs, each a whole phrase. "thank you so much", "good job", "looks good",
+ * "دەستخۆش" and "👍🏻" were missing, so under a draft they went to the model or, when it was slow,
+ * to the reply rule, which started a paid revision (2026-09-23).
+ */
+const ACKNOWLEDGEMENT_PHRASES = [
+  'ok', 'okay', 'thanks', 'thank you', 'thank u', 'thanks a lot', 'thanks so much', 'thank you so much', 'thank you very much',
+  'many thanks', 'thx', 'ty', 'great', 'great work', 'great job', 'good job', 'good work', 'nice work', 'nice job', 'well done',
+  'perfect', 'nice', 'good', 'cool', 'looks good', 'looks great', 'looks perfect', 'looks nice', 'all good', 'got it', 'received',
+  'noted', 'done', 'super', 'excellent', 'wonderful', 'amazing', 'love it', 'approved', 'appreciated', 'much appreciated',
+  'سوپاس', 'زۆر سوپاس', 'سوپاس بۆ تۆ', 'سوپاست دەکەم', 'زۆر سوپاست دەکەم', 'سپاس', 'مەمنون', 'باشە', 'زۆر باشە',
+  'دەستت خۆش', 'دەستت خۆش بێت', 'دەستخۆش', 'دەستخۆشی', 'ناوازەیە', 'جوانە', 'زۆر جوانە',
+];
+const ACKNOWLEDGEMENT = new RegExp(
+  `^(?:(?:${[...ACKNOWLEDGEMENT_PHRASES].sort((a, b) => b.length - a.length).map(wordPattern).join('|')})[\\s!.،,؛]*|[\\p{Extended_Pictographic}\\u200d\\s]+)+$`,
+  'iu'
+);
 
-/** Short enough to rule out backtracking on a long message, and nothing but thanks or an OK. */
+/**
+ * Short enough to rule out backtracking on a long message, and nothing but thanks or an OK. Skin
+ * tones (U+1F3FB–1F3FF) and the emoji presentation selector are not pictographs themselves, so
+ * "👍🏻" failed until they were dropped.
+ */
 export function isAcknowledgement(text: string): boolean {
-  const t = text.trim();
+  const t = text.replace(/[\u{1F3FB}-\u{1F3FF}\uFE0F]/gu, '').trim();
   return t.length > 0 && t.length <= 60 && ACKNOWLEDGEMENT.test(t);
 }
+
+function acknowledgement(documentKind: DocumentKind): MessageClassification {
+  return { kind: 'other', intent: 'question_or_other', confidence: 0.9, isInstructionOnly: false, reason: 'Acknowledgement', documentKind };
+}
+
+/**
+ * What makes a reply to a design a change request when the model cannot say: the revision lists,
+ * without the words that also praise ("great work", "much better, thanks", "not bad", "very
+ * professional") or only name a colour ("love the gold"), plus the verbs a change is asked with.
+ */
+const NOT_CHANGE_CUES = new Set(['great', 'better', 'professional', 'high end', 'bad', 'poor', 'gold', 'navy', 'cream', 'blue', 'white']);
+const CHANGE_CUES = [
+  ...new Set([...REVISION_ACTION_KEYWORDS, ...REVISION_KEYWORDS, 'make', 'use', 'put', 'size', 'instead', 'wrong', 'mistake', 'typo']),
+].filter((k) => !NOT_CHANGE_CUES.has(k));
 
 const GREETING_WORDS = ['hi', 'hello', 'hey', 'help', 'status', '\u0633\u06B5\u0627\u0648', '\u0686\u06C6\u0646\u06CC'];
 const QUESTION_WORDS = ['when', 'what', 'how', 'where', 'who', 'is it', 'can we', 'would', '\u0626\u0627\u06CC\u0627', '\u06A9\u06D5\u06CC', '\u0686\u06C6\u0646', '\u0686\u06CC'];
@@ -198,16 +231,7 @@ export function classifyWithHeuristics(
 
   // A thank-you or an OK is not a change request, reply or not: "thanks" in reply to a draft
   // started a paid redesign of it.
-  if (isAcknowledgement(trimmed)) {
-    return {
-      kind: 'other',
-      intent: 'question_or_other',
-      confidence: 0.9,
-      isInstructionOnly: false,
-      reason: 'Acknowledgement',
-      documentKind,
-    };
-  }
+  if (isAcknowledgement(trimmed)) return acknowledgement(documentKind);
 
   // A lasting preference ("from now on", "always", لەمەودوا, with an instruction verb) that
   // carries no copy is a standing rule, whether or not it answers a draft.
@@ -224,7 +248,23 @@ export function classifyWithHeuristics(
     };
   }
 
-  // 1. Reply-to always binds to the specific replied-to task
+  // 1. A reply binds to the replied-to task, as a change only when it asks for one. These rules
+  // decide when the model is slow or down, and "great work, the client loves it" in reply to a
+  // draft started a paid revision (2026-09-23); a reply with no change in it is asked about.
+  if (hasReplyTo && !isExplicitRevision && !matchesInstructionPattern && !CHANGE_CUES.some((kw) => containsKeyword(trimmed, kw))) {
+    return {
+      kind: 'other',
+      intent: 'question_or_other',
+      confidence: 0.5,
+      isInstructionOnly: false,
+      reason: 'Reply to a design with no change asked for',
+      documentKind,
+      needsClarification: true,
+      clarifyingQuestion: isSoraniText(trimmed)
+        ? 'تکایە ڕوونکردنەوە بدە: ئایا ئەمە داوای گۆڕانکارییە لە دیزاینەکەدا؟ ئەگەر بەڵێ، بنووسە: دەستکاری. ئەگەر نا، هیچ شتێک ناگۆڕدرێت.'
+        : 'Could you please clarify: is this a change to the design? Reply "revise" and it will be changed; otherwise nothing is changed.',
+    };
+  }
   if (hasReplyTo) {
     return {
       kind: 'feedback',
@@ -352,6 +392,8 @@ export async function classifyInboundTelegramMessage(
   if (!apiKey || options.useHeuristics) {
     return classifyWithHeuristics(messageText, Boolean(recentTask), hasReplyTo);
   }
+  // Thanks and OKs are answered without a paid model call.
+  if (isAcknowledgement(messageText)) return acknowledgement(detectDocumentKind(messageText.trim()));
 
   try {
     const previewImg = recentTask?.previewImageUrl || recentTask?.previewImageBase64;
@@ -489,15 +531,19 @@ Also fill:
     let kind: MessageKind = ['new_brief', 'feedback', 'standing_rule', 'question', 'other'].includes(rawKind)
       ? rawKind
       : 'new_brief';
+    // A rule the model finds in a change or a brief is kept only when the words say "from now on",
+    // "always", لەمەودوا…: a restated one-off change ("make the title gold") became a rule applied to
+    // every later design (2026-09-23). Said as a standing rule on its own, the model's rule stands.
+    const modelRule = typeof parsed.standingRule === 'string' && parsed.standingRule.trim() ? parsed.standingRule.trim().slice(0, 400) : undefined;
+    const standingRule = modelRule && (kind === 'standing_rule' || ((kind === 'feedback' || kind === 'new_brief') && isStandingRule(messageText))) ? modelRule : undefined;
     // Feedback needs a design to change; with none in the chat it is a preference for the next one.
-    if (kind === 'feedback' && !recentTask) kind = typeof parsed.standingRule === 'string' && parsed.standingRule.trim() ? 'standing_rule' : 'new_brief';
+    if (kind === 'feedback' && !recentTask) kind = standingRule ? 'standing_rule' : 'new_brief';
 
     const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.9;
     const isInstructionOnly = Boolean(parsed.isInstructionOnly);
     const directive = parsed.directive || messageText.trim();
     const reason = parsed.reason || `Classified by ${model}`;
     const docKind = parsed.documentKind === 'formal_document' ? 'formal_document' : 'design_piece';
-    const standingRule = typeof parsed.standingRule === 'string' && parsed.standingRule.trim() ? parsed.standingRule.trim().slice(0, 400) : undefined;
 
     const intent = kind === 'feedback'
       ? 'revision_feedback'

@@ -2036,21 +2036,32 @@ export function createApp(options?: CreateAppOptions) {
         payloadText = payloadText.slice(sectionMatch.index + sectionMatch[0].length).trim();
       } else {
         // 3c. If message begins with conversational opening directives, strip leading directive block.
+        // The list grew on 2026-09-23: "Please make a KAAE poster with these photos" and "Design a
+        // post for…" were set as the design's headline, a paid draft with the request printed on it.
         // The boundary after the opening is a Unicode letter class, not \b: \b is ASCII only, so
         // "تکایە" was never followed by a boundary and the Kurdish openings never matched. A Kurdish
         // request that opened with "تکایە ..." kept that line as copy, and the instruction became
         // the headline of the design.
-        const conversationalParagraph = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)(?![\p{L}\p{N}\p{M}_])[\s\S]*?(?=\n\s*\n)/iu);
+        const conversationalParagraph = payloadText.match(/^(?:i need|i want|we need|we want|please (?:create|make|design|prepare|do)|can you (?:design|make|create|prepare)|could you (?:design|make|create|prepare)|design request|here is|design an?|make an?|create an?|prepare an?|kindly (?:design|make|create|prepare)|تکایە|دیزاینێک|دیزاینێکم دەوێت|پۆستەرێک|دەمانەوێت|دەمەوێت|پێویستمان بە|بۆمان دروست بکە|دروست بکە|ئامادە بکە)(?![\p{L}\p{N}\p{M}_])[\s\S]*?(?=\n\s*\n)/iu);
         if (conversationalParagraph && payloadText.length > conversationalParagraph[0].length + 20) {
           clientInstructions = conversationalParagraph[0].trim();
           payloadText = payloadText.slice(conversationalParagraph[0].length).trim();
         } else {
-          const conversationalMatch = payloadText.match(/^(?:i need|please create|can you design|design request|here is|make a|create an?|we need|kindly design|تکایە|دیزاینێکم دەوێت)(?![\p{L}\p{N}\p{M}_])[^\n]*\n+/iu);
+          const conversationalMatch = payloadText.match(/^(?:i need|i want|we need|we want|please (?:create|make|design|prepare|do)|can you (?:design|make|create|prepare)|could you (?:design|make|create|prepare)|design request|here is|design an?|make an?|create an?|prepare an?|kindly (?:design|make|create|prepare)|تکایە|دیزاینێک|دیزاینێکم دەوێت|پۆستەرێک|دەمانەوێت|دەمەوێت|پێویستمان بە|بۆمان دروست بکە|دروست بکە|ئامادە بکە)(?![\p{L}\p{N}\p{M}_])[^\n]*\n+/iu);
           if (conversationalMatch && payloadText.length > conversationalMatch[0].length + 20) {
             clientInstructions = conversationalMatch[0].trim();
             payloadText = payloadText.slice(conversationalMatch[0].length).trim();
           }
         }
+      }
+    }
+
+    // "KAAE poster:" on a line of its own names the job; it is not the headline.
+    if (!clientInstructions) {
+      const header = payloadText.match(/^([^\n]{0,60}(?:poster|design|post|flyer|invitation|banner|story|پۆستەر|دیزاین|بانگهێشت)[^\n]{0,40}):\s*\n+/iu);
+      if (header && payloadText.length > header[0].length + 20) {
+        clientInstructions = header[1].trim();
+        payloadText = payloadText.slice(header[0].length).trim();
       }
     }
 
@@ -2962,8 +2973,14 @@ export function createApp(options?: CreateAppOptions) {
             : null;
           if (chatOnly && outboxRepo && db && isValidUuid(taskId)) {
             const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
+            let earlierSendFailed = false;
             await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-              if (await outboxRepo.findByIdempotencyKey(failTenantId, notifyKey, trx)) return;
+              const earlier = await outboxRepo.findByIdempotencyKey(failTenantId, notifyKey, trx);
+              // A second Deliver said "sent" whatever became of the first send, even one that failed.
+              if (earlier) {
+                earlierSendFailed = (earlier as { state?: string }).state === 'failed';
+                return;
+              }
               await outboxRepo.enqueue({
                 tenantId: failTenantId,
                 aggregateType: 'task',
@@ -2973,7 +2990,7 @@ export function createApp(options?: CreateAppOptions) {
                 payload: chatOnly as unknown as Record<string, unknown>,
               }, trx);
             });
-            requesterNotified = true;
+            requesterNotified = !earlierSendFailed;
           }
         } catch (err) {
           console.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
@@ -3005,7 +3022,7 @@ export function createApp(options?: CreateAppOptions) {
         status: failure.status,
         code: failure.code,
         message: requesterNotified
-          ? `${failure.message} The approved file was sent to the requester in Telegram; the Drive archive is not written.`
+          ? `${String(failure.message).replace(/[.\s]+$/, '')}. The approved file was sent to the requester in Telegram; the Drive archive is not written.`
           : failure.message,
         requesterNotified,
       };
@@ -3364,6 +3381,92 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
+  /**
+   * Whether this Telegram update already saved something: a request or revision (persistChatIntake
+   * keys it `<chat>:<update>` and `<chat>:<update>_<suffix>`), an answered question, a rule, a PDF
+   * being read. Read before any paid call.
+   */
+  async function telegramUpdateHandled(chat: string, updateId: string): Promise<{ taskId?: string } | false> {
+    if (!db) return false;
+    const key = `${chat}:${updateId}`;
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ id: string; task_id: string | null }>`SELECT e.id,
+          (SELECT o.aggregate_id FROM hawa.outbox_commands o WHERE o.tenant_id = e.tenant_id AND o.command_type = 'task.created'
+            AND o.idempotency_key = ${`chat:telegram:${key}`} LIMIT 1) AS task_id
+        FROM hawa.inbox_events e
+        WHERE e.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND e.source_account_id = 'telegram'
+          AND (e.source_event_id = ${key} OR e.source_event_id LIKE ${`${key}\\_%`})
+        LIMIT 1`.execute(trx)).rows[0]);
+    return row ? { taskId: row.task_id || undefined } : false;
+  }
+
+  /** Records a side effect that leaves no task behind (a rule saved, a rule removed, a PDF read). */
+  async function markTelegramUpdateHandled(chat: string, updateId: string, kind: string, payload: unknown): Promise<void> {
+    if (!db || !chat || chat === 'tg_default' || !updateId) return;
+    const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : { value: payload };
+    try {
+      await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+        await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+          SELECT ${DEFAULT_TENANT_ID}::uuid, 'telegram', ${`${chat}:${updateId}`}, ${kind}, ${JSON.stringify(record)}::jsonb,
+            ${crypto.createHash('sha256').update(JSON.stringify(record)).digest('hex')}, true
+          WHERE NOT EXISTS (SELECT 1 FROM hawa.inbox_events WHERE tenant_id = ${DEFAULT_TENANT_ID}::uuid
+            AND source_account_id = 'telegram' AND source_event_id = ${`${chat}:${updateId}`})`.execute(trx);
+      });
+    } catch (err) {
+      console.warn(`[TelegramIngress] Could not record update ${updateId} as handled (${kind}):`, err);
+    }
+  }
+
+  // A studio run counts as being made only while it moves: a run left mid-stage by a restart stays
+  // non-terminal for ever (one from 2026-09-14 still read 'briefing' on 2026-09-23).
+  const LIVE_RUN = sql`r.status NOT IN ('transferred', 'degraded', 'failed', 'abandoned') AND r.updated_at > now() - interval '30 minutes'`;
+
+  /** Where a task's design is: being made, finished (a draft exists), failed, or never started. */
+  async function taskDesignState(taskId: string): Promise<'running' | 'finished' | 'failed' | 'none'> {
+    if (!db || !isValidUuid(taskId)) return 'none';
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ live: boolean; finished: boolean; runs: number }>`SELECT
+          bool_or(${LIVE_RUN}) AS live,
+          bool_or(r.status IN ('transferred', 'degraded')) AS finished,
+          count(*)::int AS runs
+        FROM hawa.design_studio_runs r WHERE r.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND r.task_id = ${taskId}::uuid`.execute(trx)).rows[0]);
+    if (!row || !row.runs) return 'none';
+    if (row.live) return 'running';
+    return row.finished ? 'finished' : 'failed';
+  }
+
+  /** A revision of this design that is still being made, if any. */
+  async function revisionInFlight(parentTaskId: string): Promise<{ taskId: string; title: string } | null> {
+    if (!db || !isValidUuid(parentTaskId)) return null;
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ id: string; title: string | null }>`SELECT t.id, t.title FROM hawa.tasks t
+        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+        WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid
+          AND o.payload->'studioOptions'->>'parentTaskId' = ${parentTaskId}
+          AND t.created_at > now() - interval '2 hours'
+          AND (NOT EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id)
+               AND t.created_at > now() - interval '5 minutes'
+            OR EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN}))
+        ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+    return row ? { taskId: row.id, title: row.title || 'your change' } : null;
+  }
+
+  /** The request this chat made in the last half hour whose design is being made, if any. */
+  async function studioRunInProgressForChat(chat: string): Promise<{ taskId: string; title: string } | null> {
+    if (!db || !chat || chat === 'tg_default') return null;
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ id: string; title: string | null }>`SELECT t.id, t.title FROM hawa.tasks t
+        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+        WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid
+          AND o.payload->>'sourceChannelId' = ${chat}
+          AND t.created_at > now() - interval '30 minutes'
+          AND t.client_id IS NOT NULL
+          AND COALESCE(o.payload->>'isInstructionOnly', 'false') != 'true'
+          AND EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN})
+        ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+    return row ? { taskId: row.id, title: row.title || 'your request' } : null;
+  }
+
   async function checkAndRecordIngressEvent(
     adapterKind: string,
     sourceEventId: string,
@@ -3590,6 +3693,25 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const msg = json.message || json.channel_post || json;
+    // An update Telegram delivers again (Core restarted after handling it and before the poller
+    // stored its position) was read again from the top: transcribed, classified, and able to start
+    // a second paid design or remove a second rule. Anything this update already saved ends it here,
+    // before any paid call.
+    const updateChat = String(msg.chat?.id || json.sourceChannelId || '');
+    if (db && updateChat && updateChat !== 'tg_default' && json.update_id != null) {
+      // With the database unreachable nothing could be saved anyway: the update waits for it here,
+      // not after a paid transcription and classification that the poller repeats every 30 s.
+      const handledBefore = await telegramUpdateHandled(updateChat, sourceEventId).catch((err: unknown) => {
+        console.warn('[TelegramIngress] Could not check whether the update was handled before:', err);
+        return null;
+      });
+      if (handledBefore === null) return problem(c, 503, 'Database Unavailable', 'The update is retried when the database answers');
+      if (handledBefore) {
+        // The request this update saved, as the first delivery answered it.
+        const saved = handledBefore.taskId ? tasks.get(handledBefore.taskId) || (await resolveTaskWithFallback(handledBefore.taskId)) : undefined;
+        return c.json({ ok: true, duplicate: true, updateId: sourceEventId, ...(handledBefore.taskId ? { task: saved || { id: handledBefore.taskId } } : {}) }, 200);
+      }
+    }
     let rawText = msg.text || msg.caption || json.text || '';
     let voiceTranscript: string | undefined = undefined;
 
@@ -3651,12 +3773,11 @@ export function createApp(options?: CreateAppOptions) {
       } catch (err) {
         console.warn('[TelegramIngress] Failed to download reference photo:', err);
       }
-      // With a caption the text still goes ahead, and the sender is told the picture did not; it
-      // used to be dropped without a word and the design made without it.
-      if (!referenceImageBase64 && String(msg.caption || '').trim() && msg.chat?.id) {
-        await telegramBridge.dispatchOutboundMessage(String(msg.chat.id), {
-          text: '⚠️ Your text was received, but the picture with it could not be downloaded from Telegram. Please send the picture again.',
-        }).catch(() => undefined);
+      // A picture Telegram could not hand over is fetched again with the whole update: the poller
+      // retries a 503 and, after its last try, tells the sender. Going ahead without it made a paid
+      // design without the picture, and a picture sent again later no longer joined that request.
+      if (!referenceImageBase64) {
+        return problem(c, 503, 'Picture Not Downloaded', 'The picture could not be downloaded from Telegram; the update is retried');
       }
     } else if (json.referenceImageBase64) {
       referenceImageBase64 = json.referenceImageBase64;
@@ -3702,7 +3823,13 @@ export function createApp(options?: CreateAppOptions) {
         fileSize: Number(docObj.file_size) || undefined,
         caption: String(msg.caption || ''),
       });
-      if (reading.done) guidelineReadings.add(reading.done.finally(() => guidelineReadings.delete(reading.done!)));
+      if (reading.done) {
+        // The set held the reading itself and deleted a different promise, so it only grew.
+        const tracked: Promise<void> = reading.done.finally(() => guidelineReadings.delete(tracked));
+        guidelineReadings.add(tracked);
+      }
+      // A PDF read is a paid call: the same update delivered again is not read twice.
+      if (reading.accepted) await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_guidelines_pdf', json);
       return c.json({ ok: true, guidelines: reading.accepted ? 'reading' : 'refused', updateId: sourceEventId }, 200);
     }
 
@@ -3752,10 +3879,12 @@ export function createApp(options?: CreateAppOptions) {
             return null;
           })
         : null;
-      const target = album || await findRequestAwaitingReference(db, { sourceChannelId }).catch((err) => {
+      // An album photo belongs to its album's request or to none yet: with the caption on a later
+      // photo, the first one was attached to whichever request the chat made last.
+      const target = album || (albumId ? null : await findRequestAwaitingReference(db, { sourceChannelId }).catch((err) => {
         console.warn('[TelegramIngress] Could not look for a request to attach the photo to:', err);
         return null;
-      });
+      }));
       if (target) {
         const persisted = await persistChatIntake(db, {
           platform: 'telegram',
@@ -3782,6 +3911,21 @@ export function createApp(options?: CreateAppOptions) {
         }
         broadcast('task:created', persisted.task);
         return c.json({ ok: true, referenceFor: target.taskId, album: Boolean(album), task: persisted.task }, 201);
+      }
+      // A picture that comes after the design has passed its brief cannot join it, and "send the
+      // request text now" made the sender send the request again: a second paid design (2026-09-23).
+      if (!albumId) {
+        const running = await studioRunInProgressForChat(sourceChannelId).catch(() => null);
+        if (running) {
+          await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+            text:
+              `🖼️ <b>Your design "${escapeTelegramHtml(running.title)}" is already being made</b> with the pictures it had.\n\n` +
+              `<i>When the draft arrives, reply to it with this picture and say what to do with it. Nothing new was started.</i>`,
+            parse_mode: 'HTML',
+          }).catch(() => undefined);
+          await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_late_picture', json);
+          return c.json({ ok: true, ignored: true, reason: 'DESIGN_ALREADY_RUNNING', taskId: running.taskId }, 200);
+        }
       }
       // No request to attach to yet: the image is kept as a reference for the request that follows.
       // It used to fall through to intake as a brief whose copy was the sentence "Apply the attached
@@ -3814,7 +3958,7 @@ export function createApp(options?: CreateAppOptions) {
 
     // /status: this chat's latest requests and where each one is. It used to report the bridge's own
     // counters (mode, ingress URL, uptime), which told the sender nothing about their design.
-    if (typeof rawText === 'string' && /^\/status(@\w+)?\s*$/i.test(rawText.trim()) && db && sourceChannelId !== 'tg_default') {
+    if (typeof rawText === 'string' && /^\/status(@\w+)?(\s.*)?$/is.test(rawText.trim()) && db && sourceChannelId !== 'tg_default') {
       const rows = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
         (await sql<{ id: string; title: string | null; state: string; created_at: Date; design_id: string | null }>`
           SELECT t.id, t.title, t.state, t.created_at,
@@ -3824,12 +3968,25 @@ export function createApp(options?: CreateAppOptions) {
             AND o.payload->>'sourceChannelId' = ${sourceChannelId}
             AND COALESCE(o.payload->>'isInstructionOnly', 'false') <> 'true'
           ORDER BY t.created_at DESC LIMIT 5`.execute(trx)).rows
-      ).catch(() => []);
+      ).catch((err: unknown) => {
+        // A read that failed answered "No requests from this chat yet", which is untrue.
+        console.warn('[TelegramIngress] /status could not read the chat\'s requests:', err);
+        return null;
+      });
+      if (!rows) {
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text: '📊 Your requests could not be read just now. Please send /status again in a minute.',
+        });
+        return c.json({ ok: false, command: true, status: 'UNAVAILABLE' }, 200);
+      }
       const stateLabel: Record<string, string> = {
-        received: 'being designed', routing: 'being designed', brief_draft: 'being designed', design_planning: 'being designed',
-        studio_composition: 'being designed', qa: 'being checked', human_review: 'draft ready, awaiting approval in Hawa Desk',
-        revision_requested: 'change requested', approved: 'approved, awaiting delivery', publishing: 'being delivered',
-        complete: 'delivered', failed_operator: 'needs the office (the automatic draft failed)', rejected: 'rejected', cancelled: 'cancelled',
+        received: 'being designed', promotion_pending: 'being designed', routing: 'being designed', routing_review: 'being designed',
+        brief_draft: 'being designed', brief_review: 'being designed', context_ready: 'being designed', design_planning: 'being designed',
+        asset_production: 'being designed', studio_composition: 'being designed', qa: 'being checked', auto_repair: 'being checked',
+        human_review: 'draft ready, awaiting approval in Hawa Desk', revision_requested: 'replaced by a newer version',
+        approved: 'approved, awaiting delivery', publishing: 'being delivered', complete: 'delivered', paused: 'paused by the office',
+        failed_retryable: 'delayed, being retried', failed_operator: 'needs the office (the automatic draft failed)',
+        rejected: 'rejected', cancelled: 'cancelled',
       };
       const lines = rows.map((r, i) =>
         `${i + 1}. <b>${escapeTelegramHtml(String(r.title || 'Request').replace(/^[^:]*:\s*/, '').slice(0, 60))}</b>\n` +
@@ -3849,6 +4006,8 @@ export function createApp(options?: CreateAppOptions) {
     if (rulesCommand && sourceChannelId !== 'tg_default') {
       if (!rulesDeps) return problem(c, 503, 'Rules unavailable', 'Standing rules need the database');
       await handleRulesCommand(rulesDeps, { sourceChannelId, command: rulesCommand, text: rawText });
+      // "/forget 1" delivered twice would remove the rule after it as well.
+      if (rulesCommand.kind === 'forget') await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_rules_forget', json);
       return c.json({ ok: true, command: true, rules: rulesCommand.kind }, 200);
     }
 
@@ -4057,8 +4216,10 @@ export function createApp(options?: CreateAppOptions) {
       let pendingTasks: any[] = replyTarget ? [replyTarget] : [];
       if (!replyTarget && db) {
         try {
-          const isSecond = /\b(second|2nd|two|plan 2|option 2)\b/i.test(rawText);
-          const isThird = /\b(third|3rd|three|plan 3|option 3)\b/i.test(rawText);
+          // Only a request that names an earlier design ("option 2", "the second design") reads
+          // against it: "make the two dates gold" bound to the chat's second-newest request.
+          const isSecond = /\b(?:plan|option|design|draft)\s*(?:2|two)\b|\b(?:second|2nd)\s+(?:plan|option|design|draft)\b/i.test(rawText);
+          const isThird = /\b(?:plan|option|design|draft)\s*(?:3|three)\b|\b(?:third|3rd)\s+(?:plan|option|design|draft)\b/i.test(rawText);
           const ordinalIndex = isThird ? 2 : isSecond ? 1 : 0;
 
           const recentDbTask = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -4197,6 +4358,18 @@ export function createApp(options?: CreateAppOptions) {
         return c.json({ ok: true, status: 'CLARIFICATION_REQUIRED', question: classification.clarifyingQuestion });
       }
 
+      // "From now on, always put the logo bottom-right", sent on its own, is a rule for later
+      // designs. Read as a change to the chat's latest draft, it also paid for a revision nobody
+      // asked for; read as a brief, the sentence became a design. Only a reply to a draft applies
+      // a rule to that draft as well.
+      const ruleSentence = !isReply && isStandingRule(rawText) && (
+        classification.kind === 'feedback' ||
+        (classification.kind === 'new_brief' && rawText.trim().length <= 200 && !/\n/.test(rawText.trim()))
+      );
+      if (ruleSentence) {
+        classification = { ...classification, kind: 'standing_rule', standingRule: classification.standingRule || rawText.trim() };
+      }
+
       // A lasting preference is saved for the client and applies to every later design. On its own
       // it changes nothing now; said with a change to a draft, the draft is revised as well.
       // A new brief that also says "and from now on …" is designed, and its rule is saved too.
@@ -4204,7 +4377,8 @@ export function createApp(options?: CreateAppOptions) {
         if (!rulesDeps) return problem(c, 503, 'Rules unavailable', 'Standing rules need the database');
         // Said about a design (a reply, or a change to the latest one), the rule is that design's
         // client's, not whichever client the chat asked for last.
-        const designClient = classification.kind === 'feedback' && pendingTasks[0]?.clientId && isValidUuid(pendingTasks[0].clientId)
+        const aboutDesign = classification.kind === 'feedback' || Boolean(replyTarget);
+        const designClient = aboutDesign && pendingTasks[0]?.clientId && isValidUuid(pendingTasks[0].clientId)
           ? await ruleClientById(rulesDeps, pendingTasks[0].clientId)
           : undefined;
         const saved = await saveChatRule(rulesDeps, {
@@ -4216,12 +4390,15 @@ export function createApp(options?: CreateAppOptions) {
         });
         standingRuleSaved = saved.saved;
         if (classification.kind === 'standing_rule') {
+          if (saved.saved) await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_standing_rule', json);
           return c.json({ ok: true, status: saved.saved ? 'RULE_SAVED' : 'RULE_CLIENT_UNKNOWN', rule: classification.standingRule, ruleId: saved.ruleId }, 200);
         }
       } else if (classification.kind === 'standing_rule') {
         // Read as a lasting preference with nothing to restate: saved in the sender's own words.
         if (!rulesDeps) return problem(c, 503, 'Rules unavailable', 'Standing rules need the database');
-        const saved = await saveChatRule(rulesDeps, { sourceChannelId, sourceEventId, ruleText: rawText.trim(), originalText: rawText });
+        const designClient = replyTarget?.clientId && isValidUuid(replyTarget.clientId) ? await ruleClientById(rulesDeps, replyTarget.clientId) : undefined;
+        const saved = await saveChatRule(rulesDeps, { sourceChannelId, sourceEventId, ruleText: rawText.trim(), originalText: rawText, client: designClient });
+        if (saved.saved) await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_standing_rule', json);
         return c.json({ ok: true, status: saved.saved ? 'RULE_SAVED' : 'RULE_CLIENT_UNKNOWN', ruleId: saved.ruleId }, 200);
       }
 
@@ -4344,6 +4521,32 @@ export function createApp(options?: CreateAppOptions) {
           : undefined,
       });
       standingRuleSaved = saved.saved;
+    }
+
+    // A change to a design that is still being made (a reply to "Request saved", a second change
+    // before the first one's draft) was revised from nothing: a second full paid design, and a
+    // different one. The sender is asked to reply to the draft once it arrives.
+    if (feedbackTargetTask && db && sourceChannelId !== 'tg_default' && isValidUuid(feedbackTargetTask.id)) {
+      const [designState, pendingChange] = await Promise.all([
+        taskDesignState(feedbackTargetTask.id).catch((err: unknown) => {
+          console.warn('[TelegramIngress] Could not read the design state of the change target:', err);
+          return 'none' as const;
+        }),
+        revisionInFlight(feedbackTargetTask.id).catch(() => null),
+      ]);
+      if (designState === 'running' || pendingChange) {
+        const title = String(pendingChange?.title || feedbackTargetTask.title || 'your design').replace(/^[^:]*:\s*/, '').slice(0, 80);
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text: pendingChange
+            ? `⏳ <b>Your previous change to "${escapeTelegramHtml(title)}" is still being made.</b>\n\n` +
+              `<i>When its draft arrives, reply to that draft with this change. Nothing new was started.</i>`
+            : `⏳ <b>Your draft "${escapeTelegramHtml(title)}" is still being made.</b>\n\n` +
+              `<i>When it arrives, reply to its image with this change. Nothing new was started.</i>`,
+          parse_mode: 'HTML',
+        }).catch(() => undefined);
+        await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_change_while_designing', json);
+        return c.json({ ok: true, status: 'DESIGN_STILL_RUNNING', taskId: pendingChange?.taskId || feedbackTargetTask.id }, 200);
+      }
     }
 
     if (feedbackTargetTask) {
@@ -4605,11 +4808,15 @@ export function createApp(options?: CreateAppOptions) {
               parse_mode: 'HTML',
             });
           } else {
+            // The change is made to the design the sender saw, so the message no longer promises "a
+            // new layout architecture"; it carries the revision's Task ID so a reply to it finds the
+            // revision, not the design before it.
             await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-              text: `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(rawText.slice(0, 500))}"\n\n` +
-                `🎨 <b>Preparing an updated Canva draft with a new layout architecture...</b>\n` +
-                `<i>You will receive the editable Canva link in this chat as soon as it is ready.</i>\n\n` +
-                scopeLine,
+              text: `✏️ <b>Change received:</b> "${escapeTelegramHtml(rawText.slice(0, 500))}"\n\n` +
+                `🎨 <b>Making this change to the same design.</b>\n` +
+                `<i>The new draft and its editable Canva link come to this chat when ready. To change it again, reply to the new draft.</i>\n\n` +
+                scopeLine +
+                `\n🆔 Task ID: <code>${escapeTelegramHtml(persisted.task.id)}</code>`,
               parse_mode: 'HTML',
             });
           }
@@ -6239,6 +6446,19 @@ export function createApp(options?: CreateAppOptions) {
     );
 
     if (!result.ok) {
+      // Drive refused and the approved file went to the requester's chat: the delivery happened and
+      // only the archive did not, so it is not reported as an error. The Desk showed a red "Delivery
+      // failed" for a file the client had received.
+      if ((result as { requesterNotified?: boolean }).requesterNotified) {
+        return c.json({
+          ok: true,
+          status: 'DELIVERED_TO_CHAT_ONLY',
+          taskId,
+          code: (result as { code?: string }).code || 'ARCHIVE_NOT_WRITTEN',
+          message: (result as { message?: string }).message || 'The approved file was sent to the requester in Telegram; the Drive archive is not written.',
+          requesterNotified: true,
+        }, 202);
+      }
       const status = (result as any).status || 422;
       const title = (result as any).title || (status === 409 ? 'Conflict' : status === 404 ? 'Task Not Found' : 'Publication Failed');
       return problem(c, status, title, (result as any).message || 'The publisher refused the delivery');
@@ -7325,6 +7545,36 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 403, 'Forbidden', `Actor is not authorized to review designs for client '${task.clientId}'`);
     }
 
+    // A design the client asked to change is replaced by its revision (a separate task). Approving
+    // it delivered the version without the change; while the change is still being made, or once
+    // its draft is ready, the approval goes to the revision. A revision that failed leaves this
+    // design approvable, so the client is never left with nothing to approve.
+    if (isApproved && db && isValidUuid(taskId)) {
+      const newer = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+        (await sql<{ id: string; state: string; live: boolean }>`SELECT t.id, t.state,
+            EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN}) AS live
+          FROM hawa.tasks t
+          JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
+          WHERE t.tenant_id = ${tenantId}::uuid
+            AND o.payload->'studioOptions'->>'parentTaskId' = ${taskId}
+            AND t.state NOT IN ('cancelled', 'rejected', 'failed_operator')
+          ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]
+      ).catch((err: unknown) => {
+        console.warn('[core:approval] Could not check for a newer revision:', err);
+        return undefined;
+      });
+      if (newer && (newer.live || ['human_review', 'approved', 'publishing', 'complete'].includes(newer.state))) {
+        return problem(
+          c,
+          409,
+          'Replaced By A Newer Revision',
+          newer.live
+            ? `A change to this design is still being made (task ${newer.id}). Approve its draft when it arrives.`
+            : `This design was changed at the client's request. Approve the newer version instead (task ${newer.id}).`
+        );
+      }
+    }
+
     // Strictly server-derived actor identity
     const actorUserId = auth.userId || '00000000-0000-4000-b000-000000000001';
     const actorDisplayName = auth.displayName || (auth.role === 'administrator' ? 'Administrator' : auth.role === 'art_director' ? 'Art Director' : 'Primary Operator');
@@ -7511,7 +7761,7 @@ export function createApp(options?: CreateAppOptions) {
         );
       } catch (err: any) {
         console.error('[core:approvals:create] DB approval error:', err);
-        if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification')) {
+        if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification')) {
           return problem(c, 409, 'Conflict', err.message);
         }
         if (err.message?.includes('Precondition failed') || err.message?.includes('QA run')) {

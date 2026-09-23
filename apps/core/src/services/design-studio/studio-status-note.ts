@@ -28,7 +28,15 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
       .map((c: { after?: string; element?: string } | null) => String(c?.after || c?.element || '').trim())
       .filter(Boolean)
       .slice(0, 3);
-    parts.push(changed.length ? `your change made to the same design (${changed.join('; ')})` : 'your change made to the same design');
+    // What was asked and does not show on the design, said plainly: the note repeated the model's
+    // own account, and could report a gold accent that had been taken off as unreadable.
+    const unmade = (Array.isArray(directed.unmade) ? directed.unmade : [])
+      .map((u: unknown) => String(u ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (changed.length) parts.push(`your change made to the same design (${changed.join('; ')})`);
+    else if (directed.unchanged !== true) parts.push('your change made to the same design');
+    if (unmade.length) parts.push(`⚠️ could not be made: ${unmade.join('; ')}`);
   } else if (stages.directedFailed) {
     parts.push('your change could not be made to the same design, so it was designed afresh');
   } else if (candidates.length > 0) parts.push(`${candidates.length} concept${candidates.length === 1 ? '' : 's'}`);

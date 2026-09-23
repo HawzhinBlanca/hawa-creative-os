@@ -3,7 +3,7 @@ import { sql, withRlsContext, ClientRulesRepository, type Database, type Kysely 
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { readBrandGuidelines, fontCaveat, type GuidelinesModel } from './brand-guidelines.js';
 import { isPdf } from './telegram-media.js';
-import { formatRuleSaved, formatRulesList, type RulesCommand } from './standing-rules-chat.js';
+import { formatRuleSaved, formatRulesList, ruleNumber, type RulesCommand } from './standing-rules-chat.js';
 
 /**
  * The chat side of a client's standing rules: which client a message is about, saving a rule said
@@ -27,6 +27,10 @@ export interface RulesIntakeDeps {
 export interface RuleClient {
   id: string;
   name: string;
+  /** Its code, registered name and aliases, which a guidelines document's brand name is checked against. */
+  names?: string[];
+  /** The message named it, rather than it being the chat's latest client. */
+  named?: boolean;
 }
 
 const scope = (deps: RulesIntakeDeps) => ({ tenantId: deps.tenantId, userId: deps.userId, role: 'operator' as const });
@@ -40,16 +44,24 @@ const word = (text: string, w: string) =>
 
 /**
  * The client a rule is for: the one the message names (by code, name or alias), else the client of
- * this chat's most recent request in the last 30 days. Undefined when neither says.
+ * this chat's most recent request in the last 30 days. Undefined when neither says, when the
+ * message names two clients, or when it names one this chat may not use.
  */
 export async function resolveRuleClient(deps: RulesIntakeDeps, sourceChannelId: string, text: string): Promise<RuleClient | undefined> {
   return withRlsContext(deps.db, scope(deps), async (trx) => {
     const clients = (await sql<{ id: string; code: string; name: string; aliases: string[] | null }>`SELECT id, code, name, aliases FROM hawa.clients WHERE tenant_id = ${deps.tenantId}::uuid`.execute(trx)).rows;
-    const named = clients.find((c) => [c.code, c.name, ...(Array.isArray(c.aliases) ? c.aliases : [])].some((w: string) => typeof w === 'string' && word(text, w)));
-    // Naming a client in a message would otherwise let any chat read, add or remove that client's
-    // rules; outside the office, the chat must have asked for that client's designs itself.
-    const chatKnows = named
-      ? deps.trustNamedClient ||
+    const namesOf = (c: (typeof clients)[number]) =>
+      [c.code, c.name, ...(Array.isArray(c.aliases) ? c.aliases : [])].filter((w): w is string => typeof w === 'string' && w.trim().length > 0);
+    const asRuleClient = (c: (typeof clients)[number], named: boolean): RuleClient => ({ id: String(c.id), name: displayName(c), names: namesOf(c), named });
+    const namedClients = clients.filter((c) => namesOf(c).some((w) => word(text, w)));
+    // "Same as KAAE, for Drustee" is a rule for neither until the sender says which.
+    if (namedClients.length > 1) return undefined;
+    const named = namedClients[0];
+    if (named) {
+      // Naming a client in a message would otherwise let any chat read, add or remove that client's
+      // rules; outside the office, the chat must have asked for that client's designs itself.
+      const chatKnows =
+        deps.trustNamedClient ||
         Boolean(
           (
             await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
@@ -57,9 +69,11 @@ export async function resolveRuleClient(deps: RulesIntakeDeps, sourceChannelId: 
                 AND o.payload->>'sourceChannelId' = ${sourceChannelId} AND t.client_id = ${named.id}::uuid
                 AND o.created_at > now() - interval '90 days'`.execute(trx)
           ).rows[0]?.n
-        )
-      : false;
-    if (named && chatKnows) return { id: String(named.id), name: displayName(named) };
+        );
+      // A client named but not this chat's is asked about, never swapped for the chat's latest
+      // client: a KAAE rule from another client's chat was saved as that client's (2026-09-23).
+      return chatKnows ? asRuleClient(named, true) : undefined;
+    }
     const recent = (
       await sql<{ client_id: string }>`SELECT t.client_id FROM hawa.outbox_commands o JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
         WHERE o.tenant_id = ${deps.tenantId}::uuid AND o.command_type = 'task.created'
@@ -78,7 +92,7 @@ export async function resolveRuleClient(deps: RulesIntakeDeps, sourceChannelId: 
       ).rows[0];
       client = ruled ? clients.find((c) => String(c.id) === String(ruled.client_id)) : clients.length === 1 ? clients[0] : undefined;
     }
-    return client ? { id: String(client.id), name: displayName(client) } : undefined;
+    return client ? asRuleClient(client, false) : undefined;
   });
 }
 
@@ -91,6 +105,31 @@ export async function ruleClientById(deps: RulesIntakeDeps, clientId: string): P
   }).catch(() => undefined);
 }
 
+/** Lower case, letters and digits only: "K.A.A.E." and "kaae" are one name. */
+const squash = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+/** "Kurdistan Accrediting Association for Education" as "kaae". */
+const initials = (s: string) =>
+  s.split(/[^\p{L}\p{N}]+/u).filter((w) => w && !/^(for|of|and|the|in)$/i.test(w)).map((w) => w[0]).join('').toLowerCase();
+
+/**
+ * Whether the brand a guidelines document is for is this client: one name contains the other, or
+ * one is the other's initials. Case, spaces and punctuation do not count.
+ */
+export function brandMatchesClient(brandName: string, clientNames: string[]): boolean {
+  const brand = squash(brandName);
+  if (!brand) return true;
+  return clientNames.some((n) => {
+    const name = squash(n);
+    if (!name) return false;
+    return (
+      (name.length >= 3 && brand.includes(name)) ||
+      (brand.length >= 3 && name.includes(brand)) ||
+      (name.length >= 2 && initials(brandName) === name) ||
+      (brand.length >= 2 && initials(n) === brand)
+    );
+  });
+}
+
 const noClient = (what: string) => ({
   text: `❓ <b>Which client is this ${what} for?</b>\n\n<i>Send it again with the client's name in it (for example KAAE).</i>`,
   parse_mode: 'HTML',
@@ -100,13 +139,13 @@ const noClient = (what: string) => ({
 export async function saveChatRule(
   deps: RulesIntakeDeps,
   params: { sourceChannelId: string; sourceEventId: string; ruleText: string; originalText: string; client?: RuleClient }
-): Promise<{ saved: boolean; created?: boolean; ruleId?: string; clientId?: string }> {
+): Promise<{ saved: boolean; created?: boolean; ruleId?: string; clientId?: string; ruleNumber?: number }> {
   const client = params.client || (await resolveRuleClient(deps, params.sourceChannelId, params.originalText));
   if (!client) {
     await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, noClient('rule'));
     return { saved: false };
   }
-  const { rule, created, count } = await withRlsContext(deps.db, scope(deps), async (trx) => {
+  const { rule, created, count, number } = await withRlsContext(deps.db, scope(deps), async (trx) => {
     const repo = new ClientRulesRepository(trx);
     const out = await repo.save({
       tenantId: deps.tenantId,
@@ -114,13 +153,14 @@ export async function saveChatRule(
       humanRule: params.ruleText,
       source: { kind: 'telegram_message', id: `${params.sourceChannelId}:${params.sourceEventId}`, note: params.originalText.slice(0, 500) },
     });
-    return { ...out, count: (await repo.listActive(deps.tenantId, client.id)).length };
+    const active = await repo.listActive(deps.tenantId, client.id);
+    return { ...out, count: active.length, number: ruleNumber(active, out.rule.id) };
   });
   await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
-    text: formatRuleSaved(client.name, rule.humanRule, created, count),
+    text: formatRuleSaved(client.name, rule.humanRule, created, count, number),
     parse_mode: 'HTML',
   });
-  return { saved: true, created, ruleId: rule.id, clientId: client.id };
+  return { saved: true, created, ruleId: rule.id, clientId: client.id, ruleNumber: number };
 }
 
 /** /rules and /forget. */
@@ -217,10 +257,21 @@ export async function handleGuidelinesPdf(
         });
         return;
       }
+      // Another brand's guidelines sent in this client's chat would become this client's rules.
+      // A caption or file name that names the client is the sender saying which client they are for.
+      if (reading.brandName && !client.named && !brandMatchesClient(reading.brandName, client.names?.length ? client.names : [client.name])) {
+        await deps.bridge.dispatchOutboundMessage(params.sourceChannelId, {
+          text:
+            `📘 <b>${escapeTelegramHtml(name)} reads as the brand guidelines of ${escapeTelegramHtml(reading.brandName)}, not ${escapeTelegramHtml(client.name)}</b>, so no rules were saved.\n\n` +
+            `<i>Send it again with the client's name in the caption (for example ${escapeTelegramHtml(client.name)}), and its rules are saved for that client.</i>`,
+          parse_mode: 'HTML',
+        });
+        return;
+      }
       const sourceId = params.fileUniqueId || createHash('sha256').update(bytes).digest('hex').slice(0, 32);
       const saved = await withRlsContext(deps.db, scope(deps), async (trx) => {
         const repo = new ClientRulesRepository(trx);
-        const out: Array<{ text: string; created: boolean; caveat?: string }> = [];
+        const out: Array<{ id: string; text: string; created: boolean; caveat?: string }> = [];
         for (const rule of reading.rules) {
           const { rule: row, created } = await repo.save({
             tenantId: deps.tenantId,
@@ -233,13 +284,19 @@ export async function handleGuidelinesPdf(
             },
             source: { kind: 'brand_guidelines', id: sourceId, note: name },
           });
-          out.push({ text: row.humanRule, created, caveat: fontCaveat(rule) });
+          // Two lines of the document can read as one rule; it is listed once.
+          if (!out.some((r) => r.id === row.id)) out.push({ id: row.id, text: row.humanRule, created, caveat: fontCaveat(rule) });
         }
-        return { out, total: (await repo.listActive(deps.tenantId, client.id)).length };
+        return { out, active: await repo.listActive(deps.tenantId, client.id) };
       });
       const fresh = saved.out.filter((r) => r.created).length;
+      // Each rule under the number /rules shows and /forget takes. They were numbered 1..N in the
+      // document's order, so "/forget 3" removed another rule than the one shown as 3 (2026-09-23).
+      const numbered = saved.out
+        .map((r) => ({ ...r, n: ruleNumber(saved.active, r.id) }))
+        .sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity));
       // Whole lines only, within Telegram's 4096 characters: a cut through a tag fails the message.
-      const all = saved.out.map((r, i) => `${i + 1}. ${escapeTelegramHtml(r.text)}${r.caveat ? `\n   <i>⚠️ ${escapeTelegramHtml(r.caveat)}</i>` : ''}`);
+      const all = numbered.map((r) => `${r.n ? `${r.n}.` : '•'} ${escapeTelegramHtml(r.text)}${r.caveat ? `\n   <i>⚠️ ${escapeTelegramHtml(r.caveat)}</i>` : ''}`);
       const lines: string[] = [];
       for (const line of all) {
         if (lines.join('\n').length + line.length > 3000) {
@@ -253,7 +310,7 @@ export async function handleGuidelinesPdf(
           `📘 <b>${escapeTelegramHtml(client.name)} brand guidelines read</b> (${escapeTelegramHtml(name)}): ` +
           `${fresh} new rule${fresh === 1 ? '' : 's'} saved${saved.out.length > fresh ? `, ${saved.out.length - fresh} already in force` : ''}.\n\n` +
           lines.join('\n') +
-          `\n\n<i>Every new ${escapeTelegramHtml(client.name)} design follows these (${saved.total} rules in force). /rules lists them; /forget removes one.</i>`,
+          `\n\n<i>Every new ${escapeTelegramHtml(client.name)} design follows these (${saved.active.length} rules in force). /rules lists them; /forget and a number removes one.</i>`,
         parse_mode: 'HTML',
       });
     } catch (err) {

@@ -126,6 +126,42 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
 }
 
 /**
+ * Core answers a studio start with 429 STUDIO_BUSY while two of the tenant's runs are unfinished. The
+ * step retried that five times in under a second and the workflow then told the requester "We could
+ * not make the automatic draft", although nothing was wrong with the request: it only had to wait its
+ * turn (2026-09-23). A busy answer is now journalled as an answer rather than thrown, and the same
+ * request is asked again after a durable 25 s wait, for up to 15 minutes. Only then does the run end
+ * as it did before. The wait is counted from what was asked for, never from a clock, so a replay
+ * reaches the same decision at the same try.
+ */
+const CORE_BUSY_WAIT_MS = 25000;
+const CORE_BUSY_WINDOW_MS = 15 * 60 * 1000;
+
+type CoreBusy = { coreBusy: string };
+const isCoreBusy = (value: unknown): value is CoreBusy =>
+  typeof value === 'object' && value !== null && typeof (value as { coreBusy?: unknown }).coreBusy === 'string';
+
+async function runUnlessBusy<T>(ctx: WorkflowDurableContext, stepName: string, request: () => Promise<T>): Promise<T | CoreBusy> {
+  let waitedMs = 0;
+  for (let attempt = 0; ; attempt++) {
+    const answer: T | CoreBusy = await ctx.run(attempt === 0 ? stepName : `${stepName}-after-busy-${attempt}`, async () => {
+      try {
+        return await request();
+      } catch (err) {
+        if (err instanceof CoreBoundaryError && err.httpStatus === 429) return { coreBusy: err.code || 'HTTP_429' };
+        // A change whose original design is still being made waits for it the same way: the studio
+        // refuses it with 409 PARENT_STILL_RUNNING rather than designing the change from nothing.
+        if (err instanceof CoreBoundaryError && err.httpStatus === 409 && err.code === 'PARENT_STILL_RUNNING') return { coreBusy: err.code };
+        throw err;
+      }
+    });
+    if (!isCoreBusy(answer) || waitedMs >= CORE_BUSY_WINDOW_MS) return answer;
+    if (ctx.sleep) await ctx.sleep(CORE_BUSY_WAIT_MS);
+    waitedMs += CORE_BUSY_WAIT_MS;
+  }
+}
+
+/**
  * The code Core records for a studio run that ended `failed`. It used to be the run's free-text
  * diagnostic ("Studio v3 failed: Winner failed hard QA: TEXT_OVERFLOW, …"), which Core squashed into
  * an upper-case token and printed to the requester. The code is now a short, stable name; the
@@ -135,6 +171,10 @@ export function studioFailureCode(result: { code?: unknown; diagnostic?: unknown
   if (typeof result.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(result.code)) return result.code;
   const text = [result.diagnostic, result.message, result.error].filter((v) => typeof v === 'string').join(' ');
   if (/BUDGET_EXHAUSTED/i.test(text)) return 'BUDGET_EXHAUSTED';
+  // The provider account out of credit or its key refused: every design fails the same way until
+  // the office tops it up, which the generic STUDIO_FAILED hid in the task history.
+  if (/insufficient_quota|exceeded your current quota|INSUFFICIENT_QUOTA|billing_hard_limit/i.test(text)) return 'MODEL_CREDIT_EXHAUSTED';
+  if (/invalid_api_key|incorrect api key|HTTP 401\b/i.test(text)) return 'MODEL_KEY_REFUSED';
   if (/hard QA/i.test(text)) return 'HARD_QA_REFUSED';
   if (/judge|critic/i.test(text) && /unavailable/i.test(text)) return 'MODEL_UNAVAILABLE';
   return 'STUDIO_FAILED';
@@ -238,13 +278,19 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       height: variant.height,
       ...input.studioOptions,
     };
+    // Still busy after the whole window: the run ends as a busy start always did, with Core's code.
+    const endBusy = (busy: CoreBusy) =>
+      finish('DESIGN_SERVER_ERROR', undefined, busy.coreBusy, undefined, {
+        detail: `Core was still busy (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting for a free studio slot.`,
+      });
     try {
-      result = await ctx.run('canva-studio-start', () =>
+      result = await runUnlessBusy(ctx, 'canva-studio-start', () =>
         call('/canva/studio', studioBody, 'workflow-studio-' + runKey)
       );
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
+    if (isCoreBusy(result)) return endBusy(result);
     let idlePolls = 0;
     let waitedMs = 0;
     let stuckStage: string | undefined;
@@ -255,8 +301,9 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       // at the same poll, and a wall-clock read would make that decision non-deterministic.
       waitedMs += wait;
       const before = String(result.status);
+      let next: unknown;
       try {
-        result = await ctx.run('canva-studio-resume-' + n, () =>
+        next = await runUnlessBusy(ctx, 'canva-studio-resume-' + n, () =>
           call(
             '/canva/studio/' + encodeURIComponent(result.runId) + '/resume',
             {},
@@ -266,6 +313,9 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
       } catch (error) {
         return await handleBoundaryError(error, 'DESIGN_REJECTED');
       }
+      // The run's own answer is kept until then, so the report still names the run.
+      if (isCoreBusy(next)) return endBusy(next);
+      result = next;
       if (String(result.status) !== before) {
         idlePolls = 0;
         continue;
@@ -379,8 +429,12 @@ export async function runCanvaDraft(input: WorkflowInput, ctx: WorkflowDurableCo
 
   if (input.designStudio) {
     try {
+      // Every other step here keeps retrying through a Core restart (index.ts). Parity pays a vision
+      // model on every call and Core keeps no earlier answer, so it keeps the short bound: a restart
+      // costs this courtesy check, reported as unavailable, not a model bill per retry.
       const pRes = await ctx.run('canva-parity-check', () =>
-        call('/canva/parity-check', { runId: result?.runId })
+        call('/canva/parity-check', { runId: result?.runId }),
+        { maxRetryAttempts: 5 }
       );
       parity = pRes?.parity || 'match';
     } catch (err: any) {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   classifyWithHeuristics,
   classifyInboundTelegramMessage,
+  isAcknowledgement,
 } from '../src/services/telegram-classifier.js';
 
 describe('telegram-classifier: Intent & Instruction-Only Detection', () => {
@@ -274,5 +275,98 @@ By Invitation Only`;
       expect(res.intent).toBe('revision_feedback');
       expect(res.isInstructionOnly).toBe(true);
     });
+  });
+});
+
+/**
+ * Found on 2026-09-23: common thanks were not recognised, so under a draft they cost a model call
+ * and, when the model was slow, the reply rule started a paid revision on "great work".
+ */
+describe('telegram-classifier: thanks and praise under a draft start nothing paid', () => {
+  const draft = { id: '5f94e0e3-4934-4490-9c1f-44147a0e66b6', title: 'KAAE Gala Dinner Invitation' };
+  const thanks = [
+    'thank you so much', 'Thanks a lot!', 'thank u', 'good job', 'Looks good', 'great work', 'perfect', 'nice', 'approved',
+    'thanks 👍🏻', '🙏🏼', '👍🏽👍🏽', '❤️', 'دەستخۆش', 'دەستت خۆش بێت', 'سوپاست دەکەم', 'زۆر سوپاس', 'مەمنون', 'سپاس',
+  ];
+
+  for (const text of thanks) {
+    it(`"${text}" in reply to a draft is 'other', with no model call`, async () => {
+      const fetcher = vi.fn();
+      const res = await classifyInboundTelegramMessage({ messageText: text, recentTask: draft, hasReplyTo: true }, { apiKey: 'test-key', fetcher });
+      expect(res.kind).toBe('other');
+      expect(res.needsClarification).toBeFalsy();
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+  }
+
+  it('is thanks only when the whole short message is', () => {
+    expect(isAcknowledgement('looks good but move the logo')).toBe(false);
+    expect(isAcknowledgement('thanks, now make the title gold')).toBe(false);
+    expect(isAcknowledgement(`thanks ${'very '.repeat(12)}much`)).toBe(false);
+  });
+
+  const failing = {
+    'a 500': vi.fn(async () => new Response('{}', { status: 500 })),
+    'a timeout': vi.fn(async () => { throw new DOMException('The operation timed out.', 'TimeoutError'); }),
+  };
+  for (const [how, fetcher] of Object.entries(failing)) {
+    it(`asks, after ${how}, whether praise in reply to a draft is a change, and never starts one`, async () => {
+      const res = await classifyInboundTelegramMessage(
+        { messageText: 'great work, the client will love this one', recentTask: draft, hasReplyTo: true },
+        { apiKey: 'test-key', fetcher }
+      );
+      expect(fetcher).toHaveBeenCalled();
+      expect(['feedback', 'new_brief', 'standing_rule']).not.toContain(res.kind);
+      expect(res.needsClarification).toBe(true);
+      expect(res.clarifyingQuestion).toMatch(/is this a change to the design\? Reply "revise"/);
+    });
+
+    it(`still revises, after ${how}, a reply that asks for a change`, async () => {
+      for (const messageText of ['move the logo left', 'the title font is wrong', 'use the navy background instead', 'ڕەنگەکە تۆختر بکە']) {
+        const res = await classifyInboundTelegramMessage({ messageText, recentTask: draft, hasReplyTo: true }, { apiKey: 'test-key', fetcher });
+        expect(res.kind).toBe('feedback');
+        expect(res.needsClarification).toBeFalsy();
+      }
+    });
+  }
+
+  it('asks in Kurdish when the reply is Kurdish, with the answer intake reads as "revise"', () => {
+    const res = classifyWithHeuristics('زۆر جوانە، کڕیارەکە حەزی لێ دەکات', true, true);
+    expect(res.kind).toBe('other');
+    expect(res.clarifyingQuestion).toContain('دەستکاری');
+  });
+});
+
+describe('telegram-classifier: a model-stated rule needs the words of one', () => {
+  const draft = { id: '5f94e0e3-4934-4490-9c1f-44147a0e66b6', title: 'KAAE Gala Dinner Invitation' };
+  const answering = (kind: string, standingRule: string) =>
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ kind, confidence: 0.95, isInstructionOnly: true, directive: '', reason: 'r', documentKind: 'design_piece', standingRule }) } }] }),
+        { status: 200 }
+      )
+    );
+
+  it('drops a rule the model restated from a one-off change or brief', async () => {
+    const change = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
+    expect(change.kind).toBe('feedback');
+    expect(change.standingRule).toBeUndefined();
+    const brief = await classifyInboundTelegramMessage({ messageText: 'KAAE open day, gold titles', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('new_brief', 'Use gold titles.') });
+    expect(brief.standingRule).toBeUndefined();
+    // With no design to change, a one-off change is a brief, not a rule.
+    const noDraft = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: null }, { apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
+    expect(noDraft.kind).toBe('new_brief');
+    expect(noDraft.standingRule).toBeUndefined();
+  });
+
+  it('keeps it when the message says "from now on", and always for a standing rule', async () => {
+    const both = await classifyInboundTelegramMessage(
+      { messageText: 'make the title gold, and from now on always use gold titles', recentTask: draft },
+      { apiKey: 'test-key', fetcher: answering('feedback', 'Use gold titles.') }
+    );
+    expect(both.standingRule).toBe('Use gold titles.');
+    const rule = await classifyInboundTelegramMessage({ messageText: 'for all KAAE designs, gold titles please', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('standing_rule', 'Use gold titles.') });
+    expect(rule.kind).toBe('standing_rule');
+    expect(rule.standingRule).toBe('Use gold titles.');
   });
 });

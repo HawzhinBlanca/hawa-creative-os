@@ -27,7 +27,7 @@ import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
-import { runDirectedEditStage } from './stages/edit.stage.js';
+import { runDirectedEditStage, isModelTransportError } from './stages/edit.stage.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -147,6 +147,8 @@ export interface StudioResumeResult {
   diagnostic?: string;
   winnerCandidateId?: string;
   judgeStatus?: DesignStudioJudgeStatus;
+  /** A failure's code, when it has a more precise one than the worker would read from the text. */
+  code?: string;
 }
 
 export class DesignStudioService {
@@ -172,8 +174,8 @@ export class DesignStudioService {
    * Every image the request carries, in the order they arrived: photos sent on their own from the
    * same chat around it (each belongs to the nearest request in time), the one saved with the task
    * at intake, and photos that joined it afterwards (Telegram delivers text and photo as two
-   * messages). A request re-sent as text alone, the same words as one sent with images earlier the
-   * same day, carries that one's images: on 2026-09-22 a client re-sent the brief at 14:49 without
+   * messages). A request re-sent as text alone, the same words as one sent with images within the
+   * hour before, carries that one's images: on 2026-09-22 a client re-sent the brief at 14:49 without
    * re-attaching the portraits sent with it at 14:36, and the design got none.
    */
   private async requestImages(s: Scope, taskId: string, depth = 0): Promise<string[]> {
@@ -194,13 +196,17 @@ export class DesignStudioService {
     if (valid(own)) found.push({ at: myTime, url: own });
 
     const channel = payload.sourceChannelId;
-    const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 1440));
+    // An hour back, not a day: a day's window let pictures from the day's earlier attempts, failed
+    // or finished, merge into a new design.
+    const minutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_BEFORE || 60));
     // Text first, photos after, is as common as the reverse (2026-09-22, 14:36: the brief, then two
     // images 10 and 12 seconds later, saved as "awaiting request").
     const afterMinutes = Math.max(0, Number(process.env.HAWA_REFERENCE_MERGE_MINUTES_AFTER || 15));
     type ChatRow = { task_id: string; occurred_at: string; client_id: string | null; image: string | null; raw: string | null };
     let rows: ChatRow[] = [];
     if (typeof channel === 'string' && channel && (minutes > 0 || afterMinutes > 0)) {
+      // Nearest the request first. Oldest first, a busy chat filled the limit with the window's
+      // earliest rows and cut off the ones beside the request.
       rows = await this.tx(s, async (db) =>
         (
           await sql<ChatRow>`WITH me AS (SELECT created_at FROM hawa.tasks WHERE id=${taskId}::uuid AND tenant_id=${s.tenantId}::uuid)
@@ -219,7 +225,7 @@ export class DesignStudioService {
                   AND e.data->'payload'->'studioOptions'->>'referenceImageBase64' IS NOT NULL
                   AND e.data->'payload'->'studioOptions'->>'referenceFor' IS NULL)
             )
-          ORDER BY e.occurred_at ASC LIMIT 40`.execute(db)
+          ORDER BY abs(extract(epoch FROM e.occurred_at - me.created_at)) ASC, e.occurred_at ASC LIMIT 40`.execute(db)
         ).rows
       );
       // Each orphan photo belongs to the request nearest to it in time, this one or another from
@@ -497,12 +503,14 @@ export class DesignStudioService {
 
       // 7. Create run record
       const runId = randomUUID();
+      // A finished design costs $0.33-0.78 in at most 10 calls (2026-09-23), so a cap of $6 and 40
+      // calls let a run that was going wrong spend eight designs' worth before it stopped.
       const maxUsd =
         this.options.maxUsd ||
-        (process.env.DESIGN_STUDIO_MAX_USD ? parseFloat(process.env.DESIGN_STUDIO_MAX_USD) : 6.0);
+        (process.env.DESIGN_STUDIO_MAX_USD ? parseFloat(process.env.DESIGN_STUDIO_MAX_USD) : 2.0);
       const maxCalls =
         this.options.maxCalls ||
-        (process.env.DESIGN_STUDIO_MAX_CALLS ? parseInt(process.env.DESIGN_STUDIO_MAX_CALLS, 10) : 40);
+        (process.env.DESIGN_STUDIO_MAX_CALLS ? parseInt(process.env.DESIGN_STUDIO_MAX_CALLS, 10) : 24);
 
       const budget = {
         maxUsd,
@@ -537,8 +545,8 @@ export class DesignStudioService {
   /**
    * The pictures a run works with. A change to a design starts from that design's pictures, in
    * their order, with any new picture sent with the change after them: a revision's own lookup
-   * found only its own new picture, or nothing the day after (the inheritance window is a day), and
-   * the edit was refused for photos the design still showed.
+   * found only its own new picture, or nothing once the look-back window had passed, and the edit
+   * was refused for photos the design still showed.
    */
   private async imagesForRun(s: Scope, run: { task_id: string; request: unknown }): Promise<string[]> {
     const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
@@ -594,6 +602,37 @@ export class DesignStudioService {
       artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
       concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
     };
+  }
+
+  /**
+   * Refuses, for now, a revision of a design that is still being made. With no finished design to
+   * edit, the revision was designed afresh at full cost while the design it changes was still on its
+   * way. It stays at its stage and a later resume makes the edit. A parent run left unadvanced past
+   * the stale window no longer holds it up, and a parent with no run in progress (all failed, or
+   * none) is designed afresh as before.
+   */
+  private async refuseWhileParentRuns(s: Scope, parentTaskId: string): Promise<void> {
+    if ((await this.activeRunsOfTask(s, parentTaskId)) > 0) {
+      throw new CanvaFlowError(
+        409,
+        'PARENT_STILL_RUNNING',
+        'The design this change is for is still being made. Resume this revision once that design is finished.'
+      );
+    }
+  }
+
+  /** A task's unfinished studio runs, less any left unadvanced past the stale window. */
+  private async activeRunsOfTask(s: Scope, taskId: string): Promise<number> {
+    const staleMinutes = this.options.staleRunMinutes ?? 30;
+    const row = await this.tx(s, async (db) =>
+      (
+        await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.design_studio_runs
+          WHERE tenant_id = ${s.tenantId}::uuid AND task_id = ${taskId}::uuid
+            AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')
+            AND updated_at > now() - make_interval(mins => ${staleMinutes})`.execute(db)
+      ).rows[0]
+    );
+    return Number(row?.n ?? 0);
   }
 
   /**
@@ -998,66 +1037,69 @@ export class DesignStudioService {
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
       throw err;
     }
-    // An image the requester attached reaches the brief, which says what it is; a style reference
-    // then reaches the layout generator, the critique and the judge. It was saved with every
-    // Telegram task but only the legacy planner ever read it.
-    // What each image is, the model decides by looking at it: the brief classifies every image the
-    // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
-    // and a reference for the graphic" with three images is two photos and one reference; until
-    // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
-    let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
-    if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
-    const images = await this.imagesForRun(s, run).catch(() => [] as string[]);
-    const roles = briefSoFar?.imageRoles;
-    let classified = false;
-    if (
-      roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
-      !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
-    ) {
-      // A picture joined the request after its brief was written and before any layout (the
-      // reference sent a few seconds after the album): the brief is written again, once, looking at
-      // every picture, so each is classified instead of guessed from the request's words.
-      ctx.requestImages = images;
-      ctx.attachedImage = undefined;
-      const reread = await runBriefStage(ctx);
-      const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-      stages.brief = { ...reread, photosSent, imagesRebrief: true };
-      await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
-      briefSoFar = stages.brief as LateReferenceBrief;
-      ctx.requestImages = undefined;
-    }
-    const rolesNow = briefSoFar?.imageRoles;
-    if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
-      classified = true;
-      ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
-      const ref = rolesNow.find((r) => r.role === 'style_reference');
-      ctx.attachedImage = ref ? images[ref.index] : undefined;
-      if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
-    } else if (images.length > 1 && run.status === 'briefing') {
-      // The brief below looks at all of them.
-      ctx.requestImages = images;
-      ctx.attachedImage = undefined;
-    } else if (images.length > 1) {
-      // A brief written before images were classified, or images that arrived after it: the request's
-      // own words decide, as before.
-      if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
-      else ctx.attachedImage = images[images.length - 1];
-    } else {
-      ctx.attachedImage = await this.attachedImage(s, run.task_id);
-    }
-    // A photo that arrived after the brief ran came without a caption, right after the request, so
-    // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
-    const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
-    // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
-    if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
-      briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
-    }
-    // Only the brief calling the photo the client's own logo stops the run from following it.
-    if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
-      ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
-    }
-
+    // The handler at the end covers the reads and the re-briefs before the stage as well. An
+    // exception from them (the image re-brief's model call, a picture that would not decode) used
+    // to leave the run at its stage for the worker to poll until it gave up on it as stuck.
     try {
+      // An image the requester attached reaches the brief, which says what it is; a style reference
+      // then reaches the layout generator, the critique and the judge. It was saved with every
+      // Telegram task but only the legacy planner ever read it.
+      // What each image is, the model decides by looking at it: the brief classifies every image the
+      // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
+      // and a reference for the graphic" with three images is two photos and one reference; until
+      // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
+      let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+      if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
+      const images = await this.imagesForRun(s, run).catch(() => [] as string[]);
+      const roles = briefSoFar?.imageRoles;
+      let classified = false;
+      if (
+        roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
+        !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
+      ) {
+        // A picture joined the request after its brief was written and before any layout (the
+        // reference sent a few seconds after the album): the brief is written again, once, looking at
+        // every picture, so each is classified instead of guessed from the request's words.
+        ctx.requestImages = images;
+        ctx.attachedImage = undefined;
+        const reread = await runBriefStage(ctx);
+        const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
+        stages.brief = { ...reread, photosSent, imagesRebrief: true };
+        await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+        briefSoFar = stages.brief as LateReferenceBrief;
+        ctx.requestImages = undefined;
+      }
+      const rolesNow = briefSoFar?.imageRoles;
+      if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
+        classified = true;
+        ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
+        const ref = rolesNow.find((r) => r.role === 'style_reference');
+        ctx.attachedImage = ref ? images[ref.index] : undefined;
+        if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
+      } else if (images.length > 1 && run.status === 'briefing') {
+        // The brief below looks at all of them.
+        ctx.requestImages = images;
+        ctx.attachedImage = undefined;
+      } else if (images.length > 1) {
+        // A brief written before images were classified, or images that arrived after it: the request's
+        // own words decide, as before.
+        if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+        else ctx.attachedImage = images[images.length - 1];
+      } else {
+        ctx.attachedImage = await this.attachedImage(s, run.task_id);
+      }
+      // A photo that arrived after the brief ran came without a caption, right after the request, so
+      // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
+      const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
+      // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
+      if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
+        briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
+      }
+      // Only the brief calling the photo the client's own logo stops the run from following it.
+      if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
+        ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
+      }
+
       switch (run.status) {
         case 'briefing': {
           // A change to a design the client received keeps that design's brief: the same reading of
@@ -1070,6 +1112,12 @@ export class DesignStudioService {
             await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
             return { runId, status: 'conceiving', stage: 'brief', spentUsd: budget.spentUsd };
           }
+          // A parent still being made has no brief yet; this run waits for it rather than pay for one
+          // of its own that could read the pictures differently.
+          const directedParent = (
+            (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as { directed?: { parentTaskId?: unknown } } | undefined
+          )?.directed?.parentTaskId;
+          if (ctx.pipelineV3 && typeof directedParent === 'string') await this.refuseWhileParentRuns(s, directedParent);
           const brief = await runBriefStage(ctx);
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
@@ -1092,6 +1140,7 @@ export class DesignStudioService {
               await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages, budget });
               return { runId, status: 'laying_out', stage: 'concepts', spentUsd: budget.spentUsd };
             }
+            await this.refuseWhileParentRuns(s, directedRequest.parentTaskId);
             console.warn(`[studio] run ${run.id}: no finished design found for parent task ${directedRequest.parentTaskId}; the revision is designed afresh.`);
           }
           // A v3 run's layout call invents its own three archetypes and never reads these
@@ -1135,7 +1184,8 @@ export class DesignStudioService {
                 status: 'winner',
                 rank: 1,
               });
-              stages.directed = { ...stages.directed, changes: edited.changes };
+              // What the design shows of the request, and what it does not: the sender's note reads both.
+              stages.directed = { ...stages.directed, changes: edited.changes, unmade: edited.unmade, unchanged: edited.unchanged };
               stages.layouts = { count: 1, directed: true };
               // The client's own design with their change: no rival layouts to critique or judge.
               await this.repo.updateRunStatus(runId, s.tenantId, 'qa', { stages, budget, winnerCandidateId: stages.directed.candidateId, judgeStatus: 'SKIPPED' });
@@ -1143,6 +1193,17 @@ export class DesignStudioService {
             } catch (caught) {
               const err = caught as Error;
               if (caught instanceof StudioBudgetExhaustedError) throw caught;
+              if (isModelTransportError(caught)) {
+                // A timeout, an HTTP error or an exhausted quota says nothing about whether the change
+                // fits the design, and the three new layouts would go to the same provider: every edit
+                // failure used to be designed afresh, paying for three candidates behind a call that
+                // was failing anyway. The run ends here and says why; the sender can ask again.
+                const detail = `${err?.name || 'Error'}: ${err?.message || err}`;
+                const diagnostic = `Studio v3 failed at stage laying_out: the requested change was not made because the model call failed (${detail}). It was not designed afresh; send the change again to retry.`;
+                stages.directed = { ...stages.directed, error: detail };
+                await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+                return { runId, status: 'failed', stage: 'edit', diagnostic, message: diagnostic, code: 'MODEL_UNAVAILABLE', spentUsd: budget.spentUsd };
+              }
               // The change could not be made to the design as it stands: the revision is designed
               // afresh with the change in its instructions, which is how every revision used to run.
               console.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
@@ -1448,7 +1509,8 @@ export class DesignStudioService {
           });
 
           if (ctx.pipelineV3) {
-            return this.judgeV3(s, run, ctx, stages, budget, candidateStates);
+            // Awaited, so a failure in it reaches the handler below instead of leaving the run here.
+            return await this.judgeV3(s, run, ctx, stages, budget, candidateStates);
           }
 
           let tournamentResult;
@@ -1715,9 +1777,12 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
+      // Not a failure: the run waits at its stage for the design it revises, and a later resume
+      // makes the edit.
+      if (err instanceof CanvaFlowError && err.code === 'PARENT_STILL_RUNNING') throw err;
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
-        return this.handleBudgetExhaustion(s, run, ctx);
+        return this.handleBudgetExhaustion(s, run, ctx, budget);
       }
 
       if (ctx.pipelineV3) {
@@ -1809,7 +1874,17 @@ export class DesignStudioService {
   /**
    * Graceful budget exhaustion handling: selects best candidate so far that passes hard QA.
    */
-  private async handleBudgetExhaustion(s: Scope, run: any, ctx: StageContext): Promise<StudioResumeResult> {
+  private async handleBudgetExhaustion(
+    s: Scope,
+    run: any,
+    ctx: StageContext,
+    budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number }
+  ): Promise<StudioResumeResult> {
+    // The cap and what reached it, in the run's own record: with the caps lowered to a few designs'
+    // worth, the operator needs to see which one a run hit.
+    const cap = budget
+      ? ` at stage ${run.status} ($${Number(budget.spentUsd).toFixed(2)} of $${budget.maxUsd}, ${budget.calls} of ${budget.maxCalls} calls)`
+      : '';
     const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
     let bestCandidate: any = null;
 
@@ -1827,8 +1902,9 @@ export class DesignStudioService {
         status: row.status as DesignStudioCandidateStatus,
       };
 
-      const qa = await runQAStage(ctx, state);
-      if (qa.passed) {
+      // A candidate QA cannot even read is not the best so far; it must not strand the run either.
+      const qa = await runQAStage(ctx, state).catch(() => undefined);
+      if (qa?.passed) {
         bestCandidate = row;
         break;
       }
@@ -1837,7 +1913,7 @@ export class DesignStudioService {
     if (bestCandidate) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'transferring', {
         winnerCandidateId: bestCandidate.id,
-        diagnostic: 'BUDGET_EXHAUSTED: proceeded with best candidate passing hard QA.',
+        diagnostic: `BUDGET_EXHAUSTED${cap}: proceeded with best candidate passing hard QA.`,
       });
       return {
         runId: run.id,
@@ -1848,7 +1924,7 @@ export class DesignStudioService {
     }
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
-      diagnostic: 'BUDGET_EXHAUSTED: no candidates passed hard QA before budget cap was reached.',
+      diagnostic: `BUDGET_EXHAUSTED${cap}: no candidates passed hard QA before budget cap was reached.`,
     });
     return {
       runId: run.id,

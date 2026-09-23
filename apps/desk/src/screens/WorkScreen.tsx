@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { eventStream } from '../services/eventStream.js';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
@@ -9,6 +9,7 @@ import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
 import { loadTaskDetail, mergeTaskDetail } from '../services/taskDetail.js';
+import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
 
 export interface LiveTask {
   id: string;
@@ -112,15 +113,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
   const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
   const [pinnedExportIds, setPinnedExportIds] = useState<string[]>([]);
-  const [approverRole, setApproverRole] = useState<'art_director' | 'brand_lead' | 'compliance_reviewer'>('art_director');
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  // Show temporary toast
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+  // Show temporary toast. Each toast owns the timer: an older toast's timer cleared a newer one
+  // after a fraction of its time, so a failure shown right after a success vanished unread.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info', durationMs = 3500) => {
     setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3500);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), durationMs);
   };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   // Fetch canonical task list from server using typed API client (H01)
   const fetchTasks = async () => {
@@ -401,60 +405,57 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return;
     }
     const exportsForApproval = approvalExports.state === 'known' ? approvalExports.value : [];
-    const blocker = approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds);
+    const blocker = approvalRoleBlocker(sessionUser?.role) || approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds);
     if (blocker) {
       showToast(blocker, 'error');
       return;
     }
+    const taskId = selectedTask.id;
+    const revisionId = selectedTask.latestRevisionId;
     setActionLoading(true);
+    let decisionRes: any;
     try {
-      const decisionRes: any = await apiClient.tasks.recordDecision(
-        selectedTask.id,
-        selectedTask.latestRevisionId,
-        {
-          action: 'approve',
-          reason: 'Brand, hierarchy, and exact-copy verified',
-          pinnedExportIds,
-        }
-      );
-
-      // Await genuine 201 server receipt and refresh authoritative task state
-      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
-      setIsApprovalModalOpen(false);
-      showToast(`Approved Revision ${selectedTask.latestRevisionId}. Decision ID: ${decisionRes.decisionId || 'recorded'}.`, 'success');
+      decisionRes = await apiClient.tasks.recordDecision(taskId, revisionId, {
+        action: 'approve',
+        reason: 'Brand, hierarchy, and exact-copy verified',
+        pinnedExportIds,
+      });
     } catch (err: any) {
       showToast(`Approval failed: ${err.message || 'Server error'}`, 'error');
-    } finally {
       setActionLoading(false);
+      return;
     }
+    // Core recorded the approval; a failed refresh after it is not a failed approval.
+    const refreshedTask = await apiClient.tasks.get(taskId).catch(() => null);
+    if (refreshedTask) setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...refreshedTask } : t)));
+    setIsApprovalModalOpen(false);
+    const notice = describeApproval(revisionId, decisionRes?.decisionId, Boolean(refreshedTask));
+    showToast(notice.text, notice.tone, notice.durationMs);
+    setActionLoading(false);
   };
 
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
     if (!selectedTask) return;
+    const taskId = selectedTask.id;
     setActionLoading(true);
+    let delivery: unknown;
     try {
-      const delivery: any = await apiClient.tasks.publish(selectedTask.id, {
+      delivery = await apiClient.tasks.publish(taskId, {
         destination: 'google_drive',
       });
-
-      // Await genuine server receipt and refresh task
-      const refreshedTask = await apiClient.tasks.get(selectedTask.id);
-      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...refreshedTask } : t)));
-      if (refreshedTask.status === 'COMPLETE') {
-        showToast('Delivery complete.', 'success');
-      } else if (delivery?.status === 'PUBLISH_RECONCILIATION') {
-        // The files are in Drive but the Sheets row was not confirmed; delivering again retries only the row.
-        showToast(`Files delivered to Drive, but the Sheets row is not confirmed: ${delivery.sheetProblem || 'no reason reported'}. Deliver again to retry the row.`, 'info');
-      } else {
-        showToast('Publication requested. Check the task for verified delivery status.', 'info');
-      }
     } catch (err: any) {
       showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
-    } finally {
       setActionLoading(false);
+      return;
     }
+    // Core accepted the delivery (202 DELIVERED_TO_CHAT_ONLY included: the requester has the file);
+    // a failed refresh after it is not a failed delivery.
+    const refreshedTask = await apiClient.tasks.get<LiveTask>(taskId).catch(() => null);
+    if (refreshedTask) setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...refreshedTask } : t)));
+    const notice = describeDelivery(delivery, refreshedTask ? String(refreshedTask.status || '') : undefined);
+    showToast(notice.text, notice.tone, notice.durationMs);
+    setActionLoading(false);
   };
 
   // Helper: Next action prompt
@@ -1294,19 +1295,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               )}
             </fieldset>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Sign-off Role
-              </label>
-              <select
-                className="hawa-select"
-                value={approverRole}
-                onChange={(e) => setApproverRole(e.target.value as any)}
-              >
-                <option value="art_director">Art Director (Creative & Layout Sign-off)</option>
-                <option value="brand_lead">Brand Lead (Client Identity Sign-off)</option>
-                <option value="compliance_reviewer">Compliance Reviewer (Institutional Legal Sign-off)</option>
-              </select>
+            {/* Core records the approval under the signed-in session's role; nothing chosen here is sent. */}
+            <div style={{ marginBottom: 16, fontSize: 12 }}>
+              <span style={{ fontWeight: 600 }}>Signing off as: </span>
+              <span>{sessionUser ? `${sessionUser.displayName || 'Signed-in user'} (${roleLabel(sessionUser.role || 'unknown role')})` : 'the signed-in session'}</span>
+              {approvalRoleBlocker(sessionUser?.role) && (
+                <p role="status" style={{ color: '#b91c1c', margin: '4px 0 0' }}>
+                  {approvalRoleBlocker(sessionUser?.role)}
+                </p>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -1319,6 +1316,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 onClick={handleApprove}
                 disabled={
                   actionLoading ||
+                  Boolean(approvalRoleBlocker(sessionUser?.role)) ||
                   Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds))
                 }
               >

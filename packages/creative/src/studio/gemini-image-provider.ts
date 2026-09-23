@@ -340,6 +340,9 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         };
       } catch (err: any) {
         console.warn(`[StudioArt] Error during generation attempt ${attempt}:`, err?.message);
+        // A request that timed out or lost its answer may have been generated and billed: asking
+        // again could pay twice for one picture. The free procedural motif takes its place.
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.isUncertain || /timed?\s*out|aborted/i.test(String(err?.message || ''))) break;
       }
     }
   }
@@ -384,6 +387,13 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   };
 }
 
+/**
+ * How long one image request may take, the generation and the download of its bytes together.
+ * These calls had no timeout, so a provider that accepted the request and never answered held a
+ * paid run open forever (2026-09-23). Image generation is slow, so the bound is generous.
+ */
+const IMAGE_REQUEST_TIMEOUT_MS = 120_000;
+
 interface ProviderImage {
   imageBuffer: Buffer;
   mimeType: string;
@@ -400,6 +410,9 @@ async function requestImage(
   key: string,
   fetcher: typeof fetch
 ): Promise<ProviderImage | null> {
+  // One deadline for the whole request, body and download included; a timeout throws like every
+  // other network failure, and the caller decides what to do with it.
+  const signal = AbortSignal.timeout(IMAGE_REQUEST_TIMEOUT_MS);
   if (settings.provider === 'google') {
     // Gemini's Interactions API (ai.google.dev/gemini-api/docs/image-generation, 2026-09-18).
     const res = await fetcher('https://generativelanguage.googleapis.com/v1beta/interactions', {
@@ -415,6 +428,7 @@ async function requestImage(
           image_size: settings.size,
         },
       }),
+      signal,
     });
     if (!res.ok) {
       console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
@@ -445,6 +459,7 @@ async function requestImage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({ model: settings.model, prompt, n: 1, size: settings.size, quality: settings.quality }),
+    signal,
   });
   if (!res.ok) {
     console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
@@ -453,7 +468,7 @@ async function requestImage(
   const data = (await res.json()) as any;
   let imageBuffer: Buffer;
   if (data.data?.[0]?.b64_json) imageBuffer = Buffer.from(data.data[0].b64_json, 'base64');
-  else if (data.data?.[0]?.url) imageBuffer = Buffer.from(await (await fetcher(data.data[0].url)).arrayBuffer());
+  else if (data.data?.[0]?.url) imageBuffer = Buffer.from(await (await fetcher(data.data[0].url, { signal })).arrayBuffer());
   else {
     console.warn('[StudioArt] OpenAI returned no image data');
     return null;

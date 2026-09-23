@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { composeDeliveredMessage, readStoredExportBytes, type TelegramSender } from '../src/delivery-notification.js';
@@ -177,6 +177,74 @@ describe('notify.published', () => {
     expect(messages.some((m) => m.text.includes('Desk drill'))).toBe(false);
   });
 
+  describe('when Telegram refuses a file', () => {
+    // 2026-09-23: TELEGRAM_DOCUMENT_REJECTED_403 (a blocked bot, a bad chat) was not known to be
+    // permanent, so the delivery was retried to its last attempt and nobody was told.
+    async function deliverRefused(error: string, officeAlertChatId: string | null) {
+      const bytes = new Uint8Array(Array.from({ length: 20 }, (_, i) => i));
+      const taskId = randomUUID();
+      const chat = String(6000 + Math.floor(Math.random() * 1000));
+      const { idempotencyKey } = await enqueue('notify.published', {
+        taskId, title: 'Refused file', chatId: chat,
+        files: [{ artifactId: randomUUID(), format: 'png', filename: 'refused.png', mimeType: 'image/png', sha256: sha(bytes) }],
+      });
+      const { sender, messages } = recordingSender();
+      const refusing: TelegramSender = { ...sender, async dispatchOutboundDocument() { return { success: false, error }; } };
+      const consumer = new OutboxConsumer(db, {
+        tenantId, userId, batchSize: 100, maxAttempts: 5,
+        telegramBotToken: botToken, telegramSender: () => refusing, officeAlertChatId,
+        readExportBytes: async () => bytes,
+      });
+      await consumer.processBatch(100);
+      return { taskId, chat, idempotencyKey, messages, row: await record(idempotencyKey) };
+    }
+
+    it('stops at the first 403, and alerts the office instead of messaging the requester again', async () => {
+      const { taskId, chat, messages, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_403', '9191');
+      expect(row?.state).toBe('failed');
+      expect(row?.attempts).toBe(1);
+      expect(row?.last_error).toContain('TELEGRAM_DOCUMENT_REJECTED_403');
+      expect(messages.filter((m) => m.chatId === chat)).toHaveLength(0);
+      const toOffice = messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId));
+      expect(toOffice).toHaveLength(1);
+      expect(toOffice[0].text).toContain('could not be delivered');
+      expect(toOffice[0].text).toContain(`Requesting chat: ${chat}`);
+      expect(toOffice[0].text).toContain('TELEGRAM_DOCUMENT_REJECTED_403');
+      expect(toOffice[0].parse_mode).toBeUndefined();
+    });
+
+    it('logs the task and the reason when there is no office chat to alert', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { taskId, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_400', null);
+        expect(row?.state).toBe('failed');
+        const lines = logged.mock.calls.map((args) => String(args[0]));
+        expect(lines.some((l) => l.includes(taskId) && l.includes('TELEGRAM_DOCUMENT_REJECTED_400') && l.includes('no office chat'))).toBe(true);
+      } finally {
+        logged.mockRestore();
+      }
+    });
+
+    it('keeps retrying a 429, which is Telegram asking to slow down, and alerts nobody yet', async () => {
+      const { taskId, idempotencyKey, messages, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_429', '9191');
+      try {
+        expect(row?.state).toBe('pending');
+        expect(messages.filter((m) => m.text.includes(taskId))).toHaveLength(0);
+      } finally {
+        await asTenant((trx) => sql`DELETE FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND idempotency_key = ${idempotencyKey}`.execute(trx));
+      }
+    });
+
+    it('does not alert the office about a send that may have arrived', async () => {
+      const { taskId, chat, messages, row } = await deliverRefused('TELEGRAM_DELIVERY_UNCERTAIN', '9191');
+      expect(row?.state).toBe('failed');
+      expect(row?.last_error).toContain('DELIVERY_UNCERTAIN');
+      // The requester's notice goes out as before; the office hears nothing about this task.
+      expect(messages.filter((m) => m.chatId === chat)).toHaveLength(1);
+      expect(messages.filter((m) => m.chatId === '9191' && m.text.includes(taskId))).toHaveLength(0);
+    });
+  });
+
   it('is retried, instead of reported delivered, when no bot token is configured', async () => {
     const { idempotencyKey } = await enqueue('notify.published', { taskId: randomUUID(), title: 'No token', chatId: '4244', files: [] });
     const consumer = new OutboxConsumer(db, { tenantId, userId, batchSize: 100, telegramBotToken: null, maxAttempts: 5 });
@@ -243,6 +311,19 @@ describe('composeDeliveredMessage', () => {
     expect(text).toContain('<a href="https://drive.google.com/drive/folders/fld_1">delivery folder</a>');
     expect(text).toContain('<a href="https://docs.google.com/spreadsheets/d/sh_1#gid=0&amp;range=A7">row 7</a> recorded.');
     expect(text).not.toContain('attached');
+  });
+
+  it('names a Drive archive failure in plain English instead of printing Core\'s code', () => {
+    const archive = (archiveProblem: string) =>
+      composeDeliveredMessage({ title: 'Archive', archiveProblem }, { filesSent: 1 }).split('\n\n').find((l) => l.startsWith('Office archive'));
+    expect(archive('INVALID_DESTINATION')).toBe("Office archive: not saved to Google Drive yet (the client's Drive folder is not set up).");
+    expect(archive('CREDENTIALS_MISSING')).toBe('Office archive: not saved to Google Drive yet (the office Google account is not connected).');
+    for (const code of ['DRIVE_LOOKUP_FAILED', 'DRIVE_UPLOAD_FAILED', 'HTTP_403', 'DRIVE_UPLOAD_FAILED: 403 Forbidden']) {
+      expect(archive(code)).toBe('Office archive: not saved to Google Drive yet (Google Drive did not accept the upload).');
+    }
+    // A reason Core already put into words is kept, and still escaped.
+    expect(archive('the office Google account is not connected')).toBe('Office archive: not saved to Google Drive yet (the office Google account is not connected).');
+    expect(archive('Drive quota <full> & closed')).toBe('Office archive: not saved to Google Drive yet (Drive quota &lt;full&gt; &amp; closed).');
   });
 });
 

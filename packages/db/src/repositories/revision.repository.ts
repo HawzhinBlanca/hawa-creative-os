@@ -34,6 +34,23 @@ export interface RecordApprovalParams {
   qaReport?: Record<string, unknown>;
 }
 
+/** Why a task in this state cannot be approved, or undefined when it can (received, human_review, …). */
+export function unapprovableTaskReason(taskId: string, revisionId: string, state: string): string | undefined {
+  switch (state) {
+    case 'revision_requested':
+      return `Cannot approve stale revision ${revisionId}: task ${taskId} was replaced by a newer revision; approve the latest revision instead`;
+    case 'publishing':
+      return `Task ${taskId} is already approved and being delivered; it cannot be approved again`;
+    case 'complete':
+      return `Task ${taskId} is already approved and delivered; it cannot be approved again`;
+    case 'cancelled':
+    case 'rejected':
+      return `Cannot approve task ${taskId}: it was ${state}`;
+    default:
+      return undefined;
+  }
+}
+
 export class RevisionRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
@@ -277,6 +294,14 @@ export class RevisionRepository {
       // Prevent duplicate approval if already approved
       if (task.state === 'approved' && params.decision === 'approved') {
         throw new Error(`Task ${params.taskId} is already approved on revision ${params.revisionId}`);
+      }
+
+      // A task a Telegram change replaced, or one already past approval, is not approved again: the
+      // Desk still listed it, and approving it would deliver the design the office had asked to
+      // change (2026-09-23). The first three messages keep the phrases Core maps to 409 Conflict.
+      if (params.decision === 'approved') {
+        const refusal = unapprovableTaskReason(params.taskId, params.revisionId, task.state);
+        if (refusal) throw new Error(refusal);
       }
 
       // 2. Ensure verified passing QC run exists (NEVER manufacture fake QA rows)

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Database } from '../types.js';
 
 /**
@@ -84,6 +84,11 @@ export class ClientRulesRepository {
         supersedes_rule_id: null,
         created_by: null,
         approved_by: null,
+        // The time of this insert, not of the transaction: a guidelines PDF saves all its rules in
+        // one transaction, now() gave them one created_at, and listActive's tie-break on a random
+        // id numbered them differently from the reply, so "/forget 3" removed another rule
+        // (2026-09-23).
+        created_at: sql<Date>`clock_timestamp()`,
       })
       .returningAll()
       .executeTakeFirstOrThrow();

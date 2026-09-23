@@ -25,6 +25,27 @@ export interface GooglePublisherConfig {
 
 const DRIVE_LOOKUP_TIMEOUT_MS = 10_000;
 const DRIVE_UPLOAD_TIMEOUT_MS = 120_000;
+const TOKEN_TIMEOUT_MS = 15_000;
+
+const CREDENTIALS_MISSING_MESSAGE = 'Google Workspace credentials not configured; publication is unavailable and cannot complete';
+
+/** The service account's signing key and email, or why there is no usable pair. */
+interface ServiceAccount {
+  privateKey?: string;
+  clientEmail?: string;
+  source: 'config' | 'env' | 'none';
+  problem?: string;
+}
+
+type AccessTokenResult = { ok: true; token: string } | { ok: false; error: AppError };
+
+/**
+ * A key as production stores it. A PEM kept in an env file often has its newlines escaped as the
+ * two characters backslash-n, which no signer accepts.
+ */
+function normalisePem(pem: string): string {
+  return pem.includes('\\n') ? pem.replace(/\\n/g, '\n') : pem;
+}
 
 export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
@@ -42,8 +63,10 @@ export class GooglePublisher implements Publisher {
 
   /**
    * Discovers and inspects Google Workspace service account credentials from config or environment.
+   * hasKey means a private key was actually found, not merely that a variable is set; `problem`
+   * says why a configured key cannot be used.
    */
-  getCredentials(): { email?: string; hasKey: boolean; token?: string; source: 'config' | 'env' | 'token' | 'none' } {
+  getCredentials(): { email?: string; hasKey: boolean; token?: string; source: 'config' | 'env' | 'token' | 'none'; problem?: string } {
     if (this.config.oauthToken || process.env.GOOGLE_OAUTH_TOKEN) {
       return {
         token: this.config.oauthToken || process.env.GOOGLE_OAUTH_TOKEN,
@@ -51,75 +74,188 @@ export class GooglePublisher implements Publisher {
         source: 'token',
       };
     }
-    if (this.config.serviceAccountEmail && this.config.serviceAccountKey) {
-      return { email: this.config.serviceAccountEmail, hasKey: true, source: 'config' };
-    }
-    const envEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GCP_SERVICE_ACCOUNT_EMAIL;
-    const envKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GCP_PRIVATE_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    if (envEmail || envKey) {
-      return { email: envEmail, hasKey: Boolean(envKey), source: 'env' };
-    }
-    return { source: 'none', hasKey: false };
+    const account = this.readServiceAccount();
+    if (account.source === 'none') return { source: 'none', hasKey: false };
+    return {
+      email: account.clientEmail,
+      hasKey: Boolean(account.privateKey),
+      source: account.source,
+      ...(account.problem ? { problem: account.problem } : {}),
+    };
   }
 
   /**
-   * Resolves a valid bearer token for Google API calls.
+   * The signing key and email from whichever form is configured: a raw PEM with a separate email, a
+   * service-account JSON key inline (GOOGLE_SERVICE_ACCOUNT_KEY), or a JSON key file
+   * (GOOGLE_APPLICATION_CREDENTIALS). Until 2026-09-23 only the first worked: given the JSON key
+   * production is issued, the publisher tried to sign with the whole JSON, and a key file path was
+   * counted as a key without ever being read. An explicitly configured email wins over the JSON's.
+   */
+  private readServiceAccount(): ServiceAccount {
+    const configured = this.config.serviceAccountKey;
+    const envKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GCP_PRIVATE_KEY;
+    const keyFile = this.config.credentialsFile || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const explicitEmail =
+      this.config.serviceAccountEmail || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GCP_SERVICE_ACCOUNT_EMAIL;
+    const source: ServiceAccount['source'] =
+      configured || this.config.credentialsFile
+        ? 'config'
+        : envKey || keyFile
+          ? 'env'
+          : explicitEmail
+            ? (this.config.serviceAccountEmail ? 'config' : 'env')
+            : 'none';
+    if (source === 'none') return { source };
+
+    let raw = configured || envKey;
+    let origin = configured
+      ? 'The configured service-account key'
+      : process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? 'GOOGLE_SERVICE_ACCOUNT_KEY' : 'GCP_PRIVATE_KEY';
+    if (!raw && keyFile) {
+      origin = `The service-account key file ${keyFile}`;
+      try {
+        raw = fs.readFileSync(keyFile, 'utf8');
+      } catch (err: unknown) {
+        const code = (err as { code?: unknown } | null)?.code;
+        return { source, clientEmail: explicitEmail, problem: `${origin} could not be read (${typeof code === 'string' ? code : 'unreadable'})` };
+      }
+    }
+    if (!raw) return { source, clientEmail: explicitEmail, problem: 'No service-account private key is configured' };
+
+    let privateKey: string | undefined = raw;
+    let jsonEmail: string | undefined;
+    if (raw.trim().startsWith('{')) {
+      let parsed: { private_key?: unknown; client_email?: unknown };
+      try {
+        parsed = JSON.parse(raw) as { private_key?: unknown; client_email?: unknown };
+      } catch {
+        // Never echo the text: it is meant to hold a private key.
+        return { source, clientEmail: explicitEmail, problem: `${origin} starts like JSON but is not valid JSON` };
+      }
+      privateKey = typeof parsed.private_key === 'string' && parsed.private_key ? parsed.private_key : undefined;
+      jsonEmail = typeof parsed.client_email === 'string' && parsed.client_email ? parsed.client_email : undefined;
+      if (!privateKey) {
+        return { source, clientEmail: explicitEmail || jsonEmail, problem: `${origin} is a service-account JSON with no private_key` };
+      }
+    }
+
+    privateKey = normalisePem(privateKey);
+    const clientEmail = explicitEmail || jsonEmail;
+    if (!/-----BEGIN (RSA )?PRIVATE KEY-----/.test(privateKey)) {
+      return { source, clientEmail, problem: `${origin} is not a PEM private key` };
+    }
+    if (!clientEmail) {
+      return { source, privateKey, problem: 'No service-account email is configured (client_email or GOOGLE_SERVICE_ACCOUNT_EMAIL)' };
+    }
+    return { source, privateKey, clientEmail };
+  }
+
+  /**
+   * Resolves a valid bearer token for Google API calls, or null. Callers that report why use
+   * resolveAccessToken.
    */
   private async getAccessToken(): Promise<string | null> {
+    const resolved = await this.resolveAccessToken();
+    return resolved.ok ? resolved.token : null;
+  }
+
+  /**
+   * A bearer token, or why there is none: CREDENTIALS_MISSING when no usable key is configured,
+   * GOOGLE_TOKEN_FAILED when Google refused or did not answer the token request. They used to be
+   * one silent null, so a rejected key was reported as a missing one.
+   */
+  private async resolveAccessToken(): Promise<AccessTokenResult> {
+    const missing = (detail?: string): AccessTokenResult => ({
+      ok: false,
+      error: {
+        code: 'CREDENTIALS_MISSING',
+        message: detail ? `${CREDENTIALS_MISSING_MESSAGE}: ${detail}` : CREDENTIALS_MISSING_MESSAGE,
+        retryable: false,
+        safeAction: 'Configure the Google service-account key (GOOGLE_SERVICE_ACCOUNT_KEY) and deliver again',
+      },
+    });
+    const tokenFailed = (why: string, retryable: boolean, status?: number): AccessTokenResult => ({
+      ok: false,
+      error: {
+        code: 'GOOGLE_TOKEN_FAILED',
+        message: `Google did not issue an access token for the service account: ${why}`,
+        retryable,
+        safeAction: retryable ? 'Deliver again shortly' : 'Check the service account key and its access, then deliver again',
+        ...(status !== undefined ? { detail: { status } } : {}),
+      },
+    });
+
     const creds = this.getCredentials();
     if (creds.token) {
-      return creds.token;
+      return { ok: true, token: creds.token };
     }
     if (!creds.hasKey) {
-      return null;
+      return missing(creds.problem);
     }
 
     // In local/test or when a mock/custom bearer is provided
     if (process.env.MOCK_GOOGLE_TOKEN) {
-      return process.env.MOCK_GOOGLE_TOKEN;
+      return { ok: true, token: process.env.MOCK_GOOGLE_TOKEN };
     }
 
-    // Attempt service account JWT minting if a PEM private key is configured
+    const account = this.readServiceAccount();
+    if (!account.privateKey || !account.clientEmail || account.problem) {
+      return missing(account.problem);
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const claimSet = {
+      iss: account.clientEmail,
+      scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now,
+    };
+    const enc = (obj: object) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const signatureInput = `${enc(header)}.${enc(claimSet)}`;
+    let assertion: string;
     try {
-      const privateKey = this.config.serviceAccountKey || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-      const clientEmail = this.config.serviceAccountEmail || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-      if (privateKey && clientEmail && privateKey.includes('BEGIN PRIVATE KEY')) {
-        const now = Math.floor(Date.now() / 1000);
-        const header = { alg: 'RS256', typ: 'JWT' };
-        const claimSet = {
-          iss: clientEmail,
-          scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets',
-          aud: 'https://oauth2.googleapis.com/token',
-          exp: now + 3600,
-          iat: now,
-        };
-
-        const enc = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-        const signatureInput = `${enc(header)}.${enc(claimSet)}`;
-        const signer = crypto.createSign('RSA-SHA256');
-        signer.update(signatureInput);
-        const signature = signer.sign(privateKey, 'base64url');
-        const assertion = `${signatureInput}.${signature}`;
-
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion,
-          }),
-        });
-
-        if (tokenRes.ok) {
-          const data = await tokenRes.json() as any;
-          return data.access_token || null;
-        }
-      }
-    } catch {
-      // Fallback
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(signatureInput);
+      assertion = `${signatureInput}.${signer.sign(account.privateKey, 'base64url')}`;
+    } catch (err: unknown) {
+      // The key's text is never echoed; OpenSSL's reason names the format problem, not the key.
+      return missing(`the private key could not sign (${err instanceof Error ? err.message.slice(0, 120) : 'unknown error'})`);
     }
 
-    return null;
+    let tokenRes: Response;
+    try {
+      tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion,
+        }),
+        signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
+      });
+    } catch (err: unknown) {
+      const { name, message } = (err ?? {}) as { name?: unknown; message?: unknown };
+      return tokenFailed(
+        name === 'TimeoutError' || name === 'AbortError'
+          ? `the token request timed out after ${TOKEN_TIMEOUT_MS / 1000} s`
+          : `the token endpoint could not be reached (${typeof message === 'string' ? message : String(err)})`,
+        true
+      );
+    }
+
+    const body = (await tokenRes.json().catch(() => null)) as { access_token?: unknown; error?: unknown; error_description?: unknown } | null;
+    if (!tokenRes.ok) {
+      // Google's error and error_description name the fault (invalid_grant: Invalid JWT Signature)
+      // and carry nothing secret.
+      const reason = [body?.error, body?.error_description].filter((v) => typeof v === 'string' && v).join(': ').slice(0, 200);
+      return tokenFailed(`HTTP ${tokenRes.status}${reason ? ` (${reason})` : ''}`, tokenRes.status === 429 || tokenRes.status >= 500, tokenRes.status);
+    }
+    if (typeof body?.access_token !== 'string' || !body.access_token) {
+      return tokenFailed(`HTTP ${tokenRes.status} without an access_token`, true, tokenRes.status);
+    }
+    return { ok: true, token: body.access_token };
   }
 
   /**
@@ -262,17 +398,12 @@ export class GooglePublisher implements Publisher {
       return { ok: true, value: emptyReceipt };
     }
 
-    // 5. Resolve credentials & token
-    const token = await this.getAccessToken();
-    if (!token) {
-      return {
-        ok: false,
-        error: {
-          code: 'CREDENTIALS_MISSING',
-          message: 'Google Workspace credentials not configured; publication is unavailable and cannot complete',
-        } as any,
-      };
+    // 5. Resolve credentials & token. A key Google refused is GOOGLE_TOKEN_FAILED, not a missing key.
+    const access = await this.resolveAccessToken();
+    if (!access.ok) {
+      return { ok: false, error: access.error };
     }
+    const token = access.token;
 
     const publicationId = crypto.randomUUID();
     const driveFolderId = request.destination.productionRootFolderId;

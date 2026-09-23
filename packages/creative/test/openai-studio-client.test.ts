@@ -1,8 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   OpenAiStudioClient,
   OpenAiModelHttpError,
   OpenAiModelTimeoutError,
+  OpenAiModelParseError,
+  OpenAiModelTruncatedError,
+  OpenAiModelResponseError,
 } from '../src/studio/openai-studio-client.js';
 import { DisallowedProviderError } from '@hawa/domain';
 
@@ -223,5 +226,124 @@ describe('OpenAiStudioClient (ADR-030, G01, G02)', () => {
       client.createStructuredCompletion({ model: 'gpt-6-astra', messages: [{ role: 'user', content: 'test' }], jsonSchema: TEST_SCHEMA })
     ).rejects.toMatchObject({ status: 429, code: 'RATE_LIMIT_EXCEEDED' });
     expect(fetcher.mock.calls.length).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * Only a request that got no answer is asked again. Until 2026-09-23 a reply that was not JSON, or
+ * a body that broke after the headers, was retried like a dropped socket: up to six billed calls
+ * for one question.
+ */
+describe('OpenAiStudioClient retries only what was never answered', () => {
+  const SCHEMA = { name: 'plan', schema: { type: 'object' }, strict: false };
+  const ask = (fetcher: ReturnType<typeof vi.fn>) =>
+    new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch }).createStructuredCompletion({
+      model: 'gpt-6-astra',
+      messages: [{ role: 'user', content: 'test' }],
+      jsonSchema: SCHEMA,
+      maxTokens: 1234,
+    });
+  const answer = (choice: Record<string, unknown>) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: 'chatcmpl_x', choices: [choice], usage: { prompt_tokens: 100, completion_tokens: 20 } }),
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('throws a reply that is not JSON once, without asking again, and without echoing it', async () => {
+    const reply = 'I cannot produce that layout {because: the brief is unclear}';
+    const fetcher = vi.fn().mockResolvedValue(answer({ message: { content: reply }, finish_reason: 'stop' }));
+    const err = await ask(fetcher).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OpenAiModelParseError);
+    expect(err).toMatchObject({ code: 'MODEL_OUTPUT_UNPARSEABLE', contentLength: reply.length, responseId: 'chatcmpl_x' });
+    expect((err as Error).message).not.toContain('brief is unclear');
+    expect((err as OpenAiModelParseError).costUsd).toBeGreaterThan(0);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws a reply with no JSON at all instead of returning an empty object', async () => {
+    const fetcher = vi.fn().mockResolvedValue(answer({ message: { content: 'Sorry, I cannot help with that.' }, finish_reason: 'stop' }));
+    await expect(ask(fetcher)).rejects.toBeInstanceOf(OpenAiModelParseError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reads JSON wrapped in prose or a fence', async () => {
+    const fetcher = vi.fn().mockResolvedValue(answer({ message: { content: 'Here it is:\n```json\n{"headline":"OK"}\n```' }, finish_reason: 'stop' }));
+    const res = await ask(fetcher);
+    expect(res.data).toEqual({ headline: 'OK' });
+  });
+
+  it('throws a reply cut off at the token cap instead of parsing it', async () => {
+    const fetcher = vi.fn().mockResolvedValue(answer({ message: { content: '{"headline":"Cut o' }, finish_reason: 'length' }));
+    const err = await ask(fetcher).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OpenAiModelTruncatedError);
+    expect(err).toMatchObject({ code: 'MODEL_OUTPUT_TRUNCATED', maxTokens: 1234 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a body that breaks after the headers arrived', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw Object.assign(new TypeError('terminated'), { cause: { code: 'UND_ERR_SOCKET', message: 'other side closed' } });
+      },
+    });
+    const err = await ask(fetcher).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OpenAiModelResponseError);
+    expect(err).toMatchObject({ code: 'UNCERTAIN_RESPONSE', status: 200, isUncertain: true });
+    expect((err as Error).message).toContain('UND_ERR_SOCKET');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a request that got no answer, three times by default', async () => {
+    vi.stubEnv('HAWA_MODEL_MAX_ATTEMPTS', '');
+    vi.stubEnv('HAWA_RETRY_DELAY_MS', '1');
+    const dropped = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET', message: 'socket hang up' } });
+    const fetcher = vi.fn().mockRejectedValue(dropped);
+    await expect(ask(fetcher)).rejects.toThrow(/fetch failed \(ECONNRESET: socket hang up\) after 3 attempts/);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+
+    const recovers = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValue(answer({ message: { content: '{"headline":"OK"}' }, finish_reason: 'stop' }));
+    const res = await ask(recovers);
+    expect(res.data).toEqual({ headline: 'OK' });
+    expect(res.receipt.attempts).toBe(2);
+  });
+
+  it('keeps an override of the attempt count', async () => {
+    vi.stubEnv('HAWA_MODEL_MAX_ATTEMPTS', '1');
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    await expect(ask(fetcher)).rejects.toThrow('fetch failed');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('still turns an abort into a timeout, without retrying', async () => {
+    const fetcher = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    await expect(ask(fetcher)).rejects.toBeInstanceOf(OpenAiModelTimeoutError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not generate an image again when the answer could not be read', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    });
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch });
+    await expect(client.generateImage({ model: 'gpt-image-2.5-sunburst', prompt: 'navy texture' })).rejects.toBeInstanceOf(OpenAiModelResponseError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    const noImage = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ created: 1, data: [] }) });
+    const empty = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: noImage as unknown as typeof fetch });
+    await expect(empty.generateImage({ model: 'gpt-image-2.5-sunburst', prompt: 'navy texture' })).rejects.toThrow(/No image payload/);
+    expect(noImage).toHaveBeenCalledTimes(1);
   });
 });

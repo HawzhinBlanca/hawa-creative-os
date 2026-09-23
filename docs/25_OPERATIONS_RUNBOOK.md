@@ -142,7 +142,7 @@ Design Studio v2 operates a multi-stage, durable pipeline (`see` → `judge` →
 ### 1. Operational Configuration & Feature Flags
 - `DESIGN_STUDIO_V2`: Defaults to `'off'`. When off, standard intake uses the legacy single-shot planner. When `'on'`, Telegram intake dispatches into the studio pipeline.
 - `DESIGN_STUDIO_TIER_DEFAULT`: Defaults to `'standard'` (3 candidates, 1 revision loop). May be set to `'premium'` for high-touch briefs.
-- `DESIGN_STUDIO_MAX_USD`: Hard budget ceiling per run (default `$6.00`). If accumulated costs in `hawa.design_studio_calls` reach this ceiling, the run transitions to `BUDGET_EXHAUSTED` and selects the best candidate evaluated so far.
+- `DESIGN_STUDIO_MAX_USD`: Hard budget ceiling per run (default `$2.00` since 2026-09-23; `DESIGN_STUDIO_MAX_CALLS` defaults to 24). Real designs cost $0.33–0.78 with at most 10 calls. If accumulated costs in `hawa.design_studio_calls` reach this ceiling, the run ends `failed` with the stage, spend and call count in its diagnostic.
 - Explicit Route: `POST /v1/tasks/:taskId/canva/studio` is available regardless of the feature flag for Desk testing and qualification evaluations.
 
 ### 2. Operational Database Inspection Queries
@@ -186,7 +186,7 @@ GROUP BY r.id;
 - **Receipts**: Call receipts record total attempt counts (`attempts: 4`) and exact token usage.
 
 #### Scenario (d): Hard budget cap enforcement (`BUDGET_EXHAUSTED`)
-- **Symptom**: Run cost reaches or exceeds `DESIGN_STUDIO_MAX_USD` (default $6.00, or office override).
+- **Symptom**: Run cost reaches or exceeds `DESIGN_STUDIO_MAX_USD` (default $2.00, or office override).
 - **Mitigation**: `DesignStudioService` stops current stage execution immediately and halts further paid calls.
 - **Behavior**: The run promotes the highest-scoring candidate evaluated so far (or metric-best if critique is incomplete), marks run status as `degraded`, and appends an honest budget exhaustion note to the delivery message.
 

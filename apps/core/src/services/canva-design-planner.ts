@@ -72,7 +72,27 @@ export function unwrapCopyEnvelope(text:string):{copy:string;trailing:string} {
   return {copy:inner,trailing};
 }
 
+/**
+ * Emoji typed into a brief ("📍 Erbil", "📅 25 September"). The transfer cannot set them and the
+ * whole request was refused as COPY_UNSUPPORTED, so an ordinary office brief never got a draft
+ * (2026-09-23 review). They are decoration, not copy: the words around them are kept exactly.
+ */
+export function withoutEmoji(text:string):string{
+  return text
+    .replace(/[\u{1F000}-\u{1FAFF}\u{E0020}-\u{E007F}][\u{1F3FB}-\u{1F3FF}\uFE0F\u200D]*/gu,'')
+    .replace(/\u200D(?=\s|$)/gu,'')
+    .split('\n').map(line=>line.replace(/[ \t]{2,}/g,' ').trim()).join('\n')
+    .trim();
+}
+
 export function savedDesignCopy(payload:any,description:string):{copy:string[];instructions:string} {
+  const saved=savedDesignCopyAsSent(payload,description);
+  const copy=saved.copy.map(withoutEmoji).filter(Boolean);
+  if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The request carries no design copy apart from emoji. Send the exact text to set; no placeholder copy will be invented.');
+  return {...saved,copy};
+}
+
+function savedDesignCopyAsSent(payload:any,description:string):{copy:string[];instructions:string} {
   const p=payload?.payload||payload||{},body=p.body||p;
   const raw:string=typeof p.rawRequestText==='string'?p.rawRequestText:description;
   const divider=raw?.match(/\n\s*[_\-=*]{3,}\s*\n/);

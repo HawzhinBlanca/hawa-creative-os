@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-22T22:49:28Z",
+  "generatedAt": "2026-09-23T09:41:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "73a2482d098eb16d3013cf35d4c6e726695981023b033c7d52bca94f9fe561a7",
-      "bytes": 2893
+      "sha256": "5ca1d63a21f73fccc3b31765ab5ae6fdd4de4c00f4fea91b92fb6e8f1f4198e4",
+      "bytes": 2894
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -559,8 +559,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "d8f2ba435b6475ab9f410b6be915e9bd40661c6a49944096b9f05e50b07d7166",
-      "bytes": 12582
+      "sha256": "60b0f70783e4c448238d60ab8079ac50cb77acbfaa5e5f3ab6bb8366c5c14af0",
+      "bytes": 12682
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -1049,7 +1049,7 @@
     },
     {
       "path": "scripts/ratchet_any.ts",
-      "sha256": "29e8b7649b356b0870e1db3a5bf9f64c42e75bbb51a369ba6b224a2e050993b4",
+      "sha256": "0a052e5b249767339c9ffa33c9fbdcf1560032a749c2770bfc447864e44aef11",
       "bytes": 2991
     },
     {

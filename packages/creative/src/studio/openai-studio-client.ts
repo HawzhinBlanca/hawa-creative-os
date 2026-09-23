@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { assertModelAllowed, modelSupportsReasoningEffort, resolveModel } from '@hawa/domain';
 import {
+  StudioModelError,
   StudioModelHttpError,
   StudioModelTimeoutError,
   StudioCircuitBreakerOpenError,
@@ -106,6 +107,75 @@ export class OpenAiModelTimeoutError extends StudioModelTimeoutError {
   }
 }
 
+/**
+ * The model answered, and the call was billed, but the reply is not the JSON that was asked for.
+ * Asking again costs as much and mostly fails the same way, so it is never retried; until
+ * 2026-09-23 it was, up to six billed calls for one question. The message gives the reply's
+ * length, never its text: a reply can quote the client's brief.
+ */
+export class OpenAiModelParseError extends StudioModelError {
+  readonly model: string;
+  readonly contentLength: number;
+  readonly responseId?: string;
+  readonly costUsd: number;
+  constructor(model: string, contentLength: number, billed: { responseId?: string; costUsd?: number } = {}) {
+    super(
+      `OpenAI ${model} replied with ${contentLength} characters that are not valid JSON; not retried, the call was billed`,
+      'MODEL_OUTPUT_UNPARSEABLE'
+    );
+    this.name = 'OpenAiModelParseError';
+    this.model = model;
+    this.contentLength = contentLength;
+    this.responseId = billed.responseId;
+    this.costUsd = billed.costUsd ?? 0;
+  }
+}
+
+/**
+ * The model stopped at the token cap (finish_reason 'length'), so its reply is cut off. Parsing a
+ * partial reply either fails or, worse, yields an object missing its tail; the same cap cuts the
+ * same answer again, so this is not retried either. The fix is a larger maxTokens.
+ */
+export class OpenAiModelTruncatedError extends StudioModelError {
+  readonly model: string;
+  readonly maxTokens: number;
+  readonly responseId?: string;
+  readonly costUsd: number;
+  constructor(model: string, maxTokens: number, billed: { responseId?: string; costUsd?: number } = {}) {
+    super(
+      `OpenAI ${model} stopped at its ${maxTokens}-token cap, so the reply is cut off; not retried, raise maxTokens`,
+      'MODEL_OUTPUT_TRUNCATED'
+    );
+    this.name = 'OpenAiModelTruncatedError';
+    this.model = model;
+    this.maxTokens = maxTokens;
+    this.responseId = billed.responseId;
+    this.costUsd = billed.costUsd ?? 0;
+  }
+}
+
+/**
+ * The response headers arrived and then the body could not be read (the socket dropped mid-body,
+ * or the body was not JSON). OpenAI has most likely already done, and billed, the work, so asking
+ * again would pay twice for one answer: it is reported as uncertain rather than retried.
+ */
+export class OpenAiModelResponseError extends StudioModelError {
+  public isUncertain = true;
+  readonly status: number;
+  constructor(model: string, status: number, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    const detail = describeFetchCause(cause);
+    super(
+      `OpenAI ${model} answered HTTP ${status} but the response could not be read (${reason}${detail ? `; ${detail}` : ''}); ` +
+        `not retried, the call may have been billed`,
+      'UNCERTAIN_RESPONSE'
+    );
+    this.name = 'OpenAiModelResponseError';
+    this.status = status;
+    this.cause = cause;
+  }
+}
+
 export class OpenAiCircuitBreakerOpenError extends StudioCircuitBreakerOpenError {
   readonly code = 'CIRCUIT_BREAKER_OPEN';
   constructor() {
@@ -157,6 +227,42 @@ function computeRetryDelayMs(attempt: number): number {
   const base = Math.pow(2, attempt) * 1000;
   const jitter = Math.floor(Math.random() * 250);
   return base + jitter;
+}
+
+/**
+ * Attempts per model call, HAWA_MODEL_MAX_ATTEMPTS or 3. Only a request that never got an answer
+ * (and 429/5xx) is retried, so each attempt past the first is one that was not billed; six were
+ * allowed while unreadable replies were retried too, which multiplied a bad reply's cost.
+ */
+function modelMaxAttempts(): number {
+  const configured = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 3);
+  return Number.isFinite(configured) && configured >= 1 ? Math.floor(configured) : 3;
+}
+
+/**
+ * The JSON in a model's reply: the whole reply, or the outermost {...} when prose surrounds it.
+ * undefined when there is none (JSON.parse never returns undefined, so it cannot be mistaken).
+ */
+function parseJsonReply(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Prose or a fence around the object; try the braces below.
+  }
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+    } catch {
+      // Not JSON either.
+    }
+  }
+  return undefined;
+}
+
+function isAbortError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError';
 }
 
 /** The reason Node's fetch hid behind "fetch failed", or an empty string. */
@@ -312,46 +418,78 @@ export class OpenAiStudioClient {
     const timeout = options.timeoutMs || this.timeoutMs;
 
     let attempt = 0;
-    // T9: VPN/tunnel egress intermittently drops long-lived TLS mid-request (UND_ERR_SOCKET).
-    // Three attempts with 2s/4s backoff proved insufficient; six with exponential backoff survives it.
-    const maxAttempts = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 6);
+    // T9: VPN/tunnel egress intermittently drops long-lived TLS mid-request (UND_ERR_SOCKET), so a
+    // request that got no answer is asked again. Nothing that got an answer is (2026-09-23): a reply
+    // that is cut off or not JSON, or a body that broke after the headers, was retried like a dropped
+    // socket, each attempt a new billed call for the same question.
+    const maxAttempts = modelMaxAttempts();
 
     while (attempt < maxAttempts) {
       attempt++;
-      let timeoutId: any;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      let res: Response;
       try {
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), timeout);
+        res = await this.fetcher(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        if (isAbortError(err)) {
+          this.breaker.recordFailure();
+          throw new OpenAiModelTimeoutError(timeout);
+        }
+        // No answer arrived, so nothing was billed: the one failure that is safe to ask again.
+        // Node's fetch reports every network failure as "fetch failed" and keeps the reason in
+        // err.cause (ECONNRESET, UND_ERR_HEADERS_TIMEOUT, ENOTFOUND, ...). A studio run on
+        // 2026-09-22 failed at layout with only "fetch failed" on record and nothing in the logs.
+        const cause = describeFetchCause(err);
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[openai] ${model} attempt ${attempt}/${maxAttempts} failed: ${message}${cause ? ` (${cause})` : ''}`);
+        if (attempt >= maxAttempts) {
+          this.breaker.recordFailure();
+          if (cause && err instanceof Error && !err.message.includes(cause)) err.message = `${err.message} (${cause}) after ${attempt} attempts`;
+          throw err;
+        }
+        await sleep(computeRetryDelayMs(attempt));
+        continue;
+      }
 
-        const res = await this.fetcher(`${this.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${this.apiKey}`,
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
-
-          if (!res.ok) {
-            const errBody = await res.text().catch(() => '');
-            if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
-              await sleep(computeRetryDelayMs(attempt));
-              continue;
-            }
-            if (typeof this.breaker.recordFailure === 'function') {
-              this.breaker.recordFailure();
-            }
-            throw new OpenAiModelHttpError(res.status, errBody);
+      try {
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
+            await sleep(computeRetryDelayMs(attempt));
+            continue;
           }
-
-          const xRequestId = res.headers?.get?.('x-request-id') || null;
-          const data: any = await res.json();
-          if (typeof this.breaker.recordSuccess === 'function') {
-            this.breaker.recordSuccess();
+          if (typeof this.breaker.recordFailure === 'function') {
+            this.breaker.recordFailure();
           }
+          throw new OpenAiModelHttpError(res.status, errBody);
+        }
 
-          const latencyMs = Date.now() - startTime;
+        const xRequestId = res.headers?.get?.('x-request-id') || null;
+        const data: any = await res.json();
+        if (typeof this.breaker.recordSuccess === 'function') {
+          this.breaker.recordSuccess();
+        }
+
+        const latencyMs = Date.now() - startTime;
+        const usage = data.usage || {};
+        const costUsd = this.calculateCost(model, usage);
+        const responseId = data.id || xRequestId || `openai_${Date.now()}`;
+
+        const finishReason = data.choices?.[0]?.finish_reason ?? data.stop_reason;
+        if (finishReason === 'length' || finishReason === 'max_tokens') {
+          throw new OpenAiModelTruncatedError(model, payload.max_completion_tokens, { responseId, costUsd });
+        }
+
         const toolUsePart = Array.isArray(data.content)
           ? data.content.find((b: any) => b.type === 'tool_use')?.input
           : null;
@@ -366,36 +504,24 @@ export class OpenAiStudioClient {
         let parsed: any;
         if (toolUsePart && typeof toolUsePart === 'object') {
           parsed = toolUsePart;
-        } else if (toolCallArg) {
-          try {
-            parsed = JSON.parse(toolCallArg);
-          } catch {
-            parsed = {};
-          }
         } else {
-          try {
-            parsed = JSON.parse(cleanContent);
-          } catch {
-            const firstBrace = cleanContent.indexOf('{');
-            const lastBrace = cleanContent.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace > firstBrace) {
-              parsed = JSON.parse(cleanContent.slice(firstBrace, lastBrace + 1));
-            } else {
-              parsed = {};
-            }
+          // A reply that is not JSON used to become {} (no braces at all) or a retry (braces that
+          // did not parse). Neither is an answer: it is reported, once.
+          const replyText = toolCallArg ? String(toolCallArg) : cleanContent;
+          parsed = parseJsonReply(replyText);
+          if (parsed === undefined) {
+            throw new OpenAiModelParseError(model, replyText.length, { responseId, costUsd });
           }
         }
 
-        const usage = data.usage || {};
-        const costUsd = this.calculateCost(model, usage);
         const sha256 = createHash('sha256').update(cleanContent).digest('hex');
 
         return {
           data: parsed,
           rawText: cleanContent,
           receipt: {
-            id: data.id || xRequestId || `openai_${Date.now()}`,
-            responseId: data.id || xRequestId || `openai_${Date.now()}`,
+            id: responseId,
+            responseId,
             xRequestId,
             model: data.model || model,
             inputTokens: usage.prompt_tokens || usage.input_tokens || 0,
@@ -409,25 +535,17 @@ export class OpenAiStudioClient {
             attempts: attempt,
           },
         };
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        if (err instanceof OpenAiModelHttpError) {
-          throw err;
-        }
-        // Node's fetch reports every network failure as "fetch failed" and keeps the reason in
-        // err.cause (ECONNRESET, UND_ERR_HEADERS_TIMEOUT, ENOTFOUND, ...). A studio run on
-        // 2026-09-22 failed at layout with only "fetch failed" on record and nothing in the logs.
-        const cause = describeFetchCause(err);
-        console.warn(`[openai] ${model} attempt ${attempt}/${maxAttempts} failed: ${err?.message || err}${cause ? ` (${cause})` : ''}`);
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          if (cause && err instanceof Error && !err.message.includes(cause)) err.message = `${err.message} (${cause}) after ${attempt} attempts`;
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
+        // HTTP, parse and truncation errors are already what they should be.
+        if (err instanceof StudioModelError) throw err;
+        // Anything else broke after the headers arrived (a socket dropped mid-body, a body that is
+        // not JSON): OpenAI has probably billed the call, so it is reported, not asked again.
+        this.breaker.recordFailure();
+        throw new OpenAiModelResponseError(model, res.status, err);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -516,18 +634,18 @@ export class OpenAiStudioClient {
     const timeout = options.timeoutMs || this.timeoutMs;
 
     // T9: the image lane made a single attempt with no retry, so one dropped connection lost
-    // the call outright. Same transient-network and 429/5xx handling as the text path.
-    const maxAttempts = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 6);
+    // the call outright. Same handling as the text path: only a request that got no answer, and
+    // 429/5xx, is asked again; an image that was generated is never paid for twice.
+    const maxAttempts = modelMaxAttempts();
     let attempt = 0;
 
     while (attempt < maxAttempts) {
       attempt++;
-      let timeoutId: any;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      let res: Response;
       try {
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), timeout);
-
-        const res = await this.fetcher(`${this.baseUrl}/images/generations`, {
+        res = await this.fetcher(`${this.baseUrl}/images/generations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -536,9 +654,21 @@ export class OpenAiStudioClient {
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-
+      } catch (err: unknown) {
         clearTimeout(timeoutId);
+        if (isAbortError(err)) {
+          this.breaker.recordFailure();
+          throw new OpenAiModelTimeoutError(timeout);
+        }
+        if (attempt >= maxAttempts) {
+          this.breaker.recordFailure();
+          throw err;
+        }
+        await sleep(computeRetryDelayMs(attempt));
+        continue;
+      }
 
+      try {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
           if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
@@ -559,7 +689,8 @@ export class OpenAiStudioClient {
         if (b64Json) {
           imgBuffer = Buffer.from(b64Json, 'base64');
         } else if (data.data?.[0]?.url) {
-          const urlRes = await this.fetcher(data.data[0].url);
+          const urlRes = await this.fetcher(data.data[0].url, { signal: controller.signal });
+          if (!urlRes.ok) throw new Error(`the generated image's URL answered HTTP ${urlRes.status}`);
           const arrayBuf = await urlRes.arrayBuffer();
           imgBuffer = Buffer.from(arrayBuf);
         } else {
@@ -584,19 +715,16 @@ export class OpenAiStudioClient {
             latencyMs,
           },
         };
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        if (err instanceof OpenAiModelHttpError) {
-          throw err;
-        }
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
+        if (err instanceof StudioModelError) throw err;
+        // The generation was answered, so it was probably billed: a body that broke, an image
+        // that could not be downloaded or an answer without one is reported, not generated again.
+        this.breaker.recordFailure();
+        throw new OpenAiModelResponseError(model, res.status, err);
       } finally {
         // Without this an aborted or thrown attempt leaves its abort timer pending.
         clearTimeout(timeoutId);

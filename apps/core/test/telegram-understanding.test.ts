@@ -118,7 +118,10 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     expect(replies()).not.toMatch(/Local layout preview/);
 
     // A change that is also a lasting preference revises this design and is saved for the next ones.
-    const both = await send({ text: `from now on always make KAAE titles gold ${randomUUID().slice(0, 4)}`, reply_to_message: draft });
+    // (Another design: a second change to one whose first change is still being made starts nothing.)
+    const other = await send({ text: 'KAAE accreditation dinner\n---\nOctober 13, 2026\nErbil' });
+    const otherDraft = { ...draft, text: `🎨 Your Canva draft is ready\nTask ID: ${other.body.task.id}` };
+    const both = await send({ text: `from now on always make KAAE titles gold ${randomUUID().slice(0, 4)}`, reply_to_message: otherDraft });
     expect(both.body.status).toBe('REVISION_QUEUED');
     expect(replies()).toMatch(/Also saved as a standing rule/);
     const rule = (await activeRules()).find((r) => r.humanRule.startsWith('from now on always make KAAE titles gold'));

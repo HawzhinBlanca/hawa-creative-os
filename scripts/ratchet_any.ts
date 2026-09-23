@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 
 // Maximum allowed 'any' count in source files. Ratchet must only decrease, never increase.
-const BASELINE_ANY_CEILING = 1059;
+const BASELINE_ANY_CEILING = 1053;
 
 function walk(dir: string): string[] {
   const results: string[] = [];

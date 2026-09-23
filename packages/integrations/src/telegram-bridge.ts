@@ -101,6 +101,50 @@ export function escapeTelegramMarkdown(value: unknown): string {
   return String(value ?? '').replace(/([_*`\[])/g, '\\$1');
 }
 
+/** Telegram's limits in UTF-16 units: a message's text, and a photo's or document's caption. */
+export const TELEGRAM_TEXT_LIMIT = 4096;
+export const TELEGRAM_CAPTION_LIMIT = 1024;
+const SHORTENED_NOTE = '\n…(shortened)';
+
+/** HTML tags opened in `html` and not closed, innermost last. */
+function unclosedHtmlTags(html: string): string[] {
+  const open: string[] = [];
+  for (const m of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)[^>]*>/g)) {
+    const name = m[2].toLowerCase();
+    if (!m[1]) open.push(name);
+    else {
+      const at = open.lastIndexOf(name);
+      if (at !== -1) open.splice(at, 1);
+    }
+  }
+  return open;
+}
+
+/**
+ * Text cut to Telegram's `limit`. Telegram refuses a longer message outright ("message is too
+ * long"), the plain-text retry was refused the same way, and callers ignore success:false, so the
+ * message vanished (2026-09-23). The cut falls at a line break where one is near, never inside an
+ * HTML tag or entity, and closes the HTML tags it leaves open; the result fits with its tags
+ * counted, so the plain-text retry, which sends the same text, fits too.
+ */
+export function fitTelegramText(text: string, limit: number, parseMode?: string): string {
+  if (text.length <= limit) return text;
+  const html = parseMode?.toUpperCase() === 'HTML';
+  let budget = limit - SHORTENED_NOTE.length;
+  while (budget > 0) {
+    let cut = text.slice(0, budget);
+    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1); // never half an emoji
+    const lineBreak = cut.lastIndexOf('\n');
+    if (lineBreak >= budget / 2) cut = cut.slice(0, lineBreak);
+    if (!html) return `${cut}${SHORTENED_NOTE}`;
+    cut = cut.replace(/<[^>]*$/, '').replace(/&#?[a-zA-Z0-9]*$/, '');
+    const fitted = `${cut}${unclosedHtmlTags(cut).reverse().map((tag) => `</${tag}>`).join('')}${SHORTENED_NOTE}`;
+    if (fitted.length <= limit) return fitted;
+    budget -= fitted.length - limit;
+  }
+  return SHORTENED_NOTE.trimStart();
+}
+
 export function parseCallbackData(data: string): { action: 'approve' | 'revision'; taskId: string; signature: string } | null {
   if (!data) return null;
   const parts = data.split(':');
@@ -577,13 +621,14 @@ export class TelegramBridgeDaemon {
     message: { text: string; parse_mode?: string; reply_markup?: any }
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
     if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
+    const text = fitTelegramText(message.text, TELEGRAM_TEXT_LIMIT, message.parse_mode);
     try {
       const res = await fetch(`https://api.telegram.org/bot${this.config.botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: message.text,
+          text,
           ...(message.parse_mode ? {parse_mode: message.parse_mode} : {}),
           ...(message.reply_markup ? {reply_markup: message.reply_markup} : {}),
         }),
@@ -598,14 +643,14 @@ export class TelegramBridgeDaemon {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              text: message.text,
+              text,
               ...(message.reply_markup ? {reply_markup: message.reply_markup} : {}),
             }),
             signal: AbortSignal.timeout(15000),
           });
           const retryBody = await retryRes.json().catch(() => null) as any;
           if (retryRes.ok && retryBody?.ok === true && Number.isSafeInteger(retryBody.result?.message_id)) {
-            this.recordSentMessage({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
+            this.recordSentMessage({chatId, text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
             return { success: true, messageId: String(retryBody.result.message_id) };
           }
         }
@@ -615,7 +660,7 @@ export class TelegramBridgeDaemon {
           String(body.result?.chat?.id) !== String(chatId)) {
         return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
       }
-      this.recordSentMessage({chatId, text: message.text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
+      this.recordSentMessage({chatId, text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
       return { success: true, messageId: String(body.result.message_id) };
     } catch (err: unknown) {
       if (this.isPreConnectionError(err)) {
@@ -645,8 +690,10 @@ export class TelegramBridgeDaemon {
       const formData = new FormData();
       formData.append('chat_id', String(chatId));
       formData.append('photo', blob, 'design.png');
+      // Cut before escaping: Telegram counts the caption after entity parsing, which drops the
+      // escapes, and the plain fallback below sends this same cut text unescaped.
+      const safeCaption = caption ? fitTelegramText(caption, TELEGRAM_CAPTION_LIMIT) : '';
       if (caption) {
-        const safeCaption = caption.length > 1024 ? caption.slice(0, 1020) + '…' : caption;
         formData.append('caption', escapeTelegramMarkdown(safeCaption));
         formData.append('parse_mode', 'Markdown');
       }
@@ -667,7 +714,8 @@ export class TelegramBridgeDaemon {
         const fallbackForm = new FormData();
         fallbackForm.append('chat_id', String(chatId));
         fallbackForm.append('photo', blob, 'design.png');
-        fallbackForm.append('caption', caption.replace(/[*_`\[\]()]/g, ''));
+        // The uncut caption went here, so a long caption was refused a second time.
+        fallbackForm.append('caption', safeCaption.replace(/[*_`\[\]()]/g, ''));
         if (replyMarkup) fallbackForm.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
         const fbRes = await fetch(url, { method: 'POST', body: fallbackForm, signal: AbortSignal.timeout(20000) });
         const fbBody = await fbRes.json().catch(() => null) as any;
@@ -702,7 +750,8 @@ export class TelegramBridgeDaemon {
     form.append('chat_id', String(chatId));
     form.append('document', new Blob([new Uint8Array(fileBytes)], { type: options.mimeType || 'application/octet-stream' }), filename || 'file');
     if (options.caption) {
-      form.append('caption', options.caption.length > 1024 ? options.caption.slice(0, 1020) + '…' : options.caption);
+      // A blind slice could end inside an HTML tag or entity, which Telegram refuses outright.
+      form.append('caption', fitTelegramText(options.caption, TELEGRAM_CAPTION_LIMIT, options.parseMode));
       if (options.parseMode) form.append('parse_mode', options.parseMode);
     }
     try {

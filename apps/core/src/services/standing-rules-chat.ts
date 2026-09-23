@@ -21,12 +21,19 @@ export function isStandingRule(text: string): boolean {
 
 export type RulesCommand = { kind: 'list' } | { kind: 'forget'; numbers: number[] } | { kind: 'forget_usage' };
 
+/**
+ * Arabic-Indic (٠–٩) and Extended Arabic-Indic (۰–۹) digits as ASCII. A Kurdish keyboard types
+ * "/forget ١", which Number() reads as NaN, so the office got the usage reply (2026-09-23).
+ */
+const asciiDigits = (s: string) =>
+  s.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - (d >= '\u06F0' ? 0x06f0 : 0x0660)));
+
 /** "/rules", "/forget 2", "/forget 2 5". Telegram appends "@botname" to commands in groups. */
 export function parseRulesCommand(text: string): RulesCommand | null {
   const m = (text || '').trim().match(/^\/(rules|forget)(?:@\w+)?(?:\s+(.*))?$/is);
   if (!m) return null;
   if (m[1].toLowerCase() === 'rules') return { kind: 'list' };
-  const numbers = [...new Set((m[2] || '').split(/[\s,]+/).map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
+  const numbers = [...new Set(asciiDigits(m[2] || '').split(/[\s,،]+/).map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
   return numbers.length ? { kind: 'forget', numbers } : { kind: 'forget_usage' };
 }
 
@@ -57,8 +64,20 @@ export function formatRulesList(clientName: string, rules: ClientRule[]): string
   );
 }
 
-export function formatRuleSaved(clientName: string, rule: string, created: boolean, count: number): string {
+/** The number /rules shows for a rule and /forget takes, or undefined when it is not active. */
+export function ruleNumber(activeRules: Array<Pick<ClientRule, 'id'>>, ruleId: string): number | undefined {
+  const i = activeRules.findIndex((r) => r.id === ruleId);
+  return i < 0 ? undefined : i + 1;
+}
+
+/**
+ * The reply to a rule said in chat. `number` is the rule's place in /rules, so the sender can
+ * remove this one without listing them first.
+ */
+export function formatRuleSaved(clientName: string, rule: string, created: boolean, count: number, number?: number): string {
+  const n = number && number > 0 ? ` (number ${number})` : '';
+  const forget = n ? `/forget ${number} removes it` : '/forget removes one';
   return created
-    ? `📌 <b>Saved as a standing rule for ${esc(clientName)}:</b>\n"${esc(rule)}"\n\n<i>Every new ${esc(clientName)} design follows it (${count} rule${count === 1 ? '' : 's'} in force). /rules lists them; /forget removes one.</i>`
-    : `📌 <b>Already a standing rule for ${esc(clientName)}:</b>\n"${esc(rule)}"\n\n<i>/rules lists them; /forget removes one.</i>`;
+    ? `📌 <b>Saved as a standing rule for ${esc(clientName)}${n}:</b>\n"${esc(rule)}"\n\n<i>Every new ${esc(clientName)} design follows it (${count} rule${count === 1 ? '' : 's'} in force). /rules lists them; ${forget}.</i>`
+    : `📌 <b>Already a standing rule for ${esc(clientName)}${n}:</b>\n"${esc(rule)}"\n\n<i>/rules lists them; ${forget}.</i>`;
 }

@@ -30,6 +30,25 @@ export * from './workflow-dispatcher.js';
 const dbUrl = process.env.DATABASE_URL;
 const sharedDb = dbUrl ? createDb(dbUrl) : undefined;
 
+/**
+ * How long a step keeps retrying a Core that does not answer. Every step this worker journals is a
+ * call to Core (runCanvaDraft, reportNotRunnable). Five attempts at the SDK's default spacing (50 ms,
+ * doubling) ended a step in under a second, so a Core restart or deploy (10–60 s) during a design
+ * failed the step, the workflow reported DESIGN_SERVER_ERROR to a Core that was still down, and the
+ * requester of a paid run was never told (2026-09-23). Core deduplicates these calls (idempotency
+ * keys, studio stages persisted before advancing, one in-flight resume per run, the outbox for the
+ * outcome), so a retry pays for nothing twice. They now back off from 2 s to a 30 s ceiling for up to
+ * 10 minutes: that outlasts a restart, and a real outage still ends in a reported outcome.
+ *
+ * A step that pays for work Core does not deduplicate (the parity check's model call) passes its own
+ * options and keeps the old bound of five quick attempts.
+ */
+const CORE_STEP_RETRY = {
+  initialRetryInterval: 2000,
+  retryIntervalFactor: 2,
+  maxRetryInterval: 30000,
+  maxRetryDuration: 10 * 60 * 1000,
+};
 
 /**
  * Wraps a Restate context so that errors the workflow marks as terminal (refused request,
@@ -51,7 +70,7 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
         }
         throw error;
       }
-    }, { maxRetryAttempts: 5, ...options }),
+    }, options ? { maxRetryAttempts: 5, ...options } : CORE_STEP_RETRY),
     sleep: (millis) => ctx.sleep(millis),
   };
 }

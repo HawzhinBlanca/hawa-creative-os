@@ -57,15 +57,17 @@ describe('revision feedback messages, with a database', () => {
     expect(once.status).toBe(200);
     expect((await once.json()).status).toBe('REVISION_QUEUED');
     const onceTexts = texts(dispatch);
-    const revisionMsg = onceTexts.find((t) => /Revision instruction received/.test(t));
+    const revisionMsg = onceTexts.find((t) => /Change received/.test(t));
     expect(revisionMsg).toBeDefined();
     expect(revisionMsg).toMatch(/Applied to this design only/);
     expect(revisionMsg).not.toMatch(/standing rule for this client/);
 
+    // Another design: a second change to one whose first change is still being made starts nothing.
+    const second = await (await post(app, chatId, 'KAAE Annual Research Forum 2026\nدەق: کۆڕی ساڵانەی توێژینەوە')).json();
     dispatch.mockClear();
-    const standing = await post(app, chatId, `revise task ${task.id}: from now on use Amiri for all Kurdish text`);
+    const standing = await post(app, chatId, `revise task ${second.task.id}: from now on use Amiri for all Kurdish text`);
     expect((await standing.json()).status).toBe('REVISION_QUEUED');
-    const standingMsg = texts(dispatch).find((t) => /Revision instruction received/.test(t));
+    const standingMsg = texts(dispatch).find((t) => /Change received/.test(t));
     expect(standingMsg).toMatch(/Also saved as a standing rule/);
     expect(texts(dispatch).join('\n')).toMatch(/Saved as a standing rule for KAAE|Already a standing rule for KAAE/);
     // Saved for real, in PostgreSQL, where every later KAAE design reads it.

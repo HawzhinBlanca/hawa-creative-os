@@ -13,6 +13,7 @@ import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import {
   composeDeliveredMessage,
+  composeDeliveryFailedAlert,
   composeIntakeFailedAlert,
   composeIntakeFailedMessage,
   intakeChatOf,
@@ -39,6 +40,15 @@ export interface OutboxCommandRecord {
 }
 
 export type DeliveryErrorCategory = 'retryable' | 'permanent' | 'uncertain';
+
+/**
+ * Telegram's own refusal of a send (a chat that does not exist, a bot the requester blocked, a file
+ * over the size limit) comes back as TELEGRAM_REJECTED_4xx or TELEGRAM_DOCUMENT_REJECTED_4xx. Retrying
+ * cannot change that answer, but the permanent pattern did not know these codes, so a delivery to a
+ * bad chat was retried to its last attempt with nobody told (2026-09-23). 429 is Telegram asking to
+ * slow down, and stays retryable.
+ */
+const TELEGRAM_REFUSED = /TELEGRAM_(?:DOCUMENT_)?REJECTED_4(?!29)\d\d/;
 
 export class OutboxDeliveryError extends Error {
   constructor(
@@ -161,6 +171,38 @@ export class OutboxConsumer {
       }
     } catch (notifyErr) {
       console.error(`[OutboxConsumer] Could not notify about dead-lettered request ${cmd.aggregate_id}:`, notifyErr);
+    }
+  }
+
+  /**
+   * A delivery of an approved design that ended `failed` (refused for good, or out of attempts) used
+   * to leave one log line naming the command: neither the requester nor the office heard (2026-09-23).
+   * The office chat is alerted. The requester is not messaged again: the chat that failed may be
+   * theirs. With no bot token or office chat, or an office chat that is the requester's own, the
+   * failure is logged with the task and the reason instead.
+   */
+  private async alertOfficeDeliveryFailed(cmd: OutboxCommandRecord, attempts: number, error: string) {
+    let taskId = cmd.aggregate_id;
+    try {
+      const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+      taskId = String(payload?.taskId || cmd.aggregate_id);
+      const chat = payload?.chatId || payload?.sourceChannelId;
+      const requesterChat = chat ? String(chat) : null;
+      const botToken = this.telegramBotToken();
+      const office = this.officeAlertChatId();
+      if (!botToken || !office || office === requesterChat) {
+        const why = !botToken ? 'TELEGRAM_BOT_TOKEN is not set' : !office ? 'no office chat is configured' : "the office chat is the requester's own";
+        console.error(`[OutboxConsumer] Delivery of task ${taskId} failed after ${attempts} attempts (${error}); the office was not alerted: ${why}.`);
+        return;
+      }
+      const alerted = await this.telegramSender(botToken).dispatchOutboundMessage(office, {
+        text: composeDeliveryFailedAlert(taskId, requesterChat, attempts, error),
+      });
+      if (!alerted.success) {
+        console.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}), and so did the office alert: ${alerted.error}`);
+      }
+    } catch (alertErr) {
+      console.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}); the office could not be alerted:`, alertErr);
     }
   }
 
@@ -419,7 +461,8 @@ export class OutboxConsumer {
 
           const isPermanent =
             (err instanceof OutboxDeliveryError && err.category === 'permanent') ||
-            /CHAT_NOT_FOUND|BOT_BLOCKED|USER_DEACTIVATED|INVALID_RECIPIENT|PERMANENT_REJECTION|CLIENT_REQUIRED|INVALID_DESTINATION/i.test(errorMessage);
+            /CHAT_NOT_FOUND|BOT_BLOCKED|USER_DEACTIVATED|INVALID_RECIPIENT|PERMANENT_REJECTION|CLIENT_REQUIRED|INVALID_DESTINATION/i.test(errorMessage) ||
+            TELEGRAM_REFUSED.test(errorMessage);
           const isUncertain =
             (err instanceof OutboxDeliveryError && err.category === 'uncertain') ||
             /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE/i.test(errorMessage);
@@ -453,6 +496,9 @@ export class OutboxConsumer {
               // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
               if (cmd.command_type === 'task.created' && !isUncertain) {
                 await this.tellRequesterIntakeFailed(cmd, Number(updated.attempts) || 0, errorMessage);
+              }
+              if (cmd.command_type === 'notify.published' && !isUncertain) {
+                await this.alertOfficeDeliveryFailed(cmd, Number(updated.attempts) || 0, errorMessage);
               }
             } else {
               aggregateSummary.retried++;

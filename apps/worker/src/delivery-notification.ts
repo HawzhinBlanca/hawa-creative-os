@@ -56,6 +56,24 @@ export const readStoredExportBytes: ExportBytesReader = async (db, tenantId, tas
 export const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 /**
+ * The Drive archive problem as a client reads it. Core passes its failure code through when it has no
+ * words for it, so a client was shown "INVALID_DESTINATION" or "DRIVE_LOOKUP_FAILED" (2026-09-23). A
+ * known code is said in plain English, any other code (upper case with underscores, alone or leading
+ * a detail) is described generically, and a reason already in words is kept as it is.
+ */
+const ARCHIVE_PROBLEMS: Record<string, string> = {
+  INVALID_DESTINATION: "the client's Drive folder is not set up",
+  CREDENTIALS_MISSING: 'the office Google account is not connected',
+};
+const ARCHIVE_CODE = /^([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?=$|[\s:(])/;
+function describeArchiveProblem(problem: unknown): string {
+  const text = String(problem).trim();
+  const code = ARCHIVE_CODE.exec(text)?.[1];
+  if (!code) return text;
+  return ARCHIVE_PROBLEMS[code] || 'Google Drive did not accept the upload';
+}
+
+/**
  * The delivery message, in Telegram HTML. Every value that came from a person (the title, file
  * names, the Sheets problem) is escaped: the old message used Markdown asterisks and was sent with
  * no parse mode, so the requester saw the asterisks, and an unescaped title could break parsing.
@@ -78,7 +96,7 @@ export function composeDeliveredMessage(payload: Record<string, unknown> & { tit
 
   if (payload?.archiveProblem) {
     // The files reached the requester; the office's Drive archive is reported, not hidden.
-    lines.push(`Office archive: not saved to Google Drive yet (${escapeTelegramHtml(payload.archiveProblem)}).`);
+    lines.push(`Office archive: not saved to Google Drive yet (${escapeTelegramHtml(describeArchiveProblem(payload.archiveProblem))}).`);
     return lines.join('\n\n');
   }
   // Older commands were written only after the Sheets row was confirmed, and carry no flag.
@@ -110,6 +128,18 @@ export function composeIntakeFailedAlert(taskId: string, chatId: string, attempt
     `Attempts: ${attempts}`,
     `Last error: ${error.slice(0, 500)}`,
     'The requester has been told. Redrive it from the Desk once the cause is fixed.',
+  ].join('\n');
+}
+
+/** The office's alert when an approved design could not be delivered. Plain text, no formatting. */
+export function composeDeliveryFailedAlert(taskId: string, chatId: string | null, attempts: number, error: string): string {
+  return [
+    'Hawa alert: an approved design could not be delivered to the requester.',
+    `Task: ${taskId}`,
+    `Requesting chat: ${chatId || 'unknown'}`,
+    `Attempts: ${attempts}`,
+    `Last error: ${error.slice(0, 500)}`,
+    'The requester has not been told. Files sent before the failure stay sent; check the chat and follow up with them directly.',
   ].join('\n');
 }
 
