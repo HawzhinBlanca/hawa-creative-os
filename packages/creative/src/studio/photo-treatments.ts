@@ -468,7 +468,13 @@ export function cutoutEffectFragment(
         .map((step, i, steps) => {
           const input = i === 0 ? 'SourceAlpha' : `grown-${i - 1}`;
           const result = i === steps.length - 1 ? 'silhouette' : `grown-${i}`;
-          return `<feMorphology in="${input}" operator="dilate" radius="${step}" result="${result}"/>`;
+          // A square dilation is a row pass then a column pass: the same pixels (checked on librsvg
+          // 2.54 and 2.62, 2026-09-24) at a fraction of the cost. As one square pass per step, a
+          // 24 px outline baked at 2x took 23 s and the Canva deck timed out at 20 s.
+          return (
+            `<feMorphology in="${input}" operator="dilate" radius="${step} 0" result="${result}-rows"/>` +
+            `<feMorphology in="${result}-rows" operator="dilate" radius="0 ${step}" result="${result}"/>`
+          );
         })
         .join('')
     : `<feGaussianBlur in="SourceAlpha" stdDeviation="${n(clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX) * GLOW_SIGMA_PER_RADIUS)}" result="silhouette"/>`;

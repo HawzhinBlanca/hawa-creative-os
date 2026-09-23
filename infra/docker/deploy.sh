@@ -144,13 +144,18 @@ until docker exec hawa-production-postgres-1 pg_isready -U hawa_owner -d hawa >/
 # Custom format with zstd's long-distance matching: a dump repeats the same images many times, so it
 # is about 40 MB instead of 550 MB of plain SQL, in a second instead of thirteen. Restore it with
 # pg_restore (docs/25_OPERATIONS_RUNBOOK.md, Backups). disk_cleanup.sh keeps the newest ten.
-BACKUP="${BACKUP_DIR}/predeploy_${STAMP}.dump"
-docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 pg_dump -U hawa_owner -Fc --compress=zstd:long hawa > "$BACKUP"
-BACKUP_BYTES="$(wc -c < "$BACKUP" | tr -d ' ')"
-[[ "$BACKUP_BYTES" -gt 100000 ]] || { echo "ERROR: the backup is only ${BACKUP_BYTES} bytes"; exit 1; }
-docker exec -i hawa-production-postgres-1 pg_restore --list < "$BACKUP" >/dev/null \
-  || { echo "ERROR: the backup's table of contents cannot be read"; exit 1; }
-shasum -a 256 "$BACKUP" | awk '{print $1}' > "$BACKUP.sha256"
+# It is written as .partial and takes its name only once checked: a dump that failed used to keep its
+# name, and the next cleanup counted it as one of the ten and removed a good one to make room.
+BACKUP="${BACKUP_DIR}/predeploy_${STAMP}.dump"; PARTIAL="${BACKUP}.partial"
+backup_failed() { rm -f "$PARTIAL" "$BACKUP.sha256"; echo "ERROR: $1"; exit 1; }
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 pg_dump -U hawa_owner -Fc --compress=zstd:long hawa > "$PARTIAL" \
+  || backup_failed "pg_dump did not finish"
+BACKUP_BYTES="$(wc -c < "$PARTIAL" | tr -d ' ')"
+[[ "$BACKUP_BYTES" -gt 100000 ]] || backup_failed "the backup is only ${BACKUP_BYTES} bytes"
+docker exec -i hawa-production-postgres-1 pg_restore --list < "$PARTIAL" >/dev/null \
+  || backup_failed "the backup's table of contents cannot be read"
+{ shasum -a 256 "$PARTIAL" | awk '{print $1}' > "$BACKUP.sha256" && mv -f "$PARTIAL" "$BACKUP"; } \
+  || backup_failed "the backup could not be recorded"
 echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACKUP_BYTES} bytes)"
 
 # 6. Versioned schema upgrades (idempotent; checksums of applied files are verified)

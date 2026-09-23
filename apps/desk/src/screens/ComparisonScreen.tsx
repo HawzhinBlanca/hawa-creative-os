@@ -13,6 +13,8 @@ import {
   type ShareSummary,
   type StudyDetail,
   type StudyResults,
+  type OfficeResults,
+  type WithheldResults,
   type StudyStatus,
   type StudySummary,
 } from '../services/comparison.js';
@@ -41,6 +43,19 @@ function ShareLine({ title, share }: { title: string; share: ShareSummary }) {
       <td>{share.interval ? `${percent(share.interval.low)} to ${percent(share.interval.high)}` : '—'}</td>
       <td>{percent(share.tieRate)}</td>
     </tr>
+  );
+}
+
+/** Before the study is closed: progress only, so the numbers cannot decide when judging stops. */
+export function WithheldResultsView({ results }: { results: WithheldResults }) {
+  return (
+    <div>
+      <p role="status" style={{ fontWeight: 600 }}>{results.verdict}</p>
+      <p style={muted}>
+        {results.judgements} judgements so far ({results.decisive} decisive, {results.none} no preference) over {results.pairs} pairs.
+        {results.pairsBelowMinJudges ? ` ${results.pairsBelowMinJudges} ${results.pairsBelowMinJudges === 1 ? 'pair has' : 'pairs have'} fewer than ${results.preregistration.minJudgesPerPair} judgements.` : ''}
+      </p>
+    </div>
   );
 }
 
@@ -154,7 +169,7 @@ export function JudgeLinkNotice({ name, href, localOnly, onDismiss }: { name: st
   return (
     <div className="copy-block-card" role="alert" style={{ padding: 12, marginTop: 10 }}>
       <div style={{ fontWeight: 650 }}>Link for {name}</div>
-      <p style={{ margin: '6px 0' }}>Copy it now and send it to the judge yourself. It is shown only this once; Hawa keeps only a fingerprint of it, so a lost link is replaced by revoking it and adding the judge again.</p>
+      <p style={{ margin: '6px 0' }}>Copy it now and send it to the judge yourself. It is shown only this once; Hawa keeps only a fingerprint of it, so a lost link is replaced with "New link" in the judge's row: they keep their judgements and resume where they stopped.</p>
       <input readOnly value={href} style={{ ...field, fontFamily: 'monospace' }} onFocus={(e) => e.currentTarget.select()} aria-label={`Judging link for ${name}`} />
       {localOnly ? (
         <p style={{ ...muted, color: 'var(--warn-text)' }}>
@@ -450,6 +465,21 @@ export function StudyDetailView({
                 <td>
                   {!j.revokedAt && study.status !== 'closed' ? (
                     <button
+                      className="btn"
+                      disabled={busy}
+                      style={{ marginRight: 6 }}
+                      onClick={() =>
+                        void act('No new link was made', async () => {
+                          const issued = await apiClient.comparisons.reissueLink(study.id, j.id);
+                          onJudgeAdded(j.name, issued.link);
+                        })
+                      }
+                    >
+                      New link
+                    </button>
+                  ) : null}
+                  {!j.revokedAt && study.status !== 'closed' ? (
+                    <button
                       className="btn danger"
                       disabled={busy}
                       onClick={() => {
@@ -467,7 +497,7 @@ export function StudyDetailView({
           </tbody>
         </table>
       ) : null}
-      {study.status !== 'closed' ? (
+      {study.status === 'draft' ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 8 }}>
           <div>
             <label style={label} htmlFor="cmp-judge-name">Judge's name (the office's record only)</label>
@@ -523,7 +553,7 @@ export const ComparisonScreen: React.FC = () => {
   const [studies, setStudies] = useState<StudySummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<StudyDetail | null>(null);
-  const [results, setResults] = useState<StudyResults | null>(null);
+  const [results, setResults] = useState<OfficeResults | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [link, setLink] = useState<{ name: string; href: string; localOnly: boolean } | null>(null);
 
@@ -627,7 +657,7 @@ export const ComparisonScreen: React.FC = () => {
                   Refresh
                 </button>
               </div>
-              <ComparisonResultsView results={results} />
+              {results.withheld ? <WithheldResultsView results={results} /> : <ComparisonResultsView results={results} />}
             </div>
           ) : null}
         </div>

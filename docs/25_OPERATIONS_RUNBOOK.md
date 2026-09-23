@@ -112,29 +112,41 @@ writes a SHA-256 sidecar, restores the dump into a scratch database on the same 
 loads and holds the live task count, drops the scratch database, keeps the 14 newest dumps, copies an
 encrypted one to the archive destination, and sends a Telegram alert to the operator chat only on
 failure. `--list` shows what exists; `backup.log` in `infra/backup/snapshots/` records every run.
+Every way the script can stop is an alert, including a stop nobody planned for. A dump that fails its
+own checks is renamed `hawa_<stamp>.dump.failed` (the newest two are kept to look at), so the watchdog
+does not take it for a fresh backup; one whose archive copy failed stays, verified, and the alert says
+so. The encrypted copy is a temporary file and never outlives the run.
 
 The deploy script writes `predeploy_<stamp>.dump` (same format, with its table of contents checked)
-before every migration. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
+before every migration. It is written as `.partial` and named, with its `.sha256`, only once checked;
+a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
 either: `pg_restore -U hawa_owner -d hawa --clean --if-exists <file>` inside the postgres container,
 after stopping core and worker. Pre-deploy dumps from before 2026-09-23 are plain SQL compressed as
 `.sql.zst`: `zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -U hawa_owner -d hawa`.
 
-`infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten pre-deploy dumps; one dump a
+`infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten checked pre-deploy dumps (with a
+`.sha256`); one dump a
 day for 30 days in the old deploy archive `~/.hawa/snapshots_archive` (nothing writes there any more);
 Docker's build cache held to 8 GB and images nothing uses. The deploy runs it after health passes, the
 nightly backup runs its dump part, and the watchdog runs it when the disk passes 88%. `--report` only
-prints what Hawa holds.
+prints what Hawa holds. It deletes first and compresses last, and a file that will not compress is
+kept as it is with a warning, so one failure never stops the rest.
 
 ## Watchdog and self-healing
 
 `infra/ops/watchdog.sh` runs at login and every five minutes (launch agent `design.hawa.watchdog`).
 Docker Desktop is not configured to start at login, so the watchdog starts it, brings the stack up
-with `compose up -d --no-build` when fewer than six containers run, then checks core `/v1/health` and
-the worker health. Any problem is sent to the operator chat at most once per 30 minutes; recovery is
-announced once, saying what it was. A disk over 90% full after Hawa's own cleanup is reported with how
-much of it is Hawa's, every 6 hours (hourly past 97%), since the rest is other files on the Mac. `--status` prints the assessment without acting; `--announce` proves the alert path.
+when fewer than seven containers run (`compose start` first, then `up -d --no-build --no-recreate`),
+then checks core `/v1/health` and the worker health. Any problem is sent to the operator chat at most
+once per 30 minutes. Recovery is announced once, saying what it was, and only for a problem you were
+told about; when the other problems clear but the disk is still full, that is said at once. A disk
+over 90% full after Hawa's own cleanup is reported with how much of it is Hawa's, every 6 hours
+(hourly past 97%), since the rest is other files on the Mac; it counts as full until it drops below
+88%, so a disk hovering at the line does not flap. `--status` prints the assessment without acting; `--announce` proves the alert path.
 Agents run only while this user is logged in; after a reboot, log in and the stack returns on its own.
-Install or refresh both agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
+Install or refresh the agents with `bash infra/ops/install_launch_agents.sh` (`--uninstall` removes).
+A refresh keeps every `HAWA_*` setting already in an installed agent (the nightly job's archive
+destination, passphrase file and retention), so it never turns the off-machine copy unencrypted.
 
 ## Sorani Kurdish drafts
 

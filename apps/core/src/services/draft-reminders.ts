@@ -85,6 +85,14 @@ export async function questionsToRemind(db: Kysely<Database>, tenantId: string, 
         ) n ON true
         WHERE t.tenant_id = ${tenantId}::uuid AND t.state = 'paused'
           AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
+          -- Not once a newer change to the same design exists, or the question was answered.
+          AND NOT EXISTS (SELECT 1 FROM hawa.tasks n JOIN hawa.outbox_commands no ON no.aggregate_id = n.id AND no.command_type = 'task.created'
+            WHERE n.tenant_id = t.tenant_id AND n.id <> t.id AND n.created_at > t.created_at
+              AND no.payload->'studioOptions'->>'parentTaskId' = o.payload->'studioOptions'->>'parentTaskId'
+              AND COALESCE(no.payload->'studioOptions'->>'reformat', '') = ''
+              AND n.state NOT IN ('cancelled', 'rejected', 'failed_operator'))
+          AND NOT EXISTS (SELECT 1 FROM hawa.outbox_commands a WHERE a.tenant_id = t.tenant_id AND a.command_type = 'task.created'
+            AND a.payload->'studioOptions'->>'answers' = t.id::text)
           AND o.payload->>'sourcePlatform' = 'telegram' AND o.payload->>'sourceChannelId' ~ '^-?[0-9]+$'
           AND n.created_at > ${from}::timestamptz
           AND n.created_at < now() - interval '24 hours' AND n.created_at > now() - interval '14 days'

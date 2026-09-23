@@ -4,6 +4,7 @@ import { NEUTRAL_STYLE_SPEC, PNG, type StudioLayoutV2 } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { alignFramedHeads } from '../src/services/design-studio/photo-cutouts.js';
 import { carryOver, editMeans, treatmentsOnPalette } from '../src/services/design-studio/stages/edit.stage.js';
+import { softPhotoNotes } from '../src/services/design-studio/studio-status-note.js';
 
 /**
  * The Core half of the designer's photo treatments (plan 4.1 and 4.2): heads matched across framed
@@ -39,8 +40,10 @@ describe('framed portraits side by side', () => {
   it('are never cropped past what the photo holds sharply, nor past the zoom limit', () => {
     const small = [{ width: 1600, height: 2000 }, { width: 500, height: 625 }];
     const out = alignFramedHeads(row(), [{ x: 0.5, y: 0.3, faceShare: 0.4 }, { x: 0.5, y: 0.3, faceShare: 0.1 }], small);
-    // A 500-pixel-wide photo in a 440-pixel box holds about 1.8 times the cover crop before it looks soft.
-    expect(out.photos?.[1].zoom).toBe(1.82);
+    // A 500-pixel-wide photo in a 440-pixel box holds about 1.8 times the cover crop before it looks
+    // soft; the match stops just under that, so it never earns the "may look soft" warning.
+    expect(out.photos?.[1].zoom).toBe(1.78);
+    expect(softPhotoNotes(out.photos as never[], small)).toEqual([]);
   });
 
   it('are left alone when heads already match, when they are not in one row, or without faces', () => {

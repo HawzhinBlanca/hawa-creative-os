@@ -25,7 +25,7 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, settlePhotos, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
@@ -416,6 +416,8 @@ export class DesignStudioService {
             revisionDirective: (sourceOptions.revisionDirective as string).trim().slice(0, 2000),
             // The requester has answered a question about this change: it is not asked again.
             ...(sourceOptions.clarified === true ? { clarified: true } : {}),
+            // The task whose question this change answers: its photos (an album sent with the change) join.
+            ...(typeof sourceOptions.answers === 'string' && /^[0-9a-f-]{36}$/i.test(sourceOptions.answers) ? { answers: sourceOptions.answers } : {}),
             // The same design in another size (the task's variant), not a change.
             ...(typeof sourceOptions.reformat === 'string' && sourceOptions.reformat.trim() ? { reformat: sourceOptions.reformat.trim().slice(0, 40) } : {}),
           }
@@ -560,13 +562,17 @@ export class DesignStudioService {
    */
   private async imagesForRun(s: Scope, run: { task_id: string; request: unknown }): Promise<string[]> {
     const request = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as
-      | { pipelineV3?: boolean; directed?: { parentTaskId?: string } }
+      | { pipelineV3?: boolean; directed?: { parentTaskId?: string; answers?: string } }
       | undefined;
     const own = await this.requestImages(s, run.task_id);
     const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
     if (!parentTaskId) return own;
     const parent = await this.revisionChainImages(s, parentTaskId).catch(() => [] as string[]);
-    return [...parent, ...own.filter((url) => !parent.includes(url))];
+    // A change that answers a question carries the photos the question's task was sent with (an
+    // album sent with the change was filed under that task, which is not in the chain).
+    const answered = request?.directed?.answers ? await this.requestImages(s, request.directed.answers).catch(() => [] as string[]) : [];
+    const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
+    return [...before, ...own.filter((url) => !before.includes(url))];
   }
 
   /**
@@ -1137,7 +1143,11 @@ export class DesignStudioService {
       // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
       let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
       if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
-      const images = await this.imagesForRun(s, run).catch(() => [] as string[]);
+      // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
+      // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
+      const images = await Promise.all(
+        (await this.imagesForRun(s, run).catch(() => [] as string[])).map((url) => uprightPhotoDataUrl(url).catch(() => url))
+      );
       const roles = briefSoFar?.imageRoles;
       let classified = false;
       if (
@@ -1386,7 +1396,6 @@ export class DesignStudioService {
               const f = focus[p.photoIndex];
               if (f && p.treatment !== 'cutout') p.focus = { x: f.x, y: f.y };
             }
-            alignFramedHeads(cand.currentLayout, focus, sizes);
           }
           // Every photo with a cut-out is shown cut out, set as a designer sets people: standing on
           // the bottom edge, heads matched, clear of the text. Before the art, which works around them.
@@ -1402,6 +1411,9 @@ export class DesignStudioService {
               cand.currentLayout = settlePhotos(arrangeCutouts(cand.currentLayout, ctx.photoCutouts, ctx.cutoutOutcomes));
             }
           }
+          // Heads matched across the framed photos only, once the people who are cut out are known: a
+          // photo matched to a face that then became a cut-out was cropped to the limit for nothing.
+          for (const cand of candidateStates) alignFramedHeads(cand.currentLayout, focus, sizes);
           const artCandidates = await runArtStage(ctx, candidateStates);
 
           for (const row of candidateRows) {

@@ -1,4 +1,4 @@
-import { persistChatIntake, findRequestAwaitingReference, findAlbumRequest, splitBilingualRequest } from './services/chat-intake.js';
+import { persistChatIntake, findRequestAwaitingReference, findAlbumRequest, splitBilingualRequest, runsPipelineV3 } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { peelTrailingRemarks } from './services/request-remarks.js';
@@ -3482,7 +3482,7 @@ export function createApp(options?: CreateAppOptions) {
   async function askHistory(taskId: string): Promise<{ asks: AskRecord[]; rounds: number }> {
     if (!db || !isValidUuid(taskId)) return { asks: [], rounds: 0 };
     const rows = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-      (await sql<{ asks: unknown; depth: number }>`WITH RECURSIVE chain(id, depth) AS (
+      (await sql<{ asks: unknown; depth: number; reformat: boolean }>`WITH RECURSIVE chain(id, depth) AS (
           SELECT ${taskId}::uuid, 0
           UNION ALL
           SELECT (o.payload->'studioOptions'->>'parentTaskId')::uuid, chain.depth + 1
@@ -3490,7 +3490,10 @@ export function createApp(options?: CreateAppOptions) {
           WHERE o.tenant_id = ${DEFAULT_TENANT_ID}::uuid
             AND o.payload->'studioOptions'->>'parentTaskId' ~ '^[0-9a-f-]{36}$' AND chain.depth < 12
         )
-        SELECT r.stages->'directed'->'asks' AS asks, chain.depth FROM chain
+        SELECT r.stages->'directed'->'asks' AS asks, chain.depth,
+          EXISTS (SELECT 1 FROM hawa.outbox_commands f WHERE f.aggregate_id = chain.id AND f.command_type = 'task.created'
+            AND COALESCE(f.payload->'studioOptions'->>'reformat', '') <> '') AS reformat
+        FROM chain
         LEFT JOIN hawa.design_studio_runs r ON r.task_id = chain.id AND r.tenant_id = ${DEFAULT_TENANT_ID}::uuid
         ORDER BY chain.depth DESC, r.created_at`.execute(trx)).rows);
     const asks: AskRecord[] = [];
@@ -3499,7 +3502,10 @@ export function createApp(options?: CreateAppOptions) {
         if (typeof a?.ask === 'string' && a.ask.trim()) asks.push({ ask: a.ask.trim(), status: String(a.status || ''), ...(typeof a.reason === 'string' && a.reason ? { reason: a.reason } : {}) });
       }
     }
-    return { asks, rounds: rows.reduce((m, r) => Math.max(m, Number(r.depth) || 0), 0) };
+    // A round is each change in the chain below the first design; another size of a design is not one.
+    const deepest = rows.reduce((m, r) => Math.max(m, Number(r.depth) || 0), 0);
+    const changes = new Set(rows.filter((r) => Number(r.depth) < deepest && !r.reformat).map((r) => Number(r.depth)));
+    return { asks, rounds: changes.size };
   }
 
   /**
@@ -3554,7 +3560,7 @@ export function createApp(options?: CreateAppOptions) {
         return c.json({ ok: true, requesterAction: rq.action, taskId: rq.taskId, already: true }, 200);
       }
       const taken = await answerQuestion({ chat, pending, answer: option, updateId, rawJson: { callback: cb.id, action: rq.action, taskId: rq.taskId } });
-      await answer(taken.ok ? '👍 Got it' : 'Saved; the office will follow up');
+      await answer(taken.ok ? '👍 Got it' : 'Your answer was not saved. Please tap it again in a minute.', !taken.ok);
       return c.json({ ok: taken.ok, requesterAction: rq.action, taskId: rq.taskId, revisionTaskId: taken.revisionTaskId }, 200);
     }
     const record = { taskId: rq.taskId, actorId: String(cb?.from?.id || '') };
@@ -3586,7 +3592,8 @@ export function createApp(options?: CreateAppOptions) {
         return c.json({ ok: true, requesterAction: 'ok', taskId: rq.taskId, already: true }, 200);
       }
       const variant = (facts.payload?.variant || {}) as { width?: number; height?: number };
-      await send(composeRequesterApproved(rq.taskId, { width: variant.width ?? 1080, height: variant.height ?? 1350 }));
+      // Other sizes are made by the v3 edit; a chat on the older pipeline is not offered them.
+      await send(composeRequesterApproved(rq.taskId, { width: variant.width ?? 1080, height: variant.height ?? 1350 }, runsPipelineV3(chat)));
       await enqueueOfficeAlert(rq.taskId, `requester-approved:${rq.taskId}`, composeRequesterApprovedAlert({ taskId: rq.taskId, title: facts.title, canvaUrl: facts.canva || undefined }), chat);
       await markTelegramUpdateHandled(chat, updateId, 'telegram_requester_ok', record);
       broadcast('task:requester_approved', { taskId: rq.taskId, source: 'telegram' });
@@ -3642,7 +3649,7 @@ export function createApp(options?: CreateAppOptions) {
     type Outbound = Parameters<NonNullable<typeof telegramBridge>['dispatchOutboundMessage']>[1];
     const send = (message: { text: string; parse_mode: 'HTML' }) => telegramBridge?.dispatchOutboundMessage(input.chat, message as Outbound).catch(() => undefined);
     // The design's own options, less what made it a change: this is a format of it, not a round.
-    const { parentTaskId: _p, revisionDirective: _d, clarified: _c, reformat: _r, ...kept } = (payload.studioOptions || {}) as Record<string, unknown>;
+    const { parentTaskId: _p, revisionDirective: _d, clarified: _c, reformat: _r, answers: _a, revisionRound: _n, ...kept } = (payload.studioOptions || {}) as Record<string, unknown>;
     try {
       const persisted = await persistChatIntake(db!, {
         platform: 'telegram',
@@ -3684,6 +3691,34 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
+  /**
+   * Where a reply to a question message goes once the question is no longer waiting (answered, out of
+   * date, or its task was closed): the newest live version of the design the question was about (the
+   * answer's revision, or a newer change), else that design itself. A question's task has no design
+   * of its own, so a reply read as a change to it started a whole new paid design (2026-09-24 review).
+   * Null for a task that never asked a question.
+   */
+  async function questionFollowUp(taskId: string): Promise<string | null> {
+    if (!db || !isValidUuid(taskId)) return null;
+    const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ parent: string | null; newest: string | null }>`SELECT o.payload->'studioOptions'->>'parentTaskId' AS parent,
+          (SELECT n.id::text FROM hawa.tasks n JOIN hawa.outbox_commands no ON no.aggregate_id = n.id AND no.command_type = 'task.created'
+            WHERE n.tenant_id = t.tenant_id AND n.id <> t.id
+              AND no.payload->'studioOptions'->>'parentTaskId' = o.payload->'studioOptions'->>'parentTaskId'
+              AND COALESCE(no.payload->'studioOptions'->>'reformat', '') = ''
+              AND n.state NOT IN ('cancelled', 'rejected', 'failed_operator', 'paused')
+            ORDER BY n.created_at DESC LIMIT 1) AS newest
+        FROM hawa.tasks t
+        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.tenant_id = t.tenant_id AND o.command_type = 'task.created'
+        JOIN LATERAL (SELECT stages FROM hawa.design_studio_runs x WHERE x.tenant_id = t.tenant_id AND x.task_id = t.id ORDER BY x.created_at DESC LIMIT 1) r ON true
+        WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND t.id = ${taskId}::uuid
+          AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
+        ORDER BY o.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
+    if (!row) return null;
+    const next = row.newest || row.parent;
+    return next && isValidUuid(next) ? next : null;
+  }
+
   interface PendingQuestion {
     taskId: string;
     title: string | null;
@@ -3701,13 +3736,22 @@ export function createApp(options?: CreateAppOptions) {
   async function pendingQuestion(taskId: string, chat: string): Promise<PendingQuestion | null> {
     if (!db || !isValidUuid(taskId) || !chat) return null;
     const row = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-      (await sql<{ title: string | null; state: string; payload: unknown; stages: unknown }>`SELECT t.title, t.state::text AS state, o.payload, r.stages
+      (await sql<{ title: string | null; state: string; payload: unknown; stages: unknown; answered: boolean; superseded: boolean }>`SELECT t.title, t.state::text AS state, o.payload, r.stages,
+          -- Already answered, even if closing this task did not go through.
+          EXISTS (SELECT 1 FROM hawa.outbox_commands a WHERE a.tenant_id = t.tenant_id AND a.command_type = 'task.created'
+            AND a.payload->'studioOptions'->>'answers' = t.id::text) AS answered,
+          -- A newer change to the same design exists: this question is out of date.
+          EXISTS (SELECT 1 FROM hawa.tasks n JOIN hawa.outbox_commands no ON no.aggregate_id = n.id AND no.command_type = 'task.created'
+            WHERE n.tenant_id = t.tenant_id AND n.id <> t.id AND n.created_at > t.created_at
+              AND no.payload->'studioOptions'->>'parentTaskId' = o.payload->'studioOptions'->>'parentTaskId'
+              AND COALESCE(no.payload->'studioOptions'->>'reformat', '') = ''
+              AND n.state NOT IN ('cancelled', 'rejected', 'failed_operator')) AS superseded
         FROM hawa.tasks t
         JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.tenant_id = t.tenant_id AND o.command_type = 'task.created'
         JOIN LATERAL (SELECT stages FROM hawa.design_studio_runs x WHERE x.tenant_id = t.tenant_id AND x.task_id = t.id ORDER BY x.created_at DESC LIMIT 1) r ON true
         WHERE t.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND t.id = ${taskId}::uuid
         ORDER BY o.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
-    if (!row || row.state !== 'paused') return null;
+    if (!row || row.state !== 'paused' || row.answered || row.superseded) return null;
     const payload = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload || {}) as TaskCreatedPayload;
     const stages = (typeof row.stages === 'string' ? JSON.parse(row.stages) : row.stages || {}) as { directed?: { refused?: unknown; clarify?: { question?: unknown; options?: unknown } } };
     const clarify = stages?.directed?.refused === 'NEEDS_CLARIFICATION' ? stages.directed.clarify : undefined;
@@ -3730,11 +3774,13 @@ export function createApp(options?: CreateAppOptions) {
    * it carries the same copy, photos, reference and round), and is never asked about again. The
    * waiting task is closed. The answer is a tapped option or their own words in reply.
    */
-  async function answerQuestion(input: { chat: string; pending: PendingQuestion; answer: string; updateId: string; rawJson: unknown }): Promise<{ ok: boolean; revisionTaskId?: string }> {
+  async function answerQuestion(input: { chat: string; pending: PendingQuestion; answer: string; updateId: string; rawJson: unknown; referenceImageBase64?: string }): Promise<{ ok: boolean; revisionTaskId?: string }> {
     const { pending, chat } = input;
     type Outbound = Parameters<NonNullable<typeof telegramBridge>['dispatchOutboundMessage']>[1];
     const send = (message: { text: string; parse_mode: 'HTML' }) => telegramBridge?.dispatchOutboundMessage(chat, message as Outbound).catch(() => undefined);
-    const answer = input.answer.replace(/\s+/g, ' ').trim().slice(0, 500);
+    // A picture sent as the answer, with no words, is the answer: "the attached picture".
+    const pictureOnly = Boolean(input.referenceImageBase64) && /^Apply the attached visual reference image/.test(input.answer.trim());
+    const answer = pictureOnly ? 'the attached picture' : input.answer.replace(/\s+/g, ' ').trim().slice(0, 500);
     const payload = pending.payload;
     const options = payload.studioOptions as Record<string, unknown>;
     const directive = `${String(options.revisionDirective).trim()}\n\nAsked "${pending.question}", the client answered: ${answer}`;
@@ -3756,7 +3802,13 @@ export function createApp(options?: CreateAppOptions) {
         autoGenerate: true,
         ...(payload.variant ? { variant: payload.variant } : {}),
         ...(typeof payload.designStudio === 'boolean' ? { designStudio: payload.designStudio } : {}),
-        studioOptions: { ...options, revisionDirective: directive, clarified: true },
+        studioOptions: {
+          ...options,
+          revisionDirective: directive,
+          clarified: true,
+          answers: pending.taskId,
+          ...(input.referenceImageBase64 ? { referenceImageBase64: input.referenceImageBase64 } : {}),
+        },
       });
       if (persisted.autoGenerateDeclined) {
         await send({
@@ -3774,8 +3826,9 @@ export function createApp(options?: CreateAppOptions) {
       broadcast('task:created', persisted.task);
       return { ok: true, revisionTaskId: persisted.task.id };
     } catch (err) {
+      // Nothing is sent from here: a tapped answer is told in its pop-up, and a typed one is retried
+      // with the update (a message here would repeat on every retry).
       console.error(`[Core] Task ${pending.taskId}: the answer to its question could not be saved:`, err);
-      await send({ text: `⚠️ Your answer could not be saved just now. Please tap it again in a minute.`, parse_mode: 'HTML' });
       return { ok: false };
     }
   }
@@ -4352,7 +4405,7 @@ export function createApp(options?: CreateAppOptions) {
         brief_draft: 'being designed', brief_review: 'being designed', context_ready: 'being designed', design_planning: 'being designed',
         asset_production: 'being designed', studio_composition: 'being designed', qa: 'being checked', auto_repair: 'being checked',
         human_review: 'draft ready, awaiting approval in Hawa Desk', revision_requested: 'replaced by a newer version',
-        approved: 'approved, awaiting delivery', publishing: 'being delivered', complete: 'delivered', paused: 'paused by the office',
+        approved: 'approved, awaiting delivery', publishing: 'being delivered', complete: 'delivered', paused: 'waiting for your answer to a question',
         failed_retryable: 'delayed, being retried', failed_operator: 'needs the office (the automatic draft failed)',
         rejected: 'rejected', cancelled: 'cancelled',
       };
@@ -4549,11 +4602,39 @@ export function createApp(options?: CreateAppOptions) {
     // A reply to a question asked before a change was made is its answer, in the requester's own
     // words, whatever it says: read as a new change request, it would revise a task that has no design.
     if (replyTarget && db && sourceChannelId && sourceChannelId !== 'tg_default' && rawText.trim()) {
-      const pending = await pendingQuestion(String(replyTarget.id), sourceChannelId).catch(() => null);
+      let pending: PendingQuestion | null;
+      let followUp: string | null = null;
+      try {
+        pending = await pendingQuestion(String(replyTarget.id), sourceChannelId);
+        if (!pending) followUp = await questionFollowUp(String(replyTarget.id));
+      } catch (err) {
+        // Read as a change instead, the reply would start a new design; retried, it reaches the answer.
+        console.warn('[Core] Could not tell whether a reply answers a question:', err);
+        return problem(c, 503, 'Database unavailable', 'Whether this reply answers a question could not be checked; retry');
+      }
       if (pending) {
-        const taken = await answerQuestion({ chat: sourceChannelId, pending, answer: rawText, updateId: sourceEventId, rawJson: json });
+        const taken = await answerQuestion({ chat: sourceChannelId, pending, answer: rawText, updateId: sourceEventId, rawJson: json, referenceImageBase64 });
         if (!taken.ok) return problem(c, 503, 'Answer not saved', 'The answer could not be saved; the message will be retried');
         return c.json({ ok: true, status: 'QUESTION_ANSWERED', taskId: pending.taskId, revisionTaskId: taken.revisionTaskId }, 200);
+      }
+      if (followUp && followUp !== String(replyTarget.id) && taskRepo) {
+        // A reply to a question that no longer waits is about the design it asked about, as it now is.
+        const next = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) => taskRepo.findById(followUp!, DEFAULT_TENANT_ID, trx)).catch(() => null);
+        if (next) {
+          replyTarget = {
+            id: next.id,
+            tenantId: next.tenant_id,
+            clientId: next.client_id,
+            status: next.state,
+            title: next.title,
+            sourcePlatform: 'telegram',
+            sourceChannelId,
+            rawText: next.description,
+            createdAt: next.created_at,
+            updatedAt: next.updated_at,
+          };
+          tasks.set(next.id, replyTarget);
+        }
       }
     }
 
@@ -5688,7 +5769,10 @@ export function createApp(options?: CreateAppOptions) {
     if (telegramAllowedUsers.length > 0 && !telegramAllowedUsers.includes(userIdStr)) {
       return problem(c, 403, 'Forbidden', `Telegram user ${userIdStr} is not an authorized office operator`);
     }
-    const sessionToken = `tg_miniapp_sess_${Buffer.from(JSON.stringify(verification.value.user)).toString('base64url')}`;
+    // A random token. It used to be the Telegram user record in base64, so anyone who knew an office
+    // member's Telegram id, name, username and language could compute their operator session for the
+    // 24 hours after they opened the Mini App.
+    const sessionToken = `tg_miniapp_sess_${crypto.randomBytes(32).toString('base64url')}`;
     const displayName = [verification.value.user.first_name, verification.value.user.last_name].filter(Boolean).join(' ') || `Telegram User ${userIdStr}`;
     saveSession(sessionToken, {
       authenticated: true,

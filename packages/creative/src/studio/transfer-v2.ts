@@ -519,7 +519,12 @@ export async function encodeStudioTransferV2(
     const photo = options.photos?.[p.photoIndex];
     if (!photo) throw new Error(`Photo ${p.photoIndex} is placed in the layout but no bytes were provided`);
     const pixels = imagePixelSize(photo.bytes);
-    if (framedPhotoTreated(p)) {
+    // pptxgenjs draws any rounding as an ellipse: only a square box with a full radius is a true
+    // circle there. Other rounded corners are baked like a treatment, so the deck shows the rounded
+    // rectangle the preview drew (an 800x500 photo with radius 24 was an oval in Canva, 2026-09-24).
+    const trueCircle = p.width === p.height && (p.radius ?? 0) >= p.width / 2;
+    const roundedCorners = (p.radius ?? 0) > 0 && !trueCircle;
+    if (framedPhotoTreated(p) || roundedCorners) {
       const framed = framedPhotoFragment(p, `data:${photo.mimeType};base64,${photo.bytes.toString('base64')}`, pixels);
       placeBaked(framed, await bakePhotoFragment(framed, options.rsvgConvertPath), `Photo ${p.photoIndex}`);
       continue;
@@ -533,10 +538,12 @@ export async function encodeStudioTransferV2(
       data: `${photo.mimeType};base64,${photo.bytes.toString('base64')}`,
       x: p.x / 96,
       y: p.y / 96,
+      // Sizes in EMU, as the focused crop passes them: in inches, a picture 9,600 px or more on a
+      // side was read as EMU and drawn with a crop of zero height.
       ...(focused ?? {
-        w: (pixels ? pixels.width : p.width) / 96,
-        h: (pixels ? pixels.height : p.height) / 96,
-        ...(pixels ? { sizing: { type: 'cover', w: p.width / 96, h: p.height / 96 } } : {}),
+        w: pptxEmu(pixels ? pixels.width : p.width),
+        h: pptxEmu(pixels ? pixels.height : p.height),
+        ...(pixels ? { sizing: { type: 'cover', w: pptxEmu(p.width), h: pptxEmu(p.height) } } : {}),
       }),
       ...(rounding > 0 ? { rounding: true } : {}),
     });

@@ -253,7 +253,13 @@ class HawaApiClient {
       ),
     lock: (id: string) => this.request<import('../services/comparison.js').StudyDetail>(`/comparisons/${encodeURIComponent(id)}/lock`, { method: 'POST' }),
     close: (id: string) => this.request<import('../services/comparison.js').StudyDetail>(`/comparisons/${encodeURIComponent(id)}/close`, { method: 'POST' }),
-    results: (id: string) => this.request<import('../services/comparison.js').StudyResults>(`/comparisons/${encodeURIComponent(id)}/results`),
+    results: (id: string) => this.request<import('../services/comparison.js').OfficeResults>(`/comparisons/${encodeURIComponent(id)}/results`),
+    /** A new link for a judge who lost theirs, on the same judge record; shown once. */
+    reissueLink: (id: string, judgeId: string) =>
+      this.request<{ judgeId: string; token: string; link: { path: string; url: string | null } }>(
+        `/comparisons/${encodeURIComponent(id)}/judges/${encodeURIComponent(judgeId)}/link`,
+        { method: 'POST' }
+      ),
     /** One arm's stored PNG, fetched with the session header rather than a token in the address. */
     pairImage: async (id: string, pairId: string, arm: 'hawa' | 'designer'): Promise<Blob> => {
       const response = await fetch(

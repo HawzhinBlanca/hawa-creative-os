@@ -39,6 +39,10 @@ describe('the size buttons', () => {
     const approved = composeRequesterApproved(taskId, { width: 1080, height: 1350 });
     expect(approved.text).toContain('Need it in another size too?');
     expect(JSON.stringify(approved.reply_markup)).toContain(`rq:ssq:${taskId}`);
+    // A chat on the older pipeline cannot make another size, so it is not offered one.
+    const older = composeRequesterApproved(taskId, { width: 1080, height: 1350 }, false);
+    expect(older.reply_markup).toBeUndefined();
+    expect(older.text).not.toContain('another size');
   });
 });
 
@@ -153,6 +157,8 @@ describe.skipIf(!url)('asking for another size (webhook, PostgreSQL)', () => {
     };
     const app = createApp({ db, telegramBridge: bridge as any } as any);
     const chat = 50000000 + Math.floor(Math.random() * 9000000);
+    // Other sizes are made by the v3 edit: this chat is one of its pilot chats.
+    process.env.DESIGN_PIPELINE_V3_CHATS = String(chat);
     const call = async (body: unknown) => {
       const res = await app.request('/api/webhooks/telegram', {
         method: 'POST',

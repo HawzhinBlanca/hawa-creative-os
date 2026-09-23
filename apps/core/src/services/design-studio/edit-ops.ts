@@ -109,7 +109,18 @@ function photosOf(layout: StudioLayoutV2, p: OpParams): PhotoElement[] {
  * Makes one ask on the layout, in place, when a rule covers it with the parameters given. Returns
  * whether it was made, or why not (the ask then goes to the edit model).
  */
-export function applyOp(layout: StudioLayoutV2, op: EditOp | undefined, p: OpParams, ctx: OpContext): Applied {
+export function applyOp(
+  layout: StudioLayoutV2,
+  op: EditOp | undefined,
+  p: OpParams,
+  ctx: OpContext,
+  /**
+   * The design the steps are measured from (the one the client received). A size or zoom step is one
+   * step from it, however often the rule is made again: made again on the edit model's answer, a step
+   * measured from the answer compounded (a title ×1.2 twice, 2026-09-24 review).
+   */
+  base: StudioLayoutV2 = layout
+): Applied {
   switch (op) {
     case 'text_colour': {
       const t = textOf(layout, p);
@@ -132,9 +143,10 @@ export function applyOp(layout: StudioLayoutV2, op: EditOp | undefined, p: OpPar
       const t = textOf(layout, p);
       if (!t || !p.direction) return fail('which text, or bigger or smaller, is not clear');
       const factor = p.direction === 'bigger' ? STEP : 1 / STEP;
-      t.fontSize = Math.max(8, Math.round(t.fontSize * factor));
+      const from = textOf(base, p) ?? t;
+      t.fontSize = Math.max(8, Math.round(from.fontSize * factor));
       // The box grows or shrinks with its type, downward from its top, so the words still fit.
-      t.height = Math.max(1, Math.round(t.height * factor));
+      t.height = Math.max(1, Math.round(from.height * factor));
       return OK;
     }
     case 'font_weight_or_style': {
@@ -155,17 +167,29 @@ export function applyOp(layout: StudioLayoutV2, op: EditOp | undefined, p: OpPar
     case 'logo_move_or_scale': {
       const logo = layout.logo;
       if (!logo || (!p.corner && !p.direction)) return fail('where or how big is not clear');
+      const m = layout.grid?.margin ?? Math.round(Math.min(layout.width, layout.height) * 0.06);
       if (p.direction) {
+        const from = base.logo ?? logo;
         const factor = p.direction === 'bigger' ? STEP : 1 / STEP;
-        const cx = logo.x + logo.width / 2;
-        const cy = logo.y + logo.height / 2;
-        logo.width = Math.max(1, Math.round(logo.width * factor));
-        logo.height = Math.max(1, Math.round(logo.height * factor));
-        logo.x = Math.max(0, Math.round(cx - logo.width / 2));
-        logo.y = Math.max(0, Math.round(cy - logo.height / 2));
+        const width = Math.max(1, Math.round(from.width * factor));
+        const height = Math.max(1, Math.round(from.height * factor));
+        if (width > layout.width - 2 * m || height > layout.height - 2 * m) return fail('the logo would not fit inside the margins');
+        // A logo against a margin stays against it as it grows or shrinks, as a designer resizes it
+        // from its corner; one in open space keeps its centre. Either way it stays inside the margins
+        // (scaled from its centre, a corner logo crossed the margin and the edit was refused).
+        const near = 2;
+        const atLeft = from.x <= m + near;
+        const atRight = from.x + from.width >= layout.width - m - near;
+        const atTop = from.y <= m + near;
+        const atBottom = from.y + from.height >= layout.height - m - near;
+        const x = atRight ? from.x + from.width - width : atLeft ? from.x : from.x + (from.width - width) / 2;
+        const y = atBottom ? from.y + from.height - height : atTop ? from.y : from.y + (from.height - height) / 2;
+        logo.width = width;
+        logo.height = height;
+        logo.x = Math.round(Math.min(layout.width - m - width, Math.max(m, x)));
+        logo.y = Math.round(Math.min(layout.height - m - height, Math.max(m, y)));
       }
       if (p.corner) {
-        const m = layout.grid?.margin ?? Math.round(Math.min(layout.width, layout.height) * 0.06);
         const right = layout.width - m - logo.width;
         const bottom = layout.height - m - logo.height;
         const centre = Math.round((layout.width - logo.width) / 2);
@@ -256,8 +280,14 @@ export function applyOp(layout: StudioLayoutV2, op: EditOp | undefined, p: OpPar
     case 'photo_crop': {
       const photos = photosOf(layout, p).filter((ph) => ph.treatment !== 'cutout');
       if (!photos.length || !p.zoom) return fail('which photo, or closer or wider, is not clear');
+      const zoomOf = (ph: PhotoElement) => {
+        const from = base.photos?.find((q) => q.photoIndex === ph.photoIndex);
+        return typeof from?.zoom === 'number' ? from.zoom : 1;
+      };
+      // Wider than the whole photo in its box is not a crop: the box has to change, which is the edit's.
+      if (p.zoom === 'out' && photos.every((ph) => zoomOf(ph) <= 1)) return fail('the photo already shows all of itself in its box; showing more needs a bigger box');
       for (const ph of photos) {
-        const now = typeof ph.zoom === 'number' ? ph.zoom : 1;
+        const now = zoomOf(ph);
         const next = p.zoom === 'in' ? now * ZOOM_STEP : now / ZOOM_STEP;
         const zoom = Math.round(Math.min(3, Math.max(1, next)) * 100) / 100;
         if (zoom === 1) delete ph.zoom;
@@ -311,19 +341,22 @@ export function verifyOp(parent: StudioLayoutV2, final: StudioLayoutV2, op: Edit
     }
     case 'photo_filter':
       return photos.length > 0 && photos.every((ph) => (p.filter === 'none' ? !ph.filter : ph.filter?.kind === p.filter));
-    case 'photo_mask':
-      return photos.filter((ph) => ph.treatment !== 'cutout').every((ph) => (p.mask === 'none' ? !ph.mask : ph.mask === p.mask));
+    case 'photo_mask': {
+      const framed = photos.filter((ph) => ph.treatment !== 'cutout');
+      return framed.length > 0 && framed.every((ph) => (p.mask === 'none' ? !ph.mask : ph.mask === p.mask));
+    }
     case 'photo_fade':
       return photos.length > 0 && photos.every((ph) => (p.fadeEdge === 'none' ? !ph.fade : ph.fade?.edge === p.fadeEdge));
-    case 'photo_outline_or_glow':
-      return photos
-        .filter((ph) => ph.treatment === 'cutout')
-        .every((ph) => (typeof p.outline !== 'boolean' || Boolean(ph.outline) === p.outline) && (typeof p.glow !== 'boolean' || Boolean(ph.glow) === p.glow));
+    case 'photo_outline_or_glow': {
+      const people = photos.filter((ph) => ph.treatment === 'cutout');
+      return people.length > 0 && people.every((ph) => (typeof p.outline !== 'boolean' || Boolean(ph.outline) === p.outline) && (typeof p.glow !== 'boolean' || Boolean(ph.glow) === p.glow));
+    }
     case 'photo_cutout':
       return photos.length > 0 && photos.every((ph) => (p.cutout ? ph.treatment === 'cutout' : ph.treatment !== 'cutout'));
     case 'photo_crop': {
       const was = (i: number) => parent.photos?.find((q) => q.photoIndex === i)?.zoom ?? 1;
-      return photos.filter((ph) => ph.treatment !== 'cutout').every((ph) => (p.zoom === 'in' ? (ph.zoom ?? 1) > was(ph.photoIndex) : (ph.zoom ?? 1) < was(ph.photoIndex) || was(ph.photoIndex) === 1));
+      const framed = photos.filter((ph) => ph.treatment !== 'cutout');
+      return framed.length > 0 && framed.every((ph) => (p.zoom === 'in' ? (ph.zoom ?? 1) > was(ph.photoIndex) : (ph.zoom ?? 1) < was(ph.photoIndex)));
     }
     case 'background_colour':
       return Boolean(p.colour && final.background?.color?.toUpperCase() === nearestBrand(p.colour, ctx.palette));

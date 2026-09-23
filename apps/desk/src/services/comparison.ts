@@ -108,6 +108,25 @@ export interface StudyResults {
   };
 }
 
+/** Before the study is closed, Core sends progress only: the share, interval and verdict are withheld. */
+export interface WithheldResults {
+  studyId: string;
+  name: string;
+  status: StudyStatus;
+  withheld: true;
+  preregistration: Preregistration;
+  preregistrationSha256: string;
+  pairs: number;
+  judgements: number;
+  decisive: number;
+  none: number;
+  pairsBelowMinJudges: number;
+  perPair: Array<{ pairId: string; label: string; judgements: number }>;
+  verdict: string;
+}
+
+export type OfficeResults = (StudyResults & { withheld?: false }) | WithheldResults;
+
 export interface AddedJudge {
   judge: JudgeSummary;
   token: string;

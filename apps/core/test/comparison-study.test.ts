@@ -57,6 +57,15 @@ function withTextChunk(png: Buffer, key: string, value: string): Buffer {
   return Buffer.concat([png.subarray(0, 33), length, type, data, crc, png.subarray(33)]);
 }
 
+function withChunk(png: Buffer, typeName: string, data: Buffer): Buffer {
+  const type = Buffer.from(typeName, 'latin1');
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([type, data])));
+  return Buffer.concat([png.subarray(0, 33), length, type, data, crc, png.subarray(33)]);
+}
+
 function makePng(width: number, height: number, rgb: [number, number, number], software?: string): Buffer {
   const png = new PNG({ width, height });
   for (let i = 0; i < width * height; i++) {
@@ -161,6 +170,10 @@ describe('the comparison statistics', () => {
     expect(short.claim).toMatchObject({ sampleComplete: false, holds: false, pairsBelowMinJudges: 1 });
     expect(short.claim.verdict).toContain('193 of 194 decisive judgements; 1 pair has fewer than 4 judgements');
     expect(summariseStudy({ status: 'judging', preregistration: PREREGISTRATION, pairs, facts: [] }).claim.verdict).toBe('No decisive judgements yet.');
+    // Fewer pairs than pre-registered: the claim cannot hold, however the picks go.
+    const fewer = summariseStudy({ status: 'closed', preregistration: { ...PREREGISTRATION, plannedPairs: 51 }, pairs, facts });
+    expect(fewer.claim).toMatchObject({ sampleComplete: false, holds: false });
+    expect(fewer.claim.verdict).toContain('50 of 51 pre-registered pairs');
   });
 
   it('count a revoked judge in the primary outcome and show how many that is', () => {
@@ -223,6 +236,17 @@ describe('an uploaded design', () => {
     huge.writeUInt32BE(9000, 16);
     huge.writeUInt32BE(9000, 20);
     expect(refusal(huge).status).toBe(413);
+    // 16-bit: a small file can declare a huge decode (2026-09-24 review), and no design needs it.
+    const deep = Buffer.from(makePng(2, 2, [0, 0, 0]));
+    deep[24] = 16;
+    expect(refusal(deep)).toMatchObject({ status: 415 });
+    expect(refusal(deep).message).toContain('16-bit');
+    // A wide-gamut profile would show the designer's colours shifted; sRGB is accepted.
+    const p3 = withChunk(makePng(2, 2, [0, 0, 0]), 'iCCP', Buffer.concat([Buffer.from('Display P3\0\0', 'latin1'), Buffer.alloc(8)]));
+    expect(refusal(p3).message).toContain('colour profile other than sRGB');
+    const srgb = withChunk(makePng(2, 2, [9, 9, 9]), 'iCCP', Buffer.concat([Buffer.from('sRGB IEC61966-2.1\0\0', 'latin1'), Buffer.alloc(8)]));
+    expect(cleanPng(srgb, 'x').png.includes(Buffer.from('iCCP'))).toBe(false);
+    expect(refusal(withChunk(makePng(2, 2, [0, 0, 0]), 'cHRM', Buffer.alloc(32))).status).toBe(415);
   });
 
   it('needs a written pre-registration, with the protocol’s numbers by default', () => {
@@ -353,6 +377,10 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     expect(locked.json).toMatchObject({ status: 'judging' });
     expect(locked.json.lockedAt).toBeTruthy();
     expect((await call('POST', `/v1/comparisons/${id}/lock`)).status).toBe(409);
+    // Judges are fixed once judging starts, as pre-registered.
+    const lateJudge = await call('POST', `/v1/comparisons/${id}/judges`, { name: 'Late', kind: 'designer' });
+    expect(lateJudge.status).toBe(409);
+    expect(lateJudge.json.detail ?? lateJudge.json.message ?? JSON.stringify(lateJudge.json)).toContain('judges are fixed');
 
     // Locked: no new pairs, from the route or straight into the table.
     const late = await call('POST', `/v1/comparisons/${id}/pairs`, { hawaPngBase64: b64(makePng(W, H, [1, 1, 1])), designerPngBase64: b64(makePng(W, H, [2, 2, 2])) });
@@ -448,6 +476,15 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     }
     expect(orderB).toEqual(orderPairsForJudge(judgeB, pairIds.map((pid) => ({ id: pid }))).map((p) => p.id));
 
+    // ---- B loses the link: a new one on the same judge record; the old one stops; B resumes, counted once ----
+    const reissued = await call('POST', `/v1/comparisons/${id}/judges/${judgeB}/link`);
+    expect(reissued.status).toBe(201);
+    const newTokenB: string = reissued.json.token;
+    expect(newTokenB).not.toBe(tokenB);
+    expect((await call('GET', `/api/judge/${tokenB}/next`, undefined, null)).status).toBe(404);
+    expect((await call('GET', `/api/judge/${newTokenB}/next`, undefined, null)).json).toEqual({ status: 'done', judged: 3, total: 3 });
+    expect((await call('POST', `/api/judge/${newTokenB}/judgments`, { pairId: pairIds[0], choice: 'right' }, null)).json).toEqual({ ok: true, already: true });
+
     // ---- Revoking C: the link stops working everywhere, as if it had never existed ----
     const tokenC = tokens['Outside designer C'];
     const revoked = await call('DELETE', `/v1/comparisons/${id}/judges/${judgeId('Outside designer C')}`);
@@ -470,8 +507,17 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
       expected[arm ?? 'none'] += 1;
     }
     for (const pid of pairIds) expected[preferredArm(shownLeftFor(judgeB, pid), 'left')!] += 1;
+    // While judging, only progress: the share, interval and verdict are withheld until the study closes.
+    const running = await call('GET', `/v1/comparisons/${id}/results`);
+    expect(running.status).toBe(200);
+    expect(running.json).toMatchObject({ withheld: true, judgements: 6, decisive: 5, none: 1 });
+    expect(running.json.primary).toBeUndefined();
+    for (const withheld of ['primary', 'claim', 'byJudgeKind', 'excludingSeenBefore', 'seenBefore', 'position']) expect(running.json).not.toHaveProperty(withheld);
+    expect(Object.keys(running.json.perPair[0]).sort()).toEqual(['judgements', 'label', 'pairId']);
+    expect((await call('POST', `/v1/comparisons/${id}/close`)).status).toBe(200);
     const results = await call('GET', `/v1/comparisons/${id}/results`);
     expect(results.status).toBe(200);
+    expect(results.json.withheld).toBe(false);
     expect(results.json.primary).toMatchObject({ judgements: 6, decisive: 5, none: 1, hawa: expected.hawa, designer: expected.designer });
     expect(results.json.primary.tieRate).toBeCloseTo(1 / 6, 10);
     const ci = wilsonInterval(expected.hawa, 5)!;
@@ -482,15 +528,14 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     expect(results.json.excludingSeenBefore.judgements).toBe(5);
     expect(results.json.position).toMatchObject({ shown: 6, decisive: 5 });
     expect(results.json.perPair.map((p: { label: string }) => p.label)).toEqual(['P01', 'P02', 'X-9']);
-    expect(results.json.claim).toMatchObject({ holds: false, closed: false, sampleComplete: false });
+    expect(results.json.claim).toMatchObject({ holds: false, closed: true, sampleComplete: false });
     expect(results.json.preregistration).toEqual(PREREGISTRATION);
 
     // ---- Closing: no more picks, no more images; the results stand ----
-    expect((await call('POST', `/v1/comparisons/${id}/close`)).status).toBe(200);
     expect((await call('POST', `/v1/comparisons/${id}/close`)).status).toBe(409);
-    expect((await call('GET', `/api/judge/${tokenB}/next`, undefined, null)).json).toEqual({ status: 'closed', judged: 3, total: 3 });
-    expect((await call('GET', `/api/judge/${tokenB}/image/${pairIds[0]}/left`, undefined, null)).status).toBe(404);
-    const afterClose = await call('POST', `/api/judge/${tokenB}/judgments`, { pairId: pairIds[0], choice: 'right' }, null);
+    expect((await call('GET', `/api/judge/${newTokenB}/next`, undefined, null)).json).toEqual({ status: 'closed', judged: 3, total: 3 });
+    expect((await call('GET', `/api/judge/${newTokenB}/image/${pairIds[0]}/left`, undefined, null)).status).toBe(404);
+    const afterClose = await call('POST', `/api/judge/${newTokenB}/judgments`, { pairId: pairIds[0], choice: 'right' }, null);
     expect(afterClose.status).toBe(409);
     expect((await call('POST', `/v1/comparisons/${id}/judges`, { name: 'Late', kind: 'designer' })).status).toBe(409);
     expect((await call('GET', `/v1/comparisons/${id}/results`)).json.primary.judgements).toBe(6);

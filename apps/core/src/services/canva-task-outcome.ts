@@ -88,7 +88,9 @@ export async function transitionTaskForOutcome(
   if (!task) throw new Error(`Task ${params.taskId} is not visible in tenant ${params.tenantId}; its outcome could not be recorded`);
   const from = String(task.state);
   // A draft after an operator was called (a re-drive that worked) goes back to review.
-  const allowed = params.toState === 'human_review' ? [...PRE_OUTCOME_STATES, 'failed_operator'] : PRE_OUTCOME_STATES;
+  // A draft after an operator was called (a re-drive that worked) goes back to review, and a re-drive
+  // that stopped to ask the requester a question waits for the answer rather than the operator.
+  const allowed = params.toState === 'human_review' || params.toState === 'paused' ? [...PRE_OUTCOME_STATES, 'failed_operator'] : PRE_OUTCOME_STATES;
   if (from === params.toState || !allowed.includes(from)) return { changed: false, fromState: from, toState: from };
   await repo.transitionState({
     taskId: params.taskId,

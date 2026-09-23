@@ -442,12 +442,12 @@ describe('untreated photos are drawn exactly as before', () => {
 
   it('in the deck: a framed photo and a cut-out keep their pictures, and a zoom of 1 changes nothing', async () => {
     const photo = redPhoto();
-    const plain = await deckOf(withPhotos(framed({ radius: 24 })), [photo]);
+    const plain = await deckOf(withPhotos(framed()), [photo]);
     expect(plain.pictures).toHaveLength(1);
     expect(plain.pictures[0].media).toEqual(new Uint8Array(photo));
-    // pptxgenjs's `rounding` is how a radius has always reached the deck.
+    // Rounded corners are baked since 2026-09-24 (pptxgenjs's rounding is an ellipse); see the review tests.
     expect(plain.slide).toContain('<a:srcRect l="0" r="0" t="0" b="0"/>');
-    const zoomOne = await deckOf(withPhotos(framed({ radius: 24, zoom: 1 })), [photo]);
+    const zoomOne = await deckOf(withPhotos(framed({ zoom: 1 })), [photo]);
     expect(zoomOne.slide).toBe(plain.slide);
     expect(zoomOne.media).toEqual(plain.media);
 
@@ -617,5 +617,41 @@ describe('librsvg\'s morphology limits, and how the outline works within them', 
     expect(layers.map((l) => l.kind)).toEqual(['cutout-shadow', 'cutout-glow', 'cutout-outline', 'cutout-person']);
     // An outline on a photo drawn framed (no cut-out supplied) is not drawn.
     expect(photoLayers([cutout({ outline: { color: GOLD, width: 2 } })], []).map((l) => l.kind)).toEqual(['framed']);
+  });
+});
+
+describe('after the 2026-09-24 review', () => {
+  it('draws an outline as row and column passes, so a wide one bakes in time', () => {
+    const svg = renderLayoutV2ToSvg(withPhotos(cutout({ outline: { color: '#FFFFFF', width: 24 } })), { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [person()] }).svg;
+    expect(svg).toMatch(/radius="\d+ 0"/);
+    expect(svg).toMatch(/radius="0 \d+"/);
+    expect(svg).not.toMatch(/radius="\d+"(?! )/);
+  });
+
+  it('crops a photo 9,600 px or more on a side in the deck instead of drawing nothing', async () => {
+    const wide = Buffer.from(rgbaPng(10, 10, () => RED));
+    wide.writeUInt32BE(9800, 16);
+    wide.writeUInt32BE(1400, 20);
+    const layout = withPhotos({ photoIndex: 0, role: 'hero', x: 86, y: 440, width: 800, height: 400 });
+    const deck = await encodeStudioTransferV2(layout, copy, undefined, { photos: [{ bytes: wide, mimeType: 'image/png' as const }] });
+    const slide = strFromU8(unzipSync(new Uint8Array(deck.bytes))['ppt/slides/slide1.xml']);
+    const rect = slide.match(/<a:srcRect([^/]*)\/>/)?.[1] ?? '';
+    // 9800x1400 into 800x400: the height is kept whole and the sides are cropped.
+    expect(rect).toContain('t="0" b="0"');
+    expect(Number(rect.match(/\bl="(\d+)"/)?.[1])).toBeGreaterThan(30000);
+  });
+
+  it('sends rounded corners to the deck as they are drawn; a true circle stays native', async () => {
+    const rounded = await deckOf(withPhotos(framed({ width: 400, height: 250, radius: 24 })), [redPhoto()]);
+    expect(rounded.pictures).toHaveLength(1);
+    expect(rounded.slide).not.toContain('prst="ellipse"');
+    const circle = await deckOf(withPhotos(framed({ radius: 200 })), [redPhoto()]);
+    expect(circle.slide).toContain('prst="ellipse"');
+  });
+
+  it('casts no contact shadow under a person fading into the background', () => {
+    const shadowed: PhotoCutoutAsset = { ...person(), shadowPng: rgbaPng(10, 10, () => [0, 0, 0, 90]), shadowWidth: 110, shadowHeight: 160, shadowX: -5, shadowY: -5 };
+    expect(photoLayers([cutout()], [shadowed]).map((l) => l.kind)).toContain('cutout-shadow');
+    expect(photoLayers([cutout({ fade: { edge: 'bottom', length: 0.4 } })], [shadowed]).map((l) => l.kind)).not.toContain('cutout-shadow');
   });
 });

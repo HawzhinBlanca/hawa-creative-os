@@ -130,8 +130,10 @@ export function photoLayers(
     return { photo, asset, placed: asset ? cutoutPlacement(photo, asset) : undefined };
   });
   const layers: PhotoLayer[] = [];
+  // A person fading into the background casts no contact shadow: the shadow stayed as a dark ghost of
+  // the legs where the person had faded to nothing (2026-09-24 review).
   for (const { photo, asset, placed } of drawn) {
-    if (asset?.shadowPng && placed?.shadow) layers.push({ kind: 'cutout-shadow', photo, png: asset.shadowPng, rect: placed.shadow });
+    if (asset?.shadowPng && placed?.shadow && !photo.fade) layers.push({ kind: 'cutout-shadow', photo, png: asset.shadowPng, rect: placed.shadow });
   }
   for (const { photo, asset, placed } of drawn) {
     if (asset && placed) {

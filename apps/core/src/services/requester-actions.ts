@@ -100,8 +100,8 @@ const taskLine = (taskId: string, title?: string | null) =>
   `📌 <b>Task ID:</b> <code>${escapeTelegramHtml(taskId)}</code>\n📜 <b>Title:</b> ${escapeTelegramHtml(title || 'Campaign Design')}\n`;
 
 /** To the requester, after Approve. */
-export function composeRequesterApproved(taskId: string, current?: { width?: number; height?: number }): TelegramReply {
-  const sizes = sizeButtons(taskId, current);
+export function composeRequesterApproved(taskId: string, current?: { width?: number; height?: number }, offerSizes = true): TelegramReply {
+  const sizes = offerSizes ? sizeButtons(taskId, current) : [];
   return {
     text:
       `✅ <b>Thank you, you approved this design.</b>\n\n` +

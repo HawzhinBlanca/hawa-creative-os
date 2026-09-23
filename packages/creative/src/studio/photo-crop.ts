@@ -90,6 +90,8 @@ export function photoFocusOrUndefined(value: unknown): PhotoFocus | undefined {
 export function imagePixelSize(buffer: Buffer): { width: number; height: number } | null {
   const png = pngPixelSize(buffer);
   if (png) return png;
+  const webp = webpPixelSize(buffer);
+  if (webp) return webp;
   if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
   let i = 2;
   while (i + 9 < buffer.length) {
@@ -125,4 +127,57 @@ export function dataUriPixelSize(uri: string): { width: number; height: number }
   const comma = uri.indexOf(',');
   if (comma < 0 || !/^data:[^,]*;base64$/i.test(uri.slice(0, comma))) return null;
   return imagePixelSize(Buffer.from(uri.slice(comma + 1), 'base64'));
+}
+
+/**
+ * The pixel size in a WebP's header (lossy VP8, lossless VP8L or extended VP8X), or null. Without it
+ * a WebP photo was stretched to its box in the deck while the preview cropped it (2026-09-24 review).
+ */
+export function webpPixelSize(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null;
+  const chunk = buffer.toString('ascii', 12, 16);
+  let size: { width: number; height: number } | null = null;
+  if (chunk === 'VP8X') size = { width: buffer.readUIntLE(24, 3) + 1, height: buffer.readUIntLE(27, 3) + 1 };
+  else if (chunk === 'VP8L' && buffer[20] === 0x2f) {
+    const bits = buffer.readUInt32LE(21);
+    size = { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+  } else if (chunk === 'VP8 ' && buffer[23] === 0x9d && buffer[24] === 0x01 && buffer[25] === 0x2a) {
+    size = { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
+  }
+  return size && size.width > 0 && size.height > 0 ? size : null;
+}
+
+/**
+ * A JPEG's EXIF orientation (1 to 8), or 1 when it has none. A phone photo is often stored on its side
+ * with this tag saying how to turn it; the renderer draws the stored pixels as they are.
+ */
+export function jpegOrientation(buffer: Buffer): number {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return 1;
+  let i = 2;
+  while (i + 4 < buffer.length && buffer[i] === 0xff) {
+    const marker = buffer[i + 1];
+    const len = buffer.readUInt16BE(i + 2);
+    if (marker === 0xda) break; // image data: no EXIF after this
+    if (marker === 0xe1 && buffer.toString('ascii', i + 4, i + 8) === 'Exif') {
+      const tiff = i + 10;
+      if (tiff + 8 > buffer.length) return 1;
+      const little = buffer.toString('ascii', tiff, tiff + 2) === 'II';
+      const u16 = (at: number) => (little ? buffer.readUInt16LE(at) : buffer.readUInt16BE(at));
+      const u32 = (at: number) => (little ? buffer.readUInt32LE(at) : buffer.readUInt32BE(at));
+      const ifd = tiff + u32(tiff + 4);
+      if (ifd + 2 > buffer.length) return 1;
+      const entries = u16(ifd);
+      for (let e = 0; e < entries; e++) {
+        const at = ifd + 2 + e * 12;
+        if (at + 12 > buffer.length) break;
+        if (u16(at) === 0x0112) {
+          const value = u16(at + 8);
+          return value >= 1 && value <= 8 ? value : 1;
+        }
+      }
+      return 1;
+    }
+    i += 2 + len;
+  }
+  return 1;
 }

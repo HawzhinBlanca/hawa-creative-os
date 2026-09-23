@@ -353,3 +353,52 @@ describe('the focus survives preparation and normalisation', () => {
     expect(studioLayoutV2Schema.safeParse(v2).success).toBe(true);
   });
 });
+
+describe('pixel sizes and orientation (2026-09-24 review)', () => {
+  it('reads a WebP\'s size from its header, in each of its three forms', async () => {
+    const { webpPixelSize, imagePixelSize } = await import('../src/studio/photo-crop.js');
+    const riff = (chunk: string, body: Buffer) => Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.from(chunk), Buffer.alloc(4), body]);
+    const vp8x = Buffer.alloc(14); vp8x.writeUIntLE(640 - 1, 4, 3); vp8x.writeUIntLE(480 - 1, 7, 3);
+    expect(webpPixelSize(riff('VP8X', vp8x))).toEqual({ width: 640, height: 480 });
+    const vp8l = Buffer.alloc(14); vp8l[0] = 0x2f; vp8l.writeUInt32LE(((300 - 1) & 0x3fff) | (((200 - 1) & 0x3fff) << 14), 1);
+    expect(webpPixelSize(riff('VP8L', vp8l))).toEqual({ width: 300, height: 200 });
+    const vp8 = Buffer.alloc(14); vp8[3] = 0x9d; vp8[4] = 0x01; vp8[5] = 0x2a; vp8.writeUInt16LE(400, 6); vp8.writeUInt16LE(273, 8);
+    expect(imagePixelSize(riff('VP8 ', vp8))).toEqual({ width: 400, height: 273 });
+    expect(webpPixelSize(Buffer.from('RIFF0000WAVEfmt '))).toBeNull();
+  });
+
+  it('turns a JPEG stored on its side upright, once, and leaves every other photo as it came', async () => {
+    const fs = await import('node:fs');
+    const { jpegOrientation } = await import('../src/studio/photo-crop.js');
+    const { uprightPhotoDataUrl } = await import('../src/studio/photo-upright.js');
+    const { PNG: Png } = await import('pngjs');
+    // A 16x8 JPEG, red on the left and blue on the right, tagged "turn 90 degrees clockwise" (6).
+    const plain = fs.readFileSync(new URL('./fixtures/red-left-blue-right.jpg', import.meta.url));
+    const exif = Buffer.from('45786966000' + '04d4d002a00000008000101120003000000010006000000000000', 'hex');
+    const withoutApp1 = (() => {
+      const parts = [plain.subarray(0, 2)];
+      let i = 2;
+      while (i + 4 < plain.length && plain[i] === 0xff && plain[i + 1] !== 0xda) {
+        const len = plain.readUInt16BE(i + 2);
+        if (plain[i + 1] !== 0xe1) parts.push(plain.subarray(i, i + 2 + len));
+        i += 2 + len;
+      }
+      parts.push(plain.subarray(i));
+      return Buffer.concat(parts);
+    })();
+    const length = Buffer.alloc(2); length.writeUInt16BE(exif.length + 2);
+    const tagged = Buffer.concat([withoutApp1.subarray(0, 2), Buffer.from([0xff, 0xe1]), length, exif, withoutApp1.subarray(2)]);
+    expect(jpegOrientation(tagged)).toBe(6);
+    expect(jpegOrientation(withoutApp1)).toBe(1);
+    const upright = await uprightPhotoDataUrl(`data:image/jpeg;base64,${tagged.toString('base64')}`);
+    expect(upright.startsWith('data:image/png;base64,')).toBe(true);
+    const pixels = Png.sync.read(Buffer.from(upright.split(',')[1], 'base64'));
+    expect([pixels.width, pixels.height]).toEqual([8, 16]);
+    const at = (x: number, y: number) => [...pixels.data.subarray((y * 8 + x) * 4, (y * 8 + x) * 4 + 3)];
+    // Turned clockwise, the red left half is on top and the blue right half below.
+    expect(at(4, 2)[0]).toBeGreaterThan(at(4, 2)[2]);
+    expect(at(4, 13)[2]).toBeGreaterThan(at(4, 13)[0]);
+    const untouched = `data:image/jpeg;base64,${withoutApp1.toString('base64')}`;
+    expect(await uprightPhotoDataUrl(untouched)).toBe(untouched);
+  });
+});

@@ -20,7 +20,22 @@ notify() { # Telegram, operator chat; values read at call time, never logged
   [[ -n "$token" && -n "$chat" ]] || return 0
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
-fail() { echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit 1; }
+# A dump that failed its own checks is renamed .failed: under its real name the watchdog took it for a
+# fresh backup and the retention below for one of the fourteen. Only the newest two are kept, to look
+# at. A failure after the checks (the archive copy) leaves the verified dump as it is.
+DUMP_VERIFIED=0
+fail() {
+  trap - ERR
+  if [[ "$DUMP_VERIFIED" == 0 && -e "$OUT" ]]; then mv -f "$OUT" "$OUT.failed" || true; rm -f "$OUT.sha256"; fi
+  { ls -1t "$DIR"/hawa_*.dump.failed 2>/dev/null || true; } | tail -n +3 | while read -r old; do rm -f "$old"; done
+  echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit 1
+}
+# Anything else that stops the script is a failure too, and says so, instead of ending in silence.
+trap 'fail "stopped unexpectedly at line $LINENO"' ERR
+# The encrypted archive copy is a temporary file: it never outlives the run, whatever happens.
+trap 'rm -f "$OUT.enc" "$OUT.enc.sha256" "$OUT.enc.plain.sha256"' EXIT
+# Copies a run cut short left behind (two from 2026-09-20 held 520 MB); a run takes minutes.
+find "$DIR" -maxdepth 1 -name 'hawa_*.dump.enc*' -mmin +120 -delete 2>/dev/null || true
 
 docker exec "$PG" pg_isready -U hawa_owner -d hawa >/dev/null 2>&1 || fail "postgres container not ready"
 # zstd with long-distance matching: the dump repeats the same images many times, so it is about an
@@ -28,7 +43,7 @@ docker exec "$PG" pg_isready -U hawa_owner -d hawa >/dev/null 2>&1 || fail "post
 docker exec "$PG" pg_dump -U hawa_owner -Fc --no-owner --compress=zstd:long hawa > "$OUT" || fail "pg_dump exited non-zero"
 SIZE="$(stat -f '%z' "$OUT" 2>/dev/null || stat -c '%s' "$OUT")"
 [[ "$SIZE" -gt 100000 ]] || fail "dump is only ${SIZE} bytes"
-shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256"
+shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256" || fail "could not checksum the dump"
 
 # Restore verification: the dump must actually load, and hold the same task count as the live database.
 VDB="hawa_verify_$(printf "%s" "$STAMP" | tr "[:upper:]" "[:lower:]")"
@@ -36,11 +51,13 @@ docker exec "$PG" createdb -U hawa_owner "$VDB" || fail "could not create verifi
 if ! docker exec -i "$PG" pg_restore -U hawa_owner -d "$VDB" --no-owner --no-privileges --exit-on-error < "$OUT"; then
   docker exec "$PG" dropdb -U hawa_owner "$VDB" || true; fail "pg_restore rejected the dump"
 fi
-LIVE="$(docker exec "$PG" psql -U hawa_owner -d hawa -Atc 'SELECT count(*) FROM hawa.tasks')"
-REST="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.tasks')"
-EVENTS="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.task_events')"
+LIVE="$(docker exec "$PG" psql -U hawa_owner -d hawa -Atc 'SELECT count(*) FROM hawa.tasks')" || LIVE=""
+REST="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.tasks')" || REST=""
+EVENTS="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.task_events')" || EVENTS="?"
 docker exec "$PG" dropdb -U hawa_owner "$VDB" || fail "could not drop verification database"
+[[ "$LIVE" =~ ^[0-9]+$ && "$REST" =~ ^[0-9]+$ ]] || fail "could not count the tasks (live '${LIVE}', restored '${REST}')"
 [[ "$REST" -gt 0 && "$LIVE" -ge "$REST" && $((LIVE - REST)) -lt 50 ]] || fail "restored task count ${REST} does not match live ${LIVE}"
+DUMP_VERIFIED=1
 
 # Retention: keep the 14 newest nightly dumps, and copy off-disk to archive destination.
 #
@@ -62,10 +79,10 @@ if [[ -n "$ARCHIVE_KEYFILE" ]]; then
     || fail "could not encrypt the archive copy"
   # Proves the copy decrypts with this passphrase before the plain dump is ever pruned.
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in "$OUT.enc" -pass "file:$ARCHIVE_KEYFILE" \
-    | shasum -a 256 | cut -d' ' -f1 > "$OUT.enc.plain.sha256"
+    | shasum -a 256 | cut -d' ' -f1 > "$OUT.enc.plain.sha256" || fail "the encrypted archive copy does not decrypt"
   [[ "$(cat "$OUT.enc.plain.sha256")" == "$(cut -d' ' -f1 < "$OUT.sha256")" ]] \
     || fail "the encrypted archive copy does not decrypt back to the dump"
-  shasum -a 256 "$OUT.enc" | cut -d' ' -f1 > "$OUT.enc.sha256"
+  shasum -a 256 "$OUT.enc" | cut -d' ' -f1 > "$OUT.enc.sha256" || fail "could not checksum the encrypted copy"
   rm -f "$OUT.enc.plain.sha256"
   ARCHIVE_SRC="$OUT.enc"
   ARCHIVE_SRC_SHA="$OUT.enc.sha256"
@@ -75,12 +92,13 @@ if [[ "$ARCHIVE_DEST" == gs://* ]]; then
     gsutil cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/" 2>/dev/null || echo "WARNING: off-disk upload to $ARCHIVE_DEST failed" >&2
   fi
 else
-  mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST"
-  cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/"
+  # A copy that did not arrive is a failure: the dump here is fine, but the off-machine copy is missing.
+  { mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST" && cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/"; } \
+    || fail "could not copy the dump to the archive (${ARCHIVE_DEST/#$HOME/~}); the dump here is verified"
 fi
-[[ -n "$ARCHIVE_KEYFILE" ]] && rm -f "$OUT.enc" "$OUT.enc.sha256"
+if [[ -n "$ARCHIVE_KEYFILE" ]]; then rm -f "$OUT.enc" "$OUT.enc.sha256"; fi
 
-ls -1t "$DIR"/hawa_*.dump 2>/dev/null | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256"; done
+{ ls -1t "$DIR"/hawa_*.dump 2>/dev/null || true; } | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256" "$old.enc" "$old.enc.sha256"; done
 # Pre-deploy dumps have their own retention (the newest ten, compressed). They were once copied,
 # unencrypted, into the archive destination, which is off this machine: never again.
 bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNING: disk_cleanup.sh --backups did not finish" >&2

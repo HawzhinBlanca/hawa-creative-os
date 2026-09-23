@@ -12,10 +12,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 PROD="$ROOT/infra/docker/.env.production"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 STATE="$STATE_DIR/state"; COOLDOWN=1800; NOW="$(date +%s)"; MODE="${1:-}"
 COMPOSE=(docker compose -f "$ROOT/infra/docker/docker-compose.prod.yml" -f "$ROOT/infra/docker/canva-release.override.yml" --env-file "$ROOT/infra/docker/.env")
-last_status=""; last_alert=0; last_disk_alert=0; last_cleanup=0; last_msg=""; [[ -f "$STATE" ]] && source "$STATE"
+# alerted: the operator has been told about the problem now under way, so its end is announced too
+# (a problem that cleared before any alert was sent ends quietly). alerted_other: what the last red
+# alert named, so its recovery is announced even while the disk is still full. disk_was_full: the
+# disk counts as full until it drops below 88%, so a disk hovering at 89-90% does not flap.
+last_status=""; last_alert=0; last_disk_alert=0; last_cleanup=0; last_msg=""; alerted=0; alerted_other=""; disk_was_full=0
+[[ -f "$STATE" ]] && source "$STATE"
 save() {
-  printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\n' \
-    "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" > "$STATE"
+  printf 'last_status=%q\nlast_alert=%q\nlast_disk_alert=%q\nlast_cleanup=%q\nlast_msg=%q\nalerted=%q\nalerted_other=%q\ndisk_was_full=%q\n' \
+    "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" > "$STATE"
 }
 notify() {
   local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2-)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1)"
@@ -33,7 +38,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 # 2. Stack containers
 if [[ ${#problems[@]} -eq 0 ]]; then
-  running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
+  running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
   # nginx, desk, core, worker, postgres, restate and cutout (ADR-032)
   if [[ "$running" -lt 7 ]]; then
     if [[ "$MODE" != "--status" ]]; then
@@ -44,12 +49,12 @@ if [[ ${#problems[@]} -eq 0 ]]; then
       # while the deploy that would have migrated for it had stopped at its test gate.
       "${COMPOSE[@]}" start >/dev/null 2>&1 || true
       sleep 10
-      running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
+      running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
       if [[ "$running" -lt 7 ]]; then
         "${COMPOSE[@]}" up -d --no-build --no-recreate >/dev/null 2>&1 || problems+=("compose up failed")
       fi
       sleep 20
-      running="$(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' | wc -l | tr -d ' ')"
+      running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
     fi
     [[ "$running" -ge 7 ]] || problems+=("only ${running}/7 containers running")
   fi
@@ -81,7 +86,8 @@ if [[ "${used:-0}" -ge 88 && "$MODE" != "--status" ]] && (( NOW - last_cleanup >
   { date -u +%FT%TZ; bash "$ROOT/infra/ops/disk_cleanup.sh"; } >> "$HOME/.hawa/logs/disk_cleanup.log" 2>&1 || true
   last_cleanup="$NOW"; used="$(disk_used)"
 fi
-disk_full=0; [[ "${used:-0}" -lt 90 ]] || disk_full=1
+disk_full=0
+if [[ "${used:-0}" -ge 90 ]] || [[ "$disk_was_full" == 1 && "${used:-0}" -ge 88 ]]; then disk_full=1; fi
 newest="$(ls -t "$ROOT"/infra/backup/snapshots/hawa_*.dump 2>/dev/null | head -1 || true)"
 if [[ -n "$newest" ]]; then
   age=$(( NOW - $(stat -f '%m' "$newest" 2>/dev/null || stat -c '%Y' "$newest") ))
@@ -93,32 +99,40 @@ fi
 if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   echo "healthy"
   [[ "$MODE" == "--status" ]] && exit 0
-  if [[ -n "$last_status" && "$last_status" != "healthy" ]]; then
+  if [[ "$alerted" == 1 ]]; then
     notify "✅ Hawa is back to normal ($(date '+%H:%M')). It was: ${last_msg:-a problem}"
   fi
-  last_msg=""; save healthy; exit 0
+  last_msg=""; alerted=0; alerted_other=""; disk_was_full=0; save healthy; exit 0
 fi
 
 if [[ "$disk_full" -eq 1 ]]; then
   free="$(df -h "$ROOT" | awk 'NR==2{print $4}' | sed -E 's/Ti$/ TB/; s/Gi$/ GB/; s/Mi$/ MB/')"
-  backups="$(du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
-  cache="$(docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
+  # Both sources may fail (Docker down, no archive folder yet): the alert still goes, with "?".
+  backups="$( { du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null || true; } | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
+  cache="$( { docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null || true; } | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
   disk_msg="The Mac's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?} and Docker's build cache ${cache:-?}. The rest is other files on this Mac, so please free some space (System Settings, General, Storage)."
 fi
 if [[ ${#problems[@]} -eq 0 ]]; then
   # Only the disk: a reminder every 6 hours, hourly past 97%, instead of every 30 minutes.
-  echo "PROBLEM: disk ${used}% used"; last_msg="disk ${used}% full"
+  echo "PROBLEM: disk ${used}% used"
   [[ "$MODE" == "--status" ]] && exit 1
+  if [[ -n "$alerted_other" ]]; then
+    # What the last red alert named has cleared; without this the next word would be hours away.
+    notify "✅ Back to normal apart from the disk ($(date '+%H:%M')). It was: ${alerted_other}. The disk is still ${used}% full."; alerted_other=""
+  fi
+  last_msg="disk ${used}% full"; disk_was_full=1
   every=21600; [[ "${used:-0}" -lt 97 ]] || every=3600
   if (( NOW - last_disk_alert >= every )); then
-    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"
+    notify "💾 ${disk_msg} Next reminder in $(( every / 3600 )) h."; last_disk_alert="$NOW"; alerted=1
   fi
   save problem; exit 1
 fi
-msg="$(printf '%s; ' "${problems[@]}")"; echo "PROBLEM: $msg"; last_msg="${msg%; }"
+msg="$(printf '%s; ' "${problems[@]}")"; echo "PROBLEM: $msg"
 [[ "$MODE" == "--status" ]] && exit 1
+last_msg="${msg%; }${disk_msg:+; disk ${used}% full}"; disk_was_full="$disk_full"
 if (( NOW - last_alert >= COOLDOWN )); then
   notify "🔴 Hawa needs attention ($(date '+%H:%M')): ${msg%; }.${disk_msg:+ Also: ${disk_msg}}"; last_alert="$NOW"
+  alerted=1; alerted_other="${msg%; }"
   [[ -z "${disk_msg:-}" ]] || last_disk_alert="$NOW"
 fi
 save problem; exit 1

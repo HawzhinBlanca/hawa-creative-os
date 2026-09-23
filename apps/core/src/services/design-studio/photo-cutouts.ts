@@ -382,7 +382,8 @@ export function alignFramedHeads(
       const crop = coverCrop(p, size, p.focus);
       // The face's height on the design at the plain cover crop, and how far the crop may tighten.
       const shown = ((face.faceShare * size.height) / crop.sh) * p.height;
-      const soft = SOFT_PHOTO_SCALE / (p.width / crop.sw);
+      // Just under the scale the requester is warned at, so matching heads never makes a photo soft.
+      const soft = (SOFT_PHOTO_SCALE * 0.98) / (p.width / crop.sw);
       return { p, shown, most: Math.min(PHOTO_ZOOM_MAX, Math.max(1, soft)) };
     })
     .filter((r): r is { p: PhotoElement; shown: number; most: number } => Boolean(r));
@@ -398,7 +399,8 @@ export function alignFramedHeads(
     const target = Math.max(...row.map((r) => r.shown));
     for (const r of row) {
       const zoom = Math.min(r.most, target / r.shown);
-      if (zoom > HEAD_MATCH_TOLERANCE) r.p.zoom = Math.round(zoom * 100) / 100;
+      // Rounded down, so the cap above is never crossed by rounding.
+      if (zoom > HEAD_MATCH_TOLERANCE) r.p.zoom = Math.floor(zoom * 100) / 100;
     }
   }
   return layout;

@@ -65,13 +65,16 @@ export async function revisionMetrics(db: Kysely<Database>, scope: { tenantId: s
           count(*) FILTER (WHERE (o.payload->'studioOptions'->>'revisionRound')::int >= 3)::int AS later
         FROM hawa.outbox_commands o
         WHERE o.tenant_id = ${scope.tenantId}::uuid AND o.command_type = 'task.created' AND o.created_at > ${since}
-          AND o.payload->'studioOptions'->>'revisionRound' ~ '^[0-9]+$'`.execute(trx)
+          AND o.payload->'studioOptions'->>'revisionRound' ~ '^[0-9]+$'
+          -- Another size is not a round, and an answered question is the same round as the question.
+          AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''
+          AND COALESCE(o.payload->'studioOptions'->>'clarified', 'false') <> 'true'`.execute(trx)
     ).rows[0];
     const approvals = (
       await sql<{ total: number; first: number }>`SELECT count(*)::int AS total,
           count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM hawa.outbox_commands o WHERE o.tenant_id = e.tenant_id
             AND o.command_type = 'task.created' AND o.aggregate_id::text = e.payload->>'taskId'
-            AND o.payload->'studioOptions' ? 'parentTaskId'))::int AS first
+            AND o.payload->'studioOptions' ? 'parentTaskId' AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''))::int AS first
         FROM hawa.inbox_events e
         WHERE e.tenant_id = ${scope.tenantId}::uuid AND e.event_kind = 'telegram_requester_ok' AND e.received_at > ${since}`.execute(trx)
     ).rows[0];

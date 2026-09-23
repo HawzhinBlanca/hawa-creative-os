@@ -18,6 +18,7 @@ import {
   recordJudgment,
   resolveJudge,
   revokeJudge,
+  reissueJudgeLink,
   studyResults,
   type ComparisonScope,
   type JudgeSession,
@@ -115,6 +116,13 @@ export function registerComparisonRoutes(ctx: RouteContext) {
     const { judge, token } = await addJudge(database, scope, c.req.param('id') || '', { name: body.name, kind: body.kind });
     c.header('Cache-Control', 'no-store');
     return c.json({ judge, token, link: judgeLink(token) }, 201);
+  }));
+
+  // A judge who lost their link: a new one on the same judge record, shown once, like the first.
+  registerRoute('post', '/comparisons/:id/judges/:judgeId/link', office(async (c, scope, database) => {
+    const { judgeId, token } = await reissueJudgeLink(database, scope, c.req.param('id') || '', c.req.param('judgeId') || '');
+    c.header('Cache-Control', 'no-store');
+    return c.json({ judgeId, token, link: judgeLink(token) }, 201);
   }));
 
   registerRoute('delete', '/comparisons/:id/judges/:judgeId', office(async (c, scope, database) =>

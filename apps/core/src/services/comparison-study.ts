@@ -216,12 +216,14 @@ export function summariseStudy(input: {
   const pairsBelowMinJudges = perPair.filter((p) => p.judgements < preregistration.minJudgesPerPair).length;
   const lowerBound = primary.interval ? primary.interval.low : null;
   const lowerBoundAboveThreshold = lowerBound !== null && lowerBound > preregistration.threshold;
-  const sampleComplete = pairs.length > 0 && primary.decisive >= preregistration.minDecisive && pairsBelowMinJudges === 0;
+  const pairsShort = Math.max(0, preregistration.plannedPairs - pairs.length);
+  const sampleComplete = pairs.length > 0 && pairsShort === 0 && primary.decisive >= preregistration.minDecisive && pairsBelowMinJudges === 0;
   const closed = status === 'closed';
   const holds = lowerBoundAboveThreshold && sampleComplete && closed;
   const bound = lowerBound === null ? '' : ` (${pct(lowerBound)})`;
   const missing = [
     ...(closed ? [] : ['the study is not closed']),
+    ...(pairsShort ? [`${pairs.length} of ${preregistration.plannedPairs} pre-registered pairs`] : []),
     ...(primary.decisive >= preregistration.minDecisive ? [] : [`${primary.decisive} of ${preregistration.minDecisive} decisive judgements`]),
     ...(pairsBelowMinJudges ? [`${pairsBelowMinJudges} ${pairsBelowMinJudges === 1 ? 'pair has' : 'pairs have'} fewer than ${preregistration.minJudgesPerPair} judgements`] : []),
   ];
@@ -350,7 +352,34 @@ export function parsePreregistration(input: unknown): Preregistration {
 
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 /** Guards the decoder: a small file can declare an enormous canvas. 40 megapixels is well past any poster export. */
-export const MAX_IMAGE_PIXELS = 40_000_000;
+export const MAX_IMAGE_PIXELS = 16_000_000;
+
+/**
+ * What a PNG's chunks say before any pixel is decoded: its bit depth, and whether it carries a colour
+ * profile other than sRGB. Decoding is refused for 16-bit images (a 300 KB file declaring 16-bit RGBA
+ * at 40 megapixels took 3.5 s of Core's only thread and 1.2 GB, 2026-09-24 review) and for a tagged
+ * wide-gamut profile, whose pixels would be shown to judges as sRGB with shifted colours.
+ */
+export function pngHeaderProblem(bytes: Buffer, what: string): string | undefined {
+  const bitDepth = bytes[24];
+  if (bitDepth > 8) return `The ${what} is a ${bitDepth}-bit PNG. Export it as an 8-bit PNG (the usual setting).`;
+  for (let at = 8; at + 8 <= bytes.length; ) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.toString('latin1', at + 4, at + 8);
+    const data = bytes.subarray(at + 8, at + 8 + length);
+    if (type === 'IDAT' || type === 'IEND') break;
+    if (type === 'cHRM') return `The ${what} carries its own colour primaries. Export it in sRGB.`;
+    if (type === 'iCCP' && !/srgb/i.test(data.toString('latin1', 0, Math.min(80, data.indexOf(0) < 0 ? 80 : data.indexOf(0))))) {
+      return `The ${what} carries a colour profile other than sRGB. Export it in sRGB, or judges would see its colours shifted.`;
+    }
+    if (type === 'gAMA' && data.length >= 4) {
+      const gamma = data.readUInt32BE(0);
+      if (gamma < 44000 || gamma > 47000) return `The ${what} declares a gamma other than sRGB's. Export it in sRGB.`;
+    }
+    at += 12 + length;
+  }
+  return undefined;
+}
 
 export function sniffImage(bytes: Uint8Array): 'png' | 'jpeg' | 'unknown' {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return 'png';
@@ -394,8 +423,10 @@ export function cleanPng(bytes: Buffer, what: string): CleanPng {
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
   if (!width || !height || width * height > MAX_IMAGE_PIXELS) {
-    throw new ComparisonError(413, `The ${what} is ${width}×${height} pixels; the limit is 40 megapixels. Export it at the size it is delivered.`);
+    throw new ComparisonError(413, `The ${what} is ${width}×${height} pixels; the limit is 16 megapixels. Export it at the size it is delivered.`);
   }
+  const problem = pngHeaderProblem(bytes, what);
+  if (problem) throw new ComparisonError(415, problem);
   let decoded: ReturnType<typeof PNG.sync.read>;
   try {
     decoded = PNG.sync.read(bytes);
@@ -713,7 +744,11 @@ export async function addJudge(
   const token = newJudgeToken();
   const judge = await withRlsContext(db, rls(scope), async (trx) => {
     const study = await studyForUpdate(trx, scope, studyId);
-    if (study.status === 'closed') throw new ComparisonError(409, 'The study is closed; no judges can be added.');
+    // Judges are fixed when judging starts, as the plan is: adding judges while watching the numbers
+    // would be choosing when to stop. A judge who lost their link gets a new one (reissueJudgeLink).
+    if (study.status !== 'draft') {
+      throw new ComparisonError(409, study.status === 'closed' ? 'The study is closed; no judges can be added.' : 'Judging has started, so the judges are fixed. A judge who lost their link can be given a new one.');
+    }
     const row = (
       await sql<{ id: string; created_at: Date }>`INSERT INTO hawa.comparison_judges (study_id, tenant_id, name, kind, token_sha256)
         VALUES (${studyId}::uuid, ${scope.tenantId}::uuid, ${name}, ${kind}, ${tokenSha256(token)})
@@ -722,6 +757,28 @@ export async function addJudge(
     return { id: row.id, name, kind, createdAt: iso(row.created_at) as string, revokedAt: null, judgements: 0 };
   });
   return { judge, token };
+}
+
+/**
+ * A new link for a judge who lost theirs, on the same judge record: the old link stops working, and
+ * the judge keeps their judgements, their order and their sides, and resumes where they stopped. A
+ * revoked judge, or a closed study, gets none.
+ */
+export async function reissueJudgeLink(db: Kysely<Database>, scope: ComparisonScope, studyId: string, judgeId: string): Promise<{ judgeId: string; token: string }> {
+  if (!isUuid(studyId) || !isUuid(judgeId)) throw new ComparisonError(404, 'No such judge.');
+  const token = newJudgeToken();
+  await withRlsContext(db, rls(scope), async (trx) => {
+    const study = await studyForUpdate(trx, scope, studyId);
+    if (study.status === 'closed') throw new ComparisonError(409, 'The study is closed; no new links are issued.');
+    const row = (
+      await sql<{ revoked_at: Date | null }>`SELECT revoked_at FROM hawa.comparison_judges
+        WHERE id = ${judgeId}::uuid AND study_id = ${studyId}::uuid AND tenant_id = ${scope.tenantId}::uuid FOR UPDATE`.execute(trx)
+    ).rows[0];
+    if (!row) throw new ComparisonError(404, 'No such judge.');
+    if (row.revoked_at) throw new ComparisonError(409, "This judge's link was revoked; a revoked judge gets no new link.");
+    await sql`UPDATE hawa.comparison_judges SET token_sha256 = ${tokenSha256(token)}, link_reissued_at = now() WHERE id = ${judgeId}::uuid`.execute(trx);
+  });
+  return { judgeId, token };
 }
 
 /** Revokes a judge's link. Their judgements stay in the study (see summariseStudy); the link answers 404 from now on. */
@@ -741,7 +798,31 @@ export async function revokeJudge(db: Kysely<Database>, scope: ComparisonScope, 
   });
 }
 
-export async function studyResults(db: Kysely<Database>, scope: ComparisonScope, studyId: string): Promise<StudyResults & { studyId: string; name: string; preregistration: Preregistration; preregistrationSha256: string }> {
+/**
+ * Before a study is closed the office sees progress only: how many judgements, how many pairs are
+ * short of their judges. The share, its interval and the verdict are withheld, so nobody stops the
+ * study, or adds to it, because of how the numbers look (2026-09-24 review): the plan decides when
+ * it ends.
+ */
+export interface WithheldResults {
+  studyId: string;
+  name: string;
+  status: StudyStatus;
+  withheld: true;
+  preregistration: Preregistration;
+  preregistrationSha256: string;
+  pairs: number;
+  judgements: number;
+  decisive: number;
+  none: number;
+  pairsBelowMinJudges: number;
+  perPair: Array<{ pairId: string; label: string; judgements: number }>;
+  verdict: string;
+}
+
+export type OfficeResults = (StudyResults & { studyId: string; name: string; preregistration: Preregistration; preregistrationSha256: string; withheld?: false }) | WithheldResults;
+
+export async function studyResults(db: Kysely<Database>, scope: ComparisonScope, studyId: string): Promise<OfficeResults> {
   if (!isUuid(studyId)) throw new ComparisonError(404, 'No such study.');
   return withRlsContext(db, rls(scope), async (trx) => {
     const row = (await sql<StudyRow>`${studySelect(scope.tenantId)} AND s.id = ${studyId}::uuid`.execute(trx)).rows[0];
@@ -766,13 +847,23 @@ export async function studyResults(db: Kysely<Database>, scope: ComparisonScope,
       choice: f.choice,
       seenBefore: f.seen_before,
     }));
-    return {
-      studyId,
-      name: study.name,
-      preregistration: study.preregistration,
-      preregistrationSha256: study.preregistrationSha256,
-      ...summariseStudy({ status: study.status, preregistration: study.preregistration, pairs, facts }),
-    };
+    const results = summariseStudy({ status: study.status, preregistration: study.preregistration, pairs, facts });
+    const head = { studyId, name: study.name, preregistration: study.preregistration, preregistrationSha256: study.preregistrationSha256 };
+    if (study.status !== 'closed') {
+      return {
+        ...head,
+        status: study.status,
+        withheld: true as const,
+        pairs: results.pairs,
+        judgements: results.primary.judgements,
+        decisive: results.primary.decisive,
+        none: results.primary.none,
+        pairsBelowMinJudges: results.claim.pairsBelowMinJudges,
+        perPair: results.perPair.map((p) => ({ pairId: p.pairId, label: p.label, judgements: p.judgements })),
+        verdict: 'The results are shown when the study is closed. Until then only progress is shown, so the numbers cannot decide when judging stops.',
+      };
+    }
+    return { ...head, ...results, withheld: false as const };
   });
 }
 

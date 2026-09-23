@@ -36,10 +36,17 @@ dumps() {
 }
 
 # A plain SQL dump becomes .sql.zst; the original goes only after the compressed copy tests whole.
+# It is written as .zst.part first, so a run cut short (a full disk, a reboot) never leaves a broken
+# .sql.zst that the listing below would count as a kept dump.
 compress() {
   local f="$1"
   command -v zstd >/dev/null || return 0
-  zstd -q -T0 -6 --long=27 -f "$f" -o "$f.zst" && zstd -q -t --long=27 "$f.zst" && touch -r "$f" "$f.zst" && rm -f "$f"
+  if zstd -q -T0 -6 --long=27 -f "$f" -o "$f.zst.part" && zstd -q -t --long=27 "$f.zst.part" \
+    && touch -r "$f" "$f.zst.part" && mv -f "$f.zst.part" "$f.zst"; then
+    rm -f "$f"
+  else
+    rm -f "$f.zst.part"; return 1
+  fi
 }
 
 report() {
@@ -55,14 +62,26 @@ report() {
 
 if [[ "$MODE" == "--report" ]]; then report; exit 0; fi
 
-# 1. Pre-deploy dumps. deploy.sh writes predeploy_*.dump; before 2026-09-23 it wrote plain
-#    hawa_*.sql, which are pre-deploy dumps too (nightly dumps are hawa_*.dump, not matched here).
+# Everything to delete goes first and compression last, so one dump that will not compress (a disk
+# too full for the copy) neither stops the rest nor keeps the surplus that would have made room.
+to_compress=()
+
+# Left behind by a run that was cut short: a half-written compressed copy, and a pre-deploy dump
+# deploy.sh was still writing or checking (it removes its own on failure; these are a day old).
+for d in "$DIR" "$ARCHIVE"; do
+  if [[ -d "$d" ]]; then find "$d" -maxdepth 1 \( -name '*.zst.part' -o -name 'predeploy_*.partial' \) -mtime +0 -delete 2>/dev/null || true; fi
+done
+
+# 1. Pre-deploy dumps. deploy.sh writes predeploy_*.dump, with its .sha256 only once the dump has
+#    been checked; one without it is not counted as one of the ten. Before 2026-09-23 deploy.sh wrote
+#    plain hawa_*.sql, which are pre-deploy dumps too (nightly dumps are hawa_*.dump, not matched here).
 if [[ -d "$DIR" ]]; then
   n=0
   while read -r _ f; do
+    if [[ "$f" == */predeploy_*.dump && ! -e "$f.sha256" ]]; then continue; fi
     n=$((n + 1))
     if (( n > KEEP_PREDEPLOY )); then rm -f "$f" "$f.sha256"
-    elif [[ "$f" == *.sql ]]; then compress "$f"; fi
+    elif [[ "$f" == *.sql ]]; then to_compress+=("$f"); fi
   done < <(dumps "$DIR"/predeploy_*.dump "$DIR"/hawa_*.sql "$DIR"/hawa_*.sql.zst)
 fi
 
@@ -74,9 +93,13 @@ if [[ -d "$ARCHIVE" ]]; then
     day="${stamp:0:8}"
     if [[ "$day" < "$cutoff" || "$day" == "$last_day" ]]; then rm -f "$f" "$f.sha256"; continue; fi
     last_day="$day"
-    if [[ "$f" == *.sql ]]; then compress "$f"; fi
+    if [[ "$f" == *.sql ]]; then to_compress+=("$f"); fi
   done < <(dumps "$ARCHIVE"/hawa_*.sql "$ARCHIVE"/hawa_*.sql.zst "$ARCHIVE"/hawa_*.dump)
 fi
+
+for f in ${to_compress[@]+"${to_compress[@]}"}; do
+  compress "$f" || echo "WARNING: $(basename "$f") could not be compressed; it is kept as it is" >&2
+done
 
 # 3. Docker: build cache held to a ceiling (a rebuild recreates what it needs), and dangling images.
 #    Images a container uses, even a stopped one, are never removed.

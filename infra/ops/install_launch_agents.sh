@@ -11,7 +11,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AGENTS="$HOME/Library/LaunchAgents"; LOGS="$HOME/.hawa/logs"; mkdir -p "$AGENTS" "$LOGS"
 PATHS="/Applications/Docker.app/Contents/Resources/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.docker/bin"
 uid="$(id -u)"
+# Settings added by hand to an installed agent (the nightly job's archive destination, its passphrase
+# file and how many copies to keep) are carried over. Rewriting the plist without them sent the next
+# nightly copy to the default folder, unencrypted, with nothing to say so.
+carried_env() { # label -> <key>/<string> pairs for every HAWA_* variable the installed agent has
+  local plist="$AGENTS/$1.plist" key value
+  [[ -f "$plist" ]] || return 0
+  { /usr/libexec/PlistBuddy -c "Print :EnvironmentVariables" "$plist" 2>/dev/null || true; } \
+    | sed -nE 's/^ *(HAWA_[A-Z0-9_]+) = .*/\1/p' | while read -r key; do
+      value="$(/usr/libexec/PlistBuddy -c "Print :EnvironmentVariables:$key" "$plist")"
+      value="$(printf '%s' "$value" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+      printf '<key>%s</key><string>%s</string>' "$key" "$value"
+    done
+}
 write_plist() { # label, script, schedule-xml
+  local carried; carried="$(carried_env "$1")"
   cat > "$AGENTS/$1.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,7 +33,7 @@ write_plist() { # label, script, schedule-xml
   <key>Label</key><string>$1</string>
   <key>ProgramArguments</key><array><string>/bin/bash</string><string>$2</string></array>
   <key>WorkingDirectory</key><string>$ROOT</string>
-  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATHS</string><key>HOME</key><string>$HOME</string></dict>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATHS</string><key>HOME</key><string>$HOME</string>$carried</dict>
   $3
   <key>StandardOutPath</key><string>$LOGS/$1.log</string>
   <key>StandardErrorPath</key><string>$LOGS/$1.log</string>

@@ -44,6 +44,8 @@ export interface ChatIntake {
     clarified?: boolean;
     /** The same design as the parent's, in another size (the variant): a format, not a change. */
     reformat?: string;
+    /** The task whose question this revision answers: its photos join this one, and it counts as answered. */
+    answers?: string;
   };
 }
 

@@ -313,6 +313,12 @@ The nightly job could also copy plain, unencrypted `.sql` dumps to the off-host 
 deploy writes compressed custom-format dumps (`predeploy_*.dump`, about 40 MB instead of 550 MB) and
 archives nothing; `infra/ops/disk_cleanup.sh` keeps ten of them, one a day for 30 days of the old
 archive, and Docker's build cache under 8 GB; no plain dump is copied off the machine.
+*Review (2026-09-24):* nine failure paths in that work, each reproduced against copies with stub
+binaries and fixed. The watchdog could stop without alerting when the disk was full and Docker down.
+A failed dump kept its name and counted as a backup. A failed archive copy was silent. Temporary
+encrypted copies piled up. One file that would not compress stopped the cleanup. Rerunning
+`install_launch_agents.sh` dropped the archive destination and passphrase file. The behaviour is
+described in `docs/25_OPERATIONS_RUNBOOK.md`, Backups and Watchdog.
 
 **14.** `pnpm gate:prepare` replays stored layouts through the preparation code and makes **no model
 calls**. It was treated (in this session, by me, out loud) as proof that a model change was safe.

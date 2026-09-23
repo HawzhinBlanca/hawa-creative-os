@@ -15,12 +15,19 @@ const rootDir = path.resolve(__dirname, '../../..');
  * and never touches the files.
  */
 function outputState(): Record<string, string> {
-  const status = execSync('git status --porcelain --untracked-files=all output/', { cwd: rootDir, encoding: 'utf8' });
+  // -z: paths come raw and NUL-separated. Without it git quotes a path holding a space or a non-ASCII
+  // character, and the quoted name matched no file, so a change to that file went unseen.
+  const status = execSync('git status --porcelain -z --untracked-files=all output/', { cwd: rootDir, encoding: 'utf8' });
   const state: Record<string, string> = {};
-  for (const line of status.split('\n').filter(Boolean)) {
-    const file = line.slice(3).replace(/^.* -> /, '');
+  const entries = status.split('\0');
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!entry) continue;
+    const code = entry.slice(0, 2);
+    const file = entry.slice(3);
+    if (code[0] === 'R' || code[0] === 'C') i++; // a rename's original path is the next entry
     const full = path.resolve(rootDir, file);
-    state[`${line.slice(0, 2)} ${file}`] = fs.existsSync(full) && fs.statSync(full).isFile() ? createHash('sha256').update(fs.readFileSync(full)).digest('hex') : 'absent';
+    state[`${code} ${file}`] = fs.existsSync(full) && fs.statSync(full).isFile() ? createHash('sha256').update(fs.readFileSync(full)).digest('hex') : 'absent';
   }
   return state;
 }

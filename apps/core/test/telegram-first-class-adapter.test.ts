@@ -386,6 +386,10 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
     expect(body.authenticated).toBe(true);
     expect(body.user.id).toBe(parseInt(authorizedUserId, 10));
     expect(body.sessionToken).toContain('tg_miniapp_sess_');
+    // The token is random: it carries nothing of the user, and a second login gets another.
+    expect(body.sessionToken).not.toContain(Buffer.from(JSON.stringify(body.user)).toString('base64url').slice(0, 12));
+    const again = await (await app.request('/api/auth/telegram-miniapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: validInitData }) })).json();
+    expect(again.sessionToken).not.toBe(body.sessionToken);
 
     // Verify session token can access protected authenticated endpoints
     const authSessionRes = await app.request('/api/auth/session', {
