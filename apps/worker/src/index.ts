@@ -26,6 +26,8 @@ process.on('uncaughtException', (err: Error) => {
 });
 import { runCanvaDraft } from './canva-draft-workflow.js';
 import { outcomeRecorder } from './outcome-without-core.js';
+import { createTelegramSender, telegramSenderDepsFromEnv } from './lifecycle/telegram-sender.js';
+import { createDeliveryWorkflow } from './lifecycle/delivery.js';
 export * from './workflow.js';
 export * from './canva-draft-workflow.js';
 export * from './outbox-consumer.js';
@@ -117,10 +119,17 @@ const taskWorkflow = restate.workflow({
   },
 });
 
+// Slice 2.2 (PHASE2_DESIGN.md 2.5, 2.6): the Delivery workflow and the per-chat TelegramSender. A
+// service is never removed from this build once bound (scripts/restate-bluegreen.ts WORKER_SERVICES).
+const telegramSender = createTelegramSender(telegramSenderDepsFromEnv(sharedDb));
+const delivery = createDeliveryWorkflow();
+
 const restateHandler = restate
   .endpoint()
   .bind(taskService)
   .bind(taskWorkflow)
+  .bind(delivery)
+  .bind(telegramSender)
   .http1Handler();
 
 let outboxConsumer: OutboxConsumer | null = null;
@@ -218,7 +227,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ready',
-      services: ['TaskService', 'TaskWorkflow'],
+      services: ['TaskService', 'TaskWorkflow', 'Delivery', 'TelegramSender'],
       outboxConsumer: outboxConsumer ? 'active' : 'idle',
     }));
     return;
@@ -227,7 +236,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  log.info(`Hawa Worker listening on port ${port} with Restate services [TaskService, TaskWorkflow]`);
+  log.info(`Hawa Worker listening on port ${port} with Restate services [TaskService, TaskWorkflow, Delivery, TelegramSender]`);
 });
 
 const shutdown = () => {

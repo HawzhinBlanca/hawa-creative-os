@@ -176,8 +176,12 @@ export type RegisterOutcome =
   | { ok: false; state: 'refused'; reason: string }
   | { ok: false; state: 'partial'; deploymentId: string | null; reason: string };
 
-/** The services a worker build hosts (apps/worker/src/index.ts); checked even when GET /services is short. */
-export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService'] as const;
+/**
+ * The services a worker build hosts (apps/worker/src/index.ts); checked even when GET /services is
+ * short. Every service ever bound stays here and in the build: Restate keeps a service the new build
+ * does not host on the old deployment, which then never drains (PHASE2_DESIGN.md 1.2 finding 7).
+ */
+export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'Delivery', 'TelegramSender'] as const;
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

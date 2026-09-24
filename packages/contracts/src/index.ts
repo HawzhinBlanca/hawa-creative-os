@@ -10,3 +10,4 @@ export * from './identities.js';
 export * from './release-manifest.js';
 export * from './task-status.js';
 export * from './blobs.js';
+export * from './lifecycle-delivery.js';

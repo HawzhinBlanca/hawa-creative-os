@@ -636,6 +636,8 @@ POST /v1/ingress/rehearsal
 POST /v1/ingress/unified
 POST /v1/integrations/canva/authorize
 POST /v1/integrations/canva/disconnect
+POST /v1/internal/lifecycle/:requestId/deliveries/:approvalId/prepare
+POST /v1/internal/tasks/:taskId/delivery-finished
 POST /v1/judge/:token/judgments
 POST /v1/messages/:messageId/promote
 POST /v1/migration/archive

@@ -8,7 +8,19 @@
  * database. The publication, its files and its row are in Postgres, and so is the outbox.
  */
 import crypto from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, type Publisher, type RequestContext } from '@hawa/contracts';
+import {
+  CHANNEL_INGRESS_USER_ID,
+  SYSTEM_AUTOMATION_USER_ID,
+  TASK_TRANSITIONED_EVENT,
+  deliveryWorkflowId,
+  taskTransitioned,
+  type DeliveryInput,
+  type DeliveryOutcome,
+  type PreparedDelivery,
+  type Publisher,
+  type RequestContext,
+} from '@hawa/contracts';
+import { chaosPoint } from '@hawa/observability';
 import { TaskStateMachine, type PinnedExport } from '@hawa/domain';
 import {
   sql,
@@ -50,6 +62,31 @@ export interface OmnichannelDeliveryDeps {
 }
 
 export type OmnichannelDelivery = ReturnType<typeof createOmnichannelDelivery>;
+
+/** How one delivery runs. `mode: 'workflow'` is the Delivery workflow's prepare step (deliverOmnichannel). */
+export interface DeliveryOptions {
+  policy?: string;
+  designRevisionId?: string;
+  approvalId?: string;
+  mode?: 'legacy' | 'workflow';
+}
+
+/** What the publish route is told when it hands a delivery to the Delivery workflow. */
+export type WorkflowDeliveryStart =
+  | { ok: true; deliveryId: string; run: number; alreadyRunning: boolean; recorded?: DeliveryOutcome['outcome'] }
+  | { ok: true; complete: true; publicationId: string }
+  | { ok: false; status: number; code: string; message: string };
+
+/** The code startWorkflowDelivery answers when Core's own delivery already owns the publication. */
+export const DELIVERY_OWNED_BY_CORE = 'DELIVERY_OWNED_BY_CORE';
+
+/** What the Delivery workflow reports to Core's delivery-finished endpoint (slice 2.2). */
+export interface DeliveryFinishedReport {
+  deliveryId: string;
+  approvalId: string;
+  run: number;
+  outcome: DeliveryOutcome;
+}
 
 export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   const {
@@ -194,12 +231,68 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   /** Tasks whose delivery is running in this process: a task left PUBLISHING with none is stranded. */
   const deliveriesInFlight = new Set<string>();
 
+  /** Tells the Desk the task moved, in the one task:transitioned shape. */
+  const broadcastMove = (taskId: string, from: string, to: string) => {
+    try {
+      broadcast(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from, to }));
+    } catch (err) {
+      log.error(`[core:events] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, err instanceof Error ? err.message : err);
+    }
+  };
+
+  const tenantOf = (task: { tenantId?: string } | null | undefined) => (task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID);
+
+  /** The task's requesting Telegram chat: the task's own record of it, else its `task.created` event. */
+  async function requesterChatOf(task: ({ tenantId?: string; sourcePlatform?: unknown; sourceChannelId?: unknown }) | null | undefined, taskId: string): Promise<string | null> {
+    const notification = await import('./delivery-notification.js');
+    const tenantId = tenantOf(task);
+    return notification.resolveRequesterChat(
+      task,
+      db && isValidUuid(taskId)
+        ? () => withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+            (await sql<{ data: Parameters<typeof notification.requesterChatFromIntake>[0] }>`SELECT data FROM hawa.task_events
+              WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
+              ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
+        : undefined
+    );
+  }
+
+  /**
+   * Who delivers the task: 'restate' when any of its publications is the Delivery workflow's (slice
+   * 2.2); 'core' when Core's own delivery has started one, or has queued the requester's files in the
+   * outbox (a chat-only delivery can do that with no publication row); null when nothing has started.
+   * Throws when Postgres cannot be read: the caller must not guess, since either path acting on the
+   * other's delivery would send the files a second time.
+   */
+  async function deliveryExecutorOfTask(task: { tenantId?: string } | undefined, taskId: string): Promise<'core' | 'restate' | null> {
+    if (!db || !isValidUuid(taskId)) return null;
+    const tenantId = tenantOf(task);
+    return withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      const row = (await sql<{ executor: 'core' | 'restate' }>`SELECT executor FROM hawa.publications
+        WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
+        ORDER BY (executor = 'restate') DESC, created_at DESC LIMIT 1`.execute(trx)).rows[0];
+      if (row) return row.executor;
+      return (await coreQueuedFiles(trx, tenantId, taskId)) ? 'core' : null;
+    });
+  }
+
+  /** Whether Core's own delivery queued the task's files for the requester (a `notify.published` command). */
+  async function coreQueuedFiles(trx: Kysely<Database>, tenantId: string, taskId: string, publicationKey?: string): Promise<boolean> {
+    const { deliveredNotificationKey } = await import('./delivery-notification.js');
+    const rows = publicationKey
+      ? (await sql`SELECT 1 FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND command_type = 'notify.published'
+          AND idempotency_key = ${deliveredNotificationKey(taskId, publicationKey)} LIMIT 1`.execute(trx)).rows
+      : (await sql`SELECT 1 FROM hawa.outbox_commands WHERE tenant_id = ${tenantId}::uuid AND command_type = 'notify.published'
+          AND aggregate_id = ${taskId}::uuid LIMIT 1`.execute(trx)).rows;
+    return rows.length > 0;
+  }
+
   async function executeOmnichannelPublish(
     taskId: string,
     actor: { type: string; id: string } = { type: 'workflow', id: 'publisher' },
     reason: string = 'Omnichannel campaign published',
     autoApproveFromAwaiting: boolean = false,
-    deliveryOptions?: { policy?: string; designRevisionId?: string; approvalId?: string }
+    deliveryOptions?: DeliveryOptions
   ) {
     deliveriesInFlight.add(taskId);
     try {
@@ -209,13 +302,23 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
   }
 
+  /**
+   * `mode: 'workflow'` is the Delivery workflow's prepare step (slice 2.2): the Drive and Sheets work
+   * only. The task is already PUBLISHING (the publish route moved it when it started the workflow),
+   * nothing is written to the outbox (the workflow sends the files itself, through TelegramSender),
+   * and neither the task nor the publication is completed here (Core's delivery-finished endpoint
+   * does that once the requester has the files). The answer is `{ ok: true, prepared }`.
+   *
+   * Any other mode is Core's own delivery, which refuses a publication the workflow owns.
+   */
   async function deliverOmnichannel(
     taskId: string,
     actor: { type: string; id: string },
     reason: string,
     autoApproveFromAwaiting: boolean,
-    deliveryOptions?: { policy?: string; designRevisionId?: string; approvalId?: string }
+    deliveryOptions?: DeliveryOptions
   ) {
+    const workflowMode = deliveryOptions?.mode === 'workflow';
     // Postgres's status, not this process's copy: a delivery decided on a stale APPROVED sent a task
     // that had since been sent back or delivered by another path.
     let task: Awaited<ReturnType<typeof readCurrentTask>>;
@@ -226,6 +329,16 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       throw err;
     }
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
+    if (workflowMode) {
+      // The workflow's own run only: a task delivered already, or taken back, is not delivered again.
+      const state = String(task.state || task.status || '').toLowerCase();
+      if (state === 'complete') {
+        return { ok: false, status: 409, code: 'DELIVERY_ALREADY_COMPLETE', message: `Task ${taskId} is delivered already` };
+      }
+      if (state !== 'publishing' && state !== 'publish_reconciliation') {
+        return { ok: false, status: 409, code: 'NOT_PUBLISHING', message: `Task ${taskId} is '${state}', not being delivered` };
+      }
+    }
 
     // Only the task's own client DNA names a destination; another client's folder is never a fallback.
     const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
@@ -284,7 +397,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // (it used to be answered from the receipt this process kept, which a restart lost). COMPLETE has
     // no transitions, so this is read before the move to PUBLISHING, which would refuse it with 409;
     // a chat approve on a delivered task then got an error instead of the stored delivery.
-    if (task.status === 'COMPLETE' && publicationRepo && db && isValidUuid(taskId)) {
+    if (!workflowMode && task.status === 'COMPLETE' && publicationRepo && db && isValidUuid(taskId)) {
       const doneTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
       const done = await withRlsContext(db, { tenantId: doneTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
         publicationRepo.findByKey(publicationKey, doneTenantId, trx)
@@ -298,8 +411,66 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
     }
 
+    /**
+     * The workflow's answer: what the requester is sent, and what became of the archive. Built from
+     * the same payloads Core's own delivery writes to the outbox, so the notice reads the same.
+     */
+    const preparedAnswer = (
+      payload: { files: PreparedDelivery['files']; driveFolderId: string; spreadsheetId: string; sheetsConfirmed: boolean; sheetRowNumber: number | null; sheetProblem: string | null } | null,
+      facts: { chatId: string | null; chatOnly: boolean; archived: boolean; sheetsConfirmed: boolean; archiveProblem?: string | null }
+    ): { ok: true; prepared: PreparedDelivery } => ({
+      ok: true,
+      prepared: {
+        ok: true,
+        taskId,
+        publicationKey,
+        chatId: facts.chatId,
+        title: task.title || null,
+        files: payload?.files ?? [],
+        chatOnly: facts.chatOnly,
+        archived: facts.archived,
+        sheetsConfirmed: facts.sheetsConfirmed,
+        notice: {
+          title: task.title || null,
+          files: payload?.files ?? [],
+          driveFolderId: payload?.driveFolderId ?? '',
+          spreadsheetId: payload?.spreadsheetId ?? '',
+          sheetsConfirmed: payload?.sheetsConfirmed ?? facts.sheetsConfirmed,
+          sheetRowNumber: payload?.sheetRowNumber ?? null,
+          sheetProblem: payload?.sheetProblem ?? null,
+          ...(facts.archiveProblem ? { archiveProblem: facts.archiveProblem } : {}),
+        },
+      },
+    });
+
     const doPublish = async () => {
-      if (autoApproveFromAwaiting && task.status === 'AWAITING_APPROVAL') {
+      // One executor per publication (slice 2.2). Read under the publish lock, which the publish route
+      // also takes when it hands a delivery to the workflow, so the answer cannot change under us.
+      if (publicationRepo && db && isValidUuid(taskId)) {
+        const ownerTenant = tenantOf(task);
+        let owner: 'core' | 'restate' | null;
+        try {
+          owner = (await withRlsContext(db, { tenantId: ownerTenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+            publicationRepo.findByKey(publicationKey, ownerTenant, trx)))?.executor ?? null;
+        } catch (err) {
+          log.error('[core:omnichannel] Could not read who delivers this publication:', err);
+          return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Who delivers this publication could not be read; try again' };
+        }
+        if (!workflowMode && owner === 'restate') {
+          return {
+            ok: false,
+            status: 409,
+            title: 'Delivered By The Workflow',
+            code: 'DELIVERY_OWNED_BY_WORKFLOW',
+            message: `The delivery of task ${taskId} is run by the Delivery workflow; press Deliver in the Desk to follow or retry it`,
+          };
+        }
+        if (workflowMode && owner !== 'restate') {
+          return { ok: false, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `The publication of task ${taskId} is not the workflow's to deliver` };
+        }
+      }
+
+      if (!workflowMode && autoApproveFromAwaiting && task.status === 'AWAITING_APPROVAL') {
         const approveTrans = sm.transition('APPROVED', actor as any, 'Approved via chat trigger');
         if (approveTrans.ok) {
           task.status = 'APPROVED';
@@ -326,7 +497,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
 
       // Files already delivered with the Sheets row unconfirmed: publishing again retries only the row.
-      const retryingSheetRow = task.status === 'PUBLISH_RECONCILIATION';
+      // The workflow's task is PUBLISHING already: the publish route moved it.
+      const retryingSheetRow = task.status === 'PUBLISH_RECONCILIATION' || workflowMode;
       if (!retryingSheetRow) {
         const trans = sm.transition('PUBLISHING', actor as any, 'Omnichannel publication started');
         if (!trans.ok) {
@@ -374,6 +546,18 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // after the move to PUBLISHING, leaving the task there for good with nothing sent.
     const failTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
     const failBeforeDrive = async (failure: { status: number; code: string; message: string }) => {
+      if (workflowMode) {
+        // The workflow asks again: a database that could not record the intent is not a Drive failure.
+        if (failure.code === 'PUBLICATION_INTENT_PERSISTENCE_FAILED') return { ok: false, status: 503, code: failure.code, message: failure.message };
+        // The files still go to the requester, as in Core's own delivery; the workflow sends them.
+        const archiveProblem = failure.code === 'CREDENTIALS_MISSING' ? 'the office Google account is not connected' : String(failure.code || 'Drive refused the upload');
+        const chatId = await requesterChatOf(task, taskId);
+        const notification = await import('./delivery-notification.js');
+        const chatOnly = notification.buildChatOnlyNotificationPayload({
+          taskId, clientId: task.clientId || null, title: task.title || null, chatId, publicationKey, pins: approval.pinnedExports, files, archiveProblem,
+        });
+        return preparedAnswer(chatOnly, { chatId, chatOnly: true, archived: false, sheetsConfirmed: false, archiveProblem });
+      }
       // The Drive archive could not be written, and the requester still gets the design the office
         // approved: the pinned exports are stored and hash-checked, and the worker sends those bytes.
         // The archive stays failed here (and in Desk) until Drive works; a later successful delivery
@@ -550,13 +734,15 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         message: publishResult.error.message,
       });
     }
+    // The chaos suite kills Core here: the files are in Drive, and nothing of it is recorded yet.
+    await chaosPoint('core.delivery.after-drive', { taskId, mode: workflowMode ? 'workflow' : 'core' });
 
     // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
     // unconfirmed leave the task in PUBLISH_RECONCILIATION (the database keeps 'publishing'); it used
     // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
     const sheetsConfirmed = publishResult.value.state === 'complete';
     const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
-    if (task.status !== finalStatus) {
+    if (!workflowMode && task.status !== finalStatus) {
       const finishTrans = sm.transition(
         finalStatus,
         actor as any,
@@ -600,8 +786,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       files,
     });
 
-    // A task made in Desk has no chat to tell; writing the command anyway only dead-lettered it.
-    if (outboxPayload && !outboxPayload.chatId) {
+    // A task made in Desk has no chat to tell; writing the command anyway only dead-lettered it. The
+    // workflow sends the files itself (TelegramSender), so nothing goes to the outbox for it.
+    if (workflowMode) {
+      // Nothing to write to the outbox.
+    } else if (outboxPayload && !outboxPayload.chatId) {
       log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
     } else if (outboxPayload && outboxRepo && db && isValidUuid(taskId)) {
       try {
@@ -621,7 +810,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
     }
 
-    if (sheetsConfirmed && taskRepo && db && isValidUuid(taskId)) {
+    if (!workflowMode && sheetsConfirmed && taskRepo && db && isValidUuid(taskId)) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
         await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -674,7 +863,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             }, trx);
           }
 
-          if (sheetsConfirmed) {
+          // The workflow's publication is completed with its task, by delivery-finished.
+          if (sheetsConfirmed && !workflowMode) {
             await publicationRepo.markComplete({
               tenantId: pubTenantId,
               publicationId: dbPub.id,
@@ -684,7 +874,14 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         });
       } catch (err) {
         log.error('[core:omnichannel:receipts] Error persisting drive/sheet receipts:', err);
+        // The workflow asks again, and Drive adopts the files it already holds: nothing is uploaded twice.
+        if (workflowMode) return { ok: false, status: 503, code: 'RECEIPTS_NOT_RECORDED', message: 'The Drive and Sheets receipts could not be recorded; try again' };
       }
+    }
+
+    if (workflowMode) {
+      const archived = (publishResult.value.driveFiles || []).some((f: { verified?: boolean }) => f.verified);
+      return preparedAnswer(outboxPayload, { chatId: outboxPayload?.chatId ?? (await requesterChatOf(task, taskId)), chatOnly: false, archived, sheetsConfirmed });
     }
 
     // What Google confirmed is recorded above (drive_refs, sheet_syncs); the receipt routes read it
@@ -762,6 +959,14 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
    */
   async function reopenInterruptedDelivery(task: { status?: string; tenantId?: string }, taskId: string, userId: string): Promise<'reopened' | 'failed' | 'no'> {
     if (String(task?.status || '').toLowerCase() !== 'publishing' || deliveriesInFlight.has(taskId)) return 'no';
+    // A delivery the Delivery workflow runs is not stranded by a Core restart: the workflow carries on
+    // and reports back (slice 2.2). Taking it back to APPROVED here would let a second one start.
+    try {
+      if ((await deliveryExecutorOfTask(task, taskId)) === 'restate') return 'no';
+    } catch (err) {
+      log.error('[core:publish] Could not read who delivers this task:', err);
+      return 'failed';
+    }
     const machine = new TaskStateMachine(taskId, 'PUBLISHING');
     const back = machine.transition('APPROVED', { type: 'user', id: userId } as Parameters<typeof machine.transition>[1], 'Delivery interrupted; delivered again');
     if (taskRepo && db && isValidUuid(taskId)) {
@@ -776,6 +981,260 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
     if (back.ok) task.status = 'APPROVED';
     return 'reopened';
+  }
+
+  /**
+   * The publish route's side of a delivery run by the Delivery workflow (slice 2.2, PHASE2_DESIGN.md
+   * section 3): the same checks as Core's own delivery (an approval with its pinned exports), then,
+   * under the publish lock that Core's own delivery also takes, one transaction that
+   * - records the publication as the workflow's (`executor = 'restate'`), creating it if need be,
+   * - moves the task APPROVED -> PUBLISHING (a task left PUBLISHING, the Sheets row unconfirmed or an
+   *   earlier delivery cut off, stays so: the new run retries the archive, not the files), and
+   * - counts the run (`executor_run`), whose number names the workflow key.
+   * Then it asks Restate to start that workflow. A run already in flight (started, not reported back)
+   * is asked for again under its own key, which Restate answers 409 for: nothing starts twice, and a
+   * start whose answer was lost is made good.
+   */
+  async function startWorkflowDelivery(
+    taskId: string,
+    request: { actorId: string; chatId: string | null; policy?: string; designRevisionId?: string; approvalId?: string }
+  ): Promise<WorkflowDeliveryStart> {
+    if (!db || !taskRepo || !publicationRepo || !isValidUuid(taskId)) {
+      return { ok: false, status: 503, code: 'DATABASE_REQUIRED', message: 'The Delivery workflow keeps its publication in the database, which is not connected' };
+    }
+    const ingress = (process.env.RESTATE_INGRESS_URL || '').replace(/\/+$/, '');
+    if (!ingress) return { ok: false, status: 503, code: 'RESTATE_NOT_CONFIGURED', message: 'RESTATE_INGRESS_URL is not set, so the Delivery workflow cannot be started' };
+    let task: Awaited<ReturnType<typeof readCurrentTask>>;
+    try {
+      task = await readCurrentTask(taskId);
+    } catch (err) {
+      if (err instanceof TaskStoreUnavailableError) return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: err.message };
+      throw err;
+    }
+    if (!task) return { ok: false, status: 404, code: 'TASK_NOT_FOUND', message: 'Task Not Found' };
+    const tenantId = tenantOf(task);
+    const client = await resolveClientDna(task.clientId, { tenantId });
+    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
+    const approval = await findApprovalForDelivery(tenantId, taskId, task, request.designRevisionId || task.latestRevisionId, {
+      approvalId: request.approvalId,
+      allowInvalidated: request.policy === 'deliver_approved_stored',
+    });
+    if (!approval) return { ok: false, status: 422, code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
+    const deliverables = await loadPinnedDeliverables(
+      deliverableStore,
+      { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
+      approval.pinnedExports
+    );
+    if (!deliverables.ok) return { ok: false, status: 422, code: deliverables.code, message: deliverables.message };
+    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
+
+    type Claim = { kind: 'complete'; publicationId: string } | { kind: 'running'; run: number } | { kind: 'started'; run: number; from: string }
+      | { kind: 'wrong_state'; state: string } | { kind: 'core' };
+    let held: Awaited<ReturnType<typeof withSessionAdvisoryLock<Claim>>>;
+    try {
+      held = await withSessionAdvisoryLock(db, `publish:${taskId}`, () =>
+        withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx): Promise<Claim> => {
+          let created = false;
+          const existing = await publicationRepo.findByKey(publicationKey, tenantId, trx);
+          // Core's own delivery queued these files for the requester (a chat-only delivery writes no
+          // publication first): it stays Core's, or the requester would get them twice.
+          if ((!existing || existing.executor === 'core') && await coreQueuedFiles(trx, tenantId, taskId, publicationKey)) return { kind: 'core' };
+          if (!existing) {
+            created = true;
+            await publicationRepo.createPublication({
+              tenantId,
+              taskId,
+              designRevisionId: approval.designRevisionId,
+              approvalId: approval.approvalId,
+              publicationKey,
+              packageManifest: { files: deliverables.files.map((f) => ({ name: f.filename, sha256: f.sha256, size: f.byteSize })) },
+              packageSha256: deliverables.packageHash,
+              initialState: 'pending',
+            }, trx);
+          }
+          const pub = (await sql<{ id: string; state: string; executor: string; executor_run: number; executor_finished_run: number }>`
+            SELECT id, state::text AS state, executor, executor_run, executor_finished_run FROM hawa.publications
+            WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
+          if (pub.state === 'complete') return { kind: 'complete', publicationId: String(pub.id) };
+          // Core's own delivery started this publication (before the chat was on the list): it may
+          // have sent the files through the outbox already, so it stays Core's. One owner per fact.
+          if (pub.executor === 'core' && !created) return { kind: 'core' };
+          if (pub.executor === 'restate' && pub.executor_run > pub.executor_finished_run) return { kind: 'running', run: pub.executor_run };
+          const current = await taskRepo.findById(taskId, tenantId, trx);
+          const state = String(current?.state || '');
+          if (state === 'approved') {
+            await taskRepo.transitionState({
+              taskId, tenantId, fromState: 'approved', toState: 'publishing', actorType: 'user', actorId: request.actorId,
+              reason: 'Delivery started by the Delivery workflow',
+            }, trx);
+          } else if (state !== 'publishing') {
+            return { kind: 'wrong_state', state };
+          }
+          const run = Number(pub.executor_run) + 1;
+          await sql`UPDATE hawa.publications SET executor = 'restate', executor_run = ${run}, updated_at = now()
+            WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
+          return { kind: 'started', run, from: state };
+        })
+      );
+    } catch (err) {
+      log.error('[core:publish:workflow] Could not hand the delivery to the Delivery workflow:', err);
+      return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'The delivery could not be recorded; nothing was started. Try again' };
+    }
+    if (!held.acquired) {
+      return { ok: false, status: 409, code: 'PUBLICATION_IN_PROGRESS', message: 'A delivery of this task is running right now; try again in a moment' };
+    }
+    const claim = held.value;
+    if (claim.kind === 'complete') return { ok: true, complete: true, publicationId: claim.publicationId };
+    if (claim.kind === 'core') {
+      return { ok: false, status: 409, code: DELIVERY_OWNED_BY_CORE, message: `The delivery of task ${taskId} was started by Core; it is finished there` };
+    }
+    if (claim.kind === 'wrong_state') {
+      return { ok: false, status: 409, code: 'NOT_APPROVED', message: `Task ${taskId} is in status '${claim.state}', not 'approved'` };
+    }
+    if (claim.kind === 'started' && claim.from !== 'publishing') broadcastMove(taskId, claim.from, 'publishing');
+
+    const deliveryId = deliveryWorkflowId(taskId, approval.approvalId, claim.run);
+    const officeChatId = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((c) => c.trim()).find(Boolean) || null;
+    const input: DeliveryInput = {
+      v: 1,
+      requestId: taskId,
+      deliveryId,
+      tenantId,
+      taskId,
+      approvalId: approval.approvalId,
+      revisionId: approval.designRevisionId,
+      chatId: request.chatId,
+      officeChatId,
+      reportTo: 'core',
+      run: claim.run,
+      ...(request.policy ? { policy: request.policy } : {}),
+    };
+    try {
+      // A workflow runs once per key: Restate answers 409 for a key it has seen, running or finished.
+      const res = await fetch(`${ingress}/Delivery/${encodeURIComponent(deliveryId)}/run/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok || res.status === 409) {
+        const alreadyRunning = claim.kind === 'running' || res.status === 409;
+        if (claim.kind === 'running') {
+          // A run that ended without Core hearing of it (Core was away for the hour its report waited)
+          // left the task PUBLISHING. Its outcome is the workflow's output: record it now.
+          const recorded = await recordFinishedRun(ingress, taskId, tenantId, approval.approvalId, deliveryId, claim.run);
+          if (recorded) return { ok: true, deliveryId, run: claim.run, alreadyRunning: false, recorded };
+        }
+        return { ok: true, deliveryId, run: claim.run, alreadyRunning };
+      }
+      const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      log.error(`[core:publish:workflow] Restate refused the Delivery workflow ${deliveryId}: HTTP ${res.status} ${detail}`);
+      return { ok: false, status: 503, code: 'DELIVERY_NOT_STARTED', message: `Restate did not start the delivery (HTTP ${res.status}); press Deliver again` };
+    } catch (err) {
+      log.error(`[core:publish:workflow] Restate did not answer for the Delivery workflow ${deliveryId}:`, err);
+      return { ok: false, status: 503, code: 'DELIVERY_NOT_STARTED', message: 'Restate did not answer, so the delivery may not have started; press Deliver again' };
+    }
+  }
+
+  /**
+   * The outcome of a Delivery run Restate has finished, recorded as its report would have been; null
+   * while it runs, or when Restate cannot say. Restate keeps a workflow's output for its retention (7 days).
+   */
+  async function recordFinishedRun(ingress: string, taskId: string, tenantId: string, approvalId: string, deliveryId: string, run: number):
+    Promise<DeliveryOutcome['outcome'] | null> {
+    let outcome: DeliveryOutcome;
+    try {
+      const res = await fetch(`${ingress}/restate/workflow/Delivery/${encodeURIComponent(deliveryId)}/output`, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return null;
+      outcome = await res.json() as DeliveryOutcome;
+    } catch {
+      return null;
+    }
+    if (!outcome || !['delivered', 'chat_only', 'uncertain', 'failed'].includes(String(outcome.outcome))) return null;
+    const recorded = await finishWorkflowDelivery(taskId, tenantId, { deliveryId, approvalId, run, outcome });
+    if (!recorded.ok) {
+      log.error(`[core:publish:workflow] The finished run ${deliveryId} could not be recorded: ${recorded.code} ${recorded.message}`);
+      return null;
+    }
+    log.warn(`[core:publish:workflow] ${deliveryId} had finished (${outcome.outcome}) without its report reaching Core; recorded now`);
+    return outcome.outcome;
+  }
+
+  /**
+   * The Delivery workflow's prepare step: Core's own delivery in workflow mode (deliverOmnichannel),
+   * for this publication only. The tenant is the task's; a request naming another is refused.
+   */
+  async function prepareWorkflowDelivery(taskId: string, request: { tenantId: string; approvalId: string; revisionId?: string; policy?: string }) {
+    return deliverOmnichannel(taskId, { type: 'workflow', id: 'delivery-workflow' }, 'Delivered by the Delivery workflow', false, {
+      mode: 'workflow',
+      approvalId: request.approvalId,
+      designRevisionId: request.revisionId,
+      policy: request.policy,
+    });
+  }
+
+  /**
+   * The Delivery workflow's report (slice 2.2; in 2.3 it goes to RequestLifecycle instead). One
+   * transaction records the run as finished and moves the task as Core's own delivery did:
+   * - archived and the Sheets row confirmed: COMPLETE, with the publication;
+   * - archived, the row not confirmed: stays PUBLISHING (PUBLISH_RECONCILIATION), and Deliver retries
+   *   the row;
+   * - nothing archived (Drive refused, or the prepare step gave up): back to APPROVED, so Deliver can
+   *   be pressed again once Drive works. The requester's files are sent once whatever happens.
+   * A report for a run already recorded answers 'replayed' and changes nothing.
+   */
+  async function finishWorkflowDelivery(taskId: string, tenantId: string, report: DeliveryFinishedReport):
+    Promise<{ ok: true; status: 'applied' | 'replayed'; taskState: string } | { ok: false; status: number; code: string; message: string }> {
+    if (!db || !taskRepo || !publicationRepo || !isValidUuid(taskId) || !isValidUuid(tenantId) || !isValidUuid(report.approvalId)) {
+      return { ok: false, status: 422, code: 'INVALID_REPORT', message: 'A delivery report names a task, a tenant and an approval' };
+    }
+    const publicationKey = `pub_key_${taskId}_${report.approvalId}`;
+    const outcome = report.outcome;
+    let result: { ok: true; status: 'applied' | 'replayed'; taskState: string } | { ok: false; status: number; code: string; message: string };
+    try {
+      result = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number }>`
+          SELECT id, executor, executor_run, executor_finished_run FROM hawa.publications
+          WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
+        if (!pub) return { ok: false as const, status: 404, code: 'PUBLICATION_NOT_FOUND', message: `No publication ${publicationKey}` };
+        if (pub.executor !== 'restate') return { ok: false as const, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `Publication ${publicationKey} is Core's` };
+        const current = await taskRepo.findById(taskId, tenantId, trx);
+        const state = String(current?.state || '');
+        if (report.run <= Number(pub.executor_finished_run)) return { ok: true as const, status: 'replayed' as const, taskState: state };
+        if (report.run > Number(pub.executor_run)) return { ok: false as const, status: 409, code: 'UNKNOWN_RUN', message: `Run ${report.run} of ${publicationKey} was never started` };
+        let next = state;
+        // Only a task still being delivered moves: one delivered or taken back meanwhile stays as it is.
+        if (state === 'publishing') {
+          if (outcome.archived && outcome.sheetsConfirmed) {
+            await taskRepo.transitionState({
+              taskId, tenantId, fromState: 'publishing', toState: 'complete', actorType: 'workflow', actorId: 'delivery-workflow',
+              reason: 'Delivered by the Delivery workflow', data: { publicationKey, deliveryId: report.deliveryId, outcome: outcome.outcome },
+            }, trx);
+            await publicationRepo.markComplete({ tenantId, publicationId: String(pub.id), taskId }, trx);
+            next = 'complete';
+          } else if (!outcome.archived) {
+            await taskRepo.transitionState({
+              taskId, tenantId, fromState: 'publishing', toState: 'approved', actorType: 'workflow', actorId: 'delivery-workflow',
+              reason: `Delivery ended before the Drive archive: ${outcome.reason || outcome.outcome}`,
+              data: { publicationKey, deliveryId: report.deliveryId, outcome: outcome.outcome },
+            }, trx);
+            next = 'approved';
+          }
+        }
+        await sql`UPDATE hawa.publications SET executor_finished_run = ${report.run}, updated_at = now()
+          WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
+        return { ok: true as const, status: 'applied' as const, taskState: next };
+      });
+    } catch (err) {
+      log.error('[core:delivery-finished] Could not record the Delivery workflow\'s report:', err);
+      return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'The delivery report could not be recorded; send it again' };
+    }
+    if (result.ok && result.status === 'applied') {
+      if (result.taskState === 'complete') broadcast('task:published', { taskId, status: 'COMPLETE', executor: 'restate' });
+      else if (result.taskState === 'publishing') broadcast('task:publish_reconciliation', { taskId, status: 'PUBLISH_RECONCILIATION', executor: 'restate' });
+      else if (result.taskState === 'approved') broadcastMove(taskId, 'publishing', 'approved');
+    }
+    return result;
   }
 
   /** A change the client asked for that delivery would leave out (null: it could not be checked). */
@@ -796,5 +1255,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     executeOmnichannelPublish,
     reopenInterruptedDelivery,
     changeBlockingDelivery,
+    requesterChatOf,
+    deliveryExecutorOfTask,
+    startWorkflowDelivery,
+    prepareWorkflowDelivery,
+    finishWorkflowDelivery,
   };
 }

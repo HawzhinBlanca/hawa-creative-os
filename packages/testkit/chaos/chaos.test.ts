@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, restateQuery, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, restateQuery, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, checkRequest, deliver, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sentTo, sleep,
@@ -46,6 +46,12 @@ function sampleMemory(): void {
 
 let chatSeq = 9_200_000 + (Date.now() % 100_000) * 10;
 const newChat = () => String(++chatSeq);
+// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300012, one per scenario.
+let flaggedSeq = 9_300_000;
+const flaggedChat = () => {
+  if (flaggedSeq >= 9_300_012) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
+  return String(++flaggedSeq);
+};
 
 /**
  * One scenario: a fresh chat, the script, quiescence, then the invariants. Every invariant is
@@ -60,12 +66,16 @@ interface Expectation {
   extra?: InvariantResult[];
   /** The scenario made no design request in its chat (R4), so only `extra` applies. */
   skipRequestChecks?: boolean;
+  /** The approved files the delivery sends (default 1). */
+  files?: number;
+  /** Who delivers: 'restate' for a chat on HAWA_LIFECYCLE_CHATS (slice 2.2). */
+  executor?: 'core' | 'restate';
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean } = {}) {
   const run = enabled && (only.length === 0 || only.includes(name));
   it.skipIf(!run)(`${name}: ${what}`, async () => {
-    const chat = newChat();
+    const chat = options.flagged ? flaggedChat() : newChat();
     const events: string[] = [];
     const started = Date.now();
     const report: ScenarioReport = { name, what, ms: 0, invariants: [], events };
@@ -323,6 +333,92 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   });
 
+  // Slice 2.2 (PHASE2_DESIGN.md section 3; design R1 S8): the Delivery workflow and TelegramSender, on
+  // chats listed in HAWA_LIFECYCLE_CHATS. Each request pins two files; no scenario presses Deliver twice.
+  scenario('L2.0', 'flagged chat: the Delivery workflow sends both approved files and the notice once, no faults', async (chat, events) => {
+    const { deliveryId } = await workflowRequest(chat, 'L2.0', events);
+    // Core reads a finished run's outcome here when its report never arrived (startWorkflowDelivery).
+    const output = await fetch(`http://127.0.0.1:${PORTS.restateIngress}/restate/workflow/Delivery/${encodeURIComponent(deliveryId)}/output`);
+    const outcome = output.ok ? await output.json() as { outcome?: string } : null;
+    events.push(`workflow output: HTTP ${output.status} ${JSON.stringify(outcome)}`);
+    return {
+      delivered: true, files: 2, executor: 'restate',
+      extra: [{ name: "Restate keeps the finished run's outcome where Core reads it", ok: output.status === 200 && outcome?.outcome === 'delivered', detail: `HTTP ${output.status} ${JSON.stringify(outcome)}` }],
+    };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K14', 'flagged chat: Core killed in the middle of the delivery (Drive upload slowed to 8 s), back after 5 s; Deliver pressed once', async (chat, events) => {
+    let stateAfterRestart = '';
+    await workflowRequest(chat, 'L2.K14', events, {
+      beforeDeliver: async () => { await fakes.googleDelay({ path: '^/drive/v3/files', delayMs: 8000, n: 1 }); },
+      afterDeliver: async (taskId) => {
+        await sleep(2000);
+        const stateAtKill = await taskState(taskId);
+        kill('core');
+        await sleep(5000);
+        start('core');
+        await waitHealthy('core');
+        stateAfterRestart = String(await taskState(taskId));
+        events.push(`killed core 2 s into the delivery (task ${stateAtKill}); after the restart: task ${stateAfterRestart}`);
+      },
+    });
+    return {
+      delivered: true, files: 2, executor: 'restate',
+      extra: [{ name: 'the delivery finishes after a Core restart without a second Deliver press', ok: true, detail: `task ${stateAfterRestart} right after the restart, complete without another press` }],
+    };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K15', 'flagged chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
+    const k = await killAtPoint('core.delivery.after-drive', { mode: 'workflow' });
+    await workflowRequest(chat, 'L2.K15', events);
+    events.push(`killed ${(await k.done).killed} at core.delivery.after-drive`);
+    return { delivered: true, files: 2, executor: 'restate' };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K16', 'flagged chat: worker killed between the two files', async (chat, events) => {
+    const k = await killAtPoint('worker.delivery.between-files', {});
+    await workflowRequest(chat, 'L2.K16', events);
+    events.push(`killed ${(await k.done).killed} at worker.delivery.between-files`);
+    return { delivered: true, files: 2, executor: 'restate' };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K17', 'flagged chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres');
+    await workflowRequest(chat, 'L2.K17', events);
+    events.push(`killed ${(await k.done).killed} while the sender was held after the first file`);
+    // The send's answer is journaled and its 'sent' mark written once Postgres is back: nothing is
+    // uncertain, so the office hears nothing.
+    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 0 };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K18', 'flagged chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('worker.delivery.between-files', {}, 'restate');
+    await workflowRequest(chat, 'L2.K18', events);
+    events.push(`killed ${(await k.done).killed} while the delivery was held between the files`);
+    return { delivered: true, files: 2, executor: 'restate' };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.K12', 'flagged chat: worker killed after Telegram took the first file, before its mark (one uncertain send expected)', async (chat, events) => {
+    const k = await killAtPoint('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' });
+    await workflowRequest(chat, 'L2.K12', events);
+    events.push(`killed ${(await k.done).killed} after the first document send`);
+    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1 };
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L2.429', 'flagged chat: Telegram answers 429 (retry_after 3) to the second file', async (chat, events) => {
+    await fakes.telegramFault({ method: 'sendDocument', chat, kind: '429', n: 1, retryAfter: 3, skip: 1 });
+    await workflowRequest(chat, 'L2.429', events);
+    const calls = (await fakes.sent()).filter((s: any) => s.chat_id === chat && s.method === 'sendDocument');
+    const limited = calls.find((s: any) => s.fault === '429');
+    const after = limited ? calls.find((s: any) => s.delivered && s.seq > limited.seq) : undefined;
+    const waitedMs = limited && after ? Date.parse(after.at) - Date.parse(limited.at) : -1;
+    events.push(`429 at ${limited?.at ?? 'never'}; the second file delivered ${waitedMs} ms later`);
+    return {
+      delivered: true, files: 2, executor: 'restate',
+      extra: [{ name: "the second file is sent again no sooner than Telegram's retry_after (3 s)", ok: Boolean(limited && after) && waitedMs >= 3000, detail: `waited ${waitedMs} ms after the 429` }],
+    };
+  }, 12 * 60_000, { flagged: true });
+
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();
     const chatB = newChat();
@@ -350,6 +446,30 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   });
 });
+
+/**
+ * Slice 2.2: a request in a flagged chat, delivered by the Restate Delivery workflow. The PNG and the
+ * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
+ * press is answered at once (202, executor restate); nothing presses it again.
+ */
+async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void> } = {}) {
+  const taskId = await briefToDraft(chat, tag);
+  events.push(`task ${taskId}: draft in chat`);
+  const approved = await approve(taskId, { pinDeck: true });
+  events.push(`approve (PNG and PPTX pinned): HTTP ${approved.status}`);
+  if (approved.status >= 300) throw new Error(`approval refused: HTTP ${approved.status} ${JSON.stringify(approved.body).slice(0, 300)}`);
+  if (hooks.beforeDeliver) await hooks.beforeDeliver(taskId);
+  const started = Date.now();
+  const delivered = await deliver(taskId);
+  events.push(`deliver: HTTP ${delivered.status} in ${Date.now() - started} ms, executor ${delivered.body?.executor}, ${delivered.body?.deliveryId}`);
+  if (delivered.status !== 202 || delivered.body?.executor !== 'restate') {
+    throw new Error(`the flagged chat's delivery was not handed to the workflow: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
+  }
+  if (hooks.afterDeliver) await hooks.afterDeliver(taskId);
+  await waitDelivered(chat, taskId, 300_000, 2);
+  events.push(`delivered, task ${await taskState(taskId)}`);
+  return { taskId, deliveryId: String(delivered.body.deliveryId) };
+}
 
 /** Brief to the Deliver press, without waiting for the task to complete (a kill may stop it). */
 async function fullRequestUntilDelivery(chat: string, tag: string, events: string[]): Promise<string> {

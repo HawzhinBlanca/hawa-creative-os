@@ -38,6 +38,7 @@ export interface ChaosSecrets {
   CHAOS_WEBHOOK_SECRET: string;
   CHAOS_CANVA_SECRET: string;
   CHAOS_CANVA_KEY: string;
+  CHAOS_WORKER_TOKEN: string;
 }
 
 /**
@@ -67,6 +68,7 @@ export function secrets(): ChaosSecrets {
     CHAOS_WEBHOOK_SECRET: hex(24),
     CHAOS_CANVA_SECRET: hex(16),
     CHAOS_CANVA_KEY: hex(32),
+    CHAOS_WORKER_TOKEN: hex(24),
   };
   mkdirSync(RUN_DIR, { recursive: true });
   writeFileSync(ENV_FILE, Object.entries(made).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });

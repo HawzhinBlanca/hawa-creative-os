@@ -147,6 +147,8 @@ describe.skipIf(!ownerUrl || !appUrl || !containerRunning)('a database built by 
         has_column_privilege('hawa_app', 'hawa.publications', 'state', 'UPDATE') AS publication_state,
         has_column_privilege('hawa_app', 'hawa.publications', 'package_sha256', 'UPDATE') AS publication_hash,
         has_table_privilege('hawa_app', 'hawa.publications', 'DELETE') AS publication_delete,
+        has_column_privilege('hawa_app', 'hawa.publications', 'executor', 'UPDATE') AS publication_executor,
+        has_column_privilege('hawa_app', 'hawa.publications', 'executor_finished_run', 'UPDATE') AS publication_executor_run,
         has_table_privilege('hawa_app', 'hawa.approvals', 'UPDATE') AS approval_update,
         has_table_privilege('hawa_app', 'hawa.schema_upgrades', 'SELECT') AS upgrades_read`.execute(app)).rows[0];
     expect(privileges).toEqual({
@@ -154,6 +156,8 @@ describe.skipIf(!ownerUrl || !appUrl || !containerRunning)('a database built by 
       inbox_update: false, inbox_delete: false, events_update: false,
       revision_status: true, revision_hash: false, revision_delete: false,
       publication_state: true, publication_hash: false, publication_delete: false,
+      // Migration 022: who delivers a publication, moved by Core's publish route and delivery-finished.
+      publication_executor: true, publication_executor_run: true,
       approval_update: false, upgrades_read: true,
     });
   });

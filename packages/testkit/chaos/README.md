@@ -117,6 +117,9 @@ Placed today, in the worker only:
 | `worker.dispatch.after-submit` | `workflow-dispatcher.ts`, after Restate accepted the workflow | a re-dispatch must meet Restate's 409 |
 | `worker.step.after-action` (`detail.step`) | `durable-context.ts` `withStepChaosPoints`, inside every `TaskWorkflow` step after its action, before Restate journals it | the step runs again on replay; Core's idempotency keys must make it harmless |
 | `worker.sender.after-telegram` (`detail.kind`, `step`) | `outbox-consumer.ts` `sendOnce`, after the Telegram send, before the `sent` mark | the send is only `attempted` on record: must end uncertain, never sent twice, one office alert |
+| `worker.sender.after-telegram` (`detail.commandType` = `lifecycle`, `kind`, `key`) | `lifecycle/telegram-sender.ts` `sendAttempt`, after the Telegram send, before its mark | the same, for the TelegramSender object (slice 2.2) |
+| `worker.delivery.between-files` | `lifecycle/delivery.ts`, before the second and later files | some files sent, the rest not yet |
+| `core.delivery.after-drive` (`detail.mode`) | `services/omnichannel-delivery.ts`, after the Drive upload, before anything of it is recorded | Drive holds the files; a retry must adopt them, not upload again |
 
 **Follow-ups (not placed: `apps/core/src/app.ts` is being split by another stream).** The design names
 `core.intake.after-decision`, `core.project.after-commit`, `core.outcome.after-bridge` and
@@ -157,6 +160,31 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file |
 | R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the invocation must stay pinned to blue |
 | R4 | two chats: a 19.9 MB picture whose download takes 30 s in chat A; chat B's text must be answered in under 5 s |
+
+**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats 9300001 to 9300012, which
+`docker-compose.chaos.yml` lists in `HAWA_LIFECYCLE_CHATS`, so Deliver hands the task to the Restate
+`Delivery` workflow instead of Core's own delivery. Each request pins the PNG and the PPTX (two files),
+and Deliver is pressed once. On top of the checks above: both files archived once each and shown to the
+requester once each, the publication `executor = 'restate'` with every started run reported back, no
+`notify.published` command, every `Delivery` invocation completed.
+
+| Name | What |
+|---|---|
+| L2.0 | happy path; also reads the finished run's output from Restate's ingress, where Core reads it when a report was lost |
+| L2.K14 | Core killed 2 s into the delivery (the fake Drive upload slowed to 8 s), back after 5 s; no second Deliver press |
+| L2.K15 | Core killed at `core.delivery.after-drive` (files in Drive, nothing recorded) |
+| L2.K16 | worker killed at `worker.delivery.between-files` |
+| L2.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` (first file sent, its mark not written) |
+| L2.K18 | Restate killed while the delivery is held between the files |
+| L2.K12 | worker killed at `worker.sender.after-telegram` for the first file (one uncertain send, one office alert) |
+| L2.429 | Telegram answers 429 with `retry_after` 3 to the second file; it must be sent again no sooner than 3 s later |
+
+First run (2026-09-24, `--only R1.0,L2.0,L2.K14,L2.K15,L2.K16,L2.K17,L2.K18,L2.K12,L2.429`, 235 s with a
+cached build, peak 1,044 MiB): every invariant held. R1.0 (unflagged chat, legacy path) 15 s; L2.0 13 s;
+L2.K14 21 s (the task was complete right after Core came back, without a second press, where the
+legacy R1.K14 stays in `publishing`); L2.K15 19 s; L2.K16 17 s; L2.K17 20 s (the `sent` mark is written
+once Postgres is back, so nothing is uncertain and the office hears nothing); L2.K18 17 s; L2.K12 17 s
+(one office alert naming the task, the file shown once); L2.429 16 s (the second file 3,032 ms after the 429).
 
 Not yet: R1 kill points that need Phase 2 code (poller, `ChatInbox`, `RequestLifecycle`); the design's
 K9 with a *patched* worker build (R1.D1 deploys the same build, so it proves the drain and the pinning

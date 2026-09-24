@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -9,6 +9,7 @@ import { isValidUuid, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
+import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
@@ -36,7 +37,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   // (app.ts); the context types it as AuthContext, whose fields are optional. These handlers were
   // written against the former.
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
-  const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = ctx.delivery;
+  const {
+    executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
+    requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery,
+  } = ctx.delivery;
   const defaultClientId = DEFAULT_CLIENT_ID;
 
   /**
@@ -80,6 +84,60 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
 
     if (requestedApprovalId && task?.latestApproval && task.latestApproval.decisionId !== requestedApprovalId && policy !== 'deliver_approved_stored') {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
+    }
+
+    // Slice 2.2 (PHASE2_DESIGN.md section 3, ADR-034): a task whose chat is on HAWA_LIFECYCLE_CHATS
+    // when Deliver is pressed is delivered by the Restate Delivery workflow, and so is every later
+    // press for a publication the workflow already owns, even once its chat is taken off the list.
+    // A delivery Core's own path started stays Core's: it may have sent the files already. With the
+    // list empty nothing here changes: a publication the workflow owns is still refused by Core's own
+    // delivery, under its lock, if the read below could not tell.
+    const executor = await deliveryExecutorOfTask(task, taskId).catch((err: unknown) => {
+      log.warn('[core:publish] Could not read who delivers this task; Core\'s own delivery checks again under its lock:', err);
+      return undefined;
+    });
+    const requesterChat = executor === 'restate' || (executor === null && process.env.HAWA_LIFECYCLE_CHATS) ? await requesterChatOf(task, taskId) : null;
+    const byWorkflow = executor === 'restate' || (executor === null && lifecycleOwnsChat(requesterChat));
+    let started: Awaited<ReturnType<typeof startWorkflowDelivery>> | null = null;
+    if (byWorkflow) {
+      const change = await changeBlockingDelivery(task, taskId);
+      if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
+      if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
+      const status = (task?.status || '').toLowerCase();
+      if (status === 'complete') {
+        const stored = await storedCompletePublication(task, taskId);
+        if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
+      }
+      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'publish_reconciliation'].includes(status)) {
+        return problem(c, status === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${status}', not 'approved'`);
+      }
+      started = await startWorkflowDelivery(taskId, {
+        actorId: auth.userId, chatId: requesterChat, policy, designRevisionId: targetRevisionId, approvalId: requestedApprovalId,
+      });
+    }
+    // Core's own delivery had started this publication after all (read under the lock): it finishes it.
+    if (started && !started.ok && started.code === DELIVERY_OWNED_BY_CORE) started = null;
+    if (started) {
+      if (!started.ok) {
+        const titles: Record<number, string> = { 404: 'Task Not Found', 409: 'Conflict', 422: 'Nothing Approved To Deliver', 503: 'Delivery Not Started' };
+        return problem(c, started.status, titles[started.status] || 'Publication Failed', started.message);
+      }
+      if ('complete' in started) {
+        const stored = await storedCompletePublication(task, taskId);
+        return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: started.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
+      }
+      // Accepted, not done: the workflow sends the files and reports back, and the task moves then.
+      return c.json({
+        commandId: crypto.randomUUID(),
+        taskId,
+        workflowId: started.deliveryId,
+        deliveryId: started.deliveryId,
+        executor: 'restate',
+        status: started.recorded ? 'DELIVERY_RECORDED' : 'PUBLISHING',
+        alreadyDelivering: started.alreadyRunning,
+        ...(started.recorded ? { recordedOutcome: started.recorded } : {}),
+        acceptedAt: new Date().toISOString(),
+      }, 202);
     }
 
     let currentStatus = (task?.status || '').toLowerCase();
