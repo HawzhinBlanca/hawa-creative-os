@@ -12,6 +12,8 @@ export interface TelegramSendResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** On a 429: how long Telegram asked the bot to wait, in seconds (telegram-bridge.ts). */
+  retryAfterSeconds?: number;
 }
 
 /** The part of the Telegram bridge the outbox handlers use; a test supplies its own. */
@@ -98,6 +100,26 @@ export async function readSendMarks(
     if (m) marks.set(row.source_event_id.slice(commandId.length + 1), { kind: m[1] as SendStepKind, outcome: m[2] as SendMarkOutcome });
   }
   return marks;
+}
+
+/**
+ * The latest mark of one step, read by its exact key. TelegramSender (lifecycle/telegram-sender.ts)
+ * fences each message under `lc:<message key>` with the one step 'send'. readSendMarks reads a
+ * command's steps by prefix (LIKE), where `_` in a key would match any character; a message key is
+ * matched exactly instead. Read under the message's tenant.
+ */
+export async function readSendMark(
+  db: Kysely<Database>,
+  tenantId: string,
+  commandId: string,
+  step: string
+): Promise<{ kind: SendStepKind; outcome: SendMarkOutcome } | undefined> {
+  const rows = (await sql<{ event_kind: string }>`SELECT event_kind FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${TELEGRAM_DELIVERY_SOURCE}
+      AND source_event_id = ${`${commandId}:${step}`}
+    ORDER BY received_at DESC, id DESC LIMIT 1`.execute(db)).rows;
+  const m = rows[0] ? MARK_KIND.exec(rows[0].event_kind) : null;
+  return m ? { kind: m[1] as SendStepKind, outcome: m[2] as SendMarkOutcome } : undefined;
 }
 
 /** What a step's latest mark means for a new attempt. */

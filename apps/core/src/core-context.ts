@@ -111,7 +111,8 @@ export interface CoreContext {
   readCurrentTask: TaskReader['readCurrentTask'];
   resolveClientDna: ClientDnaResolver;
   /** Delivery of an approved design (services/omnichannel-delivery.ts). */
-  delivery: Pick<OmnichannelDelivery, 'executeOmnichannelPublish' | 'storedCompletePublication' | 'reopenInterruptedDelivery' | 'changeBlockingDelivery'>;
+  delivery: Pick<OmnichannelDelivery, 'executeOmnichannelPublish' | 'storedCompletePublication' | 'reopenInterruptedDelivery' | 'changeBlockingDelivery'
+    | 'requesterChatOf' | 'deliveryExecutorOfTask' | 'startWorkflowDelivery' | 'prepareWorkflowDelivery' | 'finishWorkflowDelivery'>;
   /** The model provider's last known health, for the failed-task sweep (health probes stay in app.ts). */
   probeModelProvider: () => Promise<string>;
   honestHealthHandler: (c: any) => Promise<Response>;

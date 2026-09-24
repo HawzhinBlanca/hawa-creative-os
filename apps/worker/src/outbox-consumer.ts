@@ -66,6 +66,9 @@ export type DeliveryErrorCategory = 'retryable' | 'permanent' | 'uncertain';
  */
 const TELEGRAM_REFUSED = /TELEGRAM_(?:DOCUMENT_)?REJECTED_4(?!29)\d\d/;
 
+/** The code a `notify.published` command ends with when the Delivery workflow owns its delivery. */
+export const DELIVERY_OWNED_BY_WORKFLOW = 'DELIVERY_OWNED_BY_WORKFLOW';
+
 export class OutboxDeliveryError extends Error {
   constructor(
     message: string,
@@ -293,6 +296,20 @@ export class OutboxConsumer {
     }
   }
 
+  /**
+   * Whether the Delivery workflow owns this delivery (publications.executor, migration 022): the
+   * publication the command names, or, for a command that names none, any of the task's.
+   */
+  private async deliveredByWorkflow(cmd: OutboxCommandRecord, taskId: string, publicationKey: unknown, scope: OutboxHandlerScope): Promise<boolean> {
+    if (!/^[0-9a-f-]{36}$/i.test(String(taskId))) return false;
+    const rows = await scope.inTenant((trx) => (typeof publicationKey === 'string' && publicationKey
+      ? sql<{ n: number }>`SELECT 1 AS n FROM hawa.publications WHERE tenant_id = ${cmd.tenant_id}::uuid
+          AND publication_key = ${publicationKey} AND executor = 'restate'`
+      : sql<{ n: number }>`SELECT 1 AS n FROM hawa.publications WHERE tenant_id = ${cmd.tenant_id}::uuid
+          AND task_id = ${taskId}::uuid AND executor = 'restate' LIMIT 1`).execute(trx));
+    return rows.rows.length > 0;
+  }
+
   /** Who hears about a command that ended without being delivered. None of it changes the outcome. */
   private async reportEnded(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain: boolean) {
     // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
@@ -300,6 +317,11 @@ export class OutboxConsumer {
       await this.tellRequesterIntakeFailed(cmd, attempts, error);
     }
     if (cmd.command_type === 'notify.published') {
+      if (error.includes(DELIVERY_OWNED_BY_WORKFLOW)) {
+        // Nothing was sent, and the workflow delivers it: there is nothing for the office to do.
+        log.error(`[OutboxConsumer] ${cmd.id} (notify.published) was dead-lettered: ${error}`);
+        return;
+      }
       await this.alertOfficeDeliveryFailed(cmd, attempts, error, uncertain);
     }
     if (cmd.command_type === 'notify.telegram' && uncertain) {
@@ -486,6 +508,17 @@ export class OutboxConsumer {
         // Effect transport: the requester receives the approved files and the delivery notice.
         const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
         const taskId = payload?.taskId || cmd.aggregate_id;
+
+        // A guard that should never fire: Core writes no notify.published for a publication the Delivery
+        // workflow owns (slice 2.2), which sends its files through TelegramSender under its own marks.
+        // A command for one anyway (written by an older Core, or by hand) must not send them a second time.
+        if (await this.deliveredByWorkflow(cmd, taskId, payload?.publicationKey, scope)) {
+          throw new OutboxDeliveryError(
+            `${DELIVERY_OWNED_BY_WORKFLOW}: the Delivery workflow delivers task ${taskId}; this command sent nothing`,
+            'permanent',
+            DELIVERY_OWNED_BY_WORKFLOW
+          );
+        }
 
         let sourceChannelId = payload?.chatId || payload?.sourceChannelId;
         let taskTitle = payload?.title;

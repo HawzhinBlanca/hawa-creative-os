@@ -248,6 +248,11 @@ export interface PublicationsTable {
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   completed_at: Date | null;
+  /** Who delivers it: Core, or the Restate Delivery workflow (migration 022). */
+  executor: Generated<'core' | 'restate'>;
+  /** Delivery workflow runs started, and the last one that reported back (migration 022). */
+  executor_run: Generated<number>;
+  executor_finished_run: Generated<number>;
 }
 
 export interface DriveRefsTable {

@@ -74,6 +74,7 @@ import { registerRevisionsRoutes } from './routes/revisions.routes.js';
 import { registerDecisionsRoutes } from './routes/decisions.routes.js';
 import { registerCanvaOutcomeRoutes } from './routes/canva-outcome.routes.js';
 import { registerDeliveryRoutes } from './routes/delivery.routes.js';
+import { registerDeliveryInternalRoutes } from './routes/delivery-internal.routes.js';
 import { registerOutboxRoutes } from './routes/outbox.routes.js';
 import { registerControlsRoutes } from './routes/controls.routes.js';
 import { registerTasksRoutes } from './routes/tasks.routes.js';
@@ -841,7 +842,10 @@ export function createApp(options?: CreateAppOptions) {
   const { resolveTaskWithFallback, readCurrentTask } = createTaskReader({ db, taskRepo, tasks });
 
   // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
-  const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = createOmnichannelDelivery({
+  const {
+    executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
+    requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
+  } = createOmnichannelDelivery({
     db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, events,
     isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
   });
@@ -953,7 +957,10 @@ export function createApp(options?: CreateAppOptions) {
     resolveTaskWithFallback,
     readCurrentTask,
     resolveClientDna,
-    delivery: { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery },
+    delivery: {
+      executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
+      requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
+    },
     probeModelProvider,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
@@ -990,6 +997,7 @@ export function createApp(options?: CreateAppOptions) {
   registerDecisionsRoutes(routeContext);
   registerCanvaOutcomeRoutes(routeContext);
   registerDeliveryRoutes(routeContext);
+  registerDeliveryInternalRoutes(routeContext);
   registerOutboxRoutes(routeContext);
   registerControlsRoutes(routeContext);
   registerTasksRoutes(routeContext);

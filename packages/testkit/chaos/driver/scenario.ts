@@ -111,16 +111,22 @@ export async function briefToDraft(chat: string, tag: string, timeoutMs = 240_00
   return task.id;
 }
 
-/** The Desk's approval: the stored exports, the PNG pinned (approvalPins.defaultPins), as the art director. */
-export async function approve(taskId: string): Promise<{ status: number; body: any }> {
+/**
+ * The Desk's approval: the stored exports, the PNG pinned (approvalPins.defaultPins), as the art
+ * director. `pinDeck` pins the PPTX too, so a delivery sends two files (the slice 2.2 scenarios kill
+ * and throttle between them).
+ */
+export async function approve(taskId: string, options: { pinDeck?: boolean } = {}): Promise<{ status: number; body: any }> {
   const token = secrets().CHAOS_REVIEWER_KEY;
   const state = await fakes.core(`/tasks/${taskId}/canva`, token);
   const artifacts: any[] = Array.isArray(state.json?.artifacts) ? state.json.artifacts : [];
   const png = artifacts.find((a) => String(a.format).toLowerCase() === 'png');
+  const deck = options.pinDeck ? artifacts.find((a) => String(a.format).toLowerCase() === 'pptx') : null;
+  if (options.pinDeck && !deck) throw new Error(`task ${taskId} has no stored PPTX export to pin`);
   const [task] = await query<{ rev: string | null }>(sql`SELECT current_design_revision_id AS rev FROM hawa.tasks WHERE id = ${taskId}::uuid`);
   if (!task?.rev) throw new Error(`task ${taskId} has no design revision to approve`);
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
-    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: png ? [png.id] : [] },
+    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [png?.id, deck?.id].filter(Boolean) },
   });
   return { status: res.status, body: res.json };
 }
@@ -131,10 +137,10 @@ export async function deliver(taskId: string): Promise<{ status: number; body: a
   return { status: res.status, body: res.json };
 }
 
-export async function waitDelivered(chat: string, taskId: string, timeoutMs = 180_000): Promise<void> {
+export async function waitDelivered(chat: string, taskId: string, timeoutMs = 180_000, files = 1): Promise<void> {
   await waitUntil(`delivery of task ${taskId} to chat ${chat}`, async () => {
     const docs = (await sentTo(chat)).filter((s) => s.method === 'sendDocument');
-    return docs.length > 0 && (await taskState(taskId)) === 'complete';
+    return docs.length >= files && (await taskState(taskId)) === 'complete';
   }, timeoutMs, 2000);
 }
 
@@ -208,7 +214,13 @@ export interface InvariantResult {
 }
 
 /** The checks of PHASE2_DESIGN.md section 6.3 that apply to the legacy path, for one request. */
-export async function checkRequest(chat: string, options: { delivered: boolean; classifierAllowance?: number; uncertainSends?: number; ledgerSince?: number }): Promise<InvariantResult[]> {
+export async function checkRequest(chat: string, options: {
+  delivered: boolean; classifierAllowance?: number; uncertainSends?: number; ledgerSince?: number;
+  /** The approved files the delivery sends (and archives): 1 unless the scenario pinned more. */
+  files?: number;
+  /** Who delivers: Core's own delivery and the outbox (legacy), or the Restate Delivery workflow (slice 2.2). */
+  executor?: 'core' | 'restate';
+}): Promise<InvariantResult[]> {
   const out: InvariantResult[] = [];
   const add = (name: string, ok: boolean, detail: string) => out.push({ name, ok, detail });
   const tasks = await tasksOfChat(chat);
@@ -250,8 +262,23 @@ export async function checkRequest(chat: string, options: { delivered: boolean; 
 
   if (options.delivered) {
     // Drive: the approved file archived once, however often delivery was pressed or restarted.
+    const expected = options.files ?? 1;
     const files = (await fakes.driveFiles()).filter((f: any) => f.properties?.taskId === task.id);
-    add('the approved file is archived to Drive once', files.length === 1, `drive files for the task=${files.length}`);
+    add(expected === 1 ? 'the approved file is archived to Drive once' : `the ${expected} approved files are archived to Drive once each`, files.length === expected, `drive files for the task=${files.length}`);
+    // Telegram: each approved file reached the requester (once each is checked above).
+    const docs = shown.filter((s) => s.method === 'sendDocument');
+    add(`the requester has the ${expected} approved file${expected === 1 ? '' : 's'}`, new Set(docs.map((d) => d.documentSha256)).size === expected, `documents shown=${docs.length}`);
+    if (options.executor === 'restate') {
+      const pubs = await query<{ executor: string; executor_run: number; executor_finished_run: number }>(sql`SELECT executor, executor_run, executor_finished_run FROM hawa.publications WHERE task_id = ${task.id}::uuid`);
+      add('the Delivery workflow delivered it, and reported every run it started', pubs.length === 1 && pubs[0].executor === 'restate' && pubs[0].executor_run >= 1 && pubs[0].executor_run === pubs[0].executor_finished_run,
+        JSON.stringify(pubs));
+      const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`);
+      add('no notify.published command for a workflow delivery', Number(outbox.n) === 0, `notify.published=${outbox.n}`);
+      const runs = await restateQuery<{ status: string; target_service_key: string }>(
+        `SELECT status, target_service_key FROM sys_invocation WHERE target_service_name = 'Delivery' AND target_service_key LIKE 'dl-${task.id}-%'`
+      );
+      add('each Delivery run completed', runs.length === (pubs[0]?.executor_run ?? -1) && runs.every((r) => r.status === 'completed'), JSON.stringify(runs.map((r) => `${r.target_service_key.slice(-12)}:${r.status}`)));
+    }
   }
 
   // Canva: one import (one editable document) per task.

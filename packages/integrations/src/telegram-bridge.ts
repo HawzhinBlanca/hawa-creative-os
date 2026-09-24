@@ -178,6 +178,25 @@ export type TelegramUpdateHandler = (update: TelegramUpdate) => Promise<void>;
 
 const errorText = (err: unknown, fallback: string): string => (err instanceof Error && err.message) || fallback;
 
+/**
+ * What a send to Telegram came to. On a 429 Telegram names how long to wait
+ * (`parameters.retry_after`, seconds), carried as `retryAfterSeconds` so a sender can wait exactly
+ * that long (PHASE2_DESIGN.md 2.6); the error code itself is unchanged, since the outbox reads it.
+ */
+export interface TelegramSendOutcome {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  retryAfterSeconds?: number;
+}
+
+/** Telegram's retry_after on a 429, when it gave one. */
+function retryAfterOf(res: Response, body: { error_code?: number; parameters?: { retry_after?: unknown } } | null): { retryAfterSeconds?: number } {
+  if (res.status !== 429 && body?.error_code !== 429) return {};
+  const seconds = Number(body?.parameters?.retry_after);
+  return Number.isFinite(seconds) && seconds >= 0 ? { retryAfterSeconds: seconds } : {};
+}
+
 export class TelegramBridgeDaemon {
   private active = false;
   private lastUpdateId = 0;
@@ -715,7 +734,7 @@ export class TelegramBridgeDaemon {
   async dispatchOutboundMessage(
     chatId: string | number,
     message: { text: string; parse_mode?: string; reply_markup?: any }
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  ): Promise<TelegramSendOutcome> {
     if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
     const text = fitTelegramText(message.text, TELEGRAM_TEXT_LIMIT, message.parse_mode);
     try {
@@ -750,7 +769,7 @@ export class TelegramBridgeDaemon {
             return { success: true, messageId: String(retryBody.result.message_id) };
           }
         }
-        return { success: false, error: `TELEGRAM_REJECTED_${body?.error_code || res.status}` };
+        return { success: false, error: `TELEGRAM_REJECTED_${body?.error_code || res.status}`, ...retryAfterOf(res, body) };
       }
       if (!Number.isSafeInteger(body.result?.message_id) || body.result.message_id <= 0 ||
           String(body.result?.chat?.id) !== String(chatId)) {
@@ -839,7 +858,7 @@ export class TelegramBridgeDaemon {
     fileBytes: Uint8Array,
     filename: string,
     options: { mimeType?: string; caption?: string; parseMode?: 'HTML' | 'Markdown'; timeoutMs?: number } = {}
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  ): Promise<TelegramSendOutcome> {
     if (!this.config.botToken) return { success: false, error: 'TELEGRAM_NOT_CONFIGURED' };
     if (!fileBytes || fileBytes.length === 0) return { success: false, error: 'INVALID_DOCUMENT_BUFFER' };
     const form = new FormData();
@@ -856,9 +875,9 @@ export class TelegramBridgeDaemon {
         body: form,
         signal: AbortSignal.timeout(options.timeoutMs ?? this.config.fileUploadTimeoutMs ?? TELEGRAM_FILE_TRANSFER_TIMEOUT_MS),
       });
-      const body = await res.json().catch(() => null) as { ok?: boolean; error_code?: number; result?: { message_id?: number; chat?: { id?: number | string } } } | null;
+      const body = await res.json().catch(() => null) as { ok?: boolean; error_code?: number; parameters?: { retry_after?: unknown }; result?: { message_id?: number; chat?: { id?: number | string } } } | null;
       if (!res.ok || body?.ok !== true || !body.result) {
-        return { success: false, error: `TELEGRAM_DOCUMENT_REJECTED_${body?.error_code || res.status}` };
+        return { success: false, error: `TELEGRAM_DOCUMENT_REJECTED_${body?.error_code || res.status}`, ...retryAfterOf(res, body) };
       }
       if (!Number.isSafeInteger(body.result.message_id) || Number(body.result.message_id) <= 0 ||
           String(body.result?.chat?.id) !== String(chatId)) {
