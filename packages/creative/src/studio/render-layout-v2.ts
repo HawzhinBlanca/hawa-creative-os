@@ -9,7 +9,8 @@ import * as fontkit from 'fontkit';
 import { PNG } from 'pngjs';
 import type { StudioLayoutV2, TextElement, ShapeElement, ArtConfig, Box } from './layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
-import { coverCrop, dataUriPixelSize, photoZoomFactor, type CoverCropRect } from './photo-crop.js';
+import { coverCrop, dataUriPixelSize, imagePixelSize, photoZoomFactor, type CoverCropRect } from './photo-crop.js';
+import { dataUriBytes, imageDataUri, imageFileExtension, relabelDataUri, sniffImageType } from './image-type.js';
 import {
   croppedPhotoSvg,
   cutoutEffectFragment,
@@ -164,7 +165,9 @@ const substitutionWarned = new Set<string>();
  * callers that need to fail on it.
  */
 export function assertFontResolves(fontFamily: string, fontconfigFile: string): void {
-  if (probeFontFidelity(fontFamily, { fontconfigFile }) === 'stand-in') {
+  // Substitution only: a face drawn from a different file is warned by probeFontFidelity itself,
+  // with the file and both widths, and is not "byte-identical to a family that does not exist".
+  if (probeFontSubstitution(fontFamily, { fontconfigFile }) === 'stand-in') {
     const key = `${fontconfigFile}|${fontFamily}`;
     if (!substitutionWarned.has(key)) {
       substitutionWarned.add(key);
@@ -252,49 +255,25 @@ function probeSvg(family: string): string {
 }
 
 /**
- * Measures font fidelity the way the renderer actually resolves fonts: rasterise a probe in the
- * requested family and in a family that cannot exist. Identical bytes mean the renderer silently
- * substituted a fallback face.
+ * Whether the rasteriser draws a family at all: rasterise a probe in the requested family and in a
+ * family that cannot exist. Identical bytes mean it silently substituted a fallback face.
  *
  * fc-match is not a valid check here. On a Homebrew/macOS host fc-match resolves 'Cinzel' and
  * 'Playfair Display' from the bundled fontconfig while rsvg-convert still renders Helvetica, so a
  * name-resolution guard passes while every heading in the output is the wrong typeface.
+ *
+ * This answers only "is it substituted"; `probeFontFidelity` adds "is it the file we measure with".
+ * The renderer's choice of a fallback family reads this one, so adding the ink check changed what
+ * the fidelity map reports and not which family a block is drawn in.
  */
-export function probeFontFidelity(
-  family: string,
-  options?: RenderLayoutOptions
-): 'exact' | 'stand-in' {
+function probeFontSubstitution(family: string, options?: RenderLayoutOptions): 'exact' | 'stand-in' {
   const rsvg = resolveRsvgConvert(options);
   const fontconfigFile = resolveFontconfigFile(options);
   const key = `${rsvg}|${fontconfigFile}|${family}`;
   const cached = fidelityCache.get(key);
   if (cached) return cached;
 
-  const render = (fam: string): Buffer | null => {
-    let tempDir: string | null = null;
-    try {
-      tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-font-probe-'));
-      const file = path.join(tempDir, 'probe.svg');
-      fs.writeFileSync(file, probeSvg(fam), { mode: 0o600 });
-      const res = spawnSync(rsvg, ['-w', '900', '-h', '120', '-f', 'png', file], {
-        env: { ...process.env, FONTCONFIG_FILE: fontconfigFile },
-        maxBuffer: 16 * 1024 * 1024,
-        timeout: 20000,
-      });
-      if (res.status !== 0 || !res.stdout || res.stdout.length < 100) return null;
-      return res.stdout;
-    } catch {
-      return null;
-    } finally {
-      if (tempDir) {
-        try {
-          fs.rmSync(tempDir, { recursive: true, force: true });
-        } catch {
-          // ignore cleanup failures
-        }
-      }
-    }
-  };
+  const render = (fam: string): Buffer | null => rasteriseProbe(probeSvg(fam), rsvg, fontconfigFile);
 
   const sentinelKey = `${rsvg}|${fontconfigFile}|__sentinel__`;
   let sentinelHash = fidelityCache.get(sentinelKey) as unknown as string | undefined;
@@ -311,6 +290,216 @@ export function probeFontFidelity(
   const verdict: 'exact' | 'stand-in' = hash === sentinelHash ? 'stand-in' : 'exact';
   fidelityCache.set(key, verdict);
   return verdict;
+}
+
+/** Rasterises a probe SVG at its own size, or null when the rasteriser is unavailable or fails. */
+function rasteriseProbe(svg: string, rsvg: string, fontconfigFile: string): Buffer | null {
+  let tempDir: string | null = null;
+  try {
+    tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-font-probe-'));
+    const file = path.join(tempDir, 'probe.svg');
+    fs.writeFileSync(file, svg, { mode: 0o600 });
+    const res = spawnSync(rsvg, ['-f', 'png', file], {
+      env: { ...process.env, FONTCONFIG_FILE: fontconfigFile },
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: 20000,
+    });
+    if (res.status !== 0 || !res.stdout || res.stdout.length < 100) return null;
+    return res.stdout;
+  } catch {
+    return null;
+  } finally {
+    if (tempDir) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup failures
+      }
+    }
+  }
+}
+
+/** The samples the ink check draws: Kurdish for a face that covers it, otherwise Latin. */
+export const FONT_INK_SAMPLES = {
+  arabic: 'کوردستان ڕێکخراوی ئەندازیاران ٢٠٢٦',
+  latin: 'Handgloves Quality 2026',
+} as const;
+/** How far the drawn ink may be from fontkit's before the face is called a different one. */
+export const FONT_INK_TOLERANCE = 0.02;
+const FONT_INK_SIZE = 60;
+
+export interface FontInkCheck {
+  family: string;
+  /** The file the pipeline measures this family with (`fontFileFor`), or the one the caller named. */
+  fontFile: string;
+  sample: string;
+  /** False when nothing could be measured: no rasteriser, no file, or a face that draws neither sample. */
+  measured: boolean;
+  ok: boolean;
+  renderedInkPx: number;
+  expectedInkPx: number;
+  expectedAdvancePx: number;
+  /** (rendered - expected) / expected. */
+  deviation: number;
+  message: string;
+}
+
+const inkCheckCache = new Map<string, FontInkCheck>();
+
+/** The part of a fontkit font the ink check reads. */
+interface InkFont {
+  unitsPerEm: number;
+  layout(text: string): { advanceWidth: number; bbox: { minX: number; maxX: number }; glyphs: Array<{ id: number }> };
+}
+
+/**
+ * Draws a sample string with rsvg-convert and compares the width of its ink with the width fontkit
+ * computes for the same string in the file the pipeline measures with.
+ *
+ * The substitution probe cannot see a rasteriser that draws the right family from the wrong file.
+ * The Macs do exactly that: pango draws through CoreText, which finds a different Noto Sans Arabic
+ * in ~/Library/Fonts (283 px of ink against 302 px for one sample), while fc-match, FONTCONFIG_FILE
+ * and the byte-identity probe all point at the file in packages/creative/assets/fonts. Wrapping and
+ * centring are then computed with one face and drawn with another.
+ *
+ * Compared: the width of the drawn ink against the ink width of fontkit's laid-out run (its glyph
+ * bounding box at the advances fontkit computed), so side bearings do not count against the face.
+ * The advance is reported beside it.
+ */
+export function probeFontInkWidth(
+  family: string,
+  options: RenderLayoutOptions & { fontFile?: string } = {}
+): FontInkCheck {
+  const rsvg = resolveRsvgConvert(options);
+  const fontconfigFile = resolveFontconfigFile(options);
+  const fontsDir = resolveFontsDir(options);
+  const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir);
+  const key = `${rsvg}|${fontconfigFile}|${family}|${fontFile}`;
+  const cached = inkCheckCache.get(key);
+  if (cached) return cached;
+
+  const unmeasured = (why: string, sample = ''): FontInkCheck => ({
+    family,
+    fontFile,
+    sample,
+    measured: false,
+    ok: true,
+    renderedInkPx: 0,
+    expectedInkPx: 0,
+    expectedAdvancePx: 0,
+    deviation: 0,
+    message: `FONT_INK_UNMEASURED: '${family}' (${fontFile}): ${why}`,
+  });
+
+  let font: InkFont;
+  try {
+    font = fk.openSync(fontFile) as unknown as InkFont;
+  } catch {
+    return unmeasured('the file cannot be opened');
+  }
+  const covers = (text: string) => {
+    try {
+      return !font.layout(text).glyphs.some((g) => g.id === 0);
+    } catch {
+      return false;
+    }
+  };
+  const sample = covers(FONT_INK_SAMPLES.arabic)
+    ? FONT_INK_SAMPLES.arabic
+    : covers(FONT_INK_SAMPLES.latin)
+      ? FONT_INK_SAMPLES.latin
+      : '';
+  if (!sample) return unmeasured('the face draws neither sample');
+
+  const run = font.layout(sample);
+  const scale = FONT_INK_SIZE / font.unitsPerEm;
+  const expectedAdvancePx = run.advanceWidth * scale;
+  const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
+  // Centred on a canvas twice the run's width, so the ink lands inside it whichever way the
+  // rasteriser decides the paragraph runs.
+  const width = Math.ceil(expectedAdvancePx * 2 + 200);
+  const height = FONT_INK_SIZE * 2;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+    `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
+    `<text x="${width / 2}" y="${FONT_INK_SIZE * 1.3}" font-family="${escapeXml(family)}" font-size="${FONT_INK_SIZE}" text-anchor="middle" fill="#000000">${escapeXml(sample)}</text>` +
+    `</svg>`;
+  const png = rasteriseProbe(svg, rsvg, fontconfigFile);
+  if (!png) return unmeasured('the rasteriser is unavailable', sample);
+
+  const img = PNG.sync.read(png);
+  let left = Infinity;
+  let right = -Infinity;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      if (img.data[(y * img.width + x) * 4] < 128) {
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  if (right < left) return unmeasured('the rasteriser drew no ink', sample);
+
+  const renderedInkPx = right - left + 1;
+  const deviation = (renderedInkPx - expectedInkPx) / expectedInkPx;
+  const ok = Math.abs(deviation) <= FONT_INK_TOLERANCE;
+  const pct = (Math.abs(deviation) * 100).toFixed(1);
+  const message = ok
+    ? `FONT_INK_OK: '${family}' drew ${renderedInkPx}px of ink, fontkit measures ${expectedInkPx.toFixed(1)}px with ${fontFile} (${pct}% apart)`
+    : `FONT_INK_MISMATCH: '${family}': ${rsvg} drew ${renderedInkPx}px of ink for "${sample}" at ${FONT_INK_SIZE}px, ` +
+      `while fontkit measures ${expectedInkPx.toFixed(1)}px (advance ${expectedAdvancePx.toFixed(1)}px) with ${fontFile}: ` +
+      `${pct}% apart, over the ${FONT_INK_TOLERANCE * 100}% tolerance. The rasteriser is drawing a different face from ` +
+      `the file the pipeline wraps and measures with (FONTCONFIG_FILE ${fontconfigFile}).`;
+  const check: FontInkCheck = {
+    family,
+    fontFile,
+    sample,
+    measured: true,
+    ok,
+    renderedInkPx,
+    expectedInkPx,
+    expectedAdvancePx,
+    deviation,
+    message,
+  };
+  inkCheckCache.set(key, check);
+  return check;
+}
+
+/** probeFontInkWidth that throws its message when the rasteriser draws a different face. */
+export function assertFontInkWidth(
+  family: string,
+  options: RenderLayoutOptions & { fontFile?: string } = {}
+): FontInkCheck {
+  const check = probeFontInkWidth(family, options);
+  if (check.measured && !check.ok) {
+    throw Object.assign(new Error(check.message), { code: 'FONT_INK_MISMATCH' });
+  }
+  return check;
+}
+
+const inkMismatchWarned = new Set<string>();
+
+/**
+ * Measures font fidelity the way the renderer actually resolves fonts. 'stand-in' when either the
+ * rasteriser substitutes the family (`probeFontSubstitution`), or it draws the family from a
+ * different face than the file the pipeline measures with, by more than 2% of ink width
+ * (`probeFontInkWidth`, the Mac's Noto Sans Arabic trap). The mismatch is warned once, naming the
+ * file and both widths.
+ */
+export function probeFontFidelity(
+  family: string,
+  options?: RenderLayoutOptions
+): 'exact' | 'stand-in' {
+  if (probeFontSubstitution(family, options) === 'stand-in') return 'stand-in';
+  const ink = probeFontInkWidth(family, options ?? {});
+  if (!ink.measured || ink.ok) return 'exact';
+  const key = `${ink.fontFile}|${family}|${resolveFontconfigFile(options)}`;
+  if (!inkMismatchWarned.has(key)) {
+    inkMismatchWarned.add(key);
+    console.warn(`[render-layout-v2] ${ink.message}`);
+  }
+  return 'stand-in';
 }
 
 /**
@@ -425,9 +614,10 @@ function registryFontFile(
 }
 
 /**
- * Loads font binary via fontkit and returns Font instance.
+ * The font file the pipeline measures a family with: the file fontkit opens for wrapping and ink
+ * metrics, and so the file the rasteriser has to draw for the preview to match its own measurements.
  */
-function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): string {
   const dir = fontsDir || resolveFontsDir();
   const familyLower = fontFamily.toLowerCase();
 
@@ -498,6 +688,14 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
     }
   }
 
+  return fontPath;
+}
+
+/**
+ * Loads font binary via fontkit and returns Font instance.
+ */
+function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+  const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
   if (fontCache.has(fontPath)) {
     return fontCache.get(fontPath);
   }
@@ -1082,31 +1280,24 @@ function renderTextElementToSvg(
     return { svgSnippet: '', lineCount: 0 };
   }
 
-  // Compute text anchor and X position
+  // Text anchor and X position, with their left-to-right meanings for every line, Kurdish included.
+  //
+  // A right-to-left line used to be set with direction="rtl", which flips what 'start' and 'end'
+  // mean. resvg ignores `direction` (its bidi base level is hard-coded to left-to-right), and any
+  // renderer that does the same would run a right-aligned Kurdish line off its box. The line now
+  // carries its own direction instead (RIGHT-TO-LEFT EMBEDDING ... POP DIRECTIONAL FORMATTING, below),
+  // which every bidi implementation honours; on librsvg 2.54 and 2.62 the pixels are identical to the
+  // direction="rtl" markup for right, centre and left alignment (ADR-036).
   let textX = t.x;
   let textAnchor = 'start';
-  if (t.rtl) {
-    if (t.align === 'left') {
-      textX = t.x;
-      textAnchor = 'end';
-    } else if (t.align === 'center') {
-      textX = t.x + t.width / 2;
-      textAnchor = 'middle';
-    } else {
-      // For RTL with right alignment, in SVG direction="rtl", 'start' anchors at the right edge
-      // and runs progress leftward into the designated box.
-      textX = t.x + t.width;
-      textAnchor = 'start';
-    }
-  } else {
-    if (t.align === 'center') {
-      textX = t.x + t.width / 2;
-      textAnchor = 'middle';
-    } else if (t.align === 'right') {
-      textX = t.x + t.width;
-      textAnchor = 'end';
-    }
+  if (t.align === 'center') {
+    textX = t.x + t.width / 2;
+    textAnchor = 'middle';
+  } else if (t.align === 'right') {
+    textX = t.x + t.width;
+    textAnchor = 'end';
   }
+  const lineText = (line: string) => (t.rtl && line ? `\u202B${escapeXml(line)}\u202C` : escapeXml(line));
 
   const scale = renderFontSize / font.unitsPerEm;
   const nominalLineHeight = renderFontSize * t.lineHeight;
@@ -1171,7 +1362,7 @@ function renderTextElementToSvg(
       continue;
     }
     const fill = i >= accentFrom || i < accentUntil ? ` fill="${t.accentColor}"` : '';
-    tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}"${fill}>${escapeXml(lines[i])}</tspan>`);
+    tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}"${fill}>${lineText(lines[i])}</tspan>`);
   }
 
   // A family this renderer cannot draw must not be handed to the rasteriser to guess at. Vazirmatn
@@ -1180,10 +1371,10 @@ function renderTextElementToSvg(
   // host. Substituting a declared face instead makes the outcome deterministic and inspectable,
   // and the fontFidelity map still reports that the requested family was not used.
   let drawFamily = t.fontFamily;
-  if (probeFontFidelity(t.fontFamily, { fontsDir }) === 'stand-in') {
+  if (probeFontSubstitution(t.fontFamily, { fontsDir }) === 'stand-in') {
     const fallback =
       t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
-    if (probeFontFidelity(fallback, { fontsDir }) === 'exact') {
+    if (probeFontSubstitution(fallback, { fontsDir }) === 'exact') {
       drawFamily = fallback;
     }
   }
@@ -1193,16 +1384,16 @@ function renderTextElementToSvg(
   const fontWeight = faceAxes.bold ? 'bold' : 'normal';
   const fontStyle = faceAxes.italic ? ' font-style="italic"' : '';
   const opacityAttr = t.opacity !== undefined ? ` opacity="${t.opacity}"` : '';
-  const bidiAttr = t.rtl ? ' direction="rtl"' : '';
   // Emit the spacing and size the lines were measured with. Using the raw t.* values here meant
   // the wrap was computed with one spacing and drawn with another.
   const letterSpacingAttr = letterSpacingVal
     ? ` letter-spacing="${(letterSpacingVal * renderFontSize).toFixed(2)}px"`
     : '';
 
-  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(drawFamily)}" font-size="${renderFontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}${bidiAttr}>
-    ${tspans.join('\n    ')}
-  </text>`;
+  // Nothing but the tspans inside <text>. The newline and indent that used to sit between them are
+  // character data: librsvg keeps one space of it at the end of each line, so a centred line moved
+  // left by half a space and an end-anchored one by a whole space (7 and 14 px at 40 px Verdana).
+  const svgSnippet = `<text id="text-copy-${t.copyIndex}" fill="${t.color}" font-family="${escapeXml(drawFamily)}" font-size="${renderFontSize}px" font-weight="${fontWeight}"${fontStyle} text-anchor="${textAnchor}"${letterSpacingAttr}${opacityAttr}>${tspans.join('')}</text>`;
 
   return { svgSnippet, lineCount: lines.length };
 }
@@ -1232,6 +1423,136 @@ function focusedPhotoSvg(
   crop: CoverCropRect
 ): string {
   return `<g clip-path="url(#${clipId})">${croppedPhotoSvg(id, href, box, pixels, crop)}</g>`;
+}
+
+/** The logo a render draws: the caller's data URI or file, else the KAAE logo, typed from its bytes. */
+function resolveLogoHref(options: RenderLayoutOptions): string {
+  if (options.logoDataUri) return relabelDataUri(options.logoDataUri);
+  if (options.logoPath && fs.existsSync(options.logoPath)) {
+    return imageDataUri(fs.readFileSync(options.logoPath), `logo ${options.logoPath}`);
+  }
+  return getKaaeOfficialLogoDataUri();
+}
+
+/**
+ * Logos scaled to the box they are drawn in, by logo bytes, box and rasteriser: a PNG data URI, or
+ * null when scaling failed and the logo is drawn as it came.
+ *
+ * The KAAE logo is a 2687 px square PNG drawn in a box of about 120 px. rsvg decoded and scaled it
+ * inside every render, twice per design (the design and its no-text composite), which cost about
+ * 85 ms a render; the same logo in the same box gives the same pixels every time, so it is scaled
+ * once. Scaled by the same rasteriser with the same "meet" fit, into a canvas the size of the box,
+ * then drawn 1:1: for a box on whole pixels the result is the pixels the full-size logo gave.
+ */
+const prescaledLogos = new Map<string, string | null>();
+const PRESCALED_LOGO_LIMIT = 32;
+const logoStats = { scaled: 0, reused: 0 };
+
+/** How many logos this process has scaled, and how many renders reused one. */
+export function logoPrescaleStats(): { scaled: number; reused: number } {
+  return { ...logoStats };
+}
+
+interface LogoPrescaleJob {
+  key: string;
+  svg: string;
+  width: number;
+  height: number;
+  file: string;
+  bytes: Buffer;
+}
+
+/** What scaling this logo into this box takes, or undefined when it is vector or no larger than the box. */
+function logoPrescaleJob(href: string, box: Box, options?: RenderLayoutOptions): { key: string; job: () => LogoPrescaleJob | undefined } | undefined {
+  const comma = href.indexOf(',');
+  if (!href.startsWith('data:') || comma < 0) return undefined;
+  const width = Math.max(1, Math.round(box.width));
+  const height = Math.max(1, Math.round(box.height));
+  // Hashing the encoded payload identifies the logo without decoding it on a cache hit.
+  const hash = createHash('sha256').update(href.slice(comma + 1)).digest('hex');
+  const key = `${hash}|${box.width}x${box.height}|${resolveRsvgConvert(options)}`;
+  return {
+    key,
+    job: () => {
+      const bytes = dataUriBytes(href);
+      const type = bytes ? sniffImageType(bytes) : undefined;
+      if (!bytes || !type || type === 'image/svg+xml') return undefined;
+      const size = imagePixelSize(bytes);
+      if (!size || (size.width <= width && size.height <= height)) return undefined;
+      const file = `logo.${imageFileExtension(type)}`;
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${box.width} ${box.height}">` +
+        `<image xlink:href="${file}" x="0" y="0" width="${box.width}" height="${box.height}" preserveAspectRatio="xMidYMid meet"/>` +
+        `</svg>`;
+      return { key, svg, width, height, file, bytes };
+    },
+  };
+}
+
+function rememberPrescaledLogo(key: string, href: string | null): void {
+  prescaledLogos.set(key, href);
+  while (prescaledLogos.size > PRESCALED_LOGO_LIMIT) {
+    prescaledLogos.delete(prescaledLogos.keys().next().value as string);
+  }
+}
+
+/** The logo scaled to its box, scaling it now (synchronously) the first time; undefined to draw it as it came. */
+function prescaledLogoHref(href: string, box: Box, options?: RenderLayoutOptions): string | undefined {
+  const plan = logoPrescaleJob(href, box, options);
+  if (!plan) return undefined;
+  if (prescaledLogos.has(plan.key)) {
+    const cached = prescaledLogos.get(plan.key);
+    if (cached) logoStats.reused++;
+    return cached ?? undefined;
+  }
+  const job = plan.job();
+  if (!job) {
+    rememberPrescaledLogo(plan.key, null);
+    return undefined;
+  }
+  let tempDir: string | null = null;
+  try {
+    tempDir = fs.mkdtempSync(path.join(tmpdir(), 'hawa-logo-'));
+    const svgFile = path.join(tempDir, 'logo.svg');
+    fs.writeFileSync(svgFile, job.svg, { mode: 0o600 });
+    fs.writeFileSync(path.join(tempDir, job.file), job.bytes, { mode: 0o600 });
+    const res = spawnSync(resolveRsvgConvert(options), ['-w', String(job.width), '-h', String(job.height), '-f', 'png', svgFile], {
+      env: { ...process.env, FONTCONFIG_FILE: resolveFontconfigFile(options) },
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 20000,
+    });
+    const png = res.status === 0 && res.stdout && res.stdout.length >= 100 ? res.stdout : null;
+    const out = png ? `data:image/png;base64,${png.toString('base64')}` : null;
+    rememberPrescaledLogo(plan.key, out);
+    if (out) logoStats.scaled++;
+    return out ?? undefined;
+  } catch {
+    rememberPrescaledLogo(plan.key, null);
+    return undefined;
+  } finally {
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/** Scales the layout's logo without blocking the event loop, so the render that follows finds it cached. */
+async function warmPrescaledLogo(layout: StudioLayoutV2, options: RenderLayoutOptions): Promise<void> {
+  if (!layout.logo) return;
+  const href = resolveLogoHref(options);
+  if (!href) return;
+  const plan = logoPrescaleJob(href, layout.logo, options);
+  if (!plan || prescaledLogos.has(plan.key)) return;
+  const job = plan.job();
+  if (!job) {
+    rememberPrescaledLogo(plan.key, null);
+    return;
+  }
+  try {
+    const png = await svgToPngAsync(job.svg, job.width, job.height, options, { [job.file]: job.bytes });
+    rememberPrescaledLogo(plan.key, `data:image/png;base64,${png.toString('base64')}`);
+    logoStats.scaled++;
+  } catch {
+    rememberPrescaledLogo(plan.key, null);
+  }
 }
 
 /**
@@ -1278,11 +1599,12 @@ export function renderLayoutV2ToSvg(
       `<clipPath id="${clipId}"><rect x="${artBox.x}" y="${artBox.y}" width="${artBox.width}" height="${artBox.height}"/></clipPath>`
     );
 
+    // Typed from the bytes (image-type.ts): the file name and the declared type are not evidence.
     let artHref = options.artImagePath;
-    if (artHref && fs.existsSync(artHref)) {
-      const mime = artHref.endsWith('.png') ? 'image/png' : 'image/jpeg';
-      const b64 = fs.readFileSync(artHref).toString('base64');
-      artHref = `data:${mime};base64,${b64}`;
+    if (artHref && !artHref.startsWith('data:') && fs.existsSync(artHref)) {
+      artHref = imageDataUri(fs.readFileSync(artHref), `art image ${artHref}`);
+    } else if (artHref) {
+      artHref = relabelDataUri(artHref);
     }
 
     if (artHref) {
@@ -1364,7 +1686,8 @@ export function renderLayoutV2ToSvg(
       bodyPartsNoText.push(cutoutImageSvg(id, layer.png, layer.rect));
       continue;
     }
-    const href = options.photoDataUris?.[p.photoIndex];
+    const declaredHref = options.photoDataUris?.[p.photoIndex];
+    const href = declaredHref ? relabelDataUri(declaredHref) : declaredHref;
     if (href && framedPhotoTreated(p)) {
       drawFragment(framedPhotoFragment(p, href, dataUriPixelSize(href)));
       continue;
@@ -1393,18 +1716,16 @@ export function renderLayoutV2ToSvg(
 
 
   // Logo Layer
-  let logoHref = options.logoDataUri;
-  if (!logoHref && options.logoPath && fs.existsSync(options.logoPath)) {
-    const mime = options.logoPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
-    const b64 = fs.readFileSync(options.logoPath).toString('base64');
-    logoHref = `data:${mime};base64,${b64}`;
-  }
-  if (!logoHref) {
-    logoHref = getKaaeOfficialLogoDataUri();
-  }
+  const logoHref = resolveLogoHref(options);
 
   if (layout.logo) {
-    if (logoHref) {
+    const prescaled = logoHref ? prescaledLogoHref(logoHref, layout.logo, options) : undefined;
+    if (prescaled) {
+      // Already fitted into exactly this box ("meet" applied when it was scaled), so drawn 1:1.
+      bodyPartsNoText.push(
+        `<image id="logo" xlink:href="${prescaled}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="none"/>`
+      );
+    } else if (logoHref) {
       bodyPartsNoText.push(
         `<image id="logo" xlink:href="${logoHref}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
@@ -1565,6 +1886,7 @@ export async function svgToPngAsync(
  * rasterisations (the design and its no-text composite) running side by side.
  */
 export async function renderLayoutV2Async(layout: StudioLayoutV2, options: RenderLayoutOptions = {}): Promise<RenderLayoutV2Result> {
+  await warmPrescaledLogo(layout, options);
   const { svg, noTextSvg, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
   const [png, noTextPng] = await Promise.all([
     svgToPngAsync(svg, layout.width, layout.height, options),

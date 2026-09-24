@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { sniffImageType } from './studio/image-type.js';
 
 let cachedKaaeLogoDataUri: string | null = null;
 
@@ -31,9 +32,11 @@ export function getKaaeOfficialLogoDataUri(): string {
   for (const p of candidatePaths) {
     try {
       if (fs.existsSync(p)) {
-        const b64 = fs.readFileSync(p).toString('base64');
-        if (b64.length > 1000) {
-          cachedKaaeLogoDataUri = `data:image/png;base64,${b64}`;
+        const bytes = fs.readFileSync(p);
+        // Typed from its bytes, not its .png name (ADR-036): a logo replaced by a JPEG keeps the name.
+        const type = sniffImageType(bytes);
+        if (bytes.length > 750 && type) {
+          cachedKaaeLogoDataUri = `data:${type};base64,${bytes.toString('base64')}`;
           return cachedKaaeLogoDataUri;
         }
       }
@@ -160,14 +163,19 @@ export function renderOperationsToSvg(
         throw new Error(`Text overflow: ${op.nodeId} requires more than ${op.height}px`);
       }
 
+      // A blank line is 0.8 of a line of extra space before the next line, carried on that line's dy.
+      // It used to be a tspan holding a single space: whitespace-only character data, which each
+      // renderer collapses, keeps or positions by its own rules (ADR-036).
       let textContent = '';
+      let pendingDy = 0;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (!line && i > 0) {
-          textContent += `<tspan x="${textX}" dy="${lineHeight * 0.8}"> </tspan>`;
-        } else {
-          textContent += `<tspan x="${textX}" dy="${i === 0 ? 0 : lineHeight}">${escapeXml(line)}</tspan>`;
+          pendingDy += lineHeight * 0.8;
+          continue;
         }
+        textContent += `<tspan x="${textX}" dy="${(i === 0 ? 0 : lineHeight) + pendingDy}">${escapeXml(line)}</tspan>`;
+        pendingDy = 0;
       }
 
       const fontStyleAttr = style.fontStyle ? ` font-style="${style.fontStyle}"` : '';

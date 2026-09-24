@@ -1,5 +1,6 @@
 import { imagePixelSize, jpegOrientation } from './photo-crop.js';
 import { svgToPngAsync, type RenderLayoutOptions } from './render-layout-v2.js';
+import { dataUriBytes, sniffImageType } from './image-type.js';
 
 /**
  * A client photo turned upright once, as it comes into a run, so everything after it (the brief's
@@ -38,10 +39,12 @@ function orientationMatrix(orientation: number, w: number, h: number): string | 
 }
 
 export async function uprightPhotoDataUrl(dataUrl: string, options?: RenderLayoutOptions): Promise<string> {
-  const m = /^data:image\/(jpe?g|png);base64,(.+)$/i.exec(dataUrl);
-  if (!m) return dataUrl;
-  const isJpeg = m[1].toLowerCase() !== 'png';
-  const bytes = Buffer.from(m[2], 'base64');
+  // What the photo is comes from its bytes, not the type the sender declared: a JPEG declared as a
+  // PNG kept its sideways EXIF turn, and its sibling file was named for the wrong decoder (ADR-036).
+  const bytes = dataUriBytes(dataUrl);
+  const type = bytes ? sniffImageType(bytes) : undefined;
+  if (!bytes || (type !== 'image/jpeg' && type !== 'image/png')) return dataUrl;
+  const isJpeg = type === 'image/jpeg';
   const size = imagePixelSize(bytes);
   if (!size) return dataUrl;
   const orientation = isJpeg ? jpegOrientation(bytes) : 1;
