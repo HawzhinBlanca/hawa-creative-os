@@ -1,7 +1,7 @@
 # ADR-035: Pictures and Design Sources Live in a Content-Addressed File Store
 
 **Date:** 2026-09-24
-**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 3.1).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 3.1). Amended 2026-09-24 (sections 2.3, 2.6 and 3, marked below) from the implementation design's findings 2 and 3 (`output/plans/2026-09-24-architecture-programme/FILESTORE_DESIGN.md`).
 **Amends:** the storage of reference photos (`studioOptions.referenceImageBase64`), studio candidate PNGs, Canva plan sources, cut-out PNGs and comparison images. Canva export bytes (`canva_export_bytes`) are unchanged.
 
 ## 1. Context
@@ -15,15 +15,18 @@
 
 1. Files at `~/.hawa/blobs/sha256/<first two hex>/<hex>.<ext>`, a bind mount (host backups see it). Writes go to `tmp/` on the same filesystem, are fsynced, renamed into place (an existing target means the same bytes: the temp file is discarded), the directory fsynced, mode 0444.
 2. A table `hawa.blobs(sha256 PRIMARY KEY, size, media_type, created_at)`; every referencing table holds the hash with a foreign key `ON DELETE RESTRICT`. The tenant is on the referencing row.
-3. Garbage collection is mark-and-sweep with a 14-day grace period: delete unreferenced `blobs` rows older than the grace period (the foreign key refuses referenced ones), unlink the file after the commit, sweep orphan files older than the grace period. No reference counts.
+3. Garbage collection is mark-and-sweep with a grace period: delete unreferenced `blobs` rows older than the grace period (the foreign key refuses referenced ones), unlink the file after the commit, sweep orphan files older than the grace period. No reference counts.
+   *Amended 2026-09-24.* The grace period runs from `blobs.unreferenced_since`, not from `created_at`. The mark phase sets `unreferenced_since` when nothing references a file and clears it when something does again (a new `put` of the same bytes clears it too). A row is deleted only when both `unreferenced_since` and `created_at` are older than the grace period. By age alone, a month-old picture that lost its last reference yesterday would be deleted tonight while yesterday's dump still references it. The grace period is **15 days**, and the archive keeps **14** nightly dumps (`HAWA_BACKUP_ARCHIVE_KEEP`); `nightly_backup.sh` refuses to run unless the retention is shorter than the grace period, so every file a kept dump references is still on disk or in a kept pack. The database refuses a grace under 7 days.
 4. Serving: Core authorises on the referencing row, never on the hash, and answers with `X-Accel-Redirect` to an `internal` nginx location with `Cache-Control: private, max-age=31536000, immutable`.
 5. The renderer reads pictures as files beside the SVG (librsvg reads files in the SVG's own folder; the upright step already does this), so no picture is inlined as a data URI.
 6. Backups: the Postgres dump first, then the blob directory, into the existing encrypted archive; blobs never change and the grace period exceeds the backup interval, so every reference in a dump has its file. The restore drill restores both.
+   *Amended 2026-09-24.* A reference counts as a file the store owes only when it has a `hawa.blobs` row. Before the copy backfill, the running Core writes hashes into columns the reference view reads (studio previews and art, plan sources, editable sources, comparison images) while the bytes stay in bytea beside them; those hashes have no row and no file, and nothing is lost. The nightly backup and the store check (weekly and in the restore drill) count them apart (`refs_without_row`, `referencedWithoutRow`) and do not fail on them. Once migration 020 adds the foreign keys, such a reference cannot exist.
 7. Order of moves: reference photos (the payload carries `{sha256, media_type}`, written once), plan sources, candidate PNGs, cut-outs, comparison images.
 
 ## 3. Consequences
 
 - `task.created` payloads fall from hundreds of KB to under 4 KB; JSON scans stop reading images; the 10 MB render limit no longer applies to pictures.
+  *Amended 2026-09-24.* The acceptance is: **no inline bytes in a `task.created` or `task.dispatch` payload, ever**, and **at most 4 KB whenever the request's own text fields (`rawRequestText` and `designInstructions`) total at most 2 KB**. A flat 4 KB cannot be met on text alone: 35 of 1,598 production payloads are over 4 KB with no picture (the largest 6,097 B, the legacy `body` plus the copy stored three times), and shrinking the text is not this decision's job.
 - One more thing to back up and restore; covered by the drill.
 - Canva export bytes stay in `bytea` (append-only, hash checked by the database, row-level security applies); revisited once the rest has moved.
 

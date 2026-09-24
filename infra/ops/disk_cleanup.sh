@@ -12,15 +12,20 @@
 #     the last $HAWA_LOG_DAYS (30) days, and the oldest days beyond $HAWA_LOG_MAX_MB (2048 MB). Vector
 #     never deletes, so this is their only retention.
 #
-# Nightly dumps (hawa_*.dump) keep their own retention in nightly_backup.sh. Nothing else is touched.
+# Nightly dumps (hawa_*.dump) keep their own retention in nightly_backup.sh. Nothing else is touched:
+# in particular never the file store's archive ($ARCHIVE/blobs: packs and their index) or its
+# manifests (hawa_*.blobs), which nightly_backup.sh prunes by what the kept dumps still need, and never
+# a file of the store itself (~/.hawa/blobs), which only the collector deletes. Only their half-written
+# temporary files (*.part) older than a day go. Every glob below is hawa_* or predeploy_* at depth 1.
 #
 #   bash infra/ops/disk_cleanup.sh             # clean everything above, then report
 #   bash infra/ops/disk_cleanup.sh --backups   # the dumps and the container logs (what the nightly backup runs)
 #   bash infra/ops/disk_cleanup.sh --report    # report only, delete nothing
 set -Eeuo pipefail; umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIR="$ROOT/infra/backup/snapshots"
+DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"
 ARCHIVE="${HAWA_BACKUP_ARCHIVE_DIR:-$HOME/.hawa/snapshots_archive}"
+BLOBS="${HAWA_BLOBS_DIR:-$HOME/.hawa/blobs}"
 KEEP_PREDEPLOY="${HAWA_PREDEPLOY_KEEP:-10}"
 ARCHIVE_DAYS="${HAWA_ARCHIVE_DAYS:-30}"
 CACHE_MAX="${HAWA_BUILD_CACHE_MAX:-8GB}"
@@ -81,6 +86,8 @@ report() {
     if [[ -d "$d" ]]; then du -sh "$d" | awk -v n="${d/#$HOME/~}" '{print "backups", $1, n}'; fi
   done
   if [[ -d "$CONTAINER_LOGS" ]]; then du -sh "$CONTAINER_LOGS" | awk -v n="${CONTAINER_LOGS/#$HOME/~}" '{print "logs", $1, n}'; fi
+  if [[ -d "$ARCHIVE/blobs" ]]; then du -sh "$ARCHIVE/blobs" | awk -v n="${ARCHIVE/#$HOME/~}/blobs" '{print "backups", $1, n, "(file store packs, included above)"}'; fi
+  if [[ -d "$BLOBS" ]]; then du -sh "$BLOBS" | awk -v n="${BLOBS/#$HOME/~}" '{print "files", $1, n}'; fi
   if docker info >/dev/null 2>&1; then
     docker system df --format '{{.Type}} {{.Size}} ({{.Reclaimable}} reclaimable)' | grep -E '^(Build Cache|Images)' || true
   fi
@@ -97,6 +104,11 @@ to_compress=()
 # deploy.sh was still writing or checking (it removes its own on failure; these are a day old).
 for d in "$DIR" "$ARCHIVE"; do
   if [[ -d "$d" ]]; then find "$d" -maxdepth 1 \( -name '*.zst.part' -o -name 'predeploy_*.partial' \) -mtime +0 -delete 2>/dev/null || true; fi
+done
+# The same for the file store: a pack the nightly backup was still writing, and a file a put was still
+# writing (the collector also removes these; a day is far longer than either takes).
+for d in "$ARCHIVE/blobs" "$BLOBS/tmp"; do
+  if [[ -d "$d" ]]; then find "$d" -maxdepth 1 -type f -name '*.part' -mtime +0 -delete 2>/dev/null || true; fi
 done
 
 # 1. Pre-deploy dumps. deploy.sh writes predeploy_*.dump, with its .sha256 only once the dump has

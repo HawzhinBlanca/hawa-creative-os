@@ -171,6 +171,41 @@ for model in BiRefNet-portrait-epoch_150.onnx face_detection_yunet_2023mar.onnx;
 done
 echo "✓ cut-out model files present in ${MODELS_DIR}"
 
+# The value compose itself interpolates: the shell's, else infra/docker/.env's, else the default.
+# Reading only the shell would let the directory made here, or the port probed below, drift from the
+# ones the containers get when .env sets them. A leading ${HOME} or $HOME in .env is expanded as compose does.
+compose_value() {
+  local v="${!1:-}"
+  [[ -n "$v" ]] || v="$(grep -E "^$1=" "$INTERP_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  v="${v%\"}"; v="${v#\"}"
+  case "$v" in '${HOME}'*) v="${HOME}${v#'${HOME}'}" ;; '$HOME'*) v="${HOME}${v#'$HOME'}" ;; esac
+  printf '%s' "${v:-$2}"
+}
+# 2c. The content-addressed file store (ADR-035) is a host directory bind-mounted into Core, both worker
+# colours (read-write) and nginx (read-only). It is created here, before any container starts, with the
+# marker the store requires: Docker would otherwise create a missing mount source itself, and the store
+# refuses a directory without the marker, so a mount that went wrong cannot fill an empty directory.
+# Files are 0444 and directories 0755, which nginx's own user needs to read them.
+BLOBS_DIR="$(compose_value HAWA_BLOBS_DIR "${HOME}/.hawa/blobs")"
+ensure_blob_store() {
+  install -d -m 0755 "$1" "$1/sha256" "$1/tmp"
+  if [[ ! -f "$1/.hawa-blob-store" ]]; then
+    printf 'sha256-v1\n' > "$1/.hawa-blob-store.new" && chmod 0644 "$1/.hawa-blob-store.new" && mv -f "$1/.hawa-blob-store.new" "$1/.hawa-blob-store"
+  fi
+  [[ "$(cat "$1/.hawa-blob-store")" == "sha256-v1" ]] || { echo "ERROR: $1/.hawa-blob-store is not a sha256-v1 store marker"; return 1; }
+}
+# After the stack is up: nginx must not serve /_blobs/ to anyone (it is `internal`, reached only by
+# Core's X-Accel-Redirect after Core has authorised the request), and Core must see the store.
+check_blob_store_private() {
+  local code port
+  port="$(compose_value HAWA_PORT 8080)"
+  code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:${port}/_blobs/.hawa-blob-store" || true)"
+  [[ "$code" == 404 ]] || { echo "ERROR: /_blobs/ answered ${code:-nothing} to a direct request; it must be internal to nginx (infra/docker/nginx.conf)"; return 1; }
+  docker exec "$CORE_CONTAINER" test -f /var/lib/hawa/blobs/.hawa-blob-store \
+    || { echo "ERROR: Core does not see the file store at /var/lib/hawa/blobs (the bind mount of ${BLOBS_DIR})"; return 1; }
+  echo "✓ file store mounted in Core, and /_blobs/ is not reachable from outside"
+}
+
 # 3. Compose topology with the real interpolation file
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" config --quiet
 echo "✓ compose topology valid"
@@ -205,6 +240,9 @@ if core_running; then
   refuse_stuck_legacy "$PLAN"
   finish_previous_drains "$(sed -n 's/^idle=//p' <<< "$PLAN")"
 fi
+
+ensure_blob_store "$BLOBS_DIR" || exit 1
+echo "✓ file store ready at ${BLOBS_DIR}"
 
 # 5. Backup before anything changes
 POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "$INTERP_FILE" | cut -d= -f2-)"
@@ -329,6 +367,7 @@ WORKER="$(docker exec "hawa-production-worker-${IDLE}-1" node -e "fetch('http://
 echo "worker: ${WORKER:-unavailable}"
 CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "cutout: ${CUTOUT:-unavailable}"
+check_blob_store_private || exit 1
 
 # 9. Hawa's own disk use: older pre-deploy dumps, Docker's build cache (a full disk is an outage).
 bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"

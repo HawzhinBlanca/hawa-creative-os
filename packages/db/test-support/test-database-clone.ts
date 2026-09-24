@@ -11,7 +11,9 @@
  * refused by the connection guard, so a wrong guess fails loudly rather than sharing data.
  */
 import { randomInt } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, expect, inject } from 'vitest';
 import { CLONE_PREFIX, cloneTemplate, dropClone, withDatabase, type TemplateKind } from '../src/test-template.js';
@@ -53,9 +55,17 @@ if (plan && ownerUrl) {
   }
   if (clones.length) {
     process.env.HAWA_TEST_DATABASE_CLONES = clones.join(',');
+    // Its own file store too (ADR-035): a database's hawa.blobs rows and the files they name belong
+    // together, and a file's garbage collection must never see another file's blobs.
+    const blobDir = mkdtempSync(join(tmpdir(), 'hawa-test-blobs-'));
+    mkdirSync(join(blobDir, 'sha256'), { mode: 0o755 });
+    mkdirSync(join(blobDir, 'tmp'), { mode: 0o755 });
+    writeFileSync(join(blobDir, '.hawa-blob-store'), 'sha256-v1\n', { mode: 0o644 });
+    process.env.HAWA_BLOB_DIR = blobDir;
     afterAll(async () => {
       if (process.env.HAWA_KEEP_TEST_DB === '1') return;
       for (const clone of clones) await dropClone(ownerUrl, clone);
+      rmSync(blobDir, { recursive: true, force: true });
     }, 60_000);
   }
 }

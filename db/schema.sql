@@ -988,6 +988,11 @@ BEGIN
   END LOOP;
 END $$;
 
+-- The file store (ADR-035): hawa.blobs, hawa.task_files, the blob_references view and the garbage
+-- collector's functions are created by packages/db/migrations/019_blob_store.sql, not here: they refer
+-- to tables that only the versioned migrations create (design_studio_candidates, canva_design_plans,
+-- photo_cutouts, comparison_pairs). Every database gets them through the upgrade runner.
+
 -- Figma Agent Studio v2.0 tables
 CREATE TABLE IF NOT EXISTS design_jobs (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,

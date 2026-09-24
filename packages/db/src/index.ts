@@ -16,3 +16,4 @@ export * from './task-reconciliation.js';
 export { sql, CompiledQuery, type Kysely } from 'kysely';
 export * from './session-lock.js';
 export * from './trace-context.js';
+export * from './blobs/index.js';

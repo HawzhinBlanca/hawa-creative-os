@@ -136,7 +136,9 @@ if [[ "$disk_full" -eq 1 ]]; then
   # Both sources may fail (Docker down, no archive folder yet): the alert still goes, with "?".
   backups="$( { du -sch "$ROOT/infra/backup/snapshots" "$HOME/.hawa/snapshots_archive" 2>/dev/null || true; } | tail -1 | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/')"
   cache="$( { docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null || true; } | awk '/^Build Cache/{print $3}' | sed -E 's/([0-9])([KMGT]B)$/\1 \2/')"
-  disk_msg="The Mac's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?} and Docker's build cache ${cache:-?}. The rest is other files on this Mac, so please free some space (System Settings, General, Storage)."
+  # The file store (ADR-035): client photos and design sources, deleted only by the collector.
+  files="$( { du -sh "${HAWA_BLOBS_DIR:-$HOME/.hawa/blobs}" 2>/dev/null || true; } | cut -f1 | tr -d ' ' | sed -E 's/G$/ GB/; s/M$/ MB/; s/K$/ KB/')"
+  disk_msg="The Mac's disk is ${used}% full (${free} free). Hawa has already cleaned up after itself: its backups take ${backups:-?}, its stored pictures and design files ${files:-0} and Docker's build cache ${cache:-?}. The rest is other files on this Mac, so please free some space (System Settings, General, Storage)."
 fi
 if [[ ${#problems[@]} -eq 0 ]]; then
   # Only the disk: a reminder every 6 hours, hourly past 97%, instead of every 30 minutes.

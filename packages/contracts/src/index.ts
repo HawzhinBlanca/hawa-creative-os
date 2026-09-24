@@ -9,3 +9,4 @@ export * from './asset-provider.js';
 export * from './identities.js';
 export * from './release-manifest.js';
 export * from './task-status.js';
+export * from './blobs.js';
