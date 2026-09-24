@@ -1,0 +1,494 @@
+#!/usr/bin/env tsx
+/**
+ * Moves the bytes already in the database into the content-addressed file store (ADR-035,
+ * FILESTORE_DESIGN.md section 5).
+ *
+ *   DATABASE_URL=<owner> HAWA_BLOB_DIR=<store> npx tsx scripts/blob_backfill.ts \
+ *     --phase reference_photos|plan_sources|candidates|cutouts|comparisons|all \
+ *     --mode copy|verify|strip [--batch 25] [--limit N] [--dry-run] [--log <file.ndjson>] [--measure]
+ *
+ * Modes:
+ *   copy    puts each row's bytes to the store and links them: a hash column the row lacks
+ *           (composite_sha256, png_sha256, shadow_sha256), or a hawa.task_files row for a task's
+ *           reference photo. It never changes the bytes, the JSON or an existing hash, so it needs no
+ *           trigger disabled and can run while Core runs.
+ *   verify  reports rows whose bytes are not in the store yet, stored hashes whose file is missing or
+ *           differs, and JSON still carrying a data:image URI. Changes nothing.
+ *   strip   (this release: test databases and restored copies only) sets the bytea columns of rows
+ *           whose file the store has, verified by hash, to NULL. Each batch runs in one transaction
+ *           that disables the table's append-only trigger, updates and enables it again; DDL is
+ *           transactional, so a crash leaves the trigger enabled. Reference photos in JSON are not
+ *           stripped yet: readers still read the base64 until the Telegram intake moves (refused).
+ *
+ * Progress is the data itself: copy selects rows whose bytes are present and not yet in the store,
+ * strip rows whose bytes are present and whose file is, in keyset order on the row id, and put() is
+ * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the batch in
+ * hand) resumes where it stopped. Undecodable data URIs and hash mismatches are reported and left.
+ *
+ * Preconditions, asserted before anything is read: migration 019 is applied; the role bypasses row-level
+ * security (every table forces it); the store's marker is present. Production (port 54332 or the
+ * database named hawa) is refused unless --production is given with a rehearsal receipt
+ * (~/.hawa/logs/blob_backfill_rehearsal.json: a hawa_restore_* database, its migration checksums equal
+ * to the target's, zero verify failures), and strip is refused there whatever is given.
+ */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { BlobStore, createDb, sql, type Database, type Kysely } from '../packages/db/src/index.js';
+import { sniffBlobMediaType, type BlobMediaType } from '../packages/contracts/src/blobs.js';
+
+export const PHASES = ['reference_photos', 'plan_sources', 'candidates', 'cutouts', 'comparisons'] as const;
+export type Phase = (typeof PHASES)[number];
+export type Mode = 'copy' | 'verify' | 'strip';
+
+const PPTX: BlobMediaType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+export interface BackfillProblem {
+  table: string;
+  id: string;
+  problem: string;
+}
+
+export interface PhaseReport {
+  phase: Phase;
+  mode: Mode;
+  /** Rows looked at. */
+  scanned: number;
+  /** Files put to the store (copy), whether or not the store already had them. */
+  stored: number;
+  /** Hash columns or task_files rows written (copy). */
+  linked: number;
+  /** Rows whose bytes were set to NULL (strip). */
+  stripped: number;
+  /** verify: rows still holding bytes the store does not have. */
+  notCopied: number;
+  /** verify: rows whose bytes the store has, not yet stripped. */
+  strippable: number;
+  /** verify: JSON rows still carrying a data:image URI. */
+  inlineJson: number;
+  problems: BackfillProblem[];
+  /** Stopped by --limit or a signal before the phase was done. */
+  stoppedEarly: boolean;
+}
+
+export interface BackfillOptions {
+  db: Kysely<Database>;
+  store: BlobStore;
+  phases: readonly Phase[];
+  mode: Mode;
+  batch?: number;
+  /** At most this many rows written in the whole run (copy and strip); a later run resumes. */
+  limit?: number;
+  dryRun?: boolean;
+  log?: (line: Record<string, unknown>) => void;
+  /** Checked between batches: SIGINT finishes the batch in hand, then stops. */
+  shouldStop?: () => boolean;
+}
+
+// ---- Target and preconditions ----
+
+export interface TargetCheck {
+  databaseUrl: string;
+  /** current_database() of the connection, when known. */
+  database?: string;
+  mode: Mode;
+  production: boolean;
+  receiptPath?: string;
+  /** The target's migration checksums, to compare with the receipt's. */
+  migrations?: Record<string, string>;
+}
+
+/** Production is the server on port 54332 or the database named hawa, however it is reached. */
+export function isProductionTarget(databaseUrl: string, database?: string): boolean {
+  let port = '';
+  let name = database ?? '';
+  try {
+    const u = new URL(databaseUrl);
+    port = u.port;
+    if (!name) name = decodeURIComponent(u.pathname.replace(/^\//, ''));
+  } catch {
+    return true; // Unreadable: treated as the worst case.
+  }
+  return port === '54332' || name === 'hawa';
+}
+
+/** Throws unless this run may touch this database. No connection is made. */
+export function assertTargetAllowed(t: TargetCheck): void {
+  if (!isProductionTarget(t.databaseUrl, t.database)) return;
+  if (t.mode === 'strip') {
+    throw new Error('Refused: strip does not run against production in this release (ADR-035 release B strips, after the backups and a rehearsal).');
+  }
+  if (!t.production) throw new Error('Refused: this is production (port 54332 or database hawa); pass --production with a rehearsal receipt.');
+  const receiptPath = t.receiptPath ?? path.join(os.homedir(), '.hawa/logs/blob_backfill_rehearsal.json');
+  let receipt: { database?: string; verifyFailures?: number; migrations?: Record<string, string> };
+  try {
+    receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+  } catch {
+    throw new Error(`Refused: no rehearsal receipt at ${receiptPath}; rehearse on a restored copy first.`);
+  }
+  if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(String(receipt.database ?? ''))) throw new Error('Refused: the rehearsal receipt is not from a hawa_restore_* database.');
+  if (receipt.verifyFailures !== 0) throw new Error('Refused: the rehearsal did not verify clean.');
+  if (!t.migrations || JSON.stringify(sortKeys(receipt.migrations ?? {})) !== JSON.stringify(sortKeys(t.migrations))) {
+    throw new Error("Refused: the rehearsal's migration checksums differ from this database's.");
+  }
+}
+
+const sortKeys = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+
+export async function migrationChecksums(db: Kysely<Database>): Promise<Record<string, string>> {
+  const rows = (await sql<{ name: string; sha256: string }>`SELECT name, sha256 FROM hawa.schema_upgrades ORDER BY name`.execute(db)).rows;
+  return Object.fromEntries(rows.map((r) => [r.name, r.sha256]));
+}
+
+/** 019 applied, row-level security bypassed, the store's marker present. */
+export async function assertPreconditions(db: Kysely<Database>, store: BlobStore): Promise<void> {
+  const applied = (await sql<{ ok: boolean }>`SELECT to_regclass('hawa.blobs') IS NOT NULL AND to_regclass('hawa.task_files') IS NOT NULL AS ok`.execute(db)).rows[0];
+  if (!applied?.ok) throw new Error('Migration 019 (the file store) is not applied to this database.');
+  const role = (await sql<{ ok: boolean }>`SELECT rolsuper OR rolbypassrls AS ok FROM pg_roles WHERE rolname = current_user`.execute(db)).rows[0];
+  if (!role?.ok) throw new Error('The backfill runs as the owner with BYPASSRLS (or a superuser): every table forces row-level security.');
+  await store.assertReady();
+}
+
+// ---- Helpers ----
+
+const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+/** The bytes of a base64 image data URI and their type, or a reason it is not one. */
+export function decodeImageDataUri(uri: unknown): { bytes: Buffer; mediaType: BlobMediaType } | { problem: string } {
+  if (typeof uri !== 'string') return { problem: 'not a string' };
+  const m = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(uri);
+  if (!m) return { problem: 'not a base64 data URI' };
+  const bytes = Buffer.from(m[2], 'base64');
+  const mediaType = sniffBlobMediaType(bytes);
+  if (!mediaType || !mediaType.startsWith('image/')) return { problem: `its bytes are ${mediaType ?? 'no image type the store knows'}` };
+  return { bytes, mediaType };
+}
+
+/** Runs one strip batch with the table's protective trigger disabled, and enabled again, in one transaction. */
+async function withTriggerDisabled<T>(db: Kysely<Database>, table: string, trigger: string | null, fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> {
+  return db.transaction().execute(async (trx) => {
+    if (trigger) await sql`ALTER TABLE ${sql.raw(`hawa.${table}`)} DISABLE TRIGGER ${sql.raw(trigger)}`.execute(trx);
+    const out = await fn(trx);
+    if (trigger) await sql`ALTER TABLE ${sql.raw(`hawa.${table}`)} ENABLE TRIGGER ${sql.raw(trigger)}`.execute(trx);
+    return out;
+  });
+}
+
+/** A bytea column that moves to the store, with the hash that names its file. */
+interface ByteaSource {
+  table: string;
+  bytes: string;
+  sha: string;
+  /** The hash column is new (019): copy writes it. Otherwise it already names the bytes and copy only checks it. */
+  shaIsNew: boolean;
+  expected: BlobMediaType | 'image';
+  /** The trigger strip disables for its batch. */
+  trigger: string | null;
+}
+
+const BYTEA_SOURCES: Record<Exclude<Phase, 'reference_photos'>, ByteaSource[]> = {
+  plan_sources: [
+    { table: 'canva_design_plans', bytes: 'source_content', sha: 'source_sha256', shaIsNew: false, expected: PPTX, trigger: 'immutable_canva_plan' },
+    { table: 'canva_editable_sources', bytes: 'content', sha: 'sha256', shaIsNew: false, expected: PPTX, trigger: 'canva_editable_sources_immutable' },
+  ],
+  candidates: [
+    { table: 'design_studio_candidates', bytes: 'preview_png', sha: 'preview_sha256', shaIsNew: false, expected: 'image', trigger: null },
+    { table: 'design_studio_candidates', bytes: 'composite_png', sha: 'composite_sha256', shaIsNew: true, expected: 'image', trigger: null },
+    { table: 'design_studio_candidates', bytes: 'art_png', sha: 'art_sha256', shaIsNew: false, expected: 'image', trigger: null },
+  ],
+  cutouts: [
+    { table: 'photo_cutouts', bytes: 'png', sha: 'png_sha256', shaIsNew: true, expected: 'image', trigger: null },
+    { table: 'photo_cutouts', bytes: 'shadow_png', sha: 'shadow_sha256', shaIsNew: true, expected: 'image', trigger: null },
+  ],
+  comparisons: [
+    { table: 'comparison_pairs', bytes: 'hawa_png', sha: 'hawa_sha256', shaIsNew: false, expected: 'image', trigger: 'protect_comparison_pair' },
+    { table: 'comparison_pairs', bytes: 'designer_png', sha: 'designer_sha256', shaIsNew: false, expected: 'image', trigger: 'protect_comparison_pair' },
+  ],
+};
+
+/** JSON that carries a reference photo: the task it belongs to and where in the JSON the photo is. */
+interface JsonSource {
+  table: string;
+  task: string;
+  column: string;
+  /** SQL expression for the photo's data URI, over alias r. */
+  image: string;
+  where: string;
+}
+
+const JSON_SOURCES: JsonSource[] = [
+  {
+    table: 'task_events',
+    task: 'task_id',
+    column: 'data',
+    image: `coalesce(r.data->'payload'->'studioOptions'->>'referenceImageBase64', r.data->'studioOptions'->>'referenceImageBase64')`,
+    where: `r.event_type = 'task.created'`,
+  },
+  {
+    table: 'outbox_commands',
+    task: 'aggregate_id',
+    column: 'payload',
+    image: `coalesce(r.payload->'studioOptions'->>'referenceImageBase64', r.payload->>'referenceImageBase64')`,
+    where: `r.command_type IN ('task.created', 'task.dispatch') AND r.aggregate_type = 'task'`,
+  },
+  {
+    table: 'canva_design_plans',
+    task: 'task_id',
+    column: 'request',
+    image: `r.request->>'referenceImageBase64'`,
+    where: 'true',
+  },
+];
+
+// ---- The run ----
+
+export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
+  const batch = Math.max(1, Math.min(500, o.batch ?? 25));
+  const log = o.log ?? (() => {});
+  let budget = o.limit ?? Number.POSITIVE_INFINITY;
+  const reports: PhaseReport[] = [];
+  const stop = () => budget <= 0 || Boolean(o.shouldStop?.());
+
+  for (const phase of o.phases) {
+    const report: PhaseReport = { phase, mode: o.mode, scanned: 0, stored: 0, linked: 0, stripped: 0, notCopied: 0, strippable: 0, inlineJson: 0, problems: [], stoppedEarly: false };
+    reports.push(report);
+    const problem = (table: string, id: string, what: string) => {
+      report.problems.push({ table, id, problem: what });
+      log({ phase, mode: o.mode, table, id, problem: what });
+    };
+
+    if (phase === 'reference_photos') {
+      if (o.mode === 'strip') {
+        problem('*', '*', 'refused: reference photos in JSON are stripped only once every reader reads hawa.task_files (after the Telegram intake moves)');
+        continue;
+      }
+      for (const src of JSON_SOURCES) {
+        if (o.mode === 'verify') {
+          const n = (await sql<{ n: string }>`SELECT count(*) AS n FROM ${sql.raw(`hawa.${src.table}`)} r WHERE ${sql.raw(src.where)} AND r.${sql.raw(src.column)}::text ~ 'data:image/[a-z]+;base64,'`.execute(o.db)).rows[0];
+          report.inlineJson += Number(n?.n ?? 0);
+          const unlinked = (await sql<{ n: string }>`SELECT count(*) AS n FROM ${sql.raw(`hawa.${src.table}`)} r
+            WHERE ${sql.raw(src.where)} AND ${sql.raw(src.image)} IS NOT NULL
+              AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.id = r.${sql.raw(src.task)} AND t.tenant_id = r.tenant_id)
+              AND NOT EXISTS (SELECT 1 FROM hawa.task_files f WHERE f.tenant_id = r.tenant_id AND f.task_id = r.${sql.raw(src.task)} AND f.role = 'reference_image')`.execute(o.db)).rows[0];
+          report.notCopied += Number(unlinked?.n ?? 0);
+          continue;
+        }
+        // copy: every row with a photo whose task has no reference file yet, in id order.
+        let after = '00000000-0000-0000-0000-000000000000';
+        for (;;) {
+          if (stop()) {
+            report.stoppedEarly = true;
+            break;
+          }
+          const rows = (
+            await sql<{ id: string; tenant_id: string; task_id: string; image: string }>`
+              SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.${sql.raw(src.task)}::text AS task_id, ${sql.raw(src.image)} AS image
+              FROM ${sql.raw(`hawa.${src.table}`)} r
+              WHERE ${sql.raw(src.where)} AND ${sql.raw(src.image)} IS NOT NULL AND r.id > ${after}::uuid
+                AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.id = r.${sql.raw(src.task)} AND t.tenant_id = r.tenant_id)
+                AND NOT EXISTS (SELECT 1 FROM hawa.task_files f WHERE f.tenant_id = r.tenant_id AND f.task_id = r.${sql.raw(src.task)} AND f.role = 'reference_image')
+              ORDER BY r.id LIMIT ${batch}`.execute(o.db)
+          ).rows;
+          if (!rows.length) break;
+          for (const row of rows) {
+            after = row.id;
+            report.scanned++;
+            const decoded = decodeImageDataUri(row.image);
+            if ('problem' in decoded) {
+              problem(src.table, row.id, `undecodable reference photo: ${decoded.problem}`);
+              continue;
+            }
+            if (o.dryRun) continue;
+            const ref = await o.store.put(decoded.bytes, decoded.mediaType);
+            report.stored++;
+            const inserted = await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+              VALUES (${row.tenant_id}::uuid, ${row.task_id}::uuid, ${ref.sha256}, 'reference_image') ON CONFLICT DO NOTHING`.execute(o.db);
+            if (Number(inserted.numAffectedRows ?? 0) > 0) report.linked++;
+            budget--;
+            log({ phase, mode: o.mode, table: src.table, id: row.id, task: row.task_id, sha256: ref.sha256 });
+          }
+        }
+      }
+      continue;
+    }
+
+    for (const src of BYTEA_SOURCES[phase]) {
+      const table = sql.raw(`hawa.${src.table}`);
+      const bytesCol = sql.raw(src.bytes);
+      const shaCol = sql.raw(src.sha);
+      if (o.mode === 'verify') {
+        const counts = (await sql<{ not_copied: string; strippable: string }>`
+          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND (r.${shaCol} IS NULL OR NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}))) AS not_copied,
+                 count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
+          FROM ${table} r`.execute(o.db)).rows[0];
+        report.notCopied += Number(counts?.not_copied ?? 0);
+        report.strippable += Number(counts?.strippable ?? 0);
+        // Every stored hash a row names must have its file, with those bytes.
+        const named = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+          JOIN hawa.blobs b ON b.sha256 = r.${shaCol}`.execute(o.db)).rows;
+        for (const n of named) {
+          report.scanned++;
+          try {
+            await o.store.read(n.sha, { verify: true });
+          } catch (err) {
+            problem(src.table, n.id, `${src.sha} ${n.sha.slice(0, 12)}…: ${(err as Error).message}`);
+          }
+        }
+        continue;
+      }
+
+      let after = '00000000-0000-0000-0000-000000000000';
+      for (;;) {
+        if (stop()) {
+          report.stoppedEarly = true;
+          break;
+        }
+        if (o.mode === 'copy') {
+          const rows = (await sql<{ id: string; bytes: Buffer; sha: string | null }>`
+            SELECT r.id::text AS id, r.${bytesCol} AS bytes, r.${shaCol} AS sha FROM ${table} r
+            WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
+              AND (r.${shaCol} IS NULL OR NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}))
+            ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
+          if (!rows.length) break;
+          for (const row of rows) {
+            after = row.id;
+            report.scanned++;
+            const bytes = Buffer.from(row.bytes);
+            const actual = sha256(bytes);
+            if (row.sha && row.sha !== actual) {
+              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`);
+              continue;
+            }
+            const mediaType = sniffBlobMediaType(bytes);
+            if (!mediaType || (src.expected === 'image' ? !mediaType.startsWith('image/') : mediaType !== src.expected)) {
+              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`);
+              continue;
+            }
+            if (o.dryRun) continue;
+            await o.store.put(bytes, mediaType);
+            report.stored++;
+            if (!row.sha) {
+              await sql`UPDATE ${table} SET ${shaCol} = ${actual} WHERE id = ${row.id}::uuid AND ${shaCol} IS NULL`.execute(o.db);
+              report.linked++;
+            }
+            budget--;
+            log({ phase, mode: o.mode, table: src.table, column: src.bytes, id: row.id, sha256: actual });
+          }
+          continue;
+        }
+
+        // strip: rows whose bytes the store has, verified by hash, in one transaction per batch.
+        const rows = (await sql<{ id: string; sha: string }>`
+          SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+          WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
+            AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})
+          ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
+        if (!rows.length) break;
+        after = rows[rows.length - 1].id;
+        const verified: string[] = [];
+        for (const row of rows) {
+          report.scanned++;
+          try {
+            await o.store.read(row.sha, { verify: true });
+            verified.push(row.id);
+          } catch (err) {
+            problem(src.table, row.id, `not stripped: ${(err as Error).message}`);
+          }
+        }
+        if (o.dryRun || !verified.length) continue;
+        const done = await withTriggerDisabled(o.db, src.table, src.trigger, async (trx) =>
+          sql`UPDATE ${table} r SET ${bytesCol} = NULL
+            WHERE r.id = ANY(${verified}::uuid[]) AND r.${bytesCol} IS NOT NULL
+              AND encode(sha256(r.${bytesCol}), 'hex') = r.${shaCol}`.execute(trx)
+        );
+        const n = Number(done.numAffectedRows ?? 0);
+        report.stripped += n;
+        budget -= n;
+        log({ phase, mode: o.mode, table: src.table, column: src.bytes, stripped: n, through: after });
+      }
+    }
+  }
+  return reports;
+}
+
+/** Database and table sizes, for the evidence (FILESTORE_DESIGN.md section 5, --measure). */
+export async function measure(db: Kysely<Database>): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  out.database = Number((await sql<{ n: string }>`SELECT pg_database_size(current_database()) AS n`.execute(db)).rows[0]?.n ?? 0);
+  for (const t of ['canva_design_plans', 'canva_editable_sources', 'design_studio_candidates', 'task_events', 'outbox_commands', 'photo_cutouts', 'comparison_pairs']) {
+    out[t] = Number((await sql<{ n: string }>`SELECT pg_total_relation_size(${`hawa.${t}`}::regclass) AS n`.execute(db)).rows[0]?.n ?? 0);
+  }
+  return out;
+}
+
+// ---- CLI ----
+
+function option(args: string[], name: string): string | undefined {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
+async function main(args: string[]): Promise<number> {
+  const phaseArg = option(args, '--phase') ?? 'all';
+  const mode = (option(args, '--mode') ?? '') as Mode;
+  if (!['copy', 'verify', 'strip'].includes(mode)) throw new Error('--mode copy|verify|strip is required');
+  const phases = phaseArg === 'all' ? PHASES : phaseArg.split(',').map((p) => {
+    if (!(PHASES as readonly string[]).includes(p)) throw new Error(`Unknown phase ${p}`);
+    return p as Phase;
+  });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL (the owner connection) is required');
+  const root = process.env.HAWA_BLOB_DIR;
+  if (!root) throw new Error('HAWA_BLOB_DIR is required');
+  // The target is checked on its address before any connection is made (strip, or production without
+  // --production, never connects), and again on its name and migrations once connected.
+  const production = args.includes('--production');
+  if (isProductionTarget(databaseUrl) && (mode === 'strip' || !production)) assertTargetAllowed({ databaseUrl, mode, production });
+  const db = createDb(databaseUrl);
+  let stopping = false;
+  process.on('SIGINT', () => {
+    stopping = true;
+    process.stderr.write('Stopping after this batch…\n');
+  });
+  try {
+    const database = (await sql<{ d: string }>`SELECT current_database() AS d`.execute(db)).rows[0]?.d;
+    assertTargetAllowed({ databaseUrl, database, mode, production, receiptPath: option(args, '--receipt'), migrations: await migrationChecksums(db).catch(() => ({})) });
+    const store = new BlobStore({ root: path.resolve(root), db });
+    await assertPreconditions(db, store);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logFile = option(args, '--log') ?? path.join(os.homedir(), `.hawa/logs/blob_backfill_${stamp}.ndjson`);
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const log = (line: Record<string, unknown>) => fs.appendFileSync(logFile, `${JSON.stringify({ at: new Date().toISOString(), ...line })}\n`);
+    const before = args.includes('--measure') ? await measure(db) : undefined;
+    const limit = option(args, '--limit');
+    const reports = await runBackfill({
+      db,
+      store,
+      phases,
+      mode,
+      batch: Number(option(args, '--batch') ?? 25),
+      ...(limit ? { limit: Number(limit) } : {}),
+      dryRun: args.includes('--dry-run'),
+      log,
+      shouldStop: () => stopping,
+    });
+    const after = before ? await measure(db) : undefined;
+    const summary = { database, mode, phases, reports, ...(before ? { measureBefore: before, measureAfter: after } : {}), log: logFile };
+    process.stdout.write(`${JSON.stringify(summary)}\n`);
+    return reports.some((r) => r.problems.length) ? 1 : 0;
+  } finally {
+    await db.destroy();
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (err) => {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(2);
+    }
+  );
+}

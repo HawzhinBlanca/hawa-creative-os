@@ -1,3 +1,4 @@
+import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
@@ -596,7 +597,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
   // A task's Canva export, by id (ADR-035 section 3). The bytes stay in canva_export_bytes, which the
   // database keeps append-only and hash-checked, so the address is immutable. Authorised on the export
   // row under row-level security: another tenant's task, or an export of another task, is 404.
-  registerRoute('get', '/tasks/:taskId/exports/:exportId/content', async (c: any) => {
+  registerRoute('get', '/tasks/:taskId/exports/:exportId/content', async (c: Context) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Unauthorized', 'Authentication required');
     const taskId = c.req.param('taskId');
@@ -630,7 +631,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
   // A task's reference photo, by its hash (ADR-035 section 3). Authorised on the task's file row
   // (hawa.task_files, row-level security), never on the hash: a hash another task or tenant holds,
   // or one this task never had, is 404.
-  registerRoute('get', '/tasks/:taskId/files/:sha256', async (c: any) => {
+  registerRoute('get', '/tasks/:taskId/files/:sha256', async (c: Context) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Unauthorized', 'Authentication required');
     const taskId = c.req.param('taskId');
