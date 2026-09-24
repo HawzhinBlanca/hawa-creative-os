@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -231,6 +231,32 @@ describe.skipIf(!ownerUrl)('app role rotation against Postgres', () => {
     expect(third.role).toBe(`${base}_a`);
     const secret = secretOf(third.secretFile);
     expect((await checkLogin(loginUrl(`${base}_a`, secret.HAWA_APP_PASSWORD))).accepted).toBe(true);
+  });
+
+  it('verifies in a number of round trips that does not grow with the number of tables', async () => {
+    // Each rotation compared every table's row count one query at a time, under every context, on
+    // both connections: several hundred round trips. Under the suite's parallel load that took the
+    // test above past its 30 s limit (it takes 1.5 s on a quiet machine). Counted, not timed: a
+    // round trip costs what the machine makes it cost, their number is the code's.
+    await retireRole(adminUrl, { ...opts, role: `${base}_b` });
+    const query = pg.Client.prototype.query;
+    let roundTrips = 0;
+    pg.Client.prototype.query = function (this: pg.Client, ...args: unknown[]) {
+      roundTrips++;
+      return (query as (...a: unknown[]) => unknown).apply(this, args);
+    } as typeof query;
+    let result: Awaited<ReturnType<typeof rotateAppRole>>;
+    try {
+      result = await rotateAppRole(adminUrl, opts);
+    } finally {
+      pg.Client.prototype.query = query;
+    }
+    expect(result.verification.problems).toEqual([]);
+    expect(result.verification.tablesCompared).toBeGreaterThan(20);
+    // A fixed number for the catalogue and the role, and four a context: the settings and the counts, on each side.
+    expect(roundTrips).toBeLessThanOrEqual(40 + 4 * result.verification.contextsCompared);
+    // The next test counts the secret files of this role; this one was only for counting.
+    unlinkSync(result.secretFile);
   });
 
   it('undoes the new login when it does not behave like the group, and says why', async () => {

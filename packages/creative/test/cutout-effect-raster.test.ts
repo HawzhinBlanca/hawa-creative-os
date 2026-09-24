@@ -198,9 +198,12 @@ describe('the effect picture', () => {
     expect(at(234, 1039.6)).toBeLessThanOrEqual(1);
   });
 
-  it('draws a 24 px outline at 2x, at the deck\'s largest layer, from a photograph, in under a second including the PNG', () => {
+  it('draws a 24 px outline at 2x at the deck\'s largest layer, from a photograph', () => {
     // A person 900x1300 on a 1080x1350 poster with twice the pixels: the outline's layer is 950x1325
     // layout pixels, just under PHOTO_BAKE_MAX_PIXELS at 2x (5 million device pixels).
+    // How long it takes (under a second, ADR-036) is timed by scripts/bench_cutout_outline.ts on a
+    // quiet machine: under the suite's parallel load the same work took 1.1 to 2.0 s of wall clock
+    // and failed runs that changed nothing. What the time depends on is checked below, without a clock.
     const W = 1800;
     const H = 2600;
     const silhouette = rgbaPng(W, H, (x, y) => {
@@ -209,12 +212,44 @@ describe('the effect picture', () => {
       return head || body ? 1 : 0;
     }, true);
     const photo: PhotoElement = { photoIndex: 0, role: 'portrait', x: 90, y: 40, width: 900, height: 1300, treatment: 'cutout', outline: { color: '#F5B700', width: 24 } };
-    const started = performance.now();
     const fragment = cutoutEffectFragment('outline', photo, silhouette, { x: 90, y: 40, width: 900, height: 1300 }, { width: 1080, height: 1350 }, { target: 'deck' })!;
-    const elapsed = performance.now() - started;
     const ring = PNG.sync.read(fragment.raster!);
     expect({ width: ring.width, height: ring.height }).toEqual({ width: 1900, height: 2650 });
-    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it('costs the same for the widest outline and glow as for the narrowest: the work does not grow with the width', () => {
+    // feMorphology searched a square of the outline's width around every pixel, so a 24 px outline
+    // at 2x took 23 s. Here each pass is a fixed number of steps a pixel, whatever the width. This
+    // compares the widest case with the narrowest in CPU time of this thread, which a busy machine
+    // does not add to (waiting for a core is not counted), taking the least of three tries of each,
+    // interleaved, so a slower core for one try does not decide it. A search of the width, even
+    // along one axis only, is about 30 times the narrow cost at 48 device pixels; the limit is 4.
+    const threadMs = () => {
+      const usage = (process as unknown as { threadCpuUsage?: () => NodeJS.CpuUsage }).threadCpuUsage?.() ?? process.cpuUsage();
+      return (usage.user + usage.system) / 1000;
+    };
+    const [width, height] = [1000, 1000];
+    const alpha = new Float32Array(width * height).map((_, i) => (Math.hypot((i % width) - 500, Math.floor(i / width) - 500) <= 350 ? 1 : 0));
+    const leastOfThree = (narrow: () => unknown, wide: () => unknown) => {
+      let [n, w] = [Infinity, Infinity];
+      for (let k = 0; k < 3; k++) {
+        let t = threadMs();
+        narrow();
+        n = Math.min(n, threadMs() - t);
+        t = threadMs();
+        wide();
+        w = Math.min(w, threadMs() - t);
+      }
+      // A floor of 1 ms: a pass too quick to measure has not grown either.
+      return w / Math.max(n, 1);
+    };
+    const ratios = {
+      // 24 px at 2x is a 48 device pixel radius; the round outline and the glow at their widest.
+      square: leastOfThree(() => squareDilation(alpha, width, height, 1), () => squareDilation(alpha, width, height, 48)),
+      round: leastOfThree(() => grownSilhouette(alpha, width, height, 1), () => grownSilhouette(alpha, width, height, 48)),
+      glow: leastOfThree(() => gaussianBlur(alpha, width, height, 1), () => gaussianBlur(alpha, width, height, 60)),
+    };
+    for (const [pass, ratio] of Object.entries(ratios)) expect(ratio, `${pass}: widest over narrowest`).toBeLessThan(4);
   });
 
   it('keeps every effect of a group poster, so the next render computes none of them again', () => {
