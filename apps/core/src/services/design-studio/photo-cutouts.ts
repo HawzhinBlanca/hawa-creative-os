@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { sql, type Database, type Kysely } from '@hawa/db';
+import { sql, BlobCorruptError, BlobMissingError, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
 import type { ContentPhoto } from './types.js';
 import { SOFT_PHOTO_SCALE } from './studio-status-note.js';
@@ -52,7 +52,10 @@ interface ServiceReply {
 
 interface StoredRow {
   passed: boolean;
-  png: Buffer;
+  /** Null once the strip has moved it to the file store (png_sha256 names it then). */
+  png: Buffer | null;
+  png_sha256?: string | null;
+  shadow_sha256?: string | null;
   width: number;
   height: number;
   shadow_png: Buffer | null;
@@ -93,8 +96,11 @@ export class PhotoCutouts {
   private readonly url: string | undefined;
   private readonly fetcher: typeof fetch;
   private readonly timeoutMs: number;
+  /** Where cut-out PNGs are written (ADR-035); without one they stay in the row only. */
+  private readonly blobStore: BlobStore | null;
 
-  constructor(options: { url?: string; fetcher?: typeof fetch; timeoutMs?: number } = {}) {
+  constructor(options: { url?: string; fetcher?: typeof fetch; timeoutMs?: number; blobStore?: BlobStore | null } = {}) {
+    this.blobStore = options.blobStore ?? null;
     this.url = (options.url ?? process.env.CUTOUT_URL ?? '').replace(/\/+$/, '') || undefined;
     this.fetcher = options.fetcher ?? fetch;
     // A cut takes about 10 s in the office VM, one at a time: a run with several photos, or another
@@ -130,7 +136,7 @@ export class PhotoCutouts {
     for (let photoIndex = 0; photoIndex < photos.length; photoIndex++) {
       const photo = photos[photoIndex];
       const sourceSha256 = createHash('sha256').update(photo.bytes).digest('hex');
-      let row = await this.stored(tx, sourceSha256);
+      let row = await this.withStoredPngs(await this.stored(tx, sourceSha256));
       // Why the service would not cut this one photo (it could not read it, or failed on it).
       let refused: string | undefined;
       if (!row && options.compute && !unavailable) {
@@ -164,7 +170,7 @@ export class PhotoCutouts {
         ...(typeof row.report?.faceHeight === 'number' ? { faceHeight: row.report.faceHeight } : {}),
       });
       assets.push(
-        row.passed
+        row.passed && row.png
           ? {
               png: row.png,
               width: row.width,
@@ -226,10 +232,41 @@ export class PhotoCutouts {
   private async stored(tx: Tx, sourceSha256: string): Promise<StoredRow | undefined> {
     return tx(async (db) =>
       (
-        await sql<StoredRow>`SELECT passed, png, width, height, shadow_png, shadow, report FROM hawa.photo_cutouts
+        await sql<StoredRow>`SELECT passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report FROM hawa.photo_cutouts
           WHERE source_sha256 = ${sourceSha256} ORDER BY created_at DESC LIMIT 1`.execute(db)
       ).rows[0]
     );
+  }
+
+  /**
+   * The row with its PNGs read from the file store where it names stored files, else from its own
+   * bytes: readers prefer the store and fall back to the row (ADR-035, release A).
+   */
+  private async withStoredPngs(row: StoredRow | undefined): Promise<StoredRow | undefined> {
+    if (!row || !this.blobStore) return row;
+    const read = async (sha: string | null | undefined, bytes: Buffer | null) => {
+      if (sha) {
+        try {
+          return await this.blobStore!.read(sha);
+        } catch (err) {
+          if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) throw err;
+        }
+      }
+      return bytes;
+    };
+    return { ...row, png: await read(row.png_sha256, row.png), shadow_png: await read(row.shadow_sha256, row.shadow_png) };
+  }
+
+  /** Puts a cut-out PNG to the file store; its hash, or null when there is no store or the put failed. */
+  private async storePng(bytes: Buffer | null): Promise<string | null> {
+    if (!bytes || !this.blobStore) return null;
+    try {
+      return (await this.blobStore.put(bytes, 'image/png')).sha256;
+    } catch (err) {
+      // The bytes are still written to the row (dual-write until the strip), so the cut-out is kept.
+      log.warn(`[cutouts] a cut-out PNG was not written to the file store: ${(err as Error)?.message || err}`);
+      return null;
+    }
   }
 
   private async make(tx: Tx, tenantId: string, photo: ContentPhoto, sourceSha256: string): Promise<StoredRow> {
@@ -276,10 +313,13 @@ export class PhotoCutouts {
       shadow: reply.shadow ? { width: reply.shadow.width, height: reply.shadow.height, x: reply.shadow.x, y: reply.shadow.y } : null,
       report,
     };
+    // The PNGs go to the file store first (its own short transaction), then the row names them.
+    const pngSha256 = await this.storePng(row.png);
+    const shadowSha256 = await this.storePng(row.shadow_png);
     await tx(async (db) =>
-      sql`INSERT INTO hawa.photo_cutouts (tenant_id, source_sha256, model, model_sha256, passed, png, width, height, shadow_png, shadow, report)
-        VALUES (${tenantId}::uuid, ${sourceSha256}, ${reply.model}, ${reply.modelSha256}, ${row.passed}, ${row.png}, ${row.width}, ${row.height},
-          ${row.shadow_png}, ${row.shadow ? JSON.stringify(row.shadow) : null}::jsonb, ${JSON.stringify(report)}::jsonb)
+      sql`INSERT INTO hawa.photo_cutouts (tenant_id, source_sha256, model, model_sha256, passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report)
+        VALUES (${tenantId}::uuid, ${sourceSha256}, ${reply.model}, ${reply.modelSha256}, ${row.passed}, ${row.png}, ${pngSha256}, ${row.width}, ${row.height},
+          ${row.shadow_png}, ${shadowSha256}, ${row.shadow ? JSON.stringify(row.shadow) : null}::jsonb, ${JSON.stringify(report)}::jsonb)
         ON CONFLICT (tenant_id, source_sha256, model_sha256) DO NOTHING`.execute(db)
     );
     log.info(`[cutouts] ${sourceSha256.slice(0, 12)}: ${row.passed ? 'passed' : `failed ${failed.join(', ')}`} (${reply.timings?.matte ?? '?'} s)`);

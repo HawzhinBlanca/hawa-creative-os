@@ -1,9 +1,25 @@
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
-import { type UUID, isTaskApiStatus, isTaskDbState } from '@hawa/contracts';
+import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef } from '@hawa/contracts';
 import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** What a Canva export is served as, by its stored format. */
+const EXPORT_MEDIA: Record<string, { type: string; disposition: string }> = {
+  png: { type: 'image/png', disposition: 'inline; filename="design.png"' },
+  pdf_standard: { type: 'application/pdf', disposition: 'inline; filename="design.pdf"' },
+  pptx: { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', disposition: 'attachment; filename="design.pptx"' },
+};
+
+/** A task's export's address: immutable, since the database refuses any change to an export's bytes. */
+export function taskExportContentUrl(taskId: string, exportId: string): string {
+  return `/v1/tasks/${taskId}/exports/${exportId}/content`;
+}
 
 /**
  * The Desk's task list, task creation, one task and its timeline (architecture programme 1.3, G7).
@@ -26,6 +42,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     broadcastEvent: broadcast,
   } = ctx;
   const defaultTenantId = DEFAULT_TENANT_ID;
+  // Reference photos are stored files (ADR-035), served after authorising on the task's file row.
+  const blobStore = blobStoreFor(db, ctx.options?.blobStore);
 
   // List Tasks (H01, FR-076, FR-078). One page per request (architecture programme 0.3): keyset on
   // (created_at, id) with an opaque cursor, and the filter's total. The Desk read every page of this
@@ -400,8 +418,10 @@ export function registerTasksRoutes(ctx: RouteContext): void {
 
             // The preview is the newest PNG export. The newest export of any format is the deck the
             // worker exports after the PNG, which Desk drew as a broken "PNG" with the deck's hash.
+            // Its bytes are not read here: the Desk fetches them from the export's own address
+            // (ADR-035), where they were a base64 data URI inside this JSON.
             const exportRow = (await sql<any>`
-              SELECT id, sha256, format, encode(content, 'base64') as b64, octet_length(content) as byte_size
+              SELECT id, sha256, format, octet_length(content) as byte_size
               FROM hawa.canva_export_bytes
               WHERE task_id = ${taskId}::uuid AND tenant_id = ${tenantId}::uuid AND format = 'png'
               ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
@@ -449,10 +469,14 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           const latestRevisionId = dbTask.current_design_revision_id || memoryTask?.latestRevisionId || undefined;
 
           let latestRevision = memoryTask?.latestRevision;
+          // A picture is never inlined into the task (ADR-035): an old in-memory data URI is dropped.
+          if (typeof latestRevision?.previewUrl === 'string' && latestRevision.previewUrl.startsWith('data:')) {
+            latestRevision = { ...latestRevision, previewUrl: undefined };
+          }
           if (revRow || exportRow) {
             const versionNum = revRow ? Number(revRow.revision || 1) : 1;
             const sha256 = exportRow?.sha256 || revRow?.source_sha256;
-            const previewUrl = exportRow?.b64 ? `data:image/png;base64,${exportRow.b64}` : undefined;
+            const previewUrl = exportRow?.id ? taskExportContentUrl(taskId, String(exportRow.id)) : undefined;
             const byteSize = exportRow?.byte_size ? Number(exportRow.byte_size) : undefined;
             // The planner records width and height; 1080 x 1350 was shown for any design whose manifest
             // had no "dimensions" (review of 2026-09-24). Unknown stays unknown.
@@ -567,6 +591,61 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
     return c.json(task);
+  });
+
+  // A task's Canva export, by id (ADR-035 section 3). The bytes stay in canva_export_bytes, which the
+  // database keeps append-only and hash-checked, so the address is immutable. Authorised on the export
+  // row under row-level security: another tenant's task, or an export of another task, is 404.
+  registerRoute('get', '/tasks/:taskId/exports/:exportId/content', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Unauthorized', 'Authentication required');
+    const taskId = c.req.param('taskId');
+    const exportId = c.req.param('exportId');
+    if (!UUID_PATTERN.test(taskId || '') || !UUID_PATTERN.test(exportId || '')) return problem(c, 404, 'Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable', 'Exports are kept in PostgreSQL');
+    const row = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async (trx) =>
+      (await sql<{ sha256: string; format: string; content: Buffer }>`
+        SELECT sha256, format, content FROM hawa.canva_export_bytes
+        WHERE id = ${exportId}::uuid AND task_id = ${taskId}::uuid AND tenant_id = ${auth.tenantId}::uuid`.execute(trx)).rows[0]
+    );
+    const media = row ? EXPORT_MEDIA[row.format] : undefined;
+    if (!row || !media) return problem(c, 404, 'Not Found', 'No such export for this task');
+    const etag = `"sha256-${row.sha256}"`;
+    const headers: Record<string, string> = {
+      'Content-Type': media.type,
+      'Content-Disposition': media.disposition,
+      'Cache-Control': IMMUTABLE_CACHE_CONTROL,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Content-SHA256': row.sha256,
+      ETag: etag,
+    };
+    if ((c.req.header('If-None-Match') || '').split(',').some((t: string) => t.trim().replace(/^W\//, '') === etag)) {
+      const { 'Content-Type': _type, ...rest } = headers;
+      return new Response(null, { status: 304, headers: rest });
+    }
+    const bytes = Buffer.from(row.content);
+    return new Response(new Uint8Array(bytes), { status: 200, headers: { ...headers, 'Content-Length': String(bytes.length) } });
+  });
+
+  // A task's reference photo, by its hash (ADR-035 section 3). Authorised on the task's file row
+  // (hawa.task_files, row-level security), never on the hash: a hash another task or tenant holds,
+  // or one this task never had, is 404.
+  registerRoute('get', '/tasks/:taskId/files/:sha256', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId) return problem(c, 401, 'Unauthorized', 'Authentication required');
+    const taskId = c.req.param('taskId');
+    const sha256 = c.req.param('sha256');
+    if (!UUID_PATTERN.test(taskId || '') || !isSha256Hex(sha256)) return problem(c, 404, 'Not Found');
+    if (!db || !blobStore) return problem(c, 404, 'Not Found');
+    const row = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async (trx) =>
+      (await sql<{ sha256: string; media_type: string; size: string }>`
+        SELECT b.sha256, b.media_type, b.size FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256
+        WHERE f.tenant_id = ${auth.tenantId}::uuid AND f.task_id = ${taskId}::uuid AND f.sha256 = ${sha256}
+        LIMIT 1`.execute(trx)).rows[0]
+    );
+    const ref = row ? parseBlobRef({ sha256: row.sha256, mediaType: row.media_type, size: Number(row.size) }) : undefined;
+    if (!ref) return problem(c, 404, 'Not Found');
+    return blobResponse(c, blobStore, ref);
   });
 
   // Get Task Timeline

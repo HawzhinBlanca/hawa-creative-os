@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { PNG } from '@hawa/creative';
-import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { sql, withRlsContext, type BlobStore, type Database, type Kysely } from '@hawa/db';
+import { parseBlobRef, type BlobRef } from '@hawa/contracts';
+import { blobStoreFor, putToStore, readPreferringStore } from './blob-store-context.js';
 
 /**
  * The blinded head-to-head comparison of Hawa with the office's designer (output/plans/
@@ -631,7 +633,13 @@ export interface AddPairInput {
   designerPng?: Buffer;
 }
 
-export async function addPair(db: Kysely<Database>, scope: ComparisonScope, studyId: string, input: AddPairInput): Promise<PairSummary> {
+export async function addPair(
+  db: Kysely<Database>,
+  scope: ComparisonScope,
+  studyId: string,
+  input: AddPairInput,
+  opts: { blobStore?: BlobStore | null } = {}
+): Promise<PairSummary> {
   const fromTask = input.fromTask === true;
   const taskId = input.taskId === undefined || input.taskId === null || input.taskId === '' ? null : input.taskId;
   if (taskId !== null && !isUuid(taskId)) throw new ComparisonError(400, 'The task id is not a valid id.');
@@ -672,6 +680,11 @@ export async function addPair(db: Kysely<Database>, scope: ComparisonScope, stud
     );
   }
   if (hawa.sha256 === designer.sha256) throw new ComparisonError(422, 'The two images are the same picture.');
+  // Both pictures to the file store before the pair row names them (ADR-035); the bytes stay in the
+  // row as well until the strip.
+  const store = blobStoreFor(db, opts.blobStore);
+  await putToStore(store, hawa.png, 'image/png', "a comparison pair's Hawa design");
+  await putToStore(store, designer.png, 'image/png', "a comparison pair's designer design");
   return withRlsContext(db, rls(scope), async (trx) => {
     // Checked again under the row lock: the study may have been locked while the images were prepared.
     const study = await studyForUpdate(trx, scope, studyId);
@@ -711,16 +724,49 @@ export async function addPair(db: Kysely<Database>, scope: ComparisonScope, stud
   });
 }
 
+/**
+ * Where one arm's picture is: the stored file's reference when the file store has it, else the row's
+ * bytes (a pair from before the store). Serving authorises on this row, never on the hash (ADR-035).
+ */
+export interface PairImageSource {
+  ref: BlobRef | null;
+  bytes: Buffer | null;
+}
+
+type PairImageRow = { sha256: string | null; media_type: string | null; size: string | null; png: Buffer | null };
+
+function pairImageSourceOf(row: PairImageRow | undefined): PairImageSource | null {
+  if (!row) return null;
+  const ref = row.sha256 && row.media_type ? parseBlobRef({ sha256: row.sha256, mediaType: row.media_type, size: Number(row.size) }) ?? null : null;
+  if (!ref && !row.png) return null;
+  return { ref, bytes: ref ? null : row.png };
+}
+
+/** One arm's picture, for the office only: where it is (pairImageSource) without reading it. */
+export async function pairImageSource(db: Kysely<Database>, scope: ComparisonScope, studyId: string, pairId: string, arm: Arm): Promise<PairImageSource | null> {
+  if (!isUuid(studyId) || !isUuid(pairId)) return null;
+  return withRlsContext(db, rls(scope), async (trx) =>
+    pairImageSourceOf(
+      (
+        await sql<PairImageRow>`SELECT b.sha256, b.media_type, b.size,
+            CASE WHEN b.sha256 IS NULL THEN (CASE WHEN ${arm} = 'hawa' THEN p.hawa_png ELSE p.designer_png END) END AS png
+          FROM hawa.comparison_pairs p
+          LEFT JOIN hawa.blobs b ON b.sha256 = (CASE WHEN ${arm} = 'hawa' THEN p.hawa_sha256 ELSE p.designer_sha256 END)
+          WHERE p.id = ${pairId}::uuid AND p.study_id = ${studyId}::uuid AND p.tenant_id = ${scope.tenantId}::uuid`.execute(trx)
+      ).rows[0]
+    )
+  );
+}
+
+/** The bytes of a picture source: the stored file, else the row's bytes. */
+async function pairImageBytes(db: Kysely<Database>, source: PairImageSource | null, blobStore?: BlobStore | null): Promise<Buffer | null> {
+  if (!source) return null;
+  return readPreferringStore(blobStoreFor(db, blobStore), source.ref?.sha256, source.bytes);
+}
+
 /** One arm's stored PNG, for the office only. */
 export async function readPairImage(db: Kysely<Database>, scope: ComparisonScope, studyId: string, pairId: string, arm: Arm): Promise<Buffer | null> {
-  if (!isUuid(studyId) || !isUuid(pairId)) return null;
-  return withRlsContext(db, rls(scope), async (trx) => {
-    const row = (
-      await sql<{ png: Buffer }>`SELECT CASE WHEN ${arm} = 'hawa' THEN hawa_png ELSE designer_png END AS png
-        FROM hawa.comparison_pairs WHERE id = ${pairId}::uuid AND study_id = ${studyId}::uuid AND tenant_id = ${scope.tenantId}::uuid`.execute(trx)
-    ).rows[0];
-    return row?.png ?? null;
-  });
+  return pairImageBytes(db, await pairImageSource(db, scope, studyId, pairId, arm));
 }
 
 /** Starts judging. From here the plan and the pairs are fixed; the database refuses changes too. */
@@ -957,19 +1003,27 @@ export async function judgeNext(db: Kysely<Database>, session: JudgeSession): Pr
   });
 }
 
-/** The image shown on one side of a pair for this judge, while the study is judging. */
-export async function judgeImage(db: Kysely<Database>, session: JudgeSession, pairId: string, side: Side): Promise<Buffer | null> {
+/** Where the picture shown on one side of a pair for this judge is, while the study is judging. */
+export async function judgeImageSource(db: Kysely<Database>, session: JudgeSession, pairId: string, side: Side): Promise<PairImageSource | null> {
   if (!isUuid(pairId)) return null;
   const arm = armForSide(session.judgeId, pairId, side);
-  return withRlsContext(db, judgeRls(session), async (trx) => {
-    const row = (
-      await sql<{ png: Buffer }>`SELECT CASE WHEN ${arm} = 'hawa' THEN p.hawa_png ELSE p.designer_png END AS png
-        FROM hawa.comparison_pairs p JOIN hawa.comparison_studies s ON s.id = p.study_id
-        WHERE p.id = ${pairId}::uuid AND p.study_id = ${session.studyId}::uuid AND p.tenant_id = ${session.tenantId}::uuid
-          AND s.status = 'judging'`.execute(trx)
-    ).rows[0];
-    return row?.png ?? null;
-  });
+  return withRlsContext(db, judgeRls(session), async (trx) =>
+    pairImageSourceOf(
+      (
+        await sql<PairImageRow>`SELECT b.sha256, b.media_type, b.size,
+            CASE WHEN b.sha256 IS NULL THEN (CASE WHEN ${arm} = 'hawa' THEN p.hawa_png ELSE p.designer_png END) END AS png
+          FROM hawa.comparison_pairs p JOIN hawa.comparison_studies s ON s.id = p.study_id
+          LEFT JOIN hawa.blobs b ON b.sha256 = (CASE WHEN ${arm} = 'hawa' THEN p.hawa_sha256 ELSE p.designer_sha256 END)
+          WHERE p.id = ${pairId}::uuid AND p.study_id = ${session.studyId}::uuid AND p.tenant_id = ${session.tenantId}::uuid
+            AND s.status = 'judging'`.execute(trx)
+      ).rows[0]
+    )
+  );
+}
+
+/** The image shown on one side of a pair for this judge, while the study is judging. */
+export async function judgeImage(db: Kysely<Database>, session: JudgeSession, pairId: string, side: Side): Promise<Buffer | null> {
+  return pairImageBytes(db, await judgeImageSource(db, session, pairId, side));
 }
 
 /**

@@ -290,7 +290,8 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
       // Verify URLs are provided without embedding raw image bytes
       const firstCandidate = data.candidates[0];
-      expect(firstCandidate.previewUrl).toContain(`/candidates/${firstCandidate.id}/preview.png`);
+      // The address names the picture's hash, so it is immutable (ADR-035).
+      expect(firstCandidate.previewUrl).toContain(`/candidates/${firstCandidate.id}/preview/${fakeSha}.png`);
       expect(data.totalUsdEstimate).toBeGreaterThanOrEqual(0);
     });
 

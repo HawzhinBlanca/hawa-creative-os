@@ -524,6 +524,8 @@ export interface DesignStudioCandidatesTable {
   preview_png: Buffer | null;
   preview_sha256: string | null;
   composite_png: Buffer | null;
+  /** The composite's file in the store (migration 019, ADR-035); preview_sha256 and art_sha256 name theirs. */
+  composite_sha256: string | null;
   art_png: Buffer | null;
   art_sha256: string | null;
   art_provenance: unknown | null;

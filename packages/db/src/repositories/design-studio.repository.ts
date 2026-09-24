@@ -1,6 +1,8 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { withRlsContext } from '../client.js';
+import { parseBlobRef, sniffBlobMediaType, type BlobRef } from '@hawa/contracts';
+import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
   Database,
   DesignStudioRunsTable,
@@ -97,8 +99,82 @@ export interface RecordFeedbackParams {
   notes?: string | null;
 }
 
+/** A candidate's three pictures, each a bytea column (until migration 021) and a hash naming its file. */
+export type CandidateImageKind = 'preview' | 'composite' | 'art';
+const CANDIDATE_IMAGE_COLUMNS = {
+  preview: { bytes: 'preview_png', sha: 'preview_sha256' },
+  composite: { bytes: 'composite_png', sha: 'composite_sha256' },
+  art: { bytes: 'art_png', sha: 'art_sha256' },
+} as const;
+type CandidateImageRow = Partial<Pick<DesignStudioCandidatesTable, 'preview_png' | 'preview_sha256' | 'composite_png' | 'composite_sha256' | 'art_png' | 'art_sha256'>>;
+
 export class DesignStudioRepository {
-  constructor(private readonly db: Kysely<Database>) {}
+  /**
+   * `blobStore`: where candidate pictures are also written (ADR-035, release A dual-write). Without
+   * one (a process with no HAWA_BLOB_DIR), pictures stay in their bytea columns only, as before.
+   */
+  constructor(
+    private readonly db: Kysely<Database>,
+    private readonly blobStore: BlobStore | null = null
+  ) {}
+
+  /**
+   * Puts each picture to the file store and returns the hash columns to write with it. The file and
+   * its hawa.blobs row commit before the candidate row does, in the store's own short transaction, so
+   * the candidate's transaction never waits on a disk write; a candidate write that then fails leaves
+   * an unreferenced file, which the collector removes after its grace. The bytes are still written to
+   * the row as well until the strip (FILESTORE_DESIGN.md section 5), so a failed put only logs.
+   */
+  private async storeCandidateImages(images: Partial<Record<CandidateImageKind, Buffer | null | undefined>>): Promise<Partial<Record<CandidateImageKind, string>>> {
+    const out: Partial<Record<CandidateImageKind, string>> = {};
+    if (!this.blobStore) return out;
+    for (const kind of Object.keys(images) as CandidateImageKind[]) {
+      const bytes = images[kind];
+      if (!bytes || !bytes.length) continue;
+      const mediaType = sniffBlobMediaType(bytes);
+      if (!mediaType || !mediaType.startsWith('image/')) continue;
+      try {
+        out[kind] = (await this.blobStore.put(bytes, mediaType)).sha256;
+      } catch (err) {
+        console.warn(`[design-studio] the ${kind} picture was not written to the file store (its bytes stay in the row): ${err instanceof Error ? err.message : err}`);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * A candidate's picture: from the file store when the row names a stored file, else from the row's
+   * bytes (a row written before the store, or a file the store does not have).
+   */
+  async readCandidateImage(row: CandidateImageRow | null | undefined, kind: CandidateImageKind): Promise<Buffer | undefined> {
+    if (!row) return undefined;
+    const columns = CANDIDATE_IMAGE_COLUMNS[kind];
+    const sha = row[columns.sha];
+    if (this.blobStore && sha) {
+      try {
+        return await this.blobStore.read(sha);
+      } catch (err) {
+        if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) throw err;
+      }
+    }
+    const bytes = row[columns.bytes];
+    return bytes ? Buffer.from(bytes) : undefined;
+  }
+
+  /** The rows with each picture as readCandidateImage reads it, in the bytea columns' places. */
+  private async withCandidateImages<T extends CandidateImageRow>(rows: T[]): Promise<T[]> {
+    if (!this.blobStore) return rows;
+    return Promise.all(
+      rows.map(async (row) => {
+        const [preview, composite, art] = await Promise.all([
+          this.readCandidateImage(row, 'preview'),
+          this.readCandidateImage(row, 'composite'),
+          this.readCandidateImage(row, 'art'),
+        ]);
+        return { ...row, preview_png: preview ?? null, composite_png: composite ?? null, art_png: art ?? null };
+      })
+    );
+  }
 
   private async withClient<T>(
     trx: Kysely<Database> | undefined,
@@ -213,6 +289,7 @@ export class DesignStudioRepository {
   }
 
   async insertCandidate(params: InsertCandidateParams, trx?: Kysely<Database>) {
+    const stored = await this.storeCandidateImages({ preview: params.previewPng, composite: params.compositePng, art: params.artPng });
     return this.withClient(trx, params.tenantId, async (client) => {
       const [row] = await client
         .insertInto('design_studio_candidates')
@@ -226,10 +303,11 @@ export class DesignStudioRepository {
           metrics: params.metrics ? JSON.stringify(params.metrics) : null,
           status: params.status || 'draft',
           preview_png: params.previewPng || null,
-          preview_sha256: params.previewSha256 || null,
+          preview_sha256: stored.preview ?? (params.previewSha256 || null),
           composite_png: params.compositePng || null,
+          composite_sha256: stored.composite ?? null,
           art_png: params.artPng || null,
-          art_sha256: params.artSha256 || null,
+          art_sha256: stored.art ?? (params.artSha256 || null),
           art_provenance: params.artProvenance ? JSON.stringify(params.artProvenance) : null,
         })
         .returningAll()
@@ -238,7 +316,13 @@ export class DesignStudioRepository {
     });
   }
 
-  async getCandidatesForRun(runId: string, tenantId?: string, trx?: Kysely<Database>) {
+  /** A run's candidates; their pictures come from the file store where it has them (readCandidateImage). */
+  async getCandidatesForRun(runId: string, tenantId?: string, trx?: Kysely<Database>, opts: { images?: boolean } = {}) {
+    const rows = await this.candidatesForRun(runId, tenantId, trx);
+    return opts.images === false ? rows : this.withCandidateImages(rows);
+  }
+
+  private async candidatesForRun(runId: string, tenantId?: string, trx?: Kysely<Database>) {
     return this.withClient(trx, tenantId, async (client) => {
       let query = client
         .selectFrom('design_studio_candidates')
@@ -252,8 +336,38 @@ export class DesignStudioRepository {
     });
   }
 
-  async getCandidateById(id: string, tenantId?: string, trx?: Kysely<Database>) {
+  /**
+   * What serving one of a candidate's pictures needs, read under row-level security: its run, the
+   * hash the row names, the stored file's reference when the store has that file, and the row's bytes
+   * only when it does not (a row written before the store). Undefined when the candidate is not the
+   * tenant's.
+   */
+  async getCandidateImageSource(
+    id: string,
+    tenantId: string,
+    kind: CandidateImageKind,
+    trx?: Kysely<Database>
+  ): Promise<{ runId: string; taskId: string; sha256: string | null; ref: BlobRef | null; bytes: Buffer | null } | undefined> {
+    const columns = CANDIDATE_IMAGE_COLUMNS[kind];
     return this.withClient(trx, tenantId, async (client) => {
+      const row = (
+        await sql<{ run_id: string; task_id: string; sha256: string | null; media_type: string | null; size: string | null; bytes: Buffer | null }>`
+          SELECT c.run_id, r.task_id, c.${sql.ref(columns.sha)} AS sha256, b.media_type, b.size,
+                 CASE WHEN b.sha256 IS NULL THEN c.${sql.ref(columns.bytes)} END AS bytes
+          FROM hawa.design_studio_candidates c
+          JOIN hawa.design_studio_runs r ON r.id = c.run_id AND r.tenant_id = c.tenant_id
+          LEFT JOIN hawa.blobs b ON b.sha256 = c.${sql.ref(columns.sha)}
+          WHERE c.id = ${id}::uuid AND c.tenant_id = ${tenantId}::uuid`.execute(client)
+      ).rows[0];
+      if (!row) return undefined;
+      const ref = row.sha256 && row.media_type ? parseBlobRef({ sha256: row.sha256, mediaType: row.media_type, size: Number(row.size) }) ?? null : null;
+      return { runId: String(row.run_id), taskId: String(row.task_id), sha256: row.sha256, ref, bytes: row.bytes ? Buffer.from(row.bytes) : null };
+    });
+  }
+
+  /** One candidate; its pictures come from the file store where it has them (readCandidateImage). */
+  async getCandidateById(id: string, tenantId?: string, trx?: Kysely<Database>) {
+    const row = await this.withClient(trx, tenantId, async (client) => {
       let query = client
         .selectFrom('design_studio_candidates')
         .selectAll()
@@ -263,6 +377,7 @@ export class DesignStudioRepository {
       }
       return await query.executeTakeFirst();
     });
+    return row ? (await this.withCandidateImages([row]))[0] : row;
   }
 
   async updateCandidate(
@@ -286,6 +401,7 @@ export class DesignStudioRepository {
     },
     trx?: Kysely<Database>
   ) {
+    const stored = await this.storeCandidateImages({ preview: updates.previewPng, composite: updates.compositePng, art: updates.artPng });
     return this.withClient(trx, tenantId, async (client) => {
       const setClause: Record<string, unknown> = {
         updated_at: new Date(),
@@ -303,9 +419,15 @@ export class DesignStudioRepository {
       }
       if (updates.previewPng !== undefined) setClause.preview_png = updates.previewPng;
       if (updates.previewSha256 !== undefined) setClause.preview_sha256 = updates.previewSha256;
-      if (updates.compositePng !== undefined) setClause.composite_png = updates.compositePng;
+      if (stored.preview) setClause.preview_sha256 = stored.preview;
+      if (updates.compositePng !== undefined) {
+        setClause.composite_png = updates.compositePng;
+        // A new composite replaces the old one's file too; none leaves none.
+        setClause.composite_sha256 = stored.composite ?? null;
+      }
       if (updates.artPng !== undefined) setClause.art_png = updates.artPng;
       if (updates.artSha256 !== undefined) setClause.art_sha256 = updates.artSha256;
+      if (stored.art) setClause.art_sha256 = stored.art;
       if (updates.artProvenance !== undefined) setClause.art_provenance = updates.artProvenance ? JSON.stringify(updates.artProvenance) : null;
 
       const [row] = await client

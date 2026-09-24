@@ -1,23 +1,38 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { RouteContext } from './types.js';
 import {
   DesignStudioService,
   type DesignStudioServiceOptions,
 } from '../services/design-studio/index.js';
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
-import { DesignStudioRepository } from '@hawa/db';
+import { DesignStudioRepository, type CandidateImageKind } from '@hawa/db';
+import { isSha256Hex } from '@hawa/contracts';
 import { globalFeedbackMiner } from '@hawa/creative';
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+
+/**
+ * A candidate picture's address. With its hash in the path it is immutable (a revision renders a new
+ * picture with a new hash), so the browser and nginx may keep it for a year; without one (a row from
+ * before the hashes were kept) it is the old path, served no-store.
+ */
+export function candidateImageUrl(taskId: string, runId: string, candidateId: string, kind: CandidateImageKind, sha256: string | null | undefined): string {
+  const base = `/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${candidateId}`;
+  return isSha256Hex(sha256) ? `${base}/${kind}/${sha256}.png` : `${base}/${kind}.png`;
+}
 
 export function registerDesignStudioRoutes(
   ctx: RouteContext,
   options?: DesignStudioServiceOptions,
   serviceOverride?: DesignStudioService
 ) {
-  const canvaService = ctx.db ? new CanvaConnectService(ctx.db) : undefined;
+  // The file store candidate pictures are written to and served from (ADR-035).
+  const blobStore = blobStoreFor(ctx.db, options?.blobStore ?? ctx.options?.blobStore);
+  const canvaService = ctx.db ? new CanvaConnectService(ctx.db, { blobStore }) : undefined;
   const service =
     serviceOverride ||
-    (ctx.db ? new DesignStudioService(ctx.db, canvaService, options) : null);
-  const repo = ctx.db ? new DesignStudioRepository(ctx.db) : null;
+    (ctx.db ? new DesignStudioService(ctx.db, canvaService, { ...options, blobStore }) : null);
+  const repo = ctx.db ? new DesignStudioRepository(ctx.db, blobStore) : null;
 
   const protect = (
     fn: (
@@ -138,7 +153,8 @@ export function registerDesignStudioRoutes(
         return ctx.problem(c, 404, 'Run Not Found', 'Studio run not found for this task');
       }
 
-      const candidateRows = await r.getCandidatesForRun(runId, s.tenantId);
+      // Evidence without bytes: the rows as stored, not their pictures read from the file store.
+      const candidateRows = await r.getCandidatesForRun(runId, s.tenantId, undefined, { images: false });
       const judgments = await r.getJudgmentsForRun(runId, s.tenantId);
       const calls = await r.getCallsForRun(runId, s.tenantId);
 
@@ -154,12 +170,10 @@ export function registerDesignStudioRoutes(
         critiques: (row.critiques as any[] || []).map((cr) => (typeof cr === 'string' ? JSON.parse(cr) : cr)),
         artSha256: row.art_sha256,
         previewSha256: row.preview_sha256,
-        previewUrl: `/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${row.id}/preview.png`,
-        artUrl: row.art_sha256
-          ? `/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${row.id}/art.png`
-          : null,
-        compositeUrl: row.composite_png
-          ? `/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${row.id}/composite.png`
+        previewUrl: candidateImageUrl(taskId, runId, row.id, 'preview', row.preview_sha256),
+        artUrl: row.art_sha256 ? candidateImageUrl(taskId, runId, row.id, 'art', row.art_sha256) : null,
+        compositeUrl: row.composite_sha256 || row.composite_png
+          ? candidateImageUrl(taskId, runId, row.id, 'composite', row.composite_sha256)
           : null,
       }));
 
@@ -202,70 +216,58 @@ export function registerDesignStudioRoutes(
     })
   );
 
-  // 4. Candidate image streams (preview.png, art.png, composite.png)
-  const imageHandler = (kind: 'preview' | 'art' | 'composite') =>
+  // 4. Candidate pictures (preview, art, composite). Authorised on the candidate row, read under
+  //    row-level security (ADR-035 section 2.4): one row, not every candidate of the run with its bytes.
+  //    `/:kind/<sha256>.png` is the immutable address; the old `/<kind>.png` stays one release, no-store.
+  const imageHandler = (kind: CandidateImageKind, pinned: boolean) =>
     protect(async (c, s, _svc, r) => {
       const taskId = c.req.param('taskId');
       const runId = c.req.param('runId');
       const candidateId = c.req.param('candidateId');
-
-      const run = await r.getRunById(runId, s.tenantId);
-      if (!run || run.task_id !== taskId) {
-        return ctx.problem(c, 404, 'Run Not Found', 'Studio run not found');
+      let wanted: string | undefined;
+      if (pinned) {
+        const file = /^([0-9a-f]{64})\.png$/.exec(c.req.param('file') || '');
+        if (!file) return ctx.problem(c, 404, 'Image Not Available', 'No such picture');
+        wanted = file[1];
       }
 
-      const candidateRows = await r.getCandidatesForRun(runId, s.tenantId);
-      const cand = candidateRows.find((row) => row.id === candidateId);
-      if (!cand) {
+      const source = await r.getCandidateImageSource(candidateId, s.tenantId, kind);
+      if (!source || source.runId !== runId || source.taskId !== taskId) {
         return ctx.problem(c, 404, 'Candidate Not Found', 'Candidate not found');
       }
-
-      let buffer: Buffer | null = null;
-      let sha256: string | null = null;
-
-      if (kind === 'preview') {
-        buffer = cand.preview_png ? Buffer.from(cand.preview_png) : null;
-        sha256 = cand.preview_sha256;
-      } else if (kind === 'art') {
-        buffer = cand.art_png ? Buffer.from(cand.art_png) : null;
-        sha256 = cand.art_sha256;
-      } else if (kind === 'composite') {
-        buffer = cand.composite_png ? Buffer.from(cand.composite_png) : null;
-        sha256 = cand.preview_sha256;
+      // A stale address (the picture was rendered again since) names nothing any more.
+      if (wanted && source.sha256 !== wanted) {
+        return ctx.problem(c, 404, 'Image Not Available', `This ${kind} picture has been replaced`);
       }
-
-      if (!buffer) {
-        return ctx.problem(
-          c,
-          404,
-          'Image Not Available',
-          `No ${kind} image currently rendered for this candidate`
-        );
+      const cacheControl = pinned ? IMMUTABLE_CACHE_CONTROL : 'no-store';
+      // protect() set no-store on the context, and Hono copies the context's headers onto a returned
+      // Response: the picture's own caching is set there too, or it would be overwritten.
+      c.header('Cache-Control', cacheControl);
+      if (source.ref && blobStore && source.ref.mediaType.startsWith('image/')) {
+        return blobResponse(c, blobStore, source.ref, { cacheControl });
       }
-
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'no-store');
-      if (sha256) {
-        c.header('X-Content-SHA256', sha256);
+      // A row from before the store: its bytes, served as the old route served them. At the pinned
+      // address only when they are the bytes the hash names.
+      const buffer = source.bytes;
+      if (!buffer || (wanted && createHash('sha256').update(buffer).digest('hex') !== wanted)) {
+        return ctx.problem(c, 404, 'Image Not Available', `No ${kind} image currently rendered for this candidate`);
       }
-      return c.body(new Uint8Array(buffer));
+      return new Response(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': cacheControl,
+          'X-Content-Type-Options': 'nosniff',
+          ...(source.sha256 && kind !== 'composite' ? { 'X-Content-SHA256': source.sha256 } : {}),
+          ...(wanted ? { 'X-Content-SHA256': wanted } : {}),
+        },
+      });
     });
 
-  ctx.registerRoute(
-    'get',
-    '/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/preview.png',
-    imageHandler('preview')
-  );
-  ctx.registerRoute(
-    'get',
-    '/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art.png',
-    imageHandler('art')
-  );
-  ctx.registerRoute(
-    'get',
-    '/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/composite.png',
-    imageHandler('composite')
-  );
+  for (const kind of ['preview', 'art', 'composite'] as const) {
+    ctx.registerRoute('get', `/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/${kind}.png`, imageHandler(kind, false));
+    ctx.registerRoute('get', `/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/${kind}/:file`, imageHandler(kind, true));
+  }
 
   // 5. POST /tasks/:taskId/canva/studio/:runId/select — select candidate in awaiting_selection
   ctx.registerRoute(

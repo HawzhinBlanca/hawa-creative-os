@@ -9,6 +9,9 @@ import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
 import { isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
 import { log } from '../logging.js';
+import { blobStoreFor, putToStore, readPreferringStore } from './blob-store-context.js';
+
+const PPTX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation' as const;
 
 type Scope={tenantId:string;actorId:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
@@ -560,6 +563,8 @@ export class CanvaDesignPlanner {
         priorPlanId:claim.priorPlanRow?.id||null,
         turns:openAiBody.messages.length
       },receipt};
+      // The source to the file store before the row names it (ADR-035); its bytes stay in the row too until the strip.
+      await putToStore(blobStoreFor(this.db),source.bytes,PPTX_MEDIA_TYPE,'a plan source');
       await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='planned',result=${JSON.stringify(evidence)}::jsonb,source_content=${source.bytes},source_sha256=${source.sha256},updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
     }catch(error){
       const reason=error instanceof z.ZodError?'LAYOUT_SCHEMA_INVALID':error instanceof Error?error.message:'UNKNOWN';
@@ -586,7 +591,10 @@ export class CanvaDesignPlanner {
     const row=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
     if(!row)throw new CanvaFlowError(404,'PLAN_NOT_FOUND','Saved plan not found.');
     if(row.status!=='planned')return {planId:id,status:row.status,message:row.diagnostic||'Planning was claimed. If interrupted, do not start a second paid request.'};
-    const imported=await this.canva.importEditableDesign(s,taskId,'plan-'+id,{bytes:row.source_content,sha256:row.source_sha256,manifest:row.result.manifest});
+    // The stored file when there is one, else the row's bytes (a plan from before the store).
+    const bytes=await readPreferringStore(blobStoreFor(this.db),row.source_sha256,row.source_content);
+    if(!bytes)throw new CanvaFlowError(409,'PLAN_SOURCE_MISSING','The saved plan has no source to import.');
+    const imported=await this.canva.importEditableDesign(s,taskId,'plan-'+id,{bytes,sha256:row.source_sha256,manifest:row.result.manifest});
     return {...imported,planId:id,receipt:row.result.receipt,message:imported.status==='retrieved'?'Editable draft created in Canva. Review layout, font and exact copy before release.':('message' in imported?imported.message:'Canva is importing the saved draft. Resume this operation to check it.')};
   }
 }
