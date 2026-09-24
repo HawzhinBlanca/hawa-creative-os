@@ -11,6 +11,7 @@ import type {
 } from '@hawa/contracts';
 import {
   EXPIRE_AFTER_MS,
+  LifecycleEventUnreadableError,
   LifecycleProjectionUnavailableError,
   LifecycleStateTooNewError,
   LifecycleStateUnreadableError,
@@ -236,6 +237,66 @@ describe('designFinished', () => {
     expect(back.ops[0]).toMatchObject({ op: 'recordOutcome', runId: `dr-${TASK0}`, report: { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' } });
     expect(back.applied.next).toMatchObject({ stage: 'in_review', rev: s.rev + 1 });
     expect(back.applied.next.outcomeDeferred).toBeUndefined();
+  });
+
+  it('a retried design outcome projects under the key and ops of the first attempt, so Core replays it', () => {
+    const s = opened();
+    const ev = finished(`dr-${TASK0}`);
+    const first = projectionRequestFor(s, ev, plan(s, ev, T0) as Projecting);
+    const deferred = accepted(apply(s, ev, { status: 'unavailable' }, T0));
+    const retryEv: LifecycleEvent = { type: 'retryProjection', ...(effectsOf(deferred, 'schedule')[0].event as { v: 1; eventId: string; runId: string }) };
+    const second = projectionRequestFor(deferred.next, retryEv, plan(deferred.next, retryEv, T0 + 600_000) as Projecting);
+    expect(second).toEqual(first);
+
+    // Offered a third time (Core still down on the second): still the first attempt's projection.
+    const again = accepted(apply(deferred.next, retryEv, { status: 'unavailable' }, T0 + 600_000));
+    const retry2: LifecycleEvent = { type: 'retryProjection', ...(effectsOf(again, 'schedule')[0].event as { v: 1; eventId: string; runId: string }) };
+    expect(projectionRequestFor(again.next, retry2, plan(again.next, retry2, T0 + 1_200_000) as Projecting)).toEqual(first);
+
+    // Core committed the first attempt and died before answering: it replays the stored result, and
+    // the request moves on exactly as if the first answer had arrived.
+    const results = coreAnswers(first.ops, {});
+    const replayed = accepted(apply(again.next, retry2, { v: 1, status: 'replayed', rev: first.rev, stage: 'in_review', results }, T0 + 1_200_000));
+    expect(replayed.next).toMatchObject({ stage: 'in_review', rev: first.rev, draft: { taskId: TASK0, revisionId: REV0 } });
+    expect(replayed.next.outcomeDeferred).toBeUndefined();
+    expect(effectsOf(replayed, 'send').map((e) => e.message.onSent?.what)).toEqual(['draft']);
+  });
+
+  it('a report too large to keep whole is still offered again byte for byte', () => {
+    const s = opened();
+    const big = { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId: 'DAF_1', qa: 'x'.repeat(20_000) };
+    const ev = finished(`dr-${TASK0}`, TASK0, big);
+    const first = projectionRequestFor(s, ev, plan(s, ev, T0) as Projecting);
+    const deferred = accepted(apply(s, ev, { status: 'unavailable' }, T0));
+    const retryEv: LifecycleEvent = { type: 'retryProjection', ...(effectsOf(deferred, 'schedule')[0].event as { v: 1; eventId: string; runId: string }) };
+    expect(projectionRequestFor(deferred.next, retryEv, plan(deferred.next, retryEv, T0) as Projecting)).toEqual(first);
+  });
+
+  it('after an AHEAD reconciliation the retry still replays the first attempt, never records the outcome a second time', () => {
+    // Core committed the outcome at rev 2 unanswered; a requester button on the request then got
+    // AHEAD and the shell took Postgres's revision. The retry must not project at rev 3.
+    const s = opened();
+    const ev = finished(`dr-${TASK0}`);
+    const first = projectionRequestFor(s, ev, plan(s, ev, T0) as Projecting);
+    const deferred = accepted(apply(s, ev, { status: 'unavailable' }, T0));
+    const reconciled = reconcileAhead(deferred.next, first.rev);
+    const retryEv: LifecycleEvent = { type: 'retryProjection', ...(effectsOf(deferred, 'schedule')[0].event as { v: 1; eventId: string; runId: string }) };
+    expect(projectionRequestFor(reconciled, retryEv, plan(reconciled, retryEv, T0) as Projecting)).toEqual(first);
+  });
+
+  it('once another projection was applied at the deferred revision, the outcome was never recorded: the retry projects it afresh', () => {
+    // Round 1 is designing with the round-0 draft still on the request, and the requester presses a
+    // button on that old draft while Core cannot take round 1's outcome.
+    let s = step(draftSent(), requester('change', TASK0, { directive: 'bigger logo' })).applied.next;
+    const ev = finished(`dr-${TASK1}`, TASK1, undefined, 1);
+    const first = projectionRequestFor(s, ev, plan(s, ev, T0) as Projecting);
+    const deferred = accepted(apply(s, ev, { status: 'unavailable' }, T0));
+    const button = step(deferred.next, requester('ok', TASK0, { n: 'old' }));
+    expect(button.expectedRev).toBe(first.expectedRev);
+    s = button.applied.next;
+    const retryEv: LifecycleEvent = { type: 'retryProjection', ...(effectsOf(deferred, 'schedule')[0].event as { v: 1; eventId: string; runId: string }) };
+    const fresh = projectionRequestFor(s, retryEv, plan(s, retryEv, T0) as Projecting);
+    expect(fresh).toMatchObject({ expectedRev: first.rev, rev: first.rev + 1, key: `${REQ}:${first.rev + 1}:designFinished`, ops: first.ops });
   });
 
   it('retryProjection is ignored for another run or once nothing is deferred', () => {
@@ -567,6 +628,19 @@ describe('every event', () => {
     expect(() => plan(opened(), { ...finished(`dr-${TASK0}`), v: 2 } as unknown as LifecycleEvent, T0)).toThrow(LifecycleStateTooNewError);
   });
 
+  it('an event with no version, or one that is not a whole number, is unreadable, not newer (retrying cannot help)', () => {
+    for (const v of [undefined, '1', 0, 1.5, null]) {
+      let thrown: unknown;
+      try {
+        plan(opened(), { ...finished(`dr-${TASK0}`), v } as unknown as LifecycleEvent, T0);
+      } catch (err) {
+        thrown = err;
+      }
+      expect((thrown as { code?: string })?.code, `v=${String(v)}`).toBe('LIFECYCLE_EVENT_UNREADABLE');
+      expect(thrown).toBeInstanceOf(LifecycleEventUnreadableError);
+    }
+  });
+
   it('an unknown event type is ignored', () => {
     expect(ignored(opened(), { type: 'somethingNew', v: 1, eventId: 'z' } as unknown as LifecycleEvent).reason).toMatch(/unknown event/);
   });
@@ -595,7 +669,19 @@ describe('upgrade() of every stored state shape', () => {
   const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
 
   it('has the shapes this build has written', () => {
-    expect(files).toEqual(['v1-2026-09-25-full.json', 'v1-2026-09-25-in-review.json', 'v1-2026-09-25-opened.json']);
+    expect(files).toEqual(['v1-2026-09-25-deferred.json', 'v1-2026-09-25-full.json', 'v1-2026-09-25-in-review.json', 'v1-2026-09-25-opened.json']);
+  });
+
+  it('keeps a deferred outcome\'s first projection, retried under its key; one without it (written before) or not whole is projected afresh', () => {
+    const raw = JSON.parse(readFileSync(join(dir, 'v1-2026-09-25-deferred.json'), 'utf8'));
+    const retryEv: LifecycleEvent = { type: 'retryProjection', v: 1, eventId: 'retry:x', runId: raw.outcomeDeferred.runId };
+    const kept = upgrade(raw)!;
+    expect(projectionRequestFor(kept, retryEv, plan(kept, retryEv, T0) as Projecting)).toMatchObject({ key: raw.outcomeDeferred.projection.key, expectedRev: 1, rev: 2 });
+    for (const projection of [undefined, { key: 'k', expectedRev: 1, rev: 5 }, { key: 7, expectedRev: 1, rev: 2 }, 'x']) {
+      const s = upgrade({ ...raw, rev: 3, outcomeDeferred: { ...raw.outcomeDeferred, projection } })!;
+      expect(s.outcomeDeferred?.projection, JSON.stringify(projection)).toBeUndefined();
+      expect(projectionRequestFor(s, retryEv, plan(s, retryEv, T0) as Projecting)).toMatchObject({ key: `${raw.requestId}:4:designFinished`, expectedRev: 3 });
+    }
   });
 
   for (const file of files) {

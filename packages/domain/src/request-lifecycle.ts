@@ -62,7 +62,6 @@ const MAX_DECISIONS = 16;
 const MAX_QUESTION_CHARS = 1000;
 const MAX_OPTION_CHARS = 200;
 const MAX_OPTIONS = 3;
-const MAX_DEFERRED_REPORT_CHARS = 8000;
 
 // ---------------------------------------------------------------------------------------------
 // Ids
@@ -119,6 +118,18 @@ export class LifecycleStateTooNewError extends Error {
   }
 }
 
+/**
+ * An event with no payload version, or one that is not a whole number: not a newer build's event
+ * but a malformed one. Retrying cannot help; the shell answers it with a terminal error.
+ */
+export class LifecycleEventUnreadableError extends Error {
+  readonly code = 'LIFECYCLE_EVENT_UNREADABLE';
+  constructor(message: string) {
+    super(message);
+    this.name = 'LifecycleEventUnreadableError';
+  }
+}
+
 /** The stored state is not a lifecycle state at all. Retrying cannot help; the invocation pauses for a person. */
 export class LifecycleStateUnreadableError extends Error {
   readonly code = 'LIFECYCLE_STATE_UNREADABLE';
@@ -170,7 +181,17 @@ export function upgrade(raw: unknown): LifecycleStateV1 | undefined {
     reminders: strings(s.reminders),
     sizes: isRecord(s.sizes) ? (s.sizes as Record<string, string>) : {},
     seen: strings(s.seen),
+    ...(isRecord(s.outcomeDeferred) ? { outcomeDeferred: deferredOf(s.outcomeDeferred) } : {}),
   };
+}
+
+/** A deferred outcome as stored; a first projection that is not whole is dropped (the retry projects afresh). */
+function deferredOf(d: NonNullable<LifecycleStateV1['outcomeDeferred']>): NonNullable<LifecycleStateV1['outcomeDeferred']> {
+  const p = d.projection as Partial<NonNullable<typeof d.projection>> | undefined;
+  const whole = isRecord(p) && typeof p.key === 'string' && Number.isSafeInteger(p.expectedRev) && p.rev === (p.expectedRev as number) + 1 && (p.stage === undefined || isLifecycleStage(p.stage));
+  const { projection: _dropped, ...rest } = d;
+  void _dropped;
+  return whole ? d : rest;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -227,11 +248,15 @@ interface Rule {
   /** Known before projecting; otherwise Core and the fold derive it from the results. */
   stage?: LifecycleStage;
   fold: (f: Fold) => void;
-  /** For an event that can wait for Core (a design outcome): what to do when the step gave up. */
-  unavailable?: (f: Fold) => void;
+  /**
+   * For an event that can wait for Core (a design outcome): what to do when the step gave up.
+   * `sent` is the projection the step was sending, which Core may have committed unanswered.
+   */
+  unavailable?: (f: Fold, sent: DeferredProjection) => void;
 }
 
 type Decision = { ignored: true; reason: string; reply?: unknown } | ({ ignored: false } & Rule);
+type DeferredProjection = NonNullable<NonNullable<LifecycleStateV1['outcomeDeferred']>['projection']>;
 
 const ignore = (reason: string, reply?: unknown): Decision => ({ ignored: true, reason, ...(reply !== undefined ? { reply } : {}) });
 const refuse = (code: OfficeDecisionRefusal, message: string): Decision => ignore(`office decision refused: ${code}`, { accepted: false, code, message } satisfies OfficeDecisionResult);
@@ -327,12 +352,6 @@ function answerCallback(f: Fold, callbackQueryId: string | undefined): void {
 
 const cut = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-function keptReport(report: CanvaStatusReport): CanvaStatusReport {
-  if (JSON.stringify(report).length <= MAX_DEFERRED_REPORT_CHARS) return report;
-  const { status, code, designId, message } = report;
-  return { status, ...(code ? { code } : {}), ...(designId ? { designId } : {}), ...(typeof message === 'string' ? { message: cut(message, 2000) } : {}) };
-}
-
 /** Folds a design outcome Core recorded (designFinished, or retryProjection after Core was down). */
 function foldOutcome(f: Fold, report: CanvaStatusReport): void {
   const res = resultOf(f.results, 'recordOutcome');
@@ -363,9 +382,13 @@ function foldOutcome(f: Fold, report: CanvaStatusReport): void {
   sendAll(f);
 }
 
-function deferOutcome(f: Fold, runId: string, report: CanvaStatusReport, taskId: string): void {
-  const attempts = (f.prev?.outcomeDeferred?.runId === runId ? f.prev.outcomeDeferred.attempts ?? 1 : 0) + 1;
-  f.next.outcomeDeferred = { runId, since: f.prev?.outcomeDeferred?.since ?? f.now, report: keptReport(report), attempts };
+function deferOutcome(f: Fold, runId: string, report: CanvaStatusReport, taskId: string, sent: DeferredProjection): void {
+  const prev = f.prev?.outcomeDeferred?.runId === runId ? f.prev.outcomeDeferred : undefined;
+  const attempts = (prev ? prev.attempts ?? 1 : 0) + 1;
+  // The report is kept whole, not cut to size: the retry must send the very ops Core may hold under
+  // the first key, or Core refuses it (KEY_REUSED) and the outcome is lost. It is kept only while
+  // Core is down, and the designFinished event carried the same bytes into the journal.
+  f.next.outcomeDeferred = { runId, since: prev?.since ?? f.now, report, attempts, projection: sent };
   // The requester and the office hear once that the outcome is not recorded yet; later attempts only retry.
   if (attempts === 1) f.effects.push({ type: 'outcomeUnrecorded', requestId: f.next.requestId, taskId, runId, status: report.status, chatId: f.next.chatId });
   const key = `retry:${f.next.requestId}:${runId}:${attempts}`;
@@ -381,7 +404,7 @@ function outcomeRule(s: LifecycleStateV1, runId: string, report: CanvaStatusRepo
     ignored: false,
     ops: [{ op: 'recordOutcome', taskId, runId, report }],
     fold: (f) => foldOutcome(f, report),
-    unavailable: (f) => deferOutcome(f, runId, report, taskId),
+    unavailable: (f, sent) => deferOutcome(f, runId, report, taskId, sent),
   };
 }
 
@@ -528,6 +551,9 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
 
 function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
   const version = (ev as { v?: unknown }).v;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new LifecycleEventUnreadableError(`event ${ev.type} has no payload version this build can read (v=${JSON.stringify(version) ?? 'undefined'})`);
+  }
   if (version !== 1) throw new LifecycleStateTooNewError(`event ${ev.type} v${String(version)} was written by a newer build`);
 
   if (s && s.seen.includes(ev.eventId)) {
@@ -801,8 +827,16 @@ export function plan(s: LifecycleStateV1 | undefined, ev: LifecycleEvent, now: n
 export function projectionRequestFor(s: LifecycleStateV1 | undefined, ev: LifecycleEvent, p: Extract<Plan, { ignored: false }>): ProjectionRequest {
   const requestId = s?.requestId ?? (ev.type === 'open' ? ev.requestId : '');
   const tenantId = s?.tenantId ?? (ev.type === 'open' ? ev.tenantId : '');
+  const sent = ev.type === 'retryProjection' && s?.outcomeDeferred?.runId === ev.runId ? s.outcomeDeferred.projection : undefined;
+  if (sent) {
+    // The outcome offered again is the projection first sent, key, revision and ops alike: if Core
+    // committed it and died before answering, it answers 'replayed' with what it recorded.
+    return { v: 1, expectedRev: sent.expectedRev, rev: sent.rev, key: sent.key, tenantId, ...(sent.stage ? { stage: sent.stage } : {}), ops: p.ops };
+  }
   const expectedRev = s?.rev ?? 0;
-  return { v: 1, expectedRev, rev: expectedRev + 1, key: `${requestId}:${expectedRev + 1}:${ev.type}`, tenantId, ...(p.stage ? { stage: p.stage } : {}), ops: p.ops };
+  // A retry stands in for the designFinished it offers again, and is named as that event (2.9).
+  const eventType = ev.type === 'retryProjection' ? 'designFinished' : ev.type;
+  return { v: 1, expectedRev, rev: expectedRev + 1, key: `${requestId}:${expectedRev + 1}:${eventType}`, tenantId, ...(p.stage ? { stage: p.stage } : {}), ops: p.ops };
 }
 
 /**
@@ -824,12 +858,22 @@ export function apply(
   const f: Fold = { prev: s, next, results: [], effects: [], now, scale };
   if (projected.status === 'unavailable') {
     if (!d.unavailable || !s) throw new LifecycleProjectionUnavailableError(`Core did not take the projection of ${ev.type}; it must be retried`);
-    d.unavailable(f);
+    const sent = projectionRequestFor(s, ev, { ignored: false, ops: d.ops, ...(d.stage ? { stage: d.stage } : {}) });
+    d.unavailable(f, { key: sent.key, expectedRev: sent.expectedRev, rev: sent.rev, ...(sent.stage ? { stage: sent.stage } : {}) });
   } else {
     f.results = projected.results;
     d.fold(f);
-    // The revision Postgres now holds: the next projection expects it.
-    f.next.rev = projected.rev;
+    // The revision Postgres now holds: the next projection expects it. A replayed answer of an
+    // older projection never takes the state back.
+    f.next.rev = Math.max(f.next.rev ?? 0, projected.rev);
+    // Another event was projected at the revision a deferred outcome was sent at: Postgres was still
+    // there, so Core never recorded the outcome, and its retry must project it afresh.
+    const held = f.next.outcomeDeferred?.projection;
+    if (s && held && s.rev === held.expectedRev && ev.type !== 'designFinished' && ev.type !== 'retryProjection') {
+      const { projection: _stale, ...rest } = f.next.outcomeDeferred!;
+      void _stale;
+      f.next.outcomeDeferred = rest;
+    }
   }
   f.next.seen = [...(f.next.seen ?? []), ev.eventId].slice(-MAX_SEEN);
   let reply = f.reply;

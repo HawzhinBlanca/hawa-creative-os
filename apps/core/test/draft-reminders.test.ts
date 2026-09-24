@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, OutboxRepository } from '@hawa/db';
-import { composeDraftReminder, inOfficeHours, remindUnansweredDrafts } from '../src/services/draft-reminders.js';
+import { composeDraftReminder, draftsToRemind, inOfficeHours, questionsToRemind, remindUnansweredDrafts } from '../src/services/draft-reminders.js';
 
 /** A draft nobody answered is asked about once a day later, once more at five days, and no more. */
 describe('draft reminders', () => {
@@ -100,6 +100,26 @@ describe.skipIf(!url)('draft reminders (PostgreSQL)', () => {
     expect(await keys(answered.taskId)).toEqual([]);
     // A paused question is not a draft: no draft reminder for it.
     expect(await reminders(open.taskId)).toEqual([]);
+  });
+
+  it('never for a request the lifecycle owns: RequestLifecycle schedules its own reminders (PHASE2_DESIGN.md 2.3)', async () => {
+    const owned = await draft(26);
+    const legacy = await draft(26);
+    const question = await draft(27);
+    const stages = { directed: { refused: 'NEEDS_CLARIFICATION', clarify: { question: 'Fill the space with what?', options: ['bigger photos', 'bigger text'] } } };
+    await withRlsContext(db, operator, async (trx) => {
+      await sql`UPDATE hawa.tasks SET request_id = ${randomUUID()}::uuid WHERE id IN (${owned.taskId}::uuid, ${question.taskId}::uuid)`.execute(trx);
+      await sql`UPDATE hawa.tasks SET state = 'paused' WHERE id = ${question.taskId}::uuid`.execute(trx);
+      await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${question.taskId}::uuid, ${kaae}::uuid, ${userId}, ${'reminder_' + question.taskId}, 'h', '{}'::jsonb, 'standard', 'failed', ${JSON.stringify(stages)}::jsonb)`.execute(trx);
+    });
+    const drafts = (await draftsToRemind(db, tenantId, userId, '2026-01-01T00:00:00Z')).map((d) => d.taskId);
+    expect(drafts).toContain(legacy.taskId);
+    expect(drafts).not.toContain(owned.taskId);
+    expect((await questionsToRemind(db, tenantId, userId, '2026-01-01T00:00:00Z')).map((q) => q.taskId)).not.toContain(question.taskId);
+    await pass();
+    expect(await reminders(owned.taskId)).toEqual([]);
+    expect(await reminders(legacy.taskId)).toEqual([`notify.telegram:reminder1:${legacy.taskId}`]);
   });
 
   it('never at night, and never for drafts sent before reminders existed', async () => {

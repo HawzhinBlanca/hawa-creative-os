@@ -191,7 +191,20 @@ export interface LifecycleStateV1 {
   /** Reminders already sent: `draft:1:<taskId>`, `question:5:<taskId>`, … */
   reminders: string[];
   /** Core did not take a design outcome within the projection's retry window. */
-  outcomeDeferred?: { runId: string; since: number; report?: CanvaStatusReport; attempts?: number };
+  outcomeDeferred?: {
+    runId: string;
+    since: number;
+    /** The report exactly as it was first projected: the retry must send the same ops. */
+    report?: CanvaStatusReport;
+    attempts?: number;
+    /**
+     * The projection first sent for this outcome. Core may have committed it and died before
+     * answering, so the retry sends it again under the same key and revision, and Core replays its
+     * record instead of refusing a new key as AHEAD. Dropped once another projection is applied at
+     * that revision, which proves the outcome was never recorded.
+     */
+    projection?: { key: string; expectedRev: number; rev: number; stage?: LifecycleStage };
+  };
   /** Size action → the child request opened for it. */
   sizes: Record<string, string>;
   /** The last 64 event ids handled: duplicates beyond Restate's idempotency retention do nothing. */

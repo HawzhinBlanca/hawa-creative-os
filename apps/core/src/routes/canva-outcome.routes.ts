@@ -93,6 +93,15 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     const task = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, trx =>
       taskRepo.findById(taskId, auth.tenantId!, trx));
     if (!task) return problem(c, 404, 'Task Not Found');
+    // A request RequestLifecycle owns takes its design outcome through the lifecycle's projection
+    // (PHASE2_DESIGN.md 2.3). Recording it here as well would move the task and message the
+    // requester behind the lifecycle's back. 4xx is terminal for the worker, so this is not retried.
+    if (task.request_id) {
+      return c.json({
+        type: 'https://hawa.design/errors/409', title: 'Lifecycle Owned', status: 409, code: 'LIFECYCLE_OWNED', requestId: task.request_id,
+        detail: 'This task belongs to a request the lifecycle owns; its design outcome goes to RequestLifecycle.designFinished', instance: c.req.url,
+      }, 409);
+    }
 
     const created = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
       (await sql<any>`SELECT data FROM hawa.task_events

@@ -32,6 +32,7 @@ import {
   toApiTaskStatus,
   type DraftIntake,
   type LifecycleRecord,
+  type LifecycleOrigin,
   type LifecycleStage,
   type ProjectionConflict,
   type ProjectionOp,
@@ -159,10 +160,32 @@ async function taskCreatedPayload(run: Run, taskId: string): Promise<Record<stri
   return payload && typeof payload === 'object' ? (typeof payload === 'string' ? JSON.parse(payload) : payload) : {};
 }
 
+/**
+ * Where a request came from, as it is written into the task's raw record: the Telegram update of the
+ * chat it names, or a size of the parent request it names. Only the known fields are kept, so a
+ * newer worker's added fields do not reach the row unread.
+ */
+function checkOrigin(op: Extract<ProjectionOp, { op: 'createRequest' }>): LifecycleOrigin {
+  const o = op.origin as Partial<Record<string, unknown>> | undefined;
+  if (!o || typeof o !== 'object') return refuse('INVALID_OP', 'createRequest carries where the request came from');
+  if (o.kind === 'telegram') {
+    if (o.chatId !== op.chatId) refuse('INVALID_OP', 'The origin names another chat than the request');
+    if (!Number.isSafeInteger(o.updateId) || (o.updateId as number) < 0) refuse('INVALID_OP', 'A Telegram origin names its update');
+    return { kind: 'telegram', chatId: op.chatId as string, updateId: o.updateId as number };
+  }
+  if (o.kind === 'size') {
+    if (!op.parentRequestId || o.parentRequestId !== op.parentRequestId) refuse('INVALID_OP', 'A size origin names the parent request of the op');
+    if (typeof o.action !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(o.action)) refuse('INVALID_OP', 'A size origin names its size action');
+    return { kind: 'size', parentRequestId: op.parentRequestId as string, action: o.action as string };
+  }
+  return refuse('INVALID_OP', `Unknown origin ${JSON.stringify(o.kind)}`);
+}
+
 async function createRequest(run: Run, op: Extract<ProjectionOp, { op: 'createRequest' }>): Promise<ProjectionOpResult> {
   if (op.requestId !== run.requestId) refuse('INVALID_OP', 'createRequest names another request');
   if (run.row) refuse('INVALID_OP', 'The request is open already');
   if (typeof op.chatId !== 'string' || !/^-?\d{1,20}$/.test(op.chatId)) refuse('INVALID_OP', 'A lifecycle request comes from a Telegram chat');
+  const origin = checkOrigin(op);
   const draft = checkDraft(op.draft);
   if (op.parentRequestId !== undefined) {
     if (!isValidUuid(op.parentRequestId)) refuse('INVALID_OP', 'parentRequestId must be a request id');
@@ -177,7 +200,7 @@ async function createRequest(run: Run, op: Extract<ProjectionOp, { op: 'createRe
     sourceEventId: `lc-${run.requestId}-r0`,
     sourceChannelId: op.chatId as string,
     rawText: draft.rawText,
-    rawJson: { lifecycle: { requestId: run.requestId, round: 0, origin: op.origin }, text: draft.rawText },
+    rawJson: { lifecycle: { requestId: run.requestId, round: 0, origin }, text: draft.rawText },
     clientId: draft.clientId,
     title: text(draft.title, 500),
     headlineEn: draft.headlineEn, headlineCkb: draft.headlineCkb, copyEn: draft.copyEn, copyCkb: draft.copyCkb,

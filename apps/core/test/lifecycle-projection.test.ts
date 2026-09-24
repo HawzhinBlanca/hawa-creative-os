@@ -203,6 +203,27 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
     expect(await refused.json()).toMatchObject({ code: 'INVALID_DRAFT' });
   });
 
+  it('refuses an open whose origin is not the chat it names or a size of its parent request', async () => {
+    const chat = newChat();
+    const ev = openEvent(chat);
+    const body = planned(undefined, ev);
+    const withOrigin = (origin: unknown) => ({ ...body, ops: [{ ...(body.ops[0] as object), origin }] });
+    for (const origin of [
+      undefined,
+      'telegram',
+      { kind: 'email', chatId: chat, updateId: 1 },
+      { kind: 'telegram', chatId: '999', updateId: 1 },
+      { kind: 'telegram', chatId: chat, updateId: -1 },
+      { kind: 'telegram', chatId: chat, updateId: '1' },
+      { kind: 'size', parentRequestId: randomUUID(), action: 'sst' },
+    ]) {
+      const res = await project(ev.requestId, withOrigin(origin));
+      expect(res.status, JSON.stringify(origin)).toBe(422);
+      expect(await res.json()).toMatchObject({ code: 'INVALID_OP' });
+    }
+    expect((await read(ev.requestId)).status).toBe(404);
+  });
+
   it('refuses a malformed projection: a key that is not <requestId>:<rev>:…, a revision that is not expectedRev + 1, an unknown op', async () => {
     const ev = openEvent(newChat());
     const body = planned(undefined, ev);
@@ -288,6 +309,25 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
     const options = await asOwner(async (trx) => (await sql<{ options: Record<string, unknown> }>`
       SELECT payload->'studioOptions' AS options FROM hawa.outbox_commands WHERE aggregate_id = ${changeTask.taskId}::uuid AND command_type = 'task.created'`.execute(trx)).rows[0].options);
     expect(options).toMatchObject({ parentTaskId: roundTask, revisionDirective: 'Make the logo bigger' });
+  });
+
+  it('the legacy outcome report refuses a lifecycle-owned task (409 LIFECYCLE_OWNED) and changes nothing', async () => {
+    const { state } = await opened();
+    const taskId = state.rounds[0].taskId;
+    const sendsBefore = bridge.dispatchOutboundMessage.mock.calls.length;
+    const legacyAuth = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
+    for (const path of ['canva-status', 'canva-ready']) {
+      const res = await app.request(`/v1/tasks/${taskId}/notifications/${path}`, {
+        method: 'POST', headers: legacyAuth, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId: 'DAGowned0001' }),
+      });
+      expect(res.status, path).toBe(409);
+      expect(await res.json()).toMatchObject({ code: 'LIFECYCLE_OWNED', requestId: state.requestId });
+    }
+    const rows = await asOwner(async (trx) => (await sql<{ state: string; notices: number }>`
+      SELECT t.state::text, (SELECT count(*) FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'notify.telegram')::int AS notices
+      FROM hawa.tasks t WHERE t.id = ${taskId}::uuid`.execute(trx)).rows[0]);
+    expect(rows).toEqual({ state: 'received', notices: 0 });
+    expect(bridge.dispatchOutboundMessage.mock.calls.length).toBe(sendsBefore);
   });
 
   it('records a draft as sent the way legacy queries read it (a delivered notify.telegram row) and keeps the time', async () => {
