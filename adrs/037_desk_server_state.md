@@ -1,7 +1,7 @@
 # ADR-037: The Desk Keeps Server State in TanStack Query
 
 **Date:** 2026-09-24
-**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 1.5).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"). Implemented 2026-09-24 on branch `worktree-wf_93123f63-474-3` (architecture programme, Phase 1.5); not yet merged or deployed.
 **Adds:** `@tanstack/react-query` v5 to `apps/desk` (its runtime dependencies today are react, react-dom and dompurify).
 
 ## 1. Context: the measured need
@@ -19,14 +19,16 @@ All of these are server-state concerns (caching, refetch on focus and interval, 
 TanStack Query v5 with:
 
 - numbered pages with `placeholderData: keepPreviousData` and a server total (an invalidation refetches one page; infinite scroll would refetch every loaded page in sequence);
-- one event stream per tab; `task:*` events invalidate `['tasks']` and `['task', id]`, coalesced over 300 ms; everything is invalidated after a reconnect; polling runs only while the stream is down;
+- one event stream per tab; `task:*` events invalidate `['tasks']` and `['task', id]`, coalesced over 300 ms (applied once events pause for 300 ms, at the latest 1 s after the first); everything is invalidated after a reconnect; polling runs only while the stream is down;
 - one 401 handler in `QueryCache` and `MutationCache` (clear, drop the token, sign in once);
 - approve and revise show pending state in the UI and never change the cached status before the server confirms (approval has server side effects and can be refused);
-- `retry` off for 401 and 403, at most two retries otherwise; `staleTime` about 30 s.
+- `retry` off for 401 and 403 (and 404: a stale link, a deleted task), at most two retries otherwise; `staleTime` about 30 s.
 
 ## 3. Consequences
 
-- About 13 kB min+gzip (measured in the Vite build before merging).
+- Size, measured with `vite build` on 2026-09-24 against the same Desk at 79b70e0 (498.68 kB, 146.40 kB gzip, one chunk): TanStack Query and the new Desk code in one chunk came to 540.87 kB (158.60 kB gzip), over the 500 KiB entry budget that CV-17 (`apps/core/test/hawa-work-desk-cv17.test.ts`) sets. The budget is kept, not raised: the Work screen stays in the entry chunk and the Clients, Settings, Ops, Eval and Comparison screens load on first visit (`React.lazy`). Entry chunk 414.42 kB (127.82 kB gzip); the five screen chunks 128.9 kB (36.1 kB gzip) together. CV-17 now measures the chunk `index.html` loads, and every chunk against the same limit.
+- "Polling only while the stream is down" relies on the stream failing visibly. Core ends the response when the heartbeat (15 s) finds its session revoked or expired, so the browser reconnects, the ticket request meets the 401 and the Desk shows sign-in; the Desk also treats a stream silent for 45 s as down.
+- Deploy: a Desk cached by the service worker from before this change still opens the stream with `?access_token=`, which Core now refuses. It reconnects with a 401 every 10 s or less and polls until the new Desk loads (a reload). It degrades; it does not break.
 - The hand-written polling, paging and 401 paths are deleted.
 - The server-side changes (keyset pages, lean list query, indexes, a stream ticket instead of the session token in the URL) are made with it.
 
