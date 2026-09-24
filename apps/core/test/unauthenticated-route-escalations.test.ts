@@ -52,7 +52,7 @@ describe('Adversarial Bug Hunt: Unauthenticated Route Escalations & Auth Gate By
         'x-enforce-auth': 'true',
       },
     });
-    expect([401, 404]).toContain(approveRes.status);
+    expect(approveRes.status).toBe(404);
 
     const after = await app.request(`/v1/tasks/${taskId}`, { headers: { Authorization: `Bearer ${testOperatorToken}` } });
     expect((await after.json()).status).toBe(created.status);

@@ -7295,7 +7295,9 @@ export function createApp(options?: CreateAppOptions) {
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
     let task = await readCurrentTask(taskId);
     let dbTask: any = null;
-    if (taskRepo && db) {
+    // An id that is not a uuid names no task in Postgres, and the query would fail on the cast (a
+    // 500) rather than find nothing; the :control catch-all used to answer 404 before it got here.
+    if (taskRepo && db && isValidUuid(taskId)) {
       dbTask = await withRlsContext(
         db,
         { tenantId, userId: auth.userId, role: auth.role },

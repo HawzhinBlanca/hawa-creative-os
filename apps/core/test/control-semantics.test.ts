@@ -31,6 +31,18 @@ describe('N3: task control semantics', () => {
     }
   );
 
+  // A task id that is not a uuid names no task either. Postgres refuses to compare it with a uuid
+  // column, so a route that hands it to the database unguarded would answer 500 (with a stack trace
+  // outside production); the catch-all never let one get that far.
+  it.each(INTERCEPTED.flatMap((word) => (['memory', 'postgres'] as const).map((store) => [word, store] as const)))(
+    'POST /tasks/<not a uuid>/%s answers 404 (%s)',
+    async (word, store) => {
+      const body = JSON.stringify({ nodes: [{ id: 'n1', type: 'text' }] });
+      const res = await apps[store]().request(`/v1/tasks/not-a-uuid/${word}`, { method: 'POST', headers, body });
+      expect(res.status).toBe(404);
+    }
+  );
+
   const newTask = async (app: ReturnType<typeof createApp>, title: string, clientId = 'kaae') => {
     const created = await app.request('/v1/tasks', { method: 'POST', headers, body: JSON.stringify({ title, clientId }) });
     expect(created.status).toBe(201);
