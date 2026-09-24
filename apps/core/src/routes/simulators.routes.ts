@@ -209,6 +209,8 @@ export function registerSimulatorsRoutes(ctx: RouteContext): void {
       updatedAt: new Date().toISOString(),
     };
 
+    // A rehearsal writes no task to Postgres. Without a database the rehearsed task is kept here, in
+    // the no-database store; with one, the store holds nothing (services/no-database-store.ts).
     tasks.set(taskId, task);
     events.set(taskId, [
       {

@@ -93,7 +93,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
                 createdAt: dbTask.created_at,
                 updatedAt: dbTask.updated_at,
               };
-              tasks.set(dbTask.id, replyTarget);
             }
           } catch (dbErr) {
             // A database that cannot answer now may answer on the next attempt; a 404 here was final
@@ -161,7 +160,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
             createdAt: next.created_at,
             updatedAt: next.updated_at,
           };
-          tasks.set(next.id, replyTarget);
         }
       }
     }
@@ -185,7 +183,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
         createdAt: next.created_at,
         updatedAt: next.updated_at,
       };
-      tasks.set(next.id, replyTarget);
       changedNewestVersion = true;
     }
 
@@ -210,7 +207,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
                 createdAt: dbTask.created_at,
                 updatedAt: dbTask.updated_at,
               };
-              tasks.set(dbTask.id, feedbackTargetTask);
             }
           } catch (dbErr) {
             log.warn('[Core] Failed to find text UUID task in DB:', dbErr);
@@ -227,7 +223,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
             const next = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) => taskRepo.findById(named.newest, DEFAULT_TENANT_ID, trx)).catch(() => null);
             if (!next) return problem(c, 503, 'Database unavailable', 'The newest version of the named design could not be read; retry');
             feedbackTargetTask = { id: next.id, tenantId: next.tenant_id, clientId: next.client_id, status: next.state, title: next.title, sourcePlatform: 'telegram', sourceChannelId, createdAt: next.created_at, updatedAt: next.updated_at };
-            tasks.set(next.id, feedbackTargetTask);
             changedNewestVersion = true;
           }
         }
@@ -238,7 +233,8 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
       const isReply = Boolean(msg.reply_to_message);
       // The design the message is read against: the one a reply answers; else this chat's most
       // recent request in PostgreSQL, revisions included (the in-memory map never held revisions, so
-      // a second change bound to the original design and lost the first); else the in-memory map.
+      // a second change bound to the original design and lost the first); without a database, the
+      // no-database store's (services/no-database-store.ts).
       let pendingTasks: any[] = replyTarget ? [replyTarget] : [];
       if (!replyTarget && db) {
         try {
@@ -280,7 +276,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
               createdAt: row.created_at,
               updatedAt: row.updated_at,
             };
-            tasks.set(row.id, rehydrated);
             pendingTasks = [rehydrated];
           }
         } catch (dbErr) {

@@ -240,7 +240,10 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(crossJson.title).toBe('Cross-Task Revision Mismatch');
   });
 
-  it('4. Detects tampered artifact set hash and tampered QC report hash', async () => {
+  // The evidence an approval is checked against is what Postgres and the export store hold. A capture
+  // set and a QA report sent with the revision were kept only on one Core's copy of the task (the
+  // cleanup step of the app.ts split removed it), so they are no longer what a forgery is found against.
+  it('4. Detects a forged export reference and a tampered QC report hash', async () => {
     const task = await createTestTask();
     const revId = crypto.randomUUID();
 
@@ -250,18 +253,11 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         revisionId: revId,
         document: { id: 'doc_t', pages: [{ id: 'p1', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'n1', type: 'text', text: 'Authentic' }] },
-        captureSet: {
-          id: crypto.randomUUID(),
-          capturedArtifactSetHash: 'authentic_merkle_root_sha256_hash_123',
-        },
-        qaReport: {
-          criticalPass: true,
-          reportSha256: 'authentic_qc_report_sha256_hash_456',
-        },
       }),
     });
+    await passQa(task.id, revId);
 
-    // 4a. Tampered artifact set hash
+    // 4a. An export this task never captured cannot be what the approval ships.
     const badArtifactRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {
@@ -270,13 +266,13 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       },
       body: JSON.stringify({
         decision: 'approved',
-        capturedArtifactSetHash: 'forged_tampered_merkle_root_hex',
+        pinnedExportIds: [crypto.randomUUID()],
       }),
     });
     expect(badArtifactRes.status).toBe(422);
-    expect((await badArtifactRes.json()).detail).toContain('Submitted captured artifact set hash');
+    expect((await badArtifactRes.json()).detail).toContain('No retrieved export of this task');
 
-    // 4b. Tampered QC report hash
+    // 4b. Tampered QC report hash: the stored QC run's hash is the one that counts.
     const badQcRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {

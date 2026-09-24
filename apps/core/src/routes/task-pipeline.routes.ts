@@ -9,6 +9,7 @@ import { KAAE_CLIENT_ID } from '@hawa/integrations';
 import { manifestFromOperations } from '../services/generated-manifest.js';
 import { inlineTemplateCopyMissing, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { DEFAULT_CLIENT_ID } from '../core-context.js';
+import { readTaskBrief } from '../services/brief-reader.js';
 
 /**
  * Routing a task to a client, its brief and generating its design (architecture programme 1.3, G7).
@@ -27,7 +28,6 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     registerRoute,
     resolveClientDna,
     revisionRepo,
-    revisions,
     taskRepo,
     tasks,
     verifyRequestAuth,
@@ -175,7 +175,8 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
       createdAt: new Date().toISOString(),
     };
 
-    briefs.set(taskId, brief);
+    // Postgres keeps the brief (design_briefs, below); without a database, the no-database store does.
+    if (!db) briefs.set(taskId, brief);
 
     const briefFromStatus = task ? task.status : toApiTaskStatus(dbTask.state);
     const sm = new TaskStateMachine(taskId, briefFromStatus);
@@ -250,7 +251,9 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
 
     const currentClientId = task?.clientId || dbTask?.client_id || defaultClientId;
-    const brief: DesignBrief = briefs.get(taskId) || task?.brief || {
+    // The brief saved for the task: Postgres's, or without a database the no-database store's.
+    const savedBrief = db ? await readTaskBrief(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, taskId) : briefs.get(taskId);
+    const brief: DesignBrief = savedBrief || {
       briefId: crypto.randomUUID(),
       taskId,
       clientId: currentClientId,
@@ -346,19 +349,6 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
       format: 'canva_native' as any,
       nodes,
     };
-
-    const newRev = {
-      revisionId,
-      id: revisionId,
-      taskId,
-      document,
-      ops,
-      author: { userId: auth.userId || 'generator', role: 'model' },
-      createdAt: new Date().toISOString(),
-      metadata: { studio: 'Canva Native Studio' },
-    };
-
-    revisions.set(revisionId, newRev);
 
     // QA runs the deterministic engine on the design just generated, against the brief and the client's
     // DNA. It used to be a literal all-pass report (score 100, contrast 7.2) stored as a passing QC run.
@@ -477,14 +467,6 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
       }
     }
 
-    if (finalRevisionId !== revisionId) {
-      (newRev as any).id = finalRevisionId;
-      (newRev as any).revisionId = finalRevisionId;
-      revisions.delete(revisionId);
-      revisions.set(finalRevisionId, newRev);
-    } else {
-      revisions.set(finalRevisionId, newRev);
-    }
     if (task) {
       task.latestRevisionId = finalRevisionId;
     }

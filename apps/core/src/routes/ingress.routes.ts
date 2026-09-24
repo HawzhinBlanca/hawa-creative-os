@@ -1,9 +1,10 @@
 import type { RouteContext } from './types.js';
 import crypto from 'node:crypto';
-import { withRlsContext } from '@hawa/db';
+import { withRlsContext, IdempotencyConflictError } from '@hawa/db';
 import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { log } from '../logging.js';
+import { taskFromRows } from '../services/task-reader.js';
 import { refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
 
 export function registerIngressRoutes(ctx: RouteContext) {
@@ -179,7 +180,39 @@ export function registerIngressRoutes(ctx: RouteContext) {
     const body = await c.req.json().catch(() => ({}));
     const idempotencyKey = c.req.header('Idempotency-Key') || `promote_${messageId}`;
 
-    // Deduplicate by idempotency key or source message event ID
+    // With a database the promoted task is written like any other, once per key. It was kept in this
+    // process alone, where the Desk's list, another Core and a restart never found it.
+    if (db && taskRepo) {
+      const auth = verifyRequestAuth(c);
+      const tenantId = auth.tenantId || defaultTenantId;
+      if (body.clientId && !isValidUuid(body.clientId)) return problem(c, 400, 'Invalid Client Identifier', 'clientId must be a UUID');
+      const source = { sourcePlatform: 'ingress_message', sourceEventId: messageId, sourceChannelId: 'message_adapter' };
+      try {
+        const { task, created } = await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'operator' }, (trx) =>
+          taskRepo.createTaskAggregate({
+            tenantId,
+            userId: auth.userId || operatorUserId,
+            idempotencyKey,
+            title: body.title || `Promoted from message ${messageId}`,
+            description: body.description || '',
+            clientId: body.clientId || null,
+            projectId: isValidUuid(body.projectId) ? body.projectId : null,
+            actorType: 'user',
+            actorId: auth.actorId || 'operator',
+            payload: source,
+            enqueueOutbox: true,
+          }, trx));
+        const promoted = { ...taskFromRows(task, { created: { payload: source } }), idempotencyKey };
+        if (created) broadcast('task:created', promoted);
+        return c.json(promoted, created ? 201 : 200);
+      } catch (err) {
+        if (err instanceof IdempotencyConflictError) return problem(c, 409, 'Idempotency Conflict', 'This message was already promoted with different details');
+        log.error('[core:promote] the promoted task could not be saved:', err);
+        return problem(c, 503, 'Durable Storage Unavailable', 'The promoted task could not be saved; try again');
+      }
+    }
+
+    // Without a database: deduplicate by idempotency key or source message event ID.
     for (const t of tasks.values()) {
       if (t.idempotencyKey === idempotencyKey || t.sourceEventId === messageId) {
         return c.json(t, 200);

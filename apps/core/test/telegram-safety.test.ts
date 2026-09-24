@@ -305,8 +305,8 @@ describe('handlers that act on a task read its status from Postgres', () => {
     const read = vi.spyOn(exports.store, 'read');
     await coreDb.destroy();
 
-    // A signed WhatsApp approve-and-publish reads the task without insisting on Postgres and goes
-    // straight into delivery, so this is delivery's own read that answers.
+    // A signed WhatsApp approve-and-publish reads the task from Postgres before it acts (Core keeps
+    // no copy of it since the cleanup step of the app.ts split), so that read refuses first.
     const sig = computeActionSignature(taskId, 'approve');
     const res = await core.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`);
     const body = await res.json();

@@ -61,7 +61,9 @@ describe('an approval without a QA report', () => {
 describe('an approval after QA ran', () => {
   it('shows the report\'s own SHA-256; echoing it passes the hash check, and the failing QA then refuses approval', async () => {
     const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
-    const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA' }) })).json();
+    // The headline the client sent: KAAE's template draws nothing without one. The task's title used
+    // to stand in for it on the copy of the task the creating Core kept in memory.
+    const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA', headlineCkb: 'داشکاندنی ٢٥٪' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
     await app.request(`/v1/tasks/${taskId}/briefs`, {
@@ -90,7 +92,7 @@ describe('an approval after QA ran', () => {
       value: { qcRunId: randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
     }) };
     const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true }, qaEngine: passing as never });
-    const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Forged QA' }) })).json();
+    const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Forged QA', headlineCkb: 'داشکاندنی ٢٥٪' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
     await app.request(`/v1/tasks/${taskId}/briefs`, {
@@ -98,7 +100,7 @@ describe('an approval after QA ran', () => {
       headers: json,
       body: JSON.stringify({ objective: 'Promo', rawRequestText: 'داشکاندنی ٢٥٪ تا ١٠ی مانگ', primaryLanguage: 'ckb', direction: 'rtl' }),
     });
-    await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    expect((await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' })).status).toBe(202);
     const { latestRevisionId } = await (await app.request(`/v1/tasks/${taskId}`)).json();
 
     const res = await approve(app, taskId, latestRevisionId, { qcReportHash: 'verified_qc_pass' });

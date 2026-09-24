@@ -6,7 +6,7 @@
  */
 import crypto from 'node:crypto';
 import { PRIMARY_OPERATOR_USER_ID, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { sql, withRlsContext, toApiTaskStatus } from '@hawa/db';
+import { sql, withRlsContext } from '@hawa/db';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -21,7 +21,6 @@ export type RedriveDeps = Pick<
   | 'outboxRepo'
   | 'revisionRepo'
   | 'canvaConnectService'
-  | 'tasks'
   | 'telegramBridge'
   | 'telegramAllowedUsers'
   | 'broadcastEvent'
@@ -33,7 +32,7 @@ export type Redrive = ReturnType<typeof createRedrive>;
 
 export function createRedrive(deps: RedriveDeps) {
   const {
-    db, taskRepo, outboxRepo, revisionRepo, canvaConnectService, tasks, telegramBridge, telegramAllowedUsers,
+    db, taskRepo, outboxRepo, revisionRepo, canvaConnectService, telegramBridge, telegramAllowedUsers,
     broadcastEvent: broadcast, broadcastTransition, probeModelProvider,
   } = deps;
 
@@ -132,14 +131,6 @@ export function createRedrive(deps: RedriveDeps) {
             canvaUrl: existingBinding.edit_url, fallbackCopy: taskData.payload?.exactCopy,
           });
           recheck = done;
-          const memTask = tasks.get(taskId);
-          if (memTask && done.revisionId) {
-            memTask.latestRevisionId = done.revisionId;
-            if (done.qc) memTask.qaReport = done.qc.qaReport;
-            // The status is the database's: a failed check keeps the draft in review with approval
-            // blocked by its QC run. Memory said CHANGES_REQUESTED, which no other layer had.
-            if (done.transition?.changed) memTask.status = toApiTaskStatus(done.transition.toState);
-          }
           if (done.transition?.changed) broadcastTransition(taskId, done.transition.fromState, done.transition.toState, done.transition.version);
           // A new check without a move is still news to the Desk, which re-reads the task on it.
           if (done.qc) broadcast('task:qa_completed', { taskId, revisionId: done.revisionId, qaReport: done.qc.qaReport });

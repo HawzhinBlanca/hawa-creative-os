@@ -3,7 +3,7 @@ import type { RouteContext } from './types.js';
 import { CanvaConnectService, CanvaFlowError, type CanvaServiceOptions } from '../services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
-import { TASK_TRANSITIONED_EVENT, taskTransitioned, toApiTaskStatus } from '@hawa/contracts';
+import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
@@ -75,16 +75,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     try {
       const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
       const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
-      // The Desk's view of the task in memory follows, as it does for the worker's report: approval
-      // reads the latest revision from it.
-      const memTask = ctx.tasks.get(taskId);
-      if (recorded.recorded && memTask) {
-        memTask.latestRevisionId = recorded.revisionId;
-        memTask.qaReport = recorded.qc.qaReport;
-        // The database's status: a capture after a revision request moves the task to review; a
-        // failed check blocks approval through its QC run (memory said CHANGES_REQUESTED, no layer's word).
-        if (recorded.transition?.changed) memTask.status = toApiTaskStatus(recorded.transition.toState);
-      }
+      // The revision, its QC run and the task's move are Postgres's; approval reads them there.
       if (recorded.recorded && recorded.transition?.changed) {
         // Its own catch: the check is recorded by now, so a failure here is only the event's.
         const { fromState, toState, version } = recorded.transition;

@@ -28,8 +28,6 @@ export function taskExportContentUrl(taskId: string, exportId: string): string {
  */
 export function registerTasksRoutes(ctx: RouteContext): void {
   const {
-    briefs,
-    clientDnas,
     db,
     events,
     isProduction,
@@ -245,10 +243,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             ? 4
             : 3;
 
+        let clientDnaVersion = body.clientDnaVersion;
         const aggregateResult = await withRlsContext(
           db,
           { tenantId, userId, role: auth.role || 'operator' },
           async (trx) => {
+            clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
             return await taskRepo.createTaskAggregate(
               {
                 tenantId,
@@ -267,7 +267,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                   headlineCkb: body.headlineCkb,
                   copyEn: body.copyEn,
                   copyCkb: body.copyCkb,
-                  clientDnaVersion: body.clientDnaVersion || ((await resolveClientDna(body.clientId, undefined, trx))?.version || 1),
+                  clientDnaVersion,
                 },
                 enqueueOutbox: true,
               },
@@ -296,13 +296,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           sourceChannelId: 'hawa_desk',
           idempotencyKey,
           clientScopeLocked: false,
-          clientDnaVersion: body.clientDnaVersion || (clientDnas.get(dbTask.client_id)?.version || 1),
+          clientDnaVersion,
           version: Number(dbTask.version),
           createdAt: dbTask.created_at instanceof Date ? dbTask.created_at.toISOString() : (dbTask.created_at || new Date().toISOString()),
           updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
         };
 
-        tasks.set(dbTask.id, normalizedTask);
         if (aggregateResult.created) {
           broadcast('task:created', normalizedTask);
           return c.json(normalizedTask, 201);
@@ -328,7 +327,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
       }
     }
 
-    // In-memory fallback ONLY when no database is configured (e.g. lightweight isolated unit tests)
+    // Without a database the task lives in the no-database store (services/no-database-store.ts).
     for (const t of tasks.values()) {
       if (t.idempotencyKey === idempotencyKey) {
         if (t.title !== (body.title || 'Untitled Task')) {
@@ -395,8 +394,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    const memoryTask = tasks.get(taskId);
-
+    // With a database the task, its copy, preview, QC, approval, Canva design and delivery are all
+    // read from Postgres. This process's copy of the task used to fill whatever Postgres lacked, so
+    // the Core that created a task showed it differently from every other Core.
     if (taskRepo && db) {
       try {
         const queryRes = await withRlsContext(
@@ -462,18 +462,14 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent } = queryRes;
           const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
 
-          const headlineEn = memoryTask?.headlineEn || payload.headlineEn || payload.body?.headlineEn || dbTask.title;
-          const headlineCkb = memoryTask?.headlineCkb || payload.headlineCkb || payload.body?.headlineCkb || null;
-          const copyEn = memoryTask?.copyEn || payload.copyEn || payload.body?.copyEn || dbTask.description;
-          const copyCkb = memoryTask?.copyCkb || payload.copyCkb || payload.body?.copyCkb || null;
+          const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
+          const headlineCkb = payload.headlineCkb || payload.body?.headlineCkb || null;
+          const copyEn = payload.copyEn || payload.body?.copyEn || dbTask.description;
+          const copyCkb = payload.copyCkb || payload.body?.copyCkb || null;
 
-          const latestRevisionId = dbTask.current_design_revision_id || memoryTask?.latestRevisionId || undefined;
+          const latestRevisionId = dbTask.current_design_revision_id || undefined;
 
-          let latestRevision = memoryTask?.latestRevision;
-          // A picture is never inlined into the task (ADR-035): an old in-memory data URI is dropped.
-          if (typeof latestRevision?.previewUrl === 'string' && latestRevision.previewUrl.startsWith('data:')) {
-            latestRevision = { ...latestRevision, previewUrl: undefined };
-          }
+          let latestRevision;
           if (revRow || exportRow) {
             const versionNum = revRow ? Number(revRow.revision || 1) : 1;
             const sha256 = exportRow?.sha256 || revRow?.source_sha256;
@@ -498,7 +494,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             };
           }
 
-          let qaReport = memoryTask?.qaReport;
+          let qaReport;
           if (qcRow) {
             const report = qcRow.report as any;
             qaReport = {
@@ -513,9 +509,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             };
           }
 
-          let latestApproval = memoryTask?.latestApproval;
-          if (!['approved', 'publishing', 'complete'].includes(String(dbTask.state))) latestApproval = undefined;
-          else if (approvalRow) {
+          let latestApproval;
+          if (['approved', 'publishing', 'complete'].includes(String(dbTask.state)) && approvalRow) {
             latestApproval = {
               decisionId: approvalRow.id,
               role: approvalRow.decision_payload?.approverRole || 'art_director',
@@ -524,7 +519,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             };
           }
 
-          let canvaBinding = (memoryTask as any)?.canvaBinding;
+          let canvaBinding;
           if (canvaBindingRow) {
             canvaBinding = {
               designId: canvaBindingRow.canva_design_id,
@@ -534,7 +529,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             };
           }
 
-          let deliveryReceipt = (memoryTask as any)?.deliveryReceipt;
+          let deliveryReceipt;
           if (pubEvent) {
             deliveryReceipt = {
               driveFolderUrl: pubEvent.data?.driveFolderUrl || pubEvent.data?.folderUrl,
@@ -564,10 +559,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
             clientScopeLocked: Boolean(dbTask.client_id),
             clientDnaVersion:
-              memoryTask?.clientDnaVersion ||
               payload.clientDnaVersion ||
               payload.body?.clientDnaVersion ||
-              briefs.get(taskId)?.clientDnaVersion ||
               (dbTask.client_id ? (await resolveClientDna(dbTask.client_id))?.version : undefined) ||
               1,
             version: Number(dbTask.version),
@@ -581,11 +574,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
           };
           return c.json(normalizedTask);
-        } else if (!memoryTask) {
-          return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
         }
+        return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
       } catch (err) {
+        // Answered from this process's copy, a failed read showed a task Postgres may since have changed.
         log.error('[core:tasks:get] DB fetch error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The task could not be read; try again');
       }
     }
 
@@ -663,18 +657,16 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           async (trx) => await taskRepo.getEvents(taskId, tenantId, trx)
         );
 
-        if (dbEvents.length > 0) {
-          const mapped = dbEvents.map((e) => ({
-            eventId: e.id,
-            taskId: e.task_id,
-            eventType: e.event_type,
-            aggregateVersion: Number(e.aggregate_version),
-            actor: { type: e.actor_type, id: e.actor_id },
-            data: e.data,
-            occurredAt: e.occurred_at instanceof Date ? e.occurred_at.toISOString() : e.occurred_at,
-          }));
-          return c.json({ events: mapped });
-        }
+        const mapped = dbEvents.map((e) => ({
+          eventId: e.id,
+          taskId: e.task_id,
+          eventType: e.event_type,
+          aggregateVersion: Number(e.aggregate_version),
+          actor: { type: e.actor_type, id: e.actor_id },
+          data: e.data,
+          occurredAt: e.occurred_at instanceof Date ? e.occurred_at.toISOString() : e.occurred_at,
+        }));
+        return c.json({ events: mapped });
       } catch (err) {
         // Answered with the in-memory events (usually none), a failed read showed the Desk's History
         // tab as "no recorded events" (review of 2026-09-24).
@@ -683,6 +675,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
       }
     }
 
+    // Without a database, the no-database store's events.
     const taskEvents = events.get(taskId) || [];
     return c.json({ events: taskEvents });
   });

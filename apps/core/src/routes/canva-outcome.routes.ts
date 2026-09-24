@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { CanvaBindingRepository, sql, toApiTaskStatus, withRlsContext } from '@hawa/db';
+import { CanvaBindingRepository, sql, withRlsContext } from '@hawa/db';
 import { CanvaDesignStudioAdapter, validateCanvaDesignUrl } from '@hawa/integrations';
 import type { RouteContext } from './types.js';
 import { evaluateCanvaExportQc, isValidUuid } from '../core-helpers.js';
@@ -18,8 +18,7 @@ import { createAskHistory } from '../services/ask-history.js';
  */
 export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
   const {
-    registerRoute, verifyRequestAuth, problem, db, taskRepo, outboxRepo, revisionRepo, canvaConnectService, tasks, revisions,
-    briefs, resolveTaskWithFallback, broadcastTransition,
+    registerRoute, verifyRequestAuth, problem, db, taskRepo, outboxRepo, revisionRepo, tasks, broadcastTransition,
   } = ctx;
   // createApp always builds one; the context types it optional for modules that can run without it.
   const telegramBridge = ctx.telegramBridge!;
@@ -197,14 +196,6 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
             tenantId: auth.tenantId!, taskId, actorId: auth.userId || null, status, designId, canvaUrl,
             fallbackCopy: source?.exactCopy, reason: outcomeReason,
           }));
-        const memTask = tasks.get(taskId);
-        if (bridged.created && memTask) {
-          memTask.latestRevisionId = bridged.revisionId;
-          // In review either way, as the database records it; a failed check blocks approval through
-          // its QC run. Memory said CHANGES_REQUESTED, which no other layer had.
-          memTask.status = 'AWAITING_APPROVAL';
-          memTask.qaReport = bridged.qc.qaReport;
-        }
         // The bridge moves the task to review itself, so the transition below finds nothing to change
         // and told no one: the Desk kept the task as RECEIVED, Approve disabled, until a reload (review
         // of 2026-09-24).
@@ -236,8 +227,6 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
           data: { outcome: status, ...(code ? { code } : {}), ...(designId ? { designId } : {}), ...(detail ? { detail } : {}) },
         }));
       if (moved.changed) {
-        const memTask = tasks.get(taskId);
-        if (memTask) memTask.status = toApiTaskStatus(outcomeState);
         broadcastTransition(taskId, moved.fromState, moved.toState, moved.version);
       }
       if (outcomeState === 'failed_operator') {
@@ -452,55 +441,18 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     return c.json({ taskId, mode, ...result.value, verification: 'handoff_only' });
   });
 
+  // Retired under ADR-025 with a database. Without one it assembled a package of files that were never
+  // made: fixed byte counts, a logo hash and a Drive folder no delivery had used (architecture
+  // programme 1.3, cleanup step). Native Canva exports are served by their own route.
   registerRoute('get', '/tasks/:taskId/export-package', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
-    if (canvaConnectService) {
-      return c.json({
-        error: 'STUDIO_EXPORT_PACKAGE_RETIRED',
-        statusCode: 410,
-        message: 'The legacy export package endpoint was retired under ADR-025. Use /v1/tasks/:taskId/canva/artifacts/:artifactId for native Canva exports.',
-        activeStudio: 'canva_native',
-        decommissionedUnder: 'ADR-025',
-      }, 410);
-    }
-    const taskId = c.req.param('taskId');
-    const task = await resolveTaskWithFallback(taskId);
-    if (!task) return problem(c, 404, 'Task Not Found');
-
-    const rev = task.latestRevisionId ? revisions.get(task.latestRevisionId) : undefined;
-    const brief = task.briefId ? briefs.get(task.briefId) : (briefs.get(taskId) || task.brief);
-    const qaReport = task.latestQAReport || { criticalPass: true, score: 100 };
-
-    const packageId = `pkg_${taskId.slice(0, 8)}_${Date.now()}`;
-    const packageHash = crypto.createHash('sha256').update(`${taskId}:${packageId}:${JSON.stringify(rev?.document || {})}`).digest('hex');
-
-    const exportPackage = {
-      packageId,
-      taskId,
-      packageHash,
-      createdAt: new Date().toISOString(),
-      status: task.status,
-      files: [
-        { name: `${taskId}.hyc`, sha256: rev?.document?.sourceSha256 || 'sha256_hyc_v1', bytes: 14520, contentType: 'application/x-hycanvas+json' },
-        { name: 'manifest.json', sha256: crypto.createHash('sha256').update(JSON.stringify(rev?.document || {})).digest('hex'), bytes: 3240, contentType: 'application/json' },
-        { name: 'brand_logo_primary.svg', sha256: 'sha256_logo_verified_primary', bytes: 8412, contentType: 'image/svg+xml' },
-        { name: 'qc_report.json', sha256: crypto.createHash('sha256').update(JSON.stringify(qaReport)).digest('hex'), bytes: 1820, contentType: 'application/json' },
-      ],
-      sourceDocument: rev?.document || {
-        documentId: `doc_${taskId.slice(0, 8)}`,
-        sourceRevision: 1,
-        sourceSha256: 'sha256_hyc_v1',
-        format: 'hycanvas',
-      },
-      brief: brief || null,
-      qaReport,
-      driveDestination: {
-        folderId: 'folder_drive_client_approved_001',
-        driveName: 'Hawa Creative Shared Drive / Approvals / 2026',
-      },
-    };
-
-    return c.json(exportPackage);
+    return c.json({
+      error: 'STUDIO_EXPORT_PACKAGE_RETIRED',
+      statusCode: 410,
+      message: 'The legacy export package endpoint was retired under ADR-025. Use /v1/tasks/:taskId/canva/artifacts/:artifactId for native Canva exports.',
+      activeStudio: 'canva_native',
+      decommissionedUnder: 'ADR-025',
+    }, 410);
   });
 }
