@@ -595,40 +595,68 @@ describe('outlines and glows as pictures (ADR-036 section 2.2)', () => {
     height: 1200,
   });
 
-  it('draws an outline and a glow with no SVG filter, as pictures the preview and the deck share', async () => {
+  it('draws an outline and a glow with no SVG filter: pictures at the preview\'s pixels and at the deck\'s', async () => {
     const layout = withPhotos(cutout({ outline: { color: '#FFFFFF', width: 24 }, glow: { color: GOLD, radius: 30 } }));
     const svg = renderLayoutV2ToSvg(layout, { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [big()] }).svg;
     expect(svg).not.toContain('feMorphology');
     expect(svg).not.toContain('<filter');
-    const embedded = (kind: string) => Buffer.from(svg.match(new RegExp(`<image id="photo-${kind}-0" xlink:href="data:image/png;base64,([^"]+)"`))![1], 'base64');
-    // The deck places the very bytes the preview embeds: no second rasterisation.
+    const embedded = (kind: string) => PNG.sync.read(Buffer.from(svg.match(new RegExp(`<image id="photo-${kind}-0" xlink:href="data:image/png;base64,([^"]+)"`))![1], 'base64'));
     const deck = await deckOf(layout, [], [big()]);
     expect(deck.pictures.map((p) => p.name)).toEqual(['Photo 0 glow', 'Photo 0 outline', 'Photo 0']);
-    expect(Buffer.from(deck.pictures[0].media).equals(embedded('glow'))).toBe(true);
-    expect(Buffer.from(deck.pictures[1].media).equals(embedded('outline'))).toBe(true);
+    for (const [k, kind] of [[0, 'glow'], [1, 'outline']] as const) {
+      const placed = deck.pictures[k];
+      const [w, h] = [placed.cx / EMU_PER_PX, placed.cy / EMU_PER_PX];
+      // The preview's picture has a pixel per layout pixel, as the preview is drawn; the deck's, two.
+      expect({ width: embedded(kind).width, height: embedded(kind).height }).toEqual({ width: Math.round(w), height: Math.round(h) });
+      const baked = PNG.sync.read(Buffer.from(placed.media));
+      expect({ width: baked.width, height: baked.height }).toEqual({ width: Math.round(w * 2), height: Math.round(h * 2) });
+      // The deck places the picture made for it as it is: no second rasterisation.
+      const rect = { x: 140, y: 440, width: 400, height: 600 };
+      const made = cutoutEffectFragment(kind, layout.photos![0], big().png, rect, layout, { target: 'deck' })!;
+      expect(Buffer.from(placed.media).equals(made.raster!)).toBe(true);
+    }
   });
 
-  it('rounds an outline\'s corners: every pixel within its width of the person, and none past it', async () => {
-    // The body's top-left corner is at (240, 520). A square dilation (feMorphology) drew the corner
-    // square: the pixel at (224, 504) is 22 px from the body, and was gold with a 20 px outline.
+  it('draws an outline\'s corners square, as feMorphology drew them: today\'s look, kept', async () => {
+    // The body's top-left corner is at (240, 520). A square dilation reaches the width along both
+    // axes at once: the pixel at (224, 504), 22 px from the corner along the diagonal, is gold with a
+    // 20 px outline, as it was before the outline became a picture (PLAN 3.2: within 1 device px
+    // of today's outline).
     const layout = withPhotos(cutout({ outline: { color: GOLD, width: 20 } }));
     const { png } = await preview(layout, [], [big()]);
-    expect(near(at(png, BODY.left - 12, BODY.top - 12), GOLD_RGB)).toBe(true); // 16 px away
-    expect(at(png, BODY.left - 16, BODY.top - 16)).toEqual(BG); // 22 px away
+    expect(near(at(png, BODY.left - 16, BODY.top - 16), GOLD_RGB)).toBe(true);
+    expect(near(at(png, BODY.left - 19, BODY.top - 19), GOLD_RGB)).toBe(true);
+    expect(at(png, BODY.left - 22, BODY.top - 22)).toEqual(BG);
     const deck = await deckOf(layout, [], [big()]);
     const outline = deck.pictures.find((p) => p.name === 'Photo 0 outline')!;
     const ring = PNG.sync.read(Buffer.from(outline.media));
     const [ox, oy] = [outline.x / EMU_PER_PX, outline.y / EMU_PER_PX];
-    // At 2x, along the diagonal from the corner: 18 layout px away is inside, 21.6 is outside.
-    expect(at(ring, (BODY.left - 13 - ox) * 2, (BODY.top - 13 - oy) * 2)).toEqual([...GOLD_RGB, 255]);
-    expect(at(ring, (BODY.left - 15.5 - ox) * 2, (BODY.top - 15.5 - oy) * 2)[3]).toBe(0);
+    // At 2x, the device pixel [corner - 19.5, corner - 19) on both axes is inside; [-21, -20.5) is not.
+    expect(at(ring, (BODY.left - 19.5 - ox) * 2, (BODY.top - 19.5 - oy) * 2)).toEqual([...GOLD_RGB, 255]);
+    expect(at(ring, (BODY.left - 21 - ox) * 2, (BODY.top - 21 - oy) * 2)[3]).toBe(0);
+  });
+
+  it('draws an outline a whole number of layout pixels wide, as before: 3.5 is drawn 4', () => {
+    const rect = { x: 140, y: 440, width: 400, height: 600 };
+    const widthOf = (width: number) => {
+      const fragment = cutoutEffectFragment('outline', cutout({ outline: { color: GOLD, width } }), big().png, rect, { width: 1080, height: 1350 }, { target: 'deck' })!;
+      const ring = PNG.sync.read(fragment.raster!);
+      // Gold device pixels left of the body's left edge, along the row at y 700.
+      const row = Math.round((700 - fragment.rect.y) * 2);
+      let count = 0;
+      for (let x = 0; x < (BODY.left - fragment.rect.x) * 2; x++) if (ring.data[(row * ring.width + x) * 4 + 3] === 255) count++;
+      return count / 2;
+    };
+    expect(widthOf(3.5)).toBe(4);
+    expect(widthOf(4)).toBe(4);
+    expect(widthOf(3.4)).toBe(3);
   });
 
   it('draws an outline from a part of the person beyond the canvas edge', () => {
     // The body is placed entirely off the left edge of the canvas; its outline still reaches onto it.
     const photo = cutout({ x: -300, outline: { color: GOLD, width: 10 } });
     const rect = { x: -300, y: 440, width: 400, height: 600 };
-    const fragment = cutoutEffectFragment('outline', photo, person().png, rect, { width: 1080, height: 1350 })!;
+    const fragment = cutoutEffectFragment('outline', photo, person().png, rect, { width: 1080, height: 1350 }, { target: 'deck' })!;
     expect(fragment.rect.x).toBe(0);
     const ring = PNG.sync.read(fragment.raster!);
     // The body is x -200..0, all of it off the canvas; its outline shows at the canvas's left edge.

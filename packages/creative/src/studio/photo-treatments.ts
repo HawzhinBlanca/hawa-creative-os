@@ -14,7 +14,7 @@ import {
 } from './layout-v2.js';
 import { coverCrop, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import { hexToRgb } from './color-science.js';
-import { cutoutEffectRasterCached, type FadeRamp } from './cutout-effect-raster.js';
+import { cutoutEffectRasterCached, type FadeRamp, type OutlineCorners } from './cutout-effect-raster.js';
 
 /**
  * Designer treatments of a client's photo: a circle or arch mask, a fade into the background, a
@@ -27,8 +27,8 @@ import { cutoutEffectRasterCached, type FadeRamp } from './cutout-effect-raster.
  * alone, through the same rsvg-convert the preview uses, and places the PNG at the fragment's rect
  * with no further crop. Canva keeps a PNG's alpha on PPTX import, so the mask and the fade survive,
  * and the design the judge scored and the design the client edits show the same pixels. An outline
- * or a glow is already a picture (cutout-effect-raster.ts, ADR-036): the preview embeds it and the
- * deck places the same PNG.
+ * or a glow is already a picture (cutout-effect-raster.ts, ADR-036), computed at the preview's pixels
+ * for the preview and at the bake scale for the deck, as its filter drew it at each.
  *
  * A photo with none of these treatments is not drawn from here at all: the preview and the deck
  * draw it exactly as before (the deck natively cropped, so the client can re-crop it in Canva).
@@ -99,11 +99,20 @@ export interface PhotoFragment {
    */
   sourceScale?: number;
   /**
-   * The fragment as a finished picture at `rect`, `photoBakePixelSize` pixels: an outline or a glow,
-   * which `svg` embeds. The deck places these bytes as they are, with no rasterising.
+   * An outline or a glow made for the deck: the finished picture at `rect`, `photoBakePixelSize`
+   * pixels, which `svg` embeds. The deck places these bytes as they are, with no rasterising.
    */
   raster?: Buffer;
 }
+
+/**
+ * Who an outline or a glow is drawn for, which sets its pixels: the preview, one device pixel a
+ * layout pixel (as the renderer draws the preview); the deck, `photoBakeScale` of them. A filter used
+ * to run at whatever scale it was drawn at, so each picture is computed at its own and both match
+ * what the filter drew there. The preview drawing the deck's picture shrunk instead differed from
+ * today's preview by up to several device pixels in the ring under the person's soft edge.
+ */
+export type CutoutEffectTarget = 'preview' | 'deck';
 
 /** The two things drawn around a cut-out person, under them. */
 export type CutoutEffectKind = 'outline' | 'glow';
@@ -373,9 +382,13 @@ export function cutoutPersonFragment(photo: PhotoElement, png: Buffer, rect: Box
   return { defs: source.defs, svg, rect: region, ...(source.sourceScale !== undefined ? { sourceScale: source.sourceScale } : {}) };
 }
 
-/** An outline's width as drawn, in layout pixels, held to its range. */
+/**
+ * An outline's width as drawn: held to its range and rounded to a whole layout pixel, as it was
+ * when feMorphology drew it (a whole device pixel at any whole bake scale). A fraction of a pixel of
+ * outline is below what anyone sees.
+ */
 function outlineWidthPx(outline: PhotoOutline | undefined): number {
-  return clampTo(outline?.width ?? 0, PHOTO_OUTLINE_WIDTH_MIN, PHOTO_OUTLINE_WIDTH_MAX);
+  return Math.round(clampTo(outline?.width ?? 0, PHOTO_OUTLINE_WIDTH_MIN, PHOTO_OUTLINE_WIDTH_MAX));
 }
 
 /** A glow's Gaussian standard deviation, in layout pixels. */
@@ -437,10 +450,10 @@ function effectGridRect(region: Box, grown: Box, reach: number): Box {
  * from the person's alpha (cutout-effect-raster.ts), which the preview embeds as an `<image>` at the
  * layer's rect and the deck places as it is, so the two show the same picture.
  *
- *   outline  every pixel within the outline's width of the person's silhouette (an exact Euclidean
- *            distance transform), filled with its colour;
- *   glow     the silhouette blurred as feGaussianBlur blurs (sigma half the radius), in its colour;
- *            with an outline too, the silhouette is first grown by the outline's width, so the glow
+ *   outline  the person's alpha grown by a square of the outline's width, as feMorphology grew it
+ *            (today's look, square corners), filled with its colour;
+ *   glow     the alpha blurred as feGaussianBlur blurs (sigma half the radius), in its colour;
+ *            with an outline too, the alpha is first grown by the outline's width, so the glow
  *            lights the outline's outer edge (drawn from the person alone, a 24 px outline covered a
  *            30 px glow entirely: proof render in Core, 2026-09-24);
  *
@@ -453,29 +466,39 @@ function effectGridRect(region: Box, grown: Box, reach: number): Box {
  * A person with a fade has it on the effect too, over the person's rect, so the outline fades out
  * with them instead of standing alone where they have faded.
  *
- * The picture is at the scale the deck bakes the layer at (`photoBakeScale`), so the deck's layer is
- * exactly these pixels and the preview draws them at its own size. There is no SVG filter: librsvg's
- * feMorphology took 23 s for a 24 px outline at 2x (the Canva deck timed out), capped a step at 10
- * device pixels and drew a square's corners; resvg draws it wrongly (ADR-036).
+ * The picture is at the preview's pixels, or for the deck at the scale it bakes the layer at
+ * (`photoBakeScale`), so the deck's layer is exactly those pixels; either way it is what the filter
+ * drew at that scale (see CutoutEffectTarget). There is no SVG filter: librsvg's
+ * feMorphology took 23 s for a 24 px outline at 2x (the Canva deck timed out) and capped a step at
+ * 10 device pixels; resvg draws it wrongly (ADR-036). The same square is now computed in a few
+ * comparisons a pixel.
  *
- * Undefined when the photo has no such effect or none of it falls on the canvas.
+ * Undefined when the photo has no such effect, none of it falls on the canvas, or the person has no
+ * width or height.
  */
 export function cutoutEffectFragment(
   kind: CutoutEffectKind,
   photo: PhotoElement,
   png: Buffer,
   personRect: Box,
-  canvas: { width: number; height: number }
+  canvas: { width: number; height: number },
+  options: {
+    target?: CutoutEffectTarget;
+    /** The outline's shape; square (today's look) unless a proof sheet asks for the round one. */
+    outlineCorners?: OutlineCorners;
+  } = {}
 ): PhotoFragment | undefined {
+  const { target = 'preview', outlineCorners = 'square' } = options;
   const outline = kind === 'outline' ? photo.outline : undefined;
   const glow = kind === 'glow' ? photo.glow : undefined;
   if (!outline && !glow) return undefined;
+  if (!(personRect.width > 0 && personRect.height > 0)) return undefined;
   const region = cutoutEffectRect(kind, photo, personRect, canvas);
   if (!region) return undefined;
   const pixels = pngPixelSize(png);
   const sourceScale = pixels && personRect.width > 0 ? pixels.width / personRect.width : undefined;
   const placed: PhotoFragment = { defs: '', svg: '', rect: region, ...(sourceScale !== undefined ? { sourceScale } : {}) };
-  const scale = photoBakeScale(placed);
+  const scale = target === 'deck' ? photoBakeScale(placed) : 1;
   const reach = effectReach(kind, photo.outline, photo.glow);
   const gridRect = effectGridRect(region, grownPersonRect(personRect, reach), reach);
   const fade = photo.fade ? fadeRamp(photo.fade, personRect) : undefined;
@@ -487,6 +510,7 @@ export function cutoutEffectFragment(
     color: (outline?.color ?? glow?.color) as Hex,
     // A glow lights the outline's outer edge when the photo has both.
     outlineWidth: photo.outline ? outlineWidthPx(photo.outline) : 0,
+    ...(outlineCorners === 'round' ? { outlineCorners } : {}),
     ...(glow ? { glowSigma: glowSigmaPx(glow) } : {}),
     // As the person's fade mask writes the ramp, to a thousandth of a pixel.
     ...(fade ? { fade: { x1: n(fade.x1), y1: n(fade.y1), x2: n(fade.x2), y2: n(fade.y2) } } : {}),
@@ -494,7 +518,7 @@ export function cutoutEffectFragment(
   const svg =
     `<image id="photo-${kind}-${photo.photoIndex}" xlink:href="data:image/png;base64,${raster.toString('base64')}" ` +
     `x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" preserveAspectRatio="none"/>`;
-  return { ...placed, svg, raster };
+  return { ...placed, svg, ...(target === 'deck' ? { raster } : {}) };
 }
 
 /**

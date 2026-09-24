@@ -7,16 +7,24 @@ import { hexToRgb } from './color-science.js';
  * The outline and the glow around a cut-out person, drawn in our code as a picture (ADR-036 section
  * 2.2). They used to be SVG filters: the outline an feMorphology dilation, which librsvg ran in 23 s
  * for a 24 px outline baked at 2x (the Canva deck timed out at 20 s), capped at 10 device pixels a
- * step, and which resvg draws wrongly. Drawn here, the preview and the deck embed the same PNG, and
- * no renderer's filter code is involved.
+ * step, and which resvg draws wrongly. Drawn here, the preview and the deck each embed a PNG computed
+ * at their own pixels, as the filter ran at them, and no renderer's filter code is involved.
  *
- *   outline  every pixel within `width` of the person's silhouette, by an exact Euclidean distance
- *            transform (Felzenszwalb and Huttenlocher, linear time) of the person's alpha, with the
- *            silhouette's edge placed to a fraction of a pixel from the alpha itself, so the band's
- *            outer edge is anti-aliased;
- *   glow     the silhouette (grown by the outline's width when there is one, so the glow lights the
- *            outline's outer edge) blurred as SVG's feGaussianBlur blurs: three box blurs a row and a
- *            column, of the sizes the SVG specification gives for the standard deviation.
+ *   outline  the person's alpha grown by `width`, in one of two shapes:
+ *              square  (the default) what feMorphology drew: each pixel takes the largest alpha
+ *                      within `width` along both axes (a separable running maximum, van Herk and
+ *                      Gil-Werman, a few comparisons a pixel whatever the width). Today's look,
+ *                      soft edges and hair under half alpha included, so the change of renderer is
+ *                      not a change of design (PLAN 3.2: within 1 device px of today's outline);
+ *              round   every pixel within `width` of the silhouette by an exact Euclidean distance
+ *                      transform (Felzenszwalb and Huttenlocher, linear time), the edge placed to
+ *                      a fraction of a pixel, so the band's outer edge is anti-aliased. Corners and
+ *                      diagonals come in to the true width (a square reaches sqrt(2) times it).
+ *                      Nothing selects it yet: it is the owner's to choose from a proof sheet
+ *                      (scripts/compare_cutout_outlines.ts --corners round);
+ *   glow     the alpha (grown by the outline when there is one, so the glow lights the outline's
+ *            outer edge) blurred as SVG's feGaussianBlur blurs: three box blurs a row and a column,
+ *            of the sizes the SVG specification gives for the standard deviation.
  *
  * Either one leaves out the person's opaque core and follows the person's fade, as the filters did.
  * Every step is plain arithmetic on typed arrays in a fixed order, so the same inputs give the same
@@ -34,6 +42,9 @@ const CORE_INTERCEPT = 1 - CORE_SLOPE;
 
 /** A pixel is inside the silhouette when the person covers at least half of it. */
 const INSIDE_ALPHA = 0.5;
+
+/** How an outline grows the person: as feMorphology did (square), or by true distance (round). */
+export type OutlineCorners = 'square' | 'round';
 
 /** The pixel grid an effect is drawn on: its top-left in layout pixels, its size in device pixels. */
 export interface EffectGrid {
@@ -62,8 +73,14 @@ export interface CutoutEffectRasterInput {
   /** The part of the grid the PNG shows, in layout pixels: whole pixels inside the grid. */
   crop: Box;
   color: Hex;
-  /** The outline's width in layout pixels: the band itself, or what the glow is grown by first. */
+  /**
+   * The outline's width in layout pixels: the band itself, or what the glow is grown by first. A
+   * square outline grows by whole device pixels, as feMorphology did: the width times the scale,
+   * rounded.
+   */
   outlineWidth: number;
+  /** The outline's shape; square when absent. */
+  outlineCorners?: OutlineCorners;
   /** The glow's Gaussian standard deviation in layout pixels; absent for an outline. */
   glowSigma?: number;
   fade?: FadeRamp;
@@ -89,14 +106,26 @@ interface Taps {
  * Resampling weights along one axis, from the person's `srcCount` pixels drawn over
  * [rectStart, rectStart + rectLength) to `dstCount` grid pixels starting at `origin`.
  *
- * A tent filter as wide as a source pixel when enlarging (bilinear, as the renderer draws an
- * enlarged picture) and as wide as a device pixel when reducing, so every source pixel counts. The
- * picture is transparent past its edges, so weights that fall outside it still count toward the
- * total and a pixel half over the picture's edge is half covered.
+ * The weights cairo gives a picture librsvg draws (CAIRO_FILTER_GOOD, pixman's separable
+ * convolution): a source pixel, as a box one pixel wide, seen through a box `width` source pixels wide
+ * centred on the device pixel; each weight is how much the two overlap. `width` is the source pixels
+ * per device pixel when reducing by more than 3:4, held to 16 (cairo's cap), and otherwise one, which
+ * is bilinear. Matching it matters at the person's edge: a device pixel the picture only just
+ * covers must come out opaque exactly when the renderer draws it opaque, or the outline shows where
+ * the renderer draws the person (measured: a tent kernel put a ring one device pixel inside the
+ * person, at 23% alpha, in the preview of a picture with twice its pixels). The picture is
+ * transparent past its edges, so weights that fall outside it still count toward the total and a
+ * pixel half over the picture's edge is half covered.
  */
 function resampleTaps(dstCount: number, origin: number, scale: number, rectStart: number, rectLength: number, srcCount: number): Taps {
+  // A picture drawn less than a device pixel long covers next to nothing, and where it is drawn in
+  // no length at all a source position is not a number: none are read.
+  if (!(rectLength * scale >= 1 && srcCount > 0)) {
+    return { start: new Int32Array(dstCount), count: new Int32Array(dstCount), index: new Int32Array(0), weight: new Float64Array(0) };
+  }
   const sourcePerDevice = srcCount / (rectLength * scale);
-  const support = Math.max(1, sourcePerDevice);
+  const width = sourcePerDevice < 4 / 3 ? 1 : Math.min(16, sourcePerDevice);
+  const half = width / 2;
   const start = new Int32Array(dstCount);
   const count = new Int32Array(dstCount);
   const index: number[] = [];
@@ -104,12 +133,13 @@ function resampleTaps(dstCount: number, origin: number, scale: number, rectStart
   for (let i = 0; i < dstCount; i++) {
     const centre = origin + (i + 0.5) / scale;
     const u = ((centre - rectStart) * srcCount) / rectLength;
-    const first = Math.ceil(u - 0.5 - support);
-    const last = Math.floor(u - 0.5 + support);
+    const first = Math.floor(u - half - 0.5);
+    const last = Math.ceil(u + half - 0.5);
     let total = 0;
     start[i] = index.length;
     for (let k = first; k <= last; k++) {
-      const w = 1 - Math.abs(k + 0.5 - u) / support;
+      // Source pixel k spans [k, k + 1); the device pixel's box spans [u - half, u + half).
+      const w = Math.min(k + 1, u + half) - Math.max(k, u - half);
       if (w <= 0) continue;
       total += w;
       if (k >= 0 && k < srcCount) {
@@ -153,6 +183,41 @@ export function personAlphaOnGrid(png: Buffer, personRect: Box, grid: EffectGrid
       for (let x = 0; x < grid.width; x++) out[dst + x] += w * across[src + x];
     }
   }
+  return out;
+}
+
+/**
+ * The running maximum of `radius` either side along each line of a grid, transparent past its ends
+ * (van Herk and Gil-Werman): the line, padded with `radius` zeros at each end, is cut into blocks
+ * of 2 * radius + 1; within each block a maximum from the block's start (`ahead`) and one from its
+ * end (`behind`). Any window of that length spans at most two blocks, so its maximum is
+ * max(behind[first], ahead[last]): three comparisons a pixel, whatever the radius.
+ */
+function runningMax(src: Float32Array, dst: Float32Array, lines: number, length: number, lineStep: number, step: number, radius: number): void {
+  const size = 2 * radius + 1;
+  const padded = length + 2 * radius;
+  const ahead = new Float32Array(padded);
+  const behind = new Float32Array(padded);
+  const value = (line: number, j: number) => (j >= radius && j < radius + length ? src[line * lineStep + (j - radius) * step] : 0);
+  for (let line = 0; line < lines; line++) {
+    for (let j = 0; j < padded; j++) ahead[j] = j % size === 0 ? value(line, j) : Math.max(ahead[j - 1], value(line, j));
+    for (let j = padded - 1; j >= 0; j--) behind[j] = j % size === size - 1 || j === padded - 1 ? value(line, j) : Math.max(behind[j + 1], value(line, j));
+    const base = line * lineStep;
+    for (let p = 0; p < length; p++) dst[base + p * step] = Math.max(behind[p], ahead[p + 2 * radius]);
+  }
+}
+
+/**
+ * The alpha grown by a square of `radius` whole device pixels either side: each pixel's value the
+ * largest within the square, as feMorphology's dilate draws it. A row pass then a column pass,
+ * which is the same square (a maximum over a rectangle is a maximum of maxima).
+ */
+export function squareDilation(alpha: Float32Array, width: number, height: number, radius: number): Float32Array {
+  if (radius <= 0) return Float32Array.from(alpha);
+  const rows = new Float32Array(alpha.length);
+  runningMax(alpha, rows, height, width, width, 1, radius);
+  const out = new Float32Array(alpha.length);
+  runningMax(rows, out, width, height, 1, width, radius);
   return out;
 }
 
@@ -333,7 +398,12 @@ export function cutoutEffectRaster(input: CutoutEffectRasterInput): Buffer {
   const scale = grid.scale;
   const alpha = personAlphaOnGrid(input.png, input.personRect, grid);
   const outlinePx = input.outlineWidth * scale;
-  let coverage = input.glowSigma === undefined || outlinePx > 0 ? grownSilhouette(alpha, grid.width, grid.height, outlinePx) : alpha;
+  const grow = input.glowSigma === undefined || outlinePx > 0;
+  let coverage = !grow
+    ? alpha
+    : input.outlineCorners === 'round'
+      ? grownSilhouette(alpha, grid.width, grid.height, outlinePx)
+      : squareDilation(alpha, grid.width, grid.height, Math.round(outlinePx));
   if (input.glowSigma !== undefined) coverage = gaussianBlur(coverage, grid.width, grid.height, input.glowSigma * scale);
 
   const left = Math.round((crop.x - grid.x) * scale);
@@ -372,11 +442,13 @@ export function cutoutEffectRaster(input: CutoutEffectRasterInput): Buffer {
 }
 
 /**
- * The preview and the deck draw the same effect from the same inputs, usually moments apart; the
- * last few are kept so the second is not computed again. The key is a hash of every input, so a
- * hit is the same bytes a computation would give.
+ * A refinement or a judge renders the same layout again, and a deck follows its preview; the last
+ * few dozen effects are kept so none is computed twice. Enough for a group poster: each person with an outline and a glow is two, and a
+ * limit below a layout's count would be cycled through in order and never hit. Each is a PNG of a
+ * few hundred kilobytes at most. The key is a hash of every input, so a hit is the same bytes a
+ * computation would give.
  */
-const RASTER_CACHE_LIMIT = 4;
+const RASTER_CACHE_LIMIT = 32;
 const rasterCache = new Map<string, Buffer>();
 
 export function cutoutEffectRasterCached(input: CutoutEffectRasterInput): Buffer {
