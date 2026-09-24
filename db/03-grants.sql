@@ -46,6 +46,10 @@ DO $$ BEGIN
   IF to_regclass('hawa.inbox_event_duplicates') IS NOT NULL THEN
     REVOKE ALL ON hawa.inbox_event_duplicates FROM hawa_app;
   END IF;
+  -- Reviewers' comments (migration 021) are never rewritten or erased by the application.
+  IF to_regclass('hawa.review_comments') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE ON hawa.review_comments FROM hawa_app;
+  END IF;
 END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;

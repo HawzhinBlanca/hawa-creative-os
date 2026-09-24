@@ -13,10 +13,39 @@ import { askLedger } from '../services/ask-ledger.js';
 /** A hawa.design_revisions row. */
 type RevisionRow = NonNullable<Awaited<ReturnType<RevisionRepository['findRevisionById']>>>;
 
+/** A hawa.review_comments row (migration 021), as the comment routes read it. */
+interface CommentRow {
+  id: string;
+  task_id: string;
+  design_revision_id: string | null;
+  node_id: string | null;
+  author_role: string;
+  author_user_id: string;
+  author_display_name: string;
+  body: string;
+  category: string;
+  priority: string;
+  created_at: Date | string;
+}
+const COMMENT_COLUMNS = 'id, task_id, design_revision_id, node_id, author_role, author_user_id, author_display_name, body, category, priority, created_at';
+
+/** A comment in the shape the comment routes have always answered with. */
+const commentFromRow = (row: CommentRow) => ({
+  commentId: row.id,
+  taskId: row.task_id,
+  revisionId: row.design_revision_id,
+  nodeId: row.node_id,
+  author: { userId: row.author_user_id, role: row.author_role, displayName: row.author_display_name },
+  comment: row.body,
+  category: row.category,
+  priority: row.priority,
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+});
+
 /**
  * Design revisions and what reviewers say about them (architecture programme 1.3, group G3, moved
  * from app.ts): revisions and their QA, reviewer comments, the structural diff, operator feedback
- * and the requester's asks. Revisions and feedback are read from and written to Postgres.
+ * and the requester's asks, all read from and written to Postgres.
  * GET /tasks/:taskId/revisions/diff is registered before GET /tasks/:taskId/revisions/:revisionId,
  * which would otherwise take "diff" for a revision id.
  */
@@ -29,7 +58,6 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     revisionRepo,
     tasks,
     briefs,
-    taskComments,
     qaEngine,
     readCurrentTask,
     broadcastEvent: broadcast,
@@ -41,7 +69,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const defaultClientId = DEFAULT_CLIENT_ID;
 
-  // Revisions and feedback are only held in Postgres. They used to live in maps in this
+  // Revisions, comments and feedback are only held in Postgres. They used to live in maps in this
   // process as well, which were read first: a restart lost them, a second Core process never saw
   // them, and a revision Postgres refused was still answered (architecture programme 1.3, group G3).
   // Without a database these routes answer 503 rather than keep anything in memory.
@@ -383,11 +411,20 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
   });
 
   // Register Task Node Reviewer Comment (Gate F: Reviewer comments with role policy)
+  // A comment is a row of hawa.review_comments (migration 021): append-only, scoped to the task by
+  // row-level security. It used to be kept only in this process's memory, so a restart lost every
+  // comment and a second process never saw one.
   registerRoute('post', '/tasks/:taskId/comments', async (c: any) => {
     const taskId = c.req.param('taskId');
     // Postgres's copy, or 503 when it cannot be read: the comment names the task's current revision.
     const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
+    if (!db) return noDatabase(c, 'Review comments');
+    // A task Postgres does not hold (only this process's copy has an id that is not a uuid) has no
+    // row for the comment to belong to.
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.userId) return problem(c, 401, 'Authentication Required');
 
     const body = await c.req.json().catch(() => ({}));
     const allowedRoles = ['art_director', 'creative_director', 'client_reviewer', 'operator'];
@@ -397,35 +434,60 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       return problem(c, 403, 'Forbidden', `Role ${actorRole} is not permitted to submit review comments`);
     }
 
-    const commentId = crypto.randomUUID();
-    const commentRecord = {
-      commentId,
-      taskId,
-      revisionId: body.revisionId || task.latestRevisionId,
-      nodeId: body.nodeId || null,
-      author: {
-        userId: body.author?.userId || 'reviewer_1',
-        role: actorRole,
-        displayName: body.author?.displayName || 'Reviewer',
-      },
-      comment: body.comment || '',
-      category: body.category || 'copy_change',
-      priority: body.priority || 'medium',
-      createdAt: new Date().toISOString(),
+    // The body is stored as it came, so each field is a bounded string (the table checks the same limits).
+    const field = (value: unknown, fallback: string | null, max: number): string | null | undefined => {
+      if (value === undefined || value === null || value === '') return fallback;
+      return typeof value === 'string' && value.length <= max ? value : undefined;
     };
+    const text = field(body.comment, '', 10000);
+    const nodeId = field(body.nodeId, null, 200);
+    const category = field(body.category, 'copy_change', 100);
+    const priority = field(body.priority, 'medium', 50);
+    const displayName = field(body.author?.displayName, auth.displayName || 'Reviewer', 200);
+    if (text === undefined || text === null || nodeId === undefined || !category || !priority || !displayName) {
+      return problem(c, 400, 'Invalid Comment', 'comment, nodeId, category, priority and author.displayName must be strings of a reasonable length');
+    }
 
-    if (!taskComments.has(taskId)) taskComments.set(taskId, []);
-    taskComments.get(taskId)!.push(commentRecord);
+    // The revision the comment is on: the one the body names, which must be this task's, or else the
+    // task's current revision when Postgres holds it.
+    const named = body.revisionId ?? task.latestRevisionId ?? null;
+    let revisionId: string | null = null;
+    if (named) {
+      const found = isValidUuid(named) ? (await readRevisions(auth, [named])).get(named) : undefined;
+      if (found && found.taskId === taskId) revisionId = named;
+      else if (body.revisionId !== undefined) return problem(c, 404, 'Revision Not Found', `Revision ${named} is not a revision of task ${taskId}`);
+    }
+
+    const scope = scopeOf(auth);
+    let row: CommentRow;
+    try {
+      row = await withRlsContext(db, scope, async (trx) => (await sql<CommentRow>`
+        INSERT INTO hawa.review_comments
+          (tenant_id, task_id, design_revision_id, node_id, author_role, author_user_id, author_display_name, body, category, priority)
+        VALUES (${scope.tenantId}::uuid, ${taskId}::uuid, ${revisionId}::uuid, ${nodeId}, ${actorRole}, ${auth.userId}, ${displayName},
+          ${text}, ${category}, ${priority})
+        RETURNING ${sql.raw(COMMENT_COLUMNS)}`.execute(trx)).rows[0]);
+    } catch (err) {
+      log.error('[core:comments:create] DB error:', err);
+      return problem(c, 503, 'Durable Storage Unavailable', 'The comment could not be recorded; try again');
+    }
+    const commentRecord = commentFromRow(row);
 
     broadcast('task:comment_added', { taskId, comment: commentRecord });
 
     return c.json({ ok: true, comment: commentRecord }, 201);
   });
 
-  registerRoute('get', '/tasks/:taskId/comments', (c: any) => {
+  registerRoute('get', '/tasks/:taskId/comments', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const comments = taskComments.get(taskId) || [];
-    return c.json({ ok: true, taskId, comments });
+    if (!db) return noDatabase(c, 'Review comments');
+    if (!isValidUuid(taskId)) return c.json({ ok: true, taskId, comments: [] });
+    const scope = scopeOf(verifyRequestAuth(c));
+    const rows = await withRlsContext(db, scope, async (trx) => (await sql<CommentRow>`
+      SELECT ${sql.raw(COMMENT_COLUMNS)} FROM hawa.review_comments
+      WHERE tenant_id = ${scope.tenantId}::uuid AND task_id = ${taskId}::uuid
+      ORDER BY created_at, id`.execute(trx)).rows);
+    return c.json({ ok: true, taskId, comments: rows.map(commentFromRow) });
   });
 
   // Semantic Document Revision Diff (Gate F: Structural Diffs)

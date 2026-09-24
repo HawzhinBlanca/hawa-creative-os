@@ -186,3 +186,39 @@ describe('what a delivery left is read from publications', () => {
     expect((await app.request(`/tasks/${taskId}/publication-state`, { headers: artDirector })).status).toBe(503);
   });
 });
+
+describe('reviewer comments are recorded in review_comments', () => {
+  it('another process lists a comment, attributed to the signed-in reviewer', async () => {
+    const { a, b } = twoProcesses();
+    const taskId = await newTask(a, 'Comments');
+    const revisionId = await newRevision(a, taskId, 'Commented headline');
+
+    const posted = await a.request(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ revisionId, nodeId: 'headline', comment: 'Larger, please', author: { role: 'art_director', userId: 'someone-else', displayName: 'AD' } }),
+    });
+    expect(posted.status).toBe(201);
+    const { comment } = await posted.json();
+    expect(comment).toMatchObject({ taskId, revisionId, nodeId: 'headline', comment: 'Larger, please', author: { role: 'art_director', displayName: 'AD' } });
+    // The author is whoever is signed in; the body used to name any user it liked.
+    expect(comment.author.userId).not.toBe('someone-else');
+
+    const listed = await (await b.request(`/tasks/${taskId}/comments`)).json();
+    expect(listed.comments).toEqual([comment]);
+  });
+
+  it('refuses a comment on another task\'s revision', async () => {
+    const { a } = twoProcesses();
+    const first = await newTask(a, 'First');
+    const revisionOfFirst = await newRevision(a, first, 'First headline');
+    const second = await newTask(a, 'Second');
+    const res = await a.request(`/tasks/${second}/comments`, {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ revisionId: revisionOfFirst, comment: 'Wrong task', author: { role: 'art_director' } }),
+    });
+    expect(res.status).toBe(404);
+    expect((await (await a.request(`/tasks/${second}/comments`)).json()).comments).toEqual([]);
+  });
+});

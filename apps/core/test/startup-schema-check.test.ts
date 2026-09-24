@@ -16,7 +16,10 @@ import { checkSchemaUpgrades, describeMissingUpgrades, expectedUpgrades } from '
 const appUrl = process.env.TEST_DATABASE_URL;
 const ownerUrl = process.env.TEST_DATABASE_OWNER_URL;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const LAST = '020_inbox_event_dedupe.sql';
+const LAST = '021_review_comments.sql';
+// The upgrade that grants the app role its read of hawa.schema_upgrades (schema-check.ts): when the
+// read is denied, it and every later upgrade count as missing.
+const GRANTING = '020_inbox_event_dedupe.sql';
 
 /** Rolls back whatever `fn` did as the schema owner. */
 async function rolledBack<T>(owner: Kysely<Database>, fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> {
@@ -78,7 +81,7 @@ describe.skipIf(!appUrl || !ownerUrl)('Core checks the versioned upgrades before
       return checkSchemaUpgrades(trx, expectedUpgrades());
     });
     expect(check).toMatchObject({ ok: false, missing: ['019_blob_store.sql', LAST] });
-    expect(describeMissingUpgrades(check as Extract<typeof check, { ok: false }>)).toMatch(/missing versioned upgrades 019_blob_store\.sql, 020_inbox_event_dedupe\.sql .*upgrade\.ts/);
+    expect(describeMissingUpgrades(check as Extract<typeof check, { ok: false }>)).toMatch(/missing versioned upgrades 019_blob_store\.sql, 021_review_comments\.sql .*upgrade\.ts/);
   });
 
   it('says no upgrade has run when their table is not there, and that 020 has not run when it cannot be read', async () => {
@@ -92,7 +95,7 @@ describe.skipIf(!appUrl || !ownerUrl)('Core checks the versioned upgrades before
       await sql`SET LOCAL ROLE hawa_app`.execute(trx);
       return checkSchemaUpgrades(trx, expectedUpgrades());
     });
-    expect(denied).toMatchObject({ ok: false, missing: [LAST], reason: expect.stringContaining(`${LAST} has not run`) });
+    expect(denied).toMatchObject({ ok: false, missing: [GRANTING, LAST], reason: expect.stringContaining(`${GRANTING} has not run`) });
   });
 
   it('does not call an unreachable database a missing upgrade', async () => {
