@@ -7,6 +7,7 @@
  *     --phase reference_photos|plan_sources|candidates|cutouts|comparisons|all \
  *     --mode copy|verify|strip [--batch 25] [--limit N] [--dry-run] [--log <file.ndjson>] [--measure]
  *     [--write-receipt [--receipt <file>]]   (verify on a hawa_restore_* copy: the rehearsal receipt)
+ *     [--production [--receipt <file>] [--accept-left-as-is N]]   (copy on production, after a rehearsal)
  *
  * Modes:
  *   copy    puts each row's bytes to the store and links them: a hash column the row lacks
@@ -21,8 +22,9 @@
  *           transactional, so a crash leaves the trigger enabled. Reference photos in JSON are not
  *           stripped yet: readers still read the base64 until the Telegram intake moves (refused).
  *
- * Progress is the data itself: copy selects rows whose bytes are present and not yet in the store,
- * strip rows whose bytes are present and whose file is, in keyset order on the row id, and put() is
+ * Progress is the data itself: copy selects rows whose bytes are present and not yet in the store
+ * (reference photos: every photo, skipped when its hash is already linked to its task), strip rows whose
+ * bytes are present and whose file is, in keyset order on the row id, and put() is
  * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the batch in
  * hand) resumes where it stopped. Undecodable data URIs and hash mismatches are reported and left.
  *
@@ -30,7 +32,8 @@
  * security (every table forces it); the store's marker is present. Production (port 54332 or the
  * database named hawa) is refused unless --production is given with a rehearsal receipt
  * (~/.hawa/logs/blob_backfill_rehearsal.json: a hawa_restore_* database, its migration checksums equal
- * to the target's, zero verify failures), and strip is refused there whatever is given.
+ * to the target's, zero verify failures, and --accept-left-as-is equal to the number of rows it left as
+ * they are), and strip is refused there whatever is given.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,6 +53,12 @@ export interface BackfillProblem {
   table: string;
   id: string;
   problem: string;
+  /**
+   * A row copy leaves as it is on purpose (an undecodable photo, bytes that do not match their hash
+   * or are not the type the column holds). It cannot be fixed by running copy again, so a rehearsal
+   * lists these apart and production copy asks for them to be accepted by count.
+   */
+  leftAsIs?: boolean;
 }
 
 export interface PhaseReport {
@@ -99,6 +108,8 @@ export interface TargetCheck {
   receiptPath?: string;
   /** The target's migration checksums, to compare with the receipt's. */
   migrations?: Record<string, string>;
+  /** --accept-left-as-is N: the number of rows the rehearsal left as they are, read and accepted. */
+  acceptLeftAsIs?: number;
 }
 
 /** Production is the server on port 54332 or the database named hawa, however it is reached. */
@@ -123,7 +134,7 @@ export function assertTargetAllowed(t: TargetCheck): void {
   }
   if (!t.production) throw new Error('Refused: this is production (port 54332 or database hawa); pass --production with a rehearsal receipt.');
   const receiptPath = t.receiptPath ?? path.join(os.homedir(), '.hawa/logs/blob_backfill_rehearsal.json');
-  let receipt: { database?: string; verifyFailures?: number; migrations?: Record<string, string> };
+  let receipt: { database?: string; verifyFailures?: number; leftAsIs?: unknown[]; migrations?: Record<string, string> };
   try {
     receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
   } catch {
@@ -131,6 +142,12 @@ export function assertTargetAllowed(t: TargetCheck): void {
   }
   if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(String(receipt.database ?? ''))) throw new Error('Refused: the rehearsal receipt is not from a hawa_restore_* database.');
   if (receipt.verifyFailures !== 0) throw new Error('Refused: the rehearsal did not verify clean.');
+  // Rows copy leaves as they are never become clean by copying; they are accepted by count, so a new
+  // bad row since the rehearsal (or a different receipt) is refused rather than waved through.
+  const leftAsIs = Array.isArray(receipt.leftAsIs) ? receipt.leftAsIs.length : 0;
+  if (leftAsIs !== (t.acceptLeftAsIs ?? 0)) {
+    throw new Error(`Refused: the rehearsal left ${leftAsIs} row(s) as they are (listed in the receipt); pass --accept-left-as-is ${leftAsIs} once they are read and accepted.`);
+  }
   if (!t.migrations || JSON.stringify(sortKeys(receipt.migrations ?? {})) !== JSON.stringify(sortKeys(t.migrations))) {
     throw new Error("Refused: the rehearsal's migration checksums differ from this database's.");
   }
@@ -255,9 +272,9 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
   for (const phase of o.phases) {
     const report: PhaseReport = { phase, mode: o.mode, scanned: 0, stored: 0, linked: 0, stripped: 0, notCopied: 0, strippable: 0, inlineJson: 0, problems: [], stoppedEarly: false };
     reports.push(report);
-    const problem = (table: string, id: string, what: string) => {
-      report.problems.push({ table, id, problem: what });
-      log({ phase, mode: o.mode, table, id, problem: what });
+    const problem = (table: string, id: string, what: string, leftAsIs = false) => {
+      report.problems.push({ table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
+      log({ phase, mode: o.mode, table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
     };
 
     if (phase === 'reference_photos') {
@@ -265,21 +282,17 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         problem('*', '*', 'refused: reference photos in JSON are stripped only once every reader reads hawa.task_files (after the Telegram intake moves)');
         continue;
       }
+      // Each photo is compared by its hash, not by its task: a task may carry several different photos
+      // (an event, a later dispatch, a planner request), and each must be in hawa.task_files. The JSON is
+      // decoded here rather than in SQL, so an undecodable photo is a reported problem, not a failed query.
       for (const src of JSON_SOURCES) {
         if (o.mode === 'verify') {
           const n = (await sql<{ n: string }>`SELECT count(*) AS n FROM ${sql.raw(`hawa.${src.table}`)} r WHERE ${sql.raw(src.where)} AND r.${sql.raw(src.column)}::text ~ 'data:image/[a-z]+;base64,'`.execute(o.db)).rows[0];
           report.inlineJson += Number(n?.n ?? 0);
-          const unlinked = (await sql<{ n: string }>`SELECT count(*) AS n FROM ${sql.raw(`hawa.${src.table}`)} r
-            WHERE ${sql.raw(src.where)} AND ${sql.raw(src.image)} IS NOT NULL
-              AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.id = r.${sql.raw(src.task)} AND t.tenant_id = r.tenant_id)
-              AND NOT EXISTS (SELECT 1 FROM hawa.task_files f WHERE f.tenant_id = r.tenant_id AND f.task_id = r.${sql.raw(src.task)} AND f.role = 'reference_image')`.execute(o.db)).rows[0];
-          report.notCopied += Number(unlinked?.n ?? 0);
-          continue;
         }
-        // copy: every row with a photo whose task has no reference file yet, in id order.
         let after = '00000000-0000-0000-0000-000000000000';
         for (;;) {
-          if (stop()) {
+          if (o.mode === 'copy' && stop()) {
             report.stoppedEarly = true;
             break;
           }
@@ -289,7 +302,6 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               FROM ${sql.raw(`hawa.${src.table}`)} r
               WHERE ${sql.raw(src.where)} AND ${sql.raw(src.image)} IS NOT NULL AND r.id > ${after}::uuid
                 AND EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.id = r.${sql.raw(src.task)} AND t.tenant_id = r.tenant_id)
-                AND NOT EXISTS (SELECT 1 FROM hawa.task_files f WHERE f.tenant_id = r.tenant_id AND f.task_id = r.${sql.raw(src.task)} AND f.role = 'reference_image')
               ORDER BY r.id LIMIT ${batch}`.execute(o.db)
           ).rows;
           if (!rows.length) break;
@@ -298,7 +310,15 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             report.scanned++;
             const decoded = decodeImageDataUri(row.image);
             if ('problem' in decoded) {
-              problem(src.table, row.id, `undecodable reference photo: ${decoded.problem}`);
+              problem(src.table, row.id, `undecodable reference photo: ${decoded.problem}; left as it is`, true);
+              continue;
+            }
+            const photoSha = sha256(decoded.bytes);
+            const linked = await sql`SELECT 1 FROM hawa.task_files
+              WHERE tenant_id = ${row.tenant_id}::uuid AND task_id = ${row.task_id}::uuid AND role = 'reference_image' AND sha256 = ${photoSha}`.execute(o.db);
+            if (linked.rows.length) continue;
+            if (o.mode === 'verify') {
+              report.notCopied++;
               continue;
             }
             if (o.dryRun) continue;
@@ -320,11 +340,9 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
       const bytesCol = sql.raw(src.bytes);
       const shaCol = sql.raw(src.sha);
       if (o.mode === 'verify') {
-        const counts = (await sql<{ not_copied: string; strippable: string }>`
-          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND (r.${shaCol} IS NULL OR NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}))) AS not_copied,
-                 count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
+        const counts = (await sql<{ strippable: string }>`
+          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
           FROM ${table} r`.execute(o.db)).rows[0];
-        report.notCopied += Number(counts?.not_copied ?? 0);
         report.strippable += Number(counts?.strippable ?? 0);
         // Every stored hash a row names must have its file, with those bytes.
         const named = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
@@ -337,16 +355,17 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             problem(src.table, n.id, `${src.sha} ${n.sha.slice(0, 12)}…: ${(err as Error).message}`);
           }
         }
-        continue;
+        // The rows not copied yet are then read as copy reads them (below), so those copy would leave
+        // as they are are told apart from those it would copy.
       }
 
       let after = '00000000-0000-0000-0000-000000000000';
       for (;;) {
-        if (stop()) {
+        if (o.mode !== 'verify' && stop()) {
           report.stoppedEarly = true;
           break;
         }
-        if (o.mode === 'copy') {
+        if (o.mode === 'copy' || o.mode === 'verify') {
           const rows = (await sql<{ id: string; bytes: Buffer; sha: string | null }>`
             SELECT r.id::text AS id, r.${bytesCol} AS bytes, r.${shaCol} AS sha FROM ${table} r
             WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
@@ -359,20 +378,28 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             const bytes = Buffer.from(row.bytes);
             const actual = sha256(bytes);
             if (row.sha && row.sha !== actual) {
-              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`);
+              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`, true);
               continue;
             }
             const mediaType = sniffBlobMediaType(bytes);
             if (!mediaType || (src.expected === 'image' ? !mediaType.startsWith('image/') : mediaType !== src.expected)) {
-              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`);
+              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`, true);
+              continue;
+            }
+            if (o.mode === 'verify') {
+              report.notCopied++;
               continue;
             }
             if (o.dryRun) continue;
             await o.store.put(bytes, mediaType);
             report.stored++;
             if (!row.sha) {
-              await sql`UPDATE ${table} SET ${shaCol} = ${actual} WHERE id = ${row.id}::uuid AND ${shaCol} IS NULL`.execute(o.db);
-              report.linked++;
+              // Core may have replaced the bytes since the select (copy runs while Core runs): link only
+              // bytes that still hash to what was stored, or the row would name the old picture.
+              const linked = await sql`UPDATE ${table} SET ${shaCol} = ${actual}
+                WHERE id = ${row.id}::uuid AND ${shaCol} IS NULL AND encode(sha256(${bytesCol}), 'hex') = ${actual}`.execute(o.db);
+              if (Number(linked.numAffectedRows ?? 0) > 0) report.linked++;
+              else log({ phase, mode: o.mode, table: src.table, column: src.bytes, id: row.id, note: 'bytes changed since the select; linked on the next run' });
             }
             budget--;
             log({ phase, mode: o.mode, table: src.table, column: src.bytes, id: row.id, sha256: actual });
@@ -418,12 +445,15 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
  * The receipt a production copy asks for (assertTargetAllowed), from a verify run on a restored copy:
  * written by `--mode verify --write-receipt` against a hawa_restore_* database. Its verifyFailures
  * counts every problem and every row not yet copied, so only a clean rehearsal lets production run.
+ * Rows copy leaves as they are on purpose are listed apart (leftAsIs): running copy again cannot fix
+ * them, so they would otherwise block production for good; they are accepted by count instead.
  */
 export function rehearsalReceipt(database: string, migrations: Record<string, string>, reports: PhaseReport[]) {
   if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(database)) throw new Error(`A rehearsal receipt comes from a hawa_restore_* database, not ${database}`);
   if (reports.some((r) => r.mode !== 'verify')) throw new Error('A rehearsal receipt is written by a verify run');
-  const verifyFailures = reports.reduce((n, r) => n + r.problems.length + r.notCopied, 0);
-  return { database, migrations, verifyFailures, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
+  const verifyFailures = reports.reduce((n, r) => n + r.problems.filter((p) => !p.leftAsIs).length + r.notCopied, 0);
+  const leftAsIs = reports.flatMap((r) => r.problems.filter((p) => p.leftAsIs).map(({ table, id, problem }) => ({ table, id, problem })));
+  return { database, migrations, verifyFailures, leftAsIs, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
 }
 
 /** Database and table sizes, for the evidence (FILESTORE_DESIGN.md section 5, --measure). */
@@ -467,7 +497,16 @@ async function main(args: string[]): Promise<number> {
   });
   try {
     const database = (await sql<{ d: string }>`SELECT current_database() AS d`.execute(db)).rows[0]?.d;
-    assertTargetAllowed({ databaseUrl, database, mode, production, receiptPath: option(args, '--receipt'), migrations: await migrationChecksums(db).catch(() => ({})) });
+    const accept = option(args, '--accept-left-as-is');
+    assertTargetAllowed({
+      databaseUrl,
+      database,
+      mode,
+      production,
+      receiptPath: option(args, '--receipt'),
+      migrations: await migrationChecksums(db).catch(() => ({})),
+      ...(accept !== undefined ? { acceptLeftAsIs: Number(accept) } : {}),
+    });
     const store = new BlobStore({ root: path.resolve(root), db });
     await assertPreconditions(db, store);
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');

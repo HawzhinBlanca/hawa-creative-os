@@ -52,8 +52,10 @@ export async function readPreferringStore(
 ): Promise<Buffer | null> {
   if (store && sha256) {
     try {
-      return await store.read(sha256);
+      // Verified: a same-size corrupted file (a plan PPTX sent on to Canva) must not be used.
+      return await store.read(sha256, { verify: true });
     } catch (err) {
+      if (err instanceof BlobCorruptError) log.warn(`[blobs] ${err.message}; the row's bytes are used`);
       // A store that cannot be read at all (a missed mount, no marker) must not take down a reader
       // whose row still has the bytes; it is logged, and only a row without bytes fails with it.
       if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) {
@@ -63,6 +65,17 @@ export async function readPreferringStore(
     }
   }
   return bytes ? Buffer.from(bytes) : null;
+}
+
+/**
+ * True when a stored file is gone or damaged (not when the store cannot be read at all), logged: a
+ * route serving it in stream mode then answers with the row's bytes, still there in release A,
+ * rather than a 500. In accel mode nginx answers such a file itself, with 404.
+ */
+export function storedFileLost(err: unknown, what: string): boolean {
+  if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) return false;
+  log.warn(`[blobs] ${what}: ${err.message}; the row's bytes are used`);
+  return true;
 }
 
 export function blobStoreFor(db: Kysely<Database> | null | undefined, injected?: BlobStore | null): BlobStore | null {

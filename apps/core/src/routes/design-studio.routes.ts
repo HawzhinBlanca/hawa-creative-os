@@ -8,7 +8,7 @@ import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-s
 import { DesignStudioRepository, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
 import { globalFeedbackMiner } from '@hawa/creative';
-import { blobStoreFor } from '../services/blob-store-context.js';
+import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
 
 /**
@@ -231,7 +231,7 @@ export function registerDesignStudioRoutes(
         wanted = file[1];
       }
 
-      const source = await r.getCandidateImageSource(candidateId, s.tenantId, kind);
+      let source = await r.getCandidateImageSource(candidateId, s.tenantId, kind);
       if (!source || source.runId !== runId || source.taskId !== taskId) {
         return ctx.problem(c, 404, 'Candidate Not Found', 'Candidate not found');
       }
@@ -244,10 +244,15 @@ export function registerDesignStudioRoutes(
       // Response: the picture's own caching is set there too, or it would be overwritten.
       c.header('Cache-Control', cacheControl);
       if (source.ref && blobStore && source.ref.mediaType.startsWith('image/')) {
-        return blobResponse(c, blobStore, source.ref, { cacheControl });
+        try {
+          return await blobResponse(c, blobStore, source.ref, { cacheControl });
+        } catch (err) {
+          if (!storedFileLost(err, `candidate ${candidateId} ${kind}`)) throw err;
+          source = (await r.getCandidateImageSource(candidateId, s.tenantId, kind, undefined, { withBytes: true })) ?? source;
+        }
       }
-      // A row from before the store: its bytes, served as the old route served them. At the pinned
-      // address only when they are the bytes the hash names.
+      // A row from before the store, or whose file is lost: its bytes, served as the old route served
+      // them. At the pinned address only when they are the bytes the hash names.
       const buffer = source.bytes;
       if (!buffer || (wanted && createHash('sha256').update(buffer).digest('hex') !== wanted)) {
         return ctx.problem(c, 404, 'Image Not Available', `No ${kind} image currently rendered for this candidate`);

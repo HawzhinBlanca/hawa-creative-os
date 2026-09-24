@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
+import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
 import { parseBlobRef, sniffBlobMediaType, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
@@ -101,6 +102,17 @@ export interface RecordFeedbackParams {
 
 /** A candidate's three pictures, each a bytea column (until migration 021) and a hash naming its file. */
 export type CandidateImageKind = 'preview' | 'composite' | 'art';
+/**
+ * The hash a picture column must carry for these bytes. The preview and art columns are checked
+ * against their bytes (migration 013), so when a put failed and the caller gave no hash, the row still
+ * names the new picture, never the old one: readers then miss in the store and use the bytes.
+ */
+function pictureSha(bytes: Buffer | null | undefined, stored: string | undefined, given: string | null | undefined): string | null {
+  if (stored) return stored;
+  if (given) return given;
+  return bytes && bytes.length ? createHash('sha256').update(bytes).digest('hex') : null;
+}
+
 const CANDIDATE_IMAGE_COLUMNS = {
   preview: { bytes: 'preview_png', sha: 'preview_sha256' },
   composite: { bytes: 'composite_png', sha: 'composite_sha256' },
@@ -153,8 +165,10 @@ export class DesignStudioRepository {
     const bytes = row[columns.bytes];
     if (this.blobStore && sha) {
       try {
-        return await this.blobStore.read(sha);
+        // Verified: a same-size corrupted file must not be shown or judged as the candidate.
+        return await this.blobStore.read(sha, { verify: true });
       } catch (err) {
+        if (err instanceof BlobCorruptError) console.warn(`[design-studio] ${err.message}; the row's ${kind} bytes are used`);
         // A store that cannot be read at all (a missed mount) must not stop a run whose rows still
         // have their bytes; only a row without them fails with it.
         if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) {
@@ -308,11 +322,11 @@ export class DesignStudioRepository {
           metrics: params.metrics ? JSON.stringify(params.metrics) : null,
           status: params.status || 'draft',
           preview_png: params.previewPng || null,
-          preview_sha256: stored.preview ?? (params.previewSha256 || null),
+          preview_sha256: pictureSha(params.previewPng, stored.preview, params.previewSha256),
           composite_png: params.compositePng || null,
           composite_sha256: stored.composite ?? null,
           art_png: params.artPng || null,
-          art_sha256: stored.art ?? (params.artSha256 || null),
+          art_sha256: pictureSha(params.artPng, stored.art, params.artSha256),
           art_provenance: params.artProvenance ? JSON.stringify(params.artProvenance) : null,
         })
         .returningAll()
@@ -351,14 +365,17 @@ export class DesignStudioRepository {
     id: string,
     tenantId: string,
     kind: CandidateImageKind,
-    trx?: Kysely<Database>
+    trx?: Kysely<Database>,
+    /** withBytes: the row's bytes even when the store has the file (a route whose file was lost). */
+    opts: { withBytes?: boolean } = {}
   ): Promise<{ runId: string; taskId: string; sha256: string | null; ref: BlobRef | null; bytes: Buffer | null } | undefined> {
     const columns = CANDIDATE_IMAGE_COLUMNS[kind];
+    const withBytes = opts.withBytes === true;
     return this.withClient(trx, tenantId, async (client) => {
       const row = (
         await sql<{ run_id: string; task_id: string; sha256: string | null; media_type: string | null; size: string | null; bytes: Buffer | null }>`
           SELECT c.run_id, r.task_id, c.${sql.ref(columns.sha)} AS sha256, b.media_type, b.size,
-                 CASE WHEN b.sha256 IS NULL THEN c.${sql.ref(columns.bytes)} END AS bytes
+                 CASE WHEN b.sha256 IS NULL OR ${withBytes} THEN c.${sql.ref(columns.bytes)} END AS bytes
           FROM hawa.design_studio_candidates c
           JOIN hawa.design_studio_runs r ON r.id = c.run_id AND r.tenant_id = c.tenant_id
           LEFT JOIN hawa.blobs b ON b.sha256 = c.${sql.ref(columns.sha)}
@@ -422,17 +439,20 @@ export class DesignStudioRepository {
       if (updates.layouts !== undefined) {
         setClause.layouts = updates.layouts.map((l) => JSON.stringify(l));
       }
-      if (updates.previewPng !== undefined) setClause.preview_png = updates.previewPng;
-      if (updates.previewSha256 !== undefined) setClause.preview_sha256 = updates.previewSha256;
-      if (stored.preview) setClause.preview_sha256 = stored.preview;
+      if (updates.previewPng !== undefined) {
+        setClause.preview_png = updates.previewPng;
+        setClause.preview_sha256 = pictureSha(updates.previewPng, stored.preview, updates.previewSha256);
+      } else if (updates.previewSha256 !== undefined) setClause.preview_sha256 = updates.previewSha256;
       if (updates.compositePng !== undefined) {
         setClause.composite_png = updates.compositePng;
         // A new composite replaces the old one's file too; none leaves none.
         setClause.composite_sha256 = stored.composite ?? null;
       }
-      if (updates.artPng !== undefined) setClause.art_png = updates.artPng;
-      if (updates.artSha256 !== undefined) setClause.art_sha256 = updates.artSha256;
-      if (stored.art) setClause.art_sha256 = stored.art;
+      if (updates.artPng !== undefined) {
+        // New art (or none) replaces the old art's hash too, even when its put failed.
+        setClause.art_png = updates.artPng;
+        setClause.art_sha256 = pictureSha(updates.artPng, stored.art, updates.artSha256);
+      } else if (updates.artSha256 !== undefined) setClause.art_sha256 = updates.artSha256;
       if (updates.artProvenance !== undefined) setClause.art_provenance = updates.artProvenance ? JSON.stringify(updates.artProvenance) : null;
 
       const [row] = await client

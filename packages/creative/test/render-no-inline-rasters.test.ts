@@ -220,6 +220,22 @@ describe('ADR-035: the renderer reads pictures as files beside the SVG', () => {
     expect(seen.some((s) => s.siblings.some((n) => n.startsWith('cutout-')))).toBe(true);
   }, 120_000);
 
+  it('the guard mode is an explicit setting: without it a server logs and renders', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><image href="${uri(art, 'image/png')}"/></svg>`;
+    // vitest.config.ts sets HAWA_INLINE_DATA_URI_GUARD=throw; NODE_ENV alone must not change behaviour.
+    expect(process.env.HAWA_INLINE_DATA_URI_GUARD).toBe('throw');
+    const saved = process.env.HAWA_INLINE_DATA_URI_GUARD;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      delete process.env.HAWA_INLINE_DATA_URI_GUARD;
+      expect(() => checkInlineDataUris(svg, 'test')).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/\[render\] inline data URI \d+ bytes/));
+    } finally {
+      process.env.HAWA_INLINE_DATA_URI_GUARD = saved;
+      warn.mockRestore();
+    }
+  });
+
   it('the guard refuses an SVG with an inline data URI over 100 KB in a test run', () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg"><image href="${uri(art, 'image/png')}"/></svg>`;
     expect(() => checkInlineDataUris(svg, 'test')).toThrow(/inline data URI \d+ bytes/);

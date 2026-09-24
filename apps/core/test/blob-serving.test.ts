@@ -3,8 +3,10 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, blobStoreFromEnv, DesignStudioRepository, type BlobStore } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
-import { addPair, createStudy } from '../src/services/comparison-study.js';
+import { addJudge, addPair, createStudy, lockStudy, revokeJudge } from '../src/services/comparison-study.js';
 import { PNG } from '@hawa/creative';
+import fs from 'node:fs';
+import { readPreferringStore } from '../src/services/blob-store-context.js';
 
 /**
  * Serving stored files (ADR-035 section 2.4, FILESTORE_DESIGN.md sections 3 and 7). Every route
@@ -280,6 +282,63 @@ describe.skipIf(!url)('serving stored files (ADR-035)', () => {
       expect((await get(`/v1/tasks/${taskId}/canva/studio/${theirs.runId}/candidates/${candidateId}/preview/${sha(rerendered)}.png`)).status).toBe(404);
     });
 
+    it('a new art picture whose put failed, or no art at all, never leaves the old art\'s hash on the row', async () => {
+      const taskId = await request(tenantId, operatorUserId, kaae);
+      const oldArt = png(30, 30, [250, 0, 0]);
+      const { candidateId } = await candidate(tenantId, operatorUserId, kaae, taskId, new DesignStudioRepository(db, store), { preview: png(30, 30, [1, 1, 1]), art: oldArt });
+      // The same store, except that every put fails (a full disk).
+      const failing = Object.create(store) as BlobStore;
+      failing.put = async () => {
+        throw new Error('no space left on device');
+      };
+      const repo = new DesignStudioRepository(db, failing);
+      const artHash = async () =>
+        withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) =>
+          (await sql<any>`SELECT art_sha256 FROM hawa.design_studio_candidates WHERE id = ${candidateId}::uuid`.execute(trx)).rows[0].art_sha256 as string | null
+        );
+
+      // A directed edit carries the parent's art bytes without their hash.
+      const newArt = png(30, 30, [0, 250, 0]);
+      await repo.updateCandidate(candidateId, tenantId, { artPng: newArt });
+      expect(await artHash()).toBe(sha(newArt));
+      expect(Buffer.from((await repo.getCandidateById(candidateId, tenantId))!.art_png!).equals(newArt)).toBe(true);
+
+      await new DesignStudioRepository(db, store).updateCandidate(candidateId, tenantId, { artPng: oldArt });
+      expect(await artHash()).toBe(sha(oldArt));
+      await repo.updateCandidate(candidateId, tenantId, { artPng: null });
+      expect(await artHash()).toBeNull();
+      expect((await new DesignStudioRepository(db, store).getCandidateById(candidateId, tenantId))!.art_png).toBeFalsy();
+    });
+
+    it('a stored file whose bytes no longer hash to its name is never read: the row\'s bytes are used', async () => {
+      const taskId = await request(tenantId, operatorUserId, kaae);
+      const repo = new DesignStudioRepository(db, store);
+      const composite = png(33, 17, [3, 140, 77]);
+      const { candidateId } = await candidate(tenantId, operatorUserId, kaae, taskId, repo, { preview: png(33, 17, [9, 9, 9]), composite });
+      // The same size, other bytes: the size check alone does not see it.
+      const file = store.pathOf({ sha256: sha(composite), mediaType: 'image/png' });
+      const corrupt = Buffer.from(composite);
+      corrupt[corrupt.length - 5] ^= 0xff;
+      fs.chmodSync(file, 0o644);
+      fs.writeFileSync(file, corrupt);
+      const read = await repo.getCandidateById(candidateId, tenantId);
+      expect(Buffer.from(read!.composite_png!).equals(composite)).toBe(true);
+      expect((await readPreferringStore(store, sha(composite), composite))!.equals(composite)).toBe(true);
+      expect(await readPreferringStore(store, sha(composite), null)).toBeNull();
+    });
+
+    it('in stream mode a stored file gone from disk is answered with the row\'s bytes, not a 500', async () => {
+      const taskId = await request(tenantId, operatorUserId, kaae);
+      const preview = png(21, 13, [44, 1, 200]);
+      const { runId, candidateId } = await candidate(tenantId, operatorUserId, kaae, taskId, new DesignStudioRepository(db, store), { preview });
+      const file = store.pathOf({ sha256: sha(preview), mediaType: 'image/png' });
+      fs.chmodSync(file, 0o644);
+      fs.rmSync(file);
+      const res = await get(`/v1/tasks/${taskId}/canva/studio/${runId}/candidates/${candidateId}/preview/${sha(preview)}.png`);
+      expect(res.status).toBe(200);
+      expect(Buffer.from(await res.arrayBuffer()).equals(preview)).toBe(true);
+    });
+
     it('a candidate from before the store (bytes only) is still served, at its hash address only when the bytes match', async () => {
       const taskId = await request(tenantId, operatorUserId, kaae);
       const legacy = png(20, 20, [1, 50, 99]);
@@ -324,6 +383,58 @@ describe.skipIf(!url)('serving stored files (ADR-035)', () => {
       const accel = await withAccel(() => get(`/v1/comparisons/${study.id}/pairs/${pair.id}/designer.png`, asOffice));
       expect(accel.headers.get('X-Accel-Redirect')).toBe(`/_blobs/sha256/${pair.designerSha256.slice(0, 2)}/${pair.designerSha256}.png`);
       expect(accel.headers.get('Cache-Control')).toBe('private, no-store');
+    });
+
+    const judgingStudy = async () => {
+      const office = { tenantId, userId: operatorUserId, role: 'administrator', actorId: 'admin_1' };
+      const study = await createStudy(db, office, {
+        name: `Blob judge study ${randomUUID().slice(0, 6)}`,
+        preregistration: {
+          sample: '2 office requests chosen before anything is made.',
+          judges: 'One designer from outside the office.',
+          analysis: 'Share of decisive judgements preferring Hawa with a Wilson 95% interval.',
+          threshold: 0.5,
+          minDecisive: 2,
+          minJudgesPerPair: 1,
+          plannedPairs: 2,
+        },
+      });
+      const first = await addPair(db, office, study.id, { hawaPng: png(12, 12, [5, 90, 5]), designerPng: png(12, 12, [90, 5, 5]) }, { blobStore: store });
+      await addPair(db, office, study.id, { hawaPng: png(12, 12, [5, 5, 90]), designerPng: png(12, 12, [90, 90, 5]) }, { blobStore: store });
+      const { judge, token } = await addJudge(db, office, study.id, { name: 'Outside designer', kind: 'designer' });
+      await lockStudy(db, office, study.id);
+      return { office, study, pair: first, judge, token };
+    };
+
+    it('a judge\'s picture keeps its no-referrer and noindex headers in accel mode, has no hash, and a revoked judge gets 404 with no redirect', async () => {
+      const { office, study, pair, judge, token } = await judgingStudy();
+      const path = `/api/judge/${token}/image/${pair.id}/left`;
+      // nginx drops an upstream Referrer-Policy and X-Robots-Tag across X-Accel-Redirect, and its
+      // /_blobs/ location sets another referrer policy: Core sends a judge's (small) picture itself.
+      const ok = await withAccel(() => get(path));
+      expect(ok.status).toBe(200);
+      expect(ok.headers.get('X-Accel-Redirect')).toBeNull();
+      expect(ok.headers.get('Referrer-Policy')).toBe('no-referrer');
+      expect(ok.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+      expect(ok.headers.get('Content-Disposition')).toBe('inline; filename="design.png"');
+      expect(ok.headers.get('X-Content-SHA256')).toBeNull();
+      expect(ok.headers.get('ETag')).toBeNull();
+      expect(Buffer.from(await ok.arrayBuffer()).subarray(0, 4).toString('hex')).toBe('89504e47');
+
+      await revokeJudge(db, office, study.id, judge.id);
+      const revoked = await withAccel(() => get(path));
+      expect(revoked.status).toBe(404);
+      expect(revoked.headers.get('X-Accel-Redirect')).toBeNull();
+    });
+
+    it('in stream mode a pair picture gone from disk is answered with the row\'s bytes, not a 500', async () => {
+      const { study, pair } = await judgingStudy();
+      const file = store.pathOf({ sha256: pair.hawaSha256, mediaType: 'image/png' });
+      fs.chmodSync(file, 0o644);
+      fs.rmSync(file);
+      const res = await get(`/v1/comparisons/${study.id}/pairs/${pair.id}/hawa.png`, { 'x-user-role': 'administrator' });
+      expect(res.status).toBe(200);
+      expect(sha(Buffer.from(await res.arrayBuffer()))).toBe(pair.hawaSha256);
     });
   });
 });

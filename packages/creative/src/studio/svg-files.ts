@@ -66,9 +66,11 @@ export type InlineDataUriGuardMode = 'throw' | 'log';
 let guardMode: InlineDataUriGuardMode | undefined;
 
 /**
- * How a large inline data URI is treated: a test run throws, so a regression fails the suite; a
- * server logs `[render] inline data URI N bytes` and renders, until a clean week in production makes it
- * a throw there too (FILESTORE_DESIGN.md section 6).
+ * How a large inline data URI is treated: with HAWA_INLINE_DATA_URI_GUARD=throw (vitest.config.ts sets
+ * it) the render throws, so a regression fails the suite; otherwise a server logs `[render] inline data
+ * URI N bytes` and renders, until a clean week in production makes it a throw there too
+ * (FILESTORE_DESIGN.md section 6). An explicit setting rather than the test-runner environment, so
+ * production code has no test-only branch.
  */
 export function setInlineDataUriGuard(mode: InlineDataUriGuardMode | undefined): void {
   guardMode = mode;
@@ -77,7 +79,7 @@ export function setInlineDataUriGuard(mode: InlineDataUriGuardMode | undefined):
 export function checkInlineDataUris(svg: string, where: string): void {
   const largest = largestInlineDataUri(svg);
   if (largest <= INLINE_DATA_URI_MAX) return;
-  const mode = guardMode ?? (process.env.NODE_ENV === 'test' ? 'throw' : 'log');
+  const mode = guardMode ?? (process.env.HAWA_INLINE_DATA_URI_GUARD === 'throw' ? 'throw' : 'log');
   const message = `[render] inline data URI ${largest} bytes in ${where} (limit ${INLINE_DATA_URI_MAX}); pictures go beside the SVG as files`;
   if (mode === 'throw') throw new Error(message);
   console.warn(message);

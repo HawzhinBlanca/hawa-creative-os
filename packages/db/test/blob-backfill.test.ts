@@ -175,6 +175,44 @@ describe.skipIf(!ownerUrl)('scripts/blob_backfill.ts', () => {
     expect(event.image).toBe(uri(seeded.photo));
   });
 
+  it('a second, different photo of a task that already has one is copied too, and verify counts it until it is', async () => {
+    const { ids } = seeded;
+    const second = png();
+    await sql`INSERT INTO hawa.outbox_commands(tenant_id, aggregate_type, aggregate_id, command_type, idempotency_key, payload)
+      VALUES (${TENANT}::uuid, 'task', ${ids.photoTask}::uuid, 'task.dispatch', ${'backfill-second-' + ids.photoTask},
+        ${JSON.stringify({ taskId: ids.photoTask, studioOptions: { referenceImageBase64: uri(second) } })}::jsonb)`.execute(db);
+    const before = await runBackfill({ db, store, phases: ['reference_photos'], mode: 'verify' });
+    expect(before[0].notCopied).toBe(1);
+
+    const copied = await runBackfill({ db, store, phases: ['reference_photos'], mode: 'copy' });
+    expect(copied[0]).toMatchObject({ stored: 1, linked: 1 });
+    const shas = (await sql<{ sha256: string }>`SELECT sha256 FROM hawa.task_files WHERE task_id = ${ids.photoTask}::uuid ORDER BY sha256`.execute(db)).rows.map((r) => r.sha256);
+    expect(shas).toEqual([sha(seeded.photo), sha(second)].sort());
+    expect((await runBackfill({ db, store, phases: ['reference_photos'], mode: 'verify' }))[0].notCopied).toBe(0);
+  });
+
+  it('copy never links a row to bytes the row no longer holds (Core replaced them mid-batch)', async () => {
+    const run = (await row(sql`SELECT run_id::text AS id FROM hawa.design_studio_candidates WHERE id = ${seeded.ids.candidate}::uuid`)).id;
+    const raced = randomUUID();
+    const before = png();
+    const after = png();
+    await sql`INSERT INTO hawa.design_studio_candidates(id, run_id, tenant_id, ordinal, concept, status, composite_png)
+      VALUES (${raced}::uuid, ${run}::uuid, ${TENANT}::uuid, 3, '{}', 'draft', ${before})`.execute(db);
+    // Core writes a new composite (its own put failed, so no hash) between the backfill's select and update.
+    const racing = Object.create(store) as BlobStore;
+    racing.put = async (bytes: Buffer, mediaType: Parameters<BlobStore['put']>[1]) => {
+      const ref = await store.put(bytes, mediaType);
+      if (bytes.equals(before)) await sql`UPDATE hawa.design_studio_candidates SET composite_png = ${after}, composite_sha256 = NULL WHERE id = ${raced}::uuid`.execute(db);
+      return ref;
+    };
+    await runBackfill({ db, store: racing, phases: ['candidates'], mode: 'copy' });
+    expect((await row(sql`SELECT composite_sha256 FROM hawa.design_studio_candidates WHERE id = ${raced}::uuid`)).composite_sha256).toBeNull();
+
+    // The next run links the bytes the row holds now.
+    await runBackfill({ db, store, phases: ['candidates'], mode: 'copy' });
+    expect((await row(sql`SELECT composite_sha256 FROM hawa.design_studio_candidates WHERE id = ${raced}::uuid`)).composite_sha256).toBe(sha(after));
+  });
+
   it('verify counts nothing left to copy, and names what strip would empty', async () => {
     const reports = await runBackfill({ db, store, phases: PHASES, mode: 'verify' });
     for (const p of ['plan_sources', 'candidates', 'cutouts', 'comparisons']) {
@@ -289,6 +327,21 @@ describe.skipIf(!ownerUrl)('scripts/blob_backfill.ts', () => {
       expect(receipt).toMatchObject({ database: 'hawa_restore_x', migrations, verifyFailures: 1, phases: ['candidates'] });
       const clean = rehearsalReceipt('hawa_restore_x', migrations, [{ ...verify[0], problems: [], notCopied: 0 }]);
       expect(clean.verifyFailures).toBe(0);
+    });
+
+    it('rows copy leaves as they are are listed apart in the receipt and must be accepted by count', async () => {
+      const verify = await runBackfill({ db, store, phases: ['reference_photos'], mode: 'verify' });
+      const r = rehearsalReceipt('hawa_restore_x', migrations, verify);
+      // The undecodable photo, in its task.created event and its outbox command: not failures, but listed.
+      expect(r.verifyFailures).toBe(0);
+      expect(r.leftAsIs.map((x) => x.table).sort()).toEqual(['outbox_commands', 'task_events']);
+      expect(r.leftAsIs.every((x) => /left as it is/.test(x.problem))).toBe(true);
+
+      const withLeft = path.join(receiptDir, 'left.json');
+      fs.writeFileSync(withLeft, JSON.stringify({ ...r, database: 'hawa_restore_20260924' }));
+      expect(() => assertTargetAllowed({ databaseUrl: prodName, mode: 'copy', production: true, receiptPath: withLeft, migrations })).toThrow(/--accept-left-as-is 2/);
+      expect(() => assertTargetAllowed({ databaseUrl: prodName, mode: 'copy', production: true, receiptPath: withLeft, migrations, acceptLeftAsIs: 1 })).toThrow(/left 2 row/);
+      expect(() => assertTargetAllowed({ databaseUrl: prodName, mode: 'copy', production: true, receiptPath: withLeft, migrations, acceptLeftAsIs: 2 })).not.toThrow();
     });
 
     it('the CLI refuses a production strip before it connects', () => {

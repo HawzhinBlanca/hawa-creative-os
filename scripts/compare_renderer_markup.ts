@@ -34,6 +34,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as creative from '../packages/creative/src/index.js';
 import * as fresh from '../packages/creative/src/studio/render-layout-v2.js';
+import { inlineSvgFiles } from '../packages/creative/src/studio/svg-files.js';
 // pngjs is a dependency of the creative package, not of the root; the renderer re-exports it.
 const { PNG } = fresh;
 import type { StudioLayoutV2 } from '../packages/creative/src/studio/layout-v2.js';
@@ -293,8 +294,14 @@ async function main() {
     for (const d of designs) {
       n++;
       const opts = { copyText: d.copy };
-      const o = old.renderLayoutV2ToSvg(d.layout, opts);
-      const f = fresh.renderLayoutV2ToSvg(d.layout, opts);
+      // A renderer from ADR-035 on reads its pictures as files beside the SVG; the markup compared
+      // and the SVGs rasterised here are written alone, so the pictures are put back inline.
+      const self = (r: { svg: string; noTextSvg: string; files?: Record<string, Buffer> }) => ({
+        svg: inlineSvgFiles(r.svg, r.files),
+        noTextSvg: inlineSvgFiles(r.noTextSvg, r.files),
+      });
+      const o = self(old.renderLayoutV2ToSvg(d.layout, opts));
+      const f = self(fresh.renderLayoutV2ToSvg(d.layout, opts));
       const stripped = stripTextWhitespace(o.svg);
       const slug = String(n).padStart(3, '0');
       const files: Record<string, string> = {};
