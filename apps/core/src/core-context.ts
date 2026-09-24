@@ -16,14 +16,7 @@ import type {
   PublicationRepository,
 } from '@hawa/db';
 import type { Publisher, QAEngine } from '@hawa/contracts';
-import type {
-  DesignBrief,
-  ApprovalDecision,
-  FeedbackEvent,
-  ClientDNA,
-  TaskWorkflowController,
-} from '@hawa/domain';
-import type { QualityRubricReport } from '@hawa/qa';
+import type { DesignBrief, ClientDNA } from '@hawa/domain';
 import type {
   UnifiedIngressService,
   TelegramBridgeDaemon,
@@ -43,7 +36,7 @@ import type { CanvaConnectService } from './services/canva-connect-service.js';
 import type { DeliverableStore } from './services/pinned-deliverables.js';
 import type { TaskReader } from './services/task-reader.js';
 import type { ClientDnaResolver } from './services/client-dna-resolver.js';
-import type { OmnichannelDelivery, OmnichannelDeliveryDeps } from './services/omnichannel-delivery.js';
+import type { OmnichannelDelivery } from './services/omnichannel-delivery.js';
 
 /** The one tenant this office runs as. */
 export const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
@@ -87,28 +80,23 @@ export interface CoreContext {
   /** Brand guidelines being read in the background after the sender was answered; tests await them. */
   guidelineReadings: Set<Promise<void>>;
 
-  // In-memory shared stores (used as fallback or for in-memory tests)
+  // Without a database only: with one, each holds nothing and Postgres is the only truth
+  // (services/no-database-store.ts). Routes still read and write them for the in-memory mode.
   tasks: Map<string, any>;
   events: Map<string, any[]>;
   briefs: Map<string, DesignBrief>;
-  revisions: Map<string, any>;
-  decisions: Map<string, ApprovalDecision[]>;
-  feedbacks: Map<string, FeedbackEvent[]>;
-  clientDnas: Map<string, ClientDNA>;
   clientSnapshots: Map<string, ClientDnaSnapshot[]>;
-  evalRuns: Map<string, any>;
   uploadedAssets: Map<string, any>;
-  workflowControllers: Map<string, TaskWorkflowController>;
-  rubricReports: Map<string, QualityRubricReport[]>;
-  taskComments: Map<string, any[]>;
-  omnichannelReceipts: Map<string, any>;
-  inFlightPublications: OmnichannelDeliveryDeps['inFlightPublications'];
-  inMemoryOutbox: Map<string, any[]>;
+  /** Client DNA as this process loaded it; Postgres answers first (services/client-dna-resolver.ts). */
+  clientDnas: Map<string, ClientDNA>;
+  /** Evaluation runs: no table yet (SPLIT_PLAN.md section 7 leaves them to the owner). */
+  evalRuns: Map<string, any>;
+
   historicalMigrator: HistoricalDesignMigrator;
   globalCanvaNativeAdapter: CanvaNativeAdapter;
   globalCanvaCircuitBreaker: CircuitBreaker;
   channelKillSwitches: { telegram: boolean; waha: boolean };
-  issuedSessions: Map<string, any> | Set<string>;
+  /** The event stream's open connections. */
   subscribers: Set<any>;
 
   // Shared utility functions

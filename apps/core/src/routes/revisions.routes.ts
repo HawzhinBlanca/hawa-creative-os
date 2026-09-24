@@ -9,6 +9,7 @@ import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { askLedger } from '../services/ask-ledger.js';
+import { readTaskBrief } from '../services/brief-reader.js';
 
 /** A hawa.design_revisions row. */
 type RevisionRow = NonNullable<Awaited<ReturnType<RevisionRepository['findRevisionById']>>>;
@@ -56,8 +57,6 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     db,
     taskRepo,
     revisionRepo,
-    tasks,
-    briefs,
     qaEngine,
     readCurrentTask,
     broadcastEvent: broadcast,
@@ -136,7 +135,9 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const revisionId = c.req.param('revisionId');
     if (!db) return noDatabase(c, 'Design revisions');
-    const rev = (await readRevisions(verifyRequestAuth(c), [revisionId])).get(revisionId);
+    const auth = verifyRequestAuth(c);
+    const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+    const rev = (await readRevisions(auth, [revisionId])).get(revisionId);
     // Another task's revision is not found here: its QA run would be recorded against this task.
     if (!rev || rev.taskId !== taskId) return problem(c, 404, 'Revision Not Found');
 
@@ -150,7 +151,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     };
 
     const revText = rev.document?.nodes?.find((n: any) => n.text)?.text || 'Campaign Text';
-    const brief: DesignBrief = briefs.get(taskId) || {
+    // The brief saved for the task, as Postgres has it; a brief made from the revision's text otherwise.
+    const brief: DesignBrief = (await readTaskBrief(db, { tenantId, userId: auth.userId, role: auth.role }, taskId)) || {
       briefId: crypto.randomUUID(),
       taskId,
       clientId: defaultClientId,
@@ -211,13 +213,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     });
 
     if (!qaRes.ok) return problem(c, 500, 'QA Failed', qaRes.error.message);
-    const task = tasks.get(taskId);
-    if (task) {
-      task.latestQAReport = { ...qaRes.value, revisionId, designRevisionId: revisionId };
-    }
     if (db) {
       try {
-        const tenantId = (task as any)?.tenantId || '00000000-0000-4000-a000-000000000001';
         await withRlsContext(db, { tenantId, userId: '00000000-0000-4000-a000-000000000002', role: 'operator' }, async (trx) => {
           const profile = await trx.selectFrom('qc_profiles').select('id').limit(1).executeTakeFirst();
           const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
@@ -275,7 +272,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
 
     const now = new Date().toISOString();
     const wasApproved = task ? task.status === 'APPROVED' : dbTask?.state === 'approved';
-    const previousApprovalId = (task as any)?.latestApproval?.decisionId;
+    // The approval this revision invalidates, as Postgres records it (services/task-reader.ts).
+    const previousApprovalId: string | undefined = task?.latestApproval?.decisionId;
 
     // Postgres names a revision by uuid. A caller's own id that is not one used to be kept in memory
     // only; now it would fail the insert, so it is refused before anything is written.
@@ -333,40 +331,14 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       metadata: body.metadata || {},
     };
 
-    const previousRevId = task?.latestRevisionId;
-    if (task) {
-      task.latestRevisionId = finalRevisionId;
-      task.updatedAt = now;
-      task.latestQAReport = body.qaReport ? { ...body.qaReport, revisionId: finalRevisionId } : null;
-      task.latestCaptureSet = body.captureSet || null;
-      if ((task as any).latestApproval) {
-        (task as any).latestApproval = {
-          ...((task as any).latestApproval || {}),
-          invalidated: true,
-          invalidationReason: 'new_revision_created',
-        };
-      }
-      task.status = 'AWAITING_APPROVAL';
-    }
+    // The new revision, the task's move to review and the approval's invalidation are Postgres's
+    // (createRevision). They were also written onto this process's copy of the task, with a QA report
+    // and a capture set the caller sent, which approval then trusted and a restart lost.
 
     // Gate F & Invariant #11: Post-approval edits strictly invalidate approval
     let approvalInvalidated = false;
     if (wasApproved) {
       approvalInvalidated = true;
-      if (task) {
-        task.status = 'AWAITING_APPROVAL';
-        const invalidationRecord = {
-          invalidatedAt: now,
-          reason: 'post_approval_edit',
-          previousApprovalId,
-          previousRevisionId: previousRevId,
-          newRevisionId: finalRevisionId,
-          actor: body.author || { userId: auth.userId, role: auth.role },
-        };
-        (task as any).invalidationHistory = (task as any).invalidationHistory || [];
-        (task as any).invalidationHistory.push(invalidationRecord);
-        (task as any).latestApproval = { ...((task as any).latestApproval || {}), invalidated: true, invalidationRecord };
-      }
       if (taskRepo && db) {
         try {
           await withRlsContext(
@@ -391,15 +363,13 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
           log.error('[core:revisions:invalidate] DB approval invalidation error:', err);
         }
       }
-    } else {
-      if (task) task.status = 'AWAITING_APPROVAL';
     }
 
     broadcast('task:revision_created', { taskId, revisionId: finalRevisionId, approvalInvalidated });
 
     return c.json({
       ok: true,
-      status: task ? task.status : 'AWAITING_APPROVAL',
+      status: 'AWAITING_APPROVAL',
       revisionId: finalRevisionId,
       id: finalRevisionId,
       revisionNumber: dbRevision ? dbRevision.revision : 1,

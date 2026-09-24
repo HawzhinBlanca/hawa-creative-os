@@ -1,5 +1,5 @@
 import type { RouteContext } from './types.js';
-import { OutboxRepository, sql, withRlsContext } from '@hawa/db';
+import { OutboxRepository, sql, withRlsContext, dbStatesForApiStatuses, toApiTaskStatus } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
@@ -29,7 +29,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
     problem,
     sloDaemon,
     reconciliationService,
-    tasks,
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
@@ -336,13 +335,32 @@ export function registerSystemRoutes(ctx: RouteContext) {
     });
   });
 
-  // Operations Failures
-  registerRoute('get', '/operations/failures', (c: any) => {
-    const failedTasks = Array.from(tasks.values()).filter((t) =>
-      // NEEDS_INFORMATION was listed too: no task ever carried it (a task waiting for its requester is PAUSED, not a failure).
-      t.status === 'OPERATOR_REQUIRED' || t.status === 'REJECTED'
-    );
-    return c.json({ items: failedTasks, total: failedTasks.length });
+  // Operations Failures: the tasks Postgres marks for an operator, or as rejected, newest first. This
+  // listed the tasks this process held in memory, so a task the worker failed, or any task after a
+  // restart, was missing from the Desk's Ops screen.
+  const failedStates = dbStatesForApiStatuses(['OPERATOR_REQUIRED', 'REJECTED']);
+  registerRoute('get', '/operations/failures', async (c: Context) => {
+    if (!db) return problem(c, 503, 'Database Unavailable', 'Task failures are read from PostgreSQL');
+    const auth = verifyRequestAuth(c);
+    const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+    const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
+    try {
+      const { rows, total } = await withRlsContext(db, { tenantId, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' }, async (trx) => {
+        const failed = trx.selectFrom('tasks').where('tenant_id', '=', tenantId).where('state', 'in', failedStates);
+        const rows = await failed.select(['id', 'title', 'state', 'client_id', 'version', 'created_at', 'updated_at'])
+          .orderBy('updated_at', 'desc').limit(200).execute();
+        const counted = await failed.select((eb) => eb.fn.countAll<string>().as('n')).executeTakeFirst();
+        return { rows, total: Number(counted?.n ?? 0) };
+      });
+      const items = rows.map((t) => ({
+        id: t.id, title: t.title, status: toApiTaskStatus(t.state), state: t.state, clientId: t.client_id ?? undefined,
+        version: Number(t.version), createdAt: iso(t.created_at), updatedAt: iso(t.updated_at),
+      }));
+      return c.json({ items, total });
+    } catch (err) {
+      log.error('[core:failures] Could not read the failed tasks:', err);
+      return problem(c, 503, 'Database Unavailable', 'The failed tasks could not be read; try again');
+    }
   });
 
   // Integrations Health
@@ -418,33 +436,33 @@ export function registerSystemRoutes(ctx: RouteContext) {
       );
     }
 
-    const allTasks = Array.from(tasks.values()).map((t) => ({
+    // The tasks, and the Drive files and Sheets rows each delivery confirmed, as Postgres holds them
+    // (services/publication-receipt.ts). They were the tasks this process held in memory and the
+    // receipts it kept, so an audit after a restart found no task, or every delivered task
+    // undelivered. Without a database there is nothing to compare.
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The audit compares the tasks and delivery records PostgreSQL holds');
+    const auth = verifyRequestAuth(c);
+    const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' };
+    const stored = await Promise.all([
+      withRlsContext(db, scope, (trx) =>
+        trx.selectFrom('tasks').select(['id', 'state', 'client_id', 'current_design_revision_id', 'updated_at'])
+          .where('tenant_id', '=', scope.tenantId).execute()),
+      readDeliveredRecords(db, scope),
+    ]).catch((err: unknown) => {
+      log.error('[core:reconciliation] Could not read the tasks or their delivery records:', err);
+      return null;
+    });
+    if (!stored) return problem(c, 503, 'Database Unavailable', 'The tasks and their delivery records could not be read; try again');
+    const [taskRows, delivered] = stored;
+    const allTasks = taskRows.map((t) => ({
       id: t.id,
-      status: t.status,
-      clientId: t.clientId || undefined,
-      latestRevisionId: t.latestRevisionId || undefined,
-      updatedAt: t.updatedAt || new Date().toISOString(),
+      status: toApiTaskStatus(t.state),
+      clientId: t.client_id || undefined,
+      latestRevisionId: t.current_design_revision_id || undefined,
+      updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),
     }));
-
-    // Delivery records are the Drive files and Sheets rows each delivery confirmed, as Postgres holds
-    // them (services/publication-receipt.ts). They used to be the receipts this process kept, so the
-    // audit after a restart found every delivered task undelivered. Without a database there are none.
-    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [];
-    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [];
-    if (db) {
-      const auth = verifyRequestAuth(c);
-      const delivered = await readDeliveredRecords(db, {
-        tenantId: auth.tenantId || DEFAULT_TENANT_ID,
-        userId: auth.userId || SYSTEM_AUTOMATION_USER_ID,
-        role: auth.role || 'operator',
-      }).catch((err: unknown) => {
-        log.error('[core:reconciliation] Could not read the delivery records:', err);
-        return null;
-      });
-      if (!delivered) return problem(c, 503, 'Database Unavailable', 'The delivery records could not be read; try again');
-      driveFiles.push(...delivered.driveFiles);
-      sheetRows.push(...delivered.sheetRows);
-    }
+    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [...delivered.driveFiles];
+    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [...delivered.sheetRows];
 
     // Rows supplied or altered by the caller make the report a simulation, which is returned but
     // never kept as the latest audit the Desk shows.

@@ -21,8 +21,8 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
     events,
     isProduction,
     problem,
+    readCurrentTask,
     registerRoute,
-    resolveTaskWithFallback,
     taskRepo,
     verifyRequestAuth,
     broadcastEvent: broadcast,
@@ -251,7 +251,9 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
       return problem(c, 403, 'Forbidden', 'Invalid action signature');
     }
 
-    const task = await resolveTaskWithFallback(taskId);
+    // The task as Postgres has it, or 503 when it cannot be read: this approves, delivers or sends
+    // back the design. A task this process had cached answered while Postgres was unreachable.
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     if (action === 'approve') {

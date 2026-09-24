@@ -22,45 +22,55 @@ export function registerClientsRoutes(ctx: RouteContext) {
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
 
-  // Client DNA Listing
+  /** A client as the list shows it, from its DNA and the number of versions kept of it. */
+  const listed = (d: ClientDNA, snapshotsCount: number) => ({
+    clientId: d.clientId,
+    name: d.name,
+    code: d.code,
+    version: d.version,
+    status: d.status,
+    defaultLocale: d.defaultLocale,
+    defaultDirection: d.defaultDirection,
+    updatedAt: d.updatedAt,
+    colorsCount: d.colors?.length ?? 0,
+    rulesCount: d.guidelines?.layoutRules?.length ?? 0,
+    snapshotsCount,
+  });
+
+  // Client DNA Listing. With a database, each client's active DNA and its number of versions, as
+  // Postgres holds them now (SPLIT_PLAN G2 and the cleanup step): this listed the DNA this process
+  // had loaded at start-up, so a client saved by another Core showed its old name and colours.
   registerRoute('get', '/clients', async (c: any) => {
-    const uniqueDnas = Array.from(new Map(Array.from(clientDnas.values()).map((d) => [d.clientId, d])).values());
-    // With a database, a client's history is the versions Postgres holds (SPLIT_PLAN G2); the map
-    // only lists the clients hydrated from it. Keyed by the three spellings of a client.
-    let storedVersions: Map<string, number> | undefined;
     if (db) {
+      const auth = verifyRequestAuth(c);
+      const tenantId = auth.tenantId || defaultTenantId;
       try {
-        const auth = verifyRequestAuth(c);
-        const tenantId = auth.tenantId || defaultTenantId;
         const rows = await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, (trx) =>
           trx.selectFrom('client_dna_versions as v')
-            .innerJoin('clients as cl', (join) => join.onRef('cl.id', '=', 'v.client_id').onRef('cl.tenant_id', '=', 'v.tenant_id'))
-            .select((eb) => ['v.client_id', 'cl.code', eb.fn.countAll<string>().as('n')])
+            .select((eb) => [
+              'v.client_id',
+              'v.dna',
+              eb.selectFrom('client_dna_versions as all_v')
+                .select((inner) => inner.fn.countAll<string>().as('n'))
+                .whereRef('all_v.client_id', '=', 'v.client_id')
+                .whereRef('all_v.tenant_id', '=', 'v.tenant_id')
+                .as('versions'),
+            ])
             .where('v.tenant_id', '=', tenantId)
-            .groupBy(['v.client_id', 'cl.code'])
+            .where('v.status', '=', 'active')
             .execute());
-        storedVersions = new Map();
-        for (const row of rows) {
-          for (const key of [row.client_id, String(row.code), `client-${row.code}`]) storedVersions.set(key, Number(row.n));
-        }
-      } catch {
-        storedVersions = undefined;
+        const list = rows.flatMap((row) => {
+          const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
+          return dna && typeof dna === 'object' ? [listed({ ...dna, clientId: dna.clientId || row.client_id }, Number(row.versions ?? 0))] : [];
+        });
+        return c.json(list, 200);
+      } catch (err) {
+        return problem(c, 503, 'Database Unavailable', (err as Error)?.message || 'Could not read the clients');
       }
     }
-    const list = uniqueDnas.map((d) => ({
-      clientId: d.clientId,
-      name: d.name,
-      code: d.code,
-      version: d.version,
-      status: d.status,
-      defaultLocale: d.defaultLocale,
-      defaultDirection: d.defaultDirection,
-      updatedAt: d.updatedAt,
-      colorsCount: d.colors.length,
-      rulesCount: d.guidelines.layoutRules.length,
-      snapshotsCount: storedVersions ? storedVersions.get(d.clientId) ?? 0 : (clientSnapshots.get(d.clientId) || []).length,
-    }));
-    return c.json(list, 200);
+    // Without a database, the DNA this process holds, keyed three ways per client.
+    const uniqueDnas = Array.from(new Map(Array.from(clientDnas.values()).map((d) => [d.clientId, d])).values());
+    return c.json(uniqueDnas.map((d) => listed(d, (clientSnapshots.get(d.clientId) || []).length)), 200);
   });
 
   // Client DNA Detail

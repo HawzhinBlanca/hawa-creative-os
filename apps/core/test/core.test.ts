@@ -224,13 +224,9 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(editorUrlData.url).toMatch(/figma\.com\/design|\/review\?doc=|canva\.com\/design/);
     expect(editorUrlData.taskId).toBe(taskId);
 
-    // 4c. Test Content-Addressed Export Package Assembler (FR-045)
+    // 4c. The legacy export package is retired (ADR-025): it listed files that were never made.
     const pkgRes = await app.request(`/v1/tasks/${taskId}/export-package`);
-    expect(pkgRes.status).toBe(200);
-    const pkgData = await pkgRes.json();
-    expect(pkgData.packageHash).toBeDefined();
-    expect(pkgData.files.length).toBeGreaterThanOrEqual(4);
-    expect(pkgData.files.some((f: any) => f.name.endsWith('.hyc'))).toBe(true);
+    expect(pkgRes.status).toBe(410);
 
     // 5. QA really ran on the generated design. The generic generator draws a placeholder logo hash,
     //    so the official client logo is missing and QA fails (it used to be a literal all-pass report).
@@ -261,10 +257,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
   it('enforces repair budget of max 2 cycles on revision requests', async () => {
     const app = dbApp;
+    // KAAE's template draws only the headline the client sent; the title no longer stands in for one.
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Revision Test' }),
+      body: JSON.stringify({ title: 'Revision Test', headlineEn: 'Revision Test' }),
     });
     const { id: taskId } = await createRes.json();
 
@@ -329,9 +326,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const health = await healthRes.json();
     expect(health.items.length).toBe(6);
 
-    // Operations Failures
-    const failRes = await app.request('/v1/operations/failures');
+    // Operations Failures are the failed tasks Postgres holds
+    const failRes = await dbApp.request('/v1/operations/failures');
     expect(failRes.status).toBe(200);
+    expect((await app.request('/v1/operations/failures')).status).toBe(503);
   });
 
   it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {
@@ -402,13 +400,15 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   });
 
   it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050)', async () => {
+    // The audit compares the tasks and delivery records Postgres holds; without a database there is none.
+    expect((await app.request('/v1/operations/reconciliation/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(503);
     // 1. Before any audit there is no report, not an invented clean one
-    const getRes = await app.request('/v1/operations/reconciliation');
+    const getRes = await dbApp.request('/v1/operations/reconciliation');
     expect(getRes.status).toBe(200);
     expect(await getRes.json()).toBeNull();
 
     // 2. Auto-repair is refused: Core cannot upload to Drive or write Sheets from here
-    const repairRes = await app.request('/v1/operations/reconciliation/run', {
+    const repairRes = await dbApp.request('/v1/operations/reconciliation/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ autoRepair: true }),
@@ -417,7 +417,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect((await repairRes.json()).title).toBe('Auto-Repair Not Available');
 
     // 3. The audit runs and says what it compared
-    const runRes = await app.request('/v1/operations/reconciliation/run', {
+    const runRes = await dbApp.request('/v1/operations/reconciliation/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -431,7 +431,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(runReport).not.toHaveProperty('repairedCount');
     expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
 
-    const latest = await (await app.request('/v1/operations/reconciliation')).json();
+    const latest = await (await dbApp.request('/v1/operations/reconciliation')).json();
     expect(latest.auditId).toBe(runReport.auditId);
   });
 
@@ -798,11 +798,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(cssText).toContain("font-family: 'AsterKurdishTitle'");
     expect(cssText).toContain('ascent-override: 95%');
 
-    // 3. Fetch CDN Font binary
+    // 3. No font file is kept, so none is served: the stylesheet's local() sources apply. It served
+    //    the package's bytes until the next restart, and 64 zero bytes for any other family.
     const fontRes = await app.request('/v1/fonts/cdn/AsterKurdishTitle/font.woff2');
-    expect(fontRes.status).toBe(200);
-    expect(fontRes.headers.get('Content-Type')).toBe('font/woff2');
-    expect(fontRes.headers.get('Cache-Control')).toContain('immutable');
+    expect(fontRes.status).toBe(404);
+    expect(cssText).toContain("local('AsterKurdishTitle')");
   });
 
   it('dispatches outbound campaign review to WhatsApp and processes inbound approval callback action', async () => {

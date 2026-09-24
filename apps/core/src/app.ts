@@ -1,74 +1,26 @@
-import { persistChatIntake, findRequestAwaitingReference, findAlbumRequest, splitBilingualRequest, runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
-import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
-import { peelTrailingRemarks } from './services/request-remarks.js';
-import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
+import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { streamSSE } from 'hono/streaming';
-import type {
-  RequestContext,
-  UUID,
-  NeutralManifest,
-  DesignStudioAdapter,
-  StudioOperation,
-} from '@hawa/contracts';
-import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, isTaskApiStatus, isTaskDbState, taskTransitioned, type TaskDbState } from '@hawa/contracts';
-import {
-  TaskStateMachine,
-  extractProtectedTokens,
-  validateClientDna,
-  validateUploadedAsset,
-  sanitizeSvg,
-  type TaskStatus,
-  type ClientDNA,
-  type DesignBrief,
-  type ExactCopyBlock,
-  type ApprovalDecision,
-  type FeedbackEvent,
-  type CandidateRule,
-  type DomainFailure,
-  TaskWorkflowController,
-  type TaskActor,
-  type WorkflowCheckpoint,
-  kaaeClientDNA,
-  isAuthorizedReviewerRole,
-  resolveModel,
-  resolveImageSettings,
-  activeModelTier,
-  type PinnedExport,
-} from '@hawa/domain';
+import { SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
+import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier } from '@hawa/domain';
 import {
   createDb,
   withRlsContext,
-  withSessionAdvisoryLock,
   TaskRepository,
   ClientRepository,
   IngressRepository,
   OutboxRepository,
   RevisionRepository,
   PublicationRepository,
-  CanvaBindingRepository,
-  IdempotencyConflictError,
-  ConcurrencyConflictError,
-  toDbTaskState,
-  toApiTaskStatus,
-  listTaskPage,
-  decodeTaskCursor,
-  dbStatesForApiStatuses,
-  TASK_PAGE_DEFAULT_LIMIT,
-  TASK_PAGE_MAX_LIMIT,
   sql,
-  type Database,
-  type Kysely,
-  type TaskState,
 } from '@hawa/db';
 
 try {
@@ -82,74 +34,19 @@ try {
   // Ignore in environments where env file loading is handled externally
 }
 
-import {
-  CreativeDirectorRunner,
-  ComfySandboxValidator,
-  type ComfyWorkflowGraph,
-  type ComfyWorkflowTemplateId,
-  COMFY_WORKFLOW_TEMPLATES,
-  ASPECT_RATIO_DIMENSIONS,
-  buildComfyWorkflowForTemplate,
-  buildCompositedVisualBackdrop,
-  generateSmartContrastScrim,
-  calculateContrastRatio,
-  globalFeedbackMiner,
-  type CandidateRuleProposal,
-  type ArtboardSnapshot,
-  diffDocumentManifests,
-  renderOperationsToPng,
-  parseInvitationContent,
-  resolveOrnamentSettings,
-  OpenAiStudioClient,
-} from '@hawa/creative';
-import {
-  DeterministicQAEngine,
-  checkCanvaPptx,
-  inspectKurdishFontCoverage,
-  KURDISH_SORANI_GLYPH_TABLE,
-  packageKurdishWebFont,
-  generateKurdishFontFaceCss,
-  evaluateVisionRubric,
-  type FontCoverageResult,
-  type KurdishWebFontPackage,
-  type QualityEvaluationCandidate,
-  type QualityRubricReport,
-  type RubricCanvasNode,
-} from '@hawa/qa';
-import {
-  VaultSearchEngine,
-  type SearchableItem,
-  type SearchQuery,
-  type SearchCategory,
-} from '@hawa/retrieval';
+import { CreativeDirectorRunner, resolveOrnamentSettings } from '@hawa/creative';
+import { DeterministicQAEngine } from '@hawa/qa';
 import {
   GooglePublisher,
   ReconciliationService,
   KurdishVoiceTranscriber,
   ResilientModelGateway,
-  globalCostGovernor,
-  WahaIngressHandler,
-  normalizeKurdishIncomingText,
-  buildOutboundReviewDispatch,
-  verifyActionSignature,
-  computeActionSignature,
-  parseCallbackData,
-  type CostReceipt,
-  type ClientBudgetConfig,
   TelegramBridgeDaemon,
-  KAAE_CLIENT_ID,
   UnifiedIngressService,
   MemoryIngressPersistenceAdapter,
-  validateFetchDestination,
-  sanitizeIngressContent,
-  validateIngressAttachment,
   TelegramActionTokenService,
-  verifyTelegramMiniAppInitData,
-  HumanApprovalManager,
   HistoricalDesignMigrator,
   CanvaNativeAdapter,
-  CanvaDesignStudioAdapter,
-  validateCanvaDesignUrl,
   CircuitBreaker,
   type TelegramUpdate,
 } from '@hawa/integrations';
@@ -158,18 +55,8 @@ import { EvaluationRunner } from '@hawa/evals';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
-import { type DesignStudioServiceOptions, DesignStudioService } from './services/design-studio/index.js';
-import { studioStatusNote, requesterDraftNotes } from './services/design-studio/studio-status-note.js';
-import { escapeTelegramHtml } from '@hawa/integrations';
-import { CanvaConnectService, type CanvaServiceOptions } from './services/canva-connect-service.js';
-import { manifestFromOperations } from './services/generated-manifest.js';
-import {
-  canvaDeliverableStore,
-  EMPTY_DELIVERABLE_STORE,
-  loadPinnedDeliverables,
-  parsePinnedExportIds,
-  type DeliverableStore,
-} from './services/pinned-deliverables.js';
+import { CanvaConnectService } from './services/canva-connect-service.js';
+import { canvaDeliverableStore, EMPTY_DELIVERABLE_STORE, type DeliverableStore } from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
 import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerClientsRoutes } from './routes/clients.routes.js';
@@ -193,60 +80,31 @@ import { registerTasksRoutes } from './routes/tasks.routes.js';
 import { registerTaskPipelineRoutes } from './routes/task-pipeline.routes.js';
 import { registerSearchRoutes } from './routes/search.routes.js';
 import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
-import { createChatCampaignIntake } from './services/chat-campaign-intake.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
-import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
-import {
-  parseRequesterAction,
-  composeRequesterApproved,
-  composeChangePrompt,
-  composeDesignerTakesOver,
-  composeReplacedDraft,
-  composeChangeInProgress,
-  composeRequesterApprovedAlert,
-  composeDesignerHandoff,
-  composeAnswerTaken,
-  composeSizeStarted,
-  answerIndex,
-  sizeOf,
-  type RequesterAction,
-  type AskRecord,
-} from './services/requester-actions.js';
-import { classifyInboundTelegramMessage } from './services/telegram-classifier.js';
-import { sniffImageMime, isUsableImage, TELEGRAM_BOT_DOWNLOAD_MAX_BYTES } from './services/telegram-media.js';
-import type { GuidelinesModel } from './services/brand-guidelines.js';
-import { handleGuidelinesPdf, handleRulesCommand, saveChatRule, ruleClientById, type RulesIntakeDeps } from './services/telegram-rules-intake.js';
-import { parseRulesCommand, isStandingRule } from './services/standing-rules-chat.js';
-import { CanvaDesignPlanner, unwrapCopyEnvelope } from './services/canva-design-planner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
-import { revisionMetrics } from './services/revision-metrics.js';
-import { askLedger } from './services/ask-ledger.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
 import {
   canonicalJson,
   computeDnaHash,
   isValidUuid,
   inlineTemplateCopyMissing,
-  COPY_REQUIRED_DETAIL,
   TaskStoreUnavailableError,
   qaReportSha256,
   secretsEqual,
   probeDatabase,
   evaluateCanvaExportQc,
-  cutText,
   type CreateAppOptions,
 } from './core-helpers.js';
 import type { ClientDnaSnapshot, RouteContext } from './routes/types.js';
 import type { QAEngine } from '@hawa/contracts';
-import { DEFAULT_TENANT_ID, OPERATOR_USER_ID, ADMIN_USER_ID, DEFAULT_CLIENT_ID } from './core-context.js';
+import { DEFAULT_TENANT_ID, OPERATOR_USER_ID, ADMIN_USER_ID } from './core-context.js';
 import { createTaskReader } from './services/task-reader.js';
 import { createClientDnaResolver } from './services/client-dna-resolver.js';
-import { LIVE_RUN } from './services/live-run.js';
-import { pendingChangeOf as findPendingChange, pendingChangeWords } from './services/pending-change.js';
-import { createOmnichannelDelivery, type OmnichannelDeliveryDeps } from './services/omnichannel-delivery.js';
+import { noDatabaseStore } from './services/no-database-store.js';
+import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -343,8 +201,6 @@ export function createApp(options?: CreateAppOptions) {
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
   const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
-  // Production Studio is strictly Canva Native Studio under ADR 021 & CV-22/CV-23
-  const activeStudioType = 'canva';
   const publisher = options?.publisher || new GooglePublisher();
   const modelGateway = new ResilientModelGateway();
   const evalRunner = new EvaluationRunner(modelGateway);
@@ -387,29 +243,21 @@ export function createApp(options?: CreateAppOptions) {
     Promise.race([channelKillSwitchStore.loaded, new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref?.())])
   );
 
-  // Local instance-scoped data structures
-  const tasks = new Map<string, any>();
-  const events = new Map<string, any[]>();
-  const briefs = new Map<string, DesignBrief>();
-  const revisions = new Map<string, any>();
-  const decisions = new Map<string, ApprovalDecision[]>();
-  const feedbacks = new Map<string, FeedbackEvent[]>();
+  // Without a database, the office's tasks, their events and briefs, client DNA history and uploaded
+  // assets live in these maps (development and the in-memory tests). With one, each holds nothing and
+  // Postgres is the only truth (services/no-database-store.ts; architecture programme 1.3, cleanup).
+  const tasks: Map<string, any> = noDatabaseStore(db);
+  const events: Map<string, any[]> = noDatabaseStore(db);
+  const briefs: Map<string, DesignBrief> = noDatabaseStore(db);
+  const clientSnapshots: Map<string, ClientDnaSnapshot[]> = noDatabaseStore(db);
+  const uploadedAssets: Map<string, any> = noDatabaseStore(db);
+  // Client DNA as this process loaded it from Postgres (clientDnaHydrated below), which answers first
+  // (services/client-dna-resolver.ts). Without a database, or for the invented offices a test seeds,
+  // it is all there is.
   const clientDnas = new Map<string, ClientDNA>();
   const resolveClientDna = createClientDnaResolver({ db, clientDnas });
-
-  const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
-
+  // Evaluation runs have no table yet; SPLIT_PLAN.md section 7 leaves them to the owner.
   const evalRuns = new Map<string, any>();
-  const uploadedAssets = new Map<string, any>();
-  const workflowControllers = new Map<string, TaskWorkflowController>();
-  const rubricReports = new Map<string, QualityRubricReport[]>();
-  // Read and written by nothing since groups G3 and G5 of the split (SPLIT_PLAN.md section 7), like
-  // `decisions` above: comments, delivery receipts, running deliveries and the outbox are Postgres's.
-  // CoreContext still names them; the split's cleanup step removes them with their fields.
-  const taskComments = new Map<string, any[]>();
-  const omnichannelReceipts = new Map<string, any>();
-  const inFlightPublications: OmnichannelDeliveryDeps['inFlightPublications'] = new Map();
-  const inMemoryOutbox = new Map<string, any[]>();
 
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
@@ -462,7 +310,6 @@ export function createApp(options?: CreateAppOptions) {
 
   // Client DNA comes from PostgreSQL (clientDnaHydrated below). Only a test seeds invented offices,
   // through options.seedClientDna (SPLIT_PLAN.md section 6, stage 2).
-  const defaultClientId = DEFAULT_CLIENT_ID;
   options?.seedClientDna?.(clientDnas, clientSnapshots);
 
   interface IssuedSession {
@@ -1071,24 +918,14 @@ export function createApp(options?: CreateAppOptions) {
     tasks,
     events,
     briefs,
-    revisions,
-    decisions,
-    feedbacks,
     clientDnas,
     clientSnapshots,
     evalRuns,
     uploadedAssets,
-    workflowControllers,
-    rubricReports,
-    taskComments,
-    omnichannelReceipts,
-    inFlightPublications,
-    inMemoryOutbox,
     historicalMigrator: globalHistoricalMigrator,
     globalCanvaNativeAdapter,
     globalCanvaCircuitBreaker,
     channelKillSwitches,
-    issuedSessions,
     subscribers,
     verifyRequestAuth,
     problem,
@@ -1142,25 +979,6 @@ export function createApp(options?: CreateAppOptions) {
   registerWhatsappRoutes(routeContext);
   registerTelegramWebhookRoutes(routeContext);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // =========================================================================
-  // Track B Acceptance Gates: Visual QA Rubric & Durable Workflows
-  // =========================================================================
-
-
-
   // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
   // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
   if (db && outboxRepo && process.env.TELEGRAM_BOT_TOKEN && options?.enableDraftReminders) {
@@ -1199,8 +1017,9 @@ export function createApp(options?: CreateAppOptions) {
     setTimeout(pass, 120_000).unref?.();
   }
 
-  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
-  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
+  // Client DNA as the office saved it in PostgreSQL, loaded before the port opens (a test may have
+  // seeded invented offices above; the database wins: see client-dna-hydration.ts). Production
+  // refuses to start when it cannot be read.
   const clientDnaHydrated: Promise<number> = db
     ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
         (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },

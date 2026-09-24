@@ -23,8 +23,8 @@ import type { TelegramReplyReading } from './replies.js';
 
 export type TelegramChanges = ReturnType<typeof createTelegramChanges>;
 
-export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 'feedbacks' | 'problem' | 'broadcastEvent' | 'broadcastTransition' | 'outboxRepo' | 'telegramBridge'>) {
-  const { db, events, feedbacks, problem, broadcastEvent: broadcast, broadcastTransition } = deps;
+export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 'problem' | 'broadcastEvent' | 'broadcastTransition' | 'outboxRepo' | 'telegramBridge'>) {
+  const { db, events, problem, broadcastEvent: broadcast, broadcastTransition } = deps;
   // createApp always builds the bridge; the shared context types it as optional.
   const telegramBridge = deps.telegramBridge ?? (() => { throw new Error('Telegram intake needs the Telegram bridge'); })();
   const { markTelegramUpdateHandled, taskDesignState, revisionInFlight } = createTelegramUpdateState(deps);
@@ -92,27 +92,6 @@ export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 
       // IN_PROGRESS, a word only Core's memory had). This path writes no move to the database.
       feedbackTargetTask.status = 'REVISION_REQUESTED';
       feedbackTargetTask.updatedAt = new Date().toISOString();
-
-      if (!feedbacks.has(targetId)) {
-        feedbacks.set(targetId, []);
-      }
-      feedbacks.get(targetId)?.push({
-        feedbackId: crypto.randomUUID(),
-        taskId: targetId,
-        clientId,
-        designRevisionId: feedbackTargetTask.latestRevisionId || crypto.randomUUID(),
-        polarity: 'negative',
-        category: 'layout',
-        rawFeedbackText: rawText,
-        attributedActor: {
-          userId: crypto.randomUUID(),
-          displayName: senderName,
-        },
-        governance: {
-          status: 'received',
-        },
-        occurredAt: new Date().toISOString(),
-      });
 
       // A lasting preference said with this change was saved above as a client rule (the
       // classifier reads it; the old phrase list only proposed it to a Desk queue kept in memory).

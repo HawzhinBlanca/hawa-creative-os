@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { TaskStateMachine, isAuthorizedReviewerRole, type PinnedExport } from '@hawa/domain';
-import { withRlsContext, toApiTaskStatus } from '@hawa/db';
+import { isAuthorizedReviewerRole, type PinnedExport } from '@hawa/domain';
+import { withRlsContext, sql } from '@hawa/db';
 import { HumanApprovalManager } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
-import { isValidUuid, qaReportSha256 } from '../core-helpers.js';
+import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { parsePinnedExportIds } from '../services/pinned-deliverables.js';
 import { pendingChangeOf as findPendingChange, pendingChangeWords } from '../services/pending-change.js';
@@ -23,7 +23,6 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     db,
     taskRepo,
     revisionRepo,
-    events,
     deliverableStore,
     readCurrentTask,
     resolveTaskWithFallback,
@@ -202,10 +201,14 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               .executeTakeFirst()
           );
           if (latestDbQc) {
+            effectiveQcRunId = latestDbQc.id;
+            effectiveQcReportHash = latestDbQc.report_sha256;
+            // Hash tampering verification (CV-15, R05): the hash a reviewer echoes is the stored run's.
+            if (body.qcReportHash && body.qcReportHash !== effectiveQcReportHash) {
+              return problem(c, 422, 'Unprocessable Entity', 'Submitted QC report hash does not match stored QC run hash');
+            }
             if (latestDbQc.status === 'passed' && latestDbQc.critical_pass) {
               passingQcVerified = true;
-              effectiveQcRunId = latestDbQc.id;
-              effectiveQcReportHash = latestDbQc.report_sha256;
             } else {
               return problem(
                 c,
@@ -220,35 +223,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         }
       }
 
-      if (!passingQcVerified && task?.latestQAReport) {
-        const reportRev = task.latestQAReport.revisionId || task.latestQAReport.designRevisionId;
-        if (reportRev && reportRev !== revisionId && reportRev !== resolvedRev.id) {
-          return problem(
-            c,
-            412,
-            'QA Verification Required',
-            `Cannot approve revision ${revisionId}: QA report was executed for revision ${reportRev}, not current revision`
-          );
-        }
-        effectiveQcReportHash = qaReportSha256(task.latestQAReport);
-
-        // Hash tampering verification (CV-15, R05)
-        if (body.qcReportHash && effectiveQcReportHash && body.qcReportHash !== effectiveQcReportHash) {
-          return problem(c, 422, 'Unprocessable Entity', 'Submitted QC report hash does not match stored QC run hash');
-        }
-
-        if (task.latestQAReport.criticalPass === true) {
-          passingQcVerified = true;
-        } else {
-          return problem(
-            c,
-            412,
-            'QA Verification Required',
-            'Cannot approve design revision with failing critical QA evaluation'
-          );
-        }
-      }
-
+      // The QC evidence is the run Postgres holds (above). A QA report kept on this process's copy of
+      // the task, or sent by the caller with a revision, was trusted here and lost at a restart.
       if (!passingQcVerified && (body.requireQcPass === true || c.req.header('x-require-qc') === 'true')) {
         return problem(
           c,
@@ -256,11 +232,6 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           'QA Verification Required',
           'Precondition failed: design revision cannot be approved without a verified, passing critical QA run'
         );
-      }
-
-      // Hash tampering verification if DB QC was used
-      if (body.qcReportHash && effectiveQcReportHash && body.qcReportHash !== effectiveQcReportHash) {
-        return problem(c, 422, 'Unprocessable Entity', 'Submitted QC report hash does not match stored QC run hash');
       }
 
       // Stale or revoked Canva binding verification (Server Authoritative)
@@ -273,13 +244,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         return problem(c, 422, 'Stale Canva Binding', `Cannot approve design revision with Canva binding in status '${effectiveBindingStatus}'`);
       }
 
-      // Capture set hash tampering verification
-      if (task?.latestCaptureSet?.parent_revision_id && task.latestCaptureSet.parent_revision_id !== revisionId && task.latestCaptureSet.parent_revision_id !== resolvedRev.id) {
-        return problem(c, 422, 'Unprocessable Entity', 'Submitted captured artifact set belongs to a different revision');
-      }
-      if (body.capturedArtifactSetHash && task?.latestCaptureSet && body.capturedArtifactSetHash !== task.latestCaptureSet.capturedArtifactSetHash) {
-        return problem(c, 422, 'Unprocessable Entity', `Submitted captured artifact set hash '${body.capturedArtifactSetHash}' does not match stored Merkle root '${task.latestCaptureSet.capturedArtifactSetHash}'`);
-      }
+      // What an approval ships is the exports pinned below, checked against the store. A capture set
+      // sent with a revision was kept only on this process's copy of the task, and checked from there.
     }
 
     // The exports pinned here are what delivery will send, byte for byte (pinned-deliverables.ts).
@@ -304,7 +270,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
 
     const sourceHash = resolvedRev.document?.sourceSha256 || resolvedRev.sourceSha256 || crypto.createHash('sha256').update(JSON.stringify(resolvedRev.document || {})).digest('hex');
-    const qcReportHash = effectiveQcReportHash || qaReportSha256(task?.latestQAReport);
+    const qcReportHash = effectiveQcReportHash;
 
     let dbApproval: any = null;
     if (revisionRepo && db) {
@@ -378,35 +344,16 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       ...(pinnedExports ? { pinnedExports } : {}),
     };
 
+    // The repair budget: a task sent back for changes more than twice goes to an operator. The count
+    // is the revision requests Postgres records before this one (services/task-reader.ts); it was
+    // kept on this process's copy of the task and started again from zero after a restart.
     if (task) {
-      const currentTaskStatus = toApiTaskStatus(task.status || task.state || 'received') as any;
-      const sm = new TaskStateMachine(taskId, currentTaskStatus, task.repairCount || 0);
-      if (decision.decision === 'approved') {
-        const trans = sm.transition('APPROVED', { type: 'user', id: decision.actor.userId }, 'Human approved in Desk');
-        task.status = 'APPROVED';
-        (task as any).latestApproval = decision;
-        if (trans.ok) {
-          events.get(taskId)?.push(trans.value);
-        }
-      } else if (decision.decision === 'rejected') {
-        const trans = sm.transition('REJECTED', { type: 'user', id: decision.actor.userId }, body.reason || 'Human rejected in Desk');
-        task.status = 'REJECTED';
-        if (trans.ok) {
-          events.get(taskId)?.push(trans.value);
-        }
-      } else if (decision.decision === 'revision_requested') {
+      if (decision.decision === 'approved') task.status = 'APPROVED';
+      else if (decision.decision === 'rejected') task.status = 'REJECTED';
+      else if (decision.decision === 'revision_requested') {
         task.repairCount = (task.repairCount || 0) + 1;
-        if (task.repairCount > 2) {
-          const trans = sm.transition('OPERATOR_REQUIRED', { type: 'user', id: decision.actor.userId }, 'Exceeded max human revision cycles (2)');
-          task.status = 'OPERATOR_REQUIRED';
-          if (trans.ok) events.get(taskId)?.push(trans.value);
-        } else {
-          const trans = sm.transition('REVISION_REQUESTED', { type: 'user', id: decision.actor.userId }, decision.revisionRequest?.comment || 'Revision requested');
-          task.status = 'REVISION_REQUESTED';
-          if (trans.ok) events.get(taskId)?.push(trans.value);
-        }
+        task.status = task.repairCount > 2 ? 'OPERATOR_REQUIRED' : 'REVISION_REQUESTED';
       }
-      task.version = (task.version || 1) + 1;
     }
 
     if (taskRepo && db) {
@@ -472,6 +419,15 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           return row && row.task_id === taskId ? { document: row.neutral_manifest as { nodes?: unknown[] } } : undefined;
         })
       : undefined;
+    // The QA evidence is the revision's newest QC run as Postgres holds it, with the hash it stored.
+    // It was the report kept on this process's copy of the task: another Core showed "not run".
+    const qcRun = isValidUuid(revId) && isValidUuid(taskId)
+      ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
+          (await sql<{ id: string; status: string; critical_pass: boolean | null; report: { findings?: unknown[] } | null; report_sha256: string | null }>`
+            SELECT id, status, critical_pass, report, report_sha256 FROM hawa.qc_runs
+            WHERE tenant_id = ${auth.tenantId || DEFAULT_TENANT_ID}::uuid AND task_id = ${taskId}::uuid AND design_revision_id = ${revId}::uuid
+            ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0])
+      : undefined;
 
     const deskInspection = humanApprovalManager.buildReviewDeskInspection({
       taskId,
@@ -507,15 +463,13 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       },
       // Without a QA report the evidence says not run; it used to show a passed, critical-pass report
       // with a random run id and the hash 'verified_qc_pass'.
-      qaEvidence: task.latestQAReport
+      qaEvidence: qcRun
         ? {
-            qcRunId: task.latestQAReport.qcRunId ?? null,
-            status:
-              task.latestQAReport.status ||
-              (task.latestQAReport.criticalPass === true ? 'passed' : task.latestQAReport.criticalPass === false ? 'failed' : 'unknown'),
-            criticalPass: typeof task.latestQAReport.criticalPass === 'boolean' ? task.latestQAReport.criticalPass : null,
-            qcReportHash: qaReportSha256(task.latestQAReport),
-            findingsCount: task.latestQAReport.findings?.length || 0,
+            qcRunId: qcRun.id,
+            status: qcRun.status === 'passed' || qcRun.status === 'failed' || qcRun.status === 'blocked' ? qcRun.status : 'unknown',
+            criticalPass: typeof qcRun.critical_pass === 'boolean' ? qcRun.critical_pass : null,
+            qcReportHash: qcRun.report_sha256,
+            findingsCount: Array.isArray(qcRun.report?.findings) ? qcRun.report.findings.length : 0,
             glyphCoveragePass: true,
             unobservedLayersCount: 0,
           }

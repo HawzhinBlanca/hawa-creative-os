@@ -367,10 +367,10 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       updatedAt: new Date().toISOString(),
     };
 
-    const existingMemoryTask = Array.from(tasks.values()).find(
+    const existingMemoryTask = db ? undefined : Array.from(tasks.values()).find(
       (t: any) => t.sourcePlatform === platform && t.sourceEventId === sourceEventId
     );
-    if (existingMemoryTask && !db) {
+    if (existingMemoryTask) {
       return {
         task: existingMemoryTask,
         brief: briefs.get(existingMemoryTask.id) || brief,
@@ -432,19 +432,23 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     task.generatedOps = generatedOps;
     if (designRefusal) task.designRefusal = designRefusal;
 
-    briefs.set(taskId, brief);
-    tasks.set(taskId, task);
-    events.set(taskId, [
-      {
-        eventId: crypto.randomUUID(),
-        taskId,
-        fromStatus: null,
-        toStatus: task.status,
-        actor: ctx.actor,
-        reason: `Incoming ${platform} message processed`,
-        occurredAt: new Date().toISOString(),
-      },
-    ]);
+    // Without a database this process is where the task lives (services/no-database-store.ts); with
+    // one it is in Postgres already, and a copy here would answer for it after it changed.
+    if (!db) {
+      briefs.set(taskId, brief);
+      tasks.set(taskId, task);
+      events.set(taskId, [
+        {
+          eventId: crypto.randomUUID(),
+          taskId,
+          fromStatus: null,
+          toStatus: task.status,
+          actor: ctx.actor,
+          reason: `Incoming ${platform} message processed`,
+          occurredAt: new Date().toISOString(),
+        },
+      ]);
+    }
 
     broadcast('webhook:received', { platform, updateId: sourceEventId, taskId });
     broadcast('task:created', task);
