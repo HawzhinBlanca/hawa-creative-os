@@ -8,6 +8,7 @@ import type { ClientDnaSnapshot, RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
 import { log } from '../logging.js';
+import { findClientRowId } from '../services/client-row.js';
 
 /**
  * What the office learns about a client: generation budgets, candidate rules mined from feedback and
@@ -116,12 +117,8 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     const tenantId = auth.tenantId || defaultTenantId;
 
     if (db && clientRepo) {
-      targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-        ? clientId
-        : (await clientRepo.findByCode(tenantId, clientId))?.id;
-      if (!targetId && clientId.startsWith('client-')) {
-        targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
-      }
+      // Inside a row-level-security context: outside one a client code finds nothing (services/client-row.ts).
+      targetId = await findClientRowId(db, clientRepo, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, clientId);
       if (!targetId) {
         return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
       }
@@ -185,7 +182,7 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
               tenantId,
               clientId: targetId,
               version: candidateDna.version,
-              dna: { ...candidateDna, __commitMessage: snap.commitMessage },
+              dna: { ...candidateDna, __commitMessage: snap.commitMessage, __createdBy: snap.createdBy },
               contentHash: hash,
               createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             }, trx);
@@ -197,9 +194,12 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
       }
 
       clientDnas.set(clientId, candidateDna);
-      const list = clientSnapshots.get(clientId) || [];
-      list.unshift(snap);
-      clientSnapshots.set(clientId, list);
+      // With a database the snapshot is the version just saved; the map is the store only without one.
+      if (!db) {
+        const list = clientSnapshots.get(clientId) || [];
+        list.unshift(snap);
+        clientSnapshots.set(clientId, list);
+      }
 
       broadcast('dna:snapshot_created', { clientId, version: candidateDna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
@@ -289,12 +289,8 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
     const tenantId = auth.tenantId || defaultTenantId;
 
     if (db && clientRepo) {
-      targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-        ? clientId
-        : (await clientRepo.findByCode(tenantId, clientId))?.id;
-      if (!targetId && clientId.startsWith('client-')) {
-        targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
-      }
+      // Inside a row-level-security context: outside one a client code finds nothing (services/client-row.ts).
+      targetId = await findClientRowId(db, clientRepo, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, clientId);
       if (!targetId) {
         return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
       }
@@ -334,7 +330,7 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
               tenantId,
               clientId: targetId,
               version: candidateDna.version,
-              dna: { ...candidateDna, __commitMessage: snap.commitMessage },
+              dna: { ...candidateDna, __commitMessage: snap.commitMessage, __createdBy: snap.createdBy },
               contentHash: hash,
               createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             }, trx);
@@ -346,9 +342,11 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
       }
 
       clientDnas.set(clientId, candidateDna);
-      const list = clientSnapshots.get(clientId) || [];
-      list.unshift(snap);
-      clientSnapshots.set(clientId, list);
+      if (!db) {
+        const list = clientSnapshots.get(clientId) || [];
+        list.unshift(snap);
+        clientSnapshots.set(clientId, list);
+      }
       broadcast('dna:snapshot_created', { clientId, version: candidateDna.version, sha256: hash, snapshotId: snap.snapshotId });
     }
 

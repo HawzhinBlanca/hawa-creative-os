@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {
   buildDeliveredNotificationPayload,
   deliveredNotificationKey,
@@ -23,7 +23,7 @@ const auth = { ...json, Authorization: 'Bearer test_bearer' };
 
 async function setup() {
   const exports = memoryExportStore();
-  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true }, deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true }, deliverableStore: exports.store });
   const kaaeDna = await (await app.request(`/clients/${KAAE}/dna`)).json();
   const saveDna = async (spreadsheetId: string) => {
     const res = await app.request(`/clients/${NO_SHEET_CLIENT}/dna`, {

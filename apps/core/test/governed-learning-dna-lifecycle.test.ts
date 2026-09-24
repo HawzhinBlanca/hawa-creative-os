@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { createDb, withRlsContext } from '@hawa/db';
 
 describe('Milestone 6: Governed Learning, Candidate Rule Promotion & DNA Rollback Lifecycle', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createApp({ db });
+  const app = createAppWithClientFixtures({ db });
 
   const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
   const drusteeClientId = 'c1000000-0000-4000-8000-000000000003';

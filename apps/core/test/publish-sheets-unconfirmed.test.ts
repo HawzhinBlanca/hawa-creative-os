@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
 /**
@@ -18,7 +18,7 @@ const auth = { ...json, Authorization: 'Bearer test_bearer' };
 
 async function setup() {
   const exports = memoryExportStore();
-  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   // A client whose DNA names a Drive folder but no spreadsheet, so Sheets can never confirm a row.
   const kaaeDna = await (await app.request(`/clients/${KAAE}/dna`)).json();

@@ -1,14 +1,13 @@
 import { evaluateVisionRubric, type RubricCanvasNode } from '@hawa/qa';
 import type { RouteContext } from './types.js';
-import { DEFAULT_CLIENT_ID } from '../core-context.js';
+import type { Context } from 'hono';
 
 /**
  * The visual QA rubric scorer and its reports. Moved out of app.ts by group G1 (leaves) of the split
  * (architecture programme 1.3, SPLIT_PLAN.md section 2).
  */
 export function registerRubricRoutes(ctx: RouteContext): void {
-  const { registerRoute, problem, resolveTaskWithFallback, resolveClientDna, rubricReports, broadcastEvent: broadcast } = ctx;
-  const defaultClientId = DEFAULT_CLIENT_ID;
+  const { registerRoute, problem, resolveTaskWithFallback, resolveClientDna, broadcastEvent: broadcast } = ctx;
 
   // Multilingual Visual QA Vision Rubric Scorer (FR-039, FR-041, Invariant #9, Gate E)
   registerRoute('post', '/tasks/:taskId/revisions/:revisionId/evaluate-rubric', async (c: any) => {
@@ -16,7 +15,10 @@ export function registerRubricRoutes(ctx: RouteContext): void {
     const revisionId = c.req.param('revisionId');
     const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
-    const clientId = task.clientId || defaultClientId;
+    // The client's brand colours are part of the score. A task that names no client used to be
+    // scored as the fixture office client-office-1 (SPLIT_PLAN.md section 6).
+    const clientId: string | undefined = task.clientId || undefined;
+    if (!clientId) return problem(c, 422, 'CLIENT_REQUIRED', 'The task names no client, so there are no brand colours to score against. Assign the client first.');
     const client = await resolveClientDna(clientId);
 
     const body = await c.req.json().catch(() => ({}));
@@ -56,18 +58,14 @@ export function registerRubricRoutes(ctx: RouteContext): void {
       dimensions,
     });
 
-    const existingReports = rubricReports.get(taskId) || [];
-    existingReports.push(report);
-    rubricReports.set(taskId, existingReports);
-
     broadcast('qa:rubric_evaluated', { taskId, revisionId, report });
 
     return c.json(report, 200);
   });
 
-  registerRoute('get', '/tasks/:taskId/rubric-reports', async (c: any) => {
-    const taskId = c.req.param('taskId');
-    const reports = rubricReports.get(taskId) || [];
-    return c.json(reports, 200);
-  });
+  // The reports were kept in this process's memory: lost on a restart, different in each Core, and
+  // never read by the Desk. Nothing stores them now (SPLIT_PLAN.md section 7, G1), so this says so
+  // rather than answering with an empty list that reads as "never scored".
+  registerRoute('get', '/tasks/:taskId/rubric-reports', (c: Context) =>
+    problem(c, 410, 'Gone', 'Rubric reports are not stored. POST .../evaluate-rubric returns each report to its caller.'));
 }

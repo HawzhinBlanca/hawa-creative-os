@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
 
 describe('Core API: Ingress & Task Lifecycle', () => {
   const exports = memoryExportStore();
-  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');

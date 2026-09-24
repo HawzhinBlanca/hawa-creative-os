@@ -4,6 +4,7 @@ import { withRlsContext } from '@hawa/db';
 import { validateClientDna, type ClientDNA } from '@hawa/domain';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
+import { findClientRowId, snapshotFromRow } from '../services/client-row.js';
 
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
@@ -22,8 +23,30 @@ export function registerClientsRoutes(ctx: RouteContext) {
   const operatorUserId = OPERATOR_USER_ID;
 
   // Client DNA Listing
-  registerRoute('get', '/clients', (c: any) => {
+  registerRoute('get', '/clients', async (c: any) => {
     const uniqueDnas = Array.from(new Map(Array.from(clientDnas.values()).map((d) => [d.clientId, d])).values());
+    // With a database, a client's history is the versions Postgres holds (SPLIT_PLAN G2); the map
+    // only lists the clients hydrated from it. Keyed by the three spellings of a client.
+    let storedVersions: Map<string, number> | undefined;
+    if (db) {
+      try {
+        const auth = verifyRequestAuth(c);
+        const tenantId = auth.tenantId || defaultTenantId;
+        const rows = await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, (trx) =>
+          trx.selectFrom('client_dna_versions as v')
+            .innerJoin('clients as cl', (join) => join.onRef('cl.id', '=', 'v.client_id').onRef('cl.tenant_id', '=', 'v.tenant_id'))
+            .select((eb) => ['v.client_id', 'cl.code', eb.fn.countAll<string>().as('n')])
+            .where('v.tenant_id', '=', tenantId)
+            .groupBy(['v.client_id', 'cl.code'])
+            .execute());
+        storedVersions = new Map();
+        for (const row of rows) {
+          for (const key of [row.client_id, String(row.code), `client-${row.code}`]) storedVersions.set(key, Number(row.n));
+        }
+      } catch {
+        storedVersions = undefined;
+      }
+    }
     const list = uniqueDnas.map((d) => ({
       clientId: d.clientId,
       name: d.name,
@@ -35,7 +58,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
       updatedAt: d.updatedAt,
       colorsCount: d.colors.length,
       rulesCount: d.guidelines.layoutRules.length,
-      snapshotsCount: (clientSnapshots.get(d.clientId) || []).length,
+      snapshotsCount: storedVersions ? storedVersions.get(d.clientId) ?? 0 : (clientSnapshots.get(d.clientId) || []).length,
     }));
     return c.json(list, 200);
   });
@@ -68,17 +91,21 @@ export function registerClientsRoutes(ctx: RouteContext) {
           }
         }
       } catch {
-        // Fallback to in-memory
+        // Answered below by the resolver, which reads Postgres again before the map.
       }
     }
-    const dna = clientDnas.get(clientId);
+    // The shared resolver, as the deleted app.ts copy of this route used (SPLIT_PLAN G2); it was
+    // clientDnas.get here, which a database read failure turned into the fixture's DNA.
+    const auth = verifyRequestAuth(c);
+    const dna = await resolveClientDna(clientId, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role });
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
     return c.json(dna);
   });
 
-  // GET /clients/:clientId/snapshots below reads hawa.client_dna_versions. This module had a
-  // memory-only copy registered before app.ts's, so the Desk's DNA history never showed what Postgres
-  // held (architecture programme 1.3, SPLIT_PLAN G0; test N5).
+  // With a database, a client's DNA history is hawa.client_dna_versions and nothing else (SPLIT_PLAN
+  // G0 and G2; tests N5 and split-g2-client-dna-postgres): the routes below neither read nor write
+  // the snapshot map then. It was the only copy of commit messages and rollback targets, lost on a
+  // restart and different in each Core. Without a database (tests) the map is still the store.
 
   // Client DNA
   registerRoute('post', '/clients/:clientId/dna', async (c: any) => {
@@ -177,7 +204,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
             tenantId,
             clientId: targetId,
             version: dna.version,
-            dna,
+            dna: { ...dna, __commitMessage: body.commitMessage || `Client DNA updated to v${dna.version}`, __createdBy: author },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
             expectedVersion: body.expectedVersion,
@@ -203,9 +230,11 @@ export function registerClientsRoutes(ctx: RouteContext) {
       createdAt: new Date().toISOString(),
       dna,
     };
-    const list = clientSnapshots.get(clientId) || [];
-    list.unshift(snap);
-    clientSnapshots.set(clientId, list);
+    if (!db) {
+      const list = clientSnapshots.get(clientId) || [];
+      list.unshift(snap);
+      clientSnapshots.set(clientId, list);
+    }
 
     broadcast('dna:updated', { clientId, version: dna.version, sha256: hash });
 
@@ -215,48 +244,17 @@ export function registerClientsRoutes(ctx: RouteContext) {
   registerRoute('get', '/clients/:clientId/snapshots', async (c: any) => {
     const clientId = c.req.param('clientId');
     if (db && clientRepo) {
+      const auth = verifyRequestAuth(c);
+      const tenantId = auth.tenantId || defaultTenantId;
+      const scope = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
       try {
-        const auth = verifyRequestAuth(c);
-        const tenantId = auth.tenantId || defaultTenantId;
-        // hawa.clients is under RLS: looked up outside a context, a code finds nothing and the
-        // answer fell back to Core's memory (the fixture snapshots). findByCode also reads client-<code>.
-        const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) =>
-              (await clientRepo.findByCode(tenantId, clientId, trx))?.id);
-        if (targetId) {
-          const rows = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            return await clientRepo.listDnaSnapshots(tenantId, targetId, trx);
-          });
-          if (rows && rows.length > 0) {
-            const inMemory = clientSnapshots.get(clientId) || [];
-            const inMemoryMap = new Map(inMemory.map((s: any) => [s.version, s]));
-            const mapped = rows.map((r: any) => {
-              const parsed = typeof r.dna === 'string' ? JSON.parse(r.dna) : r.dna;
-              const matchingMem = inMemoryMap.get(r.version);
-              return {
-                snapshotId: matchingMem?.snapshotId || r.id,
-                clientId: r.client_id,
-                version: r.version,
-                sha256: r.content_hash,
-                commitMessage: matchingMem?.commitMessage || parsed?.__commitMessage || `Version ${r.version} (${r.status})`,
-                createdBy: matchingMem?.createdBy || r.created_by || 'operator',
-                createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
-                dna: parsed,
-              };
-            });
-            const versionsInDb = new Set(mapped.map((m: any) => m.version));
-            for (const item of inMemory) {
-              if (!versionsInDb.has(item.version)) {
-                mapped.push(item);
-              }
-            }
-            mapped.sort((a: any, b: any) => b.version - a.version);
-            return c.json(mapped, 200);
-          }
-        }
-      } catch {
-        // Fallback to in-memory
+        const targetId = await findClientRowId(db, clientRepo, scope, clientId);
+        if (!targetId) return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+        const rows = await withRlsContext(db, { ...scope, clientId: targetId }, (trx) => clientRepo.listDnaSnapshots(tenantId, targetId, trx));
+        return c.json(rows.map(snapshotFromRow), 200);
+      } catch (err) {
+        // Not the fixture list: an unreadable database is not an empty history.
+        return problem(c, 503, 'Database Unavailable', (err as Error)?.message || 'Could not read the client DNA history');
       }
     }
     const list = clientSnapshots.get(clientId) || [];
@@ -273,11 +271,31 @@ export function registerClientsRoutes(ctx: RouteContext) {
     if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
 
     const body = await c.req.json().catch(() => ({}));
-    if (body.expectedVersion !== undefined && body.expectedVersion !== dna.version) {
-      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${dna.version}`);
+    const tenantId = auth.tenantId || defaultTenantId;
+    const scope = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
+    // With a database the snapshot is a version of hawa.client_dna_versions, numbered after the
+    // active one. A code used to be looked up outside a row-level-security context, find nothing,
+    // and leave the snapshot in this process's memory only, while the answer said 201.
+    let targetId: string | undefined;
+    let currentVersion = dna.version;
+    if (db && clientRepo) {
+      try {
+        targetId = await findClientRowId(db, clientRepo, scope, clientId);
+        if (targetId) {
+          const rowId = targetId;
+          const active = await withRlsContext(db, { ...scope, clientId: rowId }, (trx) => clientRepo.findActiveDna(tenantId, rowId, trx));
+          if (active) currentVersion = active.version;
+        }
+      } catch (err) {
+        return problem(c, 503, 'Database Unavailable', (err as Error)?.message || 'Could not read the client');
+      }
+      if (!targetId) return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+    }
+    if (body.expectedVersion !== undefined && body.expectedVersion !== currentVersion) {
+      return problem(c, 409, 'Conflict', `Optimistic lock failed: expected version ${body.expectedVersion} but current version is ${currentVersion}`);
     }
 
-    const newVersion = dna.version + 1;
+    const newVersion = currentVersion + 1;
     const author = (auth.actorId && auth.actorId !== 'test_harness' && auth.actorId !== 'anonymous')
       ? auth.actorId
       : (body.createdBy || auth.userId || auth.role || 'operator');
@@ -292,25 +310,21 @@ export function registerClientsRoutes(ctx: RouteContext) {
 
     const hash = computeDnaHash(updatedDna);
 
-    if (db && clientRepo) {
+    const commitMessage = body.commitMessage || `Manual governance snapshot (v${newVersion})`;
+    if (db && clientRepo && targetId) {
+      const rowId = targetId;
       try {
-        const tenantId = auth.tenantId || defaultTenantId;
-        const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
-        if (targetId) {
-          await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            await clientRepo.saveDnaVersion({
-              tenantId,
-              clientId: targetId,
-              version: newVersion,
-              dna: updatedDna,
-              contentHash: hash,
-              createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
-              expectedVersion: body.expectedVersion !== undefined ? body.expectedVersion : undefined,
-            }, trx);
-          });
-        }
+        await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
+          await clientRepo.saveDnaVersion({
+            tenantId,
+            clientId: rowId,
+            version: newVersion,
+            dna: { ...updatedDna, __commitMessage: commitMessage, __createdBy: author },
+            contentHash: hash,
+            createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
+            expectedVersion: body.expectedVersion !== undefined ? body.expectedVersion : undefined,
+          }, trx);
+        });
       } catch (err: any) {
         if (err.message && err.message.includes('OptimisticConcurrencyConflict')) {
           return problem(c, 409, 'Conflict', err.message);
@@ -326,15 +340,17 @@ export function registerClientsRoutes(ctx: RouteContext) {
       clientId,
       version: newVersion,
       sha256: hash,
-      commitMessage: body.commitMessage || `Manual governance snapshot (v${newVersion})`,
+      commitMessage,
       createdBy: author,
       createdAt: new Date().toISOString(),
       dna: updatedDna,
     };
 
-    const list = clientSnapshots.get(clientId) || [];
-    list.unshift(snap);
-    clientSnapshots.set(clientId, list);
+    if (!db) {
+      const list = clientSnapshots.get(clientId) || [];
+      list.unshift(snap);
+      clientSnapshots.set(clientId, list);
+    }
 
     broadcast('dna:snapshot_created', { clientId, version: newVersion, sha256: hash, snapshotId: snap.snapshotId });
 
@@ -361,16 +377,39 @@ export function registerClientsRoutes(ctx: RouteContext) {
       return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
     }
 
-    const snapshots = clientSnapshots.get(clientId) || [];
-    const targetSnap = snapshots.find(
-      (s) => (targetVersion && s.version === targetVersion) || (snapshotId && s.snapshotId === snapshotId)
-    );
+    // With a database the version to return to, and the one it follows, are Postgres's: the
+    // snapshot list used to be this process's memory, so a version saved through another Core or
+    // before a restart could not be rolled back to.
+    const tenantId = auth.tenantId || defaultTenantId;
+    const scope = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
+    const matches = (s: { version: number; snapshotId: string }) =>
+      (targetVersion && s.version === targetVersion) || (snapshotId && s.snapshotId === snapshotId);
+    let targetId: string | undefined;
+    let activeVersion = currentDna.version || 1;
+    let targetSnap: { version: number; snapshotId: string; dna: ClientDNA } | undefined;
+    if (db && clientRepo) {
+      try {
+        targetId = await findClientRowId(db, clientRepo, scope, clientId);
+        if (targetId) {
+          const rowId = targetId;
+          const rows = await withRlsContext(db, { ...scope, clientId: rowId }, (trx) => clientRepo.listDnaSnapshots(tenantId, rowId, trx));
+          targetSnap = rows.map(snapshotFromRow).find(matches);
+          const active = rows.find((r) => r.status === 'active');
+          if (active) activeVersion = active.version;
+        }
+      } catch (err) {
+        return problem(c, 503, 'Database Unavailable', (err as Error)?.message || 'Could not read the client DNA history');
+      }
+      if (!targetId) return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
+    } else {
+      targetSnap = (clientSnapshots.get(clientId) || []).find(matches);
+    }
 
     if (!targetSnap) {
       return problem(c, 404, 'Snapshot Not Found', `No snapshot found matching version ${targetVersion || snapshotId}`);
     }
 
-    const newVersion = (currentDna.version || 1) + 1;
+    const newVersion = activeVersion + 1;
     const author = auth.userId || auth.role || 'system';
     const restoredDna: ClientDNA = {
       ...targetSnap.dna,
@@ -378,6 +417,9 @@ export function registerClientsRoutes(ctx: RouteContext) {
       version: newVersion,
       updatedAt: new Date().toISOString(),
     };
+    // The restored version gets its own commit message below, not the one it was saved with.
+    delete (restoredDna as ClientDNA & { __commitMessage?: string }).__commitMessage;
+    delete (restoredDna as ClientDNA & { __createdBy?: string }).__createdBy;
 
     const hash = computeDnaHash(restoredDna);
     const rollbackSnap: ClientDnaSnapshot = {
@@ -391,24 +433,15 @@ export function registerClientsRoutes(ctx: RouteContext) {
       dna: restoredDna,
     };
 
-    if (db && clientRepo) {
+    if (db && clientRepo && targetId) {
+      const rowId = targetId;
       try {
-        const tenantId = auth.tenantId || defaultTenantId;
-        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
-        if (!targetId && clientId.startsWith('client-')) {
-          targetId = (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, '')) )?.id;
-        }
-        if (!targetId) {
-          return problem(c, 404, 'Client Not Found', `Client '${clientId}' not found in authoritative database`);
-        }
-        await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
+        await withRlsContext(db, { ...scope, clientId: rowId }, async (trx) => {
           await clientRepo.saveDnaVersion({
             tenantId,
-            clientId: targetId,
+            clientId: rowId,
             version: newVersion,
-            dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage },
+            dna: { ...restoredDna, __commitMessage: rollbackSnap.commitMessage, __createdBy: rollbackSnap.createdBy },
             contentHash: hash,
             createdBy: (auth.userId && auth.userId.length === 36) ? auth.userId : null,
           }, trx);
@@ -419,8 +452,11 @@ export function registerClientsRoutes(ctx: RouteContext) {
     }
 
     clientDnas.set(clientId, restoredDna);
-    snapshots.unshift(rollbackSnap);
-    clientSnapshots.set(clientId, snapshots);
+    if (!db) {
+      const list = clientSnapshots.get(clientId) || [];
+      list.unshift(rollbackSnap);
+      clientSnapshots.set(clientId, list);
+    }
 
     broadcast('dna:rollback', {
       clientId,

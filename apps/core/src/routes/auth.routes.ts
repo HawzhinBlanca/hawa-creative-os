@@ -163,7 +163,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     // 24 hours after they opened the Mini App.
     const sessionToken = `tg_miniapp_sess_${crypto.randomBytes(32).toString('base64url')}`;
     const displayName = [verification.value.user.first_name, verification.value.user.last_name].filter(Boolean).join(' ') || `Telegram User ${userIdStr}`;
-    saveSession?.(sessionToken, {
+    const session = {
       authenticated: true,
       tenantId: defaultTenantId,
       userId: operatorUserId,
@@ -171,9 +171,14 @@ export function registerAuthRoutes(ctx: RouteContext) {
       role: 'operator',
       displayName,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-    });
+    };
+    saveSession?.(sessionToken, session);
+    // Written to hawa.desk_sessions like a Desk sign-in (SPLIT_PLAN G1): the session lived only in
+    // this process's map, so a restart or a second Core signed the office member out.
+    const durable = persistSession ? await persistSession(sessionToken, session) : false;
     return c.json({
       ok: true,
+      durable,
       user: verification.value.user,
       authDate: verification.value.authDate,
       authenticated: true,

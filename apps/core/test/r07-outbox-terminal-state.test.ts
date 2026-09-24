@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { GooglePublisher } from '@hawa/integrations';
 import { createDb, type Kysely, type Database, OutboxRepository, withRlsContext } from '@hawa/db';
 import { memoryExportStore } from './pinned-exports-fixture.js';
@@ -107,7 +108,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Publish
@@ -159,7 +160,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     const pubRes = await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -298,7 +299,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
 
     const inMemoryOutbox = new Map<string, any[]>();
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -354,7 +355,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
 
     const inMemoryOutbox = new Map<string, any[]>();
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -427,7 +428,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Before publish

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { createApp } from '../../../apps/core/src/app.js';
+import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
 import { createDb } from '@hawa/db';
 import {
   BriefBuilder,
@@ -16,7 +16,7 @@ import { extractProtectedTokens } from '@hawa/domain';
 describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Drustee, FastPay)', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createApp({ db });
+  const app = createAppWithClientFixtures({ db });
 
   const briefBuilder = new BriefBuilder();
   const director = new CreativeDirectorRunner();

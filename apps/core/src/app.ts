@@ -4,7 +4,6 @@ import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-p
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
-import { seedClientDnaFixtures } from './fixtures/client-dna-fixtures.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
@@ -469,9 +468,10 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
-  // Seed default client DNA
+  // Client DNA comes from PostgreSQL (clientDnaHydrated below). Only a test seeds invented offices,
+  // through options.seedClientDna (SPLIT_PLAN.md section 6, stage 2).
   const defaultClientId = DEFAULT_CLIENT_ID;
-  seedClientDnaFixtures(clientDnas, clientSnapshots, computeDnaHash);
+  options?.seedClientDna?.(clientDnas, clientSnapshots);
 
   interface IssuedSession {
     authenticated: boolean;
@@ -516,7 +516,8 @@ export function createApp(options?: CreateAppOptions) {
    * re-validates cached sessions periodically so a revocation elsewhere takes effect.
    */
   async function ensureSessionLoaded(token: string | undefined): Promise<void> {
-    if (!db || !token || !token.startsWith('hawa_sess_')) return;
+    // Desk sign-ins and Telegram Mini App sign-ins (auth.routes.ts) are both in hawa.desk_sessions.
+    if (!db || !token || !(token.startsWith('hawa_sess_') || token.startsWith('tg_miniapp_sess_'))) return;
     const cached = issuedSessions.get(token);
     if (cached && cached.checkedAt && Date.now() - cached.checkedAt < SESSION_RECHECK_MS) return;
     try {

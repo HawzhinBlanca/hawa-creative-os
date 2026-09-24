@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { CostGovernor } from '@hawa/integrations';
 import { createDb, ClientRepository, withRlsContext } from '@hawa/db';
 import fs from 'node:fs';
@@ -25,8 +25,8 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
   });
 
   describe('1. Process/Instance Recreation Preserves Authoritative State', () => {
-    it('preserves client DNA mutations and version increment across new createApp() instances', async () => {
-      const app1 = createApp();
+    it('preserves client DNA mutations and version increment across new createAppWithClientFixtures() instances', async () => {
+      const app1 = createAppWithClientFixtures();
       const getOriginal = await app1.request('/v1/clients/client-drustee/dna', { headers });
       expect(getOriginal.status).toBe(200);
       const originalDna = await getOriginal.json();
@@ -46,7 +46,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
       expect(updatedDna.version).toBe(originalDna.version + 1);
 
       // Recreate app instance (simulating worker restart or second instance)
-      const app2 = createApp();
+      const app2 = createAppWithClientFixtures();
       const getRecreated = await app2.request('/v1/clients/client-drustee/dna', { headers });
       expect(getRecreated.status).toBe(200);
       const recreatedDna = await getRecreated.json();
@@ -58,7 +58,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
 
   describe('2. Forged createdBy Ignored / Rejected', () => {
     it('ignores client-supplied createdBy and attributes snapshot to authenticated identity', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
       const getOriginal = await app.request('/v1/clients/client-drustee/dna', { headers });
       const originalDna = await getOriginal.json();
 
@@ -88,7 +88,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
 
   describe('3. Optimistic Concurrency with expectedVersion', () => {
     it('yields one winner and one 409 conflict on two competing expected-version updates', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
       const getOriginal = await app.request('/v1/clients/client-drustee/dna', { headers });
       const originalDna = await getOriginal.json();
       const baseVersion = originalDna.version;
@@ -134,7 +134,7 @@ describe('R03: Authoritative Configuration and Policies in PostgreSQL (FR-017, F
         }),
       } as any;
 
-      const app = createApp({ db: failingDb });
+      const app = createAppWithClientFixtures({ db: failingDb });
       const getOriginal = await app.request('/v1/clients/client-drustee/dna', { headers });
       const originalDna = await getOriginal.json();
 

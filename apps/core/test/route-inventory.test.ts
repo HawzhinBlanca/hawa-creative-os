@@ -124,6 +124,8 @@ describe('N2: route order', () => {
     const importsApp = /(?:from\s+|import\s*\(\s*)['"](?:\.\.?\/)+app(?:\.js)?['"]/;
     const offenders: string[] = [];
     for (const dir of ['routes', 'services', 'fixtures']) {
+      // src/fixtures moved under test/ in SPLIT_PLAN G2 stage 2; checked again if it ever returns.
+      if (!fs.existsSync(path.join(src, dir))) continue;
       for (const file of fs.readdirSync(path.join(src, dir), { recursive: true }).map(String)) {
         if (!/\.tsx?$/.test(file)) continue;
         if (importsApp.test(fs.readFileSync(path.join(src, dir, file), 'utf8'))) offenders.push(`${dir}/${file.split(path.sep).join('/')}`);

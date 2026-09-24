@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 
@@ -26,7 +26,7 @@ describe.skipIf(!url)('an approved design when Drive cannot be written', () => {
     const publisher = {
       publish: vi.fn(async () => ({ ok: false, error: { code: 'CREDENTIALS_MISSING', message: 'Google Workspace credentials not configured' } })),
     };
-    const app = createApp({
+    const app = createAppWithClientFixtures({
       testAuth: { roleHeader: true },
       db,
       deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),

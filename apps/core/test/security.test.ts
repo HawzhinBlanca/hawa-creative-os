@@ -24,6 +24,7 @@ describe('Core API: Security Invariants & Asset Ingestion', () => {
         filename: 'campaign_logo.png',
         mimeType: 'image/png',
         sizeBytes: 2048,
+        clientId: 'client-security-spec',
       }),
     });
 
@@ -47,6 +48,7 @@ describe('Core API: Security Invariants & Asset Ingestion', () => {
       body: JSON.stringify({
         filename: 'icon_warning.svg',
         mimeType: 'image/svg+xml',
+        clientId: 'client-security-spec',
         sizeBytes: Buffer.byteLength(maliciousSvg),
         content: maliciousSvg,
       }),

@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import { validateUploadedAsset, sanitizeSvg } from '@hawa/domain';
 import type { RouteContext } from './types.js';
-import { DEFAULT_CLIENT_ID } from '../core-context.js';
 
 /**
  * Asset upload and SVG sanitising, and the voice-brief transcriber. Moved out of app.ts by group G1
@@ -9,7 +8,6 @@ import { DEFAULT_CLIENT_ID } from '../core-context.js';
  */
 export function registerAssetsRoutes(ctx: RouteContext): void {
   const { registerRoute, problem, uploadedAssets, voiceTranscriber, broadcastEvent: broadcast } = ctx;
-  const defaultClientId = DEFAULT_CLIENT_ID;
 
   // Asset Security & Ingestion
   registerRoute('post', '/assets/upload', async (c: any) => {
@@ -31,7 +29,10 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
 
     const assetId = crypto.randomUUID();
     const storageKey = `assets/${validation.sha256}/${body.filename}`;
-    const clientId = body.clientId || defaultClientId;
+    // Every asset belongs to a client. One sent without a client was filed under the fixture office
+    // client-office-1 (SPLIT_PLAN.md section 6), where a search for the real client never found it.
+    const clientId = typeof body.clientId === 'string' && body.clientId.trim() ? body.clientId.trim() : undefined;
+    if (!clientId) return problem(c, 422, 'CLIENT_REQUIRED', 'Name the client this asset belongs to (clientId).');
     const category = body.category || 'asset';
     const record = {
       assetId,

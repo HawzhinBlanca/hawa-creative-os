@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { DesignStudioService, type Scope } from '../src/services/design-studio/design-studio-service.js';
 import { CanvaFlowError } from '../src/services/canva-connect-service.js';
 
@@ -11,7 +11,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
 
   describe('1. Long-Lived Static Bearer Keys Forbidden in URL Query Parameters', () => {
     it('rejects static admin or operator bearer tokens passed via access_token query param', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
 
       // Attempting to pass static admin key as query param
       const res = await app.request(`/v1/events/stream?access_token=${encodeURIComponent(staticAdminKey)}`);
@@ -21,7 +21,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
     // ADR-037 (2026-09-24): the session token no longer goes in the stream's address either; the Desk
     // opens the stream with a one-use ticket (test/stream-ticket.test.ts).
     it('refuses even an issued desk session in the access_token query param, and opens the stream with a ticket', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
 
       // Create an issued session via login
       const loginRes = await app.request('/v1/auth/session', {
@@ -51,7 +51,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
     });
 
     it('rejects unauthenticated requests to /events/stream', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
       const res = await app.request('/v1/events/stream', {
         headers: { 'x-enforce-auth': '1' },
       });
@@ -142,7 +142,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
 
   describe('3. Session Revocation (Immediate Effect)', () => {
     it('revokes active session immediately so subsequent requests are rejected', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
 
       // 1. Issue session
       const loginRes = await app.request('/v1/auth/session', {
@@ -173,7 +173,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
 
   describe('4. Governance and Scope Enforcement (SA-01 to SA-05)', () => {
     it('SA-01: rejects operator claiming administrator role via request body in DNA rollback', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
       const headers = {
         Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_dev_token'}`,
         'Content-Type': 'application/json',
@@ -188,7 +188,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
     });
 
     it('SA-02: rejects cross-client candidate rule promotion', async () => {
-      const app = createApp();
+      const app = createAppWithClientFixtures();
       const operatorHeaders = {
         Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'hawa_dev_token'}`,
         'Content-Type': 'application/json',
@@ -245,7 +245,7 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
         selectFrom: () => builder,
         transaction: () => ({ execute: async () => { throw new Error('Injected refusal'); } }),
       };
-      const app = createApp({ db: fakeDb });
+      const app = createAppWithClientFixtures({ db: fakeDb });
       const headers = {
         Authorization: `Bearer ${staticAdminKey}`,
         'Content-Type': 'application/json',
