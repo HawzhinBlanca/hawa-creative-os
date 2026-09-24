@@ -49,43 +49,9 @@ cd "$ROOT_DIR"
 echo "Suite stability: $RUNS run(s), HAWA_TEST_WORKERS=$HAWA_TEST_WORKERS, commit $(git rev-parse --short HEAD 2>/dev/null || echo unknown)$(git diff --quiet 2>/dev/null || echo ' (uncommitted changes)')"
 echo "Logs and reports: $OUT_DIR"
 
-# Reads one run's JSON report and log and prints one line per failure: "<kind>\t<name>\t<first error line>".
-# Kinds: test (a failed test), file (a file that failed outside its tests: an import, a hook),
-# error (an error vitest reported outside any test, which fails the run although every test passed).
-read -r -d '' FAILURES_JS <<'JS'
-const fs = require('node:fs');
-const [reportPath, logPath] = process.argv.slice(1);
-const out = [];
-const firstLine = (text) => String(text || '').replace(/\u001b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim()).find((l) => l) || '(no message)';
-let report = null;
-try { report = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch { /* no report: the run died before writing it */ }
-if (report) {
-  for (const file of report.testResults || []) {
-    const rel = String(file.name || '').replace(process.cwd() + '/', '');
-    const failed = (file.assertionResults || []).filter((a) => a.status === 'failed');
-    for (const a of failed) out.push(['test', `${rel} > ${a.fullName || a.title}`, firstLine((a.failureMessages || [])[0])]);
-    if (file.status === 'failed' && failed.length === 0) out.push(['file', rel, firstLine(file.message)]);
-  }
-}
-let log = '';
-try { log = fs.readFileSync(logPath, 'utf8').replace(/\u001b\[[0-9;]*m/g, ''); } catch { /* no log */ }
-// Errors outside tests are printed after an "Unhandled Errors" rule, each under a rule of its own
-// ("Unhandled Rejection", "Unhandled Error"), before the run's counts.
-const start = log.search(/⎯+ Unhandled Errors? ⎯+/);
-if (start >= 0) {
-  const end = log.indexOf('\n Test Files ', start);
-  const section = log.slice(start, end >= 0 ? end : undefined);
-  const blocks = section.split(/^⎯{3,}.*$/m).map((b) => b.split('\n').map((l) => l.trim()).filter((l) => l && !/^Vitest caught|^This might cause false positive/.test(l)));
-  for (const lines of blocks) {
-    if (!lines.length) continue;
-    const origin = lines.find((l) => /^This error originated in|^The latest test that might've caused/.test(l)) || '';
-    const where = /"([^"]+)"/.exec(origin)?.[1] || '(outside any file)';
-    out.push(['error', where, lines[0]]);
-  }
-}
-if (!report && !out.length) out.push(['error', '(the run)', 'no JSON report was written: vitest did not finish']);
-for (const row of out) console.log(row.map((c) => String(c).replace(/\t/g, ' ')).join('\t'));
-JS
+# Reading a run's report and log, and the summary of all runs, are in scripts/suite_stability_report.mjs
+# (tested in scripts/test/suite-stability-report.test.ts). One line per failure: "<kind>\t<name>\t<first error line>".
+REPORT_JS="$ROOT_DIR/scripts/suite_stability_report.mjs"
 
 ALL_FAILURES="$OUT_DIR/failures.tsv"
 : > "$ALL_FAILURES"
@@ -96,12 +62,14 @@ for ((i = 1; i <= RUNS; i++)); do
   log="$OUT_DIR/run-$i.log"
   report="$OUT_DIR/run-$i.json"
   load="$(uptime | sed 's/.*load averages*: //')"
+  # A reused output directory must not lend this run the report of an earlier one, should vitest die before writing its own.
+  rm -f "$log" "$report"
   started=$(date +%s)
   npx vitest run --reporter=default --reporter=json --outputFile.json="$report" ${VITEST_ARGS[@]+"${VITEST_ARGS[@]}"} > "$log" 2>&1
   status=$?
   seconds=$(( $(date +%s) - started ))
-  failures="$(node -e "$FAILURES_JS" "$report" "$log")"
-  counts="$(grep -E '^ +(Test Files|Tests) ' "$log" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^ *//' | tr -s ' ' | paste -sd ';' -)"
+  failures="$(node "$REPORT_JS" failures "$report" "$log")"
+  counts="$(grep -E '^ +(Test Files|Tests) ' "$log" | perl -pe 's/\e\[[0-9;]*m//g; s/^ *//' | tr -s ' ' | paste -sd ';' -)"
   if [[ $status -eq 0 && -z "$failures" ]]; then
     green=$((green + 1))
     streak=$((streak + 1))
@@ -131,8 +99,6 @@ echo
 echo "Summary: $green of $RUNS run(s) green; longest green streak $best_streak."
 if [[ -s "$ALL_FAILURES" ]]; then
   echo "Every failure, with the runs it happened in and its first error:"
-  # One entry per failing test: the runs, then the first message seen.
-  awk -F'\t' '{ key = $2 "\t" $3; runs[key] = (key in runs) ? runs[key] "," $1 : $1; if (!(key in msg)) msg[key] = $4 }
-    END { for (k in runs) { split(k, p, "\t"); n = split(runs[k], r, ","); printf "  %s: %s\n    failed in %d run(s): %s\n    %s\n", p[1], p[2], n, runs[k], msg[k] } }' "$ALL_FAILURES"
+  node "$REPORT_JS" summary "$ALL_FAILURES"
 fi
 [[ $green -eq $RUNS ]]

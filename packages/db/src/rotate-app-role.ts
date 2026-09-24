@@ -345,6 +345,9 @@ export async function verifyLoginRole(admin: pg.Client, conn: Connection, appRol
       const snapshot = (await admin.query(`SELECT pg_export_snapshot() AS s`)).rows[0].s as string;
       await login.query(`SET TRANSACTION SNAPSHOT '${snapshot.replace(/'/g, '')}'`);
       await admin.query(`SET LOCAL ROLE ${assertRoleName(appRole)}`);
+      // 30 s a statement, and a context's counts are one statement: the limit covers every table of a
+      // context together (it was 30 s a table). With no context RLS hides every row, so LIMIT does not
+      // stop that pass and it reads each table in full; at the office's volumes that is well under it.
       for (const side of [admin, login]) await side.query(`SET LOCAL statement_timeout = '30s'`);
       const names = ['app.tenant_id', 'hawa.current_tenant_id', 'app.client_id', 'hawa.current_client_id', 'app.user_id', 'hawa.current_user_id', 'app.role', 'hawa.current_role'];
       // One statement sets a context and one counts every table, on each side, both sides at once.

@@ -96,7 +96,9 @@ The script (`packages/db/src/rotate-app-role.ts`, run by `rotate_app_role.sh`):
   privileges on every table, column, sequence, function, schema and the database equal
   `hawa_app`'s; and in one shared snapshot, read-only, both roles see the same rows in every `hawa`
   table with no context, as three tenants, and as each tenant's administrator. A role that differs is
-  set back to `NOLOGIN` and its file removed;
+  set back to `NOLOGIN` and its file removed. Each context's counts are one statement a side, limited
+  to 30 s for all the tables together (30 s a table before 2026-09-24); with no context the counts
+  read every table in full, since RLS hides every row;
 - refuses to give a password to a role that has open sessions, to start a third password while
   both login roles can log in, and to retire a role that has sessions or is the last that can log in.
 

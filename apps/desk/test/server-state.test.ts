@@ -122,6 +122,7 @@ const live = (deliver: () => void) =>
  * file, never sent on to vitest, and fails the test it happened in.
  */
 const consoleCalls: string[] = [];
+const consoleSpies: Array<{ mockRestore(): void }> = [];
 
 beforeAll(async () => {
   await Promise.all([
@@ -132,9 +133,9 @@ beforeAll(async () => {
     import('../src/screens/ComparisonScreen.js'),
   ]);
   for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
-    vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+    consoleSpies.push(vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
       consoleCalls.push(`console.${level}: ${args.map(String).join(' ')}`);
-    });
+    }));
   }
 });
 
@@ -163,6 +164,9 @@ afterEach(async () => {
 });
 
 afterAll(() => {
+  // Given back to vitest once the file is done: a call that still came after it is then reported
+  // (and fails the run), not swallowed here.
+  for (const spy of consoleSpies.splice(0)) spy.mockRestore();
   expect(consoleCalls).toEqual([]);
 });
 

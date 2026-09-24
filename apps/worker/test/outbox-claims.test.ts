@@ -77,9 +77,11 @@ const record = (idempotencyKey: string) => asTenant((trx) => repo.findByIdempote
  * Waits until `check` holds. The tests below wait for what a step needs (a send made, a lease run
  * out) instead of sleeping for how long it usually takes: under the suite's parallel load a fixed
  * sleep was sometimes too short, and a second consumer found a lease that had not run out yet. The
- * deadline only stops a wait for something that never happens.
+ * deadline only stops a wait for something that never happens: it is 10 s (the waits take 1 to 2 s),
+ * so that two waits in one test end within the test's 30 s and a hang is reported as the wait that
+ * never ended, not as the test's timeout.
  */
-async function until(what: string, check: () => boolean | Promise<boolean>, deadlineMs = 20_000): Promise<void> {
+async function until(what: string, check: () => boolean | Promise<boolean>, deadlineMs = 10_000): Promise<void> {
   const deadline = Date.now() + deadlineMs;
   while (!(await check())) {
     if (Date.now() > deadline) throw new Error(`gave up waiting until ${what}`);
@@ -158,13 +160,20 @@ describe('the outbox consumer holds no transaction while a handler acts', () => 
     expect({ leased: summary.leased, calls, state: row?.state, attempts: row?.attempts }).toEqual({ leased: 0, calls: 0, state: 'leased', attempts: 0 });
   });
 
-  it('lets two consumers polling one queue act on a command only while they hold it, one at a time', async () => {
+  it('lets two consumers polling one queue act on each command once, one at a time', async () => {
+    // What this checks is the claim: a command one consumer holds is not handed to the other. The
+    // lease is the default minute, so no lease runs out here whatever the load; a holder that loses
+    // its lease while it acts is the takeover test's (review of phase 0.2, below).
     const ids = await Promise.all([1, 2, 3].map((n) => enqueue('test.guarded_send', { n })));
     const inside = new Map<string, number>();
     const acted = new Map<string, number>();
     let overlap = 0;
     // Every side effect goes through whileHeld, as the delivery handlers' do; the effect takes a while.
+    // Before it, the handler prepares (a delivery reads the export's bytes) holding no row lock, so
+    // only the lease keeps the other consumer off the command then: inside whileHeld the row lock
+    // alone would (claims skip locked rows).
     const handler = async (cmd: { id: string }, _db: unknown, scope: OutboxHandlerScope) => {
+      await sleep(150);
       await scope.whileHeld!(async () => {
         const now = (inside.get(cmd.id) || 0) + 1;
         inside.set(cmd.id, now);
@@ -174,7 +183,7 @@ describe('the outbox consumer holds no transaction while a handler acts', () => 
         acted.set(cmd.id, (acted.get(cmd.id) || 0) + 1);
       });
     };
-    const make = () => new OutboxConsumer(db, { tenantId, userId, batchSize: 10, leaseSeconds: 1, handlers: { 'test.guarded_send': handler } });
+    const make = () => new OutboxConsumer(db, { tenantId, userId, batchSize: 10, handlers: { 'test.guarded_send': handler } });
     const [a, b] = [make(), make()];
     let allDelivered = false;
     const drain = async (consumer: OutboxConsumer) => {
@@ -187,8 +196,10 @@ describe('the outbox consumer holds no transaction while a handler acts', () => 
       });
     };
     await Promise.all([drain(a), drain(b)]);
+    const rows = await Promise.all(ids.map((c) => record(c.idempotencyKey)));
     expect(overlap).toBe(1);
-    expect(ids.every((c) => (acted.get(c.id) || 0) >= 1)).toBe(true);
+    expect(ids.map((c) => acted.get(c.id) || 0)).toEqual([1, 1, 1]);
+    expect(rows.map((r) => [r?.state, r?.attempts])).toEqual([['delivered', 0], ['delivered', 0], ['delivered', 0]]);
   });
 
   it('records a result only while the claim is still its own', async () => {
@@ -349,7 +360,7 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
       expect(row?.last_error).toMatch(/^DELIVERY_UNCERTAIN: /);
       expect(row?.last_error).toContain(dieAt === 'document' ? 'reclaim.png' : 'delivery notice');
       expect(second.office).toHaveLength(1);
-    }, 15000);
+    });
   }
 
   it('does not resend a notify.telegram message the first worker sent, and resends it after an administrator confirms a replay', async () => {
@@ -403,7 +414,7 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
     await again().processBatch(5);
     expect(sent).toEqual([chat, chat]);
     expect((await record(idempotencyKey))?.state).toBe('delivered');
-  }, 15000);
+  });
 });
 
 /**
@@ -456,16 +467,21 @@ describe('review of phase 0.2: sends that must not be repeated', () => {
     (a as unknown as { outboxRepo: { renewClaim: () => Promise<never> } }).outboxRepo.renewClaim = async () => { throw new Error('connection timeout'); };
     const b = new OutboxConsumer(db, { tenantId, userId, leaseSeconds: 2, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender('B'), readExportBytes });
     const running = a.processBatch(5);
-    // A's lease runs out while it is still uploading one.png; then B takes the command over.
-    await until('A is uploading one.png', () => sends.includes('A:one.png'));
-    await until("A's lease has run out", () => leaseRunOut(id));
-    await b.processBatch(5);
-    uploadDone();
+    void running.catch(() => {});
+    try {
+      // A's lease runs out while it is still uploading one.png; then B takes the command over.
+      await until('A is uploading one.png', () => sends.includes('A:one.png'));
+      await until("A's lease has run out", () => leaseRunOut(id));
+      await b.processBatch(5);
+    } finally {
+      // Whatever happened to B, A's upload ends: the test then fails with B's error, not a hang.
+      uploadDone();
+    }
     const summaryA = await running;
     const count = (what: string) => sends.filter((s) => s.endsWith(`:${what}`)).length;
     expect({ one: count('one.png'), two: count('two.png'), notice: count('notice') }).toEqual({ one: 1, two: 1, notice: 1 });
     expect(summaryA.lostClaims).toBe(1);
-  }, 15000);
+  });
 
   it('never resends a file Telegram did not confirm when the command is later requeued without confirmUncertainReplay', async () => {
     const first = { id: randomUUID(), png: new Uint8Array([7, 8, 9]), name: 'first.png' };
