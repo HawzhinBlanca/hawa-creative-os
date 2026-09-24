@@ -48,6 +48,8 @@ export interface OutcomeTransition {
   changed: boolean;
   fromState: string;
   toState: string;
+  /** tasks.version after this call: the new version when it moved the task, the current one when not. */
+  version: number;
 }
 
 /**
@@ -62,8 +64,8 @@ export async function closeAnsweredQuestion(
   const task = await repo.findById(params.taskId, params.tenantId, trx);
   if (!task) throw new Error(`Task ${params.taskId} is not visible in tenant ${params.tenantId}`);
   const from = String(task.state);
-  if (from !== 'paused') return { changed: false, fromState: from, toState: from };
-  await repo.transitionState({
+  if (from !== 'paused') return { changed: false, fromState: from, toState: from, version: Number(task.version) };
+  const moved = await repo.transitionState({
     taskId: params.taskId,
     tenantId: params.tenantId,
     expectedVersion: Number(task.version),
@@ -74,7 +76,7 @@ export async function closeAnsweredQuestion(
     reason: `The requester answered the question; the change continues as task ${params.revisionTaskId}.`,
     data: { answeredBy: params.revisionTaskId },
   }, trx);
-  return { changed: true, fromState: from, toState: 'cancelled' };
+  return { changed: true, fromState: from, toState: 'cancelled', version: Number(moved.version) };
 }
 
 /**
@@ -94,8 +96,8 @@ export async function transitionTaskForOutcome(
   // A draft after an operator was called (a re-drive that worked) goes back to review, and a re-drive
   // that stopped to ask the requester a question waits for the answer rather than the operator.
   const allowed = params.toState === 'human_review' || params.toState === 'paused' ? [...PRE_OUTCOME_STATES, 'failed_operator'] : PRE_OUTCOME_STATES;
-  if (from === params.toState || !allowed.includes(from)) return { changed: false, fromState: from, toState: from };
-  await repo.transitionState({
+  if (from === params.toState || !allowed.includes(from)) return { changed: false, fromState: from, toState: from, version: Number(task.version) };
+  const moved = await repo.transitionState({
     taskId: params.taskId,
     tenantId: params.tenantId,
     expectedVersion: Number(task.version),
@@ -106,7 +108,7 @@ export async function transitionTaskForOutcome(
     reason: params.reason.slice(0, 1000),
     data: params.data,
   }, trx);
-  return { changed: true, fromState: from, toState: params.toState };
+  return { changed: true, fromState: from, toState: params.toState, version: Number(moved.version) };
 }
 
 /**
@@ -179,7 +181,7 @@ export type BridgeResult =
 
 export type ExportQcResult =
   | { recorded: false; reason: 'NO_REVISION' | 'NO_NEWER_CHECKED_EXPORT' | 'REVISION_REQUESTED' }
-  | { recorded: true; revisionId: string; revisionCreated: boolean; qc: CanvaQcEvaluation };
+  | { recorded: true; revisionId: string; revisionCreated: boolean; qc: CanvaQcEvaluation; transition?: OutcomeTransition };
 
 /**
  * Records a QC run for the task's current revision from a copy-and-font check (a PPTX export of the
@@ -219,12 +221,13 @@ export async function recordCheckedExportQc(
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.copy;
   const qc = evaluateQc(exportRow, copy || p.fallbackCopy);
+  let transition: OutcomeTransition | undefined;
   if (reworkedSince) {
     // The move is recorded as an event first, as the bridge does; createRevision then points the
     // task at the new revision. The new revision keeps the changed revision's document.
     const prior = (await sql<{ neutral_manifest: Record<string, unknown> | null }>`SELECT neutral_manifest FROM hawa.design_revisions
       WHERE tenant_id = ${p.tenantId}::uuid AND id = ${revisionId}::uuid`.execute(trx)).rows[0]?.neutral_manifest;
-    await new TaskRepository(trx).transitionState({
+    const moved = await new TaskRepository(trx).transitionState({
       taskId: p.taskId, tenantId: p.tenantId, expectedVersion: Number(task.version), fromState: 'revision_requested', toState: 'human_review',
       actorType: 'workflow', actorId: p.actorId || null,
       reason: 'The requested changes were captured from Canva with a copy-and-font check; the capture is the revision to review.',
@@ -238,6 +241,7 @@ export async function recordCheckedExportQc(
       authorType: p.actorId ? 'user' : 'workflow', authorId: p.actorId || 'canva_capture', status: 'review',
     }, trx);
     revisionId = revision?.id || newId;
+    transition = { changed: true, fromState: 'revision_requested', toState: 'human_review', version: Number(moved.version) };
   }
   const profileId = await resolveQcProfileId(trx, p.tenantId);
   // A revision's runs under one profile are numbered (UNIQUE design_revision_id, qc_profile_id, attempt).
@@ -254,7 +258,7 @@ export async function recordCheckedExportQc(
     report: qc.qaReport,
     report_sha256: crypto.createHash('sha256').update(JSON.stringify(qc.qaReport)).digest('hex'),
   }).execute();
-  return { recorded: true, revisionId, revisionCreated: Boolean(reworkedSince), qc };
+  return { recorded: true, revisionId, revisionCreated: Boolean(reworkedSince), qc, ...(transition ? { transition } : {}) };
 }
 
 /**
@@ -353,6 +357,8 @@ export interface DraftRecheckResult {
   revisionId?: string;
   revisionCreated: boolean;
   qc?: CanvaQcEvaluation;
+  /** The task's move, when the re-check made one (a first revision, or the capture after a revision request). */
+  transition?: OutcomeTransition;
 }
 
 /**
@@ -410,7 +416,7 @@ export async function recheckBoundDraft(
     if (task.current_design_revision_id) {
       const recorded = await recordCheckedExportQc(trx, deps.evaluateQc, { tenantId: p.tenantId, taskId: p.taskId, fallbackCopy: p.fallbackCopy, actorId: p.actorId });
       return recorded.recorded
-        ? { exports: { png, pptx }, revisionId: recorded.revisionId, revisionCreated: recorded.revisionCreated, qc: recorded.qc }
+        ? { exports: { png, pptx }, revisionId: recorded.revisionId, revisionCreated: recorded.revisionCreated, qc: recorded.qc, ...(recorded.transition ? { transition: recorded.transition } : {}) }
         : { exports: { png, pptx }, revisionId: task.current_design_revision_id, revisionCreated: false };
     }
     // No revision yet: the draft becomes one, its QC run from whatever check the bound design has.
@@ -425,7 +431,7 @@ export async function recheckBoundDraft(
       reason: `Canva draft ${p.designId} re-checked by a re-drive (${status}); awaiting visual review.`,
     });
     return bridged.created
-      ? { exports: { png, pptx }, revisionId: bridged.revisionId, revisionCreated: true, qc: bridged.qc }
+      ? { exports: { png, pptx }, revisionId: bridged.revisionId, revisionCreated: true, qc: bridged.qc, transition: bridged.transition }
       : { exports: { png, pptx }, revisionCreated: false };
   });
 }

@@ -96,7 +96,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
       if (!briefRes.ok) {
         expect(briefRes.error.code).toBe('BRIEF_HAS_MISSING_FACTS');
         expect(briefRes.error.detail?.missingFacts[0].field).toBe('event_date');
-        expect(briefRes.error.safeAction).toContain('Transition task to NEEDS_INFORMATION');
+        expect(briefRes.error.safeAction).toContain('Transition task to PAUSED');
       }
     });
   });

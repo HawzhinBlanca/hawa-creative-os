@@ -3,6 +3,7 @@ import type { RouteContext } from './types.js';
 import { CanvaConnectService, CanvaFlowError, type CanvaServiceOptions } from '../services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
+import { TASK_TRANSITIONED_EVENT, taskTransitioned, toApiTaskStatus } from '@hawa/contracts';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -79,9 +80,19 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
       if (recorded.recorded && memTask) {
         memTask.latestRevisionId = recorded.revisionId;
         memTask.qaReport = recorded.qc.qaReport;
-        memTask.status = recorded.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
+        // The database's status: a capture after a revision request moves the task to review; a
+        // failed check blocks approval through its QC run (memory said CHANGES_REQUESTED, no layer's word).
+        if (recorded.transition?.changed) memTask.status = toApiTaskStatus(recorded.transition.toState);
       }
-      if (recorded.recorded && recorded.revisionCreated) ctx.broadcastEvent('task:transitioned', { taskId, fromStatus: 'REVISION_REQUESTED', toStatus: 'AWAITING_APPROVAL', revisionId: recorded.revisionId });
+      if (recorded.recorded && recorded.transition?.changed) {
+        // Its own catch: the check is recorded by now, so a failure here is only the event's.
+        const { fromState, toState, version } = recorded.transition;
+        try {
+          ctx.broadcastEvent(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from: fromState, to: toState, version }));
+        } catch (err) {
+          console.error(`[canva] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
+        }
+      }
     } catch (err) {
       console.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
     }

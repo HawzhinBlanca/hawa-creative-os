@@ -166,11 +166,12 @@ describe.skip('ARCHIVED: Two-Way Chat Approval & Omnichannel Publishing (Superse
     const cbResult = await callbackRes.json();
     expect(cbResult.ok).toBe(true);
     expect(cbResult.action).toBe('revision');
-    expect(cbResult.status).toBe('IN_PROGRESS');
+    // The database's word for a design sent back for changes; this was IN_PROGRESS, which only Core's memory had.
+    expect(cbResult.status).toBe('REVISION_REQUESTED');
 
     const taskRes = await app.request(`/v1/tasks/${taskId}`);
     const task = await taskRes.json();
-    expect(task.status).toBe('IN_PROGRESS');
+    expect(task.status).toBe('REVISION_REQUESTED');
   });
 
   it('approves and publishes task via Telegram slash command /approve <taskId>', async () => {
@@ -262,11 +263,11 @@ describe.skip('ARCHIVED: Two-Way Chat Approval & Omnichannel Publishing (Superse
     const cmdResult = await cmdRes.json();
     expect(cmdResult.ok).toBe(true);
     expect(cmdResult.action).toBe('revision');
-    expect(cmdResult.status).toBe('IN_PROGRESS');
+    expect(cmdResult.status).toBe('REVISION_REQUESTED');
 
     const taskRes = await app.request(`/v1/tasks/${taskId}`);
     const task = await taskRes.json();
-    expect(task.status).toBe('IN_PROGRESS');
+    expect(task.status).toBe('REVISION_REQUESTED');
   });
 
   it('executes full omnichannel publish on WhatsApp action callback with publish=true', async () => {

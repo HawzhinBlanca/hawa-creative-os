@@ -55,6 +55,7 @@
       "maxLength": 100000
     },
     "state": {
+      "description": "The database state (task_state in db/schema.sql).",
       "enum": [
         "received",
         "promotion_pending",
@@ -76,7 +77,34 @@
         "paused",
         "failed_retryable",
         "failed_operator",
-        "cancelled"
+        "cancelled",
+        "rejected"
+      ]
+    },
+    "status": {
+      "description": "The API status of the state, as the Desk shows it.",
+      "enum": [
+        "RECEIVED",
+        "PROMOTION_PENDING",
+        "ROUTING",
+        "ROUTING_REVIEW",
+        "BRIEFING",
+        "BRIEF_REVIEW",
+        "PLANNING",
+        "ASSET_GENERATION",
+        "COMPOSING",
+        "QA",
+        "REPAIRING",
+        "AWAITING_APPROVAL",
+        "REVISION_REQUESTED",
+        "APPROVED",
+        "PUBLISHING",
+        "PUBLISH_RECONCILIATION",
+        "COMPLETE",
+        "PAUSED",
+        "OPERATOR_REQUIRED",
+        "REJECTED",
+        "CANCELLED"
       ]
     },
     "taskType": {

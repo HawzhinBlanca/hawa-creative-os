@@ -3,7 +3,8 @@ import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, ApiError } from '../src/api/client.js';
-import { inQueueFilter, queueFilterStatuses, searchFold, taskStatusView } from '../src/services/taskStatus.js';
+import { approveButtonState, inQueueFilter, queueFilterStatuses, searchFold, taskStatusView } from '../src/services/taskStatus.js';
+import { TASK_API_STATUSES } from '@hawa/contracts/task-status';
 
 /**
  * Bug hunt (2026-09-24): what the Work screen tells an office member about a real request.
@@ -76,6 +77,30 @@ describe('the status an office member sees for each state Core reports (WorkScre
 
   it('a task sent back for changes is not labelled APPROVED because of its old approval', () => {
     expect(nextAction({ id: 't', title: 't', status: 'REVISION_REQUESTED', latestApproval: approval }).pill).not.toBe('APPROVED');
+  });
+});
+
+describe('the Approve button of the task on screen (WorkScreen approveState)', () => {
+  // A draft with a revision whose QA passed: only its status decides.
+  const state = (status: unknown) =>
+    lift<string>('approveState', {
+      selectedTask: { id: 't', title: 't', status, latestRevisionId: 'r1', qaReport: { passed: true } },
+      actionLoading: false,
+      approveButtonState,
+    });
+
+  it('is not shown for a status the Desk does not know (it could be approved until 2026-09-24)', () => {
+    for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', undefined]) expect(state(unknown), String(unknown)).toBe('hidden');
+  });
+
+  it('is enabled only for a draft awaiting approval; every other status Core reports shows it disabled', () => {
+    expect(state('AWAITING_APPROVAL')).toBe('enabled');
+    for (const status of TASK_API_STATUSES.filter((s) => s !== 'AWAITING_APPROVAL')) expect(state(status), status).toBe('disabled');
+  });
+
+  it('no status but RECEIVED reads as RECEIVED', () => {
+    for (const status of TASK_API_STATUSES.filter((s) => s !== 'RECEIVED')) expect(nextAction({ id: 't', title: 't', status }).pill, status).not.toBe('RECEIVED');
+    expect(nextAction({ id: 't', title: 't', status: 'ON_HOLD' }).pill).toBe('UNKNOWN: ON HOLD');
   });
 });
 
