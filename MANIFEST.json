@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T20:44:40Z",
+  "generatedAt": "2026-09-24T22:26:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 266,
+  "fileCount": 269,
   "files": [
     {
       "path": ".dockerignore",
@@ -686,6 +686,21 @@
       "path": "plans/requirements.csv",
       "sha256": "919555f9e0b586c227a6537387c08a25108e912b2cee566ac3744a8028e1077a",
       "bytes": 15546
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/EVALUATION_PROTOCOL.md",
+      "sha256": "fd6d1211c6d50f6fe969fd7594341dc1431b3257bcdf9c06f337c63a57281804",
+      "bytes": 11505
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
+      "sha256": "6833670a944ec516f4bb7b6a24be3b6a50bfc3ff9390717f9efaa396f851d4b5",
+      "bytes": 20876
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
+      "sha256": "f86c19bf917bcfb74b09f7f5c1df0819c3eafe1660afff11cf785f814b616e49",
+      "bytes": 9324
     },
     {
       "path": "plans/risk-register.csv",
