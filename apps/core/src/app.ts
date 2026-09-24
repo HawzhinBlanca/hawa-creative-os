@@ -4,6 +4,7 @@ import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-p
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
+import { seedClientDnaFixtures } from './fixtures/client-dna-fixtures.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
@@ -539,7 +540,6 @@ export function createApp(options?: CreateAppOptions) {
   const ingressRepo = db ? new IngressRepository(db) : null;
   const outboxRepo = db ? new OutboxRepository(db) : null;
   const revisionRepo = db ? new RevisionRepository(db) : null;
-  const canvaBindingRepo = db ? new CanvaBindingRepository(db) : null;
   const canvaConnectService = options?.canvaConnectService || (db ? new CanvaConnectService(db, options?.canvaOptions) : null);
   const deliverableStore: DeliverableStore =
     options?.deliverableStore || (canvaConnectService ? canvaDeliverableStore(canvaConnectService) : EMPTY_DELIVERABLE_STORE);
@@ -652,7 +652,6 @@ export function createApp(options?: CreateAppOptions) {
   });
   // Production Studio is strictly Canva Native Studio under ADR 021 & CV-22/CV-23
   const activeStudioType = 'canva';
-  const studio: DesignStudioAdapter = canvaStudio;
   const publisher = options?.publisher || new GooglePublisher();
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
@@ -696,7 +695,6 @@ export function createApp(options?: CreateAppOptions) {
   // Local instance-scoped data structures
   const tasks = new Map<string, any>();
   const events = new Map<string, any[]>();
-  const rawEvents = new Map<string, any>();
   const briefs = new Map<string, DesignBrief>();
   const revisions = new Map<string, any>();
   const decisions = new Map<string, ApprovalDecision[]>();
@@ -722,7 +720,6 @@ export function createApp(options?: CreateAppOptions) {
     return clientDnas.get(clientId);
   };
 
-  interface LocalClientDnaSnapshot extends ClientDnaSnapshot {}
   const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
 
   const evalRuns = new Map<string, any>();
@@ -785,586 +782,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Seed default client DNA
   const defaultClientId = 'client-office-1';
-  if (clientDnas.size === 0) {
-  clientDnas.set(defaultClientId, {
-    tenantId: 'tenant-default',
-    clientId: defaultClientId,
-    name: 'Hawa Creative',
-    code: 'HAWA',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Dark Slate', hex: '#0B0F19', role: 'background' },
-      { name: 'Sky Accent', hex: '#38BDF8', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Noto Sans Arabic',
-        style: 'Regular',
-        weight: 400,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: crypto.randomUUID(),
-        name: 'Primary Logo',
-        role: 'logo_primary',
-        storageKey: 'assets/logo.png',
-        sha256: 'sha256_logo_verified_primary',
-        mimeType: 'image/png',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Sophisticated Kurdish visual studio',
-      prohibitedPhrases: ['cheap', 'guaranteed'],
-      requiredDisclaimers: [],
-      layoutRules: ['Always align brand logo to the top right in RTL'],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_office_main',
-      productionFolderId: 'folder_prod_root',
-      archiveFolderId: 'folder_archive',
-      spreadsheetId: 'sheet_tracker_123',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Drustee Evidence-First Health DNA
-  clientDnas.set('client-drustee', {
-    tenantId: 'tenant-drustee',
-    clientId: 'client-drustee',
-    name: 'Drustee Evidence-First Health',
-    code: 'DRUSTEE',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Botanical Deep Emerald', hex: '#0D5C3A', role: 'primary' },
-      { name: 'Forest Pine', hex: '#062E1D', role: 'background' },
-      { name: 'Warm Amber Gold', hex: '#D4AF37', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'ExtraBold',
-        weight: 800,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-      {
-        family: 'Noto Sans Arabic',
-        style: 'SemiBold',
-        weight: 600,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_drustee_logo_1',
-        name: 'Official Drustee Wordmark & Leaf Seal',
-        role: 'logo_primary',
-        storageKey: 'assets/drustee/logo_official.svg',
-        sha256: 'sha256_d892a01fc348be91',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_vitd3_1',
-        name: 'Vitamin D3 + K2 Amber Dropper Bottle Vector',
-        role: 'logo_secondary',
-        storageKey: 'assets/drustee/vit_d3_bottle.svg',
-        sha256: 'sha256_e1098b1c4320987a',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_omega3_1',
-        name: 'Wild Alaskan Omega-3 Softgels Bottle Vector',
-        role: 'badge',
-        storageKey: 'assets/drustee/omega3_bottle.svg',
-        sha256: 'sha256_f9018237cb1092e4',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_gmp_seal',
-        name: 'GMP Certified Manufacturing Badge',
-        role: 'badge',
-        storageKey: 'assets/drustee/badge_gmp.svg',
-        sha256: 'sha256_g88123490bca1123',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_lab_seal',
-        name: 'Third-Party Independent Lab Tested Badge',
-        role: 'badge',
-        storageKey: 'assets/drustee/badge_lab.svg',
-        sha256: 'sha256_h77123908fca9944',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Evidence-first clinical rigor in Sorani Kurdish; transparent dosages and preventative wellness without medical disease cure claims.',
-      prohibitedPhrases: [
-        'معجزة',
-        'دەرمانی هەموو دەردێک',
-        'بێ وێنە لە جیهان',
-        '١٠٠٪ گەرەنتی',
-        'چارەسەری نەخۆشی',
-        'miracle cure',
-        'cure-all',
-      ],
-      requiredDisclaimers: [
-        'تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.',
-      ],
-      layoutRules: [
-        'Always preserve UAX #9 bidi isolation for Sorani Kurdish typography',
-        'Maintain minimum 10% safe zone margins on all export aspect ratios',
-        'Display Third-Party Lab Tested and GMP Certification badges prominently',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_drustee_main',
-      productionFolderId: 'folder_drustee_prod_verified',
-      archiveFolderId: 'folder_drustee_archive',
-      spreadsheetId: 'sheet_drustee_campaigns_456',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director', 'pharmacist_reviewer'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Aster Hotel DNA
-  clientDnas.set('client-aster', {
-    tenantId: 'tenant-aster',
-    clientId: 'client-aster',
-    name: 'Aster Hotel & Resort',
-    code: 'ASTER',
-    version: 12,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Forest Green', hex: '#164a3a', role: 'primary' },
-      { name: 'Warm Cream', hex: '#f4ecdd', role: 'background' },
-      { name: 'Warm Gold', hex: '#e9b666', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'Bold',
-        weight: 700,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_aster_logo_1',
-        name: 'White Official Logo',
-        role: 'logo_primary',
-        storageKey: 'assets/aster/logo_white.svg',
-        sha256: 'sha256_a81f3b90214c718d',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Luxury Kurdish hospitality with understated elegance',
-      prohibitedPhrases: ['budget', 'discount', 'cheap'],
-      requiredDisclaimers: ['بە گەرەنتی خزمەتگوزاری تایبەت'],
-      layoutRules: [
-        'Use the white official logo; minimum clear space equals cap height',
-        'Preserve source numeral system; never normalize final copy silently',
-        'Maintain minimum 32px safe margins on 4:5 Meta feed format',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_aster_hospitality',
-      productionFolderId: 'folder_aster_prod',
-      archiveFolderId: 'folder_aster_archive',
-      spreadsheetId: 'sheet_aster_deliverables',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Nova Tech DNA
-  clientDnas.set('client-nova', {
-    tenantId: 'tenant-nova',
-    clientId: 'client-nova',
-    name: 'Nova Tech Systems',
-    code: 'NOVA',
-    version: 8,
-    status: 'active',
-    defaultLocale: 'en',
-    defaultDirection: 'ltr',
-    colors: [
-      { name: 'Deep Navy', hex: '#0b192c', role: 'background' },
-      { name: 'Slate Blue', hex: '#1e3e62', role: 'secondary' },
-      { name: 'Safety Orange', hex: '#ff6500', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Noto Sans Arabic',
-        style: 'Bold',
-        weight: 700,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar', 'en'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_nova_logo_1',
-        name: 'Nova Symbol Primary',
-        role: 'logo_primary',
-        storageKey: 'assets/nova/symbol.svg',
-        sha256: 'sha256_7f41d3b9e2810a9c',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Cutting-edge tech minimalism, precise and assertive',
-      prohibitedPhrases: ['slow', 'legacy', 'deprecated'],
-      requiredDisclaimers: [],
-      layoutRules: [
-        'Maintain generous padding (minimum 64px); max 2 focal elements per artboard',
-        'CTA elements must use safety orange with WCAG AAA contrast against background',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_nova_systems',
-      productionFolderId: 'folder_nova_prod',
-      archiveFolderId: 'folder_nova_archive',
-      spreadsheetId: 'sheet_nova_campaigns',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['creative_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Rona Couture DNA
-  clientDnas.set('client-rona', {
-    tenantId: 'tenant-rona',
-    clientId: 'client-rona',
-    name: 'Rona Haute Couture',
-    code: 'RONA',
-    version: 4,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Royal Plum', hex: '#4a154b', role: 'primary' },
-      { name: 'Off White', hex: '#f8f5fa', role: 'background' },
-      { name: 'Warm Amber', hex: '#ecb22e', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'Regular',
-        weight: 400,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_rona_logo_1',
-        name: 'Rona Signature Crest',
-        role: 'logo_primary',
-        storageKey: 'assets/rona/signature.svg',
-        sha256: 'sha256_e39a174c81b2901a',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Haute couture luxury, poetic Kurdish Sorani phrasing',
-      prohibitedPhrases: ['cheap', 'standard', 'mass-produced'],
-      requiredDisclaimers: [],
-      layoutRules: [
-        'Headline scale must be at least 2.5x body text with open leading',
-        'Product photography must use smooth organic masks rather than sharp rectangular borders',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_rona_fashion',
-      productionFolderId: 'folder_rona_prod',
-      archiveFolderId: 'folder_rona_archive',
-      spreadsheetId: 'sheet_rona_lookbook',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed FastPay Mobile Wallet DNA
-  clientDnas.set('client-fastpay', {
-    tenantId: 'tenant-fastpay',
-    clientId: 'client-fastpay',
-    name: 'FastPay Mobile Wallet',
-    code: 'FASTPAY',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Electric Cobalt', hex: '#0045F5', role: 'primary' },
-      { name: 'Midnight Navy', hex: '#071033', role: 'background' },
-      { name: 'Fintech Magenta', hex: '#F72585', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'ExtraBold',
-        weight: 800,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-      {
-        family: 'Inter',
-        style: 'Bold',
-        weight: 700,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['en'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_fastpay_logo_1',
-        name: 'Official FastPay Vector Wordmark & Lightning Bolt',
-        role: 'logo_primary',
-        storageKey: 'assets/fastpay/logo_official.svg',
-        sha256: 'sha256_fastpay_fintech_verified_c89b21',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Dynamic, high-trust Kurdish fintech messaging with Central Bank compliance',
-      prohibitedPhrases: ['hidden fees', 'delayed', 'unlicensed'],
-      requiredDisclaimers: ['مۆڵەتپێدراو لەلایەن بانکی ناوەندی عێراق (CBI)'],
-      layoutRules: [
-        'Central Bank regulatory badge must be pinned top-right',
-        'Fintech badge 0% fee must use high-contrast cyan/magenta glow',
-        'Official 1:1 format requires 32px safe margins',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_fastpay_fintech',
-      productionFolderId: 'folder_fastpay_prod',
-      archiveFolderId: 'folder_fastpay_archive',
-      spreadsheetId: 'sheet_fastpay_deliverables',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['compliance_officer', 'art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed KAAE (Kurdistan Accrediting Association for Education)
-  clientDnas.set('c1000000-0000-4000-8000-000000000002', kaaeClientDNA);
-  clientDnas.set('kaae', kaaeClientDNA);
-
-  const drusteeDna = clientDnas.get('client-drustee')!;
-  if (drusteeDna) {
-    clientDnas.set('c1000000-0000-4000-8000-000000000003', drusteeDna);
-    clientDnas.set('drustee', drusteeDna);
-    clientSnapshots.set('c1000000-0000-4000-8000-000000000003', [
-      {
-        snapshotId: 'snap_init_drustee_1',
-        clientId: 'c1000000-0000-4000-8000-000000000003',
-        version: 1,
-        sha256: computeDnaHash(drusteeDna),
-        commitMessage: 'Initial baseline Drustee health DNA with clinical green palette',
-        createdBy: 'art_director',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        dna: drusteeDna,
-      },
-    ]);
-  }
-
-  const fastpayDna = clientDnas.get('client-fastpay')!;
-  if (fastpayDna) {
-    clientDnas.set('c1000000-0000-4000-8000-000000000004', fastpayDna);
-    clientDnas.set('fastpay', fastpayDna);
-    clientSnapshots.set('c1000000-0000-4000-8000-000000000004', [
-      {
-        snapshotId: 'snap_init_fastpay_1',
-        clientId: 'c1000000-0000-4000-8000-000000000004',
-        version: 1,
-        sha256: computeDnaHash(fastpayDna),
-        commitMessage: 'Initial baseline FastPay FinTech DNA',
-        createdBy: 'art_director',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        dna: fastpayDna,
-      },
-    ]);
-  }
-  }
-
-  if (!clientSnapshots.has('client-office-1')) {
-  clientSnapshots.set('c1000000-0000-4000-8000-000000000002', [
-    {
-      snapshotId: 'snap_init_kaae_1',
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      version: 1,
-      sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Initial baseline KAAE institutional DNA with Cairo/Verdana and Navy/Gold',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      dna: kaaeClientDNA,
-    },
-  ]);
-  clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
-
-  // Seed baseline governance snapshots for all clients
-  clientSnapshots.set('client-office-1', [
-    {
-      snapshotId: 'snap_init_office_1',
-      clientId: 'client-office-1',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-office-1')!),
-      commitMessage: 'Initial baseline studio DNA with verified Kurdish typography registry',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      dna: structuredClone(clientDnas.get('client-office-1')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-drustee', [
-    {
-      snapshotId: 'snap_init_drustee_1',
-      clientId: 'client-drustee',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-drustee')!),
-      commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: structuredClone(clientDnas.get('client-drustee')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-aster', [
-    {
-      snapshotId: 'snap_init_aster_12',
-      clientId: 'client-aster',
-      version: 12,
-      sha256: computeDnaHash(clientDnas.get('client-aster')!),
-      commitMessage: 'Promoted numeral preservation rule and gold brand asset registry',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      dna: structuredClone(clientDnas.get('client-aster')!),
-    },
-    {
-      snapshotId: 'snap_init_aster_11',
-      clientId: 'client-aster',
-      version: 11,
-      sha256: 'sha256_8291ba4c9201f8e2',
-      commitMessage: 'Added Kurdish Sorani hospitality tone and Meta 4:5 safe margins',
-      createdBy: 'operator',
-      createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-      dna: { ...structuredClone(clientDnas.get('client-aster')!), version: 11 },
-    },
-  ]);
-
-  clientSnapshots.set('client-nova', [
-    {
-      snapshotId: 'snap_init_nova_8',
-      clientId: 'client-nova',
-      version: 8,
-      sha256: computeDnaHash(clientDnas.get('client-nova')!),
-      commitMessage: 'Enforced WCAG AAA contrast ratio on high-impact safety orange CTA targets',
-      createdBy: 'creative_director',
-      createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-      dna: structuredClone(clientDnas.get('client-nova')!),
-    },
-    {
-      snapshotId: 'snap_init_nova_7',
-      clientId: 'client-nova',
-      version: 7,
-      sha256: 'sha256_3fa90812bca01e74',
-      commitMessage: 'Registered Noto Sans Arabic typography and deep navy background token',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-      dna: { ...structuredClone(clientDnas.get('client-nova')!), version: 7 },
-    },
-  ]);
-
-  clientSnapshots.set('client-rona', [
-    {
-      snapshotId: 'snap_init_rona_4',
-      clientId: 'client-rona',
-      version: 4,
-      sha256: computeDnaHash(clientDnas.get('client-rona')!),
-      commitMessage: 'Haute couture luxury voice guidelines and organic product masking invariants',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      dna: structuredClone(clientDnas.get('client-rona')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-fastpay', [
-    {
-      snapshotId: 'snap_init_fastpay_1',
-      clientId: 'client-fastpay',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-fastpay')!),
-      commitMessage: 'Initial FastPay DNA lock: Electric Cobalt, CBI compliance, and 1:1 fintech promo layout',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: structuredClone(clientDnas.get('client-fastpay')!),
-    },
-  ]);
-
-  clientSnapshots.set('c1000000-0000-4000-8000-000000000002', [
-    {
-      snapshotId: 'snap_init_kaae_1',
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      version: 1,
-      sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Verdana/Cairo typography',
-      createdBy: 'autonomous_creative_director',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      dna: structuredClone(kaaeClientDNA),
-    },
-  ]);
-  clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
-  }
+  seedClientDnaFixtures(clientDnas, clientSnapshots, computeDnaHash);
 
   interface IssuedSession {
     authenticated: boolean;
@@ -1583,17 +1001,6 @@ export function createApp(options?: CreateAppOptions) {
     lastAlertMessageId?: string;
   }
   let lastPaidProbe: PaidProbeState = { at: 0, status: 'unverified' };
-
-  const recordPaidModelBillingError = (status: string = 'billing_exhausted', detail?: any) => {
-    lastPaidProbe = {
-      at: Date.now(),
-      status,
-      detail: detail || { message: 'Paid call failed' },
-      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
-      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
-    };
-    lastVerifiedProgressAt = new Date().toISOString();
-  };
 
   const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
     const key = process.env.OPENAI_API_KEY;
@@ -1999,10 +1406,8 @@ export function createApp(options?: CreateAppOptions) {
     registerRoute,
     db,
     taskRepo,
-    ingressRepo,
     outboxRepo,
     revisionRepo,
-    canvaBindingRepo,
     publicationRepo,
     unifiedIngress,
     telegramBridge,
@@ -2012,7 +1417,6 @@ export function createApp(options?: CreateAppOptions) {
     reconciliationService,
     tasks,
     events,
-    rawEvents,
     briefs,
     revisions,
     decisions,
@@ -4196,59 +3600,6 @@ export function createApp(options?: CreateAppOptions) {
           AND EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN})
         ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
     return row ? { taskId: row.id, title: row.title || 'your request' } : null;
-  }
-
-  async function checkAndRecordIngressEvent(
-    adapterKind: string,
-    sourceEventId: string,
-    payload: any,
-    payloadText: string
-  ): Promise<{ isDuplicate: boolean }> {
-    if (rawEvents.has(sourceEventId)) {
-      return { isDuplicate: true };
-    }
-    rawEvents.set(sourceEventId, payload);
-
-    if (db) {
-      try {
-        const tenantId = '00000000-0000-4000-a000-000000000001';
-        const userId = '00000000-0000-4000-b000-000000000002';
-        const isDup = await withRlsContext(
-          db,
-          { tenantId, userId, role: 'administrator' },
-          async (trx) => {
-            const existing = await trx
-              .selectFrom('inbox_events')
-              .selectAll()
-              .where('source_event_id', '=', sourceEventId)
-              .executeTakeFirst();
-            if (existing) {
-              return true;
-            }
-            const hash = crypto.createHash('sha256').update(payloadText || JSON.stringify(payload)).digest('hex');
-            await trx
-              .insertInto('inbox_events')
-              .values({
-                tenant_id: tenantId,
-                source_account_id: adapterKind,
-                source_event_id: sourceEventId,
-                event_kind: `${adapterKind}_update`,
-                payload: typeof payload === 'object' && payload !== null ? payload : { raw: payload },
-                payload_hash: hash,
-                verified: true,
-              } as any)
-              .execute();
-            return false;
-          }
-        );
-        if (isDup) {
-          return { isDuplicate: true };
-        }
-      } catch (err) {
-        log.error(`[core:ingress_dedup:${adapterKind}] DB error:`, err);
-      }
-    }
-    return { isDuplicate: false };
   }
 
   // Webhooks
@@ -9344,59 +8695,6 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // Client DNA
-  registerRoute('get', '/clients', (c: any) => {
-    const uniqueDnas = Array.from(new Map(Array.from(clientDnas.values()).map((d) => [d.clientId, d])).values());
-    const list = uniqueDnas.map((d) => ({
-      clientId: d.clientId,
-      name: d.name,
-      code: d.code,
-      version: d.version,
-      status: d.status,
-      defaultLocale: d.defaultLocale,
-      defaultDirection: d.defaultDirection,
-      updatedAt: d.updatedAt,
-      colorsCount: d.colors.length,
-      rulesCount: d.guidelines.layoutRules.length,
-      snapshotsCount: (clientSnapshots.get(d.clientId) || []).length,
-    }));
-    return c.json(list, 200);
-  });
-
-  registerRoute('get', '/clients/:clientId/dna', async (c: any) => {
-    const clientId = c.req.param('clientId');
-    if (db && clientRepo) {
-      try {
-        const auth = verifyRequestAuth(c);
-        const tenantId = auth.tenantId || defaultTenantId;
-        const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
-        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : await withRlsContext(db, rlsContext, async (trx) => {
-              const res = await clientRepo.findByCode(tenantId, clientId, trx);
-              if (res) return res.id;
-              if (clientId.startsWith('client-')) {
-                return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
-              }
-              return undefined;
-            });
-        if (targetId) {
-          const row = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            return await clientRepo.findActiveDna(tenantId, targetId, trx);
-          });
-          if (row && row.dna) {
-            const parsed = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
-            return c.json(parsed);
-          }
-        }
-      } catch {
-        // Fallback to in-memory
-      }
-    }
-    const dna = await resolveClientDna(clientId);
-    if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
-    return c.json(dna);
-  });
-
   registerRoute('post', '/clients/:clientId/dna', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
@@ -9694,63 +8992,6 @@ export function createApp(options?: CreateAppOptions) {
   registerRoute('post', '/system/cutover/rollback-rehearsal', (c: any) => {
     if (!verifyRequestAuth(c).authenticated) return problem(c, 401, 'Authentication Required');
     return problem(c, 422, 'Recovery Drill Required', 'This endpoint cannot certify recovery. Run an isolated restore drill and attach its measured evidence');
-  });
-
-  // Evaluation Runs
-  registerRoute('post', '/evaluations/runs', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const runId = crypto.randomUUID();
-
-    const evalReport = await evalRunner.runFullTournament();
-    const run = {
-      runId,
-      name: body.name || 'Hawa Creative Full Tournament',
-      report: evalReport,
-      createdAt: new Date().toISOString(),
-    };
-    evalRuns.set(runId, run);
-
-    return c.json(run, 201);
-  });
-
-  registerRoute('get', '/evaluations/runs', (c: any) => {
-    return c.json(Array.from(evalRuns.values()));
-  });
-
-  registerRoute('get', '/evaluations/runs/:runId', (c: any) => {
-    const runId = c.req.param('runId');
-    const run = evalRuns.get(runId);
-    if (!run) return problem(c, 404, 'Evaluation Run Not Found');
-    return c.json(run);
-  });
-
-  registerRoute('get', '/evaluations/datasets', (c: any) => {
-    return c.json([
-      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
-      { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
-      { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
-    ]);
-  });
-
-  registerRoute('get', '/evaluations/datasets/:datasetId/cases', (c: any) => {
-    const datasetId = c.req.param('datasetId');
-    let relFile = 'evals/routing_brief.jsonl';
-    if (datasetId === 'rtl') relFile = 'evals/rtl_golden_cases.jsonl';
-    else if (datasetId === 'retrieval') relFile = 'evals/retrieval_eval.jsonl';
-
-    try {
-      const p1 = path.resolve(process.cwd(), relFile);
-      const p2 = path.resolve(process.cwd(), '../../', relFile);
-      const targetPath = fs.existsSync(p1) ? p1 : p2;
-      const content = fs.readFileSync(targetPath, 'utf-8');
-      const cases = content
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .map((line) => JSON.parse(line));
-      return c.json({ datasetId, total: cases.length, cases });
-    } catch (err: any) {
-      return problem(c, 500, 'Dataset Read Error', `Unable to load dataset ${datasetId}: ${err.message}`);
-    }
   });
 
   // Asset Security & Ingestion
@@ -10706,16 +9947,14 @@ export function createApp(options?: CreateAppOptions) {
       const client = clientDnas.get(clientId); // search labels only; the hydrated cache is current enough
       const brief = briefs.get(taskId);
       const briefText = brief?.objective || (task as any).title || '';
-      const rawEv = rawEvents.get((task as any).sourceEventId);
-      const eventText = rawEv?.message?.text || rawEv?.text || '';
       engine.indexItem({
         id: taskId,
         category: 'tasks',
         clientId,
         clientName: client?.name,
-        title: (task as any).title || (eventText ? eventText.slice(0, 60) : `Task ${taskId.slice(0, 8)}`),
+        title: (task as any).title || `Task ${taskId.slice(0, 8)}`,
         subtitle: `Status: ${task.status} · Phase: ${task.currentPhase || 'INTAKE'}`,
-        bodyText: `${briefText} ${eventText} ${(task as any).objective || ''} ${taskId} ${(task as any).tags?.join(' ') || ''}`,
+        bodyText: `${briefText} ${(task as any).objective || ''} ${taskId} ${(task as any).tags?.join(' ') || ''}`,
         tags: (task as any).tags || [task.status],
         status: task.status,
         metadata: { currentPhase: task.currentPhase, status: task.status, latestRevisionId: task.latestRevisionId },
@@ -11271,13 +10510,6 @@ export function createApp(options?: CreateAppOptions) {
     return problem(c, 400, 'Unknown Action', 'Supported actions: pause, resume, cancel, crash, checkpoint, replay');
   });
 
-  // --- Live Provider Credentials & Model Gateway Management ---
-  const maskKey = (key?: string) => {
-    if (!key) return '';
-    if (key.length <= 8) return '********';
-    return key.substring(0, 4) + '...' + key.substring(key.length - 4);
-  };
-
   // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
   // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
   if (db && outboxRepo && process.env.TELEGRAM_BOT_TOKEN && options?.enableDraftReminders) {
@@ -11378,7 +10610,6 @@ export function createApp(options?: CreateAppOptions) {
         }
       )
     : Promise.resolve(0);
-  Object.assign(app, { clientDnaHydrated, guidelineReadings });
-
-  return app;
+  // index.ts awaits clientDnaHydrated before it opens the port.
+  return Object.assign(app, { clientDnaHydrated, guidelineReadings });
 }

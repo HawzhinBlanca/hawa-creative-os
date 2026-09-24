@@ -103,16 +103,6 @@ describe('N2: route order', () => {
     'POST /tasks/:taskId/:control -> /tasks/:taskId/revisions': 'intercepted by the catch-all (F9 removes)',
     // The one order that must survive the split: `diff` is a word, not a revision id.
     'GET /tasks/:taskId/revisions/diff -> /tasks/:taskId/revisions/:revisionId': 'diff must stay first (revisions module)',
-    // Shadowed duplicates: the route modules registered first answer, and app.ts's copies never run.
-    // SPLIT_PLAN G0 deletes them (and, for snapshots, the module's memory-only copy instead).
-    'GET /clients -> /clients': 'shadowed duplicate (G0 removes)',
-    'GET /clients/:clientId/dna -> /clients/:clientId/dna': 'shadowed duplicate (G0 removes)',
-    'GET /clients/:clientId/snapshots -> /clients/:clientId/snapshots': 'shadowed duplicate (G0 keeps the Postgres reader)',
-    'GET /evaluations/datasets -> /evaluations/datasets': 'shadowed duplicate (G0 removes)',
-    'GET /evaluations/datasets/:datasetId/cases -> /evaluations/datasets/:datasetId/cases': 'shadowed duplicate (G0 removes)',
-    'GET /evaluations/runs -> /evaluations/runs': 'shadowed duplicate (G0 removes)',
-    'GET /evaluations/runs/:runId -> /evaluations/runs/:runId': 'shadowed duplicate (G0 removes)',
-    'POST /evaluations/runs -> /evaluations/runs': 'shadowed duplicate (G0 removes)',
     // The Figma tombstone registers both `/figma/status` and `/v1/figma/status`, so `/v1/figma/status`
     // is mounted twice; both are the same 410 handler.
     'GET /figma/status -> /figma/status': 'same tombstone handler twice',

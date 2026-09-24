@@ -70,10 +70,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
     return c.json(dna);
   });
 
-  // Client Snapshots
-  registerRoute('get', '/clients/:clientId/snapshots', async (c: any) => {
-    const clientId = c.req.param('clientId');
-    const snapshots = clientSnapshots.get(clientId) || [];
-    return c.json(snapshots, 200);
-  });
+  // GET /clients/:clientId/snapshots is app.ts's, which reads hawa.client_dna_versions. This module
+  // had a memory-only copy registered first, so the Desk's DNA history never showed what Postgres
+  // held (architecture programme 1.3, SPLIT_PLAN G0; test N5).
 }

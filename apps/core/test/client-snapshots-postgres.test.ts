@@ -5,13 +5,12 @@ import { createApp } from '../src/app.js';
 
 /**
  * N5 (architecture programme 1.3, SPLIT_PLAN.md sections 5 and 6): GET /clients/:clientId/snapshots
- * is registered twice. The copy that answers is clients.routes.ts's, which reads only Core's memory;
- * app.ts's copy, which reads hawa.client_dna_versions, is shadowed and never runs. So the Desk's DNA
- * history lists nothing Postgres holds, and loses everything on a restart.
+ * was registered twice. The copy that answered was clients.routes.ts's, which read only Core's
+ * memory; app.ts's copy, which reads hawa.client_dna_versions, was shadowed and never ran. So the
+ * Desk's DNA history listed nothing Postgres held, and lost everything on a restart.
  *
- * SPLIT_PLAN G0 deletes the memory-only copy and keeps the Postgres reader. Until then this test
- * fails, which `it.fails` records; G0 flips it to `it`. Setup is in beforeAll so that a broken
- * fixture fails the file instead of passing as the expected failure.
+ * SPLIT_PLAN G0 deleted the memory-only copy and kept the Postgres reader. Setup is in beforeAll so
+ * that a broken fixture fails the file rather than the assertion.
  */
 describe('N5: a client\'s DNA snapshots come from Postgres', () => {
   const db = createDb(process.env.TEST_DATABASE_URL!);
@@ -32,8 +31,7 @@ describe('N5: a client\'s DNA snapshots come from Postgres', () => {
     expect(stored.map((r) => r.content_hash)).toContain(contentHash);
   });
 
-  // SPLIT_PLAN G0: remove `.fails` when the memory-only route in clients.routes.ts is deleted.
-  it.fails('lists the version Postgres holds, with its hash', async () => {
+  it('lists the version Postgres holds, with its hash', async () => {
     const res = await createApp({ db }).request(`/v1/clients/${clientId}/snapshots`, {
       headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
     });

@@ -3,10 +3,8 @@ import type {
   Database,
   Kysely,
   TaskRepository,
-  IngressRepository,
   OutboxRepository,
   RevisionRepository,
-  CanvaBindingRepository,
   PublicationRepository,
 } from '@hawa/db';
 import type {
@@ -55,10 +53,8 @@ export interface RouteContext {
   registerRoute: RouteRegistrar;
   db: Kysely<Database> | null;
   taskRepo: TaskRepository | null;
-  ingressRepo: IngressRepository | null;
   outboxRepo: OutboxRepository | null;
   revisionRepo: RevisionRepository | null;
-  canvaBindingRepo: CanvaBindingRepository | null;
   publicationRepo: PublicationRepository | null;
   unifiedIngress: UnifiedIngressService;
   telegramBridge?: TelegramBridgeDaemon;
@@ -70,7 +66,6 @@ export interface RouteContext {
   // In-memory shared stores (used as fallback or for in-memory tests)
   tasks: Map<string, any>;
   events: Map<string, any[]>;
-  rawEvents: Map<string, any>;
   briefs: Map<string, DesignBrief>;
   revisions: Map<string, any>;
   decisions: Map<string, ApprovalDecision[]>;
