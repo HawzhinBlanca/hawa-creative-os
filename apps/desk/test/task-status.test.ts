@@ -3,7 +3,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../src/api/client.js';
 import { TASK_EVENTS } from '../src/services/eventStream.js';
-import { keepLoadedDetail, queueEntryChanged } from '../src/services/taskDetail.js';
+import { queueEntryChanged } from '../src/services/taskDetail.js';
 import { FILTER_GROUPS, inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../src/services/taskStatus.js';
 import { toApiTaskStatus } from '../../../packages/db/src/repositories/task.repository.js';
 import { LEGAL_TRANSITIONS } from '../../../packages/domain/src/state-machine.js';
@@ -91,13 +91,6 @@ describe('a background refresh of the queue', () => {
   type Entry = { id: string; status: string; latestRevision: { id: string; version: number; previewUrl?: string } };
   const detail: Entry = { id: 't1', status: 'AWAITING_APPROVAL', latestRevision: { id: 'r1', version: 1, previewUrl: 'data:image/png;base64,AA==' } };
 
-  it('keeps the loaded preview while the revision is the same, and drops it for a new revision', () => {
-    const same = keepLoadedDetail([detail], [{ id: 't1', status: 'APPROVED', latestRevision: { id: 'r1', version: 1 } }]);
-    expect(same[0]).toMatchObject({ status: 'APPROVED', latestRevision: { previewUrl: 'data:image/png;base64,AA==' } });
-    const next = keepLoadedDetail([detail], [{ id: 't1', status: 'AWAITING_APPROVAL', latestRevision: { id: 'r2', version: 2 } }]);
-    expect(next[0].latestRevision).toEqual({ id: 'r2', version: 2 });
-  });
-
   it('reads the selected task again only when the list shows it changed', () => {
     const entry = { id: 't1', status: 'AWAITING_APPROVAL', version: 3, updatedAt: 'a' };
     expect(queueEntryChanged(entry, { ...entry })).toBe(false);
@@ -129,21 +122,24 @@ describe('the session, as the API client ends it', () => {
     await apiClient.auth.login({ key: 'k' });
   };
 
-  it('tells the screen about every 401, from any route, with Core\'s reason; a wrong sign-in key is not a session ending', async () => {
+  // ADR-037: the API client no longer ends the session itself. It tells one hint (the Desk sets it to
+  // a session check; test/server-state.test.ts renders the rest) about each 401 but a wrong sign-in key.
+  it('tells its one hint about every 401, from any route; a wrong sign-in key is not a session ending', async () => {
     await signIn('hawa_sess_a');
-    const ended = vi.fn();
-    const unsubscribe = apiClient.auth.onSessionEnded(ended);
+    const hint = vi.fn();
+    apiClient.auth.setUnauthorizedHint(hint);
     vi.stubGlobal('fetch', vi.fn(async () => json({ title: 'Authentication Required', detail: 'Sign in to Hawa first' }, 401)));
     await expect(apiClient.tasks.asks('t1')).rejects.toMatchObject({ status: 401 });
     await expect(apiClient.canva.taskState('t1')).rejects.toMatchObject({ status: 401 });
-    expect(ended).toHaveBeenCalledTimes(2);
-    expect(ended).toHaveBeenCalledWith('Sign in to Hawa first', true);
+    await expect(apiClient.auth.getSession()).rejects.toMatchObject({ status: 401 });
+    expect(hint).toHaveBeenCalledTimes(3);
+    expect(hint.mock.calls[0][0]).toMatchObject({ status: 401, message: 'Sign in to Hawa first' });
     await expect(apiClient.auth.login({ key: 'wrong' })).rejects.toMatchObject({ status: 401 });
-    expect(ended).toHaveBeenCalledTimes(2);
+    expect(hint).toHaveBeenCalledTimes(3);
     vi.stubGlobal('fetch', vi.fn(async () => json({ title: 'Database Unavailable' }, 503)));
     await expect(apiClient.tasks.asks('t1')).rejects.toMatchObject({ status: 503 });
-    expect(ended).toHaveBeenCalledTimes(2);
-    unsubscribe();
+    expect(hint).toHaveBeenCalledTimes(3);
+    apiClient.auth.setUnauthorizedHint(null);
   });
 
   it('Sign Out revokes the session it ends, and signs the tab out even when Core does not answer', async () => {

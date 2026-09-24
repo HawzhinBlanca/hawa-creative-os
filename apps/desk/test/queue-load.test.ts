@@ -1,224 +1,141 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../src/api/client.js';
 import { TASK_EVENTS } from '../src/services/eventStream.js';
-import { startQueueRefresh, startVisiblePolling, type TaskEventSource, type VisibilitySource } from '../src/services/queueRefresh.js';
+import { bridgeTaskEvents, pollIntervalFor, taskIdOf } from '../src/services/liveUpdates.js';
+import { POLL_WHILE_STREAM_DOWN_MS, queryKeys } from '../src/services/queryClient.js';
 import { inQueueFilter, queueFilterStatuses } from '../src/services/taskStatus.js';
+import { FakeStream } from './support/desk-harness.js';
 
 /**
- * Architecture programme 0.3 (2026-09-24): the load one open Desk puts on Core.
+ * The load one open Desk puts on Core.
  *
- * Before: the Work screen read every page of GET /tasks every 30 s while visible and 1 s after each
- * task event (a burst of events from one design run was one full read per event more than 1 s
- * apart), and the sidebar read the health handler every 30 s even in a hidden tab. These drive the
- * refresh and polling code the Work screen and the sidebar run, with fake timers, a fake event
- * stream and a fake document, and count the requests.
+ * Architecture programme 0.3 (2026-09-24) stopped the Work screen reading every page every 30 s and
+ * 1 s after each event; ADR-037 (programme 1.5) replaced its hand-written refresh with the query
+ * cache: the tab's one event stream invalidates what an event names, 300 ms of events at a time,
+ * and nothing is polled while the stream is up. This drives the bridge (services/liveUpdates.ts) with
+ * a fake stream and fake timers and records what it invalidates; test/server-state.test.ts counts the
+ * requests of the rendered screen.
  */
 
-class FakeDocument implements VisibilitySource {
-  hidden = false;
-  private listeners = new Set<() => void>();
-  addEventListener(_type: 'visibilitychange', listener: () => void) { this.listeners.add(listener); }
-  removeEventListener(_type: 'visibilitychange', listener: () => void) { this.listeners.delete(listener); }
-  setHidden(hidden: boolean) {
-    this.hidden = hidden;
-    this.listeners.forEach((l) => l());
-  }
+function recordingClient() {
+  const client = new QueryClient();
+  const invalidated: Array<{ key: unknown; refetchType?: string }> = [];
+  vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters?: any) => {
+    invalidated.push({ key: filters?.queryKey ?? 'everything', refetchType: filters?.refetchType });
+  });
+  return { client, invalidated };
 }
 
-class FakeStream implements TaskEventSource {
-  private handlers = new Map<string, Set<(data: any) => void>>();
-  private statusHandlers = new Set<(status: string) => void>();
-  status = 'connected';
-  on(event: string, handler: (data: any) => void) {
-    if (!this.handlers.has(event)) this.handlers.set(event, new Set());
-    this.handlers.get(event)!.add(handler);
-    return () => this.handlers.get(event)!.delete(handler);
-  }
-  onStatusChange(handler: (status: string) => void) {
-    this.statusHandlers.add(handler);
-    handler(this.status); // as eventStream.onStatusChange does
-    return () => this.statusHandlers.delete(handler);
-  }
-  emit(event: string, data: any = { taskId: 't1' }) { this.handlers.get(event)?.forEach((h) => h(data)); }
-  setStatus(status: string) {
-    this.status = status;
-    this.statusHandlers.forEach((h) => h(status));
-  }
-}
-
-const MINUTE = 60_000;
-
-describe('the Work queue refresh (services/queueRefresh.ts startQueueRefresh, as WorkScreen runs it)', () => {
-  let doc: FakeDocument;
-  let stream: FakeStream;
-  let listRequests: number;
-  let stop: () => void;
-  let refreshMs: number;
-  let inFlight: number;
-  let maxInFlight: number;
-
-  const start = () => {
-    // The screen's first read, made when it mounts, before any refresh.
-    listRequests = 1;
-    const handle = startQueueRefresh({
-      refresh: async () => {
-        listRequests++;
-        inFlight++;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        await new Promise((r) => setTimeout(r, refreshMs));
-        inFlight--;
-      },
-      stream,
-      events: TASK_EVENTS,
-      doc,
-    });
-    stop = handle.stop;
-  };
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    doc = new FakeDocument();
-    stream = new FakeStream();
-    refreshMs = 200;
-    inFlight = 0;
-    maxInFlight = 0;
-  });
-  afterEach(() => {
-    stop?.();
-    vi.useRealTimers();
-  });
-
-  it('an idle visible tab with the event stream up makes at most 2 list requests a minute', async () => {
-    start();
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(listRequests).toBeLessThanOrEqual(2);
-    await vi.advanceTimersByTimeAsync(9 * MINUTE);
-    // Ten idle minutes: nothing after the first read. It used to be 20 full reads of every page.
-    expect(listRequests).toBe(1);
-  });
-
-  it('a burst of 20 task events causes at most 2 list requests', async () => {
-    start();
-    for (let i = 0; i < 20; i++) {
-      stream.emit(TASK_EVENTS[i % TASK_EVENTS.length]);
-      await vi.advanceTimersByTimeAsync(100);
-    }
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(listRequests - 1).toBeLessThanOrEqual(2);
-    expect(listRequests - 1).toBeGreaterThanOrEqual(1); // the events are read, not dropped
-  });
-
-  it('events that keep arriving while a slow read runs still make one read at a time, spaced at least 1 s apart', async () => {
-    refreshMs = 3_000;
-    const started: number[] = [];
-    listRequests = 1;
-    const handle = startQueueRefresh({
-      refresh: async () => {
-        started.push(Date.now());
-        inFlight++;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        await new Promise((r) => setTimeout(r, refreshMs));
-        inFlight--;
-      },
-      stream,
-      events: TASK_EVENTS,
-      doc,
-    });
-    stop = handle.stop;
-    // An event every 700 ms for 20 s: a plain 1 s debounce would never fire, a plain delay would fire 28 times.
-    for (let i = 0; i < 28; i++) {
-      stream.emit('task:transitioned');
-      await vi.advanceTimersByTimeAsync(700);
-    }
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(maxInFlight).toBe(1);
-    expect(started.length).toBeGreaterThanOrEqual(2); // never starved by a steady stream
-    expect(started.length).toBeLessThanOrEqual(6); // at most one per 5 s window
-    for (let i = 1; i < started.length; i++) expect(started[i] - started[i - 1]).toBeGreaterThanOrEqual(1_000);
-  });
-
-  it('a hidden tab makes no list requests, whatever the stream does', async () => {
-    start();
-    doc.setHidden(true);
-    for (let i = 0; i < 20; i++) stream.emit('task:qa_completed');
-    await vi.advanceTimersByTimeAsync(2 * MINUTE);
-    stream.setStatus('connecting'); // the stream drops: the poll would run, but not in a hidden tab
-    await vi.advanceTimersByTimeAsync(5 * MINUTE);
-    stream.setStatus('connected');
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(listRequests - 1).toBe(0);
-
-    // Shown again, it reads once for everything it heard while hidden.
-    doc.setHidden(false);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(listRequests - 1).toBe(1);
-  });
-
-  it('polls every 30 s only while the event stream is down, and reads once when it reconnects', async () => {
-    start();
-    stream.setStatus('connecting');
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(listRequests - 1).toBe(2); // the fallback: nothing else tells the screen about changes
-    stream.setStatus('connected');
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(listRequests - 1).toBe(3); // the events sent while it was away
-    await vi.advanceTimersByTimeAsync(5 * MINUTE);
-    expect(listRequests - 1).toBe(3);
-  });
-
-  it('stops reading when the screen unmounts', async () => {
-    start();
-    stop();
-    stream.setStatus('connecting');
-    stream.emit('task:created', { id: 't9' });
-    await vi.advanceTimersByTimeAsync(5 * MINUTE);
-    expect(listRequests).toBe(1);
-  });
-});
-
-describe('the sidebar health line (services/queueRefresh.ts startVisiblePolling, as Sidebar runs it)', () => {
+describe('task events reach the query cache (services/liveUpdates.ts bridgeTaskEvents)', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('probes only while the tab is visible', async () => {
-    const doc = new FakeDocument();
-    doc.hidden = true;
-    const probe = vi.fn(async () => {});
-    const stop = startVisiblePolling({ probe, intervalMs: 30_000, doc });
-    await vi.advanceTimersByTimeAsync(10 * MINUTE);
-    expect(probe).not.toHaveBeenCalled();
-
-    doc.setHidden(false); // shown after a long time: the line is read at once
-    await vi.advanceTimersByTimeAsync(0);
-    expect(probe).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(MINUTE);
-    expect(probe.mock.calls.length).toBeLessThanOrEqual(3);
-
-    doc.setHidden(true);
-    const before = probe.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(10 * MINUTE);
-    expect(probe.mock.calls.length).toBe(before);
+  it('a burst of 20 task events invalidates the list once and each task it named once', async () => {
+    const stream = new FakeStream('connected');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream, doc: { hidden: false } });
+    for (let i = 0; i < 20; i++) {
+      stream.emit(TASK_EVENTS[i % TASK_EVENTS.length], { taskId: i % 2 ? 't1' : 't2' });
+      await vi.advanceTimersByTimeAsync(10);
+    }
+    expect(invalidated).toEqual([]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(invalidated).toEqual([
+      { key: queryKeys.tasks, refetchType: 'active' },
+      { key: queryKeys.task('t2'), refetchType: 'active' },
+      { key: queryKeys.task('t1'), refetchType: 'active' },
+    ]);
     stop();
+  });
+
+  it('applies events at most every 300 ms under a steady stream of them, never later', async () => {
+    const stream = new FakeStream('connected');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream });
+    for (let i = 0; i < 100; i++) {
+      stream.emit('task:transitioned', { taskId: 't1' });
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    const listReads = invalidated.filter((x) => x.key === queryKeys.tasks).length;
+    expect(listReads).toBeGreaterThanOrEqual(15);
+    expect(listReads).toBeLessThanOrEqual(17);
+    stop();
+  });
+
+  it('in a hidden tab only marks answers stale (the tab reads them when shown)', async () => {
+    const stream = new FakeStream('connected');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream, doc: { hidden: true } });
+    stream.emit('task:approved', { taskId: 't1' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(invalidated.every((x) => x.refetchType === 'none')).toBe(true);
+    expect(invalidated).toHaveLength(2);
+    stop();
+  });
+
+  it('invalidates everything after a reconnect, not on the first connection', async () => {
+    const stream = new FakeStream('connecting');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream });
+    stream.setStatus('connected');
+    expect(invalidated).toEqual([]);
+    stream.setStatus('connecting');
+    stream.setStatus('connected');
+    expect(invalidated).toEqual([{ key: 'everything', refetchType: 'active' }]);
+    stop();
+  });
+
+  it('hears every task event Core broadcasts, and nothing after it stops', async () => {
+    const stream = new FakeStream('connected');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream });
+    for (const name of TASK_EVENTS) expect(stream.listeners(name), name).toBe(1);
+    stop();
+    for (const name of TASK_EVENTS) expect(stream.listeners(name), name).toBe(0);
+    stream.emit('task:created', { id: 't9' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(invalidated).toEqual([]);
+  });
+
+  it('reads the task an event names in each of the shapes Core sends', () => {
+    expect(taskIdOf({ taskId: 't1' })).toBe('t1');
+    expect(taskIdOf({ task: { id: 't2' } })).toBe('t2');
+    expect(taskIdOf({ id: 't3', title: 'x' })).toBe('t3');
+    expect(taskIdOf({})).toBeUndefined();
+    expect(taskIdOf(null)).toBeUndefined();
+  });
+
+  it('polls only while the stream is down', () => {
+    expect(pollIntervalFor('connected')).toBe(false);
+    expect(pollIntervalFor('connecting')).toBe(POLL_WHILE_STREAM_DOWN_MS);
+    expect(pollIntervalFor('disconnected')).toBe(POLL_WHILE_STREAM_DOWN_MS);
   });
 });
 
-describe('the Work screen and the sidebar use these (source)', () => {
+describe('the Work screen and the sidebar have no timers of their own (source)', () => {
   const source = (file: string) => fs.readFileSync(path.resolve(__dirname, '../src', file), 'utf8');
 
-  it('the Work screen refreshes through startQueueRefresh, with the live stream and the document, and has no timer of its own', () => {
+  it('the Work screen reads the queue through a query and subscribes to no task event but the new-request toast', () => {
     const work = source('screens/WorkScreen.tsx');
-    expect(work).toMatch(/startQueueRefresh\(\{[^}]*stream: eventStream[^}]*events: TASK_EVENTS[^}]*doc: document/);
     expect(work).not.toMatch(/setInterval\(/);
-    // The live-event handler no longer schedules its own queue read.
-    expect(work).not.toMatch(/setTimeout\(refreshQueueQuietly/);
+    expect(work).toMatch(/placeholderData: keepPreviousData/);
+    expect(work).toMatch(/refetchInterval: pollInterval/);
+    expect(work.match(/stream\.on\(/g)).toHaveLength(1);
+    expect(work).toMatch(/stream\.on\('task:created'/);
   });
 
-  it('the sidebar probes health through startVisiblePolling and has no timer of its own', () => {
+  it('the sidebar reads health through a query polled only while the tab is visible', () => {
     const sidebar = source('components/Sidebar.tsx');
-    expect(sidebar).toMatch(/startVisiblePolling\(\{ probe: probeHealth/);
     expect(sidebar).not.toMatch(/setInterval\(/);
+    expect(sidebar).toMatch(/useQuery\(\{\s*queryKey: queryKeys\.health,\s*queryFn: probeHealth,\s*refetchInterval: HEALTH_POLL_MS/);
+    expect(sidebar).not.toMatch(/refetchIntervalInBackground/);
+  });
+
+  it('the hand-written refresh module is gone', () => {
+    expect(fs.existsSync(path.resolve(__dirname, '../src/services/queueRefresh.ts'))).toBe(false);
   });
 });
 

@@ -18,7 +18,9 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
       expect(res.status).toBe(401);
     });
 
-    it('permits valid short-lived issued desk session via access_token query param', async () => {
+    // ADR-037 (2026-09-24): the session token no longer goes in the stream's address either; the Desk
+    // opens the stream with a one-use ticket (test/stream-ticket.test.ts).
+    it('refuses even an issued desk session in the access_token query param, and opens the stream with a ticket', async () => {
       const app = createApp();
 
       // Create an issued session via login
@@ -35,11 +37,17 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
       const session = await loginRes.json();
       expect(session.token).toBeDefined();
 
-      // Connecting with issued session token via query parameter
-      const streamRes = await app.request(`/v1/events/stream?access_token=${encodeURIComponent(session.token)}`);
-      // Connection must succeed (200 with text/event-stream)
+      // The issued session token in the address is refused.
+      const refused = await app.request(`/v1/events/stream?access_token=${encodeURIComponent(session.token)}`);
+      expect(refused.status).toBe(401);
+
+      // A ticket asked for with the session's bearer header opens it.
+      const issued = await app.request('/v1/auth/stream-ticket', { method: 'POST', headers: { Authorization: `Bearer ${session.token}` } });
+      const { ticket } = await issued.json();
+      const streamRes = await app.request(`/v1/events/stream?ticket=${encodeURIComponent(ticket)}`);
       expect(streamRes.status).toBe(200);
       expect(streamRes.headers.get('content-type')).toContain('text/event-stream');
+      await streamRes.body?.cancel();
     });
 
     it('rejects unauthenticated requests to /events/stream', async () => {

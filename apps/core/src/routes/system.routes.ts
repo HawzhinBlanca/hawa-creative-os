@@ -30,6 +30,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
+    ensureSessionLoaded,
+    bearerTokenOf,
+    streamTickets,
   } = ctx;
 
   const maskKey = (key?: string) => {
@@ -224,9 +227,25 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 200);
   });
 
-  // Real-time Server-Sent Events (SSE) Stream
-  registerRoute('get', '/events/stream', (c: any) => {
-    const auth = verifyRequestAuth(c);
+  // Real-time Server-Sent Events (SSE) Stream. A browser's EventSource cannot send a header, so the
+  // Desk opens it with a one-use ticket (`?ticket=`, from POST /auth/stream-ticket) instead of its
+  // session token, which it used to put in the address (ADR-037). A client that can send a header
+  // still may. The route authenticates itself (registerRoute's SELF_AUTHENTICATED_READS in app.ts):
+  // the ticket is the credential, and a ticket that is unknown, used or expired is refused outright,
+  // never answered with whatever else the request carries.
+  registerRoute('get', '/events/stream', async (c: any) => {
+    const ticket = c.req.query('ticket');
+    const credential = ticket !== undefined ? streamTickets?.redeem(ticket) : bearerTokenOf?.(c);
+    if (ticket !== undefined && !credential) {
+      return problem(c, 401, 'Authentication Required', 'This stream ticket is unknown, used or expired; ask for a new one');
+    }
+    // The credential is checked again on every heartbeat, from the database when the session cache is
+    // due: a session revoked or expired while the stream is open closes it.
+    const authOf = async () => {
+      if (credential) await ensureSessionLoaded?.(credential);
+      return ticket !== undefined ? verifyRequestAuth(c, credential) : verifyRequestAuth(c);
+    };
+    const auth = await authOf();
     if (!auth.authenticated) {
       return problem(c, 401, 'Authentication Required', 'Sign in to stream system events');
     }
@@ -287,7 +306,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
           subscribers.delete(subscriber as any);
           return;
         }
-        const currentAuth = verifyRequestAuth(c);
+        const currentAuth = await authOf();
         if (!currentAuth.authenticated) {
           closed = true;
           clearInterval(heartbeat);

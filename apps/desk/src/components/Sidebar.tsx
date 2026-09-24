@@ -1,9 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useI18n } from '../services/i18n.js';
-import { startVisiblePolling } from '../services/queueRefresh.js';
+import { queryKeys } from '../services/queryClient.js';
 
 /** How often the health line is read while the tab is visible. */
 const HEALTH_POLL_MS = 30_000;
+
+interface HealthLine {
+  status: 'ok' | 'degraded' | 'checking';
+  label: string;
+  details: string;
+}
+
+const CHECKING: HealthLine = { status: 'checking', label: 'Checking Core...', details: 'Checking API availability...' };
+
+/** Reads Core's public health route; the answer is the line the sidebar shows. */
+export async function probeHealth(): Promise<HealthLine> {
+  try {
+    const res = await fetch('/v1/health', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      await res.json();
+      return { status: 'ok', label: 'Core Reachable', details: 'API responded · Canva and delivery require separate verification' };
+    }
+    return { status: 'degraded', label: 'Core Warning', details: `HTTP ${res.status} response from server` };
+  } catch {
+    return { status: 'degraded', label: 'Core Disconnected', details: 'API unreachable · check connection' };
+  }
+}
 
 export type ScreenId = 'work' | 'clients' | 'settings' | 'inbox' | 'review' | 'dna' | 'library' | 'ops' | 'eval' | 'comparison';
 
@@ -15,55 +38,17 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) => {
   const { t } = useI18n();
 
-  // Honest Live Health State (FR-064: No fake health)
-  const [healthStatus, setHealthStatus] = useState<{
-    status: 'ok' | 'degraded' | 'checking';
-    label: string;
-    details: string;
-  }>({
-    status: 'checking',
-    label: 'Checking Core...',
-    details: 'Checking API availability...',
+  // Honest Live Health State (FR-064: No fake health). A query polled every 30 s, only while the tab
+  // is visible (TanStack pauses refetchInterval in a hidden tab), and read at once when it is shown
+  // again after that: a Desk left open in a background tab read Core's health all day (programme 0.3,
+  // then ADR-037). A probe never throws: an unreachable Core is an answer the line shows.
+  const { data: healthStatus = CHECKING } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: probeHealth,
+    refetchInterval: HEALTH_POLL_MS,
+    staleTime: HEALTH_POLL_MS,
+    retry: false,
   });
-
-  useEffect(() => {
-    let mounted = true;
-    const probeHealth = async () => {
-      try {
-        const res = await fetch('/v1/health', { signal: AbortSignal.timeout(3000) });
-        if (!mounted) return;
-        if (res.ok) {
-          await res.json();
-          setHealthStatus({
-            status: 'ok',
-            label: 'Core Reachable',
-            details: 'API responded · Canva and delivery require separate verification',
-          });
-        } else {
-          setHealthStatus({
-            status: 'degraded',
-            label: 'Core Warning',
-            details: `HTTP ${res.status} response from server`,
-          });
-        }
-      } catch {
-        if (!mounted) return;
-        setHealthStatus({
-          status: 'degraded',
-          label: 'Core Disconnected',
-          details: 'API unreachable · check connection',
-        });
-      }
-    };
-
-    // Only while the tab is visible (architecture programme 0.3): a Desk left open in a background
-    // tab read Core's health handler every 30 s all day.
-    const stopPolling = startVisiblePolling({ probe: probeHealth, intervalMs: HEALTH_POLL_MS, doc: document });
-    return () => {
-      mounted = false;
-      stopPolling();
-    };
-  }, []);
 
   const isWorkActive = currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review';
   const isClientsActive = currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library';

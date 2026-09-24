@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { ScreenId } from './Sidebar.js';
-import { eventStream, type StreamConnectionStatus } from '../services/eventStream.js';
 import { useI18n } from '../services/i18n.js';
+import { useDesk } from '../DeskProviders.js';
+import { useStreamStatus } from '../services/liveUpdates.js';
 
 interface HeaderProps {
   currentScreen: ScreenId;
@@ -12,12 +13,11 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStartTour, onOpenCommandPalette }) => {
   const { locale, t, toggleLocale } = useI18n();
-  const [streamStatus, setStreamStatus] = useState<StreamConnectionStatus>(eventStream.getStatus());
+  // The tab's one event stream (ADR-037).
+  const streamStatus = useStreamStatus(useDesk().stream);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
-    const unsub = eventStream.onStatusChange(setStreamStatus);
-
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -25,7 +25,6 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNewTask, onStar
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      unsub();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

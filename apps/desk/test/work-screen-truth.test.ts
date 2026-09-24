@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiClient, ApiError } from '../src/api/client.js';
+import { apiClient } from '../src/api/client.js';
+import { readQueuePage } from '../src/screens/WorkScreen.js';
 import { inQueueFilter, queueFilterStatuses, searchFold, taskStatusView } from '../src/services/taskStatus.js';
 
 /**
@@ -117,72 +118,42 @@ describe('Request Revision (WorkScreen handleSendRevisionRequest)', () => {
   });
 });
 
-describe('the task queue (WorkScreen fetchTasks)', () => {
+describe('the task queue (WorkScreen readQueuePage, the list query\'s one request)', () => {
   // 180 tasks, newest first; the ten oldest await approval. Core filters by `statuses` and pages by
   // cursor as GET /tasks does.
   const all = Array.from({ length: 180 }, (_, i) => ({ id: `t${i}`, title: `Task ${i}`, status: i >= 170 ? 'AWAITING_APPROVAL' : 'COMPLETE' }));
   const core = () =>
-    vi.fn(async (p: { limit?: number; cursor?: string | null; statuses?: readonly string[]; q?: string }) => {
+    vi.fn(async (p: { limit?: number; cursor?: string | null; statuses?: readonly string[]; q?: string } = {}) => {
       const matching = p.statuses ? all.filter((t) => p.statuses!.includes(t.status)) : all;
       const start = p.cursor ? Number(p.cursor) : 0;
       const items = matching.slice(start, start + (p.limit ?? 50));
       const next = start + items.length;
-      return { items, total: matching.length, limit: p.limit, nextCursor: next < matching.length ? String(next) : null };
+      return { items, total: matching.length, limit: p.limit, nextCursor: next < matching.length ? String(next) : null } as any;
     });
-  const screen = (list: ReturnType<typeof core>, view: { cursor: string | null; filter: string; search: string }) => {
-    const shown = { tasks: [] as any[], total: -1, next: undefined as string | null | undefined };
-    const getSession = vi.fn(async () => ({ authenticated: false }));
-    const fetchTasks = lift<(quiet?: boolean) => Promise<void>>('fetchTasks', {
-      queueViewRef: { current: view },
-      queueReadSeq: { current: 0 },
-      QUEUE_PAGE_SIZE: 50,
-      queueFilterStatuses,
-      setQueueState: () => {},
-      setQueueError: () => {},
-      apiClient: { auth: { getSession }, tasks: { list } },
-      setSessionUser: () => {},
-      setQueueTotal: (n: number) => (shown.total = n),
-      setNextCursor: (c: string | null) => (shown.next = c),
-      selectedTaskIdRef: { current: '' },
-      tasksRef: { current: [] },
-      initialTaskIdRef: { current: undefined },
-      setTasks: (v: any) => (shown.tasks = typeof v === 'function' ? v(shown.tasks) : v),
-      keepLoadedDetail: (_prev: any[], items: any[]) => items,
-      queueEntryChanged: () => false,
-      setQueueLoads: () => {},
-      setSelectedTaskId: () => {},
-      ApiError,
-    });
-    return { fetchTasks, shown, getSession };
-  };
 
-  it('reads one page, not every page, and shows the total Core reports', async () => {
+  it('reads one page, not every page, and returns the total Core reports', async () => {
     const list = core();
-    const { fetchTasks, shown } = screen(list, { cursor: null, filter: 'all', search: '' });
-    await fetchTasks();
+    const page = await readQueuePage({ list }, { cursor: null, filter: 'all', search: '' });
     expect(list).toHaveBeenCalledTimes(1);
-    expect(shown.tasks).toHaveLength(50);
-    expect(shown.total).toBe(180);
-    expect(shown.next).toBe('50');
+    expect(page.items).toHaveLength(50);
+    expect(page.total).toBe(180);
+    expect(page.nextCursor).toBe('50');
   });
 
   it('finds the older tasks awaiting approval through the filter, which Core applies', async () => {
     // Filtering only the page on screen would show none of the ten oldest tasks awaiting approval.
     const list = core();
-    const { fetchTasks, shown } = screen(list, { cursor: null, filter: 'review', search: '' });
-    await fetchTasks();
-    expect(list.mock.calls[0][0].statuses).toEqual(['AWAITING_APPROVAL']);
-    expect(shown.tasks.filter((t) => t.status === 'AWAITING_APPROVAL')).toHaveLength(10);
-    expect(shown.total).toBe(10);
+    const page = await readQueuePage({ list }, { cursor: null, filter: 'review', search: '' });
+    expect(list.mock.calls[0][0]!.statuses).toEqual(['AWAITING_APPROVAL']);
+    expect(page.items.filter((t: any) => t.status === 'AWAITING_APPROVAL')).toHaveLength(10);
+    expect(page.total).toBe(10);
   });
 
-  it('a background refresh reads the page on screen again, with no session read', async () => {
+  it('reads the page on screen by its cursor, with the search, and nothing else (no session read)', async () => {
     const list = core();
-    const { fetchTasks, getSession } = screen(list, { cursor: '100', filter: 'all', search: 'evening' });
-    await fetchTasks(true);
+    await readQueuePage({ list }, { cursor: '100', filter: 'all', search: 'evening' });
     expect(list).toHaveBeenCalledTimes(1);
     expect(list.mock.calls[0][0]).toMatchObject({ cursor: '100', q: 'evening', limit: 50 });
-    expect(getSession).not.toHaveBeenCalled();
   });
 });
 

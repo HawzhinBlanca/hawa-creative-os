@@ -1,4 +1,4 @@
-import { getAuthToken } from './auth.js';
+import { apiClient } from '../api/client.js';
 
 export type StreamConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
@@ -38,13 +38,13 @@ class EventStreamService {
   private maxReconnectDelayMs = 10000;
   private endpoint = '/v1/events/stream';
   private eventCount = 0;
+  /** A ticket is being fetched; the stream opens when it arrives. */
+  private opening = false;
+  /** Bumped by disconnect(), so a ticket that arrives after it opens nothing. */
+  private generation = 0;
 
-  constructor() {
-    // Automatically connect on initialization in browser context
-    if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
-      this.connect();
-    }
-  }
+  // The stream is opened by the session (DeskProviders), once per tab, when the tab is signed in: it
+  // needs a ticket, and a ticket needs a session. It used to open itself when this file loaded.
 
   public getStatus(): StreamConnectionStatus {
     return this.status;
@@ -55,16 +55,34 @@ class EventStreamService {
   }
 
   public connect(): void {
-    if (this.eventSource) {
+    if (this.eventSource || this.opening || typeof EventSource === 'undefined') {
       return;
     }
 
     this.setStatus('connecting');
 
+    // EventSource cannot send a header. The session token used to go in the stream's address, and so
+    // into every access log on the way; now a one-use ticket, asked for with the bearer header, opens
+    // the stream (ADR-037). Every reconnect asks for a new one.
+    this.opening = true;
+    const generation = this.generation;
+    apiClient.auth.streamTicket().then(
+      ({ ticket }) => {
+        this.opening = false;
+        if (generation === this.generation) this.open(`${this.endpoint}?ticket=${encodeURIComponent(ticket)}`);
+      },
+      () => {
+        this.opening = false;
+        if (generation !== this.generation) return;
+        this.setStatus('connecting');
+        this.scheduleReconnect();
+      }
+    );
+  }
+
+  private open(url: string): void {
     try {
-      // EventSource cannot send headers; the stream accepts the session token as a query parameter.
-      const token = getAuthToken();
-      this.eventSource = new EventSource(token ? `${this.endpoint}?access_token=${encodeURIComponent(token)}` : this.endpoint);
+      this.eventSource = new EventSource(url);
 
       this.eventSource.addEventListener('open', () => {
         this.setStatus('connected');
@@ -113,6 +131,8 @@ class EventStreamService {
   }
 
   public disconnect(): void {
+    this.generation++;
+    this.reconnectAttempt = 0; // the next session starts without the last one's backoff
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

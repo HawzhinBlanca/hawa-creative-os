@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 
 export function registerAuthRoutes(ctx: RouteContext) {
@@ -11,6 +12,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
     saveSession,
     persistSession,
     revokeSession,
+    streamTickets,
     options,
   } = ctx;
 
@@ -110,6 +112,20 @@ export function registerAuthRoutes(ctx: RouteContext) {
         displayName: resolvedDisplayName,
       },
     }, 201);
+  });
+
+  // A one-use ticket that opens the event stream for 60 s (services/stream-tickets.ts, ADR-037). The
+  // Desk's EventSource cannot send its bearer header, and the session token it put in the stream's
+  // address instead was written to every access log on the way. Only a bearer header earns a ticket
+  // (registerRoute has already checked it); the ticket stands for that credential and nothing more.
+  registerRoute('post', '/auth/stream-ticket', async (c: Context) => {
+    const credential = bearerTokenOf?.(c);
+    if (!credential || !streamTickets) {
+      return problem(c, 401, 'Unauthorized', 'A stream ticket is issued only to a request signed with a bearer token');
+    }
+    const { ticket, expiresAt } = streamTickets.issue(credential);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ ticket, expiresAt, expiresInSeconds: Math.round((expiresAt - Date.now()) / 1000) }, 201);
   });
 
   registerRoute('delete', '/auth/session', async (c: any) => {

@@ -203,6 +203,7 @@ import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { revisionMetrics } from './services/revision-metrics.js';
 import { askLedger } from './services/ask-ledger.js';
+import { createStreamTicketStore } from './services/stream-tickets.js';
 
 export interface ClientDnaSnapshot {
   snapshotId: string;
@@ -1355,6 +1356,8 @@ export function createApp(options?: CreateAppOptions) {
     checkedAt?: number;
   }
   const issuedSessions = new Map<string, IssuedSession>();
+  // One-use, 60 s tickets that open the event stream in place of the session token (ADR-037).
+  const streamTickets = createStreamTicketStore();
   const SESSION_RECHECK_MS = 60000;
   const sessionHash = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
   const sessionRls = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
@@ -1407,7 +1410,6 @@ export function createApp(options?: CreateAppOptions) {
   const bearerTokenOf = (c: any): string | undefined => {
     const header = c.req.header('Authorization');
     if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
-    if (String(c.req.path || '').endsWith('/events/stream')) return c.req.query('access_token') || undefined;
     return undefined;
   };
 
@@ -1425,16 +1427,19 @@ export function createApp(options?: CreateAppOptions) {
     issuedSessions.set(token, session);
   }
 
-  function verifyRequestAuth(c: any): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
-    let authHeader = c.req.header('Authorization');
-    // EventSource and browser <img> elements cannot set request headers:
-    // the live event stream and media/preview endpoints may carry the session token as
-    // an `access_token` query parameter (served on loopback; validated against issued sessions).
+  /**
+   * `ticketCredential` is the bearer token a redeemed stream ticket stood for (routes/system.routes.ts);
+   * it is checked exactly as that header would be. Nothing else passes it.
+   */
+  function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
+    let authHeader = ticketCredential ? `Bearer ${ticketCredential}` : c.req.header('Authorization');
+    // Browser <img> elements cannot set request headers: media and preview endpoints may carry the
+    // session token as an `access_token` query parameter (validated against issued sessions). The
+    // event stream no longer does: it takes a one-use ticket instead (ADR-037).
     let isQueryToken = false;
     if (
       !authHeader &&
-      (String(c.req.path || '').endsWith('/events/stream') ||
-        String(c.req.path || '').includes('/studio/') ||
+      (String(c.req.path || '').includes('/studio/') ||
         String(c.req.path || '').match(/\.(png|jpg|jpeg|webp|svg|pdf)$/i))
     ) {
       const queryToken = c.req.query('access_token');
@@ -1931,8 +1936,12 @@ export function createApp(options?: CreateAppOptions) {
     path.includes('figma') ||
     path.startsWith('/webhooks/');
 
+  // Routes that authenticate the request themselves, with more than the bearer header: the event
+  // stream also takes a one-use ticket, since EventSource cannot send a header (ADR-037).
+  const SELF_AUTHENTICATED_READS = new Set(['/events/stream']);
+
   const registerRoute = (method: 'get' | 'post' | 'put' | 'delete', path: string, handler: any) => {
-    const isPublic = method === 'get' ? isPublicRead(path) : isPublicMutation(path);
+    const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) : isPublicMutation(path);
     const guarded = isPublic
       ? handler
       : async (c: any, next: any) => {
@@ -2009,6 +2018,7 @@ export function createApp(options?: CreateAppOptions) {
     saveSession,
     persistSession,
     revokeSession,
+    streamTickets,
     clientRepo,
     options,
   };
