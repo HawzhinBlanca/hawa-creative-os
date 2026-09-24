@@ -160,7 +160,7 @@ describe('Phase A Hardening: Core API & State Machine Fuzzing and Reality Checks
     const jumpRes = await app.request(`/v1/tasks/${task.id}/workflow/crash`, {
       method: 'POST',
     });
-    // Task controller handles workflow state cleanly
-    expect([200, 400, 404]).toContain(jumpRes.status);
+    // Workflow actions are retired (410, architecture programme 1.3 G6): none can move the task.
+    expect([400, 404, 410]).toContain(jumpRes.status);
   });
 });

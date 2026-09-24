@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { isTaskApiStatus } from '@hawa/contracts';
-import { TaskStateMachine, TaskWorkflowController, type TaskActor, type TaskStatus } from '@hawa/domain';
+import type { Context } from 'hono';
+import { TaskStateMachine, type TaskStatus, type WorkflowExecutionState } from '@hawa/domain';
 import { toApiTaskStatus, toDbTaskState, withRlsContext } from '@hawa/db';
 import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
@@ -10,12 +10,12 @@ import { createRedrive } from '../services/redrive.js';
 /**
  * The task controls (architecture programme 1.3, SPLIT_PLAN.md G6), moved unchanged from app.ts:
  * pause, resume, cancel and retry, the re-drive of one failed task and the sweep of all of them
- * (services/redrive.ts), and the workflow controller routes.
+ * (services/redrive.ts), and the workflow controller routes, which since then read the task's state
+ * from Postgres and no longer keep a controller per task in memory.
  */
 export function registerControlsRoutes(ctx: RouteContext): void {
   const {
-    registerRoute, verifyRequestAuth, problem, db, taskRepo, tasks, events, workflowControllers, readCurrentTask,
-    broadcastEvent: broadcast, broadcastTransition,
+    registerRoute, verifyRequestAuth, problem, db, taskRepo, events, readCurrentTask, broadcastTransition,
   } = ctx;
   const { redriveTask, sweepFailedTasks } = createRedrive(ctx);
 
@@ -122,105 +122,39 @@ export function registerControlsRoutes(ctx: RouteContext): void {
     }
   });
 
-  // Helper: Retrieve or instantiate Task Durable Workflow Controller (FR-060, Invariant #10 & #12)
-  function getOrCreateWorkflowController(taskId: string): TaskWorkflowController {
-    let controller = workflowControllers.get(taskId);
-    if (!controller) {
-      const task = tasks.get(taskId);
-      const isComplete = task?.status === 'COMPLETE';
-      controller = new TaskWorkflowController(taskId, isComplete ? 'COMPLETE' : 'RUNNING');
-      controller.recordCheckpoint(
-        task?.currentPhase || 'INTAKE',
-        (task?.status as TaskStatus) || 'RECEIVED',
-        `init_${taskId}`,
-        [
-          {
-            type: 'asset_render',
-            key: `render_init_${taskId}`,
-            completedAt: new Date().toISOString(),
-          },
-        ],
-        { taskTitle: (task as any)?.title || taskId, status: task?.status || 'RECEIVED' }
-      );
-      workflowControllers.set(taskId, controller);
-    }
-    return controller;
-  }
+  // Worker Durable Execution Recovery Controller Endpoints (FR-060, FR-061, Gate C & H). These kept a
+  // TaskWorkflowController per task in this process's memory: a restart lost every pause, checkpoint
+  // and audit line, a second Core answered differently, and pause, resume and cancel changed only this
+  // process's copy of the task, never Postgres, so neither the Desk nor the worker saw them. No Desk
+  // screen calls them (architecture programme 1.3, SPLIT_PLAN.md G6). The state is now the task's as
+  // Postgres has it; the durable controls are the four routes above, and a design run's checkpoints
+  // and replay are the worker's Restate journal, so the actions answer 410 and name the route to use.
+  const executionStateOf = (status: string): WorkflowExecutionState =>
+    status === 'PAUSED' ? 'PAUSED'
+      : status === 'CANCELLED' || status === 'REJECTED' ? 'CANCELLED'
+      : status === 'COMPLETE' ? 'COMPLETE'
+      : 'RUNNING';
 
-  // Worker Durable Execution Recovery Controller Endpoints (FR-060, FR-061, Gate C & H)
-  registerRoute('get', '/tasks/:taskId/workflow/state', async (c: any) => {
-    const taskId = c.req.param('taskId');
-    const controller = getOrCreateWorkflowController(taskId);
-    return c.json(controller.getState(), 200);
+  registerRoute('get', '/tasks/:taskId/workflow/state', async (c: Context) => {
+    const taskId = c.req.param('taskId') || '';
+    const task = await readCurrentTask(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+    const status = String(task.status);
+    return c.json({ taskId, executionState: executionStateOf(status), status, version: task.version ?? null }, 200);
   });
 
-  registerRoute('post', '/tasks/:taskId/workflow/:action', async (c: any) => {
-    const taskId = c.req.param('taskId');
-    const action = c.req.param('action');
-    const body = await c.req.json().catch(() => ({}));
-    const reason = body.reason || `Operator action: ${action}`;
-    const actor: TaskActor = body.actor || { type: 'user', id: 'operator' };
+  // What each retired action is now: a control on the task, or a new run of its design.
+  const retiredWorkflowActions = new Map<string, string>([
+    ['pause', 'pause'], ['resume', 'resume'], ['cancel', 'cancel'],
+    ['crash', 'redrive'], ['checkpoint', 'redrive'], ['replay', 'redrive'],
+  ]);
 
-    const controller = getOrCreateWorkflowController(taskId);
-    const task = tasks.get(taskId);
-
-    if (action === 'pause') {
-      const ok = controller.pause(actor, reason);
-      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot pause workflow in state ${controller.getExecutionState()}`);
-      if (task) task.status = 'PAUSED';
-      broadcast('workflow:state_changed', { taskId, action: 'pause', state: controller.getState() });
-      return c.json({ ok: true, state: controller.getState() }, 200);
-    }
-
-    if (action === 'resume') {
-      const ok = controller.resume(actor, reason);
-      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot resume workflow in state ${controller.getExecutionState()}`);
-      // COMPOSING: the design is being made again (this said DESIGN_IN_PROGRESS, a word no other layer had).
-      if (task) task.status = 'COMPOSING';
-      broadcast('workflow:state_changed', { taskId, action: 'resume', state: controller.getState() });
-      return c.json({ ok: true, state: controller.getState() }, 200);
-    }
-
-    if (action === 'cancel') {
-      const ok = controller.cancel(actor, reason);
-      if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot cancel workflow in state ${controller.getExecutionState()}`);
-      if (task) task.status = 'CANCELLED';
-      broadcast('workflow:state_changed', { taskId, action: 'cancel', state: controller.getState() });
-      return c.json({ ok: true, state: controller.getState() }, 200);
-    }
-
-    if (action === 'crash') {
-      controller.simulateCrash(reason);
-      broadcast('workflow:state_changed', { taskId, action: 'crash', state: controller.getState() });
-      return c.json({ ok: true, simulatedCrash: true, state: controller.getState() }, 200);
-    }
-
-    if (action === 'checkpoint') {
-      const stage = body.stage || task?.currentPhase || 'SYNTHESIS';
-      const status = body.status || task?.status || 'COMPOSING';
-      // A replay puts this status back on the task, so it must be one the vocabulary has.
-      if (!isTaskApiStatus(status)) return problem(c, 400, 'Bad Request', `Checkpoint status "${status}" is not a task status`);
-      const idempotencyKey = body.idempotencyKey || `chk_${crypto.randomUUID()}`;
-      const sideEffects = body.completedSideEffects || [];
-      const payload = body.payload || {};
-      const chk = controller.recordCheckpoint(stage, status, idempotencyKey, sideEffects, payload);
-      broadcast('workflow:checkpoint_recorded', { taskId, checkpoint: chk });
-      return c.json({ ok: true, checkpoint: chk, state: controller.getState() }, 201);
-    }
-
-    if (action === 'replay') {
-      const targetCheckpointId = body.targetCheckpointId;
-      const replayResult = controller.replayFromCheckpoint(actor, reason, targetCheckpointId);
-      if (!replayResult.success) {
-        return problem(c, 400, 'Replay Failed', 'Unable to replay from specified checkpoint');
-      }
-      if (task && replayResult.restoredCheckpoint) {
-        task.status = replayResult.restoredCheckpoint.taskStatus;
-      }
-      broadcast('workflow:state_changed', { taskId, action: 'replay', replayResult, state: controller.getState() });
-      return c.json({ ok: true, replayResult, state: controller.getState() }, 200);
-    }
-
-    return problem(c, 400, 'Unknown Action', 'Supported actions: pause, resume, cancel, crash, checkpoint, replay');
+  registerRoute('post', '/tasks/:taskId/workflow/:action', async (c: Context) => {
+    const taskId = c.req.param('taskId') || '';
+    const use = retiredWorkflowActions.get(c.req.param('action') || '');
+    if (!use) return problem(c, 400, 'Unknown Action', 'Supported actions: pause, resume, cancel, crash, checkpoint, replay');
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
+    return problem(c, 410, 'Workflow Action Retired',
+      `Workflow actions held their state in one Core process and never reached the task. Use POST /tasks/${taskId}/${use}.`);
   });
 }
