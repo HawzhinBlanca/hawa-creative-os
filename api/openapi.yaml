@@ -219,31 +219,57 @@ paths:
       responses:
         '202': {description: Durable generation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
         default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/{control}:
+  /v1/tasks/{taskId}/pause:
     post:
       tags: [Operations]
-      operationId: controlTaskWorkflow
+      operationId: pauseTask
+      summary: Pause a task
+      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
       parameters:
         - {$ref: '#/components/parameters/TaskId'}
-        - name: control
-          in: path
-          required: true
-          schema: {enum: [pause, resume, cancel, replay]}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 1}
-                checkpoint: {type: [string, 'null']}
-                fallbackDeploymentId: {type: [string, 'null'], format: uuid}
       responses:
         '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/resume:
+    post:
+      tags: [Operations]
+      operationId: resumeTask
+      summary: Resume a task
+      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses:
+        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/cancel:
+    post:
+      tags: [Operations]
+      operationId: cancelTask
+      summary: Hand a task to the operator
+      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to OPERATOR_REQUIRED.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses:
+        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/retry:
+    post:
+      tags: [Operations]
+      operationId: retryTask
+      summary: Retry a task
+      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses:
+        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
         default: {$ref: '#/components/responses/Problem'}
   /v1/designs/{designId}/revisions:
     get:
