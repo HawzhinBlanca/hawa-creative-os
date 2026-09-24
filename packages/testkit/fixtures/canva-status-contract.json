@@ -1,0 +1,39 @@
+{
+  "_about": [
+    "The contract between the worker and Core for POST /v1/tasks/:taskId/notifications/canva-status (architecture programme 1.3, SPLIT_PLAN.md section 5, N4).",
+    "Callers: apps/worker/src/canva-draft-workflow.ts (reportOutcome, reportNotRunnable) and apps/worker/src/outbox-consumer.ts (the task.outcome handler).",
+    "apps/worker/test/canva-status-contract.test.ts checks that the worker sends exactly these request bodies and handles each of these answers;",
+    "apps/core/test/canva-status-contract.test.ts checks that Core gives exactly these answers to these bodies. Change both sides with this file."
+  ],
+  "path": "/v1/tasks/:taskId/notifications/canva-status",
+  "fields": ["status", "code", "designId", "detail", "notifyRequester", "parity", "parityError", "runId"],
+  "requests": {
+    "draftReady": { "status": "CANVA_DRAFT_READY_FOR_VISUAL_REVIEW", "designId": "DA_test", "parity": "unknown" },
+    "manualDesignToldAtIntake": { "status": "MANUAL_DESIGN_REQUIRED", "notifyRequester": false },
+    "notRunnable": {
+      "status": "MANUAL_DESIGN_REQUIRED",
+      "notifyRequester": true,
+      "detail": "Dispatched without an automatic Canva job; nothing was generated or spent."
+    },
+    "scopeMismatch": {
+      "status": "DESIGN_BLOCKED",
+      "code": "SCOPE_MISMATCH",
+      "detail": "Workflow task/client/tenant mismatch: the dispatched client or tenant differs from the task record."
+    },
+    "refused": { "status": "DESIGN_REJECTED", "code": "COPY_UNSUPPORTED" },
+    "replayedFromOutbox": { "status": "DESIGN_FAILED", "code": "HARD_QA_REFUSED", "runId": "run-2" }
+  },
+  "answers": {
+    "unauthenticated": { "status": 401, "title": "Authentication Required" },
+    "noDatabase": { "status": 503, "title": "Database Required" },
+    "invalidTaskId": { "status": 422, "title": "Invalid Identifier" },
+    "unknownTask": { "status": 404, "title": "Task Not Found" },
+    "referenceForAnotherRequest": { "status": 200, "body": { "notified": false, "reason": "REFERENCE_FOR_ANOTHER_REQUEST" } },
+    "enqueueFailed": { "status": 500, "title": "Notification Enqueue Failed" },
+    "recorded": {
+      "status": 200,
+      "body": { "ok": true },
+      "keys": ["ok", "taskId", "status", "code", "notificationSent", "notificationError", "notificationCommandId", "designId", "canvaUrl"]
+    }
+  }
+}

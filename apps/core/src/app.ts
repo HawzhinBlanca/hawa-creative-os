@@ -256,10 +256,6 @@ const COPY_REQUIRED_DETAIL = 'The client has not sent the copy this design needs
 const globalHistoricalMigrator = new HistoricalDesignMigrator();
 const globalCanvaNativeAdapter = new CanvaNativeAdapter();
 const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failureThreshold: 3, cooldownMs: 5000 });
-const channelKillSwitches = {
-  telegram: false,
-  waha: false,
-};
 
 /** Postgres, which holds a task's status, is connected and could not be read: nothing acts on a stale copy. */
 class TaskStoreUnavailableError extends Error {
@@ -685,6 +681,13 @@ export function createApp(options?: CreateAppOptions) {
       actionTokenService: telegramActionTokenService,
       allowedUserIds: telegramAllowedUsers,
     });
+  // One app's switches. They were module-level, so every createApp() in a process shared them and
+  // switching Telegram off in one app switched it off in all of them. They still live in memory and
+  // are lost on a restart; persisting them is WhatsApp/ingress work (architecture programme 1.3, G8).
+  const channelKillSwitches = {
+    telegram: false,
+    waha: false,
+  };
   // The office's Telegram kill switch stops intake at the source: while it is on, the poller asks
   // Telegram for nothing (the webhook route refuses with 503 below). It used to change only the
   // health report, and messages kept being read and designs kept being started.

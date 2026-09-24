@@ -3,20 +3,48 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as appModule from '../src/app.js';
+import { createApp } from '../src/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../..');
 
 describe('Task 1: Elimination of Second System & Test-Environment Backdoors', () => {
-  it('proves no module-level global shared Maps exist in apps/core/src/app.ts', () => {
-    // 1. Module export check: globalSharedInMemoryOutbox must be deleted
-    expect((appModule as any).globalSharedInMemoryOutbox).toBeUndefined();
+  const operator = { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' };
 
-    // 2. Source text check: no globalShared Maps declared in apps/core/src/app.ts
-    const appTsPath = path.resolve(__dirname, '../src/app.ts');
-    const appTsContent = fs.readFileSync(appTsPath, 'utf8');
-    const globalSharedMatches = appTsContent.match(/const globalShared[A-Za-z0-9_]+\s*=\s*new Map/g);
-    expect(globalSharedMatches).toBeNull();
+  it('exports no process-wide shared outbox from app.ts', () => {
+    expect((appModule as any).globalSharedInMemoryOutbox).toBeUndefined();
+  });
+
+  // Two Core instances in one process must not see each other's state: a map every createApp()
+  // shares is a second system of record next to Postgres. This used to search app.ts's text for
+  // `const globalShared… = new Map`, which a move to another file would pass; it now asks two apps.
+  it('keeps each app\'s tasks to itself: a task created in one app is unknown to another', async () => {
+    const a = createApp();
+    const b = createApp();
+    const created = await a.request('/v1/tasks', { method: 'POST', headers: operator, body: JSON.stringify({ title: 'Isolation', clientId: 'kaae' }) });
+    expect(created.status).toBe(201);
+    const { id } = await created.json();
+    expect((await a.request(`/v1/tasks/${id}`, { headers: operator })).status).toBe(200);
+    expect((await b.request(`/v1/tasks/${id}`, { headers: operator })).status).toBe(404);
+  });
+
+  // The kill switches were module-level until architecture programme item 1.3 (step P): switching
+  // Telegram intake off in one app switched it off in every app of the process.
+  it('keeps each app\'s channel kill switches to itself', async () => {
+    const a = createApp();
+    const b = createApp();
+    const channels = async (app: ReturnType<typeof createApp>) =>
+      (await (await app.request('/v1/ingress/status', { headers: operator })).json()).channels;
+
+    const toggled = await a.request('/v1/ingress/channels/telegram/toggle', { method: 'POST', headers: operator, body: JSON.stringify({ enabled: false }) });
+    expect(toggled.status).toBe(200);
+    expect(await channels(a)).toEqual({ telegram: false, waha: true });
+    expect(await channels(b)).toEqual({ telegram: true, waha: true });
+
+    const killed = await a.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'waha', active: true }) });
+    expect(killed.status).toBe(200);
+    expect(await channels(a)).toEqual({ telegram: false, waha: false });
+    expect(await channels(b)).toEqual({ telegram: true, waha: true });
   });
 
   it('proves apps/*/src and packages/*/src contain no test-backdoor NODE_ENV or VITEST branches', () => {
