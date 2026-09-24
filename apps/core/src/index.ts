@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
+import { productionAppOptions } from './entrypoint-options.js';
 
 import fs from 'node:fs';
 import { log } from './logging.js';
@@ -68,11 +69,12 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-// The production process is the one that polls Telegram. Commit 36f6958 moved this from an
-// environment check to an option and did not set it here, so the 2026-09-22 deploy started with
-// the bridge idle (adapters/telegram/status: active=false) and nothing from the two client chats
-// reached intake for 80 minutes. production-entrypoint.test.ts pins it.
-const app = createApp({ enableTelegramPolling: true, enableDraftReminders: process.env.HAWA_DRAFT_REMINDERS !== 'off', enableCanvaSweeper: true });
+// The production process polls Telegram unless HAWA_TELEGRAM_POLLER=worker moves the poller to the
+// worker (Phase 2.1). Commit 36f6958 moved polling from an environment check to an option and did
+// not set it here, so the 2026-09-22 deploy started with the bridge idle (adapters/telegram/status:
+// active=false) and nothing from the two client chats reached intake for 80 minutes.
+// production-entrypoint.test.ts pins the options (entrypoint-options.ts).
+const app = createApp(productionAppOptions(process.env));
 
 // Client DNA is loaded from PostgreSQL; Core seeds no fixtures (only tests do, SPLIT_PLAN G2). The
 // port used to open before that finished, so the first requests after a start were answered with an

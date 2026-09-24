@@ -196,6 +196,8 @@ import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChatCampaignIntake } from './services/chat-campaign-intake.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
+import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
+import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import {
   parseRequesterAction,
@@ -554,6 +556,18 @@ export function createApp(options?: CreateAppOptions) {
    * it is checked exactly as that header would be. Nothing else passes it.
    */
   function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
+    // The worker's own credential (architecture programme Phase 2.1): HAWA_WORKER_TOKEN is a
+    // `service` principal on /v1/internal/* and nothing anywhere else, and those routes take no other
+    // credential: not the operator's or administrator's keys, a session, a stream ticket, the webhook
+    // secret, a test principal or a role header. The worker used to call Core with the operator's key.
+    const workerToken = serviceTokenOf();
+    if (isInternalPath(String(c.req.path || ''))) {
+      const presented = ticketCredential ? '' : String(c.req.header('Authorization') || '').replace(/^Bearer\s*/, '').trim();
+      if (workerToken && presented && secretsEqual(presented, workerToken)) {
+        return { authenticated: true, tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, actorId: 'hawa_worker', role: 'service', displayName: 'Hawa worker' };
+      }
+      return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+    }
     let authHeader = ticketCredential ? `Bearer ${ticketCredential}` : c.req.header('Authorization');
     // Browser <img> elements cannot set request headers: media and preview endpoints may carry the
     // session token as an `access_token` query parameter (validated against issued sessions). The
@@ -607,6 +621,11 @@ export function createApp(options?: CreateAppOptions) {
 
         if (isQueryToken) {
           // Task R04: Static long-lived bearer credentials must never be passed in URL query parameters
+          return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
+        }
+
+        // The worker's token opens /v1/internal/* only (above).
+        if (workerToken && secretsEqual(token, workerToken)) {
           return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }
 
@@ -1211,6 +1230,13 @@ export function createApp(options?: CreateAppOptions) {
         }
       )
     : Promise.resolve(0);
+
+  // The worker's calls into Core (Phase 2.1): ChatInbox hands each polled update to intake here, and
+  // dead-letters one intake keeps failing. Only HAWA_WORKER_TOKEN opens them (verifyRequestAuth).
+  registerLifecycleInternalRoutes(routeContext);
+  if (telegramPollerOf(process.env) === 'worker' && !serviceTokenOf()) {
+    log.error('[core:internal] HAWA_TELEGRAM_POLLER=worker but HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
+  }
 
   // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
   // administrator's "poll now" hands updates to intake exactly as the background loop does (through

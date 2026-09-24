@@ -6,7 +6,7 @@
  * Each request runs in its own chat, so one scenario's messages, tasks and paid calls never mix with
  * another's, and nothing is reset between scenarios.
  */
-import { fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy, type Service } from './stack.js';
+import { RESTATE_INGRESS_URL, fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy, type Service } from './stack.js';
 
 export const OFFICE_CHAT = '9000001';
 export const REQUESTER_ID = 9100001;
@@ -274,4 +274,77 @@ export async function checkRequest(chat: string, options: { delivered: boolean; 
 export async function uncoveredModelCalls(): Promise<string[]> {
   const { ledger } = await fakes.modelLedger();
   return (ledger as any[]).filter((l) => String(l.route).startsWith('unmatched')).map((l) => `${l.provider} ${l.route} ${l.model}`);
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Phase 2.1: the worker polls Telegram and each update goes through its chat's ChatInbox.
+
+/** Hands an update to a chat's ChatInbox through Restate's ingress, as the worker's poller does. */
+export async function sendToChatInbox(chat: string, update: Record<string, unknown>, idempotencyKey: string): Promise<number> {
+  const res = await fetch(`${RESTATE_INGRESS_URL}/ChatInbox/${encodeURIComponent(chat)}/handleUpdate/send`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ v: 1, update, polledAt: Date.now() }),
+  });
+  return res.status;
+}
+
+/** The chat's ChatInbox invocations as Restate records them. */
+export async function chatInboxInvocations(chat: string): Promise<Array<{ id: string; status: string; idempotency_key: string | null; last_failure_error_code: string | null }>> {
+  return restateQuery(`SELECT id, status, idempotency_key, last_failure_error_code FROM sys_invocation
+    WHERE target_service_name = 'ChatInbox' AND target_service_key = '${chat.replace(/[^0-9-]/g, '')}'`);
+}
+
+/** The worker poller's stored offset (the bot's row, shared with Core's poller). */
+export async function storedOffset(): Promise<number> {
+  const botId = secrets().CHAOS_BOT_TOKEN.split(':')[0];
+  const [row] = await query<{ cursor_value: string | null }>(sql`SELECT h.cursor_value FROM hawa.integration_health h
+    JOIN hawa.integrations i ON i.id = h.integration_id WHERE i.kind = 'telegram' AND i.name = ${`bot-${botId}`}`);
+  return Number(row?.cursor_value ?? 0);
+}
+
+/**
+ * The checks of slice 2.1 for one chat's updates: each update was handed to ChatInbox and finished
+ * there (one invocation per poller key), the offset moved past the last one, and nothing was
+ * dead-lettered. The acknowledgement reaching the chat once is checkRequest's "each message once".
+ */
+export async function checkIntake(chat: string, updateIds: number[]): Promise<InvariantResult[]> {
+  const out: InvariantResult[] = [];
+  const inv = await chatInboxInvocations(chat);
+  for (const id of updateIds) {
+    const mine = inv.filter((i) => i.idempotency_key === `tg-${id}`);
+    out.push({ name: `update ${id}: one ChatInbox invocation (key tg-${id}), completed`, ok: mine.length === 1 && mine[0].status === 'completed', detail: JSON.stringify(mine.map((i) => i.status)) });
+  }
+  const unfinished = inv.filter((i) => i.status !== 'completed');
+  out.push({ name: 'every ChatInbox invocation of the chat completed', ok: unfinished.length === 0, detail: `${inv.length} invocations: ${JSON.stringify(inv.map((i) => `${i.idempotency_key}:${i.status}`))}` });
+  const offset = await storedOffset();
+  const last = Math.max(...updateIds);
+  out.push({ name: 'the stored offset moved past the chat\'s last update', ok: offset >= last, detail: `offset=${offset} last update=${last}` });
+  const parkedIds = updateIds.map((id) => `parked-update-${id}`);
+  const [parked] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_event_id = ANY(${parkedIds})`);
+  out.push({ name: 'no update was dead-lettered', ok: Number(parked?.n ?? 0) === 0, detail: `parked=${parked?.n ?? 0}` });
+  return out;
+}
+
+/** A brief in a chat, as the scripted requests send it; returns the update as Telegram serves it. */
+export async function sendBrief(chat: string, tag: string): Promise<Record<string, unknown> & { update_id: number }> {
+  const update = textUpdate(chat, briefText(tag));
+  const [id] = await fakes.updates([update]);
+  return { ...update, update_id: id };
+}
+
+/** Waits until the chat has its task and the draft reached the chat (the brief was sent already). */
+export async function draftOf(chat: string, timeoutMs = 240_000): Promise<string> {
+  const [task] = await waitUntil(`a task for chat ${chat}`, async () => {
+    const t = await tasksOfChat(chat);
+    return t.length ? t : null;
+  }, 180_000);
+  await waitUntil(`the draft of task ${task.id} in chat ${chat}`, async () => {
+    const outcome = await designOutcome(task.id);
+    if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
+      throw new RequestEndedError(`task ${task.id}: the design run ended as ${outcome}, so there is no draft to approve`);
+    }
+    return (await sentTo(chat)).some(isDraft) && (await taskState(task.id)) === 'human_review';
+  }, timeoutMs, 2000);
+  return task.id;
 }

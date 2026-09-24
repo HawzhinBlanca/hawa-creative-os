@@ -1,0 +1,19 @@
+import type { CreateAppOptions } from './core-helpers.js';
+import { telegramPollerOf } from './services/telegram-poller-owner.js';
+
+/**
+ * The options index.ts, the production entrypoint, builds Core with. A function of the environment,
+ * so a test can check what production runs without starting it.
+ *
+ * Core polls Telegram unless HAWA_TELEGRAM_POLLER=worker (Phase 2.1). Commit 36f6958 once turned
+ * polling into an option and left index.ts without it: the 2026-09-22 deploy ran for 80 minutes with
+ * the bridge idle and nothing from the two client chats reached intake. production-entrypoint.test.ts
+ * pins the default.
+ */
+export function productionAppOptions(env: Record<string, string | undefined> = process.env): CreateAppOptions {
+  return {
+    enableTelegramPolling: telegramPollerOf(env) === 'core',
+    enableDraftReminders: env.HAWA_DRAFT_REMINDERS !== 'off',
+    enableCanvaSweeper: true,
+  };
+}
