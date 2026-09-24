@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T12:48:07.748Z",
+  "generatedAt": "2026-09-24T15:19:05.445Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,15 +19,15 @@
     ]
   },
   "build": {
-    "commit": "ac189f29b64deaf7750f9a89387bc56dfa42c247",
+    "commit": "f9c4e41c15de2a716e5ba9f69b25f3604b3b81ff",
     "treeClean": true,
-    "commitTimestamp": "2026-09-24T15:47:59+03:00",
+    "commitTimestamp": "2026-09-24T18:18:57+03:00",
     "branch": "claude/reliability"
   },
   "migrations": {
-    "targetVersion": "019_blob_store",
-    "latestMigrationFile": "019_blob_store.sql",
-    "totalMigrations": 19
+    "targetVersion": "020_inbox_event_dedupe",
+    "latestMigrationFile": "020_inbox_event_dedupe.sql",
+    "totalMigrations": 20
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -38,8 +38,8 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "7630eff59f981f3eb8fef6a9b2d11b069302f536099a03e05965188a4d1d45ad",
-        "apps/core/src/index.ts": "a274ce6fbf8f2aae68beb31760e1eec51bc276e216e6317e1787ced4d572da9f",
+        "apps/core/src/app.ts": "a1258687718b3b12fbf142a5c8cfb330e875d6384d9c89630d971c21b512aa98",
+        "apps/core/src/index.ts": "fc66615bca59ad0e9316f229ba02396d6db14b290257eeca4d8a7440ce924ba9",
         "packages/integrations/src/google-publisher.ts": "b82e7ea5c04ab4c609b332b2d80753cc4be8366fdeb1e1fdd5dd46c6f574cdb1"
       }
     },
@@ -55,7 +55,7 @@
       "service": "worker",
       "image": "hawa-worker:latest",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "974d76532d60762d97f8817f74548b000127df7a195d94a856837139c4812e29"
+        "apps/worker/src/index.ts": "52e4ce874ababd9b689321c3220274882baa891b5a6013d55a3be0b80939491c"
       }
     }
   },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "4f6d682e12b4b16b8c6753515c41b771769831a89a9be0340af63f899864ab17"
+  "sha256": "cf08ca60cdd518715854e3de255e5de09c1b8ea0872e80bf5aeefec2775686ca"
 }
