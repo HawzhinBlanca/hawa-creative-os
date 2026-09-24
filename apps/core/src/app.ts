@@ -1,5 +1,6 @@
 import { persistChatIntake, findRequestAwaitingReference, findAlbumRequest, splitBilingualRequest, runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from './services/chat-intake.js';
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
+import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
@@ -250,6 +251,15 @@ const channelKillSwitches = {
   telegram: false,
   waha: false,
 };
+
+/** Postgres, which holds a task's status, is connected and could not be read: nothing acts on a stale copy. */
+class TaskStoreUnavailableError extends Error {
+  constructor(taskId: string, cause: unknown) {
+    super(`The task ${taskId} could not be read from the database; try again`);
+    this.name = 'TaskStoreUnavailableError';
+    (this as { cause?: unknown }).cause = cause;
+  }
+}
 
 export interface CreateAppOptions {
   canvaOptions?: CanvaServiceOptions;
@@ -571,6 +581,10 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   app.onError((err, c) => {
+    if (err instanceof TaskStoreUnavailableError) {
+      console.warn('[core:task_read]', err.message, (err as { cause?: unknown }).cause);
+      return problem(c, 503, 'Database Unavailable', err.message);
+    }
     console.error('[core:unhandled_error]', err);
     if (process.env.NODE_ENV === 'production') {
       return problem(c, 500, 'Internal Server Error', 'An unexpected internal server error occurred');
@@ -659,6 +673,10 @@ export function createApp(options?: CreateAppOptions) {
       actionTokenService: telegramActionTokenService,
       allowedUserIds: telegramAllowedUsers,
     });
+  // The office's Telegram kill switch stops intake at the source: while it is on, the poller asks
+  // Telegram for nothing (the webhook route refuses with 503 below). It used to change only the
+  // health report, and messages kept being read and designs kept being started.
+  telegramBridge.pauseIntakeWhen?.(() => channelKillSwitches.telegram);
 
   // Local instance-scoped data structures
   const tasks = new Map<string, any>();
@@ -1828,7 +1846,14 @@ export function createApp(options?: CreateAppOptions) {
   // or the session endpoint, an unauthenticated caller gets 401 before the handler runs.
   // Handlers that still read the in-memory task map fall back to PostgreSQL after a restart and
   // hydrate the map, so a persisted task never answers 404 only because this process is new.
-  async function resolveTaskWithFallback(taskId: string): Promise<any | undefined> {
+  //
+  // `strict` is for a handler about to act on the task's status (deliver, publish, approve, route,
+  // control, a revision): when the database is connected and cannot be read, it throws
+  // TaskStoreUnavailableError (answered 503) instead of acting on the status this process last saw.
+  // Those handlers used to read `tasks.get(id) || resolveTaskWithFallback(id)`, so a cached task was
+  // never refreshed at all: a status changed by the worker, another process or an operator in
+  // Postgres was ignored, and a task already delivered or sent back could be delivered again.
+  async function resolveTaskWithFallback(taskId: string, opts: { strict?: boolean } = {}): Promise<any | undefined> {
     const cached = tasks.get(taskId);
     if (cached) {
       if (db && taskRepo && isValidUuid(taskId)) {
@@ -1838,10 +1863,11 @@ export function createApp(options?: CreateAppOptions) {
           if (dbTask) {
             cached.status = toApiTaskStatus(dbTask.state || 'received');
             cached.state = dbTask.state;
-            cached.version = dbTask.version;
+            cached.version = Number(dbTask.version); // bigint: pg returns a string, and version checks compare with ===
             cached.latestRevisionId = dbTask.current_design_revision_id || cached.latestRevisionId;
           }
         } catch (err) {
+          if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
           console.warn('[core:task_hydrate] PostgreSQL sync failed:', err);
         }
       }
@@ -1855,17 +1881,21 @@ export function createApp(options?: CreateAppOptions) {
       const hydrated: any = {
         id: dbTask.id, tenantId: dbTask.tenant_id, clientId: dbTask.client_id, projectId: dbTask.project_id,
         status: toApiTaskStatus(dbTask.state || 'received'), state: dbTask.state, priority: dbTask.priority,
-        title: dbTask.title, description: dbTask.description, version: dbTask.version,
+        title: dbTask.title, description: dbTask.description, version: Number(dbTask.version),
         latestRevisionId: dbTask.current_design_revision_id || undefined,
         createdAt: dbTask.created_at, updatedAt: dbTask.updated_at,
       };
       tasks.set(taskId, hydrated);
       return hydrated;
     } catch (err) {
+      if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
       console.warn('[core:task_hydrate] PostgreSQL lookup failed:', err);
       return undefined;
     }
   }
+
+  /** The task as Postgres has it now, for a handler about to act on its status. See resolveTaskWithFallback. */
+  const readCurrentTask = (taskId: string) => resolveTaskWithFallback(taskId, { strict: true });
 
   const PUBLIC_MUTATION_PATHS = new Set(['/auth/session', '/auth/telegram-miniapp']);
   const isPublicMutation = (path: string) => PUBLIC_MUTATION_PATHS.has(path) || path.startsWith('/webhooks/');
@@ -2830,7 +2860,12 @@ export function createApp(options?: CreateAppOptions) {
   ): Promise<{ approvalId: string; designRevisionId: string; pinnedExports?: PinnedExport[]; [key: string]: any } | null> {
     // An approval invalidated by a later edit still names exactly what it approved, so it may be
     // delivered, but only under the explicit deliver_approved_stored policy.
-    const recorded = [task?.latestApproval, ...[...(decisions.get(taskId) || [])].reverse()].filter(Boolean);
+    //
+    // With a database, only a persisted approval can be delivered. The one in this process's memory
+    // was trusted first, so an approval Postgres does not hold (its write never committed, or it is
+    // for a draft another process has since replaced) still sent the files. Memory answers only when
+    // there is no database at all (tests without one).
+    const recorded = db ? [] : [task?.latestApproval, ...[...(decisions.get(taskId) || [])].reverse()].filter(Boolean);
     const match: any = recorded.find(
       (a: any) =>
         a.decisionId &&
@@ -2897,6 +2932,24 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
+  /**
+   * A task delivered by another Core process (or before a restart) has its receipt in that process's
+   * memory, but its publication in Postgres: Deliver pressed again answers with that. The route used
+   * to reach "adopt the stored publication" only because its stale copy of the status still said
+   * APPROVED. Null when there is no completed publication, or it could not be read.
+   */
+  async function storedCompletePublication(task: { tenantId?: string } | undefined, taskId: string) {
+    if (!db || !publicationRepo || !isValidUuid(taskId)) return null;
+    const tenantId = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
+    const stored = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+      publicationRepo.findByTaskId(taskId, tenantId, trx)).catch((err: unknown) => {
+      console.warn('[core:publish] Could not read the stored publication:', err);
+      return null;
+    });
+    if (stored?.state !== 'complete') return null;
+    return { publicationId: String(stored.id), publicationKey: stored.publication_key, state: stored.state, recordedIn: 'postgres' as const };
+  }
+
   /** Tasks whose delivery is running in this process: a task left PUBLISHING with none is stranded. */
   const deliveriesInFlight = new Set<string>();
 
@@ -2922,7 +2975,15 @@ export function createApp(options?: CreateAppOptions) {
     autoApproveFromAwaiting: boolean,
     options?: { policy?: string; designRevisionId?: string; approvalId?: string }
   ) {
-    const task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    // Postgres's status, not this process's copy: a delivery decided on a stale APPROVED sent a task
+    // that had since been sent back or delivered by another path.
+    let task: Awaited<ReturnType<typeof readCurrentTask>>;
+    try {
+      task = await readCurrentTask(taskId);
+    } catch (err) {
+      if (err instanceof TaskStoreUnavailableError) return { ok: false, status: 503, title: 'Database Unavailable', message: err.message };
+      throw err;
+    }
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
 
     // Only the task's own client DNA names a destination; another client's folder is never a fallback.
@@ -4145,6 +4206,11 @@ export function createApp(options?: CreateAppOptions) {
     if (!secretsEqual(secret, expectedSecret)) {
       return problem(c, 401, 'Unauthorized', 'Invalid or missing Telegram webhook secret token');
     }
+    // The same answer the WhatsApp kill switch gives. Telegram keeps a refused webhook update and
+    // sends it again, so nothing is lost while intake is off; nothing is read or started either.
+    if (channelKillSwitches.telegram) {
+      return problem(c, 503, 'Service Unavailable', 'Telegram intake is disabled by the office kill switch. Fall back to Hawa Desk intake at /desk.');
+    }
 
     const rawBody = await c.req.arrayBuffer();
     const bodyText = new TextDecoder().decode(rawBody);
@@ -4330,7 +4396,7 @@ export function createApp(options?: CreateAppOptions) {
       if (handledBefore === null) return problem(c, 503, 'Database Unavailable', 'The update is retried when the database answers');
       if (handledBefore) {
         // The request this update saved, as the first delivery answered it.
-        const saved = handledBefore.taskId ? tasks.get(handledBefore.taskId) || (await resolveTaskWithFallback(handledBefore.taskId)) : undefined;
+        const saved = handledBefore.taskId ? await readCurrentTask(handledBefore.taskId) : undefined;
         return c.json({ ok: true, duplicate: true, updateId: sourceEventId, ...(handledBefore.taskId ? { task: saved || { id: handledBefore.taskId } } : {}) }, 200);
       }
     }
@@ -6771,7 +6837,7 @@ export function createApp(options?: CreateAppOptions) {
     }
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -6858,7 +6924,7 @@ export function createApp(options?: CreateAppOptions) {
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -6961,7 +7027,7 @@ export function createApp(options?: CreateAppOptions) {
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -7233,7 +7299,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const taskId = c.req.param('taskId');
-    const task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -7276,6 +7342,8 @@ export function createApp(options?: CreateAppOptions) {
           acceptedAt: new Date().toISOString(),
         }, 200);
       }
+      const stored = currentStatus === 'complete' ? await storedCompletePublication(task, taskId) : null;
+      if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
     }
 
@@ -8110,7 +8178,7 @@ export function createApp(options?: CreateAppOptions) {
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
@@ -8341,7 +8409,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       dbTask = await withRlsContext(
@@ -8878,7 +8946,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = tasks.get(taskId) || (await resolveTaskWithFallback(taskId));
+    let task = await readCurrentTask(taskId);
     let dbTask: any = null;
     if (taskRepo && db) {
       dbTask = await withRlsContext(
@@ -10884,7 +10952,7 @@ export function createApp(options?: CreateAppOptions) {
     const targetRevisionId = body.designRevisionId;
     const requestedApprovalId = body.approvalId;
 
-    const task = await resolveTaskWithFallback(taskId);
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     // Invariant: B cannot ship using A's approval (CV-15)
@@ -11163,13 +11231,17 @@ export function createApp(options?: CreateAppOptions) {
     setTimeout(pass, 120_000).unref?.();
   }
 
-  // Autonomous Background Inbound Polling for Telegram Bot in live server mode
-  if (
-    process.env.TELEGRAM_BOT_TOKEN &&
-    options?.enableTelegramPolling
-  ) {
-    // A failing update is retried, then parked for an operator with the sender told. It is never
-    // skipped: see polled-update-dispatch.ts.
+  // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
+  // administrator's "poll now" hands updates to intake exactly as the background loop does (through
+  // the same retry and dead letter, under the same one-poll-at-a-time lock); the loop itself runs
+  // only in the live server.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    const pollScope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID };
+    // The offset, and the count of attempts at a failing update, survive a restart in Postgres.
+    const pollState = db ? new PostgresTelegramPollState(db, pollScope, telegramBotKey(process.env.TELEGRAM_BOT_TOKEN)) : null;
+    if (pollState) telegramBridge.attachOffsetStorage?.(pollState);
+    // A failing update is retried, then dead-lettered with the office alerted and the sender told.
+    // It is never skipped: see polled-update-dispatch.ts.
     const handlePolledUpdate = createPolledUpdateHandler<TelegramUpdate>({
       deliver: async (update) => {
         const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -11182,9 +11254,14 @@ export function createApp(options?: CreateAppOptions) {
         if (!res.ok) console.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, await res.text().catch(() => ''));
         return res.status;
       },
+      ...(pollState ? { recordFailure: (update: TelegramUpdate, reason: string) => pollState.recordFailure(update.update_id, reason) } : {}),
       park: async (update, reason) => {
-        if (!db) throw new Error('no database to park the update in');
-        await parkTelegramUpdate(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID }, update, reason);
+        if (!db || !pollState) throw new Error('no database to park the update in');
+        const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+        await parkTelegramUpdate(db, pollScope, update, reason, {
+          officeChatId: office,
+          alongside: (trx) => pollState.advanceWithin(trx, update.update_id),
+        });
       },
       notifySender: async (update, text) => {
         const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
@@ -11193,7 +11270,8 @@ export function createApp(options?: CreateAppOptions) {
         if (!sent.success) throw new Error(sent.error || 'send failed');
       },
     });
-    telegramBridge.startPolling(handlePolledUpdate);
+    telegramBridge.useUpdateHandler?.(handlePolledUpdate);
+    if (options?.enableTelegramPolling) telegramBridge.startPolling(handlePolledUpdate);
   }
 
   // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it

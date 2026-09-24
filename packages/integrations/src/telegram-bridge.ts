@@ -169,7 +169,14 @@ export interface BridgeStatus {
   lastPollAttemptAt?: string;
   lastPollSuccessAt?: string;
   lastError?: { code: string; message: string; timestamp: string };
+  /** The office kill switch is on: nothing is fetched from Telegram and nothing is processed. */
+  intakePaused?: boolean;
 }
+
+/** Handles one polled update. Returning means intake has it; throwing keeps it for the next poll. */
+export type TelegramUpdateHandler = (update: TelegramUpdate) => Promise<void>;
+
+const errorText = (err: unknown, fallback: string): string => (err instanceof Error && err.message) || fallback;
 
 export class TelegramBridgeDaemon {
   private active = false;
@@ -188,7 +195,44 @@ export class TelegramBridgeDaemon {
   private consecutiveErrors = 0;
   private lastError?: { code: string; message: string; timestamp: string };
 
-  constructor(private readonly config: TelegramBridgeConfig = {}) {}
+  /**
+   * One getUpdates at a time, whoever asks. The background loop and the administrator's "poll now"
+   * used to run side by side: both asked Telegram from the same offset, so an update was handled
+   * twice, and whichever finished last wrote its older offset over the newer one.
+   */
+  private pollQueue: Promise<unknown> = Promise.resolve();
+  private offsetStorage?: TelegramOffsetStorage;
+  private updateHandler?: TelegramUpdateHandler;
+  private intakePaused: () => boolean = () => false;
+
+  constructor(private readonly config: TelegramBridgeConfig = {}) {
+    this.offsetStorage = config.offsetStorage;
+  }
+
+  /**
+   * Where the offset is kept across restarts, when the bridge was built without one (Core attaches
+   * its Postgres store to a bridge a caller passed in). A store given at construction is kept.
+   */
+  attachOffsetStorage(storage: TelegramOffsetStorage): void {
+    if (!this.offsetStorage) this.offsetStorage = storage;
+  }
+
+  /** The handler every poll uses when none is passed: the background loop's, and "poll now"'s. */
+  useUpdateHandler(handler: TelegramUpdateHandler): void {
+    this.updateHandler = handler;
+  }
+
+  hasUpdateHandler(): boolean {
+    return Boolean(this.updateHandler);
+  }
+
+  /**
+   * While `paused()` is true (the office's Telegram kill switch), no poll asks Telegram for updates
+   * and no update already fetched is handed on: Telegram keeps them until intake is switched back on.
+   */
+  pauseIntakeWhen(paused: () => boolean): void {
+    this.intakePaused = paused;
+  }
 
   start(): void {
     if (this.active) return;
@@ -209,15 +253,37 @@ export class TelegramBridgeDaemon {
   }
 
   /**
-   * Polls Telegram getUpdates endpoint once with offset tracking, bounded timeout, and truthful error reporting
+   * Asks Telegram for the updates after the stored offset, once, and hands each to `onUpdate` (or the
+   * handler given to useUpdateHandler) in order. Calls are queued, never concurrent: see pollQueue.
+   *
+   * The offset moves past an update only after the handler returned for it, and is stored before
+   * the next update is handled; Telegram forgets everything below the offset the next poll sends.
+   * An update whose handler throws stops the batch where it is: it is asked for again on the next
+   * poll, after the loop's backoff, and nothing behind it is handled first. What happens to an update
+   * that keeps failing is the handler's decision (Core's dead-letters it after a few attempts).
    */
-  async pollOnce(onUpdate?: (update: TelegramUpdate) => Promise<void>): Promise<number> {
+  async pollOnce(onUpdate?: TelegramUpdateHandler): Promise<number> {
+    const run = this.pollQueue.then(() => this.pollOnceExclusive(onUpdate));
+    this.pollQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private offsetLoaded = false;
+
+  private async pollOnceExclusive(onUpdate?: TelegramUpdateHandler): Promise<number> {
     if (!this.config.botToken) return 0;
-    if (this.lastUpdateId === 0 && this.config.offsetStorage) {
+    if (this.intakePaused()) return 0;
+    const handler = onUpdate ?? this.updateHandler;
+    if (this.offsetStorage && !this.offsetLoaded) {
       try {
-        this.lastUpdateId = await this.config.offsetStorage.getOffset();
+        this.lastUpdateId = Math.max(this.lastUpdateId, await this.offsetStorage.getOffset());
+        this.offsetLoaded = true;
       } catch (err) {
-        console.warn('[TelegramBridge] Failed to load offset from storage:', err);
+        // Without the stored offset Telegram would hand back updates already handled. The store is the
+        // database intake writes to, so nothing could be accepted now anyway: wait for it.
+        this.consecutiveErrors++;
+        this.lastError = { code: 'TELEGRAM_OFFSET_UNAVAILABLE', message: errorText(err, 'The stored offset could not be read'), timestamp: new Date().toISOString() };
+        return 0;
       }
     }
     this.lastPollAttemptAt = new Date().toISOString();
@@ -240,24 +306,43 @@ export class TelegramBridgeDaemon {
       }
       const data = await res.json();
       if (data.ok && Array.isArray(data.result)) {
-        this.consecutiveErrors = 0;
         this.lastPollSuccessAt = new Date().toISOString();
-        this.lastError = undefined;
         let count = 0;
         for (const update of data.result) {
-          if (onUpdate) {
-            await onUpdate(update);
-          } else {
-            await this.processUpdate(update);
+          // The kill switch can be thrown while a batch is being handled: the rest waits in Telegram.
+          if (this.intakePaused()) return count;
+          try {
+            if (handler) await handler(update);
+            else await this.processUpdate(update);
+          } catch (err) {
+            // The error count is not reset by the successful getUpdates above, so an update that keeps
+            // failing backs the loop off further each time (2, 4, 8, 16, then 30 s) instead of every 2 s.
+            this.consecutiveErrors++;
+            this.lastError = {
+              code: 'TELEGRAM_UPDATE_NOT_ACCEPTED',
+              message: `Update ${update.update_id} was not accepted and will be retried: ${errorText(err, String(err))}`,
+              timestamp: new Date().toISOString(),
+            };
+            return count;
           }
-          // Telegram drops older updates after the next offset is sent. Advance
-          // only after ingress has durably accepted (or explicitly rejected) it.
           const nextOffset = Math.max(this.lastUpdateId, update.update_id);
-          if (this.config.offsetStorage) await this.config.offsetStorage.setOffset(nextOffset);
+          if (this.offsetStorage) {
+            try {
+              await this.offsetStorage.setOffset(nextOffset);
+            } catch (err) {
+              // Not advanced in memory either: the update is asked for again and intake's own record of
+              // handled updates answers "duplicate", which is safe; skipping it would not be.
+              this.consecutiveErrors++;
+              this.lastError = { code: 'TELEGRAM_OFFSET_NOT_SAVED', message: errorText(err, 'The offset could not be stored'), timestamp: new Date().toISOString() };
+              return count;
+            }
+          }
           this.lastUpdateId = nextOffset;
           count++;
           this.processedCount++;
         }
+        this.consecutiveErrors = 0;
+        this.lastError = undefined;
         return count;
       } else {
         this.consecutiveErrors++;
@@ -282,16 +367,17 @@ export class TelegramBridgeDaemon {
   /**
    * Starts a continuous long-polling background loop
    */
-  async startPolling(onUpdate?: (update: TelegramUpdate) => Promise<void>): Promise<void> {
+  async startPolling(onUpdate?: TelegramUpdateHandler): Promise<void> {
     if (this.active) return;
     this.active = true;
     this.startTime = Date.now();
+    if (onUpdate) this.updateHandler = onUpdate;
 
     const loop = async () => {
       while (this.active) {
         try {
           this.abortController = new AbortController();
-          await this.pollOnce(onUpdate);
+          await this.pollOnce();
         } catch {
           // Continue polling loop on non-fatal error
         }
@@ -425,6 +511,7 @@ export class TelegramBridgeDaemon {
       lastPollAttemptAt: this.lastPollAttemptAt,
       lastPollSuccessAt: this.lastPollSuccessAt,
       lastError: this.lastError,
+      intakePaused: this.intakePaused(),
     };
   }
 
@@ -964,8 +1051,8 @@ export class TelegramBridgeDaemon {
    */
   async processUpdate(update: TelegramUpdate): Promise<{ processed: boolean; envelope: any; botResponse?: any }> {
     this.lastUpdateId = Math.max(this.lastUpdateId, update.update_id);
-    if (this.config.offsetStorage) {
-      await this.config.offsetStorage.setOffset(this.lastUpdateId).catch(() => {});
+    if (this.offsetStorage) {
+      await this.offsetStorage.setOffset(this.lastUpdateId).catch(() => {});
     }
     const envelope = this.normalizeUpdate(update);
     if (!envelope) {

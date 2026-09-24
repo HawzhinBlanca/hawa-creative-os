@@ -77,25 +77,26 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 200);
   });
 
+  // Kept, not removed: the Desk's Settings screen has a "Poll now" button. It used to run its own
+  // getUpdates beside the background loop, from the same offset, and ignored intake's answer, so an
+  // update intake refused with a 5xx was skipped for good. It now takes the poller's turn (pollOnce is
+  // queued: one getUpdates at a time) and uses the poller's own handler, with its retries, dead letter
+  // and stored offset. With the kill switch on it refuses as the webhook does.
   registerRoute('post', '/adapters/telegram/poll-now', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }
-    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (!secret) {
+    if (channelKillSwitches.telegram) {
+      return problem(c, 503, 'Service Unavailable', 'Telegram intake is disabled by the office kill switch');
+    }
+    if (!process.env.TELEGRAM_WEBHOOK_SECRET) {
       return c.json({ ok: false, error: 'TELEGRAM_WEBHOOK_SECRET is not configured' }, 503);
     }
-    const count = await telegramBridge.pollOnce(async (update) => {
-      await app.request('/api/webhooks/telegram?generate=true', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-telegram-bot-api-secret-token': secret,
-        },
-        body: JSON.stringify(update),
-      });
-    });
+    if (!telegramBridge.hasUpdateHandler?.()) {
+      return c.json({ ok: false, error: 'Telegram intake is not set up in this process (no bot token)' }, 503);
+    }
+    const count = await telegramBridge.pollOnce();
     return c.json({ ok: true, updatesProcessed: count, status: telegramBridge.getStatus() }, 200);
   });
 
