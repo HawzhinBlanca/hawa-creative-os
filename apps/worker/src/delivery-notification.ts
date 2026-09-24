@@ -57,6 +57,73 @@ export const readStoredExportBytes: ExportBytesReader = async (db, tenantId, tas
 export const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 /**
+ * What the outbox has done with each Telegram send of one command, so a worker that takes over a
+ * command another one stopped in the middle of never sends the same thing twice. Telegram offers no
+ * idempotency key, so each send is written down before it is made and again once Telegram answers.
+ *
+ * Each step of a command (a delivered file by its artifact id, 'notice', 'message') is recorded in
+ * hawa.inbox_events, which the app role can only append to, as `<command id>:<step>` from source
+ * 'telegram_delivery', with the outcome at the end of the event kind:
+ * - attempted: about to send. With no later outcome, the worker stopped mid-send: it may have arrived.
+ * - sent: Telegram confirmed it. Never sent again, not even on an administrator's replay.
+ * - uncertain: Telegram did not confirm it (the answer was lost). Not sent again automatically.
+ * - failed: Telegram refused it, so it did not arrive, and a later attempt may send it.
+ * - released: an administrator confirmed the replay of an uncertain command (Core's requeue with
+ *   confirmUncertainReplay, which starts it over with no attempts), so it may be sent again.
+ * Rows written before 2026-09-24 have only `telegram_document_sent` and `telegram_document_uncertain`.
+ */
+export type SendMarkOutcome = 'attempted' | 'sent' | 'uncertain' | 'failed' | 'released';
+export type SendStepKind = 'document' | 'notice' | 'message';
+/** Where an earlier attempt left a step: sent, or possibly sent (uncertain). Absent means free to send. */
+export type PriorSend = 'sent' | 'uncertain';
+
+export const TELEGRAM_DELIVERY_SOURCE = 'telegram_delivery';
+const MARK_KIND = /^telegram_(document|notice|message)_(attempted|sent|uncertain|failed|released)$/;
+
+/** Every step's latest mark for one command, with the kind of send it was. Read under the command's tenant. */
+export async function readSendMarks(
+  db: Kysely<Database>,
+  tenantId: string,
+  commandId: string
+): Promise<Map<string, { kind: SendStepKind; outcome: SendMarkOutcome }>> {
+  const rows = (await sql<{ source_event_id: string; event_kind: string }>`SELECT source_event_id, event_kind FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${TELEGRAM_DELIVERY_SOURCE}
+      AND source_event_id LIKE ${`${commandId}:%`}
+    ORDER BY received_at ASC, id ASC`.execute(db)).rows;
+  const marks = new Map<string, { kind: SendStepKind; outcome: SendMarkOutcome }>();
+  for (const row of rows) {
+    const m = MARK_KIND.exec(row.event_kind);
+    if (m) marks.set(row.source_event_id.slice(commandId.length + 1), { kind: m[1] as SendStepKind, outcome: m[2] as SendMarkOutcome });
+  }
+  return marks;
+}
+
+/** What a step's latest mark means for a new attempt. */
+export function priorSendOf(mark: SendMarkOutcome | undefined): PriorSend | undefined {
+  if (mark === 'sent') return 'sent';
+  if (mark === 'attempted' || mark === 'uncertain') return 'uncertain';
+  return undefined;
+}
+
+/**
+ * Appends one mark. `received_at` is the clock at the insert, not the transaction's start, so the
+ * marks of one step, each written in its own transaction, keep the order they were made in.
+ */
+export async function writeSendMark(
+  db: Kysely<Database>,
+  tenantId: string,
+  commandId: string,
+  step: string,
+  kind: SendStepKind,
+  outcome: SendMarkOutcome
+): Promise<void> {
+  const key = `${commandId}:${step}`;
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+    VALUES (${tenantId}::uuid, ${TELEGRAM_DELIVERY_SOURCE}, ${key}, ${`telegram_${kind}_${outcome}`},
+      ${JSON.stringify({ commandId, step, outcome })}::jsonb, ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
+}
+
+/**
  * The Drive archive problem as a client reads it. Core passes its failure code through when it has no
  * words for it, so a client was shown "INVALID_DESTINATION" or "DRIVE_LOOKUP_FAILED" (2026-09-23). A
  * known code is said in plain English, any other code (upper case with underscores, alone or leading
@@ -209,6 +276,21 @@ export function composeDeliveryUncertainAlert(taskId: string, chatId: string | n
     `Requesting chat: ${chatId || 'unknown'}`,
     `Last error (it names what was not confirmed): ${error.slice(0, 500)}`,
     'Nothing was sent twice. Look in the requester\'s chat, and send by hand whatever is not there.',
+  ].join('\n');
+}
+
+/**
+ * The office's alert when Telegram did not confirm that a message from the outbox (a draft's link,
+ * a question, a reminder) reached its chat. It is not resent, so it cannot arrive twice. Plain text,
+ * no formatting.
+ */
+export function composeMessageUncertainAlert(taskId: string, chatId: string, error: string): string {
+  return [
+    'Hawa alert: Telegram did not confirm that a message from Hawa reached its chat.',
+    `Task: ${taskId}`,
+    `Chat: ${chatId}`,
+    `Last error: ${error.slice(0, 500)}`,
+    'Nothing was sent twice. Look in the chat, and send by hand whatever is not there.',
   ].join('\n');
 }
 

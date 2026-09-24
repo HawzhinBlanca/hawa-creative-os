@@ -36,6 +36,12 @@ export class TaskWorkflowDispatcher {
 
   /**
    * Dispatches an outbox command to the durable workflow engine with confirmed submission.
+   *
+   * The outbox calls this with no transaction open (the submission is a network call of up to 10 s),
+   * and `trx` is unused: never pass one. A command reclaimed after a consumer stopped mid-dispatch is
+   * submitted again under the same workflow key, which Restate answers with 409, so no run starts
+   * twice. The command reaches here without the request's pictures (OutboxRepository.claimDue): the
+   * studio reads them from the task's own event, so they no longer ride into Restate's journal.
    */
   async dispatch(
     cmd: OutboxCommandRecord,
