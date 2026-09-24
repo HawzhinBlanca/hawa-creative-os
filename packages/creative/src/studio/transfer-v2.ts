@@ -84,9 +84,11 @@ function focusedPicture(box: Box, pixels: { width: number; height: number }, cro
 /**
  * A treated photo's fragment rasterised alone, by the renderer's own rsvg-convert, at
  * `photoBakePixelSize`: the same markup the preview inlined, so the same pixels, on a transparent
- * ground that Canva keeps on import.
+ * ground that Canva keeps on import. An outline or a glow made for the deck is already that picture,
+ * computed at the bake scale, so it is placed as it is.
  */
 async function bakePhotoFragment(fragment: PhotoFragment, rsvgConvertPath: string | undefined): Promise<Buffer> {
+  if (fragment.raster) return fragment.raster;
   const size = photoBakePixelSize(fragment);
   return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {});
 }
@@ -493,7 +495,7 @@ export async function encodeStudioTransferV2(
     // untouched cut-out and the client can delete the effect in Canva.
     if (layer.kind === 'cutout-glow' || layer.kind === 'cutout-outline') {
       const kind = layer.kind === 'cutout-glow' ? 'glow' : 'outline';
-      const effect = cutoutEffectFragment(kind, p, layer.png, layer.rect, layout);
+      const effect = cutoutEffectFragment(kind, p, layer.png, layer.rect, layout, { target: 'deck' });
       if (effect) placeBaked(effect, await bakePhotoFragment(effect, options.rsvgConvertPath), `Photo ${p.photoIndex} ${kind}`);
       continue;
     }

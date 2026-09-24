@@ -7,8 +7,8 @@ import { coverCrop, photoZoomFactor } from '../src/studio/photo-crop.js';
 import type { PhotoCutoutAsset } from '../src/studio/photo-cutout.js';
 import { photoLayers } from '../src/studio/photo-cutout.js';
 import {
+  cutoutEffectFragment,
   cutoutEffectRect,
-  outlineMorphologySteps,
   photoBakePixelSize,
   photoFilterMatrix,
   photoTreatmentFields,
@@ -587,19 +587,82 @@ describe('the Canva deck bakes a treated photo from the preview\'s own fragment'
   });
 });
 
-describe('librsvg\'s morphology limits, and how the outline works within them', () => {
-  it('splits a wide outline into whole-pixel steps of at most 5px, which at 2x is librsvg\'s 10px cap', () => {
-    expect(outlineMorphologySteps(1)).toEqual([1]);
-    expect(outlineMorphologySteps(5)).toEqual([5]);
-    expect(outlineMorphologySteps(6)).toEqual([3, 3]);
-    expect(outlineMorphologySteps(12)).toEqual([4, 4, 4]);
-    expect(outlineMorphologySteps(24)).toEqual([5, 5, 5, 5, 4]);
-    for (let w = 1; w <= 24; w++) {
-      const steps = outlineMorphologySteps(w);
-      expect(steps.reduce((a, b) => a + b, 0)).toBe(w);
-      expect(Math.max(...steps)).toBeLessThanOrEqual(5);
-      expect(steps.every(Number.isInteger)).toBe(true);
+describe('outlines and glows as pictures (ADR-036 section 2.2)', () => {
+  /** A cut-out with four times the box's pixels, so its layers are baked at 2x. */
+  const big = (): PhotoCutoutAsset => ({
+    png: rgbaPng(800, 1200, (x, y) => (x >= 200 && x < 600 && y >= 160 ? RED : CLEAR)),
+    width: 800,
+    height: 1200,
+  });
+
+  it('draws an outline and a glow with no SVG filter: pictures at the preview\'s pixels and at the deck\'s', async () => {
+    const layout = withPhotos(cutout({ outline: { color: '#FFFFFF', width: 24 }, glow: { color: GOLD, radius: 30 } }));
+    const svg = renderLayoutV2ToSvg(layout, { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [big()] }).svg;
+    expect(svg).not.toContain('feMorphology');
+    expect(svg).not.toContain('<filter');
+    const embedded = (kind: string) => PNG.sync.read(Buffer.from(svg.match(new RegExp(`<image id="photo-${kind}-0" xlink:href="data:image/png;base64,([^"]+)"`))![1], 'base64'));
+    const deck = await deckOf(layout, [], [big()]);
+    expect(deck.pictures.map((p) => p.name)).toEqual(['Photo 0 glow', 'Photo 0 outline', 'Photo 0']);
+    for (const [k, kind] of [[0, 'glow'], [1, 'outline']] as const) {
+      const placed = deck.pictures[k];
+      const [w, h] = [placed.cx / EMU_PER_PX, placed.cy / EMU_PER_PX];
+      // The preview's picture has a pixel per layout pixel, as the preview is drawn; the deck's, two.
+      expect({ width: embedded(kind).width, height: embedded(kind).height }).toEqual({ width: Math.round(w), height: Math.round(h) });
+      const baked = PNG.sync.read(Buffer.from(placed.media));
+      expect({ width: baked.width, height: baked.height }).toEqual({ width: Math.round(w * 2), height: Math.round(h * 2) });
+      // The deck places the picture made for it as it is: no second rasterisation.
+      const rect = { x: 140, y: 440, width: 400, height: 600 };
+      const made = cutoutEffectFragment(kind, layout.photos![0], big().png, rect, layout, { target: 'deck' })!;
+      expect(Buffer.from(placed.media).equals(made.raster!)).toBe(true);
     }
+  });
+
+  it('draws an outline\'s corners square, as feMorphology drew them: today\'s look, kept', async () => {
+    // The body's top-left corner is at (240, 520). A square dilation reaches the width along both
+    // axes at once: the pixel at (224, 504), 22 px from the corner along the diagonal, is gold with a
+    // 20 px outline, as it was before the outline became a picture (PLAN 3.2: within 1 device px
+    // of today's outline).
+    const layout = withPhotos(cutout({ outline: { color: GOLD, width: 20 } }));
+    const { png } = await preview(layout, [], [big()]);
+    expect(near(at(png, BODY.left - 16, BODY.top - 16), GOLD_RGB)).toBe(true);
+    expect(near(at(png, BODY.left - 19, BODY.top - 19), GOLD_RGB)).toBe(true);
+    expect(at(png, BODY.left - 22, BODY.top - 22)).toEqual(BG);
+    const deck = await deckOf(layout, [], [big()]);
+    const outline = deck.pictures.find((p) => p.name === 'Photo 0 outline')!;
+    const ring = PNG.sync.read(Buffer.from(outline.media));
+    const [ox, oy] = [outline.x / EMU_PER_PX, outline.y / EMU_PER_PX];
+    // At 2x, the device pixel [corner - 19.5, corner - 19) on both axes is inside; [-21, -20.5) is not.
+    expect(at(ring, (BODY.left - 19.5 - ox) * 2, (BODY.top - 19.5 - oy) * 2)).toEqual([...GOLD_RGB, 255]);
+    expect(at(ring, (BODY.left - 21 - ox) * 2, (BODY.top - 21 - oy) * 2)[3]).toBe(0);
+  });
+
+  it('draws an outline a whole number of layout pixels wide, as before: 3.5 is drawn 4', () => {
+    const rect = { x: 140, y: 440, width: 400, height: 600 };
+    const widthOf = (width: number) => {
+      const fragment = cutoutEffectFragment('outline', cutout({ outline: { color: GOLD, width } }), big().png, rect, { width: 1080, height: 1350 }, { target: 'deck' })!;
+      const ring = PNG.sync.read(fragment.raster!);
+      // Gold device pixels left of the body's left edge, along the row at y 700.
+      const row = Math.round((700 - fragment.rect.y) * 2);
+      let count = 0;
+      for (let x = 0; x < (BODY.left - fragment.rect.x) * 2; x++) if (ring.data[(row * ring.width + x) * 4 + 3] === 255) count++;
+      return count / 2;
+    };
+    expect(widthOf(3.5)).toBe(4);
+    expect(widthOf(4)).toBe(4);
+    expect(widthOf(3.4)).toBe(3);
+  });
+
+  it('draws an outline from a part of the person beyond the canvas edge', () => {
+    // The body is placed entirely off the left edge of the canvas; its outline still reaches onto it.
+    const photo = cutout({ x: -300, outline: { color: GOLD, width: 10 } });
+    const rect = { x: -300, y: 440, width: 400, height: 600 };
+    const fragment = cutoutEffectFragment('outline', photo, person().png, rect, { width: 1080, height: 1350 }, { target: 'deck' })!;
+    expect(fragment.rect.x).toBe(0);
+    const ring = PNG.sync.read(fragment.raster!);
+    // The body is x -200..0, all of it off the canvas; its outline shows at the canvas's left edge.
+    expect(at(ring, 5, 700 - fragment.rect.y)[3]).toBe(255);
+    expect(at(ring, 0, BODY.top - 5 - fragment.rect.y)[3]).toBe(255);
+    expect(at(ring, 15, 700 - fragment.rect.y)[3]).toBe(0);
   });
 
   it('draws a 20px outline 20px wide, in the preview and in a deck baked at 2x', async () => {
@@ -633,13 +696,6 @@ describe('librsvg\'s morphology limits, and how the outline works within them', 
 });
 
 describe('after the 2026-09-24 review', () => {
-  it('draws an outline as row and column passes, so a wide one bakes in time', () => {
-    const svg = renderLayoutV2ToSvg(withPhotos(cutout({ outline: { color: '#FFFFFF', width: 24 } })), { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [person()] }).svg;
-    expect(svg).toMatch(/radius="\d+ 0"/);
-    expect(svg).toMatch(/radius="0 \d+"/);
-    expect(svg).not.toMatch(/radius="\d+"(?! )/);
-  });
-
   it('crops a photo 9,600 px or more on a side in the deck instead of drawing nothing', async () => {
     const wide = Buffer.from(rgbaPng(10, 10, () => RED));
     wide.writeUInt32BE(9800, 16);
