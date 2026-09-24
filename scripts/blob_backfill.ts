@@ -26,8 +26,9 @@
  * Progress is the data itself: copy selects rows whose bytes are present and not yet in the store
  * (reference photos: every photo, skipped when its hash is already linked to its task), strip rows whose
  * bytes are present and whose file is, in keyset order on the row id, and put() is
- * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the batch in
- * hand) resumes where it stopped. Undecodable data URIs and hash mismatches are reported and left.
+ * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the row in
+ * hand; strip, the rows of its batch already verified) resumes where it stopped. Undecodable data URIs
+ * and hash mismatches are reported and left.
  *
  * Exit status: 0 done and clean; 1 done with problems to read; 3 stopped (a signal or --limit) with
  * rows left, so run it again; 2 refused or failed.
@@ -89,7 +90,11 @@ export interface PhaseReport {
   /** verify: JSON rows still carrying a data:image URI. */
   inlineJson: number;
   problems: BackfillProblem[];
-  /** Stopped by --limit or a signal before the phase was done. */
+  /**
+   * Stopped by --limit or a signal with a row left that this mode would write. Rows already linked
+   * and rows left as they are do not count: a run that stops just as its last writable row is done
+   * has finished.
+   */
   stoppedEarly: boolean;
 }
 
@@ -103,7 +108,7 @@ export interface BackfillOptions {
   limit?: number;
   dryRun?: boolean;
   log?: (line: Record<string, unknown>) => void;
-  /** Checked between batches: SIGINT finishes the batch in hand, then stops. */
+  /** Checked before each row that would be written: SIGINT finishes the row in hand, then stops. */
   shouldStop?: () => boolean;
 }
 
@@ -194,6 +199,11 @@ export function decodeImageDataUri(uri: unknown): { bytes: Buffer; mediaType: Bl
   return { bytes, mediaType };
 }
 
+/** Why a row whose bytes differ from the stored file its hash names is left as it is. */
+function differMessage(src: ByteaSource, sha: string, actual: string): string {
+  return `${src.bytes} hashes to ${actual.slice(0, 12)}…, not to the stored file ${src.sha} names (${sha.slice(0, 12)}…); left as it is`;
+}
+
 /** Runs one strip batch with the table's protective trigger disabled, and enabled again, in one transaction. */
 async function withTriggerDisabled<T>(db: Kysely<Database>, table: string, trigger: string | null, fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> {
   return db.transaction().execute(async (trx) => {
@@ -278,6 +288,8 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
   let budget = o.limit ?? Number.POSITIVE_INFINITY;
   const reports: PhaseReport[] = [];
   const stop = () => budget <= 0 || Boolean(o.shouldStop?.());
+  // Every exit below that sets stoppedEarly is taken just before a row this mode would write, never
+  // before a batch: a batch may hold only rows already linked or left as they are, which are not work.
 
   for (const phase of o.phases) {
     const report: PhaseReport = { phase, mode: o.mode, scanned: 0, stored: 0, linked: 0, stripped: 0, notCopied: 0, strippable: 0, inlineJson: 0, problems: [], stoppedEarly: false };
@@ -312,11 +324,6 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               ORDER BY r.id LIMIT ${batch}`.execute(o.db)
           ).rows;
           if (!rows.length) break;
-          // Stopped only when there is more to do: a run whose last write finished the phase is done.
-          if (o.mode === 'copy' && stop()) {
-            report.stoppedEarly = true;
-            break;
-          }
           for (const row of rows) {
             after = row.id;
             report.scanned++;
@@ -333,6 +340,10 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               report.notCopied++;
               continue;
             }
+            if (stop()) {
+              report.stoppedEarly = true;
+              break;
+            }
             if (o.dryRun) continue;
             const ref = await o.store.put(decoded.bytes, decoded.mediaType);
             report.stored++;
@@ -342,6 +353,7 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             budget--;
             log({ phase, mode: o.mode, table: src.table, id: row.id, task: row.task_id, sha256: ref.sha256 });
           }
+          if (report.stoppedEarly) break;
         }
       }
       continue;
@@ -353,9 +365,21 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
       const shaCol = sql.raw(src.sha);
       if (o.mode === 'verify') {
         const counts = (await sql<{ strippable: string }>`
-          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
+          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND encode(sha256(r.${bytesCol}), 'hex') = r.${shaCol}
+            AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
           FROM ${table} r`.execute(o.db)).rows[0];
         report.strippable += Number(counts?.strippable ?? 0);
+        // Bytes that do not hash to the stored file their hash names: copy skips the row (the file is
+        // there) and strip's update skips it (the bytes differ), so without this nothing would ever say.
+        // The foreign key is satisfied; a person decides which of the two pictures the row means.
+        const differ = (await sql<{ id: string; sha: string; actual: string }>`
+          SELECT r.id::text AS id, r.${shaCol} AS sha, encode(sha256(r.${bytesCol}), 'hex') AS actual FROM ${table} r
+          WHERE r.${bytesCol} IS NOT NULL AND encode(sha256(r.${bytesCol}), 'hex') <> r.${shaCol}
+            AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}) ORDER BY r.id`.execute(o.db)).rows;
+        for (const d of differ) {
+          report.scanned++;
+          problem(src.table, d.id, differMessage(src, d.sha, d.actual), true);
+        }
         // Every stored hash a row names must have its file, with those bytes.
         const named = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
           JOIN hawa.blobs b ON b.sha256 = r.${shaCol}`.execute(o.db)).rows;
@@ -381,20 +405,14 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
       }
 
       let after = '00000000-0000-0000-0000-000000000000';
-      // Stopped only when there is more to do: a run whose last write finished the phase is done.
-      const stopBefore = (rows: unknown[]) => {
-        if (!rows.length || o.mode === 'verify' || !stop()) return false;
-        report.stoppedEarly = true;
-        return true;
-      };
-      for (;;) {
+      while (!report.stoppedEarly) {
         if (o.mode === 'copy' || o.mode === 'verify') {
           const rows = (await sql<{ id: string; bytes: Buffer; sha: string | null }>`
             SELECT r.id::text AS id, r.${bytesCol} AS bytes, r.${shaCol} AS sha FROM ${table} r
             WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
               AND (r.${shaCol} IS NULL OR NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}))
             ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
-          if (!rows.length || stopBefore(rows)) break;
+          if (!rows.length) break;
           for (const row of rows) {
             after = row.id;
             report.scanned++;
@@ -414,6 +432,10 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               report.notCopied++;
               continue;
             }
+            if (stop()) {
+              report.stoppedEarly = true;
+              break;
+            }
             if (o.dryRun) continue;
             await o.store.put(bytes, mediaType);
             report.stored++;
@@ -432,22 +454,33 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         }
 
         // strip: rows whose bytes the store has, verified by hash, in one transaction per batch.
-        const rows = (await sql<{ id: string; sha: string }>`
-          SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+        const rows = (await sql<{ id: string; sha: string; actual: string }>`
+          SELECT r.id::text AS id, r.${shaCol} AS sha, encode(sha256(r.${bytesCol}), 'hex') AS actual FROM ${table} r
           WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
             AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})
           ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
-        if (!rows.length || stopBefore(rows)) break;
+        if (!rows.length) break;
         after = rows[rows.length - 1].id;
         const verified: string[] = [];
         for (const row of rows) {
           report.scanned++;
+          if (row.actual !== row.sha) {
+            problem(src.table, row.id, `not stripped: ${differMessage(src, row.sha, row.actual)}`, true);
+            continue;
+          }
           try {
             await o.store.read(row.sha, { verify: true });
-            verified.push(row.id);
           } catch (err) {
             problem(src.table, row.id, `not stripped: ${(err as Error).message}`);
+            continue;
           }
+          // The budget is spent as rows join the batch, so --limit strips exactly that many.
+          if (stop()) {
+            report.stoppedEarly = true;
+            break;
+          }
+          verified.push(row.id);
+          if (!o.dryRun) budget--;
         }
         if (o.dryRun || !verified.length) continue;
         const done = await withTriggerDisabled(o.db, src.table, src.trigger, async (trx) =>
@@ -457,7 +490,8 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         );
         const n = Number(done.numAffectedRows ?? 0);
         report.stripped += n;
-        budget -= n;
+        // A row whose bytes changed since the select was not stripped and did not spend the budget.
+        budget += verified.length - n;
         log({ phase, mode: o.mode, table: src.table, column: src.bytes, stripped: n, through: after });
       }
     }
@@ -521,7 +555,7 @@ async function main(args: string[]): Promise<number> {
   let stopping = false;
   process.on('SIGINT', () => {
     stopping = true;
-    process.stderr.write('Stopping after this batch…\n');
+    process.stderr.write('Stopping after the row in hand…\n');
   });
   try {
     const database = (await sql<{ d: string }>`SELECT current_database() AS d`.execute(db)).rows[0]?.d;
