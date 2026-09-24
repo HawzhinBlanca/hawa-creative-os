@@ -47,6 +47,7 @@ output/plans/*
 !output/plans/2026-09-16-flawless-system/
 !output/plans/2026-09-17-research-grade-pipeline/
 !output/plans/2026-09-23-designer-grade-revisions/
+!output/plans/2026-09-24-architecture-programme/
 !output/proofs/
 # A qualification run's per-brief renders, journals and resume checkpoint stay local (about 2,900
 # files so far, a 2 MB SVG per brief). Its summary is what gets committed: P10_QUALIFICATION.md and

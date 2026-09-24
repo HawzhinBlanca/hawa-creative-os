@@ -1,0 +1,354 @@
+<title>Hawa Architecture Programme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root {
+  --ground: #F3F5F8;
+  --surface: #FFFFFF;
+  --ink: #111A2C;
+  --muted: #56617A;
+  --rule: #D8DEE8;
+  --accent: #1D3F8F;
+  --gold: #9A6A00;
+  --gold-soft: #FBF1D9;
+  --good: #1F7A4D;
+  --warn: #A65B00;
+  --crit: #B23A3A;
+  --code: #EDF1F7;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0C111B; --surface: #131A28; --ink: #E6EBF4; --muted: #9AA6BB; --rule: #27324A;
+    --accent: #8FB0FF; --gold: #F2B63D; --gold-soft: #2A2210; --good: #5FC08E; --warn: #F0A24A; --crit: #F07A7A; --code: #1A2336;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0C111B; --surface: #131A28; --ink: #E6EBF4; --muted: #9AA6BB; --rule: #27324A;
+  --accent: #8FB0FF; --gold: #F2B63D; --gold-soft: #2A2210; --good: #5FC08E; --warn: #F0A24A; --crit: #F07A7A; --code: #1A2336;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font: 15.5px/1.6 var(--body); margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; grid-template-columns: 1fr; gap: 40px; }
+@media (min-width: 1040px) { .wrap { grid-template-columns: 220px minmax(0, 1fr); } }
+nav.toc { font-size: 13.5px; }
+@media (min-width: 1040px) { nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; } }
+nav.toc p { font: 600 11px/1.4 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+nav.toc a { color: var(--ink); text-decoration: none; display: block; padding: 3px 0 3px 10px; border-left: 2px solid var(--rule); }
+nav.toc a:hover, nav.toc a:focus-visible { border-left-color: var(--gold); color: var(--accent); outline: none; }
+main { min-width: 0; }
+header.doc { border-bottom: 1px solid var(--rule); padding-bottom: 24px; margin-bottom: 8px; }
+.eyebrow { font: 500 12px/1.4 var(--mono); color: var(--muted); letter-spacing: .02em; }
+h1 { font: 600 clamp(30px, 4.4vw, 44px)/1.08 var(--display); margin: 10px 0 14px; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font: 600 26px/1.2 var(--display); margin: 52px 0 14px; text-wrap: balance; scroll-margin-top: 24px; }
+h3 { font: 600 18px/1.3 var(--display); margin: 30px 0 8px; text-wrap: balance; }
+p, li { max-width: 72ch; }
+p { margin: 0 0 12px; }
+ul, ol { padding-left: 20px; margin: 0 0 12px; }
+li { margin: 3px 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+code { font: 13px/1.4 var(--mono); background: var(--code); padding: 1px 5px; border-radius: 3px; }
+.lede { font-size: 17px; color: var(--ink); max-width: 70ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 22px; font: 13px/1.5 var(--body); color: var(--muted); margin-top: 14px; }
+.meta b { color: var(--ink); font-weight: 500; }
+.callout { border-left: 3px solid var(--gold); background: var(--gold-soft); padding: 12px 16px; margin: 18px 0; border-radius: 0 4px 4px 0; max-width: 78ch; }
+.callout p:last-child { margin-bottom: 0; }
+.table { overflow-x: auto; margin: 12px 0 18px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 11.5px/1.3 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .k { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.phase { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 52px 0 6px; scroll-margin-top: 24px; }
+.phase h2 { margin: 0; }
+.tag { font: 500 12px/1 var(--mono); color: var(--gold); border: 1px solid var(--gold); padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
+.work { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 22px; }
+.work h3 { margin-top: 0; }
+.acc { font-size: 14px; color: var(--ink); }
+.acc b { font-weight: 600; color: var(--good); }
+.why b { color: var(--warn); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 760px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.pill { display: inline-block; font: 500 11px/1 var(--mono); padding: 3px 7px; border-radius: 3px; background: var(--code); color: var(--muted); }
+.diagram { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 12px 0 18px; }
+pre.mermaid { margin: 0; background: transparent; font-family: var(--mono); font-size: 12.5px; }
+.decide li::marker { color: var(--gold); font-weight: 600; }
+footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#why">Why</a></li>
+    <li><a href="#principles">Principles</a></li>
+    <li><a href="#target">Target architecture</a></li>
+    <li><a href="#timeline">Timeline</a></li>
+    <li><a href="#p0">Phase 0 · Safety</a></li>
+    <li><a href="#p1">Phase 1 · Foundations</a></li>
+    <li><a href="#p2">Phase 2 · Lifecycle on Restate</a></li>
+    <li><a href="#p3">Phase 3 · Pictures and rendering</a></li>
+    <li><a href="#p4">Phase 4 · Proof</a></li>
+    <li><a href="#measures">Measures</a></li>
+    <li><a href="#risks">Risks</a></li>
+    <li><a href="#decisions">Decisions for the owner</a></li>
+    <li><a href="#notdoing">Not doing</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">studio-v2 · 9644f91 · proposed 2026-09-24</div>
+  <h1>Hawa Architecture Programme</h1>
+  <p class="lede">Eight improvements, planned as phased, measurable work. Each change has a measured need, a proof before it ships, and a way back. The plan comes from the two review rounds of 24 September (about 95 bugs, each reproduced by a failing test) and four research reports written for it: a codebase inventory, Restate, resvg against rsvg, and the supporting technology.</p>
+  <div class="meta">
+    <span><b>Calendar:</b> 8–10 weeks</span>
+    <span><b>Effort:</b> about 67 engineer-days</span>
+    <span><b>ADRs:</b> 034–037, proposed</span>
+    <span><b>Repo copy:</b> <code>output/plans/2026-09-24-architecture-programme/PLAN.md</code></span>
+  </div>
+  <div class="callout"><p><b>Real requests are not blocked.</b> Phase 0 should land within the first week of real use, before the office as a whole is invited.</p></div>
+</header>
+
+<h2 id="why">Why: where the bugs came from</h2>
+<p>About 95 bugs in one day of review fall into four structural weak spots.</p>
+<div class="table"><table>
+<thead><tr><th>Weak spot</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td><b>State a restart loses.</b> Core holds 24 stateful maps and sets; several are read before Postgres.</td><td>A delivery stuck after a restart; Canva imports and studio runs nobody abandoned; outcomes lost when Core was down; approval buttons dead after a restart; nine call sites read a stale cached status that feeds delivery, publish and decisions. Core cannot run a second replica.</td></tr>
+<tr><td><b>One 11,214-line <code>app.ts</code>.</b> 94 routes, one 1,647-line Telegram closure, route order that is load-bearing.</td><td>Most fixes landed in it; parallel fixers had to be split by line ranges. Eight routes are unreachable duplicates; one catch-all route intercepts six later ones; six tests read the file's text.</td></tr>
+<tr><td><b>Five vocabularies for one task status.</b> Database (22), JSON schema (21), OpenAPI, domain type (19), Desk (22 plus aliases), plus words that live only in memory.</td><td>Unknown words silently become <code>received</code>; the Desk showed six states as RECEIVED; one event has four payload shapes; an unknown status could be approved.</td></tr>
+<tr><td><b>Pictures as base64 inside rows.</b></td><td>A reference photo is written three times in Postgres plus Restate; a rotated 12 MP photo broke every render (rsvg's 10 MB attribute limit); reply lookups scan JSON carrying images; in the test database 265 of 334 MB is PPTX sources inside one table.</td></tr>
+</tbody></table></div>
+
+<p>Research added three risks the plan handles first:</p>
+<ol>
+  <li><b>Deploys replay running work on new code.</b> The worker is re-registered at the same address on every deploy, with a forced fallback. Restate pins work to a deployment; swapping the container behind it replays in-flight work on changed code, the documented cause of journal mismatches. Today's deploys were safe only because nothing was in flight.</li>
+  <li><b>Network calls inside open transactions.</b> A Telegram document upload can take 60 s inside a transaction the database kills after 30 s idle: the delivery can be sent twice.</li>
+  <li><b>Desk load grows with tasks and tabs.</b> The Desk reads every page of the task list every 30 s and a second after every task event; each row runs six subqueries, two unindexed; the readiness check Docker polls every 10 s is the full health handler.</li>
+</ol>
+
+<h2 id="principles">Principles</h2>
+<div class="grid2">
+  <div><ol>
+    <li><b>Measured need, measured result.</b> A baseline and a target number before work starts.</li>
+    <li><b>Strangler, not rewrite.</b> One slice at a time, behind a per-chat flag, with the old path kept until the new one has run in production.</li>
+    <li><b>Tests before moves.</b> Behavioural and contract tests replace text-matching tests before code moves.</li>
+    <li><b>No handler waits for a person.</b> Waiting is state; each event is a short handler.</li>
+  </ol></div>
+  <div><ol start="5">
+    <li><b>Every side effect has a deterministic key</b> (<code>requestId:revision:step</code>), and every boundary reconciles before acting.</li>
+    <li><b>One owner per fact.</b> Postgres for what the Desk reads, Restate for where a request is, the file store for bytes. Nothing in Core's memory holds truth.</li>
+    <li><b>An ADR before a foundation changes</b>; the lead re-runs every proof an agent reports.</li>
+  </ol></div>
+</div>
+
+<h2 id="target">Target architecture</h2>
+<div class="diagram"><pre class="mermaid">
+flowchart LR
+  TG[Telegram] -->|getUpdates| P[Poller - worker]
+  P -->|send, key tg-update_id| CI[ChatInbox - object per chat]
+  CI -->|one-way send| RL[RequestLifecycle - object per request]
+  RL -->|start| DR[DesignRun - workflow per run]
+  RL -->|start| DL[Delivery - workflow per request and revision]
+  DR -->|outcome| RL
+  DL -->|done| RL
+  RL -->|send| TS[TelegramSender - object per chat]
+  TS --> TG
+  RL -->|project with expected revision| CORE[Core API - route modules]
+  DESK[Desk - React and TanStack Query] -->|REST and events| CORE
+  CORE -->|office decision| RL
+  CORE --> PG[(Postgres - read model)]
+  CORE --> FS[(File store - sha256)]
+  DR --> FS
+</pre></div>
+<ul>
+  <li><b>Restate</b> decides transitions. <b>Postgres</b> is the projection the Desk reads, written by Core with expected revisions. <b>Core</b> is the API and the domain services, with no lifecycle state of its own.</li>
+  <li>Reminders are delayed self-sends ("next office morning") and run on whatever code is current when they fire.</li>
+  <li>The worker runs as two colours, each registered at its own address; a deploy goes to the drained colour.</li>
+</ul>
+
+<h2 id="timeline">Timeline</h2>
+<p>Bars are engineer-days in sequence for one senior engineer with review agents; parallel streams overlap.</p>
+<div class="diagram"><pre class="mermaid">
+gantt
+  dateFormat YYYY-MM-DD
+  axisFormat %d %b
+  section Phase 0
+  Safety before scale          :p0, 2026-09-28, 6d
+  section Phase 1
+  Tests on own databases       :p11, after p0, 3d
+  One status vocabulary        :p12, after p0, 3d
+  Observability                :p14, after p0, 3d
+  Split app.ts                 :p13, after p12, 8d
+  Desk server state            :p15, after p14, 4d
+  section Phase 2
+  ChatInbox and poller         :p21, after p13, 4d
+  Delivery workflow            :p22, after p21, 4d
+  RequestLifecycle             :p23, after p22, 6d
+  Office decisions and retire  :p24, after p23, 4d
+  Cutover and operations       :p26, after p24, 2d
+  section Phase 3
+  File store                   :p31, after p15, 6d
+  Raster outlines              :p32, after p31, 3d
+  resvg gate                   :p33, after p32, 6d
+  section Phase 4
+  Proof                        :p4, after p26, 5d
+</pre></div>
+
+<div class="phase" id="p0"><h2>Phase 0 · Safety before scale</h2><span class="tag">week 1 · about 6 days</span></div>
+<div class="table"><table>
+<thead><tr><th>Change</th><th>Acceptance</th><th class="num">Effort</th></tr></thead>
+<tbody>
+<tr><td><b>Blue/green worker deploys.</b> Two worker services at their own addresses; deploy to the idle colour after a drain query returns zero; register without force; remove the forced fallback; delete the drained deployment. Restate server 1.7.0 → 1.7.10. Health reports paused and backing-off work and queue depth.</td><td class="acc"><b>Pass:</b> a deploy with a design in flight finishes it on the old colour, with no journal mismatch.</td><td class="num">2 d</td></tr>
+<tr><td><b>No network calls inside a transaction.</b> The outbox claims and commits, acts with the command's key, then records the result; claims stop returning whole payloads.</td><td class="acc"><b>Pass:</b> a 60 s send against a 30 s idle timeout completes once; a worker killed after the send does not send again.</td><td class="num">1 d</td></tr>
+<tr><td><b>Desk and health load.</b> Server-side pages (keyset), no intake JSON in the list, three indexes, coalesced event refreshes, a cheap readiness check, health polled only by visible tabs.</td><td class="acc"><b>Pass:</b> list p95 ≤ 150 ms at 5,000 tasks; an idle tab makes at most 2 list requests a minute.</td><td class="num">1.5 d</td></tr>
+<tr><td><b>Telegram safety.</b> Remove or lock the second poller; persist the offset; honour the kill switch; nine stale-status call sites read Postgres; delivery ignores approvals held only in memory.</td><td class="acc"><b>Pass:</b> a failing update is never skipped; the kill switch stops intake.</td><td class="num">1 d</td></tr>
+<tr><td><b>Renderer fixes, no new dependency.</b> No whitespace between text lines (fixes a 7–14 px shift on centred lines today); right-to-left lines as embedding marks with left-to-right anchors (measured identical on both librsvg versions); logo pre-scaled once; image types from their bytes; a font check against fontkit widths.</td><td class="acc"><b>Pass:</b> stored renders identical except the fixed shift; the font check fails on a Mac with the wrong Noto file.</td><td class="num">1 d</td></tr>
+<tr><td><b>Owner items.</b> Rotate the committed <code>hawa_app</code> password by alternating two login roles, then disable the old login; replace the Google Drive placeholder key.</td><td class="acc"><b>Pass:</b> the leaked password no longer logs in; a delivery is archived.</td><td class="num">owner</td></tr>
+</tbody></table></div>
+
+<div class="phase" id="p1"><h2>Phase 1 · Foundations for change</h2><span class="tag">weeks 2–4 · about 21 days, parallel streams</span></div>
+
+<div class="work"><h3>1.1 Tests on their own databases <span class="pill">3 d</span></h3>
+<p>A global setup builds a template database keyed by a hash of the schema, security policies, migrations, seed and fixtures, under a lock (worktrees share the server). Each test file clones its own database and drops it afterwards; the connection guard accepts only those names. The test server runs non-durable on a RAM disk. Then files run in parallel.</p>
+<p class="acc"><b>Pass:</b> suite ≤ 2 min (about 4.5 now); 20 green runs in a row; no test lifts the daily cap to pass.</p>
+<p class="why"><b>Why not a rolled-back transaction per test:</b> the app opens its own transactions, row-level security depends on transaction-local settings, and commit-time behaviour would never run.</p></div>
+
+<div class="work"><h3>1.2 One status vocabulary <span class="pill">3 d</span></h3>
+<p><code>packages/contracts</code> owns the database states, API statuses, legal transitions and Desk labels. An unknown word is an error, never <code>received</code>; one event shape <code>{taskId, from, to, version, at}</code>; the API description and JSON schema are generated from it; the Desk refuses to approve an unknown status.</p>
+<p class="acc"><b>Pass:</b> one list of statuses in the repository; a contract test fails when any layer adds a word.</p></div>
+
+<div class="work"><h3>1.3 Split app.ts <span class="pill">8 d, one group per pull request</span></h3>
+<p>Text-matching tests become behavioural first. Then, in this order: dead code (eight shadowed routes, unused helpers, fixtures) → leaves → clients → revisions and decisions → the Canva outcome handler, behind a contract test → publish and delivery → controls, replacing the catch-all route → tasks and Desk → WhatsApp → Telegram intake last. Each group removes the in-memory maps it owns.</p>
+<p class="acc"><b>Pass:</b> <code>app.ts</code> ≤ 1,500 lines; no module over 800; no truth-holding map left in Core; every step green and deployed.</p></div>
+
+<div class="work"><h3>1.4 Observability <span class="pill">3 d</span></h3>
+<p>Structured logs (pino) in Core and the worker with one request context <code>{requestId, taskId, chatId, tenantId}</code>, set at every HTTP request, Restate handler and Telegram update, and passed between services. Tokens are stripped from URLs. One Vector container writes daily log files under <code>~/.hawa/logs</code> for 30 days, so logs survive container replacement. Office numbers come from tables: cost per design, time to first draft, rounds per design, paused work. OpenTelemetry waits; a Jaeger profile can be started on demand.</p>
+<p class="acc"><b>Pass:</b> one command shows every log line of one request across Core, worker and nginx, including from containers a deploy replaced.</p></div>
+
+<div class="work"><h3>1.5 Desk server state <span class="pill">4 d · ADR-037</span></h3>
+<p>TanStack Query: numbered pages with a server total; server-side filter and search (treating ي/ی and ك/ک alike); events invalidate the list and the task, coalesced over 300 ms, and everything after a reconnect; polling only while the stream is down; one path for an expired session; approvals show "Approving…" and never change the cached status before the server confirms. The session token leaves the stream URL for a short-lived ticket.</p>
+<p class="acc"><b>Pass:</b> a new draft appears within 2 s of its event; an idle tab makes no list requests while connected; an expired session reaches sign-in from any screen.</p></div>
+
+<div class="phase" id="p2"><h2>Phase 2 · Restate owns the request lifecycle</h2><span class="tag">weeks 4–7 · about 20 days · ADR-034</span></div>
+<p>No handler waits for a person: waiting is object state, and each event runs for seconds. A deployment therefore drains within minutes, and a request can wait days for an answer or an approval across any number of deploys.</p>
+<div class="table"><table>
+<thead><tr><th>Component</th><th>Kind</th><th>Key</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><b>ChatInbox</b></td><td>Virtual Object</td><td>chat</td><td>Updates in order within a chat, chats concurrently. The poller sends with key <code>tg-&lt;update_id&gt;</code> and advances its offset only after acceptance.</td></tr>
+<tr><td><b>RequestLifecycle</b></td><td>Virtual Object</td><td>request</td><td>The state machine: open, design finished, answer, requester decision, office decision, delivery finished, remind, expire, cancel. Projects each change to Postgres through Core with an expected revision.</td></tr>
+<tr><td><b>DesignRun</b></td><td>Workflow</td><td>run</td><td>Today's design workflow: minutes long, reports its outcome (including "needs an answer") and ends.</td></tr>
+<tr><td><b>Delivery</b></td><td>Workflow</td><td>request + revision</td><td>Pinned exports and the Telegram sends; reports back.</td></tr>
+<tr><td><b>TelegramSender</b></td><td>Virtual Object</td><td>chat</td><td>Outgoing messages in order, honouring Telegram's <code>retry_after</code>.</td></tr>
+<tr><td><b>Reminders</b></td><td>delayed self-send</td><td></td><td>"Next office morning"; a reminder that arrives after the stage has moved does nothing.</td></tr>
+</tbody></table></div>
+
+<div class="table"><table>
+<thead><tr><th>Slice (per-chat flag, owner's chat first)</th><th>Replaces</th><th>Acceptance</th><th class="num">Effort</th></tr></thead>
+<tbody>
+<tr><td>Poller in the worker; ChatInbox calls the extracted Telegram intake module</td><td>Core's one-at-a-time poller</td><td>A 20 MB file in one chat does not delay another; one update twice makes one task; a worker killed mid-update processes it once.</td><td class="num">4 d</td></tr>
+<tr><td>Delivery workflow and TelegramSender</td><td>in-memory delivery tracking and its recovery</td><td>Killing Core or the worker at each step still delivers exactly once; an uncertain send alerts the office.</td><td class="num">4 d</td></tr>
+<tr><td>RequestLifecycle: questions, requester decisions, reminders</td><td>clarification memory, question tasks as the only record, Core's reminder timer</td><td>An answer days later continues the request across a deploy; no duplicate reminder after a restart.</td><td class="num">6 d</td></tr>
+<tr><td>Office decisions from the Desk through Core</td><td>approval checks spread over routes</td><td>One place decides "a change is pending"; approval and delivery refuse through it.</td><td class="num">2 d</td></tr>
+<tr><td>Retire</td><td>outbox dispatch paths; remaining truth-holding maps</td><td>Only Canva operation reconciliation keeps a sweeper.</td><td class="num">2 d</td></tr>
+<tr><td>Cutover and operations</td><td></td><td>New requests on Restate from a date; old ones finish on the old path; nightly Restate archive and monthly restore drill; payloads change only by adding optional fields.</td><td class="num">2 d</td></tr>
+</tbody></table></div>
+<div class="callout"><p><b>Chaos suite, part of every slice's acceptance:</b> kill Core, the worker, Postgres or Restate at each step of a scripted request; deploy mid-request; Telegram 429s; Canva 5xx and 429. Every request finishes exactly once; no paid call runs twice.</p></div>
+
+<div class="phase" id="p3"><h2>Phase 3 · Pictures and rendering</h2><span class="tag">weeks 6–9 · about 15 days</span></div>
+
+<div class="work"><h3>3.1 Content-addressed file store <span class="pill">6 d · ADR-035</span></h3>
+<p>Files under <code>~/.hawa/blobs/sha256/ab/&lt;hash&gt;</code>, written atomically, read-only once written; a <code>blobs</code> table with foreign keys from every referencing row; mark-and-sweep clean-up with a 14-day grace period; Core checks access on the referencing row, then nginx serves the file. Backups take the database first, then the files. Moves, in order: reference photos (written once, as a reference), plan sources (the bulk), candidate previews, cut-outs, comparison images. Canva export bytes stay in the database for now. The renderer reads pictures as files beside the SVG, never inlined.</p>
+<p class="acc"><b>Pass:</b> a request's payload ≤ 4 KB; no inlined picture over 100 KB in any SVG; database size and dump time measured before and after; the restore drill includes the files.</p></div>
+
+<div class="work"><h3>3.2 Outlines and glows as pictures <span class="pill">3 d · ADR-036</span></h3>
+<p>Drawn by a distance transform in our code and embedded in both the preview and the Canva bake, replacing the SVG filter behind the 23 s outline.</p>
+<p class="acc"><b>Pass:</b> within 1 device pixel of today's outlines; a 24 px outline at 2x in under 1 s.</p></div>
+
+<div class="work"><h3>3.3 The resvg gate <span class="pill">3 d spike + 3 d if GO · ADR-036</span></h3>
+<p>In the production image, render 200 stored layouts in every style, plus built sets of photos, cut-outs and Kurdish text, with rsvg (today's and the new markup) and with the resvg 0.48 command-line tool.</p>
+<p class="acc"><b>GO only if:</b> no crash, blank or warning; every text line within 1 px (Latin) or 2 px (Arabic), with no word-order change; every treatment within tolerance; median SSIM ≥ 0.99 and minimum ≥ 0.97; identical bytes across repeats and between Mac and container; no slower at p95 and nothing over 5 s; memory ≤ 1.5x; a person signs off the lowest-scoring pairs and the Kurdish sheet.</p>
+<p>On GO, only the rasteriser changes, to the resvg command-line tool run as a separate process (keeping the timeout and memory isolation), built from source in the image; rsvg stays one release; the preview and the bake always use the same renderer. <b>Not the in-process Node package:</b> it bundles a 2023 engine (no WebP, blank CMYK photos, crashes on some Arabic text).</p></div>
+
+<div class="phase" id="p4"><h2>Phase 4 · Proof</h2><span class="tag">weeks 9–10 · about 5 days</span></div>
+<ul>
+  <li>An adversarial review round, the method that found this week's 95 bugs: five reviewers, each finding reproduced by a failing test before it counts.</li>
+  <li>The chaos suite and a load test: 10 chats at once; a Desk with 5,000 tasks in three tabs.</li>
+  <li>The runbook, the ADRs to Accepted, and the wiki updated with decisions and their reasons.</li>
+</ul>
+
+<h2 id="measures">Measures</h2>
+<div class="table"><table>
+<thead><tr><th>Measure</th><th>Now</th><th>Target</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>Requests lost or stuck after a restart or deploy</td><td>several paths this week</td><td>0 in the chaos suite</td><td>chaos suite</td></tr>
+<tr><td>Paid design runs repeated for one request</td><td>possible</td><td>0</td><td>cost ledger</td></tr>
+<tr><td>Task list p95 at 5,000 tasks</td><td>5–13 s full load</td><td>≤ 150 ms per page</td><td>nginx timings</td></tr>
+<tr><td>Journal mismatches on deploy</td><td>risk present</td><td>0</td><td>Restate journal events</td></tr>
+<tr><td>Test suite time, flakes</td><td>about 4.5 min, shared-data flakes</td><td>≤ 2 min, 0 in 20 runs</td><td>CI log</td></tr>
+<tr><td><code>app.ts</code> size</td><td class="num">11,214 lines</td><td class="num">≤ 1,500</td><td>line count</td></tr>
+<tr><td>Truth-holding maps in Core</td><td class="num">24</td><td class="num">0</td><td>inventory</td></tr>
+<tr><td>Request payload size</td><td>up to about 400 KB per photo</td><td class="num">≤ 4 KB</td><td>database</td></tr>
+<tr><td>Request to first draft (p50, p95)</td><td>measure in week 1</td><td>report, then set</td><td>lifecycle projection</td></tr>
+<tr><td>Cost per design</td><td>about $0.37–0.52</td><td>no regression</td><td>cost ledger</td></tr>
+</tbody></table></div>
+
+<h2 id="risks">Risks</h2>
+<div class="table"><table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>A lifecycle bug loses real requests during the migration</td><td>Per-chat flag, owner's chat first; old path kept a week per slice; chaos suite; restore drill.</td></tr>
+<tr><td>Two owners of one request at cutover</td><td>Cut over by creation date; an owner field; the old path refuses what it does not own.</td></tr>
+<tr><td>Silent pauses after retries run out (about an hour)</td><td>Health and the watchdog alert on paused work and queue depth.</td></tr>
+<tr><td>The Restate volume becomes critical state</td><td>Nightly archive, monthly restore drill; every boundary idempotent because a restore rolls state back.</td></tr>
+<tr><td>Mac memory: two workers, Vector, the cut-out service</td><td>Measured in Phase 0; the idle colour stopped between deploys.</td></tr>
+<tr><td>Refactor churn breaks behaviour</td><td>Behavioural tests first; one group per pull request; a review round per phase.</td></tr>
+<tr><td>A renderer change alters the look</td><td>Only through the gate; one renderer for preview and bake; rsvg kept one release.</td></tr>
+<tr><td>Agent-reported proofs</td><td>The lead re-runs every proof before a slice counts (past agents fabricated proofs).</td></tr>
+</tbody></table></div>
+
+<h2 id="decisions">Decisions for the owner</h2>
+<ol class="decide">
+  <li>Approve the order, with Phase 0 before the office is invited as a whole.</li>
+  <li>Restate decides a request's stage; Postgres is the projection (ADR-034).</li>
+  <li>The file store as a folder under <code>~/.hawa/blobs</code>, visible to the Mac's backups (ADR-035).</li>
+  <li>Add TanStack Query to the Desk (ADR-037; the measured need is in it).</li>
+  <li>Rotate the <code>hawa_app</code> password now: a restart of Core and the worker, seconds.</li>
+  <li>Replace the Google Drive placeholder key.</li>
+  <li>Accept a Rust build stage in the core image if the resvg gate passes (ADR-036).</li>
+</ol>
+
+<h2 id="notdoing">Not doing, and why</h2>
+<ul>
+  <li><b>Kubernetes, microservices, a second host:</b> one Mac, one office; this week's failures were state and structure, not scale.</li>
+  <li><b>An agent framework:</b> ruled out by AGENTS.md; the pipeline is fixed stages.</li>
+  <li><b>A vector database, a new runtime, GraphQL:</b> no measured need.</li>
+  <li><b>A permanent observability stack:</b> heavy on a laptop that has already run out of swap; logs with a request id carry the correlation.</li>
+  <li><b>An S3 server:</b> MinIO's community edition is archived; Garage only if the S3 API is ever needed.</li>
+  <li><b>The in-process resvg Node package:</b> a stale engine; see 3.3.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li>Restate: <a href="https://docs.restate.dev/services/versioning">versioning</a>, <a href="https://docs.restate.dev/references/errors">error codes</a>, <a href="https://docs.restate.dev/admin-api/deployment/register-deployment">registering deployments</a>, <a href="https://docs.restate.dev/develop/ts/durable-timers">timers</a>, <a href="https://docs.restate.dev/develop/ts/external-events">external events</a>, <a href="https://docs.restate.dev/services/introspection">introspection</a>, <a href="https://docs.restate.dev/server/snapshots">backups</a>, <a href="https://restate.dev/blog/code-that-sleeps-for-a-month">"Code that sleeps for a month"</a>.</li>
+  <li>resvg: <a href="https://github.com/linebender/resvg/blob/main/docs/unsupported.md">unsupported features</a>, <a href="https://github.com/linebender/resvg/issues/475">bidi issue</a>, <a href="https://github.com/thx/resvg-js">resvg-js</a>.</li>
+  <li>PostgreSQL: <a href="https://www.postgresql.org/docs/17/sql-createdatabase.html">CREATE DATABASE</a>, <a href="https://www.postgresql.org/docs/17/non-durability.html">non-durable settings</a>.</li>
+  <li>TanStack Query: <a href="https://tanstack.com/query/latest/docs/framework/react/guides/polling">polling</a>, <a href="https://tkdodo.eu/blog/using-web-sockets-with-react-query">events and invalidation</a>, <a href="https://tkdodo.eu/blog/react-query-error-handling">error handling</a>.</li>
+  <li>Telegram: <a href="https://core.telegram.org/bots/api#getupdates">getUpdates</a>, <a href="https://core.telegram.org/bots/faq">rate limits</a>, <a href="https://grammy.dev/advanced/reliability">reliability</a>.</li>
+  <li>Storage and logs: <a href="https://github.com/minio/minio">MinIO repository</a>, <a href="https://vector.dev/docs/reference/configuration/sources/docker_logs/">Vector docker_logs</a>, <a href="https://nodejs.org/docs/latest-v22.x/api/async_context.html">AsyncLocalStorage</a>.</li>
+</ul>
+
+<footer>Proposed 24 September 2026 for the owner's decision. The repository copy and ADRs 034–037 carry the full detail; the codebase inventory, Restate, resvg and supporting-technology reports are kept with the session's working files.</footer>
+</main>
+</div>
