@@ -52,9 +52,14 @@ COPY --from=builder --chown=hawa:hawa /app/packages ./packages
 COPY --from=builder --chown=hawa:hawa /app/apps/core ./apps/core
 COPY --from=builder --chown=hawa:hawa /app/package.json ./package.json
 
-RUN mkdir -p /usr/local/share/fonts/hawa && \
-    cp /app/packages/creative/assets/fonts/*.ttf /usr/local/share/fonts/hawa/ 2>/dev/null || true && \
-    fc-cache -f /usr/local/share/fonts/hawa /app/packages/creative/assets/fonts || true
+# No second copy of the fonts under /usr/local/share/fonts: the renderer generates its own fontconfig
+# file at run time (packages/creative/src/studio/font-environment.ts) listing only the repo's font
+# folder and the Verdana files render-fonts.json names, so rsvg draws exactly the files fontkit
+# measures. FONTCONFIG_FILE above only serves fc-* tools run by hand. Fail the build if a pinned
+# Inter face is missing or variable again (a variable Inter was drawn ~7% narrower than measured).
+RUN test -f /app/packages/creative/assets/fonts/Inter-Regular.ttf \
+    && test -f /app/packages/creative/assets/fonts/Inter-Bold.ttf \
+    && ! fc-query -f '%{variable}\n' /app/packages/creative/assets/fonts/Inter-*.ttf | grep -q True
 
 USER hawa
 WORKDIR /app/apps/core

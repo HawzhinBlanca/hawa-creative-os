@@ -4,6 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { Hex } from './layout-v2.js';
+import { defaultFontsDir, pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
 export type ProceduralMotifType = 'guilloche' | 'sun-rays' | 'thin-rules' | 'gradient-wash' | 'diagonal-lines';
 
@@ -309,7 +310,8 @@ export function renderMotifPng(type: ProceduralMotifType, options: MotifOptions)
     const result = spawnSync(
       rsvgPath,
       ['-w', String(options.width), '-h', String(options.height), '-f', 'png', svgPath],
-      { maxBuffer: 32 * 1024 * 1024, timeout: 15000 }
+      // Motifs carry no text today; the pinned environment keeps it that way if one ever does.
+      { env: rasteriserEnv(pinnedFontconfigFile(defaultFontsDir())), maxBuffer: 32 * 1024 * 1024, timeout: 15000 }
     );
 
     if (result.status !== 0 || !result.stdout || result.stdout.length < 100) {

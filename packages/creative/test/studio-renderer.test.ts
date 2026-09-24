@@ -36,10 +36,11 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
-    // 'exact' only where the rasteriser draws the Noto Sans Arabic file fontkit measures with. The
-    // Macs draw another one from ~/Library/Fonts through CoreText, about 9% narrower; there the map
-    // has to say 'stand-in' (ADR-036), which it did not before the ink check.
-    expect(res1.fontFidelity['Noto Sans Arabic']).toBe(probeFontInkWidth('Noto Sans Arabic').ok ? 'exact' : 'stand-in');
+    // 'exact' because the rasteriser draws the Noto Sans Arabic file fontkit measures with, on every
+    // host: the Macs used to draw another one from ~/Library/Fonts through CoreText, about 9%
+    // narrower, until every rasterisation was pinned to the repo's fonts (font-environment.ts).
+    expect(probeFontInkWidth('Noto Sans Arabic').ok).toBe(true);
+    expect(res1.fontFidelity['Noto Sans Arabic']).toBe('exact');
     // Right-aligned Kurdish: the line carries its own direction (U+202B … U+202C) and the anchor its
     // left-to-right meaning, so no renderer has to honour direction="rtl" (ADR-036).
     expect(res1.svg).not.toContain('direction="rtl"');
