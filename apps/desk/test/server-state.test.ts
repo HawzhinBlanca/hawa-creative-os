@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkScreen } from '../src/screens/WorkScreen.js';
 import { App } from '../src/App.js';
 import { DeskProviders, createDeskRuntime, type DeskRuntime } from '../src/DeskProviders.js';
@@ -9,6 +9,7 @@ import { clearAuthToken, getAuthToken, setAuthToken } from '../src/services/auth
 import { TASK_EVENTS } from '../src/services/eventStream.js';
 import { queryKeys } from '../src/services/queryClient.js';
 import { FakeStream, advance, byText, click, flush, isListRead, json, mount, stubCore, type FetchCall } from './support/desk-harness.js';
+import { taskTransitioned } from '@hawa/contracts/task-status';
 
 /**
  * Architecture programme 1.5 (ADR-037, 2026-09-24): the Desk's server state on TanStack Query.
@@ -100,6 +101,10 @@ async function renderWork(stream: FakeStream, doc = { hidden: false }) {
 
 const mounted: Array<{ unmount(): Promise<void> }> = [];
 
+afterAll(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 100));
+});
+
 beforeEach(() => {
   vi.useFakeTimers();
   setAuthToken(['hawa', 'sess', 'test'].join('_'));
@@ -108,6 +113,9 @@ beforeEach(() => {
 afterEach(async () => {
   while (mounted.length) await mounted.pop()!.unmount();
   vi.useRealTimers();
+  // Work an unmounted screen started (a refetch, a stream close) may still log; let it finish
+  // before the file tears down, or vitest reports the pending console call as an unhandled error.
+  await new Promise((resolve) => setTimeout(resolve, 20));
   vi.unstubAllGlobals();
   clearAuthToken();
   apiClient.auth.setUnauthorizedHint(null);
@@ -191,7 +199,7 @@ describe('the Work queue follows the event stream', () => {
     doc.hidden = true;
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
-    for (let i = 0; i < 5; i++) stream.emit('task:transitioned', { taskId: 't1' });
+    for (let i = 0; i < 5; i++) stream.emit('task:transitioned', taskTransitioned({ taskId: 't1', from: 'human_review', to: 'human_review', version: i + 2 }));
     await advance(5_000);
     expect(core.listReads()).toBe(lists);
 
