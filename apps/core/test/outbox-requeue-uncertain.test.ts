@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, OutboxRepository, withRlsContext } from '@hawa/db';
+import { createDb, OutboxRepository, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 
 /**
@@ -68,10 +68,18 @@ describe('HUNT: requeue resends messages that may already have arrived', () => {
       }, trx));
     const uncertain = await enqueue('may have arrived');
     const plain = await enqueue('never sent');
+    // Each has a send the worker began and never heard back about (apps/worker delivery-notification.ts).
+    const markAttempted = (id: string) => withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
+      (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+      VALUES (${tenantId}::uuid, 'telegram_delivery', ${`${id}:message`}, 'telegram_message_attempted', '{}'::jsonb, ${`${id}:message:attempted`}, true, clock_timestamp())`.execute(trx));
+    const released = async (id: string) => (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.inbox_events
+      WHERE tenant_id = ${tenantId}::uuid AND source_event_id = ${`${id}:message`} AND event_kind = 'telegram_message_released'`.execute(trx))).rows[0].n;
     await withRlsContext(db, scope, async (trx) => {
       await outbox.markUncertain(uncertain.id, 'TELEGRAM_RECEIPT_INVALID', trx);
       await outbox.markPermanentFailure(plain.id, 'TELEGRAM_SEND_FAILED: HTTP 502', trx);
     });
+    await markAttempted(uncertain.id);
+    await markAttempted(plain.id);
     const requeue = (body: Record<string, unknown>) => createApp({ db } as any).request('/v1/system/outbox/requeue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_ADMIN_KEY}` },
@@ -83,16 +91,52 @@ describe('HUNT: requeue resends messages that may already have arrived', () => {
       expect(first.commands.map((c: any) => c.id)).toEqual([plain.id]);
       expect(first.keptUncertain.map((c: any) => c.id)).toEqual([uncertain.id]);
       expect([await stateOf(plain.id), await stateOf(uncertain.id)]).toEqual(['pending', 'failed']);
+      // A requeue alone restarts the command, not the send that may have arrived.
+      expect(await released(plain.id)).toBe(0);
 
       const confirmed = await (await requeue({ ids: [uncertain.id], confirmUncertainReplay: true })).json();
       expect(confirmed.commands.map((c: any) => c.id)).toEqual([uncertain.id]);
       expect(await stateOf(uncertain.id)).toBe('pending');
+      // The administrator confirmed: the worker may make that send once more.
+      expect([await released(uncertain.id), await released(plain.id)]).toEqual([1, 0]);
     } finally {
       await withRlsContext(db, scope, async (trx) => {
         for (const id of [uncertain.id, plain.id]) {
           await outbox.markPermanentFailure(id, 'hunt test cleanup', trx);
           await outbox.retire(tenantId, id, 'hunt test cleanup', 'hunt', trx);
         }
+      });
+    }
+  });
+  it('the per-task redrive releases a send that may have arrived only when the replay is confirmed', async () => {
+    const outbox = new OutboxRepository(db);
+    const taskId = randomUUID();
+    const cmd = await withRlsContext(db, scope, (trx) => outbox.enqueue({
+      tenantId, aggregateType: 'task', aggregateId: taskId, commandType: 'notify.whatsapp',
+      idempotencyKey: `hunt-uncertain-${randomUUID()}`, payload: { chatId: '4242', message: { text: 'may have arrived' } },
+    }, trx));
+    await withRlsContext(db, scope, async (trx) => {
+      await outbox.markPermanentFailure(cmd.id, 'TELEGRAM_SEND_FAILED: HTTP 502', trx);
+      await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+        VALUES (${tenantId}::uuid, 'telegram_delivery', ${`${cmd.id}:message`}, 'telegram_message_uncertain', '{}'::jsonb, 'x', true, clock_timestamp())`.execute(trx);
+    });
+    const redrive = (body: Record<string, unknown>) => createApp({ db } as any).request(`/v1/tasks/${taskId}/outbox/${cmd.id}/redrive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_ADMIN_KEY}` },
+      body: JSON.stringify(body),
+    });
+    const released = async () => (await withRlsContext(db, scope, (trx) => sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.inbox_events
+      WHERE tenant_id = ${tenantId}::uuid AND source_event_id = ${`${cmd.id}:message`} AND event_kind = 'telegram_message_released'`.execute(trx))).rows[0].n;
+    try {
+      expect((await redrive({})).status).toBe(200);
+      expect(await released()).toBe(0);
+      await withRlsContext(db, scope, (trx) => outbox.markPermanentFailure(cmd.id, 'TELEGRAM_SEND_FAILED: HTTP 502', trx));
+      expect((await redrive({ confirmUncertainReplay: true })).status).toBe(200);
+      expect(await released()).toBe(1);
+    } finally {
+      await withRlsContext(db, scope, async (trx) => {
+        await outbox.markPermanentFailure(cmd.id, 'hunt test cleanup', trx);
+        await outbox.retire(tenantId, cmd.id, 'hunt test cleanup', 'hunt', trx);
       });
     }
   });

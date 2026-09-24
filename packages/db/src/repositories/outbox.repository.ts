@@ -44,8 +44,239 @@ export function outboxRetryDelaySeconds(
   return nominal / 2 + random() * (nominal / 2);
 }
 
+/**
+ * Where a request's pictures sit inside a command's payload. Core copies the intake payload into
+ * `task.created` and `task.dispatch`, and a reference photo came with it (base64, several MB), so
+ * every claim carried it to the worker and the dispatcher sent it on to Restate's journal. No handler
+ * reads it: the studio takes the request's pictures from its `task.created` event. Claims strip them.
+ */
+export const OUTBOX_PAYLOAD_PICTURE_PATHS = [
+  '{referenceImageBase64}',
+  '{studioOptions,referenceImageBase64}',
+  '{payload,referenceImageBase64}',
+  '{payload,studioOptions,referenceImageBase64}',
+] as const;
+
+/**
+ * A command as a consumer holds it while acting: only what a handler needs, never the whole row.
+ *
+ * `claim_token` is the claim's lease expiry (`leased_until`, as Postgres prints it, to the
+ * microsecond). A command is claimed again only after the lease has run out or its holder released
+ * it, and a new lease always ends later than any earlier one, so the value identifies this holder's
+ * claim: every write of a result checks it, and a holder whose lease was taken over changes nothing.
+ * `reclaimed` is true when the lease of an earlier holder had run out (it stopped mid-command).
+ */
+export interface OutboxClaim {
+  id: string;
+  tenant_id: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  command_type: string;
+  idempotency_key: string;
+  payload: Record<string, unknown>;
+  /** 'failed' when this claim found the command's leases had run out too often (see claimDue). */
+  state: 'leased' | 'failed';
+  attempts: number;
+  claim_token: string;
+  reclaimed: boolean;
+}
+
+/** The result a holder records for its claim, in the order the consumer classifies errors. */
+export type OutboxClaimFailure = 'retry' | 'permanent' | 'uncertain';
+
+const UNCERTAIN_PREFIX = 'DELIVERY_UNCERTAIN:';
+
+/**
+ * Where the worker writes down each Telegram send of an outbox command (apps/worker
+ * delivery-notification.ts): hawa.inbox_events rows from this source, `<command id>:<step>`, with the
+ * outcome at the end of the event kind. Telegram has no idempotency key, so a send whose last mark is
+ * 'attempted' or 'uncertain' may have arrived and is never made again, until an administrator who
+ * checked the chat confirms the replay (releaseUncertainSends).
+ */
+export const OUTBOX_SEND_MARK_SOURCE = 'telegram_delivery';
+
 export class OutboxRepository {
   constructor(private readonly db: Kysely<Database>) {}
+
+  /**
+   * Claims up to `limit` due commands in one short statement, for a consumer to act on after its
+   * transaction has committed. Nothing a handler does (a Telegram upload may take a minute) happens
+   * while a transaction is open: the pool kills a session idle in a transaction after 30 s, and it
+   * used to be killed after the send and before the delivery was recorded, so the send was repeated.
+   *
+   * A command whose lease ran out (its holder stopped mid-command) is claimed again and that counts
+   * as an attempt, so a command that stops every worker that takes it cannot loop for ever: when
+   * the count reaches `maxAttempts` it is dead-lettered here as uncertain, since nobody knows what
+   * the holders did, and returned with state 'failed' for the consumer to report. `exceptIds` are
+   * never claimed (the consumer's own batch, already handled once).
+   */
+  async claimDue(
+    limit: number,
+    leaseSeconds: number,
+    maxAttempts: number = OUTBOX_MAX_ATTEMPTS,
+    trx?: Kysely<Database>,
+    options: { exceptIds?: string[] } = {}
+  ): Promise<OutboxClaim[]> {
+    const client = trx || this.db;
+    const exceptIds = options.exceptIds || [];
+    const lease = Math.max(1, leaseSeconds);
+    const payload = OUTBOX_PAYLOAD_PICTURE_PATHS.reduce(
+      (expr, path) => sql`(${expr} #- ${path}::text[])`,
+      sql`o.payload`
+    );
+    const reclaimNote = 'LEASE_EXPIRED: the consumer holding this command stopped before recording a result; claimed again';
+    const deadNote = `${UNCERTAIN_PREFIX} LEASE_EXPIRED: every consumer that claimed this command stopped before recording a result; whatever it sends may already have been sent`;
+    const result = await sql<OutboxClaim>`
+      WITH due AS (
+        SELECT id, state = 'leased' AS reclaimed
+        FROM outbox_commands
+        WHERE (state = 'pending' OR (state = 'leased' AND leased_until < now()))
+          -- Enqueuers write available_at from their own clock, so a command is due when either
+          -- that clock or the database's says so: a database clock a few ms behind the app's left a
+          -- command enqueued just now undue.
+          AND available_at <= greatest(now(), ${new Date()}::timestamptz)
+          AND NOT (id = ANY(${exceptIds}::uuid[]))
+        ORDER BY available_at ASC, created_at ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE outbox_commands o
+      SET state = CASE WHEN due.reclaimed AND o.attempts + 1 >= ${maxAttempts} THEN 'failed'::outbox_state ELSE 'leased'::outbox_state END,
+          leased_until = CASE WHEN due.reclaimed AND o.attempts + 1 >= ${maxAttempts} THEN NULL
+                              ELSE now() + make_interval(secs => ${lease}::float8) END,
+          attempts = o.attempts + CASE WHEN due.reclaimed THEN 1 ELSE 0 END,
+          last_error = CASE WHEN NOT due.reclaimed THEN o.last_error
+                            WHEN o.attempts + 1 >= ${maxAttempts} THEN ${deadNote}
+                            ELSE ${reclaimNote} END
+      FROM due
+      WHERE o.id = due.id
+      RETURNING o.id, o.tenant_id, o.aggregate_type, o.aggregate_id, o.command_type, o.idempotency_key,
+        ${payload} AS payload, o.state, o.attempts,
+        coalesce(o.leased_until::text, '') AS claim_token, due.reclaimed
+    `.execute(client);
+    return result.rows.map((r) => ({ ...r, attempts: Number(r.attempts) }));
+  }
+
+  /**
+   * Moves this holder's lease on while its handler is still acting. Returns the new claim token, or
+   * undefined when the claim is no longer this holder's (its lease ran out and another consumer took
+   * the command, or an operator redrove it).
+   */
+  async renewClaim(id: string, claimToken: string, leaseSeconds: number, trx?: Kysely<Database>): Promise<string | undefined> {
+    const client = trx || this.db;
+    const result = await sql<{ claim_token: string }>`
+      UPDATE outbox_commands
+      SET leased_until = now() + make_interval(secs => ${Math.max(1, leaseSeconds)}::float8)
+      WHERE id = ${id}::uuid AND state = 'leased' AND leased_until = ${claimToken}::timestamptz
+      RETURNING leased_until::text AS claim_token
+    `.execute(client);
+    return result.rows[0]?.claim_token;
+  }
+
+  /**
+   * Checks, before a side effect, that the claim is still this holder's and its lease has not run
+   * out, and moves the lease on. The row stays locked until the caller's transaction commits, so no
+   * other consumer can claim the command in between: write the record of the side effect in the same
+   * transaction, commit, then act. Returns the new claim token, or undefined when the claim is lost
+   * (or its lease ran out, when another consumer may be about to take it): then act on nothing.
+   *
+   * A renewal alone is not enough: renewals run on a timer, and one that fails (a database blip, no
+   * free pool connection) leaves the holder acting while the lease runs out. A second consumer then
+   * took the command over and both sent the rest of the delivery (review of phase 0.2, 2026-09-24).
+   */
+  async fenceClaim(id: string, claimToken: string, leaseSeconds: number, trx?: Kysely<Database>): Promise<string | undefined> {
+    const client = trx || this.db;
+    const result = await sql<{ claim_token: string }>`
+      UPDATE outbox_commands
+      SET leased_until = now() + make_interval(secs => ${Math.max(1, leaseSeconds)}::float8)
+      WHERE id = ${id}::uuid AND state = 'leased' AND leased_until = ${claimToken}::timestamptz AND leased_until > now()
+      RETURNING leased_until::text AS claim_token
+    `.execute(client);
+    return result.rows[0]?.claim_token;
+  }
+
+  /**
+   * Releases the sends of these commands that may have arrived (last mark 'attempted' or
+   * 'uncertain'), so the worker makes them once more. Only for an administrator who checked the chat
+   * and confirmed the replay (confirmUncertainReplay): a requeue alone never releases anything. The
+   * worker used to release them whenever a command restarted with no attempts, which a plain requeue
+   * of every dead letter also does, and a file that may already have arrived was sent again.
+   * Returns the steps released, as `<command id>:<step>`.
+   */
+  async releaseUncertainSends(tenantId: string, commandIds: string[], trx?: Kysely<Database>): Promise<string[]> {
+    if (commandIds.length === 0) return [];
+    const client = trx || this.db;
+    const result = await sql<{ source_event_id: string }>`
+      INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+      SELECT latest.tenant_id, latest.source_account_id, latest.source_event_id,
+        regexp_replace(latest.event_kind, '_(attempted|uncertain)$', '_released'),
+        jsonb_build_object('commandId', split_part(latest.source_event_id, ':', 1),
+          'step', substr(latest.source_event_id, strpos(latest.source_event_id, ':') + 1), 'outcome', 'released'),
+        latest.source_event_id || ':released', true, clock_timestamp()
+      FROM (
+        SELECT DISTINCT ON (source_event_id) tenant_id, source_account_id, source_event_id, event_kind
+        FROM hawa.inbox_events
+        WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${OUTBOX_SEND_MARK_SOURCE}
+          AND split_part(source_event_id, ':', 1) = ANY(${commandIds}::text[])
+        ORDER BY source_event_id, received_at DESC, id DESC
+      ) latest
+      WHERE latest.event_kind ~ '^telegram_(document|notice|message)_(attempted|uncertain)$'
+      RETURNING source_event_id
+    `.execute(client);
+    return result.rows.map((r) => r.source_event_id);
+  }
+
+  /**
+   * Marks the claimed command delivered, only if the claim is still this holder's. The last error
+   * is cleared: a command delivered after a reclaim kept the LEASE_EXPIRED note, and read as failed.
+   */
+  async completeClaim(id: string, claimToken: string, trx?: Kysely<Database>) {
+    const client = trx || this.db;
+    return await client
+      .updateTable('outbox_commands')
+      .set({ state: 'delivered', delivered_at: new Date(), leased_until: null, last_error: null })
+      .where('id', '=', id)
+      .where('state', '=', 'leased')
+      .where('leased_until', '=', sql<Date>`${claimToken}::timestamptz`)
+      .returning(['id', 'state', 'attempts'])
+      .executeTakeFirst();
+  }
+
+  /**
+   * Records a failed attempt of the claimed command, only if the claim is still this holder's:
+   * 'permanent' and 'uncertain' end it (an uncertain send is never repeated automatically), 'retry'
+   * schedules the next attempt or dead-letters it at `maxAttempts`. Returns undefined when the claim
+   * was lost; whoever holds the command now decides.
+   */
+  async failClaim(
+    id: string,
+    claimToken: string,
+    error: string,
+    outcome: OutboxClaimFailure,
+    options: { attempts: number; maxAttempts?: number; backoffBaseSeconds?: number },
+    trx?: Kysely<Database>
+  ) {
+    const client = trx || this.db;
+    const attempts = options.attempts + 1;
+    const maxAttempts = options.maxAttempts ?? OUTBOX_MAX_ATTEMPTS;
+    const ends = outcome !== 'retry' || attempts >= maxAttempts;
+    const lastError = outcome === 'uncertain' && !error.startsWith(UNCERTAIN_PREFIX) ? `${UNCERTAIN_PREFIX} ${error}` : error;
+    const delaySeconds = ends ? 0 : outboxRetryDelaySeconds(attempts, options.backoffBaseSeconds ?? OUTBOX_BACKOFF_BASE_SECONDS);
+    return await client
+      .updateTable('outbox_commands')
+      .set({
+        state: ends ? 'failed' : 'pending',
+        attempts,
+        last_error: lastError,
+        leased_until: null,
+        ...(ends ? {} : { available_at: new Date(Date.now() + delaySeconds * 1000) }),
+      })
+      .where('id', '=', id)
+      .where('state', '=', 'leased')
+      .where('leased_until', '=', sql<Date>`${claimToken}::timestamptz`)
+      .returning(['id', 'state', 'attempts'])
+      .executeTakeFirst();
+  }
 
   async enqueue(
     paramsOrTenantId: EnqueueCommandParams | string,
@@ -104,28 +335,17 @@ export class OutboxRepository {
       .executeTakeFirst();
   }
 
+  /**
+   * The older name for `claimDue`, kept for its callers. It returned whole rows (`RETURNING *`,
+   * pictures included); it now returns the same narrow claims.
+   */
   async leasePending(limit: number = 10, leaseSeconds: number = 60, trx?: Kysely<Database>) {
     const client = trx || this.db;
     const now = new Date();
     const leaseUntil = new Date(now.getTime() + leaseSeconds * 1000);
 
     if (typeof (client as any).executeQuery === 'function') {
-      const result = await sql<any>`
-        WITH to_lease AS (
-          SELECT id FROM outbox_commands
-          WHERE ((state = 'pending') OR (state = 'leased' AND leased_until < ${now}))
-            AND (available_at IS NULL OR available_at <= ${now})
-          ORDER BY available_at ASC, created_at ASC
-          LIMIT ${limit}
-          FOR UPDATE SKIP LOCKED
-        )
-        UPDATE outbox_commands
-        SET state = 'leased', leased_until = ${leaseUntil}
-        WHERE id IN (SELECT id FROM to_lease)
-        RETURNING *
-      `.execute(client);
-
-      return result.rows || [];
+      return await this.claimDue(limit, leaseSeconds, OUTBOX_MAX_ATTEMPTS, client);
     }
 
     // Fallback for mock DB environments without executeQuery

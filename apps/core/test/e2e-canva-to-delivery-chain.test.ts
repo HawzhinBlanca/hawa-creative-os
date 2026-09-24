@@ -259,14 +259,15 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
       userId: operatorUserId,
       batchSize: 10,
       handlers: {
-        'notify.published': async (cmd, trx) => {
-          // Resolve task channel from DB under RLS
-          const taskInfo: any = await sql`
+        'notify.published': async (cmd, _db, scope) => {
+          // Resolve task channel from DB under RLS, in its own short transaction: a handler runs
+          // with no transaction open (outbox-consumer.ts).
+          const taskInfo: any = await scope.inTenant((trx) => sql`
             SELECT t.title, e.data
             FROM hawa.tasks t
             LEFT JOIN hawa.task_events e ON e.task_id = t.id AND e.event_type = 'task.created'
             WHERE t.id = ${taskId}::uuid LIMIT 1
-          `.execute(trx);
+          `.execute(trx));
 
           const eventPayload = taskInfo.rows[0]?.data?.payload || {};
           publishedChatId = eventPayload.sourceChannelId;
