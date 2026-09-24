@@ -52,9 +52,20 @@ COPY --from=builder --chown=hawa:hawa /app/packages ./packages
 COPY --from=builder --chown=hawa:hawa /app/apps/core ./apps/core
 COPY --from=builder --chown=hawa:hawa /app/package.json ./package.json
 
-RUN mkdir -p /usr/local/share/fonts/hawa && \
-    cp /app/packages/creative/assets/fonts/*.ttf /usr/local/share/fonts/hawa/ 2>/dev/null || true && \
-    fc-cache -f /usr/local/share/fonts/hawa /app/packages/creative/assets/fonts || true
+# No second copy of the fonts under /usr/local/share/fonts: the renderer generates its own fontconfig
+# file at run time (packages/creative/src/studio/font-environment.ts) listing only the repo's font
+# folder and the Verdana files render-fonts.json names, so rsvg draws exactly the files fontkit
+# measures. FONTCONFIG_FILE above lists the same set (the Verdana files are accepted by name and the
+# rest of the system folders rejected), for fc-* tools and anything else that rasterises without the
+# renderer's environment. fonts-dejavu-core stays installed for other tools only: the symbols copy may
+# contain (☎ ✉ ➤ …) come from the committed HawaSymbols faces. Fail the build if a pinned Inter face
+# is missing or variable again (a variable Inter was drawn ~7% narrower than measured), or the symbol
+# faces are missing.
+RUN test -f /app/packages/creative/assets/fonts/Inter-Regular.ttf \
+    && test -f /app/packages/creative/assets/fonts/Inter-Bold.ttf \
+    && test -f /app/packages/creative/assets/fonts/HawaSymbols-Regular.ttf \
+    && test -f /app/packages/creative/assets/fonts/HawaSymbols-Bold.ttf \
+    && ! fc-query -f '%{variable}\n' /app/packages/creative/assets/fonts/Inter-*.ttf | grep -q True
 
 USER hawa
 WORKDIR /app/apps/core

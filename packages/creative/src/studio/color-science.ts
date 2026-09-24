@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { PNG } from 'pngjs';
 import type { Hex } from './layout-v2.js';
 import { sniffImageType } from './image-type.js';
+import { defaultFontsDir, pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
 export interface LabColor {
   L: number;
@@ -191,6 +192,8 @@ function decodeToThumbnail(imageBuffer: Buffer, mimeType: string): { width: numb
   try {
     const res = spawnSync(rsvgPath, ['-w', '128', '-h', '160', '-f', 'png'], {
       input: svg,
+      // No text is drawn here; the pinned environment is for consistency with every other call.
+      env: rasteriserEnv(pinnedFontconfigFile(defaultFontsDir())),
       maxBuffer: 16 * 1024 * 1024,
       timeout: 10000,
     });

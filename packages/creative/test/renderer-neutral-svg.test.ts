@@ -294,7 +294,9 @@ describe('the font check: rendered ink width against fontkit', () => {
   it('marks the family a stand-in in the fidelity probe when the file beside the renderer is another face', () => {
     // A fonts folder whose NotoSansArabic-Regular.ttf is really Amiri: fontkit measures Amiri, while
     // the rasteriser still draws Noto Sans Arabic from the real folder. Before this check the probe
-    // compared the render only with a family that cannot exist, and called this exact.
+    // compared the render only with a family that cannot exist, and called this exact. The folder's
+    // own fonts.conf is named explicitly: the renderer's default is now a generated file listing only
+    // the folder itself, where this mismatch cannot arise.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-font-ink-'));
     try {
       fs.copyFileSync(path.join(FONTS, 'Amiri-Regular.ttf'), path.join(dir, 'NotoSansArabic-Regular.ttf'));
@@ -302,16 +304,16 @@ describe('the font check: rendered ink width against fontkit', () => {
         path.join(dir, 'fonts.conf'),
         `<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n<fontconfig>\n  <dir>${FONTS}</dir>\n  <dir>/usr/share/fonts</dir>\n  <dir>/System/Library/Fonts</dir>\n  <dir>/System/Library/Fonts/Supplemental</dir>\n  <cachedir>${path.join(dir, 'cache')}</cachedir>\n</fontconfig>\n`
       );
-      expect(probeFontFidelity('Noto Sans Arabic', { fontsDir: dir })).toBe('stand-in');
+      expect(probeFontFidelity('Noto Sans Arabic', { fontsDir: dir, fontconfigFile: path.join(dir, 'fonts.conf') })).toBe('stand-in');
       expect(probeFontFidelity('IBM Plex Sans Arabic', { fontsDir: FONTS })).toBe('exact');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  // pango on macOS draws through CoreText and never reads FONTCONFIG_FILE, so a fontconfig swap
-  // cannot reach the Mac's rasteriser; on Linux (the production image) it is exactly the trap.
-  it.skipIf(process.platform === 'darwin')('fails when fontconfig points the family at a different file', () => {
+  // Skipped on the Macs until pango was put on its fontconfig backend (PANGOCAIRO_BACKEND=fc): on
+  // CoreText it never read FONTCONFIG_FILE, so a fontconfig swap could not reach the rasteriser.
+  it('fails when fontconfig points the family at a different file', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-font-swap-'));
     try {
       fs.copyFileSync(path.join(FONTS, 'Amiri-Regular.ttf'), path.join(dir, 'Amiri-Regular.ttf'));

@@ -21,6 +21,7 @@ import {
   type PhotoFragment,
 } from './photo-treatments.js';
 import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
+import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
 export { PNG };
 
@@ -141,12 +142,17 @@ function resolveFontsDir(options?: RenderLayoutOptions): string {
   return path.resolve(process.cwd(), 'packages/creative/assets/fonts');
 }
 
+/**
+ * The fontconfig file every rasterisation uses: the caller's, or one generated to list only the
+ * fonts folder and the registry's system files (font-environment.ts). The committed fonts.conf used
+ * to be the default, and it listed the system folders too, so a face installed on the host could be
+ * drawn in place of the file fontkit measures with.
+ */
 function resolveFontconfigFile(options?: RenderLayoutOptions): string {
   if (options?.fontconfigFile && fs.existsSync(options.fontconfigFile)) {
     return path.resolve(options.fontconfigFile);
   }
-  const fontsDir = resolveFontsDir(options);
-  return path.resolve(fontsDir, 'fonts.conf');
+  return pinnedFontconfigFile(resolveFontsDir(options));
 }
 
 const substitutionWarned = new Set<string>();
@@ -181,10 +187,7 @@ export function assertFontResolves(fontFamily: string, fontconfigFile: string): 
 
   try {
     const res = spawnSync('fc-match', ['-f', '%{family}', fontFamily], {
-      env: {
-        ...process.env,
-        FONTCONFIG_FILE: fontconfigFile,
-      },
+      env: rasteriserEnv(fontconfigFile),
       encoding: 'utf-8',
       timeout: 5000,
     });
@@ -243,55 +246,6 @@ export const ADMITTED_FONT_FAMILIES = [
 /** A family name no font can carry, used as the substitution sentinel. */
 const FONT_PROBE_SENTINEL = 'ZZHawaNoSuchFamilyZZ';
 
-const fidelityCache = new Map<string, 'exact' | 'stand-in'>();
-
-function probeSvg(family: string): string {
-  return (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="120">' +
-    '<rect width="900" height="120" fill="#ffffff"/>' +
-    `<text x="20" y="80" font-family="${family}" font-size="60" fill="#000000">Handgloves 0123</text>` +
-    '</svg>'
-  );
-}
-
-/**
- * Whether the rasteriser draws a family at all: rasterise a probe in the requested family and in a
- * family that cannot exist. Identical bytes mean it silently substituted a fallback face.
- *
- * fc-match is not a valid check here. On a Homebrew/macOS host fc-match resolves 'Cinzel' and
- * 'Playfair Display' from the bundled fontconfig while rsvg-convert still renders Helvetica, so a
- * name-resolution guard passes while every heading in the output is the wrong typeface.
- *
- * This answers only "is it substituted"; `probeFontFidelity` adds "is it the file we measure with".
- * The renderer's choice of a fallback family reads this one, so adding the ink check changed what
- * the fidelity map reports and not which family a block is drawn in.
- */
-function probeFontSubstitution(family: string, options?: RenderLayoutOptions): 'exact' | 'stand-in' {
-  const rsvg = resolveRsvgConvert(options);
-  const fontconfigFile = resolveFontconfigFile(options);
-  const key = `${rsvg}|${fontconfigFile}|${family}`;
-  const cached = fidelityCache.get(key);
-  if (cached) return cached;
-
-  const render = (fam: string): Buffer | null => rasteriseProbe(probeSvg(fam), rsvg, fontconfigFile);
-
-  const sentinelKey = `${rsvg}|${fontconfigFile}|__sentinel__`;
-  let sentinelHash = fidelityCache.get(sentinelKey) as unknown as string | undefined;
-  if (!sentinelHash) {
-    const png = render(FONT_PROBE_SENTINEL);
-    if (!png) return 'exact'; // probe unavailable; do not fabricate a failure
-    sentinelHash = createHash('sha256').update(png).digest('hex');
-    fidelityCache.set(sentinelKey, sentinelHash as any);
-  }
-
-  const png = render(family);
-  if (!png) return 'exact';
-  const hash = createHash('sha256').update(png).digest('hex');
-  const verdict: 'exact' | 'stand-in' = hash === sentinelHash ? 'stand-in' : 'exact';
-  fidelityCache.set(key, verdict);
-  return verdict;
-}
-
 /** Rasterises a probe SVG at its own size, or null when the rasteriser is unavailable or fails. */
 function rasteriseProbe(svg: string, rsvg: string, fontconfigFile: string): Buffer | null {
   let tempDir: string | null = null;
@@ -300,7 +254,7 @@ function rasteriseProbe(svg: string, rsvg: string, fontconfigFile: string): Buff
     const file = path.join(tempDir, 'probe.svg');
     fs.writeFileSync(file, svg, { mode: 0o600 });
     const res = spawnSync(rsvg, ['-f', 'png', file], {
-      env: { ...process.env, FONTCONFIG_FILE: fontconfigFile },
+      env: rasteriserEnv(fontconfigFile),
       maxBuffer: 16 * 1024 * 1024,
       timeout: 20000,
     });
@@ -319,32 +273,58 @@ function rasteriseProbe(svg: string, rsvg: string, fontconfigFile: string): Buff
   }
 }
 
-/** The samples the ink check draws: Kurdish for a face that covers it, otherwise Latin. */
+/** The samples the ink check draws, one per script the pipeline sets. */
 export const FONT_INK_SAMPLES = {
   arabic: 'کوردستان ڕێکخراوی ئەندازیاران ٢٠٢٦',
   latin: 'Handgloves Quality 2026',
 } as const;
+export type FontProbeScript = keyof typeof FONT_INK_SAMPLES;
+/**
+ * Drawn when a face lacks part of the script's own sample: Cairo has no glyph for the Sorani letters
+ * ڕ ڵ ۆ ێ ە, so its Kurdish would be partly drawn by another face, while its Arabic letters can still
+ * be checked against its own file.
+ */
+export const FONT_INK_BASIC_SAMPLES: Partial<Record<FontProbeScript, string>> = {
+  arabic: 'نقابة المهندسين في كوردستان ٢٠٢٦',
+};
+export const FONT_PROBE_SCRIPTS: readonly FontProbeScript[] = ['latin', 'arabic'];
 /** How far the drawn ink may be from fontkit's before the face is called a different one. */
 export const FONT_INK_TOLERANCE = 0.02;
+/**
+ * The tolerance when the probe is byte-identical to the sentinel, i.e. when the family is also the
+ * face the rasteriser falls back to. In the image, fontconfig's fallback for a family that does not
+ * exist is Vazirmatn, so Vazirmatn's probes equal the sentinel's and the byte test alone called it a
+ * stand-in, while its Kurdish ink was 834 px against fontkit's 834.1. Identical bytes then only say
+ * "this is the fallback face"; the ink says whether that face is the file, and it has to match closely.
+ */
+export const FONT_INK_SENTINEL_TOLERANCE = 0.005;
 const FONT_INK_SIZE = 60;
 
 export interface FontInkCheck {
   family: string;
   /** The file the pipeline measures this family with (`fontFileFor`), or the one the caller named. */
   fontFile: string;
+  /** The script whose sample was drawn; '' when nothing was. */
+  script: FontProbeScript | '';
+  sizePx: number;
   sample: string;
-  /** False when nothing could be measured: no rasteriser, no file, or a face that draws neither sample. */
+  /** False when nothing could be measured: no rasteriser, no file, or a face that draws no sample. */
   measured: boolean;
+  /** Why nothing was measured: 'uncovered' when the file has no glyph for some of the sample. */
+  unmeasuredReason?: 'unopenable' | 'uncovered' | 'no-rasteriser' | 'no-ink';
   ok: boolean;
   renderedInkPx: number;
   expectedInkPx: number;
   expectedAdvancePx: number;
   /** (rendered - expected) / expected. */
   deviation: number;
+  /** The drawn probe is byte-identical to the same sample in a family that cannot exist. */
+  sameAsSentinel: boolean;
   message: string;
 }
 
 const inkCheckCache = new Map<string, FontInkCheck>();
+const sentinelHashCache = new Map<string, string | null>();
 
 /** The part of a fontkit font the ink check reads. */
 interface InkFont {
@@ -353,41 +333,68 @@ interface InkFont {
 }
 
 /**
+ * The probe canvas for a sample at a size: the same for every family, so one sentinel rasterisation
+ * serves them all. Twice the widest run the sample could plausibly make (an em per character) plus a
+ * margin, with the run centred, so the ink lands inside it whichever way the rasteriser decides the
+ * paragraph runs.
+ */
+function inkProbeCanvasWidth(sample: string, sizePx: number): number {
+  return Math.ceil(Array.from(sample).length * sizePx * 2 + 200);
+}
+
+function inkProbeSvg(family: string, sample: string, sizePx: number): string {
+  const width = inkProbeCanvasWidth(sample, sizePx);
+  const height = Math.ceil(sizePx * 2);
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+    `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
+    `<text x="${width / 2}" y="${(sizePx * 1.3).toFixed(1)}" font-family="${escapeXml(family)}" font-size="${sizePx}" text-anchor="middle" fill="#000000">${escapeXml(sample)}</text>` +
+    `</svg>`
+  );
+}
+
+/**
  * Draws a sample string with rsvg-convert and compares the width of its ink with the width fontkit
  * computes for the same string in the file the pipeline measures with.
  *
  * The substitution probe cannot see a rasteriser that draws the right family from the wrong file.
- * The Macs do exactly that: pango draws through CoreText, which finds a different Noto Sans Arabic
- * in ~/Library/Fonts (283 px of ink against 302 px for one sample), while fc-match, FONTCONFIG_FILE
- * and the byte-identity probe all point at the file in packages/creative/assets/fonts. Wrapping and
- * centring are then computed with one face and drawn with another.
+ * The Macs did exactly that: pango drew through CoreText, which found a different Noto Sans Arabic
+ * in ~/Library/Fonts (283 px of ink against 302 px for one sample). The renderer now pins its fonts
+ * (font-environment.ts); this check is what proves the pin holds on a host.
  *
  * Compared: the width of the drawn ink against the ink width of fontkit's laid-out run (its glyph
  * bounding box at the advances fontkit computed), so side bearings do not count against the face.
- * The advance is reported beside it.
+ * The advance is reported beside it. `script` picks the sample (by default Kurdish when the face
+ * covers it, otherwise Latin); `sizePx` the size, because a variable face can be drawn at a different
+ * optical size at each one (Inter was 7% narrower at 60 px than fontkit measured).
  */
 export function probeFontInkWidth(
   family: string,
-  options: RenderLayoutOptions & { fontFile?: string } = {}
+  options: RenderLayoutOptions & { fontFile?: string; script?: FontProbeScript; sizePx?: number } = {}
 ): FontInkCheck {
   const rsvg = resolveRsvgConvert(options);
   const fontconfigFile = resolveFontconfigFile(options);
   const fontsDir = resolveFontsDir(options);
   const fontFile = options.fontFile || fontFileFor(family, false, false, fontsDir);
-  const key = `${rsvg}|${fontconfigFile}|${family}|${fontFile}`;
+  const sizePx = options.sizePx ?? FONT_INK_SIZE;
+  const key = `${rsvg}|${fontconfigFile}|${family}|${fontFile}|${options.script ?? ''}|${sizePx}`;
   const cached = inkCheckCache.get(key);
   if (cached) return cached;
 
-  const unmeasured = (why: string, sample = ''): FontInkCheck => ({
+  const unmeasured = (reason: NonNullable<FontInkCheck['unmeasuredReason']>, why: string, sample = '', script: FontProbeScript | '' = ''): FontInkCheck => ({
     family,
     fontFile,
+    script,
+    sizePx,
     sample,
     measured: false,
+    unmeasuredReason: reason,
     ok: true,
     renderedInkPx: 0,
     expectedInkPx: 0,
     expectedAdvancePx: 0,
     deviation: 0,
+    sameAsSentinel: false,
     message: `FONT_INK_UNMEASURED: '${family}' (${fontFile}): ${why}`,
   });
 
@@ -395,7 +402,7 @@ export function probeFontInkWidth(
   try {
     font = fk.openSync(fontFile) as unknown as InkFont;
   } catch {
-    return unmeasured('the file cannot be opened');
+    return unmeasured('unopenable', 'the file cannot be opened');
   }
   const covers = (text: string) => {
     try {
@@ -404,28 +411,34 @@ export function probeFontInkWidth(
       return false;
     }
   };
-  const sample = covers(FONT_INK_SAMPLES.arabic)
-    ? FONT_INK_SAMPLES.arabic
-    : covers(FONT_INK_SAMPLES.latin)
-      ? FONT_INK_SAMPLES.latin
-      : '';
-  if (!sample) return unmeasured('the face draws neither sample');
+  const sampleFor = (s: FontProbeScript) =>
+    [FONT_INK_SAMPLES[s], FONT_INK_BASIC_SAMPLES[s]].find((text): text is string => !!text && covers(text));
+  const script: FontProbeScript | '' = options.script
+    ? sampleFor(options.script) ? options.script : ''
+    : sampleFor('arabic') ? 'arabic' : sampleFor('latin') ? 'latin' : '';
+  if (!script) {
+    const which = options.script ? `the ${options.script} samples` : 'any sample';
+    const check = unmeasured('uncovered', `the face does not draw ${which}`);
+    inkCheckCache.set(key, check);
+    return check;
+  }
+  const sample = sampleFor(script) as string;
 
   const run = font.layout(sample);
-  const scale = FONT_INK_SIZE / font.unitsPerEm;
+  const scale = sizePx / font.unitsPerEm;
   const expectedAdvancePx = run.advanceWidth * scale;
   const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
-  // Centred on a canvas twice the run's width, so the ink lands inside it whichever way the
-  // rasteriser decides the paragraph runs.
-  const width = Math.ceil(expectedAdvancePx * 2 + 200);
-  const height = FONT_INK_SIZE * 2;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
-    `<rect width="${width}" height="${height}" fill="#ffffff"/>` +
-    `<text x="${width / 2}" y="${FONT_INK_SIZE * 1.3}" font-family="${escapeXml(family)}" font-size="${FONT_INK_SIZE}" text-anchor="middle" fill="#000000">${escapeXml(sample)}</text>` +
-    `</svg>`;
-  const png = rasteriseProbe(svg, rsvg, fontconfigFile);
-  if (!png) return unmeasured('the rasteriser is unavailable', sample);
+  const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx), rsvg, fontconfigFile);
+  if (!png) return unmeasured('no-rasteriser', 'the rasteriser is unavailable', sample, script);
+
+  // The same sample, canvas and size in a family that cannot exist: what the fallback face draws.
+  // The canvas depends only on the sample and the size, so every family shares this rasterisation.
+  const sentinelKey = `${rsvg}|${fontconfigFile}|${sizePx}|${sample}`;
+  if (!sentinelHashCache.has(sentinelKey)) {
+    const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx), rsvg, fontconfigFile);
+    sentinelHashCache.set(sentinelKey, sentinel ? createHash('sha256').update(sentinel).digest('hex') : null);
+  }
+  const sameAsSentinel = sentinelHashCache.get(sentinelKey) === createHash('sha256').update(png).digest('hex');
 
   const img = PNG.sync.read(png);
   let left = Infinity;
@@ -438,21 +451,25 @@ export function probeFontInkWidth(
       }
     }
   }
-  if (right < left) return unmeasured('the rasteriser drew no ink', sample);
+  if (right < left) return unmeasured('no-ink', 'the rasteriser drew no ink', sample, script);
 
   const renderedInkPx = right - left + 1;
   const deviation = (renderedInkPx - expectedInkPx) / expectedInkPx;
-  const ok = Math.abs(deviation) <= FONT_INK_TOLERANCE;
+  const tolerance = sameAsSentinel ? FONT_INK_SENTINEL_TOLERANCE : FONT_INK_TOLERANCE;
+  const ok = Math.abs(deviation) <= tolerance;
   const pct = (Math.abs(deviation) * 100).toFixed(1);
+  const fallbackNote = sameAsSentinel ? ' It is also the face drawn for a family that does not exist.' : '';
   const message = ok
-    ? `FONT_INK_OK: '${family}' drew ${renderedInkPx}px of ink, fontkit measures ${expectedInkPx.toFixed(1)}px with ${fontFile} (${pct}% apart)`
-    : `FONT_INK_MISMATCH: '${family}': ${rsvg} drew ${renderedInkPx}px of ink for "${sample}" at ${FONT_INK_SIZE}px, ` +
+    ? `FONT_INK_OK: '${family}' drew ${renderedInkPx}px of ${script} ink at ${sizePx}px, fontkit measures ${expectedInkPx.toFixed(1)}px with ${fontFile} (${pct}% apart)`
+    : `FONT_INK_MISMATCH: '${family}': ${rsvg} drew ${renderedInkPx}px of ink for "${sample}" at ${sizePx}px, ` +
       `while fontkit measures ${expectedInkPx.toFixed(1)}px (advance ${expectedAdvancePx.toFixed(1)}px) with ${fontFile}: ` +
-      `${pct}% apart, over the ${FONT_INK_TOLERANCE * 100}% tolerance. The rasteriser is drawing a different face from ` +
+      `${pct}% apart, over the ${tolerance * 100}% tolerance.${fallbackNote} The rasteriser is drawing a different face from ` +
       `the file the pipeline wraps and measures with (FONTCONFIG_FILE ${fontconfigFile}).`;
   const check: FontInkCheck = {
     family,
     fontFile,
+    script,
+    sizePx,
     sample,
     measured: true,
     ok,
@@ -460,6 +477,7 @@ export function probeFontInkWidth(
     expectedInkPx,
     expectedAdvancePx,
     deviation,
+    sameAsSentinel,
     message,
   };
   inkCheckCache.set(key, check);
@@ -469,7 +487,7 @@ export function probeFontInkWidth(
 /** probeFontInkWidth that throws its message when the rasteriser draws a different face. */
 export function assertFontInkWidth(
   family: string,
-  options: RenderLayoutOptions & { fontFile?: string } = {}
+  options: RenderLayoutOptions & { fontFile?: string; script?: FontProbeScript; sizePx?: number } = {}
 ): FontInkCheck {
   const check = probeFontInkWidth(family, options);
   if (check.measured && !check.ok) {
@@ -478,26 +496,92 @@ export function assertFontInkWidth(
   return check;
 }
 
+/**
+ * What one script of a family is drawn with:
+ * - exact: the ink matches the file the pipeline measures with;
+ * - stand-in: another face is drawn; `substituted` when it is the rasteriser's fallback face
+ *   (byte-identical to a family that does not exist), otherwise a same-named face from another file;
+ * - uncovered: the file has no glyphs for the script, so there is nothing to compare;
+ * - unmeasured: no rasteriser, or it drew nothing.
+ */
+export interface FontScriptFidelity {
+  verdict: 'exact' | 'stand-in' | 'uncovered' | 'unmeasured';
+  substituted: boolean;
+  ink: FontInkCheck;
+}
+
+/**
+ * Fidelity per script: each script is judged by what the rasteriser draws for it.
+ *
+ * The old probe drew one Latin string and called the family a stand-in when its bytes equalled a
+ * family that cannot exist. That judged a Kurdish face by its Latin, and it could not tell "this
+ * family is missing" from "this family is the fallback face": in the image both of Vazirmatn's
+ * probes equal the sentinel's because Vazirmatn is what fontconfig falls back to.
+ */
+export function probeFontScripts(
+  family: string,
+  options: RenderLayoutOptions = {}
+): Record<FontProbeScript, FontScriptFidelity> {
+  const out = {} as Record<FontProbeScript, FontScriptFidelity>;
+  for (const script of FONT_PROBE_SCRIPTS) {
+    const ink = probeFontInkWidth(family, { ...options, script });
+    const verdict: FontScriptFidelity['verdict'] = !ink.measured
+      ? ink.unmeasuredReason === 'uncovered' ? 'uncovered' : 'unmeasured'
+      : ink.ok ? 'exact' : 'stand-in';
+    out[script] = { verdict, substituted: verdict === 'stand-in' && ink.sameAsSentinel, ink };
+  }
+  return out;
+}
+
+/** The script a family is set in: the registry's word for it, otherwise judged from its name. */
+export function fontFamilyScript(family: string): FontProbeScript {
+  try {
+    const families = (loadRenderFontRegistry().families || {}) as Record<string, { name?: string; script?: string }>;
+    const declared =
+      families[family] || Object.values(families).find((f) => String(f?.name).toLowerCase() === family.toLowerCase());
+    if (declared?.script === 'arabic' || declared?.script === 'latin') return declared.script;
+  } catch {
+    // no registry: fall through to the name
+  }
+  return ARABIC_SCRIPT_FAMILIES.has(family) || /arabic/i.test(family) ? 'arabic' : 'latin';
+}
+
+/**
+ * Whether the rasteriser draws its fallback face instead of this family for text in `script` (by
+ * default the family's own script). The renderer's choice of a fallback family reads this, so a
+ * family only counts as missing for the script a block is actually set in.
+ *
+ * fc-match is not a valid check here. On a Homebrew/macOS host fc-match resolves 'Cinzel' and
+ * 'Playfair Display' from the bundled fontconfig while rsvg-convert, on pango's CoreText backend,
+ * rendered Helvetica, so a name-resolution guard passed while every heading was the wrong typeface.
+ */
+function probeFontSubstitution(
+  family: string,
+  options?: RenderLayoutOptions,
+  script: FontProbeScript = fontFamilyScript(family)
+): 'exact' | 'stand-in' {
+  return probeFontScripts(family, options ?? {})[script].substituted ? 'stand-in' : 'exact';
+}
+
 const inkMismatchWarned = new Set<string>();
 
 /**
- * Measures font fidelity the way the renderer actually resolves fonts. 'stand-in' when either the
- * rasteriser substitutes the family (`probeFontSubstitution`), or it draws the family from a
- * different face than the file the pipeline measures with, by more than 2% of ink width
- * (`probeFontInkWidth`, the Mac's Noto Sans Arabic trap). The mismatch is warned once, naming the
- * file and both widths.
+ * Font fidelity the way the renderer actually resolves fonts, judged on the family's own script
+ * (`fontFamilyScript`): 'stand-in' when the rasteriser draws that script from another face than the
+ * file the pipeline measures with, whether its fallback (`probeFontScripts`) or a same-named face from
+ * another file (the Mac's Noto Sans Arabic trap). The mismatch is warned once, naming the file and
+ * both widths. `probeFontScripts` has the verdict for every script.
  */
 export function probeFontFidelity(
   family: string,
   options?: RenderLayoutOptions
 ): 'exact' | 'stand-in' {
-  if (probeFontSubstitution(family, options) === 'stand-in') return 'stand-in';
-  const ink = probeFontInkWidth(family, options ?? {});
-  if (!ink.measured || ink.ok) return 'exact';
-  const key = `${ink.fontFile}|${family}|${resolveFontconfigFile(options)}`;
+  const result = probeFontScripts(family, options ?? {})[fontFamilyScript(family)];
+  if (result.verdict !== 'stand-in') return 'exact';
+  const key = `${result.ink.fontFile}|${family}|${resolveFontconfigFile(options)}`;
   if (!inkMismatchWarned.has(key)) {
     inkMismatchWarned.add(key);
-    console.warn(`[render-layout-v2] ${ink.message}`);
+    console.warn(`[render-layout-v2] ${result.ink.message}`);
   }
   return 'stand-in';
 }
@@ -514,6 +598,18 @@ export function getFontFidelityManifest(
   const out: Record<string, 'exact' | 'stand-in'> = {};
   for (const family of ADMITTED_FONT_FAMILIES) {
     out[family] = probeFontFidelity(family, options);
+  }
+  return out;
+}
+
+/** Every admitted family's verdict per script, for reports that need to say which script moved. */
+export function getFontFidelityByScript(
+  options?: RenderLayoutOptions
+): Record<string, Record<FontProbeScript, FontScriptFidelity['verdict']>> {
+  const out: Record<string, Record<FontProbeScript, FontScriptFidelity['verdict']>> = {};
+  for (const family of ADMITTED_FONT_FAMILIES) {
+    const scripts = probeFontScripts(family, options ?? {});
+    out[family] = { latin: scripts.latin.verdict, arabic: scripts.arabic.verdict };
   }
   return out;
 }
@@ -1365,16 +1461,18 @@ function renderTextElementToSvg(
     tspans.push(`<tspan x="${textX}" y="${lineY.toFixed(1)}"${fill}>${lineText(lines[i])}</tspan>`);
   }
 
-  // A family this renderer cannot draw must not be handed to the rasteriser to guess at. Vazirmatn
-  // is the live case: it has the glyphs, fontconfig resolves it, and pango still draws something
-  // else — so the client's Kurdish text rendered in whatever face happened to win, differing by
-  // host. Substituting a declared face instead makes the outcome deterministic and inspectable,
-  // and the fontFidelity map still reports that the requested family was not used.
+  // A family this renderer cannot draw must not be handed to the rasteriser to guess at: drawing
+  // the fallback face in its place differed by host. Substituting a declared face instead makes the
+  // outcome deterministic and inspectable, and the fontFidelity map still reports that the requested
+  // family was not used. The family is judged for the script this block is set in: Vazirmatn used to
+  // be replaced here because its Latin probe matched the fallback's, while its Kurdish, which is what
+  // a Vazirmatn block carries, was drawn from its own file (it *is* the image's fallback face).
+  const blockScript: FontProbeScript = t.rtl || /[\u0600-\u06FF]/.test(copyText) ? 'arabic' : 'latin';
   let drawFamily = t.fontFamily;
-  if (probeFontSubstitution(t.fontFamily, { fontsDir }) === 'stand-in') {
+  if (probeFontSubstitution(t.fontFamily, { fontsDir }, blockScript) === 'stand-in') {
     const fallback =
       t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
-    if (probeFontSubstitution(fallback, { fontsDir }) === 'exact') {
+    if (probeFontSubstitution(fallback, { fontsDir }, blockScript) === 'exact') {
       drawFamily = fallback;
     }
   }
@@ -1517,7 +1615,7 @@ function prescaledLogoHref(href: string, box: Box, options?: RenderLayoutOptions
     fs.writeFileSync(svgFile, job.svg, { mode: 0o600 });
     fs.writeFileSync(path.join(tempDir, job.file), job.bytes, { mode: 0o600 });
     const res = spawnSync(resolveRsvgConvert(options), ['-w', String(job.width), '-h', String(job.height), '-f', 'png', svgFile], {
-      env: { ...process.env, FONTCONFIG_FILE: resolveFontconfigFile(options) },
+      env: rasteriserEnv(resolveFontconfigFile(options)),
       maxBuffer: 64 * 1024 * 1024,
       timeout: 20000,
     });
@@ -1791,10 +1889,7 @@ function svgToPng(
       rsvgBinary,
       ['-w', String(width), '-h', String(height), '-f', 'png', svgFile],
       {
-        env: {
-          ...process.env,
-          FONTCONFIG_FILE: fontconfigFile,
-        },
+        env: rasteriserEnv(fontconfigFile),
         maxBuffer: 64 * 1024 * 1024,
         timeout: 20000,
       }
@@ -1865,7 +1960,7 @@ export async function svgToPngAsync(
       execFile(
         rsvgBinary,
         ['-w', String(width), '-h', String(height), '-f', 'png', svgFile],
-        { env: { ...process.env, FONTCONFIG_FILE: fontconfigFile }, maxBuffer: 64 * 1024 * 1024, timeout: 20000, encoding: 'buffer' },
+        { env: rasteriserEnv(fontconfigFile), maxBuffer: 64 * 1024 * 1024, timeout: 20000, encoding: 'buffer' },
         (error, stdout, stderr) => {
           if (error || !stdout || stdout.length < 100) {
             const detail = stderr && stderr.length ? stderr.toString('utf-8') : error?.message || 'Unknown error';

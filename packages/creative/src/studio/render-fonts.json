@@ -33,8 +33,14 @@
       "systemPaths": [
         "/System/Library/Fonts/Supplemental/Verdana.ttf",
         "/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf"
-      ]
+        "/System/Library/Fonts/Supplemental/Verdana Italic.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana Bold Italic.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana_Bold.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana_Italic.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana_Bold_Italic.ttf"
+      ],
+      "systemPathsNote": "The only system files the renderer may draw (font-environment.ts links the ones present into its generated fontconfig; nothing else outside assets/fonts is visible to it). The same files fontFileFor measures Verdana with."
     },
     "Noto Sans Arabic": {
       "name": "Noto Sans Arabic",
@@ -130,8 +136,8 @@
       "script": "arabic",
       "roles": { "display": 4 },
       "admitted": false,
-      "admittedNote": "Its files draw all 32 characters of the client's Sorani copy, so coverage would admit it, but it does not render. Re-measured inside the core image on 2026-09-20 with the fonts mounted and fc-cache run, against both a Latin and a Sorani probe string: both rasterise byte-identical to the ZZHawaNoSuchFamilyZZ sentinel, i.e. fontconfig falls through to the default face and never reaches this family. That is not a probe artefact — the Sorani probe distinguishes the Latin families correctly, and the files themselves are sound (static, not variable; 1333 glyphs; 'Vazirmatn' Regular 400 / Bold 700 per fontkit). Cause not yet found. Offering it would put a substituted typeface in the preview that the critique and the judge score, so it stays out until it renders.",
-      "fidelity": "stand-in",
+      "admittedNote": "Its files draw all 32 characters of the client's Sorani copy, so coverage would admit it, but it does not render. Re-measured inside the core image on 2026-09-20 with the fonts mounted and fc-cache run, against both a Latin and a Sorani probe string: both rasterise byte-identical to the ZZHawaNoSuchFamilyZZ sentinel, i.e. fontconfig falls through to the default face and never reaches this family. That is not a probe artefact — the Sorani probe distinguishes the Latin families correctly, and the files themselves are sound (static, not variable; 1333 glyphs; 'Vazirmatn' Regular 400 / Bold 700 per fontkit). Cause not yet found. Offering it would put a substituted typeface in the preview that the critique and the judge score, so it stays out until it renders. Cause found 2026-09-24: Vazirmatn is the face fontconfig falls back to for a family that does not exist, so its probes equal the sentinel's by construction. Judged by ink per script it is exact in the core image and on the Macs (Kurdish 834 px drawn against 834.1 px measured, Latin 659 against 659.4). Admitting it is now a design decision, not a rendering one.",
+      "fidelity": "exact",
       "license": "OFL-1.1",
       "licensePath": "assets/fonts/OFL-Vazirmatn.txt",
       "files": {

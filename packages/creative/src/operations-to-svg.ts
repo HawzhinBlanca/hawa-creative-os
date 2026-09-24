@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { sniffImageType } from './studio/image-type.js';
+import { defaultFontsDir, pinnedFontconfigFile, rasteriserEnv } from './studio/font-environment.js';
 
 let cachedKaaeLogoDataUri: string | null = null;
 
@@ -196,8 +197,10 @@ export function renderOperationsToSvg(
 
 /** Local previews use one renderer; missing assets/fonts/rendering never become success. */
 function renderPreview(operations: StudioOperation[], width: number, height: number, format: 'png' | 'pdf'): Buffer {
-  const config = fileURLToPath(new URL('../assets/fonts/fonts.conf', import.meta.url));
-  if (!fs.existsSync(config)) throw new Error('Pinned preview font configuration is missing');
+  // The same pinned fonts as the studio renderer (font-environment.ts), not whatever the host has.
+  const fontsDir = defaultFontsDir();
+  if (!fs.existsSync(fontsDir)) throw new Error('Pinned preview fonts are missing');
+  const config = pinnedFontconfigFile(fontsDir);
   const svg = renderOperationsToSvg(operations, width, height);
   const temp = fs.mkdtempSync(path.join(tmpdir(), 'hawa-preview-'));
   try {
@@ -206,7 +209,7 @@ function renderPreview(operations: StudioOperation[], width: number, height: num
     // Use a private, complete SVG file as the renderer input.
     // Remove temporary source material on every success or failure path.
     const result = spawnSync('rsvg-convert', ['-w', String(width), '-h', String(height), '-f', format, source], {
-      env: { ...process.env, FONTCONFIG_FILE: config },
+      env: rasteriserEnv(config),
       maxBuffer: 32 * 1024 * 1024, timeout: 15000,
     });
     if (result.status !== 0 || !result.stdout || result.stdout.length < 100) {
