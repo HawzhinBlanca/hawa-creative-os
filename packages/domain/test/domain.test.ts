@@ -25,7 +25,7 @@ describe('Domain: TaskStateMachine', () => {
   });
 
   it('rejects illegal transitions', () => {
-    const sm = new TaskStateMachine('task-123', 'RECEIVED');
+    const sm = new TaskStateMachine('task-123', 'COMPLETE');
     const res = sm.transition('APPROVED', { type: 'user', id: 'u-1' }, 'Skipping workflow');
     expect(res.ok).toBe(false);
     if (!res.ok) {

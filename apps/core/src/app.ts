@@ -776,7 +776,7 @@ export function createApp(options?: CreateAppOptions) {
     try {
       broadcast(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from, to, version }));
     } catch (err) {
-      console.error(`[core:events] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
+      log.error(`[core:events] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
     }
   }
 

@@ -5,7 +5,7 @@ import { apiClient } from '../src/api/client.js';
 import { TASK_EVENTS, readTaskTransitioned } from '../src/services/eventStream.js';
 import { queueEntryChanged } from '../src/services/taskDetail.js';
 import { FILTER_GROUPS, approveButtonState, inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../src/services/taskStatus.js';
-import { TASK_API_STATUSES, TASK_DB_STATES, TASK_STATUS_LABELS, toApiTaskStatus } from '@hawa/contracts/task-status';
+import { APPROVABLE_TASK_STATUSES, TASK_API_STATUSES, TASK_DB_STATES, TASK_STATUS_LABELS, toApiTaskStatus } from '@hawa/contracts/task-status';
 import * as vocabularyDist from '@hawa/contracts/task-status';
 import * as vocabularySource from '../../../packages/contracts/src/task-status.js';
 
@@ -56,10 +56,10 @@ describe('the label and next step of every status Core reports', () => {
     }
   });
 
-  it('offers approval only for a draft awaiting approval, and never for a status it does not know', () => {
+  it('offers approval where a person may approve, never after a change is asked or once closed, and never for a status it does not know', () => {
     const ready = { hasRevision: true, qaPassed: true, busy: false };
-    expect(approveButtonState('AWAITING_APPROVAL', ready)).toBe('enabled');
-    for (const status of TASK_API_STATUSES.filter((s) => s !== 'AWAITING_APPROVAL')) expect(approveButtonState(status, ready), status).toBe('disabled');
+    for (const status of APPROVABLE_TASK_STATUSES) expect(approveButtonState(status, ready), status).toBe('enabled');
+    for (const status of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(approveButtonState(status, ready), status).toBe('disabled');
     for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', 'awaiting_approval', '', undefined, null]) {
       expect(taskStatusView(unknown).canApprove, String(unknown)).toBe(false);
       expect(taskStatusView(unknown).primaryButton, String(unknown)).toBe('none');

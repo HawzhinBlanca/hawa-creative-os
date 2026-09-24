@@ -89,7 +89,9 @@ describe('the legal moves', () => {
   });
 
   it('approval is possible only where the moves allow APPROVED; nothing leaves a terminal status', () => {
-    expect([...APPROVABLE_TASK_STATUSES]).toEqual(['AWAITING_APPROVAL']);
+    expect([...APPROVABLE_TASK_STATUSES]).not.toEqual(expect.arrayContaining(['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED']));
+    expect(APPROVABLE_TASK_STATUSES).toEqual(expect.arrayContaining(['AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'RECEIVED']));
+    for (const closed of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(APPROVABLE_TASK_STATUSES, closed).not.toContain(closed);
     for (const status of APPROVABLE_TASK_STATUSES) expect(TASK_TRANSITIONS[status], status).toContain('APPROVED');
     expect([...TERMINAL_TASK_STATUSES].sort()).toEqual(['CANCELLED', 'COMPLETE', 'REJECTED']);
   });

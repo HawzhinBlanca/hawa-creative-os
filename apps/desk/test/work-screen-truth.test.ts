@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, ApiError } from '../src/api/client.js';
 import { readQueuePage } from '../src/screens/WorkScreen.js';
 import { approveButtonState, inQueueFilter, queueFilterStatuses, searchFold, taskStatusView } from '../src/services/taskStatus.js';
-import { TASK_API_STATUSES } from '@hawa/contracts/task-status';
+import { APPROVABLE_TASK_STATUSES, TASK_API_STATUSES } from '@hawa/contracts/task-status';
 
 /**
  * Bug hunt (2026-09-24): what the Work screen tells an office member about a real request.
@@ -86,7 +86,7 @@ describe('the Approve button of the task on screen (WorkScreen approveState)', (
   const state = (status: unknown) =>
     lift<string>('approveState', {
       selectedTask: { id: 't', title: 't', status, latestRevisionId: 'r1', qaReport: { passed: true } },
-      actionLoading: false,
+      busy: false,
       approveButtonState,
     });
 
@@ -94,9 +94,11 @@ describe('the Approve button of the task on screen (WorkScreen approveState)', (
     for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', undefined]) expect(state(unknown), String(unknown)).toBe('hidden');
   });
 
-  it('is enabled only for a draft awaiting approval; every other status Core reports shows it disabled', () => {
-    expect(state('AWAITING_APPROVAL')).toBe('enabled');
-    for (const status of TASK_API_STATUSES.filter((s) => s !== 'AWAITING_APPROVAL')) expect(state(status), status).toBe('disabled');
+  it('is enabled where a person may approve (a Desk request or a hand-finished draft too), disabled once a change is asked, it is approved or it is closed', () => {
+    for (const status of APPROVABLE_TASK_STATUSES) expect(state(status), status).toBe('enabled');
+    for (const status of TASK_API_STATUSES.filter((s) => !APPROVABLE_TASK_STATUSES.includes(s))) expect(state(status), status).toBe('disabled');
+    expect(state('OPERATOR_REQUIRED')).toBe('enabled');
+    expect(state('RECEIVED')).toBe('enabled');
   });
 
   it('no status but RECEIVED reads as RECEIVED', () => {

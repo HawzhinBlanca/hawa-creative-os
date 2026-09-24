@@ -145,26 +145,26 @@ export function toApiTaskStatus(word: string): TaskApiStatus {
  *  - An answered question closes the paused task (PAUSED → CANCELLED, closeAnsweredQuestion).
  */
 export const TASK_TRANSITIONS: Readonly<Record<TaskApiStatus, readonly TaskApiStatus[]>> = {
-  RECEIVED: ['ROUTING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED'],
-  PROMOTION_PENDING: ['RECEIVED', 'REJECTED', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED'],
-  ROUTING: ['ROUTING_REVIEW', 'PAUSED', 'BRIEFING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED'],
-  ROUTING_REVIEW: ['ROUTING', 'PAUSED', 'BRIEFING', 'REJECTED', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED'],
-  BRIEFING: ['BRIEF_REVIEW', 'PLANNING', 'PAUSED', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL'],
-  BRIEF_REVIEW: ['PLANNING', 'PAUSED', 'OPERATOR_REQUIRED', 'REJECTED', 'AWAITING_APPROVAL'],
-  PLANNING: ['ASSET_GENERATION', 'COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED'],
-  ASSET_GENERATION: ['COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED'],
-  COMPOSING: ['QA', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED'],
-  QA: ['REPAIRING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED'],
-  REPAIRING: ['COMPOSING', 'QA', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED'],
+  RECEIVED: ['ROUTING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED', 'APPROVED'],
+  PROMOTION_PENDING: ['RECEIVED', 'REJECTED', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED', 'APPROVED'],
+  ROUTING: ['ROUTING_REVIEW', 'PAUSED', 'BRIEFING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'APPROVED'],
+  ROUTING_REVIEW: ['ROUTING', 'PAUSED', 'BRIEFING', 'REJECTED', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'APPROVED'],
+  BRIEFING: ['BRIEF_REVIEW', 'PLANNING', 'PAUSED', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'APPROVED'],
+  BRIEF_REVIEW: ['PLANNING', 'PAUSED', 'OPERATOR_REQUIRED', 'REJECTED', 'AWAITING_APPROVAL', 'APPROVED'],
+  PLANNING: ['ASSET_GENERATION', 'COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED', 'APPROVED'],
+  ASSET_GENERATION: ['COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED', 'APPROVED'],
+  COMPOSING: ['QA', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED', 'APPROVED'],
+  QA: ['REPAIRING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED', 'PAUSED', 'APPROVED'],
+  REPAIRING: ['COMPOSING', 'QA', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL', 'PAUSED', 'APPROVED'],
   AWAITING_APPROVAL: ['REVISION_REQUESTED', 'REJECTED', 'APPROVED', 'OPERATOR_REQUIRED'],
   REVISION_REQUESTED: ['PLANNING', 'COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL'],
   APPROVED: ['PUBLISHING', 'AWAITING_APPROVAL', 'REVISION_REQUESTED'],
   // Back to APPROVED when the delivery failed before any file reached Drive, so it can be retried.
   PUBLISHING: ['COMPLETE', 'PUBLISH_RECONCILIATION', 'OPERATOR_REQUIRED', 'APPROVED'],
-  PUBLISH_RECONCILIATION: ['COMPLETE', 'OPERATOR_REQUIRED'],
+  PUBLISH_RECONCILIATION: ['COMPLETE', 'OPERATOR_REQUIRED', 'APPROVED'],
   COMPLETE: [],
-  PAUSED: ['ROUTING', 'BRIEFING', 'REJECTED', 'CANCELLED'],
-  OPERATOR_REQUIRED: ['ROUTING', 'BRIEFING', 'PLANNING', 'COMPOSING', 'QA', 'AWAITING_APPROVAL', 'PUBLISHING', 'REJECTED', 'PAUSED'],
+  PAUSED: ['ROUTING', 'BRIEFING', 'REJECTED', 'CANCELLED', 'APPROVED'],
+  OPERATOR_REQUIRED: ['ROUTING', 'BRIEFING', 'PLANNING', 'COMPOSING', 'QA', 'AWAITING_APPROVAL', 'PUBLISHING', 'REJECTED', 'PAUSED', 'APPROVED'],
   REJECTED: [],
   CANCELLED: [],
 };
@@ -199,12 +199,18 @@ export const TASK_STATUS_LABELS: Readonly<Record<TaskApiStatus, string>> = {
 };
 
 /**
- * The statuses a person may approve a design in: a draft with a person (AWAITING_APPROVAL). The Desk
- * used to allow every status it had not listed as refused, including one it did not know.
- * PUBLISHING also moves to APPROVED, but that is Core putting back a delivery that failed before any
- * file reached Drive, not a person's approval.
+ * The statuses in which a person may approve a design, when the task has a captured revision whose
+ * critical QA passed (the Desk checks both; Core checks the QA run and pending changes again).
+ * Not only AWAITING_APPROVAL: a draft a designer finished by hand in Canva is captured while the task
+ * stays OPERATOR_REQUIRED, and a request typed into the Desk stays RECEIVED, because a capture moves
+ * only REVISION_REQUESTED on to review (recordCheckedExportQc). Refusing those would leave the office's
+ * manual path with no way to approve (lead's decision, 2026-09-24). Refused: a change is requested, the
+ * design is already approved or being delivered, or the task is closed. An unknown status is never
+ * approvable (isApprovableTaskStatus).
  */
-export const APPROVABLE_TASK_STATUSES: readonly TaskApiStatus[] = ['AWAITING_APPROVAL'];
+export const APPROVABLE_TASK_STATUSES: readonly TaskApiStatus[] = TASK_API_STATUSES.filter(
+  (s) => !(['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED'] as readonly string[]).includes(s)
+);
 
 /** The statuses nothing moves a task out of. */
 export const TERMINAL_TASK_STATUSES: readonly TaskApiStatus[] = TASK_API_STATUSES.filter((s) => TASK_TRANSITIONS[s].length === 0);
