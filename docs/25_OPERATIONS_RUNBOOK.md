@@ -62,7 +62,7 @@ Use fallback/reconciliation and track root cause.
 
 - Rotate together: Telegram bot token (BotFather), `TELEGRAM_WEBHOOK_SECRET`, `HAWA_ADMIN_KEY`, `HAWA_ART_DIRECTOR_KEY`, `HAWA_BEARER_TOKEN`, `HAWA_ACTION_HMAC_SECRET`, `WAHA_WEBHOOK_SECRET`. Update `infra/docker/.env.production`, then redeploy.
 - Canva token key: run `apps/core/src/tools/rotate-canva-token-key.ts` with `--dry-run`, then for real, then update `CANVA_TOKEN_ENCRYPTION_KEY` and redeploy.
-- Database roles: `ALTER ROLE hawa_owner PASSWORD …` and `ALTER ROLE hawa_app PASSWORD …`, then update `infra/docker/.env` (`POSTGRES_PASSWORD`, `DATABASE_URL`).
+- Database roles: the application's credential (`DATABASE_URL`, login roles `hawa_app_a`/`hawa_app_b` inheriting `hawa_app`) is rotated without downtime by `infra/ops/rotate_app_role.sh`; the sequence is in `infra/ops/README.md`. The owner role: `ALTER ROLE hawa_owner PASSWORD …`, then update `POSTGRES_PASSWORD` in `infra/docker/.env`.
 - Never keep a credential in a script, a test, a compose default or an audit document; `infra/security/security_scan.py` blocks commits that do.
 
 Rotation record: generated values go only into `infra/docker/.env.production`, `infra/docker/.env` and

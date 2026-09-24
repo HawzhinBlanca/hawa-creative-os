@@ -221,7 +221,9 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   it('runs the export path through the non-owner runtime database role',async()=>{
     await bind();const runtimeUrl=new URL(process.env.HAWA_ISOLATED_RUNTIME_DB || url!);
     if(!/^\/hawa_(repair|tr_)/.test(runtimeUrl.pathname))throw new Error('Disposable runtime database required');
-    runtimeUrl.username='hawa_app';if(!process.env.HAWA_ISOLATED_RUNTIME_DB)runtimeUrl.password=process.env.HAWA_APP_PASSWORD || new URL(process.env.TEST_DATABASE_URL!).password;const runtimeDb=createDb(runtimeUrl.href);
+    // HAWA_ISOLATED_RUNTIME_DB names its own login role (hawa_app, or hawa_app_a/_b after a rotation,
+    // infra/ops/README.md); only a URL derived from the owner's is switched to hawa_app here.
+    if(!process.env.HAWA_ISOLATED_RUNTIME_DB){runtimeUrl.username='hawa_app';runtimeUrl.password=process.env.HAWA_APP_PASSWORD || new URL(process.env.TEST_DATABASE_URL!).password;}const runtimeDb=createDb(runtimeUrl.href);
     try {
       const runtimeService=new CanvaConnectService(runtimeDb,options);
       expect((await runtimeService.status(scope)).authorized).toBe(true);
