@@ -6,7 +6,8 @@ import { log } from '../logging.js';
 
 /**
  * A task's outbox commands, and what an operator may do with one that failed (architecture programme
- * 1.3, group G5, moved from app.ts unchanged): list, redrive, the dead letters and retire.
+ * 1.3, group G5, moved from app.ts): list, redrive, the dead letters and retire. The outbox is only
+ * held in Postgres; there is no in-memory one for an app without a database any more.
  */
 export function registerOutboxRoutes(ctx: RouteContext): void {
   const {
@@ -14,7 +15,6 @@ export function registerOutboxRoutes(ctx: RouteContext): void {
     problem,
     db,
     outboxRepo,
-    inMemoryOutbox,
   } = ctx;
 
   // createApp's verifyRequestAuth fills in every field, with '' for a caller who is not signed in
@@ -27,9 +27,12 @@ export function registerOutboxRoutes(ctx: RouteContext): void {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const taskId = c.req.param('taskId');
+    // The outbox is only held in Postgres. Without it (or when it cannot be read) there is no list to
+    // give: an empty one would say nothing is queued for the task.
+    if (!db || !outboxRepo) return problem(c, 503, 'Database Unavailable', 'Outbox commands are only held in the database');
 
     let cmds: any[] = [];
-    if (db && outboxRepo && isValidUuid(taskId)) {
+    if (isValidUuid(taskId)) {
       try {
         cmds = await withRlsContext(
           db,
@@ -38,11 +41,8 @@ export function registerOutboxRoutes(ctx: RouteContext): void {
         );
       } catch (err) {
         log.error('[core:outbox:query] DB outbox query error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The outbox could not be read; try again');
       }
-    }
-
-    if (cmds.length === 0) {
-      cmds = inMemoryOutbox.get(taskId) || [];
     }
 
     const isUncertain = (cmd: any) => ((cmd.last_error || cmd.error_message) as string | undefined)?.startsWith('DELIVERY_UNCERTAIN:') || false;
@@ -115,74 +115,50 @@ export function registerOutboxRoutes(ctx: RouteContext): void {
     const body = await c.req.json().catch(() => ({}));
     const confirmUncertainReplay = Boolean(body?.confirmUncertainReplay);
 
-    if (db && outboxRepo && isValidUuid(commandId)) {
-      try {
-        const result = await withRlsContext(
-          db,
-          { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            const cmd = await outboxRepo.findById(auth.tenantId, commandId, trx);
-            if (!cmd) return { status: 404, error: 'Command Not Found' };
-            if (cmd.state !== 'failed') {
-              return { status: 409, error: `Command ${commandId} is in '${cmd.state}' state. Only failed commands can be redriven.` };
-            }
-            const lastErr = cmd.last_error || '';
-            if (lastErr.startsWith('DELIVERY_UNCERTAIN:') && !confirmUncertainReplay) {
-              return { status: 422, error: 'Uncertain delivery requires explicit confirmation to replay. Set confirmUncertainReplay: true.' };
-            }
-            const redriven = await outboxRepo.redrive(auth.tenantId, commandId, trx);
-            // Only a confirmed replay lets the worker make a send that may already have arrived again.
-            if (confirmUncertainReplay) await outboxRepo.releaseUncertainSends(auth.tenantId, [commandId], trx);
-            return { status: 200, data: redriven };
-          }
-        );
-
-        if (result.status === 404) return problem(c, 404, 'Command Not Found', result.error);
-        if (result.status === 409) return problem(c, 409, 'Command Not Failed', result.error);
-        if (result.status === 422) return problem(c, 422, 'Uncertain Delivery Requires Explicit Confirmation', result.error);
-        if (!result.data) return problem(c, 500, 'Redrive Failed', 'Failed to redrive outbox command');
-
-        return c.json({
-          redriven: true,
-          commandId: result.data.id,
-          state: result.data.state,
-          attempts: result.data.attempts,
-          confirmedUncertainReplay: confirmUncertainReplay,
-          message: 'Outbox command queued for redelivery',
-        });
-      } catch (err: any) {
-        log.error('[core:outbox:redrive] DB error:', err);
-      }
-    }
-
-    // In-memory fallback
-    const memCmds = inMemoryOutbox.get(taskId) || [];
-    const cmd = memCmds.find((item: any) => item.id === commandId);
-    if (!cmd) {
+    // The outbox is only held in Postgres; a command id that is not a uuid names none of it.
+    if (!db || !outboxRepo) return problem(c, 503, 'Database Unavailable', 'Outbox commands are only held in the database');
+    if (!isValidUuid(commandId)) {
       return problem(c, 404, 'Command Not Found', `Outbox command ${commandId} was not found for task ${taskId}`);
     }
-    if (cmd.state !== 'failed') {
-      return problem(c, 409, 'Command Not Failed', `Command ${commandId} is in '${cmd.state}' state. Only failed commands can be redriven.`);
-    }
-    const memErr = (cmd.last_error || cmd.error_message || '') as string;
-    if (memErr.startsWith('DELIVERY_UNCERTAIN:') && !confirmUncertainReplay) {
-      return problem(c, 422, 'Uncertain Delivery Requires Explicit Confirmation', 'Uncertain delivery requires explicit confirmation to replay. Set confirmUncertainReplay: true.');
-    }
+    try {
+      const result = await withRlsContext(
+        db,
+        { tenantId: auth.tenantId, userId: auth.userId, role: auth.role },
+        async (trx) => {
+          const cmd = await outboxRepo.findById(auth.tenantId, commandId, trx);
+          // Another task's command is not redriven from this task's page.
+          if (!cmd || cmd.aggregate_id !== taskId) return { status: 404, error: `Outbox command ${commandId} was not found for task ${taskId}` };
+          if (cmd.state !== 'failed') {
+            return { status: 409, error: `Command ${commandId} is in '${cmd.state}' state. Only failed commands can be redriven.` };
+          }
+          const lastErr = cmd.last_error || '';
+          if (lastErr.startsWith('DELIVERY_UNCERTAIN:') && !confirmUncertainReplay) {
+            return { status: 422, error: 'Uncertain delivery requires explicit confirmation to replay. Set confirmUncertainReplay: true.' };
+          }
+          const redriven = await outboxRepo.redrive(auth.tenantId, commandId, trx);
+          // Only a confirmed replay lets the worker make a send that may already have arrived again.
+          if (confirmUncertainReplay) await outboxRepo.releaseUncertainSends(auth.tenantId, [commandId], trx);
+          return { status: 200, data: redriven };
+        }
+      );
 
-    cmd.state = 'pending';
-    cmd.attempts = 0;
-    cmd.last_error = null;
-    cmd.error_message = null;
-    cmd.updated_at = new Date().toISOString();
+      if (result.status === 404) return problem(c, 404, 'Command Not Found', result.error);
+      if (result.status === 409) return problem(c, 409, 'Command Not Failed', result.error);
+      if (result.status === 422) return problem(c, 422, 'Uncertain Delivery Requires Explicit Confirmation', result.error);
+      if (!result.data) return problem(c, 500, 'Redrive Failed', 'Failed to redrive outbox command');
 
-    return c.json({
-      redriven: true,
-      commandId: cmd.id,
-      state: cmd.state,
-      attempts: cmd.attempts,
-      confirmedUncertainReplay: confirmUncertainReplay,
-      message: 'Outbox command queued for redelivery',
-    });
+      return c.json({
+        redriven: true,
+        commandId: result.data.id,
+        state: result.data.state,
+        attempts: result.data.attempts,
+        confirmedUncertainReplay: confirmUncertainReplay,
+        message: 'Outbox command queued for redelivery',
+      });
+    } catch (err: any) {
+      log.error('[core:outbox:redrive] DB error:', err);
+      return problem(c, 503, 'Database Unavailable', 'The command could not be redriven; try again');
+    }
   });
 
   // Dead letters degrade the worker's health until someone acts on each one. Redrive is the only

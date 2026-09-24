@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,6 +10,11 @@ import { GooglePublisher } from '@hawa/integrations';
 import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive-server.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
 
 describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–050, FR-059–060, NFR-001, NFR-014, NFR-020)', () => {
   const originalEnv = { ...process.env };
@@ -49,7 +55,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       headers: { ...operatorHeaders, 'Idempotency-Key': `r06-task-${Date.now()}-${crypto.randomUUID()}` },
       body: JSON.stringify({
         title: 'Safe Publication Task',
-        clientId: 'client-drustee',
+        clientId: 'c1000000-0000-4000-8000-000000000003',
       }),
     });
     expect(taskRes.status).toBe(201);
@@ -92,7 +98,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
   it('1. Concurrent same-key publication calls return identical receipt with zero duplicate side-effects', async () => {
     const exports = memoryExportStore();
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
     const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Fire 3 simultaneous publish requests with identical publication intent
@@ -107,26 +113,35 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       app.request(`/v1/tasks/${task.id}/publish-omnichannel`, { method: 'POST', headers: operatorHeaders, body: payload }),
     ]);
 
-    expect(res1.status).toBe(200);
-    expect(res2.status).toBe(200);
-    expect(res3.status).toBe(200);
+    // One press delivers. A press that arrives while it runs is refused and told to retry, by the
+    // publish advisory lock (Postgres), which holds across processes; a press that arrives after it
+    // is answered from the stored publication. None of them uploads again. Presses in one process
+    // used to join the first through a map in memory, which a second process never saw.
+    const answers = await Promise.all([res1, res2, res3].map(async (res) => ({ status: res.status, body: await res.json() })));
+    const delivered = answers.filter((a) => a.status === 200);
+    expect(delivered.length).toBeGreaterThanOrEqual(1);
+    for (const refused of answers.filter((a) => a.status !== 200)) {
+      expect(refused.status).toBe(409);
+      expect(refused.body.detail).toMatch(/delivering this task right now/);
+    }
+    const fresh = delivered.find((a) => a.body.alreadyCompleted !== true && a.body.publicationReceipt.driveFiles.length > 0)!;
+    expect(fresh.body.status).toBe('COMPLETE');
+    expect(fresh.body.publicationReceipt.driveFiles).toHaveLength(1);
 
-    const data1 = await res1.json();
-    const data2 = await res2.json();
-    const data3 = await res3.json();
-
-    // Must return the exact same receipt and file count
-    expect(data1.status).toBe('COMPLETE');
-    expect(data2.status).toBe('COMPLETE');
-    expect(data3.status).toBe('COMPLETE');
-    expect(data1.publicationReceipt.publicationId).toBe(data2.publicationReceipt.publicationId);
-    expect(data2.publicationReceipt.publicationId).toBe(data3.publicationReceipt.publicationId);
-    expect(data1.publicationReceipt.driveFiles).toHaveLength(1);
+    // Pressing again returns the same receipt, read back from Postgres, with the same one file.
+    const again = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, { method: 'POST', headers: operatorHeaders, body: payload });
+    expect(again.status).toBe(200);
+    const againBody = await again.json();
+    expect(againBody.status).toBe('COMPLETE');
+    expect(againBody.publicationReceipt.publicationId).toBe(fresh.body.publicationReceipt.publicationId);
+    expect(againBody.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId))
+      .toEqual(fresh.body.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId));
+    for (const other of delivered) expect(other.body.publicationReceipt.publicationId).toBe(fresh.body.publicationReceipt.publicationId);
   });
 
   it('2. Both API routes (/publish and /publish-omnichannel) use unified publication ledger', async () => {
     const exports = memoryExportStore();
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },  deliverableStore: exports.store });
     const { task, rev, approval, exportId } = await createApprovedTaskWithExport(app, exports);
 
     // Call desk /publish route
@@ -283,7 +298,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
   it('5. Unconfirmed Sheets write leaves task in PUBLISH_RECONCILIATION; retry completes without re-upload', async () => {
     const exports = memoryExportStore();
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, 
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },
       deliverableStore: exports.store,
       publisher: new GooglePublisher({
         sheetsApiBaseUrl: 'http://127.0.0.1:1', // Simulated unreachable Sheets server
@@ -317,7 +332,11 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(pubData.complete).toBe(false);
     expect(pubData.publicationReceipt.state).toBe('drive_complete');
 
-    const taskStatus = await (await app.request(`/tasks/${task.id}`)).json();
-    expect(taskStatus.status).toBe('PUBLISH_RECONCILIATION');
+    // Postgres has no PUBLISH_RECONCILIATION task state: the task stays 'publishing' there, and the
+    // publication (drive_complete, no synced row) is what says the Sheets row is still owed.
+    const pubState = await (await app.request(`/tasks/${task.id}/publication-state`, { headers: operatorHeaders })).json();
+    expect(pubState.state).toBe('publish_reconciliation');
+    expect(pubState.driveFiles).toMatchObject({ verified: true, count: 1 });
+    expect(pubState.sheetSync.synced).toBe(false);
   });
 });

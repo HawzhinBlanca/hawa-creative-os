@@ -66,11 +66,22 @@ describe('/generate runs real QA', () => {
   });
 
   it('the revision keeps typed nodes, so the review desk lists the exact copy', async () => {
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
-    const { taskId } = await generate(app, 'client-drustee', { title: 'Vitamin D3', headlineEn: 'Pure Vitamin D3 + K2 Drops', copyEn: '5000 IU, lab tested' });
-    const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: { Authorization: 'Bearer test_bearer' } })).json();
-    expect(desk.exactCopy.map((c: any) => c.text)).toEqual(expect.arrayContaining(['Pure Vitamin D3 + K2 Drops']));
-    expect(desk.qaEvidence).toMatchObject({ status: 'failed', criticalPass: false });
+    // The review desk reads the revision from Postgres (revisions are no longer kept in memory).
+    const db = createDb(process.env.TEST_DATABASE_URL!);
+    try {
+      const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true }, db });
+      const { taskId } = await generate(app, 'c1000000-0000-4000-8000-000000000003', { title: 'Vitamin D3', headlineEn: 'Pure Vitamin D3 + K2 Drops', copyEn: '5000 IU, lab tested' });
+      const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: { Authorization: 'Bearer test_bearer' } })).json();
+      // The desk lists the text nodes of the revision Postgres stored, as they are.
+      const task = await (await app.request(`/v1/tasks/${taskId}`)).json();
+      const stored = (await (await app.request(`/tasks/${taskId}/revisions/${task.latestRevisionId}`)).json()).revision;
+      const storedText = (stored.document.nodes as Array<{ type: string; text?: string }>).filter((n) => n.type === 'text').map((n) => n.text);
+      expect(storedText.length).toBeGreaterThan(0);
+      expect(desk.exactCopy.map((c: any) => c.text)).toEqual(expect.arrayContaining(storedText));
+      expect(desk.qaEvidence).toMatchObject({ status: 'failed', criticalPass: false });
+    } finally {
+      await db.destroy();
+    }
   });
 });
 
@@ -100,6 +111,15 @@ describe('/generate with a database', () => {
     expect(run.report_sha256).toMatch(/^[0-9a-f]{64}$/);
     const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: auth })).json();
     expect(desk.qaEvidence.qcReportHash).toBe(run.report_sha256);
+
+    // Postgres refuses to approve the design while its critical QA fails.
+    const task = await (await app.request(`/v1/tasks/${taskId}`, { headers: auth })).json();
+    const approve = await app.request(`/v1/tasks/${taskId}/revisions/${task.latestRevisionId}/decisions`, {
+      method: 'POST',
+      headers: { ...auth, 'x-user-role': 'art_director' },
+      body: JSON.stringify({ outcome: 'approved' }),
+    });
+    expect(approve.status).toBe(412);
     await db.destroy();
   });
 });

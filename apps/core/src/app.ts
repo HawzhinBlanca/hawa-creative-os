@@ -407,10 +407,13 @@ export function createApp(options?: CreateAppOptions) {
   const uploadedAssets = new Map<string, any>();
   const workflowControllers = new Map<string, TaskWorkflowController>();
   const rubricReports = new Map<string, QualityRubricReport[]>();
+  // Read and written by nothing since groups G3 and G5 of the split (SPLIT_PLAN.md section 7), like
+  // `decisions` above: comments, delivery receipts, running deliveries and the outbox are Postgres's.
+  // CoreContext still names them; the split's cleanup step removes them with their fields.
   const taskComments = new Map<string, any[]>();
   const omnichannelReceipts = new Map<string, any>();
   const inFlightPublications: OmnichannelDeliveryDeps['inFlightPublications'] = new Map();
-  const inMemoryOutbox = options?.inMemoryOutbox ?? new Map<string, any[]>();
+  const inMemoryOutbox = new Map<string, any[]>();
 
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
@@ -977,8 +980,8 @@ export function createApp(options?: CreateAppOptions) {
 
   // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
   const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = createOmnichannelDelivery({
-    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, decisions, events, omnichannelReceipts,
-    inFlightPublications, inMemoryOutbox, isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
+    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, events,
+    isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
   });
 
   // Helper to register routes for /v1/..., /api/v1/..., /api/... and /...

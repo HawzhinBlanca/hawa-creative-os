@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { Context } from 'hono';
 import { SYSTEM_AUTOMATION_USER_ID, type RequestContext, type NeutralManifest } from '@hawa/contracts';
 import type { DesignBrief, FeedbackEvent } from '@hawa/domain';
-import { withRlsContext } from '@hawa/db';
+import { withRlsContext, sql, FeedbackRepository, type RevisionRepository } from '@hawa/db';
 import { diffDocumentManifests } from '@hawa/creative';
 import type { AuthContext, RouteContext } from './types.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
@@ -10,11 +10,15 @@ import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { askLedger } from '../services/ask-ledger.js';
 
+/** A hawa.design_revisions row. */
+type RevisionRow = NonNullable<Awaited<ReturnType<RevisionRepository['findRevisionById']>>>;
+
 /**
  * Design revisions and what reviewers say about them (architecture programme 1.3, group G3, moved
- * from app.ts unchanged): revisions and their QA, reviewer comments, the structural diff, operator
- * feedback and the requester's asks. GET /tasks/:taskId/revisions/diff is registered before
- * GET /tasks/:taskId/revisions/:revisionId, which would otherwise take "diff" for a revision id.
+ * from app.ts): revisions and their QA, reviewer comments, the structural diff, operator feedback
+ * and the requester's asks. Revisions and feedback are read from and written to Postgres.
+ * GET /tasks/:taskId/revisions/diff is registered before GET /tasks/:taskId/revisions/:revisionId,
+ * which would otherwise take "diff" for a revision id.
  */
 export function registerRevisionsRoutes(ctx: RouteContext): void {
   const {
@@ -25,8 +29,6 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     revisionRepo,
     tasks,
     briefs,
-    revisions,
-    feedbacks,
     taskComments,
     qaEngine,
     readCurrentTask,
@@ -39,18 +41,74 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const defaultClientId = DEFAULT_CLIENT_ID;
 
+  // Revisions and feedback are only held in Postgres. They used to live in maps in this
+  // process as well, which were read first: a restart lost them, a second Core process never saw
+  // them, and a revision Postgres refused was still answered (architecture programme 1.3, group G3).
+  // Without a database these routes answer 503 rather than keep anything in memory.
+  const noDatabase = (c: Context, what: string) => problem(c, 503, 'Database Unavailable', `${what} are only held in the database`);
+  const scopeOf = (auth: { tenantId?: string; userId?: string; role?: string }) => ({
+    tenantId: auth.tenantId || DEFAULT_TENANT_ID,
+    userId: auth.userId || SYSTEM_AUTOMATION_USER_ID,
+    role: auth.role || 'operator',
+  });
+
+  /** A design_revisions row in the shape these routes have always answered with. */
+  const revisionFromRow = (row: RevisionRow) => ({
+    id: row.id,
+    revisionId: row.id,
+    taskId: row.task_id,
+    revisionNumber: Number(row.revision),
+    sourceSha256: row.source_sha256 || '',
+    manifestSha256: row.neutral_manifest_sha256 || '',
+    status: row.status || 'draft',
+    document: (row.neutral_manifest as any) || {
+      documentId: `doc_${row.id}`,
+      sourceRevision: Number(row.revision),
+      sourceSha256: row.source_sha256,
+      format: 'historical_manifest',
+      nodes: [],
+    },
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+  });
+
+  /** The caller's tenant's revisions with these ids; an id that is not a uuid names none. */
+  const readRevisions = async (auth: { tenantId?: string; userId?: string; role?: string }, ids: string[]) => {
+    const wanted = [...new Set(ids.filter((id) => isValidUuid(id)))];
+    const found = new Map<string, ReturnType<typeof revisionFromRow>>();
+    if (!db || wanted.length === 0) return found;
+    const scope = scopeOf(auth);
+    const rows = await withRlsContext(db, scope, (trx) =>
+      trx.selectFrom('design_revisions').selectAll().where('tenant_id', '=', scope.tenantId).where('id', 'in', wanted).execute()
+    );
+    for (const row of rows) found.set(row.id, revisionFromRow(row));
+    return found;
+  };
+
   // Design Revisions
-  registerRoute('get', '/designs/:designId/revisions', (c: any) => {
+  registerRoute('get', '/designs/:designId/revisions', async (c: any) => {
     const designId = c.req.param('designId');
-    const list = Array.from(revisions.values()).filter((r) => r.taskId === designId || r.revisionId === designId);
-    return c.json({ items: list });
+    if (!db) return noDatabase(c, 'Design revisions');
+    // The design is a task (its revisions) or one revision; an id that is not a uuid is neither.
+    if (!isValidUuid(designId)) return c.json({ items: [] });
+    const scope = scopeOf(verifyRequestAuth(c));
+    const rows = await withRlsContext(db, scope, (trx) =>
+      trx
+        .selectFrom('design_revisions')
+        .selectAll()
+        .where('tenant_id', '=', scope.tenantId)
+        .where((eb) => eb.or([eb('task_id', '=', designId), eb('id', '=', designId)]))
+        .orderBy('revision', 'asc')
+        .execute()
+    );
+    return c.json({ items: rows.map(revisionFromRow) });
   });
 
   // Run Revision QA
   registerRoute('post', '/tasks/:taskId/revisions/:revisionId/qa', async (c: any) => {
     const taskId = c.req.param('taskId');
     const revisionId = c.req.param('revisionId');
-    const rev = revisions.get(revisionId);
+    if (!db) return noDatabase(c, 'Design revisions');
+    const rev = (await readRevisions(verifyRequestAuth(c), [revisionId])).get(revisionId);
     if (!rev) return problem(c, 404, 'Revision Not Found');
 
     const ctx: RequestContext = {
@@ -104,7 +162,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       taskId,
       designRevisionId: revisionId,
       document: rev.document,
-      sourceHash: rev.document.sourceSha256,
+      sourceHash: rev.document?.sourceSha256 ?? rev.sourceSha256,
       manifest,
       renders: [
         {
@@ -176,6 +234,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       );
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+    if (!revisionRepo || !db) return noDatabase(c, 'Design revisions');
 
     const body = await c.req.json().catch(() => ({}));
 
@@ -189,6 +248,11 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const wasApproved = task ? task.status === 'APPROVED' : dbTask?.state === 'approved';
     const previousApprovalId = (task as any)?.latestApproval?.decisionId;
 
+    // Postgres names a revision by uuid. A caller's own id that is not one used to be kept in memory
+    // only; now it would fail the insert, so it is refused before anything is written.
+    if (body.revisionId !== undefined && !isValidUuid(body.revisionId)) {
+      return problem(c, 400, 'Invalid Revision Id', 'revisionId must be a uuid; leave it out to have one assigned');
+    }
     let dbRevision: any = null;
     const revisionId = body.revisionId || crypto.randomUUID();
 
@@ -226,7 +290,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       pages: body.pages || [{ id: 'p1', name: 'main', width: 1080, height: 1920, unit: 'px', language: 'ckb', direction: 'rtl' }],
       nodes: candidateNodes,
       sourceSha256: dbRevision ? dbRevision.source_sha256 : crypto.createHash('sha256').update(JSON.stringify(candidateNodes)).digest('hex'),
-      version: dbRevision ? Number(dbRevision.revision) : ((revisions.get(task?.latestRevisionId)?.document?.version || 1) + 1),
+      version: Number(dbRevision.revision),
     };
 
     const newRev = {
@@ -240,7 +304,6 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       metadata: body.metadata || {},
     };
 
-    revisions.set(finalRevisionId, newRev);
     const previousRevId = task?.latestRevisionId;
     if (task) {
       task.latestRevisionId = finalRevisionId;
@@ -366,7 +429,7 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
   });
 
   // Semantic Document Revision Diff (Gate F: Structural Diffs)
-  registerRoute('get', '/tasks/:taskId/revisions/diff', (c: any) => {
+  registerRoute('get', '/tasks/:taskId/revisions/diff', async (c: any) => {
     const taskId = c.req.param('taskId');
     const fromRevId = c.req.query('fromRevisionId');
     const toRevId = c.req.query('toRevisionId');
@@ -375,8 +438,10 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
       return problem(c, 400, 'Bad Request', 'fromRevisionId and toRevisionId query params are required');
     }
 
-    const fromRev = revisions.get(fromRevId);
-    const toRev = revisions.get(toRevId);
+    if (!db) return noDatabase(c, 'Design revisions');
+    const found = await readRevisions(verifyRequestAuth(c), [fromRevId, toRevId]);
+    const fromRev = found.get(fromRevId);
+    const toRev = found.get(toRevId);
     if (!fromRev || !toRev) {
       return problem(c, 404, 'Revision Not Found', 'One or both revisions were not found');
     }
@@ -406,46 +471,13 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    let rev = revisions.get(revisionId);
-
-    // If not in memory, query PostgreSQL database
-    if (!rev && db) {
-      try {
-        const dbRev = await withRlsContext(
-          db,
-          { tenantId, userId: auth.userId, role: auth.role || 'operator' },
-          async (trx) => {
-            return await trx
-              .selectFrom('design_revisions')
-              .selectAll()
-              .where('id', '=', revisionId)
-              .where('tenant_id', '=', tenantId)
-              .executeTakeFirst();
-          }
-        );
-        if (dbRev) {
-          rev = {
-            id: dbRev.id,
-            revisionId: dbRev.id,
-            taskId: dbRev.task_id,
-            revisionNumber: Number(dbRev.revision),
-            sourceSha256: dbRev.source_sha256 || '',
-            manifestSha256: dbRev.neutral_manifest_sha256 || '',
-            status: (dbRev.status || 'draft') as any,
-            document: (dbRev.neutral_manifest as any) || {
-              documentId: `doc_${dbRev.id}`,
-              sourceRevision: Number(dbRev.revision),
-              sourceSha256: dbRev.source_sha256,
-              format: 'historical_manifest',
-              nodes: [],
-            },
-            createdAt: dbRev.created_at instanceof Date ? dbRev.created_at.toISOString() : String(dbRev.created_at),
-          };
-          revisions.set(revisionId, rev);
-        }
-      } catch (err) {
-        log.error('[core:revisions:get] DB fetch error:', err);
-      }
+    if (!db) return noDatabase(c, 'Design revisions');
+    let rev: ReturnType<typeof revisionFromRow> | undefined;
+    try {
+      rev = (await readRevisions({ tenantId, userId: auth.userId, role: auth.role || 'operator' }, [revisionId])).get(revisionId);
+    } catch (err) {
+      log.error('[core:revisions:get] DB fetch error:', err);
+      return problem(c, 503, 'Database Unavailable', 'The revision could not be read; try again');
     }
 
     if (!rev) return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist`);
@@ -460,29 +492,58 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
   registerRoute('post', '/tasks/:taskId/feedback', async (c: any) => {
     const taskId = c.req.param('taskId');
     // Feedback on a task nobody knows is refused (the `:control` catch-all used to answer this 404).
-    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
-    const body = await c.req.json();
+    const task = await readCurrentTask(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+    if (!db || !taskRepo) return noDatabase(c, 'Feedback events');
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    const body = await c.req.json().catch(() => ({}));
+    const auth = verifyRequestAuth(c);
+    const scope = scopeOf(auth);
+
+    // A feedback event (hawa.feedback_events) belongs to the task's client as Postgres records it. It
+    // used to take any client id the body named, or a fixture client's, and was kept only in memory.
+    const stored = await withRlsContext(db, scope, (trx) => taskRepo.findById(taskId, scope.tenantId, trx));
+    if (!stored) return problem(c, 404, 'Task Not Found');
+    if (!stored.client_id) return problem(c, 422, 'Client Required', 'Feedback is recorded against the task\'s client, and this task has none');
+    const revisionId = [body.revisionId, stored.current_design_revision_id].find((id) => isValidUuid(id)) ?? null;
+    const polarity = body.polarity || 'neutral';
+    const category = body.category || 'layout';
+    const rawFeedbackText = body.rawFeedbackText || body.comment || '';
+    // Who gave it is the signed-in caller; the body no longer names the user.
+    const attributedActor = { userId: auth.userId, displayName: body.displayName || auth.displayName || 'Operator' };
+
+    let row: Awaited<ReturnType<FeedbackRepository['recordFeedback']>>;
+    try {
+      row = await withRlsContext(db, scope, (trx) => new FeedbackRepository(trx).recordFeedback({
+        tenantId: scope.tenantId,
+        clientId: stored.client_id!,
+        taskId,
+        beforeRevisionId: revisionId,
+        category,
+        explicitness: 'direct_instruction',
+        target: { polarity, attributedActor },
+        comment: rawFeedbackText,
+        actorId: isValidUuid(auth.userId) ? auth.userId : null,
+      }, trx));
+    } catch (err) {
+      log.error('[core:feedback:create] DB error:', err);
+      return problem(c, 503, 'Durable Storage Unavailable', 'The feedback could not be recorded; try again');
+    }
 
     const feedback: FeedbackEvent = {
-      feedbackId: crypto.randomUUID(),
+      feedbackId: row.id,
       taskId,
-      clientId: body.clientId || defaultClientId,
-      designRevisionId: body.revisionId || crypto.randomUUID(),
-      polarity: body.polarity || 'neutral',
-      category: body.category || 'layout',
-      rawFeedbackText: body.rawFeedbackText || body.comment || '',
-      attributedActor: {
-        userId: body.userId || crypto.randomUUID(),
-        displayName: body.displayName || 'Operator',
-      },
+      clientId: row.client_id,
+      designRevisionId: revisionId ?? '',
+      polarity,
+      category,
+      rawFeedbackText,
+      attributedActor,
       governance: {
         status: 'received',
       },
-      occurredAt: new Date().toISOString(),
+      occurredAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     };
-
-    if (!feedbacks.has(taskId)) feedbacks.set(taskId, []);
-    feedbacks.get(taskId)!.push(feedback);
 
     return c.json({ feedback }, 201);
   });

@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -6,6 +7,23 @@ import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
 import { HumanApprovalManager } from '@hawa/integrations';
 import type { ApprovalActor } from '@hawa/domain';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+// Revision ids below are uuids: Postgres names a revision by uuid.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
+
+/**
+ * A QA engine whose every run passes. Postgres approves only a revision with a passing QA run on
+ * record, and a chat request's brief would fail the QA route's fixed manifest; QA is not the subject.
+ */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
 
 describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041..044, FR-069)', () => {
   let app: ReturnType<typeof createApp>;
@@ -19,7 +37,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   beforeEach(() => {
     exports = memoryExportStore();
-    app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
     approvalManager = new HumanApprovalManager();
   });
 
@@ -43,9 +61,14 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     return json.task;
   }
 
+  /** The passing QA run Postgres wants on record before a revision is approved. */
+  async function passQa(taskId: string, revisionId: string) {
+    expect((await app.request(`/tasks/${taskId}/revisions/${revisionId}/qa`, { method: 'POST' })).status).toBe(200);
+  }
+
   it('1. Review Desk provides truthful inspection of full-size preview, exact copy, references, and QA evidence (FR-041)', async () => {
     const task = await createTestTask();
-    const revId = 'rev_kaae_alpha';
+    const revId = crypto.randomUUID();
 
     // Submit initial revision with Kurdish copy
     const revRes = await app.request(`/tasks/${task.id}/revisions`, {
@@ -89,7 +112,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('2. Enforces real role authorization on review decisions (FR-043)', async () => {
     const task = await createTestTask();
-    const revId = 'rev_role_auth_test';
+    const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -142,6 +165,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(anonRes.status).toBe(401);
 
     // Case 2d: Authorized role 'art_director' succeeds with 201
+    await passQa(task.id, revId);
     const artDirectorRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {
@@ -157,9 +181,9 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     const taskA = await createTestTask('Client Alpha');
     const taskB = await createTestTask('Client Beta');
 
-    const revA1 = 'rev_alpha_1';
-    const revA2 = 'rev_alpha_2';
-    const revB1 = 'rev_beta_1';
+    const revA1 = crypto.randomUUID();
+    const revA2 = crypto.randomUUID();
+    const revB1 = crypto.randomUUID();
 
     // Submit A1 then A2
     await app.request(`/tasks/${taskA.id}/revisions`, {
@@ -218,7 +242,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('4. Detects tampered artifact set hash and tampered QC report hash', async () => {
     const task = await createTestTask();
-    const revId = 'rev_tamper_test';
+    const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -270,7 +294,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('5. Enforces optimistic concurrency / prevents concurrent approvals on mismatched version', async () => {
     const task = await createTestTask();
-    const revId = 'rev_concurrency_test';
+    const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -281,8 +305,10 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       }),
     });
 
-    // Assume current task version is 1
-    // Operator 1 approves with expectedTaskVersion: 1 -> Succeeds and bumps version to 2
+    await passQa(task.id, revId);
+    // The task's version as Postgres holds it (creating it and its revision already counted).
+    const version = (await (await app.request(`/tasks/${task.id}`)).json()).version;
+    // Operator 1 approves with the current expectedTaskVersion -> Succeeds and bumps the version
     const op1Res = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {
@@ -291,12 +317,12 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       },
       body: JSON.stringify({
         decision: 'approved',
-        expectedTaskVersion: 1,
+        expectedTaskVersion: version,
       }),
     });
     expect(op1Res.status).toBe(201);
 
-    // Operator 2 sends concurrent approval also with expectedTaskVersion: 1 -> Fails with 409
+    // Operator 2 sends a concurrent approval with the same, now stale, version -> Fails with 409
     const op2Res = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {
@@ -305,7 +331,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       },
       body: JSON.stringify({
         decision: 'approved',
-        expectedTaskVersion: 1,
+        expectedTaskVersion: version,
       }),
     });
     expect(op2Res.status).toBe(409);
@@ -314,8 +340,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('6. Rejects stale two-way chat approval actions when task has advanced (Stale Chat Action)', async () => {
     const task = await createTestTask();
-    const rev1 = 'rev_chat_v1';
-    const rev2 = 'rev_chat_v2';
+    const rev1 = crypto.randomUUID();
+    const rev2 = crypto.randomUUID();
 
     // Create Revision 1
     await app.request(`/tasks/${task.id}/revisions`, {
@@ -356,7 +382,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('7. Captures structured revision requests with scope, category, target nodes, and reusable flag (FR-042)', async () => {
     const task = await createTestTask();
-    const revId = 'rev_struct_req';
+    const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -407,8 +433,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     });
     const created = await createRes.json();
     const task = { id: created.id || created.task?.id };
-    const revA = 'rev_erbil_A';
-    const revB = 'rev_erbil_B';
+    const revA = crypto.randomUUID();
+    const revB = crypto.randomUUID();
     const bytesA = new TextEncoder().encode('export reviewed for revision A');
     const bytesB = new TextEncoder().encode('export reviewed for revision B');
     const exportA = exports.add(task.id, 'png', bytesA);
@@ -424,6 +450,8 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         document: { id: 'dA', pages: [{ id: 'p1', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 't1', type: 'text', text: 'Erbil Royal Grand Opening v1' }] },
       }),
     });
+
+    await passQa(task.id, revA);
 
     // Step 2: Approve Revision A
     const approveARes = await app.request(`/tasks/${task.id}/revisions/${revA}/decisions`, {
@@ -506,7 +534,10 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(deliverStoredJson.publicationReceipt.driveFiles.map((f: any) => f.expectedSha256)).toEqual([sha(bytesA)]);
     expect(deliverStoredJson.status).toBe('COMPLETE');
 
-    // Step 7: Conduct proper review and approval of Revision B
+    // Step 7: Revision B cannot be approved on this task any more. Postgres refuses to approve a
+    // task that is already delivered (it used to be approved and delivered again from this process's
+    // memory); B goes out as a new request.
+    await passQa(task.id, revB);
     const approveBRes = await app.request(`/tasks/${task.id}/revisions/${revB}/decisions`, {
       method: 'POST',
       headers: {
@@ -519,23 +550,12 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         pinnedExportIds: [exportB],
       }),
     });
-    expect(approveBRes.status).toBe(201);
-    const approvalB = await approveBRes.json();
-    const approvalIdB = approvalB.decisionId;
+    expect(approveBRes.status).toBe(409);
+    expect((await approveBRes.json()).detail).toContain('already approved and delivered');
 
-    // Step 8: Now publish Revision B with its own verified approval -> SUCCEEDS!
-    const publishBSuccessRes = await app.request(`/tasks/${task.id}/publish-omnichannel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        designRevisionId: revB,
-        approvalId: approvalIdB,
-      }),
-    });
-    expect(publishBSuccessRes.status).toBe(200);
-    const pubBSuccess = await publishBSuccessRes.json();
-    expect(pubBSuccess.status).toBe('COMPLETE');
-    expect(pubBSuccess.publicationReceipt.driveFiles.map((f: any) => f.expectedSha256)).toEqual([sha(bytesB)]);
+    // What was delivered, as Postgres recorded it, is A's pinned export alone.
+    const delivered = (await (await app.request(`/tasks/${task.id}/publication-receipt`)).json()).receipt;
+    expect(delivered.driveFiles.map((f: any) => f.expectedSha256)).toEqual([sha(bytesA)]);
   });
 
   it('9. Maintains an immutable, cryptographically chained audit log (FR-069)', () => {
@@ -600,7 +620,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   it('10. H03: Maps UI action "approve" to "approved", rejects invalid actions with 400, and denies role spoofing', async () => {
     const task = await createTestTask('H03 Test Client');
-    const revId = 'rev_h03_proof';
+    const revId = crypto.randomUUID();
 
     await app.request(`/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -629,6 +649,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(badActionJson.title).toBe('Invalid Decision Action');
 
     // 10b. UI action 'approve' cleanly maps to 'approved' (HTTP 201)
+    await passQa(task.id, revId);
     const uiApproveRes = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +9,22 @@ import { GooglePublisher } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
+
+/**
+ * A QA engine whose every run passes. Postgres approves only a revision with a passing QA run, and
+ * these tests are about delivery; a chat request's brief would fail the QA route's fixed manifest.
+ */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
 
 describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-051)', () => {
   let mockServer: http.Server;
@@ -248,7 +265,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
 
     it('enforces Client DNA destination isolation via core omnichannel endpoint', async () => {
       const exports = memoryExportStore();
-      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
       // Ingest task with valid client
       const ingestRes = await app.request('/api/webhooks/telegram', {
@@ -274,9 +291,10 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         }),
       });
       const { revisionId } = await revRes.json();
+      expect((await app.request(`/tasks/${taskId}/revisions/${revisionId}/qa`, { method: 'POST' })).status).toBe(200);
 
       // Approve, pinning the export the reviewer saw
-      await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+      const approved = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -284,6 +302,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         },
         body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
+      expect(approved.status).toBe(201);
 
       // Publish omnichannel
       const pubRes = await app.request(`/tasks/${taskId}/publish-omnichannel`, {
@@ -594,7 +613,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   describe('4. FR-051: Notification Failure Independence & Nonexistent File Defense', () => {
     it('notification failure does not undo or roll back valid Google Drive and Sheets publication', async () => {
       const exports = memoryExportStore();
-      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
       // A task for a client with a Drive destination (a task without a client is never delivered)
       const createRes = await app.request('/tasks', {
@@ -614,9 +633,10 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         }),
       });
       const { revisionId } = await revRes.json();
+      expect((await app.request(`/tasks/${taskId}/revisions/${revisionId}/qa`, { method: 'POST' })).status).toBe(200);
 
       // Approve
-      await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+      const approved = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -624,6 +644,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         },
         body: JSON.stringify({ decision: 'approved', role: 'art_director', pinnedExportIds: [exports.add(taskId)] }),
       });
+      expect(approved.status).toBe(201);
 
       // Publish with a failing notification callback injected in options
       const pubRes = await app.request(`/tasks/${taskId}/publish-omnichannel`, {
@@ -643,11 +664,13 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
       const receiptRes = await app.request(`/tasks/${taskId}/publication-receipt`);
       expect(receiptRes.status).toBe(200);
       const receiptBody = await receiptRes.json();
-      expect(receiptBody.receipt.receipt.publicationId).toBeDefined();
+      // Read back from Postgres: the same publication the delivery answered with, and its files.
+      expect(receiptBody.receipt).toMatchObject({ publicationId: pubData.publicationReceipt.publicationId, state: 'complete', recordedIn: 'postgres' });
+      expect(receiptBody.receipt.files.length).toBeGreaterThan(0);
     });
 
     it('a successful chat message cannot mark a nonexistent or unapproved file delivered', async () => {
-      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
 
       // Create an unapproved task
       const createRes = await app.request('/v1/tasks', {

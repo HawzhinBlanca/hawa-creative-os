@@ -1,18 +1,21 @@
 import crypto from 'node:crypto';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
-import { DEFAULT_CLIENT_ID } from '../core-context.js';
+import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { isValidUuid, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
+import { readPublicationReceipt } from '../services/publication-receipt.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
- * moved from app.ts unchanged): POST publish, GET publication-state, the WhatsApp review dispatch,
- * POST publish-omnichannel and GET publication-receipt. The delivery itself is
- * services/omnichannel-delivery.ts, reached through ctx.delivery.
+ * moved from app.ts): POST publish, GET publication-state, the WhatsApp review dispatch, POST
+ * publish-omnichannel and GET publication-receipt. The delivery itself is
+ * services/omnichannel-delivery.ts, reached through ctx.delivery; what it left is read from Postgres
+ * (services/publication-receipt.ts).
  */
 export function registerDeliveryRoutes(ctx: RouteContext): void {
   const {
@@ -23,9 +26,6 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     outboxRepo,
     publicationRepo,
     tasks,
-    omnichannelReceipts,
-    inFlightPublications,
-    inMemoryOutbox,
     readCurrentTask,
     resolveTaskWithFallback,
     resolveClientDna,
@@ -38,6 +38,19 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = ctx.delivery;
   const defaultClientId = DEFAULT_CLIENT_ID;
+
+  /**
+   * The task's delivery as Postgres has it (services/publication-receipt.ts), or null when it has
+   * none. Throws when the database cannot be read: an answer of "never delivered" then would be false.
+   */
+  const storedReceipt = (auth: { tenantId?: string; userId?: string; role?: string }, taskId: string) =>
+    db && publicationRepo && isValidUuid(taskId)
+      ? readPublicationReceipt(db, publicationRepo, {
+          tenantId: auth.tenantId || DEFAULT_TENANT_ID,
+          userId: auth.userId || SYSTEM_AUTOMATION_USER_ID,
+          role: auth.role || 'operator',
+        }, taskId)
+      : Promise.resolve(null);
 
   // Publish Task (Gate G: Truthful, Authenticated, Durable Google Workspace Publication)
   registerRoute('post', '/tasks/:taskId/publish', async (c: any) => {
@@ -78,18 +91,6 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
     const retryingSheetRow = currentStatus === 'publish_reconciliation';
     if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingSheetRow) {
-      if (currentStatus === 'complete' && omnichannelReceipts.has(taskId)) {
-        const existing = omnichannelReceipts.get(taskId);
-        return c.json({
-          commandId: crypto.randomUUID(),
-          taskId,
-          workflowId: `wf_${taskId}`,
-          publicationId: existing?.receipt?.publicationId || `pub_${taskId}`,
-          status: 'COMPLETE',
-          receipt: existing?.receipt || existing,
-          acceptedAt: new Date().toISOString(),
-        }, 200);
-      }
       const stored = currentStatus === 'complete' ? await storedCompletePublication(task, taskId) : null;
       if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
@@ -122,7 +123,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       return problem(c, status, title, (result as any).message || 'The publisher refused the delivery');
     }
 
-    const receipt = result.publicationReceipt || result.receipt || omnichannelReceipts.get(taskId)?.receipt;
+    const receipt = result.publicationReceipt || result.receipt;
     const sheetsConfirmed = result.complete !== false && receipt?.state === 'complete';
     const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
 
@@ -143,6 +144,9 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const taskId = c.req.param('taskId');
+    // The publication, its files and row, and the outbox are only held in Postgres. Without it, or
+    // when it cannot be read, there is no state to report: "unstarted" would say nothing was sent.
+    if (!db || !publicationRepo) return problem(c, 503, 'Database Unavailable', 'Publication state is only held in the database');
 
     let pubRecord: any = null;
     let driveRefs: any[] = [];
@@ -150,7 +154,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     let outboxCmds: any[] = [];
     let storedState: string | null = null;
 
-    if (db && publicationRepo && isValidUuid(taskId)) {
+    if (isValidUuid(taskId)) {
       try {
         await withRlsContext(
           db,
@@ -172,13 +176,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         );
       } catch (err) {
         log.error('[core:pub_state:query] DB error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The publication state could not be read; try again');
       }
-    }
-
-    // In-memory fallback
-    const memReceipt = omnichannelReceipts.get(taskId);
-    if (outboxCmds.length === 0) {
-      outboxCmds = inMemoryOutbox.get(taskId) || [];
     }
 
     const task = tasks.get(taskId);
@@ -188,19 +187,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       ?? (storedState ? toApiTaskStatus(storedState) : null)
       ?? (pubRecord?.state === 'complete' ? 'COMPLETE' : (pubRecord?.state === 'drive_complete' ? 'PUBLISH_RECONCILIATION' : null));
 
-    const hasDriveFiles = driveRefs.length > 0 || (memReceipt?.files && memReceipt.files.length > 0);
-    const driveVerified = hasDriveFiles && (
-      driveRefs.length > 0
-        ? driveRefs.every((r: any) => r.status === 'verified')
-        : (memReceipt?.receipt?.detail?.verified ?? true)
-    );
+    // What the delivery recorded in Postgres; a copy this process kept is no longer consulted.
+    const hasDriveFiles = driveRefs.length > 0;
+    const driveVerified = hasDriveFiles && driveRefs.every((r: any) => r.status === 'verified');
 
-    const hasSheetSync = sheetSyncs.length > 0 || Boolean(memReceipt?.sheetRow);
-    const sheetSynced = hasSheetSync && (
-      sheetSyncs.length > 0
-        ? sheetSyncs.some((s: any) => s.status === 'synced')
-        : (memReceipt?.sheetRow?.status === 'COMPLETE' || memReceipt?.receipt?.sheet?.synced)
-    );
+    const hasSheetSync = sheetSyncs.length > 0;
+    const sheetSynced = hasSheetSync && sheetSyncs.some((s: any) => s.status === 'synced');
 
     const notificationCmd = outboxCmds.find((c: any) => c.command_type === 'notify.published');
     const notificationStatus = notificationCmd ? notificationCmd.state : 'not_enqueued';
@@ -228,11 +220,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       state,
       driveFiles: {
         verified: driveVerified,
-        count: driveRefs.length || memReceipt?.files?.length || 0,
+        count: driveRefs.length,
       },
       sheetSync: {
         synced: sheetSynced,
-        rowNumber: sheetSyncs[0]?.row_number ?? memReceipt?.sheetRow?.rowNumber ?? null,
+        // pg returns the bigint column as a string; the answer is a number, as the receipt's is.
+        rowNumber: sheetSyncs[0]?.row_number != null ? Number(sheetSyncs[0].row_number) : null,
       },
       notification: {
         commandId: notificationCmd?.id || null,
@@ -313,9 +306,23 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    const currentStatus = (task.status || '').toLowerCase();
-    const existingReceipt = omnichannelReceipts.get(taskId);
-    if (currentStatus === 'complete' && existingReceipt) {
+    let currentStatus = (task.status || '').toLowerCase();
+    // Postgres has no state for files delivered with the Sheets row unconfirmed: the task stays
+    // 'publishing' there. Its retry used to rely on this process remembering PUBLISH_RECONCILIATION,
+    // which a restart or a second process did not; as in POST publish, a delivery that is not running
+    // goes back to approved and is delivered again (the Drive files are adopted, not uploaded twice).
+    const reopened = await reopenInterruptedDelivery(task, taskId, verifyRequestAuth(c).userId);
+    if (reopened === 'failed') return problem(c, 503, 'Delivery Not Restarted', 'The interrupted delivery could not be taken back to approved; try again');
+    if (reopened === 'reopened') currentStatus = 'approved';
+    // A delivered task answers with what its delivery recorded in Postgres, whichever process made it.
+    const existingReceipt = currentStatus === 'complete'
+      ? await storedReceipt(verifyRequestAuth(c), taskId).catch((err: unknown) => {
+          // The delivery reads the publication row again before it sends anything.
+          log.warn('[core:omnichannel] Could not read the stored publication:', err);
+          return null;
+        })
+      : null;
+    if (existingReceipt?.state === 'complete') {
       const client = await resolveClientDna(task.clientId);
       const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
       const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
@@ -324,20 +331,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         taskId,
         status: 'COMPLETE',
         complete: true,
-        publicationReceipt: existingReceipt.receipt || existingReceipt,
+        publicationReceipt: existingReceipt,
         driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
         sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${existingReceipt.sheetRow.rowNumber}` : null,
-        filesCount: existingReceipt.files?.length || 1,
-        publishedAt: existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
+        filesCount: existingReceipt.files.length,
+        publishedAt: existingReceipt.completedAt || existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
       }, 200);
-    }
-    const approvalIdForLookup = requestedApprovalId || task.latestApproval?.decisionId || task.latestApproval?.approvalId;
-    const inFlightKey = `pub_key_${taskId}_${approvalIdForLookup}`;
-    if (inFlightPublications.has(inFlightKey)) {
-      const inFlightRes = await inFlightPublications.get(inFlightKey);
-      if (inFlightRes && inFlightRes.ok) {
-        return c.json(inFlightRes, inFlightRes.complete === false ? 202 : 200);
-      }
     }
     if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && currentStatus !== 'publish_reconciliation') {
       return problem(c, 409, 'Conflict', `Task ${taskId} is in status '${task.status}', not 'approved'`);
@@ -359,9 +358,15 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     return c.json(result, (result as any).complete === false ? 202 : 200);
   });
 
-  registerRoute('get', '/tasks/:taskId/publication-receipt', (c: any) => {
+  // What the task's latest delivery recorded in Postgres: its confirmed Drive files and Sheets row.
+  registerRoute('get', '/tasks/:taskId/publication-receipt', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const receipt = omnichannelReceipts.get(taskId);
+    if (!db || !publicationRepo) return problem(c, 503, 'Database Unavailable', 'Publication receipts are only held in the database');
+    const receipt = await storedReceipt(verifyRequestAuth(c), taskId).catch((err: unknown) => {
+      log.error('[core:pub_receipt:query] DB error:', err);
+      return undefined;
+    });
+    if (receipt === undefined) return problem(c, 503, 'Database Unavailable', 'The publication receipt could not be read; try again');
     if (!receipt) return problem(c, 404, 'Task Not Found', 'No publication receipt found for task');
     return c.json({ ok: true, taskId, receipt }, 200);
   });
