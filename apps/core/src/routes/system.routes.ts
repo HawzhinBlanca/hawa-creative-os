@@ -4,7 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 // A function declaration, read only when a request arrives, so the import cycle with app.ts is harmless.
-import { probeDatabase } from '../app.js';
+import { probeDatabase } from '../core-helpers.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors

@@ -73,7 +73,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }) => {
     if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
     try {
-      const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../app.js')]);
+      const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
       const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
       // The Desk's view of the task in memory follows, as it does for the worker's report: approval
       // reads the latest revision from it.

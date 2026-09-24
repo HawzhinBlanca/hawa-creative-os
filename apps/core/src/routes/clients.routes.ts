@@ -1,5 +1,6 @@
 import type { RouteContext } from './types.js';
 import { withRlsContext } from '@hawa/db';
+import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
@@ -12,8 +13,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
     clientRepo,
   } = ctx;
 
-  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
-  const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const defaultTenantId = DEFAULT_TENANT_ID;
+  const operatorUserId = OPERATOR_USER_ID;
 
   // Client DNA Listing
   registerRoute('get', '/clients', (c: any) => {
