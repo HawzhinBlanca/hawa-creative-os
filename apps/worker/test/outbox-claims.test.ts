@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
-import type { TelegramSender } from '../src/delivery-notification.js';
+import { writeSendMark, type TelegramSender } from '../src/delivery-notification.js';
 
 /**
  * Phase 0.2 of the architecture programme (2026-09-24): no network call inside an open transaction.
@@ -149,6 +149,16 @@ describe('the outbox consumer holds no transaction while a handler acts', () => 
     expect({ calls, deadLettered: summary.deadLettered, state: row?.state, attempts: row?.attempts, leased: row?.leased_until ?? null })
       .toEqual({ calls: 0, deadLettered: 1, state: 'failed', attempts: 3, leased: null });
     expect(row?.last_error).toMatch(/^DELIVERY_UNCERTAIN: LEASE_EXPIRED/);
+  });
+
+  it('clears the reclaim note when a reclaimed command is then delivered', async () => {
+    const { id, idempotencyKey } = await enqueue('test.reclaimed_then_done', { note: 'first holder stopped' });
+    await asTenant((trx) => sql`UPDATE hawa.outbox_commands SET state = 'leased', leased_until = now() - interval '1 second'
+      WHERE id = ${id}::uuid`.execute(trx));
+    const consumer = new OutboxConsumer(db, { tenantId, userId, handlers: { 'test.reclaimed_then_done': async () => {} } });
+    await consumer.processBatch(5);
+    const row = await record(idempotencyKey);
+    expect({ state: row?.state, attempts: row?.attempts, error: row?.last_error ?? null }).toEqual({ state: 'delivered', attempts: 1, error: null });
   });
 
   it('hands a handler only the columns it needs, and no picture from the payload', async () => {
@@ -309,10 +319,149 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
     expect([uncertain?.state, uncertain?.last_error?.startsWith('DELIVERY_UNCERTAIN: ')]).toEqual(['failed', true]);
 
     // An administrator looked, found nothing in the chat, and confirmed the replay (requeue with
-    // confirmUncertainReplay): the command starts over with no attempts, and is sent once more.
-    await asTenant((trx) => repo.redrive(tenantId, id, trx));
+    // confirmUncertainReplay): the command starts over and its uncertain send is released, so it is
+    // sent once more. A redrive alone releases nothing (the review test above).
+    await asTenant(async (trx) => {
+      await repo.redrive(tenantId, id, trx);
+      await repo.releaseUncertainSends(tenantId, [id], trx);
+    });
     await again().processBatch(5);
     expect(sent).toEqual([chat, chat]);
+    expect((await record(idempotencyKey))?.state).toBe('delivered');
+  }, 15000);
+});
+
+/**
+ * Review of phase 0.2 (2026-09-24). A holder whose lease was taken over while it was still alive
+ * kept sending: only its final record was fenced on the claim. And a send Telegram did not confirm
+ * was released for sending again by any requeue that reset the attempts, confirmed or not.
+ */
+describe('review of phase 0.2: sends that must not be repeated', () => {
+  const office = String(9800 + Math.floor(Math.random() * 100));
+  function twoFilePayload(chat: string, files: Array<{ id: string; png: Uint8Array; name: string }>) {
+    return {
+      taskId: randomUUID(), title: 'Two files', chatId: chat, driveFolderId: '', spreadsheetId: '', sheetsConfirmed: false,
+      archiveProblem: 'the office Google account is not connected', filesCount: files.length,
+      files: files.map((f) => ({ artifactId: f.id, format: 'png', filename: f.name, mimeType: 'image/png', sha256: sha(f.png), byteSize: f.png.length })),
+    };
+  }
+  const bytesOf = (...files: Array<{ id: string; png: Uint8Array }>) =>
+    async (_d: unknown, _t: string, _task: string, id: string) => files.find((f) => f.id === id)?.png ?? null;
+  // What POST /v1/system/outbox/requeue {"all":true} does (system.routes.ts), which deploy.sh
+  // suggests after every deploy: every failed row that is not uncertain starts over with no attempts.
+  const requeueAll = () => {
+    const uncertain = 'DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE';
+    return asTenant((trx) => sql`UPDATE hawa.outbox_commands SET state = 'pending', attempts = 0, available_at = now(), leased_until = NULL
+      WHERE tenant_id = ${tenantId}::uuid AND state = 'failed' AND NOT (coalesce(last_error, '') ~* ${uncertain})`.execute(trx));
+  };
+
+  it('a holder whose lease was taken over while it is still alive sends nothing the new holder also sends', async () => {
+    const one = { id: randomUUID(), png: new Uint8Array([1, 2, 3]), name: 'one.png' };
+    const two = { id: randomUUID(), png: new Uint8Array([4, 5, 6]), name: 'two.png' };
+    await enqueue('notify.published', twoFilePayload('7123001', [one, two]));
+    const readExportBytes = bytesOf(one, two);
+    const sends: string[] = [];
+    const sender = (who: string, slowFile?: string): TelegramSender => ({
+      async dispatchOutboundDocument(_chat, _bytes, filename) {
+        sends.push(`${who}:${filename}`);
+        if (filename === slowFile) await sleep(3500);
+        return { success: true, messageId: '1' };
+      },
+      async dispatchOutboundMessage(chat) {
+        if (String(chat) !== office) sends.push(`${who}:notice`);
+        return { success: true, messageId: '2' };
+      },
+    });
+    const a = new OutboxConsumer(db, { tenantId, userId, leaseSeconds: 2, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender('A', 'one.png'), readExportBytes });
+    // A is alive, but its renewals fail for a while (a database blip, or no free pool connection).
+    (a as unknown as { outboxRepo: { renewClaim: () => Promise<never> } }).outboxRepo.renewClaim = async () => { throw new Error('connection timeout'); };
+    const b = new OutboxConsumer(db, { tenantId, userId, leaseSeconds: 2, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender('B'), readExportBytes });
+    const running = a.processBatch(5);
+    await sleep(2300); // A's lease has run out while it is still uploading one.png
+    await b.processBatch(5);
+    const summaryA = await running;
+    const count = (what: string) => sends.filter((s) => s.endsWith(`:${what}`)).length;
+    expect({ one: count('one.png'), two: count('two.png'), notice: count('notice') }).toEqual({ one: 1, two: 1, notice: 1 });
+    expect(summaryA.lostClaims).toBe(1);
+  }, 15000);
+
+  it('never resends a file Telegram did not confirm when the command is later requeued without confirmUncertainReplay', async () => {
+    const first = { id: randomUUID(), png: new Uint8Array([7, 8, 9]), name: 'first.png' };
+    const second = { id: randomUUID(), png: new Uint8Array([10, 11, 12]), name: 'second.png' };
+    const { idempotencyKey } = await enqueue('notify.published', twoFilePayload('7123002', [first, second]));
+    const readExportBytes = bytesOf(first, second);
+    const sends: string[] = [];
+    const firstRun: TelegramSender = {
+      async dispatchOutboundDocument(_chat, _bytes, filename) {
+        sends.push(`run1:${filename}`);
+        return filename === 'first.png'
+          ? { success: false, error: 'TELEGRAM_RECEIPT_INVALID: 200 with an unmatched receipt' }
+          : { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_413: Request Entity Too Large' };
+      },
+      async dispatchOutboundMessage() { return { success: true }; },
+    };
+    await new OutboxConsumer(db, { tenantId, userId, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => firstRun, readExportBytes }).processBatch(5);
+    expect((await record(idempotencyKey))?.state).toBe('failed');
+    await requeueAll();
+    const secondRun: TelegramSender = {
+      async dispatchOutboundDocument(_chat, _bytes, filename) { sends.push(`run2:${filename}`); return { success: true, messageId: '7' }; },
+      async dispatchOutboundMessage() { return { success: true, messageId: '8' }; },
+    };
+    await new OutboxConsumer(db, { tenantId, userId, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => secondRun, readExportBytes }).processBatch(5);
+    // first.png may already be in the chat; before this change (f143aa9) a file with any mark was never sent again.
+    expect(sends.filter((s) => s.endsWith(':first.png'))).toEqual(['run1:first.png']);
+  }, 15000);
+
+  it('ends a delivery as uncertain, naming the file, when a later file then fails', async () => {
+    const first = { id: randomUUID(), png: new Uint8Array([13, 14]), name: 'maybe.png' };
+    const second = { id: randomUUID(), png: new Uint8Array([15, 16]), name: 'refused.png' };
+    const { idempotencyKey } = await enqueue('notify.published', twoFilePayload('7123003', [first, second]));
+    const alerts: string[] = [];
+    const sender: TelegramSender = {
+      async dispatchOutboundDocument(_chat, _bytes, filename) {
+        return filename === 'maybe.png'
+          ? { success: false, error: 'TELEGRAM_RECEIPT_INVALID: 200 with an unmatched receipt' }
+          : { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_413: Request Entity Too Large' };
+      },
+      async dispatchOutboundMessage(chat, message) { if (String(chat) === office) alerts.push(message.text); return { success: true }; },
+    };
+    await new OutboxConsumer(db, { tenantId, userId, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender, readExportBytes: bytesOf(first, second) }).processBatch(5);
+    const row = await record(idempotencyKey);
+    expect(row?.state).toBe('failed');
+    expect(row?.last_error).toMatch(/^DELIVERY_UNCERTAIN: /);
+    expect(row?.last_error).toContain('maybe.png');
+    expect(row?.last_error).toContain('TELEGRAM_DOCUMENT_REJECTED_413');
+    expect(alerts).toHaveLength(1);
+  }, 15000);
+
+  it('keeps a send a worker was stopped in the middle of, whatever the command ended with, until an administrator confirms', async () => {
+    // A send marked attempted with no answer, left by a worker that stopped; the command then ended
+    // for a reason of its own that says nothing about that send, and a plain requeue restarts it.
+    const file = { id: randomUUID(), png: new Uint8Array([17, 18]), name: 'midway.png' };
+    const { id, idempotencyKey } = await enqueue('notify.published', twoFilePayload('7123004', [file]));
+    await asTenant(async (trx) => {
+      await writeSendMark(trx, tenantId, id, file.id, 'document', 'attempted');
+      await sql`UPDATE hawa.outbox_commands SET state = 'failed', attempts = 12, last_error = 'CORE_UNAVAILABLE: HTTP 502' WHERE id = ${id}::uuid`.execute(trx);
+    });
+    await requeueAll();
+    const sends: string[] = [];
+    const sender: TelegramSender = {
+      async dispatchOutboundDocument(_chat, _bytes, filename) { sends.push(filename); return { success: true, messageId: '9' }; },
+      async dispatchOutboundMessage(chat) { if (String(chat) !== office) sends.push('notice'); return { success: true, messageId: '10' }; },
+    };
+    const consumer = () => new OutboxConsumer(db, { tenantId, userId, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender, readExportBytes: bytesOf(file) });
+    await consumer().processBatch(5);
+    expect(sends).toEqual(['notice']);
+    const uncertain = await record(idempotencyKey);
+    expect([uncertain?.state, uncertain?.last_error]).toEqual(['failed', expect.stringMatching(/^DELIVERY_UNCERTAIN: .*midway\.png/)]);
+
+    // The administrator checked the chat and confirmed the replay: the file is sent, the notice is not.
+    await asTenant(async (trx) => {
+      await repo.redrive(tenantId, id, trx);
+      await repo.releaseUncertainSends(tenantId, [id], trx);
+    });
+    await consumer().processBatch(5);
+    expect(sends).toEqual(['notice', 'midway.png']);
     expect((await record(idempotencyKey))?.state).toBe('delivered');
   }, 15000);
 });

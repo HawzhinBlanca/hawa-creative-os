@@ -7431,6 +7431,8 @@ export function createApp(options?: CreateAppOptions) {
               return { status: 422, error: 'Uncertain delivery requires explicit confirmation to replay. Set confirmUncertainReplay: true.' };
             }
             const redriven = await outboxRepo.redrive(auth.tenantId, commandId, trx);
+            // Only a confirmed replay lets the worker make a send that may already have arrived again.
+            if (confirmUncertainReplay) await outboxRepo.releaseUncertainSends(auth.tenantId, [commandId], trx);
             return { status: 200, data: redriven };
           }
         );

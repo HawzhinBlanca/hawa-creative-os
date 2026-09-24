@@ -86,6 +86,15 @@ export type OutboxClaimFailure = 'retry' | 'permanent' | 'uncertain';
 
 const UNCERTAIN_PREFIX = 'DELIVERY_UNCERTAIN:';
 
+/**
+ * Where the worker writes down each Telegram send of an outbox command (apps/worker
+ * delivery-notification.ts): hawa.inbox_events rows from this source, `<command id>:<step>`, with the
+ * outcome at the end of the event kind. Telegram has no idempotency key, so a send whose last mark is
+ * 'attempted' or 'uncertain' may have arrived and is never made again, until an administrator who
+ * checked the chat confirms the replay (releaseUncertainSends).
+ */
+export const OUTBOX_SEND_MARK_SOURCE = 'telegram_delivery';
+
 export class OutboxRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
@@ -164,12 +173,68 @@ export class OutboxRepository {
     return result.rows[0]?.claim_token;
   }
 
-  /** Marks the claimed command delivered, only if the claim is still this holder's. */
+  /**
+   * Checks, before a side effect, that the claim is still this holder's and its lease has not run
+   * out, and moves the lease on. The row stays locked until the caller's transaction commits, so no
+   * other consumer can claim the command in between: write the record of the side effect in the same
+   * transaction, commit, then act. Returns the new claim token, or undefined when the claim is lost
+   * (or its lease ran out, when another consumer may be about to take it): then act on nothing.
+   *
+   * A renewal alone is not enough: renewals run on a timer, and one that fails (a database blip, no
+   * free pool connection) leaves the holder acting while the lease runs out. A second consumer then
+   * took the command over and both sent the rest of the delivery (review of phase 0.2, 2026-09-24).
+   */
+  async fenceClaim(id: string, claimToken: string, leaseSeconds: number, trx?: Kysely<Database>): Promise<string | undefined> {
+    const client = trx || this.db;
+    const result = await sql<{ claim_token: string }>`
+      UPDATE outbox_commands
+      SET leased_until = now() + make_interval(secs => ${Math.max(1, leaseSeconds)}::float8)
+      WHERE id = ${id}::uuid AND state = 'leased' AND leased_until = ${claimToken}::timestamptz AND leased_until > now()
+      RETURNING leased_until::text AS claim_token
+    `.execute(client);
+    return result.rows[0]?.claim_token;
+  }
+
+  /**
+   * Releases the sends of these commands that may have arrived (last mark 'attempted' or
+   * 'uncertain'), so the worker makes them once more. Only for an administrator who checked the chat
+   * and confirmed the replay (confirmUncertainReplay): a requeue alone never releases anything. The
+   * worker used to release them whenever a command restarted with no attempts, which a plain requeue
+   * of every dead letter also does, and a file that may already have arrived was sent again.
+   * Returns the steps released, as `<command id>:<step>`.
+   */
+  async releaseUncertainSends(tenantId: string, commandIds: string[], trx?: Kysely<Database>): Promise<string[]> {
+    if (commandIds.length === 0) return [];
+    const client = trx || this.db;
+    const result = await sql<{ source_event_id: string }>`
+      INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+      SELECT latest.tenant_id, latest.source_account_id, latest.source_event_id,
+        regexp_replace(latest.event_kind, '_(attempted|uncertain)$', '_released'),
+        jsonb_build_object('commandId', split_part(latest.source_event_id, ':', 1),
+          'step', substr(latest.source_event_id, strpos(latest.source_event_id, ':') + 1), 'outcome', 'released'),
+        latest.source_event_id || ':released', true, clock_timestamp()
+      FROM (
+        SELECT DISTINCT ON (source_event_id) tenant_id, source_account_id, source_event_id, event_kind
+        FROM hawa.inbox_events
+        WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${OUTBOX_SEND_MARK_SOURCE}
+          AND split_part(source_event_id, ':', 1) = ANY(${commandIds}::text[])
+        ORDER BY source_event_id, received_at DESC, id DESC
+      ) latest
+      WHERE latest.event_kind ~ '^telegram_(document|notice|message)_(attempted|uncertain)$'
+      RETURNING source_event_id
+    `.execute(client);
+    return result.rows.map((r) => r.source_event_id);
+  }
+
+  /**
+   * Marks the claimed command delivered, only if the claim is still this holder's. The last error
+   * is cleared: a command delivered after a reclaim kept the LEASE_EXPIRED note, and read as failed.
+   */
   async completeClaim(id: string, claimToken: string, trx?: Kysely<Database>) {
     const client = trx || this.db;
     return await client
       .updateTable('outbox_commands')
-      .set({ state: 'delivered', delivered_at: new Date(), leased_until: null })
+      .set({ state: 'delivered', delivered_at: new Date(), leased_until: null, last_error: null })
       .where('id', '=', id)
       .where('state', '=', 'leased')
       .where('leased_until', '=', sql<Date>`${claimToken}::timestamptz`)

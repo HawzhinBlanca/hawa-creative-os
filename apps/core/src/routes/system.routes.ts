@@ -1,5 +1,5 @@
 import type { RouteContext } from './types.js';
-import { sql, withRlsContext } from '@hawa/db';
+import { OutboxRepository, sql, withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 
@@ -192,6 +192,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
       if (ids.length) query = query.where('id', 'in', ids);
       if (!replayUncertain) query = query.where(sql<boolean>`NOT ${uncertain}`);
       const requeued = (await query.returning(['id', 'aggregate_id', 'command_type']).execute()) as Array<{ id: string; aggregate_id: string; command_type: string }>;
+      // Only a confirmed replay lets the worker make a send that may already have arrived again; a
+      // requeue alone restarts the command, and the worker still holds back such a send.
+      if (replayUncertain && requeued.length) await new OutboxRepository(trx).releaseUncertainSends(tenantId, requeued.map((r) => r.id), trx);
       let keptQuery = trx.selectFrom('outbox_commands').select(['id', 'aggregate_id', 'command_type', 'last_error'])
         .where('state', '=', 'failed').where(uncertain);
       if (ids.length) keptQuery = keptQuery.where('id', 'in', ids);

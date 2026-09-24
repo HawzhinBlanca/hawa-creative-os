@@ -76,6 +76,18 @@ export class OutboxDeliveryError extends Error {
   }
 }
 
+/**
+ * Thrown before a side effect when this consumer no longer holds the command's claim: another
+ * consumer took the command over (its lease ran out while this one was still acting) or an operator
+ * redrove it. The handler stops there; whoever holds the command now decides.
+ */
+export class OutboxClaimLostError extends Error {
+  constructor(commandId: string) {
+    super(`CLAIM_LOST: command ${commandId} is no longer this consumer's; nothing more was sent`);
+    this.name = 'OutboxClaimLostError';
+  }
+}
+
 /** Database access for a handler, which acts while no transaction is open. */
 export interface OutboxHandlerScope {
   /**
@@ -84,6 +96,12 @@ export interface OutboxHandlerScope {
    * pool kills a session left idle in a transaction for 30 s.
    */
   inTenant<T>(fn: (trx: Kysely<Database>) => Promise<T>): Promise<T>;
+  /**
+   * Like `inTenant`, but first checks that this consumer still holds the command's claim, and moves
+   * its lease on; throws OutboxClaimLostError otherwise. Write the record of a side effect here, and
+   * make the side effect only after it returns. Only given while a claim is held.
+   */
+  whileHeld?<T>(fn: (trx: Kysely<Database>) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -294,20 +312,16 @@ export class OutboxConsumer {
 
   /**
    * What earlier attempts of this command did with each Telegram send: 'sent', or 'uncertain' (it
-   * may have arrived). A command that starts over with no attempts and no earlier holder was replayed
-   * by an administrator who confirmed it (an uncertain command is requeued only then), so its uncertain
-   * sends are released and may be sent once more. A confirmed send never is.
+   * may have arrived). An uncertain send stays so until an administrator who checked the chat
+   * confirms the replay, which writes it 'released' (OutboxRepository.releaseUncertainSends). It was
+   * released whenever the command restarted with no attempts, but a plain requeue of every dead letter
+   * does that too, and a file that may have arrived was sent again. A confirmed send is never resent.
    */
   private async priorSends(cmd: OutboxCommandRecord, scope: OutboxHandlerScope): Promise<Map<string, PriorSend>> {
     const marks = await scope.inTenant((trx) => readSendMarks(trx, cmd.tenant_id, cmd.id));
-    const replayed = Number(cmd.attempts) === 0 && !cmd.reclaimed;
     const prior = new Map<string, PriorSend>();
-    for (const [step, { kind, outcome }] of marks) {
+    for (const [step, { outcome }] of marks) {
       const before = priorSendOf(outcome);
-      if (before === 'uncertain' && replayed) {
-        await scope.inTenant((trx) => writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, 'released'));
-        continue;
-      }
       if (before) prior.set(step, before);
     }
     return prior;
@@ -319,6 +333,9 @@ export class OutboxConsumer {
    * sent is skipped; one it may have sent (Telegram did not confirm it, or the worker stopped between
    * the two records) is not sent again and comes back 'uncertain', for the office to check. A send
    * Telegram refused is recorded as failed and throws, so a later attempt may make it.
+   *
+   * The 'attempted' record is written only while this consumer still holds the claim (whileHeld): a
+   * consumer whose lease another one took over sends nothing more, since the new holder may send it.
    */
   private async sendOnce(
     cmd: OutboxCommandRecord,
@@ -337,8 +354,10 @@ export class OutboxConsumer {
         `[OutboxConsumer] Could not record the ${kind} ${step} of command ${cmd.id} as ${outcome}; a later attempt will treat it as uncertain and not send it again:`,
         err instanceof Error ? err.message : err
       );
-    // If this record fails, nothing has been sent, and the command is retried.
-    await mark('attempted');
+    // If this record fails, nothing has been sent: the command is retried, or, when the claim was
+    // lost, left to its new holder.
+    if (!scope.whileHeld) throw new Error(`[OutboxConsumer] Command ${cmd.id} has no claim to send under`);
+    await scope.whileHeld((trx) => writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, 'attempted'));
     let res: TelegramSendResult;
     try {
       res = await send();
@@ -529,28 +548,36 @@ export class OutboxConsumer {
         const sender = this.telegramSender(botToken);
         const prior = await this.priorSends(cmd, scope);
         const uncertain: string[] = [];
-        for (const { file, bytes } of loaded) {
-          const sent = await this.sendOnce(cmd, scope, prior, file.artifactId, 'document', () =>
-            sender.dispatchOutboundDocument(sourceChannelId, bytes, file.filename, {
-              mimeType: file.mimeType || (file.format === 'pdf' ? 'application/pdf' : file.format === 'png' ? 'image/png' : undefined),
-              caption: file.filename,
-            })
-          );
-          if (sent === 'uncertain') uncertain.push(file.filename);
-        }
-
-        const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length, filesUncertain: uncertain.length });
-        const notice = await this.sendOnce(cmd, scope, prior, 'notice', 'notice', () =>
-          sender.dispatchOutboundMessage(sourceChannelId, { text, parse_mode: 'HTML' })
+        const endUncertain = (then?: unknown) => new OutboxDeliveryError(
+          `TELEGRAM_DELIVERY_UNCERTAIN: Telegram may or may not have received ${uncertain.join(', ')}; not resent` +
+            (then === undefined ? '' : `. After that: ${then instanceof Error ? then.message : String(then)}`),
+          'uncertain',
+          'TELEGRAM_DELIVERY_UNCERTAIN'
         );
-        if (notice === 'uncertain') uncertain.push('delivery notice');
-        if (uncertain.length > 0) {
-          throw new OutboxDeliveryError(
-            `TELEGRAM_DELIVERY_UNCERTAIN: Telegram may or may not have received ${uncertain.join(', ')}; not resent`,
-            'uncertain',
-            'TELEGRAM_DELIVERY_UNCERTAIN'
+        try {
+          for (const { file, bytes } of loaded) {
+            const sent = await this.sendOnce(cmd, scope, prior, file.artifactId, 'document', () =>
+              sender.dispatchOutboundDocument(sourceChannelId, bytes, file.filename, {
+                mimeType: file.mimeType || (file.format === 'pdf' ? 'application/pdf' : file.format === 'png' ? 'image/png' : undefined),
+                caption: file.filename,
+              })
+            );
+            if (sent === 'uncertain') uncertain.push(file.filename);
+          }
+
+          const text = composeDeliveredMessage({ ...payload, title: taskTitle }, { filesSent: loaded.length - uncertain.length, filesUncertain: uncertain.length });
+          const notice = await this.sendOnce(cmd, scope, prior, 'notice', 'notice', () =>
+            sender.dispatchOutboundMessage(sourceChannelId, { text, parse_mode: 'HTML' })
           );
+          if (notice === 'uncertain') uncertain.push('delivery notice');
+        } catch (err) {
+          // A file that may have arrived must end the command as uncertain, whatever failed after it:
+          // a later refusal used to end it 'failed' naming only that refusal, so the office was told
+          // "failed" and a requeue of every dead letter took it back.
+          if (uncertain.length === 0 || err instanceof OutboxClaimLostError) throw err;
+          throw endUncertain(err);
         }
+        if (uncertain.length > 0) throw endUncertain();
       });
     }
   }
@@ -560,30 +587,58 @@ export class OutboxConsumer {
    * lease, and another consumer (the other worker colour during a deploy) would take the command over
    * and act on it a second time. Renewed every third of the lease; each renewal is fenced on the
    * current claim, so a claim already lost is never taken back.
+   *
+   * A renewal can fail and the lease run out while the handler is still acting, so the renewals are
+   * not what keeps two consumers apart: `whileHeld`, which every side effect goes through, checks the
+   * claim (and moves the lease on) in the transaction that records the effect. Renewals and those
+   * checks each change the claim token, so they run one after the other: a renewal carrying the token
+   * a check had just replaced would find the claim gone.
    */
   private holdClaim(claim: OutboxClaim, leaseSeconds: number, scope: OutboxHandlerScope) {
     let token = claim.claim_token;
     let lost = false;
-    let renewing: Promise<void> | null = null;
+    let queue: Promise<unknown> = Promise.resolve();
+    const inTurn = <T>(fn: () => Promise<T>): Promise<T> => {
+      const run = queue.then(fn, fn);
+      queue = run.catch(() => undefined);
+      return run;
+    };
+    let renewing = false;
     const timer = setInterval(() => {
       if (renewing || lost) return;
-      renewing = scope
-        .inTenant((trx) => this.outboxRepo.renewClaim(claim.id, token, leaseSeconds, trx))
-        .then((next) => {
-          if (next) token = next;
-          else lost = true;
-        })
+      renewing = true;
+      inTurn(async () => {
+        const next = await scope.inTenant((trx) => this.outboxRepo.renewClaim(claim.id, token, leaseSeconds, trx));
+        if (next) token = next;
+        else lost = true;
+      })
         .catch((err: unknown) => console.warn(`[OutboxConsumer] Could not renew the claim of command ${claim.id}:`, err instanceof Error ? err.message : err))
         .finally(() => {
-          renewing = null;
+          renewing = false;
         });
     }, Math.max(200, (leaseSeconds * 1000) / 3));
     timer.unref?.();
+    const whileHeld = <T>(fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> =>
+      inTurn(async () => {
+        if (lost) throw new OutboxClaimLostError(claim.id);
+        const { next, out } = await scope.inTenant(async (trx) => {
+          const renewed = await this.outboxRepo.fenceClaim(claim.id, token, leaseSeconds, trx);
+          if (!renewed) throw new OutboxClaimLostError(claim.id);
+          return { next: renewed, out: await fn(trx) };
+        }).catch((err: unknown) => {
+          if (err instanceof OutboxClaimLostError) lost = true;
+          throw err;
+        });
+        // Only once committed: a rolled-back check left the lease, and so the token, as it was.
+        token = next;
+        return out;
+      });
     return {
+      scope: { ...scope, whileHeld } as OutboxHandlerScope,
       /** Stops renewing and returns the claim token to record the result with. */
       release: async () => {
         clearInterval(timer);
-        if (renewing) await renewing;
+        await queue;
         return { token, lost };
       },
     };
@@ -656,6 +711,7 @@ export class OutboxConsumer {
     }
 
     const hold = this.holdClaim(claim, settings.leaseSeconds, scope);
+    const heldScope = hold.scope;
     let failure: unknown = undefined;
     let failed = false;
     try {
@@ -666,7 +722,7 @@ export class OutboxConsumer {
           `[OutboxConsumer] Unknown command_type '${cmd.command_type}'. Unknown commands fail visibly; no no-op handler can claim useful completion.`
         );
       }
-      await handler(cmd, this.db, scope);
+      await handler(cmd, this.db, heldScope);
     } catch (err) {
       failed = true;
       failure = err;
@@ -695,12 +751,14 @@ export class OutboxConsumer {
     const errorMessage = failure instanceof Error ? failure.message : String(failure);
     summary.errors.push({ id: claim.id, commandType: claim.command_type, error: errorMessage });
 
-    const isPermanent =
-      (failure instanceof OutboxDeliveryError && failure.category === 'permanent') ||
+    // A handler that names its error's category is taken at its word; otherwise the message decides.
+    // An uncertain delivery can name a later refusal ("... After that: TELEGRAM_DOCUMENT_REJECTED_413"),
+    // and must stay uncertain.
+    const declared = failure instanceof OutboxDeliveryError && failure.category !== 'retryable' ? failure.category : undefined;
+    const isPermanent = declared ? declared === 'permanent' :
       /CHAT_NOT_FOUND|BOT_BLOCKED|USER_DEACTIVATED|INVALID_RECIPIENT|PERMANENT_REJECTION|CLIENT_REQUIRED|INVALID_DESTINATION/i.test(errorMessage) ||
       TELEGRAM_REFUSED.test(errorMessage);
-    const isUncertain =
-      (failure instanceof OutboxDeliveryError && failure.category === 'uncertain') ||
+    const isUncertain = declared ? declared === 'uncertain' :
       /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE/i.test(errorMessage);
     const outcome: OutboxClaimFailure = isPermanent ? 'permanent' : isUncertain ? 'uncertain' : 'retry';
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { sql, type Database, type Kysely } from '@hawa/db';
+import { OUTBOX_SEND_MARK_SOURCE, sql, type Database, type Kysely } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 
 /**
@@ -64,12 +64,14 @@ export const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(byte
  * Each step of a command (a delivered file by its artifact id, 'notice', 'message') is recorded in
  * hawa.inbox_events, which the app role can only append to, as `<command id>:<step>` from source
  * 'telegram_delivery', with the outcome at the end of the event kind:
- * - attempted: about to send. With no later outcome, the worker stopped mid-send: it may have arrived.
+ * - attempted: about to send, written only while the worker still holds the command's claim
+ *   (OutboxRepository.fenceClaim). With no later outcome, the worker stopped mid-send: it may have arrived.
  * - sent: Telegram confirmed it. Never sent again, not even on an administrator's replay.
  * - uncertain: Telegram did not confirm it (the answer was lost). Not sent again automatically.
  * - failed: Telegram refused it, so it did not arrive, and a later attempt may send it.
- * - released: an administrator confirmed the replay of an uncertain command (Core's requeue with
- *   confirmUncertainReplay, which starts it over with no attempts), so it may be sent again.
+ * - released: an administrator checked the chat and confirmed the replay (Core's requeue or redrive
+ *   with confirmUncertainReplay, through OutboxRepository.releaseUncertainSends), so it may be sent
+ *   again. Nothing else releases a send: a requeue alone restarts the command, not the send.
  * Rows written before 2026-09-24 have only `telegram_document_sent` and `telegram_document_uncertain`.
  */
 export type SendMarkOutcome = 'attempted' | 'sent' | 'uncertain' | 'failed' | 'released';
@@ -77,7 +79,7 @@ export type SendStepKind = 'document' | 'notice' | 'message';
 /** Where an earlier attempt left a step: sent, or possibly sent (uncertain). Absent means free to send. */
 export type PriorSend = 'sent' | 'uncertain';
 
-export const TELEGRAM_DELIVERY_SOURCE = 'telegram_delivery';
+export const TELEGRAM_DELIVERY_SOURCE = OUTBOX_SEND_MARK_SOURCE;
 const MARK_KIND = /^telegram_(document|notice|message)_(attempted|sent|uncertain|failed|released)$/;
 
 /** Every step's latest mark for one command, with the kind of send it was. Read under the command's tenant. */
