@@ -2,6 +2,7 @@ import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
 import { withStepChaosPoints, type WorkflowDurableContext, type WorkflowStepRetry } from './durable-context.js';
 import { withRlsContext, sql, createDb } from '@hawa/db';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
@@ -163,7 +164,7 @@ const server = http.createServer((req, res) => {
     // A worker whose database is unreachable cannot lease or acknowledge anything; say so.
     const tenantId = process.env.HAWA_TENANT_ID || '00000000-0000-4000-a000-000000000001';
     const probe: Promise<{ postgres: string; outbox: { pending: number; staleOver5m: number; failed: number } | null }> = sharedDb
-      ? withRlsContext(sharedDb, { tenantId, userId: '00000000-0000-4000-b000-000000000002', role: 'operator' }, async (trx) => {
+      ? withRlsContext(sharedDb, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
           const row = (await sql<{ pending: string; stale: string; failed: string }>`
             SELECT count(*) FILTER (WHERE state = 'pending') AS pending,
                    count(*) FILTER (WHERE state = 'pending' AND created_at < now() - interval '5 minutes') AS stale,

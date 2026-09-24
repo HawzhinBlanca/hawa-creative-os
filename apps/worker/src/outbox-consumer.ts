@@ -9,6 +9,7 @@ import {
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_BACKOFF_BASE_SECONDS,
 } from '@hawa/db';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { OfficeTracer, chaosPoint } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
@@ -306,9 +307,14 @@ export class OutboxConsumer {
     }
   }
 
+  /**
+   * The worker acts in the database as System Automation (ADR-027), an operator of every tenant, not
+   * as a person: it used the Art Director's id, so its rows were attributed to her and it could act
+   * only where she held a membership (PHASE2_DESIGN.md 1.2, finding 2).
+   */
   private scopeFor(tenantId: string): OutboxHandlerScope {
-    const userId = this.options.userId || '00000000-0000-4000-b000-000000000002';
-    return { inTenant: (fn) => withRlsContext(this.db, { tenantId, userId, role: 'administrator' }, fn) };
+    const userId = this.options.userId || SYSTEM_AUTOMATION_USER_ID;
+    return { inTenant: (fn) => withRlsContext(this.db, { tenantId, userId, role: 'operator' }, fn) };
   }
 
   /**
