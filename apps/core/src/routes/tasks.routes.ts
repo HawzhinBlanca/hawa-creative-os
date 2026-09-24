@@ -1,8 +1,609 @@
 import type { RouteContext } from './types.js';
+import { log } from '../logging.js';
+import crypto from 'node:crypto';
+import { type UUID, isTaskApiStatus, isTaskDbState } from '@hawa/contracts';
+import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
+import { DEFAULT_TENANT_ID } from '../core-context.js';
 
 /**
- * Empty until group G7 (tasks and Desk) of the app.ts split moves its routes here (architecture programme 1.3,
- * SPLIT_PLAN.md section 2): GET and POST /tasks, GET /tasks/:taskId and GET /tasks/:taskId/timeline.
- * createApp already calls this, so the group changes only this file and deletes its blocks in app.ts.
+ * The Desk's task list, task creation, one task and its timeline (architecture programme 1.3, G7).
+ * Moved from createApp unchanged.
  */
-export function registerTasksRoutes(_ctx: RouteContext): void {}
+export function registerTasksRoutes(ctx: RouteContext): void {
+  const {
+    briefs,
+    clientDnas,
+    db,
+    events,
+    isProduction,
+    problem,
+    registerRoute,
+    resolveClientDna,
+    resolveTaskWithFallback,
+    taskRepo,
+    tasks,
+    verifyRequestAuth,
+    broadcastEvent: broadcast,
+  } = ctx;
+  const defaultTenantId = DEFAULT_TENANT_ID;
+
+  // List Tasks (H01, FR-076, FR-078). One page per request (architecture programme 0.3): keyset on
+  // (created_at, id) with an opaque cursor, and the filter's total. The Desk read every page of this
+  // every 30 s and after every task event, each row running six correlated subqueries (two on
+  // columns with no index) and carrying the intake event's JSON, reference photo included.
+  // `offset` still works for callers that send it; `cursor` wins when both are sent.
+  registerRoute('get', '/tasks', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) {
+      return problem(c, 401, 'Unauthorized', 'Authentication required to list tasks');
+    }
+    const status = c.req.query('status');
+    const statusList = c.req.query('statuses');
+    const clientId = c.req.query('clientId');
+    const search = String(c.req.query('q') || '').trim().slice(0, 200);
+    const cursorParam = c.req.query('cursor');
+    const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+
+    const limit = Math.min(Math.max(1, Math.floor(Number(c.req.query('limit'))) || TASK_PAGE_DEFAULT_LIMIT), TASK_PAGE_MAX_LIMIT);
+    const offset = Math.max(0, Math.floor(Number(c.req.query('offset'))) || 0);
+    const cursor = cursorParam ? decodeTaskCursor(cursorParam) : null;
+    if (cursorParam && !cursor) {
+      return problem(c, 400, 'Bad Request', 'cursor is not one this API issued; start again without it');
+    }
+    // A malformed id reached Postgres as a cast error and came back as a 500.
+    if (clientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) {
+      return problem(c, 400, 'Bad Request', 'clientId must be a UUID');
+    }
+    // `statuses` (comma-separated API statuses, as the Desk's filters send them) matches exactly the
+    // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
+    let states: TaskState[] | undefined;
+    if (statusList !== undefined) states = dbStatesForApiStatuses(String(statusList).split(','));
+    else if (status) {
+      // One word of the vocabulary; an unknown one used to list the new requests ('received').
+      if (!isTaskApiStatus(status) && !isTaskDbState(status)) {
+        return problem(c, 400, 'Bad Request', `status "${status}" is not a task status`);
+      }
+      states = [toDbTaskState(status)];
+    }
+
+    if (db) {
+      try {
+        const page = await withRlsContext(
+          db,
+          { tenantId, userId: auth.userId, role: auth.role },
+          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null, states, search })
+        );
+
+        const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
+        const items = page.rows.map((t) => {
+          // A check the QC did not measure (null: the Canva export check measures neither margins nor
+          // contrast) is reported as not measured; `?? true` showed it to the office as a green tick
+          // (review of 2026-09-24).
+          const report = (t.qc_report || {}) as Record<string, any>;
+          const qaReport = t.qc_status ? {
+            passed: t.qc_status === 'passed' && t.qc_critical_pass === true,
+            bidiIsolation: report.bidiIsolation ?? null,
+            safeMargins: report.safeMargins ?? null,
+            contrastCompliant: report.contrastCompliant ?? null,
+            fontCoverage: report.fontCoverage ?? null,
+            copyFidelity: report.copyFidelity ?? null,
+            errors: report.errors || [],
+          } : undefined;
+
+          // An approval holds while the task is approved or being delivered; a task sent back for changes
+          // since showed as APPROVED with Deliver enabled (review of 2026-09-24).
+          const approvalHolds = ['approved', 'publishing', 'complete'].includes(String(t.state));
+          const latestApproval = t.approval_id && approvalHolds ? {
+            decisionId: t.approval_id,
+            role: t.approval_role || 'art_director',
+            actorId: t.approval_actor_id,
+            decidedAt: iso(t.approval_created_at),
+          } : undefined;
+
+          const canvaBinding = t.canva_design_id ? {
+            designId: t.canva_design_id,
+            designUrl: t.canva_edit_url,
+            title: t.title,
+          } : undefined;
+
+          // The list carries no preview: GET /tasks/:id does.
+          const latestRevision = t.rev_id ? {
+            id: t.rev_id,
+            version: Number(t.rev_version || 1),
+            sha256: t.rev_sha256,
+            format: 'png',
+            createdAt: iso(t.rev_created_at),
+          } : undefined;
+
+          return {
+            id: t.id,
+            tenantId: t.tenant_id,
+            clientId: t.client_id,
+            projectId: t.project_id,
+            status: toApiTaskStatus(t.state || 'received'),
+            state: t.state,
+            priority: t.priority,
+            title: t.title,
+            description: t.description,
+            clientName: t.client_name || null,
+            headlineEn: t.headline_en || t.title,
+            headlineCkb: t.headline_ckb || null,
+            copyEn: t.copy_en || t.description,
+            copyCkb: t.copy_ckb || null,
+            designInstructions: t.design_instructions || '',
+            referenceAssets: t.reference_assets || '',
+            sourcePlatform: t.source_platform || 'hawa_desk',
+            sourceEventId: t.source_event_id || t.id,
+            sourceChannelId: t.source_channel_id || 'hawa_desk',
+            clientScopeLocked: Boolean(t.client_id),
+            version: Number(t.version),
+            latestRevisionId: t.current_design_revision_id || undefined,
+            latestRevision,
+            qaReport,
+            latestApproval,
+            canvaBinding,
+            createdAt: iso(t.created_at),
+            updatedAt: iso(t.updated_at),
+          };
+        });
+        return c.json({ items, total: page.total, limit: page.limit, ...(cursor ? {} : { offset }), nextCursor: page.nextCursor });
+      } catch (err: any) {
+        log.error('[core:tasks:list] DB list query error:', err);
+        return problem(c, 500, 'Database Error', `Failed to query tasks from database: ${err.message}`);
+      }
+    }
+
+    if (isProduction) {
+      return problem(c, 503, 'Database Unavailable', 'Production task query strictly requires connected PostgreSQL database storage');
+    }
+
+    // Development without a database: the in-memory tasks, paged by offset only.
+    let list = Array.from(tasks.values());
+    if (status) list = list.filter((t) => t.status === status);
+    if (statusList !== undefined) {
+      const wanted = new Set(String(statusList).split(',').map((s) => s.trim().toUpperCase()));
+      list = list.filter((t) => wanted.has(String(t.status).toUpperCase()));
+    }
+    if (clientId) list = list.filter((t) => t.clientId === clientId);
+    const total = list.length;
+    const paginated = list.slice(offset, offset + limit);
+    return c.json({ items: paginated, total, limit, offset, nextCursor: null });
+  });
+
+  // Create Task
+  registerRoute('post', '/tasks', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    const body = await c.req.json().catch(() => ({}));
+
+    if (!auth.authenticated) {
+      return problem(
+        c,
+        401,
+        'Unauthorized',
+        'Authentication required: anonymous or unauthorized task creation is denied'
+      );
+    }
+
+    if (isProduction && !db && !process.env.HAWA_BEARER_TOKEN?.includes('disposable')) {
+      return problem(
+        c,
+        503,
+        'Database Unavailable',
+        'Production task intake strictly requires connected PostgreSQL database storage'
+      );
+    }
+
+    if (taskRepo && db && body.clientId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(body.clientId)) {
+        return problem(
+          c,
+          400,
+          'Invalid Client Identifier',
+          `Client ID '${body.clientId}' must be a valid UUID for durable storage`
+        );
+      }
+    }
+
+    const idempotencyKey =
+      c.req.header('Idempotency-Key') ||
+      c.req.header('idempotency-key') ||
+      body.idempotencyKey ||
+      `key_${Date.now()}_${crypto.randomUUID()}`;
+
+    const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+    const userId = auth.userId || '00000000-0000-4000-b000-000000000001';
+
+    // If database persistence is configured, execute atomic aggregate intake:
+    if (taskRepo && db) {
+      try {
+        const priorityNum =
+          typeof body.priority === 'number'
+            ? body.priority
+            : body.priority === 'urgent'
+            ? 5
+            : body.priority === 'rush'
+            ? 4
+            : 3;
+
+        const aggregateResult = await withRlsContext(
+          db,
+          { tenantId, userId, role: auth.role || 'operator' },
+          async (trx) => {
+            return await taskRepo.createTaskAggregate(
+              {
+                tenantId,
+                userId,
+                idempotencyKey,
+                title: body.title || 'Untitled Task',
+                description: body.description || '',
+                clientId: body.clientId || null,
+                projectId: body.projectId || null,
+                priority: priorityNum,
+                actorType: (auth.role === 'adapter' ? 'adapter' : 'user') as any,
+                actorId: auth.actorId,
+                payload: {
+                  body,
+                  headlineEn: body.headlineEn,
+                  headlineCkb: body.headlineCkb,
+                  copyEn: body.copyEn,
+                  copyCkb: body.copyCkb,
+                  clientDnaVersion: body.clientDnaVersion || ((await resolveClientDna(body.clientId, undefined, trx))?.version || 1),
+                },
+                enqueueOutbox: true,
+              },
+              trx
+            );
+          }
+        );
+
+        const dbTask = aggregateResult.task;
+        const normalizedTask = {
+          id: dbTask.id,
+          tenantId: dbTask.tenant_id,
+          clientId: dbTask.client_id,
+          projectId: dbTask.project_id,
+          status: (dbTask.state || 'received').toUpperCase(),
+          state: dbTask.state,
+          priority: dbTask.priority,
+          title: dbTask.title,
+          description: dbTask.description,
+          headlineEn: body.headlineEn || dbTask.title,
+          headlineCkb: body.headlineCkb || null,
+          copyEn: body.copyEn || dbTask.description,
+          copyCkb: body.copyCkb || null,
+          sourcePlatform: 'hawa_desk',
+          sourceEventId: dbTask.id,
+          sourceChannelId: 'hawa_desk',
+          idempotencyKey,
+          clientScopeLocked: false,
+          clientDnaVersion: body.clientDnaVersion || (clientDnas.get(dbTask.client_id)?.version || 1),
+          version: Number(dbTask.version),
+          createdAt: dbTask.created_at instanceof Date ? dbTask.created_at.toISOString() : (dbTask.created_at || new Date().toISOString()),
+          updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
+        };
+
+        tasks.set(dbTask.id, normalizedTask);
+        if (aggregateResult.created) {
+          broadcast('task:created', normalizedTask);
+          return c.json(normalizedTask, 201);
+        } else {
+          return c.json(normalizedTask, 200);
+        }
+      } catch (err: any) {
+        if (err instanceof IdempotencyConflictError) {
+          return problem(
+            c,
+            409,
+            'Idempotency Conflict',
+            'Idempotency conflict: key already used with differing payload'
+          );
+        }
+        log.error('[core:tasks:create] DB Aggregate Intake Failure:', err);
+        return problem(
+          c,
+          503,
+          'Durable Storage Unavailable',
+          `Failed to commit task aggregate to durable storage: ${err.message}`
+        );
+      }
+    }
+
+    // In-memory fallback ONLY when no database is configured (e.g. lightweight isolated unit tests)
+    for (const t of tasks.values()) {
+      if (t.idempotencyKey === idempotencyKey) {
+        if (t.title !== (body.title || 'Untitled Task')) {
+          return problem(
+            c,
+            409,
+            'Idempotency Conflict',
+            'Idempotency conflict: key already used with differing payload'
+          );
+        }
+        return c.json(t, 200);
+      }
+    }
+
+    const taskId = crypto.randomUUID();
+    const task = {
+      id: taskId,
+      tenantId: auth.tenantId || defaultTenantId,
+      clientId: body.clientId || null,
+      projectId: body.projectId || null,
+      status: 'RECEIVED',
+      priority: body.priority || 'routine',
+      title: body.title || 'Untitled Task',
+      description: body.description || '',
+      headlineEn: body.headlineEn || body.title || 'Untitled Task',
+      headlineCkb: body.headlineCkb || null,
+      copyEn: body.copyEn || body.description || '',
+      copyCkb: body.copyCkb || null,
+      sourcePlatform: 'hawa_desk',
+      sourceEventId: taskId,
+      sourceChannelId: 'hawa_desk',
+      idempotencyKey,
+      clientScopeLocked: false,
+      version: 1,
+      repairCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    tasks.set(taskId, task);
+    events.set(taskId, [
+      {
+        eventId: crypto.randomUUID(),
+        taskId,
+        fromStatus: null,
+        toStatus: 'RECEIVED',
+        actor: { type: 'user', id: auth.actorId || 'desk_user' },
+        reason: 'Task created via Hawa Desk',
+        occurredAt: new Date().toISOString(),
+      },
+    ]);
+
+    broadcast('task:created', task);
+
+    return c.json(task, 201);
+  });
+
+  // Get Task
+  registerRoute('get', '/tasks/:taskId', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) {
+      return problem(c, 401, 'Unauthorized', 'Authentication required to access task');
+    }
+    const taskId = c.req.param('taskId');
+    const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+
+    const memoryTask = tasks.get(taskId);
+
+    if (taskRepo && db) {
+      try {
+        const queryRes = await withRlsContext(
+          db,
+          { tenantId, userId: auth.userId, role: auth.role },
+          async (trx) => {
+            const withEv = await taskRepo.findWithEvents(taskId, tenantId, trx);
+            if (!withEv?.task) return null;
+            const dbTask = withEv.task;
+            const createdEv = withEv.events.find((e: any) => e.event_type === 'task.created');
+
+            let revRow: any = null;
+            if (dbTask.current_design_revision_id) {
+              revRow = await trx.selectFrom('design_revisions')
+                .selectAll()
+                .where('id', '=', dbTask.current_design_revision_id)
+                .where('tenant_id', '=', tenantId)
+                .executeTakeFirst();
+            }
+
+            // The preview is the newest PNG export. The newest export of any format is the deck the
+            // worker exports after the PNG, which Desk drew as a broken "PNG" with the deck's hash.
+            const exportRow = (await sql<any>`
+              SELECT id, sha256, format, encode(content, 'base64') as b64, octet_length(content) as byte_size
+              FROM hawa.canva_export_bytes
+              WHERE task_id = ${taskId}::uuid AND tenant_id = ${tenantId}::uuid AND format = 'png'
+              ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+
+            const qcRow = await trx.selectFrom('qc_runs')
+              .selectAll()
+              .where('task_id', '=', taskId)
+              .where('tenant_id', '=', tenantId)
+              .orderBy('started_at', 'desc')
+              .limit(1)
+              .executeTakeFirst();
+
+            const approvalRow = await trx.selectFrom('approvals')
+              .selectAll()
+              .where('task_id', '=', taskId)
+              .where('tenant_id', '=', tenantId)
+              .where('decision', '=', 'approved')
+              .orderBy('created_at', 'desc')
+              .limit(1)
+              .executeTakeFirst();
+
+            const canvaBindingRow = (await sql<any>`
+              SELECT * FROM hawa.canva_bindings
+              WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status = 'bound'
+              ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+
+            const pubEvent = (await sql<any>`
+              SELECT data, occurred_at as created_at FROM hawa.task_events
+              WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.published'
+              ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
+
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent };
+          }
+        );
+
+        if (queryRes && queryRes.dbTask) {
+          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent } = queryRes;
+          const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
+
+          const headlineEn = memoryTask?.headlineEn || payload.headlineEn || payload.body?.headlineEn || dbTask.title;
+          const headlineCkb = memoryTask?.headlineCkb || payload.headlineCkb || payload.body?.headlineCkb || null;
+          const copyEn = memoryTask?.copyEn || payload.copyEn || payload.body?.copyEn || dbTask.description;
+          const copyCkb = memoryTask?.copyCkb || payload.copyCkb || payload.body?.copyCkb || null;
+
+          const latestRevisionId = dbTask.current_design_revision_id || memoryTask?.latestRevisionId || undefined;
+
+          let latestRevision = memoryTask?.latestRevision;
+          if (revRow || exportRow) {
+            const versionNum = revRow ? Number(revRow.revision || 1) : 1;
+            const sha256 = exportRow?.sha256 || revRow?.source_sha256;
+            const previewUrl = exportRow?.b64 ? `data:image/png;base64,${exportRow.b64}` : undefined;
+            const byteSize = exportRow?.byte_size ? Number(exportRow.byte_size) : undefined;
+            // The planner records width and height; 1080 x 1350 was shown for any design whose manifest
+            // had no "dimensions" (review of 2026-09-24). Unknown stays unknown.
+            const manifest = revRow?.neutral_manifest;
+            const dimensions = manifest?.dimensions
+              || (Number(manifest?.width) > 0 && Number(manifest?.height) > 0 ? { width: Number(manifest.width), height: Number(manifest.height) } : undefined);
+            const format = exportRow?.format || 'png';
+            const createdAt = revRow?.created_at instanceof Date ? revRow.created_at.toISOString() : (revRow?.created_at ? String(revRow.created_at) : undefined);
+            latestRevision = {
+              id: revRow?.id || latestRevisionId || crypto.randomUUID(),
+              version: versionNum,
+              previewUrl,
+              sha256,
+              byteSize,
+              dimensions,
+              format,
+              createdAt,
+            };
+          }
+
+          let qaReport = memoryTask?.qaReport;
+          if (qcRow) {
+            const report = qcRow.report as any;
+            qaReport = {
+              passed: qcRow.status === 'passed' && qcRow.critical_pass === true,
+              // Not measured is null, not a pass (see the task list).
+              bidiIsolation: report?.bidiIsolation ?? null,
+              safeMargins: report?.safeMargins ?? null,
+              contrastCompliant: report?.contrastCompliant ?? null,
+              fontCoverage: report?.fontCoverage ?? null,
+              copyFidelity: report?.copyFidelity ?? null,
+              errors: report?.errors || [],
+            };
+          }
+
+          let latestApproval = memoryTask?.latestApproval;
+          if (!['approved', 'publishing', 'complete'].includes(String(dbTask.state))) latestApproval = undefined;
+          else if (approvalRow) {
+            latestApproval = {
+              decisionId: approvalRow.id,
+              role: approvalRow.decision_payload?.approverRole || 'art_director',
+              actorId: approvalRow.decided_by,
+              decidedAt: approvalRow.created_at instanceof Date ? approvalRow.created_at.toISOString() : String(approvalRow.created_at),
+            };
+          }
+
+          let canvaBinding = (memoryTask as any)?.canvaBinding;
+          if (canvaBindingRow) {
+            canvaBinding = {
+              designId: canvaBindingRow.canva_design_id,
+              designUrl: canvaBindingRow.edit_url,
+              title: dbTask.title,
+              lastSyncedAt: canvaBindingRow.updated_at instanceof Date ? canvaBindingRow.updated_at.toISOString() : String(canvaBindingRow.updated_at),
+            };
+          }
+
+          let deliveryReceipt = (memoryTask as any)?.deliveryReceipt;
+          if (pubEvent) {
+            deliveryReceipt = {
+              driveFolderUrl: pubEvent.data?.driveFolderUrl || pubEvent.data?.folderUrl,
+              sheetRowUrl: pubEvent.data?.sheetRowUrl || pubEvent.data?.sheetUrl,
+              deliveredAt: pubEvent.created_at instanceof Date ? pubEvent.created_at.toISOString() : String(pubEvent.created_at),
+            };
+          }
+
+          const normalizedTask = {
+            id: dbTask.id,
+            tenantId: dbTask.tenant_id,
+            clientId: dbTask.client_id,
+            projectId: dbTask.project_id,
+            status: toApiTaskStatus(dbTask.state || 'received'),
+            state: dbTask.state,
+            priority: dbTask.priority,
+            title: dbTask.title,
+            description: dbTask.description,
+            headlineEn,
+            headlineCkb,
+            copyEn,
+            copyCkb,
+            sourcePlatform: payload.sourcePlatform || payload.body?.source?.platform || 'hawa_desk',
+            sourceEventId: payload.sourceEventId || dbTask.id,
+            sourceChannelId: payload.sourceChannelId || 'hawa_desk',
+            designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
+            referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
+            clientScopeLocked: Boolean(dbTask.client_id),
+            clientDnaVersion:
+              memoryTask?.clientDnaVersion ||
+              payload.clientDnaVersion ||
+              payload.body?.clientDnaVersion ||
+              briefs.get(taskId)?.clientDnaVersion ||
+              (dbTask.client_id ? (await resolveClientDna(dbTask.client_id))?.version : undefined) ||
+              1,
+            version: Number(dbTask.version),
+            latestRevisionId,
+            latestRevision,
+            qaReport,
+            latestApproval,
+            canvaBinding,
+            deliveryReceipt,
+            createdAt: dbTask.created_at instanceof Date ? dbTask.created_at.toISOString() : (dbTask.created_at || new Date().toISOString()),
+            updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
+          };
+          return c.json(normalizedTask);
+        } else if (!memoryTask) {
+          return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
+        }
+      } catch (err) {
+        log.error('[core:tasks:get] DB fetch error:', err);
+      }
+    }
+
+    const task = await resolveTaskWithFallback(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
+    return c.json(task);
+  });
+
+  // Get Task Timeline
+  registerRoute('get', '/tasks/:taskId/timeline', async (c: any) => {
+    const taskId = c.req.param('taskId');
+    const auth = verifyRequestAuth(c);
+    const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
+
+    if (taskRepo && db) {
+      try {
+        const dbEvents = await withRlsContext(
+          db,
+          { tenantId, userId: auth.userId, role: auth.role },
+          async (trx) => await taskRepo.getEvents(taskId, tenantId, trx)
+        );
+
+        if (dbEvents.length > 0) {
+          const mapped = dbEvents.map((e) => ({
+            eventId: e.id,
+            taskId: e.task_id,
+            eventType: e.event_type,
+            aggregateVersion: Number(e.aggregate_version),
+            actor: { type: e.actor_type, id: e.actor_id },
+            data: e.data,
+            occurredAt: e.occurred_at instanceof Date ? e.occurred_at.toISOString() : e.occurred_at,
+          }));
+          return c.json({ events: mapped });
+        }
+      } catch (err) {
+        // Answered with the in-memory events (usually none), a failed read showed the Desk's History
+        // tab as "no recorded events" (review of 2026-09-24).
+        log.error('[core:tasks:timeline] DB timeline error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The task history could not be read; try again');
+      }
+    }
+
+    const taskEvents = events.get(taskId) || [];
+    return c.json({ events: taskEvents });
+  });
+}
