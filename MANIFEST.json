@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T11:43:09Z",
+  "generatedAt": "2026-09-24T12:32:18Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -244,8 +244,8 @@
     },
     {
       "path": "adrs/035_content_addressed_file_store.md",
-      "sha256": "fd18f894af4df69b6fcbce8e7673605dd371fad326f0472d0301211289bc9a4b",
-      "bytes": 3641
+      "sha256": "1b7cc2cfa27494b903a2bf468ad82c5ba13895e783447d923409d1973aee6c8b",
+      "bytes": 5717
     },
     {
       "path": "adrs/036_renderer_neutral_svg_and_resvg_gate.md",
@@ -344,18 +344,18 @@
     },
     {
       "path": "db/03-grants.sql",
-      "sha256": "1e9881334595793f8d756ac63a673da505d9b576737d999376bc3e5275eb673a",
-      "bytes": 1577
+      "sha256": "308386476fd7f4f87a82b8950e7ffc4a2df54fca6b8db1039ec57348ce8d142a",
+      "bytes": 2301
     },
     {
       "path": "db/rls.sql",
-      "sha256": "a112d1debac917da5e8255cfdebb61535dc17fef45300b6dde7e0cf9c1f0b8c2",
-      "bytes": 12991
+      "sha256": "e03a97ccb42951b0b4e176b5d065404ab3d73bc24cae8054acbb8050d791b045",
+      "bytes": 13185
     },
     {
       "path": "db/schema.sql",
-      "sha256": "74d830932177566ad7d73d25d41d8d269bd2226fbd3a296ab3b65c737eeae32c",
-      "bytes": 42484
+      "sha256": "88a2fa3a554b7f4edb1db5257cc6128a46b0a79f718301fecd6083c313d6976c",
+      "bytes": 42880
     },
     {
       "path": "db/seed.sql",
@@ -694,8 +694,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "84f8a384b1564a1e42a10d70b68a31c7d41fd4b7c5fe439f583d13ca35018099",
-      "bytes": 67979
+      "sha256": "eed64e041412589756122d21c0fe4a0a59a16a080e8d794a44228bf4e5995b05",
+      "bytes": 68777
     },
     {
       "path": "plans/user-stories.csv",
@@ -774,8 +774,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "d354d9b08b9f786367c0671ec5dca18506b0d8e21c7f2f9d97b67df590443591",
-      "bytes": 1001
+      "sha256": "4f77c17d05974b4076ca67052fabeda864eed134ec59309707cd519eb15dd267",
+      "bytes": 6719
     },
     {
       "path": "runbooks/11_upgrade.md",
