@@ -24,6 +24,7 @@ import { homedir } from 'node:os';
 import path, { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { buildDatabase } from './test-template.js';
 import {
   TEST_POSTGRES_CONTAINER,
   TEST_POSTGRES_PORT,
@@ -153,29 +154,8 @@ async function provisionDatabase(root: string, credentials: Credentials, name: (
     await maint.end().catch(() => {});
   }
 
-  const target = testUrl(OWNER_ROLE, credentials.ownerPassword, name);
-  const client = new pg.Client({ connectionString: target, connectionTimeoutMillis: 10000 });
-  await client.connect();
-  try {
-    for (const file of ['db/schema.sql', 'db/rls.sql', 'db/seed.sql']) {
-      await client.query(readFileSync(resolve(root, file), 'utf8'));
-      console.log(`${name}: applied ${file}`);
-    }
-    // The application role uses the disposable database exactly like the office database. The
-    // versioned upgrades below grant their own tables narrowly, so this runs before them.
-    await client.query(`GRANT CONNECT ON DATABASE ${name} TO ${APP_ROLE}`);
-    await client.query(`GRANT USAGE ON SCHEMA hawa TO ${APP_ROLE}`);
-    await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA hawa TO ${APP_ROLE}`);
-    await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hawa TO ${APP_ROLE}`);
-    console.log(`${name}: granted runtime privileges to ${APP_ROLE}`);
-  } finally {
-    await client.end().catch(() => {});
-  }
-
-  // Versioned upgrades are applied through the same runner production uses.
-  const { upgradeCanvaSchema } = await import('./upgrade.js');
-  const result = await upgradeCanvaSchema(target);
-  console.log(`${name}: versioned upgrades applied=${result.applied.length} verified=${result.verified.length}`);
+  // Built exactly like the per-file templates (test-template.ts); fixtures follow in applyFixtures.
+  await buildDatabase(root, testUrl(OWNER_ROLE, credentials.ownerPassword, name), { fixtures: false }, console.log);
 }
 
 /**

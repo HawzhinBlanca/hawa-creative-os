@@ -51,10 +51,15 @@ export default defineConfig({
     testTimeout: 30000,
     include: ['**/*.test.ts', '**/*.spec.ts'],
     exclude: ['archive/**', '**/node_modules/**', '**/dist/**', '**/.turbo/**', '**/.claude/**', '**/.worktrees/**', 'apps/desk/e2e/**'],
-    fileParallelism: false,
+    // Every file has its own databases (packages/db/src/test-template.ts), so files run in
+    // parallel. Workers are capped: the machine also runs the office's containers.
+    globalSetup: [resolve(import.meta.dirname, 'packages/db/test-support/test-global-setup.ts')],
+    fileParallelism: process.env.HAWA_TEST_SHARED_DB !== '1',
+    maxWorkers: Number(process.env.HAWA_TEST_WORKERS || 4),
     // Resolved from this file: `pnpm --filter <pkg> test` runs vitest inside the package, where a
     setupFiles: [
       resolve(import.meta.dirname, 'packages/db/src/test-connection-guard.ts'),
+      resolve(import.meta.dirname, 'packages/db/test-support/test-database-clone.ts'),
       resolve(import.meta.dirname, 'packages/integrations/test/setup-fake-drive.ts'),
     ],
     coverage: {

@@ -5,7 +5,7 @@ import { DesignStudioRepository } from '../src/repositories/design-studio.reposi
 import { sql } from 'kysely';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
-if (url && new URL(url).pathname !== '/hawa_repair') {
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) {
   throw new Error('Isolated hawa_repair database required');
 }
 

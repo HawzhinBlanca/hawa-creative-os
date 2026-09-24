@@ -23,7 +23,7 @@ describe('exact copy selection',()=>{
     });
 });
 const url=process.env.HAWA_ISOLATED_TEST_DB;
-if(url&&new URL(url).pathname!=='/hawa_repair')throw new Error('Isolated database required');
+if(url&&!/^\/hawa_(repair|tr_)/.test(new URL(url).pathname))throw new Error('Isolated database required');
 describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/Canva',()=>{
   // The mocked provider answers as the production model, and the planner rejects a receipt for any
   // model it did not request; so this suite runs the planner on the production tier.

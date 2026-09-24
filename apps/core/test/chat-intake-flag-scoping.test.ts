@@ -4,7 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { persistChatIntake, type ChatIntake } from '../src/services/chat-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
-if (url && new URL(url).pathname !== '/hawa_repair') {
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) {
   throw new Error('Only disposable hawa_repair database admitted');
 }
 

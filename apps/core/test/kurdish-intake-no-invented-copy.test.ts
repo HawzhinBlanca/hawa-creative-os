@@ -119,7 +119,7 @@ describe('Brand designs at intake', () => {
 });
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
-if (url && new URL(url).pathname !== '/hawa_repair') throw new Error('Only disposable hawa_repair database admitted');
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Only disposable hawa_repair database admitted');
 describe.skipIf(!url)('Kurdish Telegram intake with no copy, persisted', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const bearer = { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };

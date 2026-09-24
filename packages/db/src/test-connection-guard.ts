@@ -11,6 +11,14 @@ import { appendFileSync } from 'node:fs';
 import pg from 'pg';
 import { productionTargetReason } from './test-database-guard.js';
 
+/**
+ * With per-file databases (packages/db/test-support/test-database-clone.ts sets
+ * hawaPerFileDatabases) no file may reach the old shared databases: a connection there means a
+ * file built its own URL instead of reading the variables, and would share rows with every other
+ * file again.
+ */
+const SHARED_DATABASES = new Set(['hawa_test', 'hawa_repair']);
+
 interface ConnectionParameters {
   host?: string;
   port?: number;
@@ -21,7 +29,7 @@ type ConnectCallback = (error: Error | null) => void;
 type GuardedClient = pg.Client & { connectionParameters: ConnectionParameters };
 type Connect = (this: GuardedClient, callback?: ConnectCallback) => Promise<void> | void;
 
-const prototype = pg.Client.prototype as unknown as { connect: Connect; hawaProductionGuard?: true };
+const prototype = pg.Client.prototype as unknown as { connect: Connect; hawaProductionGuard?: true; hawaPerFileDatabases?: boolean };
 
 // Setup files run once per test file, but pg is loaded once per worker; wrap it only once.
 if (!prototype.hawaProductionGuard) {
@@ -30,7 +38,11 @@ if (!prototype.hawaProductionGuard) {
     const { host, port, database, user } = this.connectionParameters;
     const log = process.env.HAWA_TEST_CONNECTION_LOG;
     if (log) appendFileSync(log, `${host}:${port}/${database} ${user}\n`);
-    const reason = productionTargetReason({ host, port, database });
+    const reason =
+      productionTargetReason({ host, port, database }) ??
+      (prototype.hawaPerFileDatabases && database && SHARED_DATABASES.has(database)
+        ? 'this run gives every test file its own database; read TEST_DATABASE_URL and friends instead of naming a shared one'
+        : null);
     if (reason) {
       const error = new Error(`Test connection to ${host}:${port}/${database} refused: ${reason}.`);
       if (callback) {

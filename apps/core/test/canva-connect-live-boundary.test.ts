@@ -5,7 +5,7 @@ import { createSyntheticValidPng } from '../../../packages/integrations/src/canv
 import { CanvaConnectService,CanvaTokenCipher,downloadCanvaExport } from '../src/services/canva-connect-service.js';
 import { createApp } from '../src/app.js';
 const url=process.env.HAWA_ISOLATED_TEST_DB;
-if(url&&new URL(url).pathname!=='/hawa_repair')throw new Error('Disposable hawa_repair database required');
+if(url&&!/^\/hawa_(repair|tr_)/.test(new URL(url).pathname))throw new Error('Disposable hawa_repair database required');
 const key='a1'.repeat(32);
 describe('Canva token and download security',()=>{
   it('encrypts with actor-bound integrity and rejects wrong key, tampering or another scope',()=>{
@@ -220,7 +220,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   });
   it('runs the export path through the non-owner runtime database role',async()=>{
     await bind();const runtimeUrl=new URL(process.env.HAWA_ISOLATED_RUNTIME_DB || url!);
-    if(runtimeUrl.pathname!=='/hawa_repair')throw new Error('Disposable runtime database required');
+    if(!/^\/hawa_(repair|tr_)/.test(runtimeUrl.pathname))throw new Error('Disposable runtime database required');
     runtimeUrl.username='hawa_app';if(!process.env.HAWA_ISOLATED_RUNTIME_DB)runtimeUrl.password=process.env.HAWA_APP_PASSWORD || new URL(process.env.TEST_DATABASE_URL!).password;const runtimeDb=createDb(runtimeUrl.href);
     try {
       const runtimeService=new CanvaConnectService(runtimeDb,options);

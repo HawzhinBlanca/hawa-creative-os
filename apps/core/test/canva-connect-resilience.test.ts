@@ -4,7 +4,7 @@ import { createDb, sql } from '@hawa/db';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
-if (url && new URL(url).pathname !== '/hawa_repair') throw new Error('Disposable hawa_repair database required');
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Disposable hawa_repair database (or a per-file copy of it) required');
 const key = 'c3'.repeat(32);
 
 /**

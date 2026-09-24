@@ -6,7 +6,7 @@ import { sql } from 'kysely';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 // This suite refuses the office database. Provision the disposable schema first.
-if (url && new URL(url).pathname !== '/hawa_repair') throw new Error('Isolated hawa_repair database required');
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Isolated hawa_repair database required');
 describe.skipIf(!url)('real PostgreSQL binding/capture isolation', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const repo = new CanvaBindingRepository(db);

@@ -6,7 +6,7 @@ import { createApp } from '../src/app.js';
 import { persistChatIntake, type ChatIntake } from '../src/services/chat-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
-if (url && new URL(url).pathname !== '/hawa_repair') throw new Error('Only disposable hawa_repair database admitted');
+if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Only disposable hawa_repair database admitted');
 describe.skipIf(!url)('chat intake with real isolated PostgreSQL', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const tenant = '00000000-0000-4000-a000-000000000001';
