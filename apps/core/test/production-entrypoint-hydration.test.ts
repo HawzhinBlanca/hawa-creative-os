@@ -36,6 +36,7 @@ describe('the production entrypoint waits for client DNA before serving', () => 
     vi.doUnmock('@hono/node-server');
     vi.doUnmock('../src/app.js');
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   function appWhoseHydrationIs(hydrated: Promise<number>) {
@@ -62,7 +63,26 @@ describe('the production entrypoint waits for client DNA before serving', () => 
   });
 
   it('never opens the port when hydration fails, and exits non-zero', async () => {
-    appWhoseHydrationIs(Promise.reject(new Error('database unreachable')));
+    // Loading index.ts takes many turns of the event loop, and Node reports a rejection nobody has
+    // handled yet as unhandled before index.ts reaches its await. Marking it handled here keeps it
+    // rejected: awaiting it in index.ts still throws.
+    const failed = Promise.reject(new Error('database unreachable'));
+    failed.catch(() => {});
+    appWhoseHydrationIs(failed);
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code})`);
+    }) as typeof process.exit);
+
+    await expect(import('../src/index.js')).rejects.toThrow('process.exit(1)');
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(serve).not.toHaveBeenCalled();
+  });
+
+  it('gives up on a hydration that never finishes: exits non-zero without opening the port', async () => {
+    // A PostgreSQL that accepts the connection and never answers used to leave the process waiting
+    // for ever with the port closed. The bound is short here so the test does not wait a minute.
+    vi.stubEnv('HAWA_DNA_HYDRATION_TIMEOUT_MS', '50');
+    appWhoseHydrationIs(new Promise<number>(() => {}));
     const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit(${code})`);
     }) as typeof process.exit);

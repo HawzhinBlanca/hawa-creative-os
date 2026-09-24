@@ -8832,9 +8832,12 @@ export function createApp(options?: CreateAppOptions) {
       try {
         const auth = verifyRequestAuth(c);
         const tenantId = auth.tenantId || defaultTenantId;
+        // hawa.clients is under RLS: looked up outside a context, a code finds nothing and the
+        // answer fell back to Core's memory (the fixture snapshots). findByCode also reads client-<code>.
         const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
           ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
+          : await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) =>
+              (await clientRepo.findByCode(tenantId, clientId, trx))?.id);
         if (targetId) {
           const rows = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
             return await clientRepo.listDnaSnapshots(tenantId, targetId, trx);
@@ -10548,6 +10551,19 @@ export function createApp(options?: CreateAppOptions) {
     setTimeout(pass, 120_000).unref?.();
   }
 
+  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
+  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
+  const clientDnaHydrated: Promise<number> = db
+    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
+        (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
+        (err) => {
+          log.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
+          if (isProduction) throw err;
+          return 0;
+        }
+      )
+    : Promise.resolve(0);
+
   // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
   // administrator's "poll now" hands updates to intake exactly as the background loop does (through
   // the same retry and dead letter, under the same one-poll-at-a-time lock); the loop itself runs
@@ -10595,21 +10611,14 @@ export function createApp(options?: CreateAppOptions) {
         () => handlePolledUpdate(update)
       );
     telegramBridge.useUpdateHandler?.(handleUpdateInContext);
-    if (options?.enableTelegramPolling) telegramBridge.startPolling(handleUpdateInContext);
+    // An update polled before client DNA has loaded would go through intake against the fixture
+    // offices, so the loop starts once the load is done. If it fails in production, index.ts stops
+    // the process, and there is nothing to poll for.
+    if (options?.enableTelegramPolling) {
+      clientDnaHydrated.then(() => telegramBridge.startPolling(handleUpdateInContext), () => {});
+    }
   }
 
-  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
-  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
-  const clientDnaHydrated: Promise<number> = db
-    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
-        (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
-        (err) => {
-          log.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
-          if (isProduction) throw err;
-          return 0;
-        }
-      )
-    : Promise.resolve(0);
   // index.ts awaits clientDnaHydrated before it opens the port.
   return Object.assign(app, { clientDnaHydrated, guidelineReadings });
 }

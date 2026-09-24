@@ -39,4 +39,16 @@ describe('N5: a client\'s DNA snapshots come from Postgres', () => {
     const snapshots = (await res.json()) as Array<{ version: number; sha256: string }>;
     expect(snapshots).toContainEqual(expect.objectContaining({ version, sha256: contentHash }));
   });
+
+  // The Desk also addresses a client by its code. The reader looked the code up outside any RLS
+  // context, where hawa.clients shows nothing, and answered with Core's memory instead: the
+  // fixture snapshots, never what Postgres holds.
+  it.each(['kaae', 'client-kaae'])('lists the same version when the client is addressed as %s', async (spelling) => {
+    const res = await createApp({ db }).request(`/v1/clients/${spelling}/snapshots`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    const snapshots = (await res.json()) as Array<{ version: number; sha256: string }>;
+    expect(snapshots).toContainEqual(expect.objectContaining({ version, sha256: contentHash }));
+  });
 });

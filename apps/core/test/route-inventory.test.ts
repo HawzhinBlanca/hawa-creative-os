@@ -131,17 +131,17 @@ describe('N2: route order', () => {
   });
 
   /**
-   * A route module or service that imports app.ts is a cycle: app.ts imports the module to register
-   * it. Two exist today because app.ts still exports helpers they need; SPLIT_PLAN F1 moves those
+   * A route module, service or fixture file that imports app.ts is a cycle: app.ts imports the
+   * module to register or seed from it. Two exist today because app.ts still exports helpers they need; SPLIT_PLAN F1 moves those
    * helpers to core-helpers.ts and empties this list. Nothing may be added to it.
    */
   const IMPORTS_APP_TODAY = ['routes/canva.routes.ts', 'routes/system.routes.ts'];
 
-  it('has no module under src/routes or src/services importing app.js, beyond the two F1 removes', () => {
+  it('has no module under src/routes, src/services or src/fixtures importing app.js, beyond the two F1 removes', () => {
     const src = path.join(here, '../src');
     const importsApp = /(?:from\s+|import\s*\(\s*)['"](?:\.\.?\/)+app(?:\.js)?['"]/;
     const offenders: string[] = [];
-    for (const dir of ['routes', 'services']) {
+    for (const dir of ['routes', 'services', 'fixtures']) {
       for (const file of fs.readdirSync(path.join(src, dir), { recursive: true }).map(String)) {
         if (!/\.tsx?$/.test(file)) continue;
         if (importsApp.test(fs.readFileSync(path.join(src, dir, file), 'utf8'))) offenders.push(`${dir}/${file.split(path.sep).join('/')}`);
