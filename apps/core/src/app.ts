@@ -1139,56 +1139,6 @@ export function createApp(options?: CreateAppOptions) {
   registerWhatsappRoutes(routeContext);
   registerTelegramWebhookRoutes(routeContext);
 
-  // Moved to services/chat-campaign-intake.ts (architecture programme 1.3, G8); the Telegram webhook below still calls it here.
-  const { ingestChatCampaignTask } = createChatCampaignIntake(routeContext);
-
-  // --- Re-drive Failed Tasks & Automated Recovery Sweep ---
-  // Moved to services/redrive.ts with the controls routes (architecture programme 1.3, G6). The
-  // Telegram handler's /redo still calls it by this name until Telegram intake moves (G9). The module
-  // is imported here, where it is used, so this move left the shared import list alone.
-  const redriveTask = async (...args: Parameters<import('./services/redrive.js').Redrive['redriveTask']>) =>
-    (await import('./services/redrive.js')).createRedrive(routeContext).redriveTask(...args);
-
-  // The Telegram intake helpers moved to services/telegram-intake/ (architecture programme 1.3, G9,
-  // first step). The webhook below still calls them by these names until it moves as well; they are
-  // imported here, where they are used, as redriveTask is.
-  const telegramIntakeHelpers = Promise.all([
-    import('./services/telegram-intake/update-state.js'),
-    import('./services/telegram-intake/questions.js'),
-    import('./services/telegram-intake/requester-actions.js'),
-    import('./services/telegram-intake/callbacks-and-commands.js'),
-  ]).then(([updateState, questions, requesterActions, callbacksAndCommands]) => ({
-    ...updateState.createTelegramUpdateState(routeContext),
-    ...questions.createTelegramQuestions(routeContext),
-    ...requesterActions.createTelegramRequesterActions(routeContext),
-    ...callbacksAndCommands.createTelegramCallbacksAndCommands(routeContext),
-  }));
-  type TelegramIntakeHelpers = Awaited<typeof telegramIntakeHelpers>;
-  type PendingQuestion = import('./services/telegram-intake/questions.js').PendingQuestion;
-  const telegramUpdateHandled = async (...args: Parameters<TelegramIntakeHelpers['telegramUpdateHandled']>) => (await telegramIntakeHelpers).telegramUpdateHandled(...args);
-  const markTelegramUpdateHandled = async (...args: Parameters<TelegramIntakeHelpers['markTelegramUpdateHandled']>) => (await telegramIntakeHelpers).markTelegramUpdateHandled(...args);
-  const handleRequesterAction = async (...args: Parameters<TelegramIntakeHelpers['handleRequesterAction']>) => (await telegramIntakeHelpers).handleRequesterAction(...args);
-  const questionFollowUp = async (...args: Parameters<TelegramIntakeHelpers['questionFollowUp']>) => (await telegramIntakeHelpers).questionFollowUp(...args);
-  const pendingQuestion = async (...args: Parameters<TelegramIntakeHelpers['pendingQuestion']>) => (await telegramIntakeHelpers).pendingQuestion(...args);
-  const answerQuestion = async (...args: Parameters<TelegramIntakeHelpers['answerQuestion']>) => (await telegramIntakeHelpers).answerQuestion(...args);
-  const taskDesignState = async (...args: Parameters<TelegramIntakeHelpers['taskDesignState']>) => (await telegramIntakeHelpers).taskDesignState(...args);
-  const replyDesign = async (...args: Parameters<TelegramIntakeHelpers['replyDesign']>) => (await telegramIntakeHelpers).replyDesign(...args);
-  const revisionInFlight = async (...args: Parameters<TelegramIntakeHelpers['revisionInFlight']>) => (await telegramIntakeHelpers).revisionInFlight(...args);
-  const studioRunInProgressForChat = async (...args: Parameters<TelegramIntakeHelpers['studioRunInProgressForChat']>) => (await telegramIntakeHelpers).studioRunInProgressForChat(...args);
-  const handleCallbackQuery = async (...args: Parameters<TelegramIntakeHelpers['handleCallbackQuery']>) => (await telegramIntakeHelpers).handleCallbackQuery(...args);
-  const handleCommand = async (...args: Parameters<TelegramIntakeHelpers['handleCommand']>) => (await telegramIntakeHelpers).handleCommand(...args);
-
-  // Moved to services/office-alerts.ts and services/ask-history.ts with the Canva outcome routes
-  // (architecture programme 1.3, G4). The Telegram handler still calls them by these names until
-  // Telegram intake moves (G9); imported here, where they are used, as redriveTask is.
-  const enqueueOfficeAlert = async (...args: Parameters<import('./services/office-alerts.js').OfficeAlerts['enqueueOfficeAlert']>) =>
-    (await import('./services/office-alerts.js')).createOfficeAlerts({ db, outboxRepo }).enqueueOfficeAlert(...args);
-  const askHistory = async (...args: Parameters<import('./services/ask-history.js').AskHistory['askHistory']>) =>
-    (await import('./services/ask-history.js')).createAskHistory({ db }).askHistory(...args);
-
-  // A change the client asked for, which approval waits for (services/pending-change.ts).
-  const pendingChangeOf = (tenantId: string, taskId: string, after?: Date) => findPendingChange(db!, tenantId, taskId, after);
-
 
 
 
