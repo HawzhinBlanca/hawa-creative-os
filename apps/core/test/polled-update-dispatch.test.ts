@@ -72,6 +72,24 @@ describe('a Telegram update that intake keeps failing is never dropped', () => {
     expect(deps.park).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the durable count when one is given, so a restart carries the count on', async () => {
+    let stored = POLLED_UPDATE_MAX_ATTEMPTS - 2; // attempts made by the process before the restart
+    const recordFailure = vi.fn(async () => ++stored);
+    const deps = { deliver: vi.fn(async () => 503), recordFailure, park: vi.fn(async () => {}), notifySender: vi.fn(async () => {}), log: quiet };
+    const handle = createPolledUpdateHandler(deps);
+    expect(await advances(handle)).toBe(false);
+    expect(await advances(handle)).toBe(true);
+    expect(deps.park).toHaveBeenCalledTimes(1);
+    expect(recordFailure).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds the queue, without parking, when the failure could not be counted (the database is down)', async () => {
+    const deps = { deliver: vi.fn(async () => 503), recordFailure: vi.fn(async () => { throw new Error('database is down'); }), park: vi.fn(async () => {}), notifySender: vi.fn(async () => {}), log: quiet };
+    const handle = createPolledUpdateHandler(deps);
+    for (let i = 0; i < POLLED_UPDATE_MAX_ATTEMPTS + 2; i++) expect(await advances(handle)).toBe(false);
+    expect(deps.park).not.toHaveBeenCalled();
+  });
+
   it('counts attempts per update', async () => {
     const { deps, handle } = harness(async () => 500);
     const other = { ...update, update_id: 4243 };
@@ -94,7 +112,7 @@ describe('parkTelegramUpdate: the parked update is a durable row an operator can
       (await sql<any>`SELECT event_kind, processing_error, payload, verified FROM hawa.inbox_events
         WHERE source_account_id = 'telegram' AND source_event_id = ${'parked-update-' + updateId}`.execute(trx)).rows);
 
-  it('writes the update with the reason, under the same RLS identity production uses, and only once', async () => {
+  it('writes the update\'s id and kind with the reason, never its content, under the same RLS identity production uses, and only once', async () => {
     const parked = { update_id: 900_000_000 + Math.floor(Math.random() * 1e8), message: { chat: { id: 77 }, text: 'بانگهێشتنامەی کۆنفرانس' } };
     await parkTelegramUpdate(db, identity, parked, 'intake answered HTTP 500 after 5 attempts');
     await parkTelegramUpdate(db, identity, parked, 'a second pass after a restart');
@@ -103,8 +121,38 @@ describe('parkTelegramUpdate: the parked update is a durable row an operator can
     expect(found).toHaveLength(1);
     expect(found[0].event_kind).toBe('telegram_update_parked');
     expect(found[0].processing_error).toBe('intake answered HTTP 500 after 5 attempts');
-    expect(found[0].payload.message.text).toBe(parked.message.text);
+    // The dead letter names the update; the words stay in the chat (architecture programme 0.4).
+    expect(found[0].payload).toEqual({ update_id: parked.update_id, kind: 'message' });
+    expect(JSON.stringify(found[0].payload)).not.toContain(parked.message.text);
     expect(found[0].verified).toBe(true);
+  });
+
+  it('alerts the office once, in the same transaction, and never the sender\'s own chat', async () => {
+    const office = '91000009';
+    const parked = { update_id: 900_000_000 + Math.floor(Math.random() * 1e8), message: { chat: { id: 78 }, from: { first_name: 'Rebin', username: 'rebin_k' }, text: 'secret words' } };
+    const alongside = vi.fn(async () => {});
+    await parkTelegramUpdate(db, identity, parked, 'intake answered HTTP 500 after 5 attempts', { officeChatId: office, alongside });
+    await parkTelegramUpdate(db, identity, parked, 'again', { officeChatId: office });
+    expect(alongside).toHaveBeenCalledTimes(1);
+    const alerts = await withRlsContext(db, { ...identity, role: 'operator' }, async (trx) =>
+      (await sql<any>`SELECT payload FROM hawa.outbox_commands WHERE idempotency_key = ${`notify.office:telegram-update-parked:${parked.update_id}`}`.execute(trx)).rows);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].payload.chatId).toBe(office);
+    expect(alerts[0].payload.message.text).toContain('from chat 78, sent by Rebin (@rebin_k)');
+    expect(JSON.stringify(alerts[0].payload)).not.toContain('secret words');
+
+    const own = { update_id: parked.update_id + 1, message: { chat: { id: Number(office) }, text: 'x' } };
+    await parkTelegramUpdate(db, identity, own, 'x', { officeChatId: office });
+    const ownAlerts = await withRlsContext(db, { ...identity, role: 'operator' }, async (trx) =>
+      (await sql<any>`SELECT 1 FROM hawa.outbox_commands WHERE idempotency_key = ${`notify.office:telegram-update-parked:${own.update_id}`}`.execute(trx)).rows);
+    expect(ownAlerts).toHaveLength(0);
+  });
+
+  it('writes nothing when what goes alongside fails: the dead letter and the offset commit together', async () => {
+    const parked = { update_id: 900_000_000 + Math.floor(Math.random() * 1e8), message: { chat: { id: 79 } } };
+    await expect(parkTelegramUpdate(db, identity, parked, 'x', { officeChatId: '91000009', alongside: async () => { throw new Error('offset not stored'); } }))
+      .rejects.toThrow('offset not stored');
+    expect(await rows(parked.update_id)).toHaveLength(0);
   });
 
   it('throws when the row cannot be written, so the queue does not move past an unstored update', async () => {
