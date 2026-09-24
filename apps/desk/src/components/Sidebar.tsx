@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../services/i18n.js';
+import { startVisiblePolling } from '../services/queueRefresh.js';
+
+/** How often the health line is read while the tab is visible. */
+const HEALTH_POLL_MS = 30_000;
 
 export type ScreenId = 'work' | 'clients' | 'settings' | 'inbox' | 'review' | 'dna' | 'library' | 'ops' | 'eval' | 'comparison';
 
@@ -52,11 +56,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentScreen, onNavigate }) =
       }
     };
 
-    probeHealth();
-    const interval = setInterval(probeHealth, 30000);
+    // Only while the tab is visible (architecture programme 0.3): a Desk left open in a background
+    // tab read Core's health handler every 30 s all day.
+    const stopPolling = startVisiblePolling({ probe: probeHealth, intervalMs: HEALTH_POLL_MS, doc: document });
     return () => {
       mounted = false;
-      clearInterval(interval);
+      stopPolling();
     };
   }, []);
 

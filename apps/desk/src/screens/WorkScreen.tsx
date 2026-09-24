@@ -11,10 +11,13 @@ import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
 import { keepLoadedDetail, loadTaskDetail, mergeTaskDetail, queueEntryChanged } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
-import { inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
+import { inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
+import { startQueueRefresh } from '../services/queueRefresh.js';
 
-/** How often the queue is read again while the tab is visible. */
-const QUEUE_REFRESH_MS = 30_000;
+/** Tasks per queue page (Core's default page). */
+const QUEUE_PAGE_SIZE = 50;
+/** How long typing in the search box pauses before Core is asked. */
+const SEARCH_PAUSE_MS = 300;
 
 export interface LiveTask {
   id: string;
@@ -132,6 +135,16 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   selectedTaskIdRef.current = selectedTaskId;
   const queueStateRef = useRef(queueState);
   queueStateRef.current = queueState;
+  const initialTaskIdRef = useRef(initialTaskId);
+  initialTaskIdRef.current = initialTaskId;
+
+  // The page on screen: the cursor that started it (null: the newest page), the filter and the search
+  // Core applied. Refreshes read this same page again.
+  const queueViewRef = useRef<{ cursor: string | null; filter: QueueFilter; search: string }>({ cursor: null, filter: 'all', search: '' });
+  const queueReadSeq = useRef(0);
+  const [pageCursors, setPageCursors] = useState<(string | null)[]>([null]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [queueTotal, setQueueTotal] = useState(0);
 
   // Signing out, and a session Core no longer accepts, end the same way (2026-09-24): the queue and
   // the open task are cleared (their panels stop polling), the live stream is closed, and the
@@ -144,44 +157,49 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     setQueueError(message);
   };
 
-  // Fetch canonical task list from server using typed API client (H01). Every page is read, so the
-  // queue, its filters and its search see every task: it read the newest 50 once, and older tasks
-  // awaiting approval never appeared (2026-09-24). `quiet` is a background refresh: the queue stays
-  // on screen while it reads, and a failure is reported above it instead of replacing it. This reads
-  // no state directly (only setters and refs), so the timer may call the first render's copy.
+  // Fetch one page of the canonical task list (H01). Core pages, filters and searches (architecture
+  // programme 0.3): the screen used to read every page every 30 s, and 1 s after each task event, so
+  // its own filters and search could see every task; now the filter and the search go to Core, which
+  // returns the page asked for and the total that matches, and older matches are a page away instead
+  // of missing. `quiet` is a background refresh: the queue stays on screen while it reads, and a
+  // failure is reported above it instead of replacing it. This reads no state directly (only
+  // setters and refs), so the event and visibility handlers may call the first render's copy.
   const fetchTasks = async (quiet = false) => {
+    const view = queueViewRef.current;
+    const seq = ++queueReadSeq.current;
     if (!quiet) {
       setQueueState('loading');
       setQueueError(null);
     }
     try {
-      try {
-        const session = await apiClient.auth.getSession();
-        if (session.authenticated && session.user) {
-          setSessionUser(session.user);
-        }
-      } catch {}
-
-      const items: LiveTask[] = [];
-      const seen = new Set<string>();
-      for (let offset = 0; ; ) {
-        const res = await apiClient.tasks.list({ limit: 200, offset });
-        const page: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
-        // Newest first by offset: a task created while paging pushes one already read onto the next page.
-        for (const t of page) {
-          if (!seen.has(t.id)) {
-            seen.add(t.id);
-            items.push(t);
+      if (!quiet) {
+        try {
+          const session = await apiClient.auth.getSession();
+          if (session.authenticated && session.user) {
+            setSessionUser(session.user);
           }
-        }
-        offset += page.length;
-        if (Array.isArray(res) || page.length === 0 || offset >= Number(res.total ?? 0)) break;
+        } catch {}
       }
+
+      const res = await apiClient.tasks.list({
+        limit: QUEUE_PAGE_SIZE,
+        cursor: view.cursor,
+        statuses: queueFilterStatuses(view.filter),
+        q: view.search || undefined,
+      });
+      // A newer read (another page, filter or search) was asked for while this one ran.
+      if (seq !== queueReadSeq.current) return;
+      const page: LiveTask[] = Array.isArray(res) ? res : (res.items || []);
+      setQueueTotal(Array.isArray(res) ? page.length : Number(res.total ?? page.length));
+      setNextCursor(Array.isArray(res) ? null : (res.nextCursor ?? null));
+      // The task opened from a link or a notification stays in view even when it is not on this page.
+      const selectedId = selectedTaskIdRef.current;
+      const selectedElsewhere = selectedId && !page.some((t) => t.id === selectedId) ? tasksRef.current.find((t) => t.id === selectedId) : undefined;
+      const items = selectedElsewhere ? [...page, selectedElsewhere] : page;
       setQueueError(null);
       if (quiet) {
         // A background refresh keeps the preview already loaded and reads the selected task's detail
         // again only when the list shows it changed, rather than downloading its preview every 30 s.
-        const selectedId = selectedTaskIdRef.current;
         const changed = queueEntryChanged(tasksRef.current.find((t) => t.id === selectedId), items.find((t) => t.id === selectedId));
         setTasks((prev) => keepLoadedDetail(prev, items));
         if (changed) setQueueLoads((n) => n + 1);
@@ -190,16 +208,17 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         // The list carries no preview: the selected task's detail is read again after every reload.
         setQueueLoads((n) => n + 1);
       }
-      if (items.length === 0) {
+      if (items.length === 0 && view.filter === 'all' && !view.search && !view.cursor) {
         setQueueState('empty');
       } else {
         setQueueState('ready');
         setSelectedTaskId((prev) => {
-          if (prev && items.some((i) => i.id === prev)) return prev;
-          return items[0].id;
+          if (prev && (items.some((i) => i.id === prev) || prev === initialTaskIdRef.current)) return prev;
+          return items[0]?.id || '';
         });
       }
     } catch (err: any) {
+      if (seq !== queueReadSeq.current) return;
       if (err instanceof ApiError && err.status === 401) {
         // The API client has already shown the sign-in prompt with Core's reason.
         setQueueState('signed_out');
@@ -240,34 +259,47 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     fetchTasks();
   }, []);
 
-  // Background refresh (2026-09-24): the queue was read once, so a task created or finished
-  // elsewhere appeared only after a page reload. It is read again every 30 s while the tab is
-  // visible, when the tab comes back, and shortly after any task event. A refresh asked for while
-  // one runs is run once more after it, so no event is missed.
-  const refreshRun = useRef({ running: false, again: false });
-  const refreshQueueQuietly = () => {
-    if (queueStateRef.current !== 'ready' && queueStateRef.current !== 'empty') return;
-    if (refreshRun.current.running) {
-      refreshRun.current.again = true;
+  // A new filter or search starts again at the newest page. The search waits until typing pauses.
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchQuery.trim()), SEARCH_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
       return;
     }
-    refreshRun.current = { running: true, again: false };
-    void fetchTasks(true).finally(() => {
-      const again = refreshRun.current.again;
-      refreshRun.current = { running: false, again: false };
-      if (again) refreshQueueQuietly();
-    });
+    queueViewRef.current = { cursor: null, filter, search };
+    setPageCursors([null]);
+    if (queueStateRef.current === 'ready' || queueStateRef.current === 'empty') void fetchTasks(true);
+  }, [filter, search]);
+
+  // Older and newer pages. Each page read is remembered by the cursor that started it, so Newer goes
+  // back exactly; a refresh reads the page on screen again, never every page.
+  const showPage = (cursors: (string | null)[]) => {
+    queueViewRef.current = { ...queueViewRef.current, cursor: cursors[cursors.length - 1] };
+    setPageCursors(cursors);
+    void fetchTasks(true);
+  };
+  const showOlderPage = () => {
+    if (nextCursor) showPage([...pageCursors, nextCursor]);
+  };
+  const showNewerPage = () => {
+    if (pageCursors.length > 1) showPage(pageCursors.slice(0, -1));
+  };
+
+  // Background refresh (architecture programme 0.3). Task events ask for one read of the page on
+  // screen, coalesced; the 30 s poll runs only while the tab is visible and the event stream is down;
+  // a hidden tab reads nothing (services/queueRefresh.ts). A refresh needs a queue on screen.
+  const refreshQueueQuietly = async () => {
+    if (queueStateRef.current !== 'ready' && queueStateRef.current !== 'empty') return;
+    await fetchTasks(true);
   };
   useEffect(() => {
-    const onTick = () => {
-      if (!document.hidden) refreshQueueQuietly();
-    };
-    const timer = setInterval(onTick, QUEUE_REFRESH_MS);
-    document.addEventListener('visibilitychange', onTick);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', onTick);
-    };
+    const refresher = startQueueRefresh({ refresh: refreshQueueQuietly, stream: eventStream, events: TASK_EVENTS, doc: document });
+    return () => refresher.stop();
   }, []);
 
   // `GET /tasks` has no captured preview; `GET /tasks/:id` does. Read the selected task's detail when
@@ -276,7 +308,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     if (!selectedTaskId) return;
     let current = true;
     void loadTaskDetail<LiveTask>(apiClient.tasks, selectedTaskId).then((detail) => {
-      if (current && detail) setTasks((prev) => mergeTaskDetail(prev, detail));
+      // A task opened from a link may be on no page read yet: it is shown after the page.
+      if (current && detail) setTasks((prev) => (prev.some((t) => t.id === detail.id) ? mergeTaskDetail(prev, detail) : [...prev, detail]));
     });
     return () => {
       current = false;
@@ -313,12 +346,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   };
 
   // Live updates via EventStream (2026-09-24). Every task event re-reads what it names: the open
-  // task's detail and history at once, and the queue shortly after. The screen used to apply only
-  // task:transitioned's own status (Telegram's says IN_PROGRESS where Core records
-  // REVISION_REQUESTED), ignored approvals, and never re-read the task open on screen.
+  // task's detail and history at once; the queue is read by the refresher above, once for a burst.
+  // The screen used to apply only task:transitioned's own status (Telegram's says IN_PROGRESS where
+  // Core records REVISION_REQUESTED), ignored approvals, and never re-read the task open on screen.
   const [timelineReads, setTimelineReads] = useState(0);
   useEffect(() => {
-    let queued: ReturnType<typeof setTimeout> | undefined;
     const onTaskEvent = (data: any) => {
       const taskId = data?.taskId || data?.task?.id || data?.id;
       if (taskId && taskId === selectedTaskIdRef.current) {
@@ -327,8 +359,6 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
         });
         setTimelineReads((n) => n + 1);
       }
-      clearTimeout(queued);
-      queued = setTimeout(refreshQueueQuietly, 1000);
     };
 
     const unsubscribers = TASK_EVENTS.filter((name) => name !== 'task:created').map((name) => eventStream.on(name, onTaskEvent));
@@ -336,8 +366,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       eventStream.on('task:created', (data: any) => {
         const taskObj = data?.task || (data?.id ? data : null);
         if (taskObj) {
-          // A database row carries `state`, not the Desk's status; the queue read below brings it.
-          if (typeof taskObj.status === 'string') {
+          // A database row carries `state`, not the Desk's status; the queue read brings it. Only the
+          // newest page of the unfiltered queue shows a new task at the top.
+          const view = queueViewRef.current;
+          if (typeof taskObj.status === 'string' && !view.cursor && view.filter === 'all' && !view.search) {
             setTasks((prev) => [taskObj, ...prev.filter((t) => t.id !== taskObj.id)]);
             // The first task on an empty queue was added to a list the screen did not show.
             setQueueState((state) => (state === 'empty' ? 'ready' : state));
@@ -350,29 +382,16 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     );
 
     return () => {
-      clearTimeout(queued);
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, []);
 
-  // Filtered tasks. The filters come from the same status groups as the labels (taskStatus.ts), and
-  // search folds the Arabic-keyboard ي and ك into Sorani ی and ک (2026-09-24).
+  // Filtered tasks. Core filters and searches the page (folding the Arabic-keyboard ي and ك into
+  // Sorani ی and ک, as the screen did); the status groups (taskStatus.ts) are applied here again only
+  // for a task a live event changed since the page was read.
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      // Status Filter
-      if (!inQueueFilter(task.status, filter)) return false;
-
-      // Search Query
-      if (searchQuery.trim()) {
-        const q = searchFold(searchQuery.trim());
-        return [task.title, task.clientName, task.id, task.headlineEn, task.headlineCkb, task.copyEn, task.copyCkb].some((field) =>
-          searchFold(field).includes(q)
-        );
-      }
-
-      return true;
-    });
-  }, [tasks, filter, searchQuery]);
+    return tasks.filter((task) => inQueueFilter(task.status, filter));
+  }, [tasks, filter]);
 
   // Selected Task
   const selectedTask = useMemo(() => {
@@ -610,7 +629,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           className={`btn ${mobilePane === 'queue' ? 'primary' : ''}`}
           onClick={() => setMobilePane('queue')}
         >
-          📋 Queue ({filteredTasks.length === tasks.length ? tasks.length : `${filteredTasks.length} of ${tasks.length}`})
+          📋 Queue ({queueTotal})
         </button>
         <button
           role="tab"
@@ -639,9 +658,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>Work Queue</h2>
                 <span
                   className="queue-count-badge"
-                  title={filteredTasks.length === tasks.length ? `${tasks.length} tasks` : `${filteredTasks.length} shown of ${tasks.length} tasks`}
+                  title={filter === 'all' && !search ? `${queueTotal} tasks` : `${queueTotal} tasks match the filter and search`}
                 >
-                  {filteredTasks.length === tasks.length ? tasks.length : `${filteredTasks.length} / ${tasks.length}`}
+                  {queueTotal}
                 </span>
                 {sessionUser && (
                   <span
@@ -888,6 +907,20 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </div>
                 );
               })}
+
+            {queueState === 'ready' && (pageCursors.length > 1 || nextCursor) && (
+              <nav className="queue-pager" aria-label="Queue pages" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 4px' }}>
+                <button className="btn btn-sm" onClick={showNewerPage} disabled={pageCursors.length <= 1} aria-label="Newer tasks">
+                  ← Newer
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {`${(pageCursors.length - 1) * QUEUE_PAGE_SIZE + 1}–${(pageCursors.length - 1) * QUEUE_PAGE_SIZE + filteredTasks.length} of ${queueTotal}`}
+                </span>
+                <button className="btn btn-sm" onClick={showOlderPage} disabled={!nextCursor} aria-label="Older tasks">
+                  Older →
+                </button>
+              </nav>
+            )}
           </div>
         </section>
 

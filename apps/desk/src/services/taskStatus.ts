@@ -236,6 +236,16 @@ export function inQueueFilter(status: string | undefined | null, filter: QueueFi
 }
 
 /**
+ * The statuses a queue filter shows, for Core to filter by (GET /tasks?statuses=…): the queue reads
+ * one page at a time, so filtering only the page on screen would hide every older match
+ * (architecture programme 0.3). Undefined for "all".
+ */
+export function queueFilterStatuses(filter: QueueFilter): string[] | undefined {
+  if (filter === 'all') return undefined;
+  return Object.keys(VIEWS).filter((status) => inQueueFilter(status, filter));
+}
+
+/**
  * Text as the queue search compares it. Kurdish typed on an Arabic keyboard gives ي and ك where
  * Sorani text has ی and ک (2026-09-24): "كوردی" did not find "کوردی".
  */
