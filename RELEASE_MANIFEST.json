@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T20:44:40.199Z",
+  "generatedAt": "2026-09-24T22:49:07.465Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,10 +19,10 @@
     ]
   },
   "build": {
-    "commit": "f3d3cbb7ef1c031cca3d135211528746bd410ffc",
+    "commit": "89c542e5ff5b5e5b99d2c7771c51da84de3583da",
     "treeClean": true,
-    "commitTimestamp": "2026-09-24T23:44:31+03:00",
-    "branch": "claude/reliability"
+    "commitTimestamp": "2026-09-25T01:48:28+03:00",
+    "branch": "codex/research-grade-design-system"
   },
   "migrations": {
     "targetVersion": "022_publication_executor",
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "6ddad901d2f5503c8e4c4f214a0487072190cf5d7e43769f557a3054c1b6a8bb"
+  "sha256": "c465cac0329552daf40a4a1c03a0754c6519cb2bcaa0e10876a9505e2224e580"
 }
