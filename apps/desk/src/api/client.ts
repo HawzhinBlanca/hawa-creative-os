@@ -42,16 +42,25 @@ export class ApiError extends Error {
 
 export interface TaskListParams {
   status?: string;
+  /** Any of these statuses (a queue filter). An empty list matches nothing. */
+  statuses?: readonly string[];
+  /** Text to find in the title, description, client name or id. */
+  q?: string;
   clientId?: string;
   limit?: number;
   offset?: number;
+  /** The page after the one whose `nextCursor` this is. */
+  cursor?: string | null;
 }
 
 export interface TaskListResponse<T = any> {
   items: T[];
+  /** Every task the filter matches, not only this page. */
   total: number;
   limit?: number;
   offset?: number;
+  /** The next (older) page, or null on the last one. */
+  nextCursor?: string | null;
 }
 
 export interface DecisionPayload {
@@ -418,9 +427,12 @@ class HawaApiClient {
     list: async <T = any>(params?: TaskListParams): Promise<TaskListResponse<T>> => {
       const q = new URLSearchParams();
       if (params?.status) q.set('status', params.status);
+      if (params?.statuses) q.set('statuses', params.statuses.join(','));
+      if (params?.q) q.set('q', params.q);
       if (params?.clientId) q.set('clientId', params.clientId);
       if (params?.limit !== undefined) q.set('limit', String(params.limit));
       if (params?.offset !== undefined) q.set('offset', String(params.offset));
+      if (params?.cursor) q.set('cursor', params.cursor);
 
       const queryStr = q.toString();
       const endpoint = queryStr ? `/tasks?${queryStr}` : '/tasks';

@@ -48,15 +48,33 @@ paths:
     get:
       tags: [Tasks]
       operationId: listTasks
+      description: >-
+        One page of the tasks the caller may see, newest first (created_at, then id). Pass a page's
+        nextCursor back as `cursor` for the next, older page; `total` counts every task the filter
+        matches. List rows carry no preview, intake JSON or image bytes: GET /v1/tasks/{taskId} does.
       parameters:
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
-        - name: state
+        - name: statuses
           in: query
+          description: Comma-separated API statuses; a task matches when the list would show it with one of them.
           schema: {type: string}
+        - name: status
+          in: query
+          description: One API status (older callers). Prefer statuses.
+          schema: {type: string}
+        - name: q
+          in: query
+          description: Text to find in the title, description, client name or task id (Arabic-keyboard ي/ى and ك match Sorani ی and ک).
+          schema: {type: string, maxLength: 200}
         - name: clientId
           in: query
           schema: {type: string, format: uuid}
+        - name: offset
+          in: query
+          deprecated: true
+          description: Rows to skip (older callers). Ignored when cursor is sent.
+          schema: {type: integer, minimum: 0}
       responses:
         '200':
           description: Authorized task page
@@ -64,9 +82,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, nextCursor]
                 properties:
                   items: {type: array, items: {$ref: '../schemas/Task.schema.json'}}
+                  total: {type: integer, minimum: 0}
+                  limit: {type: integer, minimum: 1, maximum: 200}
+                  offset: {type: integer, minimum: 0}
                   nextCursor: {type: [string, 'null']}
         default: {$ref: '#/components/responses/Problem'}
     post:

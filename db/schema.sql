@@ -961,6 +961,10 @@ CREATE INDEX examples_lookup_idx ON visual_examples(client_id, project_id, task_
 CREATE INDEX model_invocations_task_idx ON model_invocations(task_id, created_at DESC);
 CREATE INDEX design_revisions_task_idx ON design_revisions(task_id, created_at DESC);
 CREATE INDEX qc_runs_revision_idx ON qc_runs(design_revision_id, started_at DESC);
+-- The Desk's task list (migration 018): keyset pages, and each row's latest QC run and approval.
+CREATE INDEX tasks_list_idx ON tasks(tenant_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX qc_runs_task_idx ON qc_runs(task_id, started_at DESC);
+CREATE INDEX approvals_task_idx ON approvals(task_id, created_at DESC);
 CREATE INDEX feedback_client_idx ON feedback_events(client_id, project_id, category, created_at DESC);
 CREATE INDEX audit_time_idx ON audit_events(tenant_id, occurred_at DESC);
 

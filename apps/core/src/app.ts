@@ -57,9 +57,15 @@ import {
   ConcurrencyConflictError,
   toDbTaskState,
   toApiTaskStatus,
+  listTaskPage,
+  decodeTaskCursor,
+  dbStatesForApiStatuses,
+  TASK_PAGE_DEFAULT_LIMIT,
+  TASK_PAGE_MAX_LIMIT,
   sql,
   type Database,
   type Kysely,
+  type TaskState,
 } from '@hawa/db';
 
 try {
@@ -6138,126 +6144,120 @@ export function createApp(options?: CreateAppOptions) {
     });
   });
 
-  // List Tasks (H01, FR-076, FR-078)
+  // List Tasks (H01, FR-076, FR-078). One page per request (architecture programme 0.3): keyset on
+  // (created_at, id) with an opaque cursor, and the filter's total. The Desk read every page of this
+  // every 30 s and after every task event, each row running six correlated subqueries (two on
+  // columns with no index) and carrying the intake event's JSON, reference photo included.
+  // `offset` still works for callers that send it; `cursor` wins when both are sent.
   registerRoute('get', '/tasks', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to list tasks');
     }
     const status = c.req.query('status');
+    const statusList = c.req.query('statuses');
     const clientId = c.req.query('clientId');
+    const search = String(c.req.query('q') || '').trim().slice(0, 200);
+    const cursorParam = c.req.query('cursor');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
-    const limit = Math.min(Math.max(1, Number(c.req.query('limit')) || 50), 200);
-    const offset = Math.max(0, Number(c.req.query('offset')) || 0);
+    const limit = Math.min(Math.max(1, Math.floor(Number(c.req.query('limit'))) || TASK_PAGE_DEFAULT_LIMIT), TASK_PAGE_MAX_LIMIT);
+    const offset = Math.max(0, Math.floor(Number(c.req.query('offset'))) || 0);
+    const cursor = cursorParam ? decodeTaskCursor(cursorParam) : null;
+    if (cursorParam && !cursor) {
+      return problem(c, 400, 'Bad Request', 'cursor is not one this API issued; start again without it');
+    }
+    // A malformed id reached Postgres as a cast error and came back as a 500.
+    if (clientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) {
+      return problem(c, 400, 'Bad Request', 'clientId must be a UUID');
+    }
+    // `statuses` (comma-separated API statuses, as the Desk's filters send them) matches exactly the
+    // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
+    let states: TaskState[] | undefined;
+    if (statusList !== undefined) states = dbStatesForApiStatuses(String(statusList).split(','));
+    else if (status) states = [toDbTaskState(status)];
 
     if (db) {
       try {
-        const { dbTasks, totalCount } = await withRlsContext(
+        const page = await withRlsContext(
           db,
           { tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => {
-            let countQ = trx.selectFrom('tasks').select(trx.fn.count('id').as('count')).where('tenant_id', '=', tenantId);
-            let q = trx.selectFrom('tasks').selectAll().select(eb => [
-              eb.selectFrom('task_events').select('data').whereRef('task_events.task_id', '=', 'tasks.id')
-                .where('event_type', '=', 'task.created').limit(1).as('intake_data'),
-              eb.selectFrom('clients').select('name').whereRef('clients.id', '=', 'tasks.client_id').limit(1).as('client_name'),
-              sql<any>`(SELECT json_build_object('status', q.status, 'critical_pass', q.critical_pass, 'report', q.report) FROM hawa.qc_runs q WHERE q.task_id = tasks.id ORDER BY q.started_at DESC LIMIT 1)`.as('latest_qc_json'),
-              sql<any>`(SELECT json_build_object('id', a.id, 'created_at', a.created_at, 'role', a.decision_payload->>'approverRole', 'actorId', a.decided_by) FROM hawa.approvals a WHERE a.task_id = tasks.id AND a.decision = 'approved' ORDER BY a.created_at DESC LIMIT 1)`.as('latest_approval_json'),
-              sql<any>`(SELECT json_build_object('designId', b.canva_design_id, 'editUrl', b.edit_url) FROM hawa.canva_bindings b WHERE b.task_id = tasks.id AND b.status = 'bound' ORDER BY b.created_at DESC LIMIT 1)`.as('canva_binding_json'),
-              sql<any>`(SELECT json_build_object('id', r.id, 'version', r.revision, 'sha256', r.source_sha256, 'format', 'png', 'created_at', r.created_at) FROM hawa.design_revisions r WHERE r.id = tasks.current_design_revision_id LIMIT 1)`.as('latest_rev_json'),
-            ]).where('tenant_id', '=', tenantId);
-            if (clientId) {
-              q = q.where('client_id', '=', clientId);
-              countQ = countQ.where('client_id', '=', clientId);
-            }
-            if (status) {
-              const dbState = toDbTaskState(status);
-              q = q.where('state', '=', dbState);
-              countQ = countQ.where('state', '=', dbState);
-            }
-            const countRow = await countQ.executeTakeFirst();
-            const total = Number(countRow?.count || 0);
-            const rows = await q.orderBy('created_at', 'desc').limit(limit).offset(offset).execute();
-            return { dbTasks: rows, totalCount: total };
-          }
+          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null, states, search })
         );
 
-        const items = dbTasks.map((t: any) => {
-          const event = t.intake_data as any; const payload = event?.payload || event || {};
-          const qc = t.latest_qc_json;
-          const app = t.latest_approval_json;
-          const cb = t.canva_binding_json;
-          const rev = t.latest_rev_json;
-
+        const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
+        const items = page.rows.map((t) => {
           // A check the QC did not measure (null: the Canva export check measures neither margins nor
           // contrast) is reported as not measured; `?? true` showed it to the office as a green tick
           // (review of 2026-09-24).
-          const qaReport = qc ? {
-            passed: qc.status === 'passed' && qc.critical_pass === true,
-            bidiIsolation: qc.report?.bidiIsolation ?? null,
-            safeMargins: qc.report?.safeMargins ?? null,
-            contrastCompliant: qc.report?.contrastCompliant ?? null,
-            fontCoverage: qc.report?.fontCoverage ?? null,
-            copyFidelity: qc.report?.copyFidelity ?? null,
-            errors: qc.report?.errors || [],
+          const report = (t.qc_report || {}) as Record<string, any>;
+          const qaReport = t.qc_status ? {
+            passed: t.qc_status === 'passed' && t.qc_critical_pass === true,
+            bidiIsolation: report.bidiIsolation ?? null,
+            safeMargins: report.safeMargins ?? null,
+            contrastCompliant: report.contrastCompliant ?? null,
+            fontCoverage: report.fontCoverage ?? null,
+            copyFidelity: report.copyFidelity ?? null,
+            errors: report.errors || [],
           } : undefined;
 
           // An approval holds while the task is approved or being delivered; a task sent back for changes
           // since showed as APPROVED with Deliver enabled (review of 2026-09-24).
           const approvalHolds = ['approved', 'publishing', 'complete'].includes(String(t.state));
-          const latestApproval = app?.id && approvalHolds ? {
-            decisionId: app.id,
-            role: app.role || 'art_director',
-            actorId: app.actorId,
-            decidedAt: app.created_at instanceof Date ? app.created_at.toISOString() : String(app.created_at),
+          const latestApproval = t.approval_id && approvalHolds ? {
+            decisionId: t.approval_id,
+            role: t.approval_role || 'art_director',
+            actorId: t.approval_actor_id,
+            decidedAt: iso(t.approval_created_at),
           } : undefined;
 
-          const canvaBinding = cb?.designId ? {
-            designId: cb.designId,
-            designUrl: cb.editUrl,
+          const canvaBinding = t.canva_design_id ? {
+            designId: t.canva_design_id,
+            designUrl: t.canva_edit_url,
             title: t.title,
           } : undefined;
 
-          const latestRevision = rev?.id ? {
-            id: rev.id,
-            version: Number(rev.version || 1),
-            sha256: rev.sha256,
-            format: rev.format || 'png',
-            createdAt: rev.created_at instanceof Date ? rev.created_at.toISOString() : String(rev.created_at),
+          // The list carries no preview: GET /tasks/:id does.
+          const latestRevision = t.rev_id ? {
+            id: t.rev_id,
+            version: Number(t.rev_version || 1),
+            sha256: t.rev_sha256,
+            format: 'png',
+            createdAt: iso(t.rev_created_at),
           } : undefined;
 
-          return ({
-          id: t.id,
-          tenantId: t.tenant_id,
-          clientId: t.client_id,
-          projectId: t.project_id,
-          status: toApiTaskStatus(t.state || 'received'),
-          state: t.state,
-          priority: t.priority,
-          title: t.title,
-          description: t.description,
-          clientName: t.client_name || null,
-          headlineEn: payload.headlineEn || payload.body?.headlineEn || t.title,
-          headlineCkb: payload.headlineCkb || payload.body?.headlineCkb || null,
-          copyEn: payload.copyEn || payload.body?.copyEn || t.description,
-          copyCkb: payload.copyCkb || payload.body?.copyCkb || null,
-          designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
-          referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
-          sourcePlatform: payload.sourcePlatform || payload.body?.source?.platform || 'hawa_desk',
-          sourceEventId: payload.sourceEventId || t.id,
-          sourceChannelId: payload.sourceChannelId || 'hawa_desk',
-          clientScopeLocked: Boolean(t.client_id),
-          version: Number(t.version),
-          latestRevisionId: t.current_design_revision_id || undefined,
-          latestRevision,
-          qaReport,
-          latestApproval,
-          canvaBinding,
-          createdAt: t.created_at instanceof Date ? t.created_at.toISOString() : t.created_at,
-          updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : t.updated_at,
-        }); });
-        return c.json({ items, total: totalCount, limit, offset });
+          return {
+            id: t.id,
+            tenantId: t.tenant_id,
+            clientId: t.client_id,
+            projectId: t.project_id,
+            status: toApiTaskStatus(t.state || 'received'),
+            state: t.state,
+            priority: t.priority,
+            title: t.title,
+            description: t.description,
+            clientName: t.client_name || null,
+            headlineEn: t.headline_en || t.title,
+            headlineCkb: t.headline_ckb || null,
+            copyEn: t.copy_en || t.description,
+            copyCkb: t.copy_ckb || null,
+            designInstructions: t.design_instructions || '',
+            referenceAssets: t.reference_assets || '',
+            sourcePlatform: t.source_platform || 'hawa_desk',
+            sourceEventId: t.source_event_id || t.id,
+            sourceChannelId: t.source_channel_id || 'hawa_desk',
+            clientScopeLocked: Boolean(t.client_id),
+            version: Number(t.version),
+            latestRevisionId: t.current_design_revision_id || undefined,
+            latestRevision,
+            qaReport,
+            latestApproval,
+            canvaBinding,
+            createdAt: iso(t.created_at),
+            updatedAt: iso(t.updated_at),
+          };
+        });
+        return c.json({ items, total: page.total, limit: page.limit, ...(cursor ? {} : { offset }), nextCursor: page.nextCursor });
       } catch (err: any) {
         console.error('[core:tasks:list] DB list query error:', err);
         return problem(c, 500, 'Database Error', `Failed to query tasks from database: ${err.message}`);
@@ -6268,12 +6268,17 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 503, 'Database Unavailable', 'Production task query strictly requires connected PostgreSQL database storage');
     }
 
+    // Development without a database: the in-memory tasks, paged by offset only.
     let list = Array.from(tasks.values());
     if (status) list = list.filter((t) => t.status === status);
+    if (statusList !== undefined) {
+      const wanted = new Set(String(statusList).split(',').map((s) => s.trim().toUpperCase()));
+      list = list.filter((t) => wanted.has(String(t.status).toUpperCase()));
+    }
     if (clientId) list = list.filter((t) => t.clientId === clientId);
     const total = list.length;
     const paginated = list.slice(offset, offset + limit);
-    return c.json({ items: paginated, total, limit, offset });
+    return c.json({ items: paginated, total, limit, offset, nextCursor: null });
   });
 
   // Create Task
