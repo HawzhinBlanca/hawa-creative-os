@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T23:20:04Z",
+  "generatedAt": "2026-09-24T23:26:27Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 276,
+  "fileCount": 278,
   "files": [
     {
       "path": ".dockerignore",
@@ -261,6 +261,11 @@
       "path": "adrs/038_release_identity_is_two_phase.md",
       "sha256": "be5a0f28c8ce0b05d8417b3d4c230bd1f8521819381fcbfaacf241a8f8b30c1c",
       "bytes": 2648
+    },
+    {
+      "path": "adrs/039_engineering_preflight_is_not_product_admission.md",
+      "sha256": "bc6da141f22387d50a90336e81d77967e00f8b730767620b721f01a1efb4e331",
+      "bytes": 2079
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -614,8 +619,8 @@
     },
     {
       "path": "docs/29_ACCEPTANCE_GATES.md",
-      "sha256": "79b5c5eeef8d1fe1a2e64647ab691672ae7127841f8557005130bbaef8324f3c",
-      "bytes": 2467
+      "sha256": "ea3f231caea66d92100e7e9168669515d59bbf2177f24b670fcfbf71da1d670d",
+      "bytes": 3666
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
@@ -724,8 +729,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R03_EVIDENCE.md",
-      "sha256": "54c88b7ec375e9b731ae47718c07b6c95a42daadefa6770bf1665f9f14f35792",
-      "bytes": 3098
+      "sha256": "f3a50328f03dd454eb3d4db82fa26267560f8c413f4f6f100709081473d745e1",
+      "bytes": 4196
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -739,8 +744,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "14ba21293e34b20be2089d8ca4b83ac5ae331405594ffda5fc1917bb5f70069c",
-      "bytes": 76126
+      "sha256": "a4a34e7a40219b0e8a4bba1f78c6f1637af817bdc4536efc98ec25c669bb043f",
+      "bytes": 76626
     },
     {
       "path": "plans/user-stories.csv",
@@ -939,8 +944,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "fb004047867d043d6d281d070dcdc18ce49573520cfeffa822a48d9c8fe50a71",
-      "bytes": 17830
+      "sha256": "3c44f377b6b3f8e0bce74675b20784a6166135eea3d5cb0e34f0b3c73366eb8c",
+      "bytes": 16313
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -1188,6 +1193,11 @@
       "bytes": 2937
     },
     {
+      "path": "scripts/release_admission_verdict.ts",
+      "sha256": "0280cfd1d37a97df5d36cde7064ff938bcace350e52893927450d8fec6e515a8",
+      "bytes": 3559
+    },
+    {
       "path": "scripts/render_10_out_of_10_designs.ts",
       "sha256": "ca763017f2389d841650a8628b5ce7dfb05a5d9923ba2a0aa2c1c342742b4ae2",
       "bytes": 45048
@@ -1359,8 +1369,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "71f69664cb555d43393c9e74fa0251f3c49dc4c7c72b7b595f9e3cc9d74fa89d",
-      "bytes": 9936
+      "sha256": "a61e63eabe898533d990b031bf1e51b7fc9f1d4225a4121a9caee67a8f90a3f2",
+      "bytes": 9970
     },
     {
       "path": "scripts/verify_t8_ratings.ts",

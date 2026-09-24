@@ -157,7 +157,7 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
     errors.push('Manifest models coverage cannot be empty; requires productionDefaults');
   } else {
     for (const [role, model] of Object.entries(PRODUCTION_MODELS)) {
-      if (manifest.models.productionDefaults[role] !== model) {
+      if (manifest.models.productionDefaults[role as keyof typeof PRODUCTION_MODELS] !== model) {
         errors.push(`Source model default for ${role} differs from provider policy`);
       }
     }

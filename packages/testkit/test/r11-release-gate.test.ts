@@ -92,6 +92,6 @@ describe('Task R11: Master Release Gate Reproducibility & Refusal Controls (FR-0
       encoding: 'utf8',
     });
     expect(output).toContain('[REFUSAL DRILL PASSED]');
-    expect(output).toContain('non-bypassable admission proven');
+    expect(output).toContain('source-manifest flag violation rejected');
   });
 });

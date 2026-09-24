@@ -6,12 +6,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUTPUT_DIR="${ROOT_DIR}/output/repairs/2026-09-19-architecture-remediation"
+# Run evidence is local and ignored. The historical 2026-09-21 dossier stays
+# tracked as an audit record; a new run must never overwrite it.
+OUTPUT_DIR="${ROOT_DIR}/output/release-gate"
 EVIDENCE_FILE="${OUTPUT_DIR}/RELEASE_GATE_EVIDENCE.json"
 mkdir -p "${OUTPUT_DIR}"
 
 TEST_REFUSAL=0
 SKIP_TESTS=0
+REQUIRE_ADMISSION=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -21,20 +24,24 @@ for arg in "$@"; do
     --skip-tests)
       SKIP_TESTS=1
       ;;
+    --require-admission)
+      REQUIRE_ADMISSION=1
+      ;;
     --help|-h)
-      echo "Usage: $0 [--test-refusal] [--skip-tests]"
-      echo "  --test-refusal  Intentionally break a gate to prove fail-closed admission refusal"
-      echo "  --skip-tests    Skip test suite execution (for rapid gate linting)"
+      echo "Usage: $0 [--test-refusal] [--skip-tests] [--require-admission]"
+      echo "  --test-refusal  Intentionally break a manifest flag to prove rejection"
+      echo "  --skip-tests    Skip test suite execution; never qualifies engineering preflight"
+      echo "  --require-admission  Refuse unless every current-candidate product gate is verified"
       exit 0
       ;;
   esac
 done
 
 echo "================================================================================"
-echo "          HAWA CREATIVE OS — MASTER ADMISSION RELEASE GATE"
+echo "          HAWA CREATIVE OS — ENGINEERING RELEASE PREFLIGHT"
 echo "================================================================================"
 echo "Root Directory: ${ROOT_DIR}"
-echo "Execution Mode: $([ "$TEST_REFUSAL" -eq 1 ] && echo "NEGATIVE CONTROL (Test Refusal)" || echo "NORMATIVE ADMISSION")"
+echo "Execution Mode: $([ "$TEST_REFUSAL" -eq 1 ] && echo "NEGATIVE CONTROL (Test Refusal)" || ([ "$REQUIRE_ADMISSION" -eq 1 ] && echo "STRICT ADMISSION" || echo "ENGINEERING PREFLIGHT"))"
 echo "Timestamp:      $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo "================================================================================"
 
@@ -54,7 +61,7 @@ if [ "$TEST_REFUSAL" -eq 1 ]; then
   if [ "$REFUSAL_EXIT" -ne 0 ] && echo "$REFUSAL_OUTPUT" | grep -q "DESIGN_PIPELINE_V3 flag must be 'off'"; then
     echo "[REFUSAL DRILL PASSED] Gate strictly refused corrupted candidate (exit code: ${REFUSAL_EXIT}):"
     echo "  ${REFUSAL_OUTPUT}"
-    echo "Refusal counterexample verified: non-bypassable admission proven."
+    echo "Refusal counterexample verified: source-manifest flag violation rejected."
     exit 0
   else
     echo "[REFUSAL DRILL FAILED] Gate admitted corrupted candidate or gave unexpected output!"
@@ -64,6 +71,10 @@ if [ "$TEST_REFUSAL" -eq 1 ]; then
 fi
 
 STAGE_STATUS=()
+if [ -n "$(git -C "${ROOT_DIR}" status --porcelain)" ]; then
+  echo "FATAL: release preflight requires a clean checkout before generated-file checks."
+  exit 1
+fi
 
 # ------------------------------------------------------------------------------
 # Stage 1: Exact TypeScript Typecheck
@@ -118,13 +129,9 @@ T_START=$(date +%s)
 # tells us whether the committed manifest is stale, and the tree is put back either way. These two
 # files are generated artifacts and are never hand-edited, so restoring them loses nothing.
 #
-# The comparison skips the three manifest files' own entries. MANIFEST.json and RELEASE_MANIFEST.json
-# each embed a `generatedAt` timestamp, so their bytes — and therefore their checksums, and therefore
-# the SHA256SUMS lines recording them — differ on every regeneration and can never converge. That is
-# worth knowing on its own: it means the "cryptographic release manifest" cannot be independently
-# reproduced, and its hash attests only that nobody hand-edited the file, not that its contents
-# follow from the tree. Every other one of the ~240 entries is content-derived and stable, which is
-# what this check is actually about.
+# The comparison skips generated manifests' own entries to avoid circular
+# checksums. The source-candidate release manifest is independently verified
+# against source hashes and the recorded commit in Stage 5.
 GATE_SUMS_BEFORE="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
 python3 "${ROOT_DIR}/scripts/refresh_manifest.py"
 GATE_SUMS_AFTER="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
@@ -139,18 +146,18 @@ fi
 python3 "${ROOT_DIR}/scripts/validate_pack.py"
 T_END=$(date +%s)
 STAGE_STATUS+=("pack_validation:PASS ($((T_END - T_START))s)")
-echo "    [PASS] Pack validation: 601 pass, 0 warn, 0 fail."
+echo "    [PASS] Pack validation completed."
 
 # ------------------------------------------------------------------------------
 # Stage 5: Cryptographic Release Manifest Verification
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 5/7] Verifying cryptographic release manifest invariants..."
+echo "--> [Stage 5/7] Verifying source-candidate manifest invariants..."
 T_START=$(date +%s)
 pnpm tsx "${ROOT_DIR}/scripts/verify_release_manifest.ts"
 T_END=$(date +%s)
 STAGE_STATUS+=("release_manifest:PASS ($((T_END - T_START))s)")
-echo "    [PASS] Release manifest SHA-256 and topology verified."
+echo "    [PASS] Source-candidate checksum and topology verified."
 
 # ------------------------------------------------------------------------------
 # Stage 6: Database Isolation Verification
@@ -222,8 +229,12 @@ else
     exit 1
   fi
   
-  TOTAL_FILES=$(grep -oE "Test Files +[0-9]+ passed" "${TEST_RUN_LOG}" | tail -1 | awk '{print $3}' || echo "185")
-  TOTAL_TESTS=$(grep -oE "Tests +[0-9]+ passed" "${TEST_RUN_LOG}" | tail -1 | awk '{print $2}' || echo "1394")
+  TOTAL_FILES=$(grep -oE "Test Files +[0-9]+ passed" "${TEST_RUN_LOG}" | tail -1 | awk '{print $3}' || true)
+  TOTAL_TESTS=$(grep -oE "Tests +[0-9]+ passed" "${TEST_RUN_LOG}" | tail -1 | awk '{print $2}' || true)
+  if [ -z "$TOTAL_FILES" ] || [ -z "$TOTAL_TESTS" ]; then
+    echo "FATAL: Test runner returned no parseable passing test/file counts. See ${TEST_RUN_LOG}"
+    exit 1
+  fi
   STAGE_STATUS+=("test_suite:PASS (${TOTAL_TESTS} tests in ${TOTAL_FILES} files, $((T_END - T_START))s)")
   echo "    [PASS] Monorepo tests: ${TOTAL_TESTS} passed across ${TOTAL_FILES} files (0 failures)."
 fi
@@ -236,119 +247,37 @@ GIT_COMMIT=$(git rev-parse HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-GATE_STATUS="QUALIFIED"
-GATE_TESTS_STATUS="PASS"
-if [ "$SKIP_TESTS" -eq 1 ]; then
-  GATE_STATUS="UNQUALIFIED_TESTS_SKIPPED"
-  GATE_TESTS_STATUS="SKIPPED"
-fi
-
 CLEAN_TREE="false"
 if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
   CLEAN_TREE="true"
 fi
 
-# Dynamically verify negative refusal drill
+# The negative control is a separate check. A clean source checkout is still
+# only an engineering candidate; this pre-deployment script cannot inspect a
+# built image, live publication, recovery, or blinded human design quality.
 REFUSAL_VERIFIED=false
 if bash "${ROOT_DIR}/scripts/enforce_release_gate.sh" --test-refusal >/dev/null 2>&1; then
   REFUSAL_VERIFIED=true
 fi
 
-# Dynamically evaluate normative acceptance gates A through H per docs/29_ACCEPTANCE_GATES.md
-GATES_JSON=$(node -e '
-const fs = require("fs");
-const path = require("path");
-const root = process.argv[1];
-const skipTests = process.argv[2] === "1";
-
-function readJsonSafe(relPath) {
-  try {
-    const full = path.join(root, relPath);
-    if (fs.existsSync(full)) {
-      return JSON.parse(fs.readFileSync(full, "utf8"));
-    }
-  } catch {}
-  return null;
-}
-
-// Gate A: Studio Proof (W06 evidence)
-const w06 = readJsonSafe("output/audits/2026-09-20-world-class-audit/W06_NATIVE_SCRIPT_FIDELITY_EVIDENCE.json");
-let gateA = "NOT_RUN";
-if (w06) {
-  const s40 = w06.synthetic40Cases?.passed === 40;
-  const r20 = w06.realCommercial20Cases?.passed === 20;
-  const verdict = w06.componentFidelityVerdict === "PASSED";
-  gateA = (s40 && r20 && verdict) ? "PASS" : "FAILED";
-}
-
-// Gate B: Security / Client Isolation
-let gateB = "PASS";
-
-// Gate C: Durable Operation
-const slo = readJsonSafe("output/repairs/2026-09-19-architecture-remediation/OPERATIONS_SLO_EVIDENCE.json");
-let gateC = "NOT_RUN";
-if (slo) {
-  gateC = (slo.status === "QUALIFIED" && slo.faultTolerance?.circuitBreakerTripsOnOutage) ? "PASS" : "FAILED";
-}
-
-// Gate D: Model / Retrieval Quality
-let gateD = "NOT_RUN";
-if (skipTests) {
-  gateD = "SKIPPED";
-} else {
-  const model = readJsonSafe("output/repairs/2026-09-19-architecture-remediation/MODEL_TOURNAMENT_EVIDENCE.json");
-  if (model) {
-    const routingOk = model.routingBriefTournament?.status === "PASSED" && model.routingBriefTournament?.criticalViolations === 0;
-    const retrievalOk = model.retrievalQualification?.status === "PASSED";
-    gateD = (routingOk && retrievalOk) ? "PASS" : "FAILED";
-  }
-}
-
-// Gate E: Design QA
-let gateE = "NOT_RUN";
-if (w06) {
-  const negControls = w06.negativeControls?.unapprovedFontRejected && w06.negativeControls?.overlappingTextBoxesRejected;
-  gateE = negControls ? "PASS" : "FAILED";
-}
-
-// Gate F: Human Review
-let gateF = "NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER";
-if (w06?.liveCanvaHumanInspection && w06.liveCanvaHumanInspection !== "NOT_RUN_REQUIRES_HUMAN_NATIVE_SPEAKER") {
-  gateF = w06.liveCanvaHumanInspection;
-}
-
-// Gate G: Publication
-let gateG = "PASS";
-
-// Gate H: Recovery
-const dr = readJsonSafe("output/repairs/2026-09-19-architecture-remediation/DISASTER_RECOVERY_EVIDENCE.json");
-let gateH = "NOT_RUN";
-if (dr) {
-  const parityOk = dr.parityVerification?.schema?.parityPassed === true;
-  const rpoOk = dr.cleanHostExecution?.rpo?.passed === true;
-  const rtoOk = dr.cleanHostExecution?.rto?.passed === true;
-  gateH = (parityOk && rpoOk && rtoOk) ? "PASS" : "FAILED";
-}
-
-const gates = {
-  GateA_StudioProof: gateA,
-  GateB_SecurityClientIsolation: gateB,
-  GateC_DurableOperation: gateC,
-  GateD_ModelRetrievalQuality: gateD,
-  GateE_DesignQA: gateE,
-  GateF_HumanReview: gateF,
-  GateG_Publication: gateG,
-  GateH_Recovery: gateH,
-};
-
-console.log(JSON.stringify(gates, null, 4));
-' "${ROOT_DIR}" "${SKIP_TESTS}")
+ENGINEERING_PASSED=1
+if [ "$SKIP_TESTS" -eq 1 ] || [ "$CLEAN_TREE" != "true" ] || [ "$REFUSAL_VERIFIED" != "true" ]; then
+  ENGINEERING_PASSED=0
+fi
+REFUSAL_VALUE=0
+if [ "$REFUSAL_VERIFIED" = "true" ]; then REFUSAL_VALUE=1; fi
+ADMISSION_JSON=$(pnpm exec tsx "${ROOT_DIR}/scripts/release_admission_verdict.ts" \
+  "${GIT_COMMIT}" "${MANIFEST_SHA256}" "${ENGINEERING_PASSED}" "${REFUSAL_VALUE}")
+GATE_STATUS=$(printf '%s' "$ADMISSION_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s).status))')
+ADMISSION_QUALIFIED=$(printf '%s' "$ADMISSION_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s).admissionQualified))')
+GATES_JSON=$(printf '%s' "$ADMISSION_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.stringify(JSON.parse(s).normativeGatesEvaluated)))')
 
 cat <<EOF > "${EVIDENCE_FILE}"
 {
   "taskId": "R11",
   "name": "Make the Release Gate Reproducible and Non-Bypassable",
   "status": "${GATE_STATUS}",
+  "admissionQualified": ${ADMISSION_QUALIFIED},
   "evaluatedAt": "${TIMESTAMP}",
   "git": {
     "commit": "${GIT_COMMIT}",
@@ -373,11 +302,12 @@ cat <<EOF > "${EVIDENCE_FILE}"
     "Stage 2: Database schema & migrations check (pnpm run db:check)",
     "Stage 3: Security & secret scanner with self-test (security_scan.py)",
     "Stage 4: Knowledge pack validation (validate_pack.py)",
-    "Stage 5: Cryptographic release manifest check (verify_release_manifest.ts)",
+    "Stage 5: Source-candidate manifest check (verify_release_manifest.ts)",
     "Stage 6: Production DB & credential isolation guard",
     "Stage 7: Full monorepo acceptance tests (${TOTAL_TESTS} passed, 0 failed)"
   ],
   "normativeGatesEvaluated": ${GATES_JSON},
+  "admissionEvidence": "Current-candidate deployment, gate, and blinded human-quality evidence are not evaluated by pre-deployment checks; R27 admission remains open.",
   "negativeRefusalTest": {
     "command": "scripts/enforce_release_gate.sh --test-refusal",
     "expectedBehavior": "Fail-closed non-zero exit when manifest flag violated",
@@ -386,10 +316,10 @@ cat <<EOF > "${EVIDENCE_FILE}"
 }
 EOF
 
-if [ "$GATE_STATUS" != "QUALIFIED" ]; then
+if [ "$ENGINEERING_PASSED" -ne 1 ] || { [ "$REQUIRE_ADMISSION" -eq 1 ] && [ "$ADMISSION_QUALIFIED" != "true" ]; }; then
   echo ""
   echo "================================================================================"
-  echo "      RELEASE GATE FAILED / REFUSED: NOT QUALIFIED FOR RELEASE"
+  echo "      RELEASE PREFLIGHT REFUSED"
   echo "      Status: ${GATE_STATUS}"
   echo "================================================================================"
   echo "Evidence written to: ${EVIDENCE_FILE}"
@@ -402,7 +332,7 @@ fi
 
 echo ""
 echo "================================================================================"
-echo "          RELEASE GATE PASSED: ALL STAGES & NORMATIVE GATES QUALIFIED"
+echo "          ENGINEERING PREFLIGHT PASSED — PRODUCT ADMISSION OPEN"
 echo "================================================================================"
 echo "Evidence written to: ${EVIDENCE_FILE}"
 for s in "${STAGE_STATUS[@]}"; do

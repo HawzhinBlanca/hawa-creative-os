@@ -238,9 +238,9 @@ echo "✓ blueprint pack"
 # Plaintext credential material on this host outside git: listed, and refused when readable by others
 bash "${ROOT_DIR}/infra/security/local_state_audit.sh"
 
-# Master admission release gate and evidence attestation check (full test execution required)
+# Engineering release preflight; product admission is evaluated on deployed artifacts later.
 bash "${ROOT_DIR}/scripts/enforce_release_gate.sh"
-echo "✓ master release gate and evidence attestation verified"
+echo "✓ engineering release preflight verified; product admission remains separate"
 
 # Where the worker would go (read-only; needs the running Core container to reach Restate).
 if core_running; then
