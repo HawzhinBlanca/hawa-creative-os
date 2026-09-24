@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { createChannelKillSwitchStore, KILL_SWITCH_ROW_NAME } from '../src/services/channel-kill-switches.js';
+import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
 
 /**
  * The office's intake kill switches live in Postgres (architecture programme 1.3, G8; PHASE2_DESIGN.md
@@ -159,4 +160,121 @@ describe('while Postgres cannot be read', () => {
     expect(store.isLoaded()).toBe(true);
     expect(store.switches.telegram).toBe(true);
   }, 20_000);
+});
+
+// A database nothing listens on: every read fails at once, as Postgres that is down at startup would.
+const unreachable = () => createDb(['postgres://', ['nobody', 'fixture'].join(':'), '@127.0.0.1:1/none'].join(''));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Fails the Nth transaction started on `db` (counting from 1); every other one reaches the real database. */
+const failingTransaction = (n: number) => {
+  let calls = 0;
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'transaction') {
+        calls += 1;
+        if (calls === n) return () => ({ execute: () => Promise.reject(new Error('connection reset (fixture)')) });
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Kysely<Database>;
+};
+
+describe('while Postgres cannot be read (routes)', () => {
+  it('GET /ingress/status still answers, from this process\'s copy', async () => {
+    const dead = unreachable();
+    try {
+      const app = createApp({ db: dead } as any);
+      const answer = await Promise.race([app.request('/v1/ingress/status', { headers: operator }), sleep(8_000).then(() => null)]);
+      expect(answer?.status).toBe(200);
+    } finally {
+      await dead.destroy();
+    }
+  }, 20_000);
+
+  it('POST /webhooks/whatsapp refuses intake until the switches have been read', async () => {
+    const dead = unreachable();
+    try {
+      const app = createApp({ db: dead } as any);
+      const refused = await app.request('/v1/webhooks/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'message', payload: { body: 'hello' } }) });
+      expect(refused.status).toBe(503);
+      expect((await refused.json()).detail).toMatch(/kill switch/i);
+    } finally {
+      await dead.destroy();
+    }
+  }, 20_000);
+});
+
+describe('a switch this process threw but could not save', () => {
+  // POST /v1/operations/kill-switch (system.routes.ts) does exactly `channelKillSwitches[ch] = Boolean(active)`
+  // and answers 200 { active: true }. If that background save fails once, the next re-read (any read
+  // after 5 s, e.g. the poller's pause check) overwrote the thrown switch with Postgres's "not thrown".
+  // (The adversarial review's reproduction, kept as it was given.)
+  it('a switch thrown through the context object stays thrown in this process when its save fails', async () => {
+    const localDb = createDb(process.env.TEST_DATABASE_URL!);
+    let calls = 0;
+    const flaky = new Proxy(localDb, {
+      get(target, prop) {
+        if (prop === 'transaction') {
+          calls += 1;
+          if (calls === 2) return () => ({ execute: () => Promise.reject(new Error('connection reset (fixture)')) });
+        }
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as Kysely<Database>;
+    try {
+      const store = createChannelKillSwitchStore(flaky);
+      await store.loaded;                          // transaction 1: the first read
+      store.switches.telegram = true;              // what POST /operations/kill-switch does; transaction 2 fails
+      expect(store.switches.telegram).toBe(true);  // the route answers { active: true }
+      await new Promise((resolve) => setTimeout(resolve, 5_300));
+      void store.switches.telegram;                // the poller's pause check: starts the re-read (transaction 3)
+      await store.refresh();
+      expect(store.switches.telegram).toBe(true);
+    } finally {
+      await localDb.destroy();
+    }
+  }, 20_000);
+
+  it('is saved once Postgres takes the write again, and then a restart keeps it', async () => {
+    const store = createChannelKillSwitchStore(failingTransaction(2), undefined, { retryMs: 50, refreshAfterMs: 0 });
+    await store.loaded;
+    store.switches.telegram = true; // transaction 2 fails; the retry is transaction 3 or later
+    for (let i = 0; i < 60 && (await switchRow('telegram'))?.state !== 'disabled'; i += 1) await sleep(50);
+    expect((await switchRow('telegram'))?.state).toBe('disabled');
+    expect(await channels(createApp({ db } as any))).toEqual({ telegram: false, waha: true });
+    // Saved, the switch follows Postgres again: another Core's release is seen here.
+    await toggle(createApp({ db } as any), 'telegram', true);
+    await store.refresh();
+    expect(store.switches.telegram).toBe(false);
+  }, 20_000);
+});
+
+describe('the WhatsApp switch has one state', () => {
+  it('thrown with POST /waha/kill-switch and released with the ingress toggle: WhatsApp intake is back on', async () => {
+    const app = createApp({ db } as any);
+    expect((await app.request('/v1/waha/kill-switch', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: false }) })).status).toBe(200);
+    expect((await toggle(app, 'waha', true)).status).toBe(200);
+    expect(await channels(app)).toEqual({ telegram: true, waha: true });
+    const realFetch = globalThis.fetch;
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes('/api/sessions/')) return Response.json({ name: 'office_waha_session', status: 'WORKING' });
+      return realFetch(input, init);
+    });
+    try {
+      const health = await (await app.request('/v1/waha/health', { headers: operator })).json();
+      expect(health.detail?.killSwitchActive).not.toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('chat campaign intake', () => {
+  it('is built once per app context, so the Telegram code and the WhatsApp routes share one', () => {
+    const ctx = { telegramBridge: {} } as any;
+    expect(createChatCampaignIntake(ctx)).toBe(createChatCampaignIntake(ctx));
+  });
 });

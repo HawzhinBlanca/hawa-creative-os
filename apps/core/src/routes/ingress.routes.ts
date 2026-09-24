@@ -42,6 +42,9 @@ export function registerIngressRoutes(ctx: RouteContext) {
       log.error(`[core:kill_switch] the ${channel} kill switch could not be saved:`, err instanceof Error ? err.message : err);
       return problem(c, 503, 'Kill switch not saved', `The ${channel} kill switch could not be saved to the database; it is unchanged. Try again.`);
     }
+    // POST /waha/kill-switch also sets the environment's WhatsApp switch, which the webhook and
+    // /waha/health read; follow it here, or a release through this toggle left WhatsApp refused.
+    if (channel === 'waha') process.env.WAHA_KILL_SWITCH = enabled ? 'false' : 'true';
     return c.json({ channel, enabled, killSwitchActive: channelKillSwitches[channel] }, 200);
   });
 

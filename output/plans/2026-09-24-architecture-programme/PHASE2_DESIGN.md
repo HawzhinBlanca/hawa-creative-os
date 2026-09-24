@@ -140,7 +140,7 @@ export const ChatInbox = restate.object({
 4. Parking: `ctx.run('park', () => core.park(update, reason))` (Core runs `parkTelegramUpdate`, unchanged), then a courtesy `PARKED_UPDATE_NOTICE` to the sender through TelegramSender.
 
 **Poller** (`apps/worker/src/lifecycle/telegram-poller.ts`) runs **only in the live colour**, through `runWhileLive` / `LiveColourGate` (`live-colour.ts`), the same gate as the outbox:
-- Loop: check the kill switch (Postgres `integration_health.state='disabled'`, cached 5 s). Then `getUpdates?offset=N+1&timeout=25`.
+- Loop: check the kill switch (Postgres `integration_health.state='disabled'` on the telegram `office-kill-switch` row, cached 5 s). Then `getUpdates?offset=N+1&timeout=25`.
 - For each update, in order: POST `${RESTATE_INGRESS_URL}/ChatInbox/${encodeURIComponent(chatKey(update))}/handleUpdate/send` with header `idempotency-key: tg-<update_id>`.
   - On 2xx, `setOffset(update_id)`, reusing `PostgresTelegramPollState` moved to `packages/db/src/telegram-poll-state.ts`.
   - Otherwise stop the batch and back off.
@@ -403,7 +403,9 @@ CREATE INDEX tasks_request_idx ON hawa.tasks(tenant_id, request_id) WHERE reques
 CREATE TABLE hawa.lifecycle_projections (
   tenant_id uuid NOT NULL, request_id uuid NOT NULL, rev bigint NOT NULL, idempotency_key text NOT NULL,
   result jsonb NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), UNIQUE (tenant_id, idempotency_key));
--- kill switch survives restarts: integration_health.state = 'disabled' on the bot's telegram row
+-- kill switch survives restarts: integration_health.state = 'disabled' on the channel's own row
+-- (shipped in 1.3/G8: hawa.integrations kind telegram|waha, name 'office-kill-switch'; not the bot's
+-- row, which telegram-poll-state.ts sets to 'healthy' on every accepted update and so would release it)
 ```
 
 - **RLS:** add `requests` and `lifecycle_projections` to the task-scoped policy loop in `db/rls.sql:116-130`. They join to `tasks` through `root_task_id`, using the hoisted-membership form from migration 016 (`generate-rls-hoist-migration.ts`).
@@ -445,7 +447,7 @@ After a request is open, **only `requests.owner` (or `tasks.request_id IS NOT NU
   - `app.ts:11256-11289` (`createPolledUpdateHandler` wiring, `startPolling`).
   - `routes/system.routes.ts:99` poll-now: becomes 409 "the worker polls" while `HAWA_TELEGRAM_POLLER=worker`.
   - The global `pollQueue` serialisation.
-  - The memory kill switch (`app.ts:257`, `ingress.routes.ts:26`): persisted in `integration_health`.
+  - The memory kill switch (`app.ts:257`, `ingress.routes.ts:26`): persisted in `integration_health`. Done in 1.3/G8 (`services/channel-kill-switches.ts`): each channel has its own `office-kill-switch` integrations row, not the bot row, because the poll state marks the bot row `healthy` on every accepted update. The worker's poller reads that row.
 - **Adds:**
   - `telegram-poller.ts`; `ChatInbox` (legacy mode only: the intake step posts to `/v1/internal/telegram/intake`, a thin wrapper that calls today's closure with the webhook secret checked internally).
   - `WORKER_SERVICES += ['ChatInbox']`.

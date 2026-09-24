@@ -17,7 +17,20 @@ import type { CoreContext } from '../core-context.js';
  * Saves a chat request (Telegram or WhatsApp) as a task and starts its design (architecture programme 1.3, G8).
  * Moved from createApp unchanged; the Telegram webhook and POST /webhooks/whatsapp both call it.
  */
-export function createChatCampaignIntake(ctx: CoreContext) {
+export function createChatCampaignIntake(ctx: CoreContext): ChatCampaignIntake {
+  // One per app context: app.ts (the Telegram code) and the WhatsApp routes both ask for it, and whatever
+  // state it keeps later (an in-flight dedup, say) must be shared by both.
+  const existing = intakes.get(ctx);
+  if (existing) return existing;
+  const intake = buildChatCampaignIntake(ctx);
+  intakes.set(ctx, intake);
+  return intake;
+}
+
+type ChatCampaignIntake = ReturnType<typeof buildChatCampaignIntake>;
+const intakes = new WeakMap<CoreContext, ChatCampaignIntake>();
+
+function buildChatCampaignIntake(ctx: CoreContext) {
   const {
     briefs,
     broadcastTransition,

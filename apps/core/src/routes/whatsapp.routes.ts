@@ -7,7 +7,7 @@ import { WahaIngressHandler, verifyActionSignature } from '@hawa/integrations';
 import { secretsEqual } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
-import { setKillSwitch } from '../services/channel-kill-switches.js';
+import { intakeRefused, setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
  * WhatsApp (WAHA) intake, its health and kill switch, and the signed approve/revise links sent in
@@ -35,8 +35,9 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
 
   registerRoute('post', '/webhooks/whatsapp', async (c: any) => {
     // 1. Office Kill Switch Check (CV-08, FR-071, FR-072). The environment's switch, or the office's
-    // switch kept in Postgres, which a restart does not forget.
-    if (process.env.WAHA_KILL_SWITCH === 'true' || channelKillSwitches.waha) {
+    // switch kept in Postgres, which a restart does not forget. Refused too while this process has
+    // not yet read that switch: it may be thrown.
+    if (process.env.WAHA_KILL_SWITCH === 'true' || await intakeRefused(channelKillSwitches, 'waha')) {
       return problem(c, 503, 'Service Unavailable', 'WAHA adapter is currently disabled by office kill switch. Fallback to Hawa Desk intake at /desk.');
     }
 
