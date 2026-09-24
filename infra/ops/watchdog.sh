@@ -36,11 +36,17 @@ if ! docker info >/dev/null 2>&1; then
   for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
   docker info >/dev/null 2>&1 || problems+=("Docker is not running and could not be started")
 fi
-# 2. Stack containers
+# 2. Stack containers: nginx, desk, core, postgres, restate and cutout (ADR-032), and at least one
+#    worker. The worker is blue/green (architecture programme 0.1): hawa-production-worker-blue-1 and/or
+#    -green-1 (both while the old colour drains), or hawa-production-worker-1 before the first
+#    blue/green deploy. Only deploy.sh creates a colour; a colour it removed must stay removed.
+WORKER_NAME='^hawa-production-worker(-blue|-green)?-1$'
+running_names() { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; }
+count_stack() { running_names | grep -cvE "$WORKER_NAME" || true; }
+count_workers() { running_names | grep -cE "$WORKER_NAME" || true; }
 if [[ ${#problems[@]} -eq 0 ]]; then
-  running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
-  # nginx, desk, core, worker, postgres, restate and cutout (ADR-032)
-  if [[ "$running" -lt 7 ]]; then
+  running="$(count_stack)"; workers="$(count_workers)"
+  if [[ "$running" -lt 6 || "$workers" -lt 1 ]]; then
     if [[ "$MODE" != "--status" ]]; then
       export HAWA_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       # Existing containers first, exactly as they were deployed. `up` then only creates what is
@@ -48,15 +54,21 @@ if [[ ${#problems[@]} -eq 0 ]]; then
       # its gate not yet passed), and on 2026-09-23 `up -d` rebuilt Core from the newer compose file
       # while the deploy that would have migrated for it had stopped at its test gate.
       "${COMPOSE[@]}" start >/dev/null 2>&1 || true
+      # The worker colours sit behind a compose profile, which `start` and `up` leave alone: start the
+      # worker containers that exist (a deploy removes a colour once it has drained).
+      for name in $( { docker ps -a --filter name=hawa-production-worker --filter status=exited --filter status=created --format '{{.Names}}' 2>/dev/null || true; } | grep -E "$WORKER_NAME" || true); do
+        docker start "$name" >/dev/null 2>&1 || true
+      done
       sleep 10
-      running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
-      if [[ "$running" -lt 7 ]]; then
+      running="$(count_stack)"
+      if [[ "$running" -lt 6 ]]; then
         "${COMPOSE[@]}" up -d --no-build --no-recreate >/dev/null 2>&1 || problems+=("compose up failed")
       fi
       sleep 20
-      running="$( { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; } | wc -l | tr -d ' ')"
+      running="$(count_stack)"; workers="$(count_workers)"
     fi
-    [[ "$running" -ge 7 ]] || problems+=("only ${running}/7 containers running")
+    [[ "$running" -ge 6 ]] || problems+=("only ${running}/6 containers besides the worker running")
+    [[ "$workers" -ge 1 ]] || problems+=("no worker container is running (run infra/docker/deploy.sh --apply to start one)")
   fi
 fi
 # 3. Core and worker health
@@ -67,14 +79,30 @@ else
 h=json.load(sys.stdin); d=h.get("dependencies",{}); bad={k:v for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","degraded","billing_exhausted")}
 parked=d.get("parkedClientMessages",0)
 if isinstance(parked,int) and parked>0: bad["parkedClientMessages"]=parked
+# Restate pauses an invocation once its retries run out (about an hour); it then waits for a person
+# (resume or cancel it in the Restate UI) and said nothing until health reported it.
+paused=d.get("restatePausedInvocations",0)
+if isinstance(paused,int) and paused>0: bad["restatePausedInvocations"]=paused
 print(h.get("status","?")+("" if not bad else " "+json.dumps(bad)))' 2>/dev/null || echo "unparseable")"
   [[ "$summary" == healthy* ]] || problems+=("core ${summary}")
 fi
-worker="$(docker exec hawa-production-worker-1 node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
-if [[ -z "$worker" ]]; then problems+=("worker health does not answer")
-else
-  wsum="$(printf '%s' "$worker" | python3 -c 'import json,sys; h=json.load(sys.stdin); print(h.get("status","?"), json.dumps(h.get("outbox",{})))' 2>/dev/null || echo "unparseable")"
-  [[ "$wsum" == healthy* ]] || problems+=("worker ${wsum}")
+# Every running worker colour answers for itself. One of them must be running the outbox: "live" (or
+# "taking_over" for the minute after a deploy); a colour draining is "standby". A worker from before
+# blue/green reports no colour and always runs it.
+outbox_runners=0; workers_seen=0
+for name in $(running_names | grep -E "$WORKER_NAME" || true); do
+  workers_seen=$((workers_seen + 1))
+  worker="$(docker exec "$name" node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
+  label="${name#hawa-production-}"; label="${label%-1}"
+  if [[ -z "$worker" ]]; then problems+=("${label} health does not answer"); continue; fi
+  wsum="$(printf '%s' "$worker" | python3 -c 'import json,sys; h=json.load(sys.stdin); print(h.get("status","?"), h.get("background","always"), json.dumps(h.get("outbox",{})))' 2>/dev/null || echo "unparseable")"
+  [[ "$wsum" == healthy* ]] || problems+=("${label} ${wsum}")
+  case "$wsum" in *" live "*|*" always "*|*" taking_over "*) outbox_runners=$((outbox_runners + 1)) ;; esac
+done
+if [[ "$workers_seen" -eq 0 ]]; then
+  # Already reported by the container check when it ran.
+  [[ "${workers:-unchecked}" == 0 ]] || problems+=("worker health does not answer (no worker running)")
+elif [[ "$outbox_runners" -eq 0 ]]; then problems+=("no worker is running the outbox (Restate names no live worker, or cannot be reached)")
 fi
 
 # 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting). From 88% Hawa

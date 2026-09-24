@@ -74,6 +74,7 @@ outside the checkout.
 ## Redeploy
 
 - `bash infra/docker/deploy.sh` runs the pre-flight (configuration present, no placeholders, compose valid, gates). `--apply` adds a `pg_dump` snapshot, versioned schema upgrades, build, start and a truthful health check (`/v1/health` dependencies must not be `unauthorized`, `unreachable`, `disconnected`, `read_only` or `outage`).
+- The worker deploys blue/green (architecture programme 0.1): the new build goes to the colour that is not live, is registered with Restate at its own address with `force: false`, and the old colour is removed once nothing is pinned to it; a drain still running after 15 minutes is left running and finished by the next deploy. Details, and how to inspect or finish a drain by hand: `infra/docker/README.md`.
 - After a deploy, send one English and one Kurdish brief from an allowlisted Telegram account and confirm each receives a final status message.
 
 ## Dead-lettered outbox commands
@@ -121,7 +122,7 @@ The deploy script writes `predeploy_<stamp>.dump` (same format, with its table o
 before every migration. It is written as `.partial` and named, with its `.sha256`, only once checked;
 a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
 either: `pg_restore -U hawa_owner -d hawa --clean --if-exists <file>` inside the postgres container,
-after stopping core and worker. Pre-deploy dumps from before 2026-09-23 are plain SQL compressed as
+after stopping core and the worker colours (`hawa-production-worker-blue-1`, `-green-1`). Pre-deploy dumps from before 2026-09-23 are plain SQL compressed as
 `.sql.zst`: `zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -U hawa_owner -d hawa`.
 
 `infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten checked pre-deploy dumps (with a
@@ -136,8 +137,10 @@ kept as it is with a warning, so one failure never stops the rest.
 
 `infra/ops/watchdog.sh` runs at login and every five minutes (launch agent `design.hawa.watchdog`).
 Docker Desktop is not configured to start at login, so the watchdog starts it, brings the stack up
-when fewer than seven containers run (`compose start` first, then `up -d --no-build --no-recreate`),
-then checks core `/v1/health` and the worker health. Any problem is sent to the operator chat at most
+when fewer than the six non-worker containers or no worker colour run (`compose start` first, then
+`up -d --no-build --no-recreate`; worker colours that exist are started by name, and only a deploy
+creates one), then checks core `/v1/health` (including paused Restate invocations) and the health of
+every running worker colour, one of which must be running the outbox. Any problem is sent to the operator chat at most
 once per 30 minutes. Recovery is announced once, saying what it was, and only for a problem you were
 told about; when the other problems clear but the disk is still full, that is said at once. A disk
 over 90% full after Hawa's own cleanup is reported with how much of it is Hawa's, every 6 hours
@@ -194,10 +197,10 @@ GROUP BY r.id;
 ### 3. Fault Injection & Incident Procedures
 
 #### Scenario (a): Worker crash or container restart during active run
-- **Symptom**: `hawa-production-worker-1` restarts or exits during an in-flight stage (e.g., `critiquing`).
+- **Symptom**: the live worker colour (`hawa-production-worker-blue-1` or `-green-1`) restarts or exits during an in-flight stage (e.g., `critiquing`).
 - **Mechanism**: Restate retains the execution journal up to the last completed step. When the worker recovers, it queries Core with the same task ID and idempotency key.
 - **Invariants**: Stages prior to the interrupted step are not re-executed; calls already committed to `hawa.design_studio_calls` are preserved; ledger call count and USD spend remain unchanged (zero duplicate billing).
-- **Verification**: `docker restart hawa-production-worker-1; npx tsx scripts/studio_fault_injection.ts`.
+- **Verification**: `docker restart hawa-production-worker-<live colour>-1; npx tsx scripts/studio_fault_injection.ts`.
 
 #### Scenario (b): Provider outage & degraded art fallback
 - **Symptom**: Gemini API key is missing, invalid, or returns 429/5xx during art generation.

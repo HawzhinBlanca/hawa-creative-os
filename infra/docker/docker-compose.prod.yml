@@ -7,6 +7,39 @@ x-logging: &logging
     max-size: "50m"
     max-file: "5"
 
+# One worker definition for both colours; only the colour and its own address differ.
+x-worker-environment: &worker-environment
+  NODE_ENV: production
+  PORT: 9080
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
+  RESTATE_INGRESS_URL: http://restate:8080
+  RESTATE_ADMIN_URL: http://restate:9070
+  HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
+
+x-worker: &worker
+  build:
+    context: ../..
+    dockerfile: infra/docker/Dockerfile.worker
+  profiles: ["worker"]
+  restart: unless-stopped
+  logging: *logging
+  env_file:
+    - .env.production
+  networks:
+    - core
+    - egress
+  depends_on:
+    core:
+      condition: service_healthy
+    restate:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://localhost:9080/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 services:
   nginx:
     image: nginx:1.27-alpine-slim
@@ -74,40 +107,34 @@ services:
       restate:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      # /ready: process up and one database ping. /health calls Restate, Canva, Telegram and the cut-out
+      # service; polled every 10 s it was load, and a slow dependency made the container "unhealthy".
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/ready').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
 
-  worker:
-    build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.worker
-    restart: unless-stopped
-    logging: *logging
-    env_file:
-      - .env.production
+  # The worker runs as two colours, blue and green, each registered with Restate at its own address
+  # (architecture programme 0.1, ADR-034). Restate pins every invocation to the deployment (address)
+  # that started it, so a deploy starts and registers the colour that is not live and leaves the live
+  # one running until nothing is pinned to it; replacing the container behind one address replayed
+  # journals in flight on new code (RT0016). Only deploy.sh starts a colour: the `worker` profile keeps
+  # a plain `compose up` (the deploy's own, the watchdog's) from creating or recreating either.
+  # The outbox consumer runs only in the colour Restate sends new work to (apps/worker/src/live-colour.ts).
+  worker-blue:
+    <<: *worker
     environment:
-      NODE_ENV: production
-      PORT: 9080
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
-      RESTATE_INGRESS_URL: http://restate:8080
-      HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
-    networks:
-      - core
-      - egress
-    depends_on:
-      core:
-        condition: service_healthy
-      restate:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:9080/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      <<: *worker-environment
+      HAWA_WORKER_COLOUR: blue
+      HAWA_WORKER_SELF_URI: http://worker-blue:9080
+
+  worker-green:
+    <<: *worker
+    environment:
+      <<: *worker-environment
+      HAWA_WORKER_COLOUR: green
+      HAWA_WORKER_SELF_URI: http://worker-green:9080
 
   # Person cut-outs (ADR-032): a matting model and a face detector on the internal network only.
   # The model files are mounted read-only from the host and pinned by sha256; one cut takes about
@@ -167,7 +194,11 @@ services:
       retries: 10
 
   restate:
-    image: ghcr.io/restatedev/restate:1.7.0
+    # 1.7.10 (2026-09-14): patch releases of 1.7 (VQueue, RocksDB and HTTP/2 fixes). Its opt-in
+    # migrations (VQueues, preflight retention, obsolete-VQueue cleanup) are one-way and stay off, so
+    # rolling back to 1.7.0 stays possible (infra/docker/README.md). A minor upgrade (1.8) migrates
+    # partitions one way: test it on a copy of restate_data first (ADR-034).
+    image: ghcr.io/restatedev/restate:1.7.10
     restart: unless-stopped
     logging: *logging
     environment:

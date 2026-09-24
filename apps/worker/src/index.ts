@@ -5,6 +5,7 @@ import { withRlsContext, sql, createDb } from '@hawa/db';
 import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
+import { LiveColourGate, runWhileLive, backgroundLoopsFromEnv, type LoopHandle } from './live-colour.js';
 
 const SERVICE_NAME = 'hawa-worker';
 // A long-running service that dies without saying why is the hardest kind of outage to diagnose,
@@ -119,7 +120,15 @@ const restateHandler = restate
   .http1Handler();
 
 let outboxConsumer: OutboxConsumer | null = null;
-if (sharedDb) {
+// Blue/green (architecture programme 0.1): a colour runs the outbox only while it is the one Restate
+// sends new work to. Without HAWA_WORKER_SELF_URI the worker is alone and runs it as before.
+const backgroundMode = backgroundLoopsFromEnv();
+const liveGate = backgroundMode.mode === 'live-colour'
+  ? new LiveColourGate({ adminUrl: backgroundMode.adminUrl, selfUri: backgroundMode.selfUri, takeoverMs: backgroundMode.takeoverMs, refreshMs: backgroundMode.refreshMs })
+  : null;
+let gatedLoop: LoopHandle | null = null;
+if (backgroundMode.mode === 'misconfigured') console.error(`[Worker] Outbox not started: ${backgroundMode.reason}`);
+if (sharedDb && backgroundMode.mode !== 'misconfigured') {
   try {
     const dispatcher = new TaskWorkflowDispatcher({
       restateIngressUrl: process.env.RESTATE_INGRESS_URL,
@@ -133,8 +142,14 @@ if (sharedDb) {
       tenantIds,
       dispatcher,
     });
-    outboxConsumer.start();
-    console.log('[Worker] OutboxConsumer background processor started');
+    if (liveGate) {
+      const consumer = outboxConsumer;
+      gatedLoop = runWhileLive({ gate: liveGate, tick: () => consumer.processBatch(), intervalMs: Number(process.env.OUTBOX_POLL_INTERVAL_MS || 1000) });
+      console.log(`[Worker] OutboxConsumer runs while ${process.env.HAWA_WORKER_SELF_URI} is the live colour`);
+    } else {
+      outboxConsumer.start();
+      console.log('[Worker] OutboxConsumer background processor started');
+    }
   } catch (err) {
     console.error('[Worker] Failed to start OutboxConsumer:', err);
   }
@@ -158,7 +173,7 @@ const server = http.createServer((req, res) => {
     probe.then(({ postgres, outbox }) => {
       const healthy = postgres !== 'disconnected';
       // Backlog or dead letters degrade the worker without failing the container health check.
-      const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0));
+      const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured';
       res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
@@ -168,7 +183,10 @@ const server = http.createServer((req, res) => {
           DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
           DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
         },
-        outboxActive: Boolean(outboxConsumer),
+        outboxActive: Boolean(outboxConsumer) && (!liveGate || liveGate.state() === 'live'),
+        // blue/green: 'live' runs the outbox; 'standby' is a draining (or not yet registered) colour.
+        colour: process.env.HAWA_WORKER_COLOUR || null,
+        background: backgroundMode.mode === 'always' ? 'always' : backgroundMode.mode === 'misconfigured' ? 'misconfigured' : liveGate!.state(),
         dependencies: { postgres },
         outbox,
         timestamp: new Date().toISOString(),
@@ -193,6 +211,7 @@ server.listen(port, () => {
 });
 
 const shutdown = () => {
+  gatedLoop?.stop();
   if (outboxConsumer) {
     outboxConsumer.stop();
   }

@@ -4,6 +4,7 @@ import { detectFontRequests, scriptLabel, unavailableFontNotice } from './servic
 import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
+import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1681,6 +1682,7 @@ export function createApp(options?: CreateAppOptions) {
   };
 
   const healthCutouts = new PhotoCutouts();
+  const restateInvocations = createRestateInvocationProbe();
   const honestHealthHandler = async (c: any) => {
     const dbStatus = await probeDatabase(db);
 
@@ -1721,7 +1723,10 @@ export function createApp(options?: CreateAppOptions) {
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
-    const restateStatus = (await probeRestate()).status;
+    // Paused invocations wait for a person and are otherwise silent (architecture programme 0.1).
+    // Asked side by side, so a hung Restate adds one timeout to /health, not two.
+    const [restateProbe, restateWork] = await Promise.all([probeRestate(), restateInvocations()]);
+    const restateStatus = restateProbe.status;
 
     let funnelMetrics: any = null;
     let funnelStatus: string = 'idle';
@@ -1758,7 +1763,8 @@ export function createApp(options?: CreateAppOptions) {
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
       || funnelStatus === 'stalled'
-      || parkedUpdates > 0;
+      || parkedUpdates > 0
+      || (restateWork.paused ?? 0) > 0;
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
 
     return c.json({
@@ -1778,6 +1784,7 @@ export function createApp(options?: CreateAppOptions) {
         everyMinutes: billingProbeMs / 60_000,
       },
       funnel: funnelMetrics,
+      restateInvocations: restateWork,
       // Which models new requests will use: HAWA_MODEL_TIER=dev is the owner's cheap tier, and
       // HAWA_MODEL_<ROLE> / HAWA_IMAGE_* override single settings. Never shows a key, only whether
       // the selected image provider has one.
@@ -1813,6 +1820,7 @@ export function createApp(options?: CreateAppOptions) {
         waha: wahaStatus,
         disk: diskStatus,
         restate: restateStatus,
+        restatePausedInvocations: restateWork.paused ?? restateWork.status,
         modelProvider: modelProviderStatus,
         telegramApi: telegramApiStatus,
         funnel: funnelStatus,

@@ -1,7 +1,10 @@
 import type { RouteContext } from './types.js';
 import { sql, withRlsContext } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
+import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
+// A function declaration, read only when a request arrives, so the import cycle with app.ts is harmless.
+import { probeDatabase } from '../app.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -38,8 +41,19 @@ export function registerSystemRoutes(ctx: RouteContext) {
   // Health and readiness endpoints
   app.get('/health', honestHealthHandler);
   app.get('/v1/health', honestHealthHandler);
-  app.get('/ready', honestHealthHandler);
-  app.get('/v1/ready', honestHealthHandler);
+  // /ready is what Docker polls every 10 s. It was the full health handler, which asks Postgres
+  // several questions and calls Restate, Canva's connection row, the cut-out service and Telegram:
+  // load that grew with the office, and a container marked unhealthy because a dependency was slow.
+  // It only says the process is up and answers, with one database ping at most. /health keeps the
+  // whole picture for the watchdog, the deploy and the Desk. A Core without a database keeps its
+  // state in memory only, so it is not ready.
+  const readinessHandler = async (c: Context) => {
+    const postgres = await probeDatabase(db);
+    const ready = postgres === 'connected';
+    return c.json({ status: ready ? 'ready' : 'not_ready', postgres, timestamp: new Date().toISOString() }, ready ? 200 : 503);
+  };
+  app.get('/ready', readinessHandler);
+  app.get('/v1/ready', readinessHandler);
 
   // Production Funnel Health & Stall Detection (Step 5 of Engineering Rank Audit)
   registerRoute('get', '/system/funnel/health', async (c: any) => {
