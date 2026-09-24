@@ -86,7 +86,10 @@ SIZE="$(stat -f '%z' "$OUT" 2>/dev/null || stat -c '%s' "$OUT")"
 shasum -a 256 "$OUT" | awk '{print $1}' > "$OUT.sha256" || fail "could not checksum the dump"
 
 # Restore verification: the dump must actually load, and hold the same task count as the live database.
-VDB="hawa_verify_$(printf "%s" "$STAMP" | tr "[:upper:]" "[:lower:]")"
+# Scratch database names end in this run's suffix, so two runs (a manual one beside the nightly, or
+# tests in parallel) never share one. Letters and digits only.
+SCRATCH_SUFFIX="$(printf '%s' "${HAWA_SCRATCH_DB_SUFFIX:-$$}" | tr -cd 'a-z0-9' | cut -c1-16)"; SCRATCH_SUFFIX="${SCRATCH_SUFFIX:-$$}"
+VDB="hawa_verify_$(printf "%s" "$STAMP" | tr "[:upper:]" "[:lower:]")_${SCRATCH_SUFFIX}"
 docker exec "$PG" createdb -U hawa_owner "$VDB" || fail "could not create verification database"
 if ! docker exec -i "$PG" pg_restore -U hawa_owner -d "$VDB" --no-owner --no-privileges --exit-on-error < "$OUT"; then
   docker exec "$PG" dropdb -U hawa_owner "$VDB" || true; fail "pg_restore rejected the dump"

@@ -24,7 +24,10 @@ PROD="${HAWA_BACKUP_NOTIFY_ENV:-$ROOT/infra/docker/.env.production}"
 DRILL_ROOT="${HAWA_DRILL_DIR:-$HOME/.hawa/drill}"
 VERIFY="${HAWA_DRILL_VERIFY_JS:-$ROOT/apps/core/dist/tools/blob-verify.js}"
 NOW="$(date -u +%Y%m%dT%H%M%SZ)"; START_TS="$(date -u +%FT%TZ)"; START_S="$(date +%s)"
-DDB="hawa_drill_$(printf '%s' "$NOW" | tr '[:upper:]' '[:lower:]')"
+# Scratch database names end in this run's suffix, so two runs (a manual one beside the nightly, or
+# tests in parallel) never share one. Letters and digits only.
+SCRATCH_SUFFIX="$(printf '%s' "${HAWA_SCRATCH_DB_SUFFIX:-$$}" | tr -cd 'a-z0-9' | cut -c1-16)"; SCRATCH_SUFFIX="${SCRATCH_SUFFIX:-$$}"
+DDB="hawa_drill_$(printf '%s' "$NOW" | tr '[:upper:]' '[:lower:]')_${SCRATCH_SUFFIX}"
 WORK="$DRILL_ROOT/$NOW"; DB_CREATED=0
 DUMP_NAME=""; TARGET=""; BLOBS_CHECKED=""; MISSING=""; ROWS=""; WITHOUT_ROW=""
 

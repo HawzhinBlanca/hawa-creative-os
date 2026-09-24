@@ -9,6 +9,9 @@ import pg from 'pg';
 import { createDb } from '../src/client.js';
 import { BlobStore, initBlobStoreDir } from '../src/blobs/store.js';
 
+/** This file's scratch databases (hawa_verify_*, hawa_drill_*) end in it; files run in parallel. */
+const scratchSuffix = `t${Math.random().toString(36).slice(2, 10)}`;
+
 /**
  * The backups of the file store, end to end (ADR-035 section 2.6, FILESTORE_DESIGN.md sections 4 and
  * 7): infra/backup/nightly_backup.sh, infra/backup/restore_drill.sh and infra/ops/disk_cleanup.sh run
@@ -57,6 +60,7 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
   function env(extra: Record<string, string> = {}): Record<string, string> {
     return {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HAWA_SCRATCH_DB_SUFFIX: scratchSuffix,
       HOME: dirs.home,
       DOCKER_CONFIG: path.join(os.homedir(), '.docker'),
       HAWA_BACKUP_SNAPSHOT_DIR: dirs.snapshots,
@@ -97,7 +101,9 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
   const reference = (sha256: string) =>
     owner.query(`INSERT INTO hawa.task_files(tenant_id, task_id, sha256, role) VALUES ($1, $2, $3, 'reference_image')`, [TENANT, task, sha256]);
   const scratchDatabases = async () =>
-    (await owner.query(`SELECT datname FROM pg_database WHERE datname LIKE 'hawa_verify_%' OR datname LIKE 'hawa_drill_%'`)).rows.map((r) => r.datname as string);
+    (await owner.query(`SELECT datname FROM pg_database WHERE datname LIKE 'hawa_verify_%' OR datname LIKE 'hawa_drill_%'`)).rows
+      .map((r) => r.datname as string)
+      .filter((name) => name.endsWith(`_${scratchSuffix}`));
 
   beforeAll(async () => {
     for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true, mode: 0o700 });
@@ -147,7 +153,7 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
     expect(log().some((l) => / GC /.test(l) && /"deleted":0/.test(l))).toBe(true);
     // Nothing left behind: no scratch directory, no verification database.
     expect(fs.readdirSync(dirs.snapshots).filter((n) => n.startsWith('.work_'))).toEqual([]);
-    expect(await scratchDatabases()).not.toContain(`hawa_verify_${stamp.toLowerCase()}`);
+    expect(await scratchDatabases()).not.toContain(`hawa_verify_${stamp.toLowerCase()}_${scratchSuffix}`);
   }, 180_000);
 
   it('a second night with nothing new writes no pack; a new file makes a pack of one', async () => {

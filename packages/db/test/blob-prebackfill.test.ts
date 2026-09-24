@@ -10,6 +10,9 @@ import { createDb } from '../src/client.js';
 import { BlobStore, initBlobStoreDir } from '../src/blobs/store.js';
 import { verifyBlobStore } from '../src/blobs/verify.js';
 
+/** This file's scratch databases (hawa_verify_*, hawa_drill_*) end in it; files run in parallel. */
+const scratchSuffix = `t${Math.random().toString(36).slice(2, 10)}`;
+
 /**
  * The first release of the file store, before the copy backfill has run. The running Core already
  * writes hashes into columns hawa.blob_references reads (design_studio_candidates.preview_sha256,
@@ -45,6 +48,7 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
   let oldStyle = '';
   const env = (extra: Record<string, string> = {}): Record<string, string> => ({
     PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HAWA_SCRATCH_DB_SUFFIX: scratchSuffix,
     HOME: dirs.home,
     DOCKER_CONFIG: path.join(os.homedir(), '.docker'),
     HAWA_BACKUP_SNAPSHOT_DIR: dirs.snapshots,

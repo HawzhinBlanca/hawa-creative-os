@@ -236,10 +236,10 @@ describe.skipIf(!appUrl || !ownerUrl)('BlobStore against PostgreSQL and a tempor
     expect((await rowOf(ref.sha256))?.unreferenced_since).toBeNull();
   });
 
-  it('keeps fsync on unless a test run turns it off', () => {
-    const on = blobStoreFromEnv(app, { HAWA_BLOB_DIR: '/tmp/x', NODE_ENV: 'production', HAWA_BLOB_FSYNC: 'off' });
-    const off = blobStoreFromEnv(app, { HAWA_BLOB_DIR: '/tmp/x', NODE_ENV: 'test', HAWA_BLOB_FSYNC: 'off' });
-    expect((on as unknown as { fsync: boolean }).fsync).toBe(true);
-    expect((off as unknown as { fsync: boolean }).fsync).toBe(false);
+  it('keeps fsync on whatever the environment says (no test switch in production code)', () => {
+    for (const NODE_ENV of ['production', 'test']) {
+      const store = blobStoreFromEnv(app, { HAWA_BLOB_DIR: '/tmp/x', NODE_ENV, HAWA_BLOB_FSYNC: 'off' });
+      expect((store as unknown as { fsync: boolean }).fsync, NODE_ENV).toBe(true);
+    }
   });
 });

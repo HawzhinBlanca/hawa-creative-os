@@ -98,7 +98,7 @@ export interface BlobStat extends BlobRef {
 export interface BlobStoreOptions {
   root: string;
   db: Kysely<Database>;
-  /** Off only in tests (HAWA_BLOB_FSYNC=off under NODE_ENV=test): fsync is most of a put's time. */
+  /** Default on. A test may build a store with fsync off (fsync is most of a put's time); the environment cannot. */
   fsync?: boolean;
   fs?: BlobFs;
 }
@@ -326,6 +326,5 @@ export class BlobStore {
 export function blobStoreFromEnv(db: Kysely<Database>, env: NodeJS.ProcessEnv = process.env): BlobStore {
   const root = env.HAWA_BLOB_DIR;
   if (!root) throw new Error('HAWA_BLOB_DIR is not set; the blob store has no default directory');
-  const fsync = !(env.NODE_ENV === 'test' && env.HAWA_BLOB_FSYNC === 'off');
-  return new BlobStore({ root: path.resolve(root), db, fsync });
+  return new BlobStore({ root: path.resolve(root), db });
 }
