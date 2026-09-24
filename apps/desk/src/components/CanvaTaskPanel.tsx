@@ -1,6 +1,8 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
-export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
+import {canvaPanelPollMs} from '../services/canvaPanelPoll.js';
+// `revision` changes when a live event names the task (the Work screen's detail query read it again).
+export const CanvaTaskPanel:React.FC<{taskId:string;revision?:number}>=({taskId,revision})=>{
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   const [width,setWidth]=useState('1200'),[height,setHeight]=useState('1697'),[results,setResults]=useState<Record<string,any>>({});
   const [plans,setPlans]=useState<any[]>([]);
@@ -10,8 +12,13 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
   const exportRequests=useRef<Record<string,{format:string;key:string}>>({});
   const refresh=async()=>{const [task,account,planning]=await Promise.all([apiClient.canva.taskState(taskId),apiClient.canva.status(),apiClient.canva.plans(taskId)]);if(activeTask.current!==taskId)return;setState(task);setPlans(planning.plans);setConnected(account.authorized===true);setResults(v=>({...v,...Object.fromEntries((task.artifacts||[]).map((a:any)=>[a.operation_id,{operationId:a.operation_id,status:'retrieved',artifact:a}]))}));};
   useEffect(()=>{setState(null);setPlans([]);setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
-  // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
-  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
+  // Every 5 s while Canva or the planner is working, otherwise once a minute (canvaPanelPoll.ts), and at
+  // once when a live event names the task. A failed poll is retried at the next tick; a 401 among them
+  // reaches the Work screen's sign-in prompt through the API client (2026-09-24).
+  const pollMs=canvaPanelPollMs({busy,operations:state?.operations,plans,results});
+  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},pollMs);return()=>clearInterval(timer);},[taskId,pollMs]);
+  const seenRevision=useRef(revision);
+  useEffect(()=>{if(seenRevision.current===revision)return;seenRevision.current=revision;void refresh().catch(()=>{});},[revision]);
   const latestPng=state?.artifacts?.find((a:any)=>a.format==='png');
   const latestCheck=state?.artifacts?.find((a:any)=>a.content_check)?.content_check;
   useEffect(()=>{let cancelled=false;let objectUrl:string|undefined;setPreview(null);

@@ -858,7 +858,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 </details>
                 <AskLedgerPanel key={`asks-${selectedTask.id}`} taskId={selectedTask.id} />
                 <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} />
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} revision={detailQuery.dataUpdatedAt} />
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}
