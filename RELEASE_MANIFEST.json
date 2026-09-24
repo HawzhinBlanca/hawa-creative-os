@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T11:43:09.199Z",
+  "generatedAt": "2026-09-24T12:32:26.673Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,15 +19,15 @@
     ]
   },
   "build": {
-    "commit": "f9f655744852125e2e68487ed8d917f13fe396f4",
+    "commit": "eece16494fb4c62ebc7ab67ec10676bfcf4c5897",
     "treeClean": true,
-    "commitTimestamp": "2026-09-24T14:43:00+03:00",
+    "commitTimestamp": "2026-09-24T15:32:18+03:00",
     "branch": "claude/reliability"
   },
   "migrations": {
-    "targetVersion": "018_desk_list_indexes",
-    "latestMigrationFile": "018_desk_list_indexes.sql",
-    "totalMigrations": 18
+    "targetVersion": "019_blob_store",
+    "latestMigrationFile": "019_blob_store.sql",
+    "totalMigrations": 19
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -55,7 +55,7 @@
       "service": "worker",
       "image": "hawa-worker:latest",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "c04600c9e6541579b6c6ade8bec159168ad1cdb4baa8cd142421f48ad7708b16"
+        "apps/worker/src/index.ts": "974d76532d60762d97f8817f74548b000127df7a195d94a856837139c4812e29"
       }
     }
   },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "d8546df3255bc1e07db031a4797914c645b3b7847574ade2210993224e808262"
+  "sha256": "d707bb96155ad69a3e40367b7115e0c7e2233fb0415fc4bb578e4a268abdc9e6"
 }
