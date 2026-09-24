@@ -1,8 +1,14 @@
-import { createHash } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import crypto, { createHash } from 'node:crypto';
+import { describe, expect, it, vi, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { computeActionSignature } from '@hawa/integrations';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
 
 /**
  * Delivery sends exactly the Canva exports the reviewer pinned when approving (owner decision,
@@ -14,9 +20,19 @@ import { memoryExportStore } from './pinned-exports-fixture.js';
 const KAAE = 'c1000000-0000-4000-8000-000000000002';
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-function setup() {
+/** A QA engine whose every run passes, for tests about something other than QA. */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
+
+/** passingQa: the task's own brief would fail the route's fixed QA manifest (a Telegram task's does). */
+function setup(opts: { passingQa?: boolean } = {}) {
   const exports = memoryExportStore();
-  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store,
+    ...(opts.passingQa ? { qaEngine: passingQa as never } : {}) });
 
   /** withClient false: a Telegram-ingested task, which carries no client until one is routed. */
   async function taskAwaitingApproval(withClient = true) {
@@ -50,6 +66,9 @@ function setup() {
         }),
       })
     ).json();
+    // Postgres approves only a revision with a passing critical QA run on record.
+    const qa = await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/qa`, { method: 'POST' });
+    expect(qa.status).toBe(200);
     return { taskId, revisionId: rev.revisionId as string };
   }
 
@@ -161,7 +180,7 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
   });
 
   it('never delivers a task without a client into another client\'s folder', async () => {
-    const { exports, taskAwaitingApproval, approve, publishOmnichannel } = setup();
+    const { exports, taskAwaitingApproval, approve, publishOmnichannel } = setup({ passingQa: true });
     const { taskId, revisionId } = await taskAwaitingApproval(false);
     const exportId = exports.add(taskId);
     expect((await approve(taskId, revisionId, [exportId])).status).toBe(201);
@@ -226,7 +245,7 @@ describe('only the test suite emulates Google', () => {
     vi.stubEnv('GOOGLE_OAUTH_TOKEN', '');
     try {
       const exports = memoryExportStore();
-      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
       const auth = { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' };
       const created = await (await app.request('/tasks', { method: 'POST', headers: auth, body: JSON.stringify({ title: 'Dev delivery', clientId: KAAE }) })).json();
       const taskId: string = created.id || created.task?.id;
@@ -237,6 +256,7 @@ describe('only the test suite emulates Google', () => {
           body: JSON.stringify({ document: { id: 'd', pages: [{ id: 'p1', name: 'main', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'h', type: 'text', text: 'Dev' }] } }),
         })
       ).json();
+      expect((await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/qa`, { method: 'POST', headers: auth })).status).toBe(200);
       const approve = await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/decisions`, {
         method: 'POST',
         headers: { ...auth, Authorization: 'Bearer test_art_director_bearer' },

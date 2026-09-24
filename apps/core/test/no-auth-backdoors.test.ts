@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { createApp } from '../src/app.js';
 
 /**
@@ -15,6 +16,10 @@ afterEach(() => { process.env = { ...saved }; });
 
 const asProduction = () => { process.env.NODE_ENV = 'production'; process.env.HAWA_ALLOW_ROLE_HEADER = 'true'; };
 const json = { 'content-type': 'application/json' };
+// Revisions and decisions are only recorded in Postgres (architecture programme 1.3, group G3), so the
+// approval test runs on this file's own test database.
+const testDb = createDb(saved.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
 
 describe('no authentication backdoor survives outside an explicit test option', () => {
   it('a token-less request is anonymous, with or without a database, in every environment', async () => {
@@ -33,8 +38,8 @@ describe('no authentication backdoor survives outside an explicit test option', 
 
   it('a signed-in operator cannot approve by naming a reviewer role in the body or the header', async () => {
     process.env.NODE_ENV = 'development';
-    const app = createApp();
-    const created = await app.request('/v1/tasks', { method: 'POST', headers: { ...json, Authorization: 'Bearer test_bearer' }, body: JSON.stringify({ title: 'T', clientId: 'kaae' }) });
+    const app = createApp({ db: testDb });
+    const created = await app.request('/v1/tasks', { method: 'POST', headers: { ...json, Authorization: 'Bearer test_bearer' }, body: JSON.stringify({ title: 'T', clientId: 'c1000000-0000-4000-8000-000000000002' }) });
     expect(created.status).toBe(201);
     const { id } = await created.json();
     const rev = await (await app.request(`/v1/tasks/${id}/revisions`, { method: 'POST', headers: { ...json, Authorization: 'Bearer test_bearer' }, body: JSON.stringify({ document: { id: 'd', pages: [{ id: 'p1', name: 'main', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'h', type: 'text', text: 'x' }] } }) })).json();

@@ -5,6 +5,10 @@ import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 // A function declaration, read only when a request arrives, so the import cycle with app.ts is harmless.
 import { probeDatabase } from '../core-helpers.js';
+import { readDeliveredRecords } from '../services/publication-receipt.js';
+import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { log } from '../logging.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -26,7 +30,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
     sloDaemon,
     reconciliationService,
     tasks,
-    omnichannelReceipts,
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
@@ -423,12 +426,24 @@ export function registerSystemRoutes(ctx: RouteContext) {
       updatedAt: t.updatedAt || new Date().toISOString(),
     }));
 
-    // Delivery records are the receipts Core kept when it published.
+    // Delivery records are the Drive files and Sheets rows each delivery confirmed, as Postgres holds
+    // them (services/publication-receipt.ts). They used to be the receipts this process kept, so the
+    // audit after a restart found every delivered task undelivered. Without a database there are none.
     const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [];
     const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [];
-    for (const data of omnichannelReceipts.values()) {
-      if (data.files && Array.isArray(data.files)) driveFiles.push(...data.files.map((f: any) => ({ ...f })));
-      if (data.sheetRow) sheetRows.push({ ...data.sheetRow });
+    if (db) {
+      const auth = verifyRequestAuth(c);
+      const delivered = await readDeliveredRecords(db, {
+        tenantId: auth.tenantId || DEFAULT_TENANT_ID,
+        userId: auth.userId || SYSTEM_AUTOMATION_USER_ID,
+        role: auth.role || 'operator',
+      }).catch((err: unknown) => {
+        log.error('[core:reconciliation] Could not read the delivery records:', err);
+        return null;
+      });
+      if (!delivered) return problem(c, 503, 'Database Unavailable', 'The delivery records could not be read; try again');
+      driveFiles.push(...delivered.driveFiles);
+      sheetRows.push(...delivered.sheetRows);
     }
 
     // Rows supplied or altered by the caller make the report a simulation, which is returned but

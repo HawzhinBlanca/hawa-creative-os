@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { TelegramBridgeDaemon, computeActionSignature } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
 
 /**
  * Chat actions never approve or modify a design (ADR-022): the Telegram webhook refuses approve,
@@ -26,7 +32,7 @@ function setup() {
     answers.push(String(text));
     return true as any;
   });
-  const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  telegramBridge: bridge });
+  const app = createApp({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },  telegramBridge: bridge });
 
   const webhook = (body: Record<string, unknown>) =>
     app.request('/api/webhooks/telegram', {

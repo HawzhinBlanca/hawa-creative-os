@@ -5,7 +5,7 @@ import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { HumanApprovalManager } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
-import { DEFAULT_CLIENT_ID } from '../core-context.js';
+import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { isValidUuid, qaReportSha256 } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { parsePinnedExportIds } from '../services/pinned-deliverables.js';
@@ -13,8 +13,8 @@ import { pendingChangeOf as findPendingChange, pendingChangeWords } from '../ser
 
 /**
  * A reviewer's decision on a design revision, and what the review desk shows before it
- * (architecture programme 1.3, group G3, moved from app.ts unchanged): POST decisions, GET review-desk
- * and the chat approval action.
+ * (architecture programme 1.3, group G3, moved from app.ts): POST decisions, GET review-desk and the
+ * chat approval action. A decision is recorded in Postgres (approvals) or refused.
  */
 export function registerDecisionsRoutes(ctx: RouteContext): void {
   const {
@@ -23,10 +23,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     db,
     taskRepo,
     revisionRepo,
-    isProduction,
     events,
-    revisions,
-    decisions,
     deliverableStore,
     readCurrentTask,
     resolveTaskWithFallback,
@@ -51,19 +48,18 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       return problem(c, 401, 'Unauthorized', 'Authentication required to record review decisions');
     }
 
-    if (isProduction && !db && !process.env.HAWA_BEARER_TOKEN?.includes('disposable')) {
-      return problem(
-        c,
-        503,
-        'Database Unavailable',
-        'Production design approval strictly requires connected PostgreSQL database storage'
-      );
-    }
-
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
     let task = await readCurrentTask(taskId);
+    // A decision is recorded in Postgres (approvals) or not at all, in every environment. Without a
+    // database it used to be kept in this process's memory, where delivery also looked for it; a
+    // restart lost it and a second process never saw it.
+    if (!db || !taskRepo || !revisionRepo) {
+      if (!task) return problem(c, 404, 'Task Not Found');
+      return problem(c, 503, 'Database Unavailable', 'A review decision is only recorded in the database');
+    }
     let dbTask: any = null;
-    if (taskRepo && db) {
+    // An id that is not a uuid names no task or revision in Postgres; the query would fail on the cast.
+    if (isValidUuid(taskId)) {
       dbTask = await withRlsContext(
         db,
         { tenantId, userId: auth.userId, role: auth.role },
@@ -74,7 +70,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
     let resolvedRev: any = null;
     let dbRev: any = null;
-    if (revisionRepo && db) {
+    if (isValidUuid(revisionId)) {
       dbRev = await withRlsContext(
         db,
         { tenantId, userId: auth.userId, role: auth.role },
@@ -95,23 +91,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       }
     }
 
-    if (!resolvedRev) {
-      const targetRev = revisions.get(revisionId);
-      if (!targetRev) {
-        const altRev = Array.from(revisions.values()).find((r: any) => r.revisionId === revisionId || r.id === revisionId);
-        if (!altRev) {
-          return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist`);
-        }
-        if (altRev.taskId !== taskId) {
-          return problem(c, 400, 'Cross-Task Revision Mismatch', `Revision ${revisionId} belongs to task ${altRev.taskId}, not task ${taskId}`);
-        }
-        resolvedRev = altRev;
-      } else if (targetRev.taskId !== taskId) {
-        return problem(c, 400, 'Cross-Task Revision Mismatch', `Revision ${revisionId} belongs to task ${targetRev.taskId}, not task ${taskId}`);
-      } else {
-        resolvedRev = targetRev;
-      }
-    }
+    if (!resolvedRev) return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist`);
 
     const body = await c.req.json().catch(() => ({}));
     const rawAction = (body.action || body.status || body.decision || body.outcome || '').toLowerCase().trim();
@@ -398,9 +378,6 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       ...(pinnedExports ? { pinnedExports } : {}),
     };
 
-    if (!decisions.has(taskId)) decisions.set(taskId, []);
-    decisions.get(taskId)!.push(decision);
-
     if (task) {
       const currentTaskStatus = toApiTaskStatus(task.status || task.state || 'received') as any;
       const sm = new TaskStateMachine(taskId, currentTaskStatus, task.repairCount || 0);
@@ -487,7 +464,14 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const revId = c.req.query('revisionId') || task.latestRevisionId || 'rev-1';
-    const rev = revisions.get(revId);
+    // The revision's copy as Postgres holds it; revisions are no longer kept in memory.
+    if (!db || !revisionRepo) return problem(c, 503, 'Database Unavailable', 'Design revisions are only held in the database');
+    const rev = isValidUuid(revId)
+      ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) => {
+          const row = await revisionRepo.findRevisionById(revId, auth.tenantId || DEFAULT_TENANT_ID, trx);
+          return row && row.task_id === taskId ? { document: row.neutral_manifest as { nodes?: unknown[] } } : undefined;
+        })
+      : undefined;
 
     const deskInspection = humanApprovalManager.buildReviewDeskInspection({
       taskId,

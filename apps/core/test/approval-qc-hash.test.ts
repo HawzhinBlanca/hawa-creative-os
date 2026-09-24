@@ -1,10 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterAll } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { createDb } from '@hawa/db';
 import { createApp } from '../src/app.js';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
 
 /**
  * An approval names the QA report it relied on by that report's hash. With no report it used to
  * record the literal 'verified_qc_pass', and the review desk showed a passed, critical-pass QA run
- * with a random id. Now there is no hash, and the evidence says the QA did not run.
+ * with a random id. Now there is no hash, and the evidence says the QA did not run. Approvals are
+ * recorded only in Postgres, which refuses one without a passing QA run: nothing is approved on
+ * an invented report either.
  */
 
 const json = { 'Content-Type': 'application/json' };
@@ -20,8 +29,8 @@ function approve(app: ReturnType<typeof createApp>, taskId: string, revisionId: 
 }
 
 describe('an approval without a QA report', () => {
-  it('records no QC hash, and the review desk says QA did not run', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
+  it('invents no QC hash: the review desk says QA did not run, and the approval is refused', async () => {
+    const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
     const created = await (await app.request('/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'No QA', clientId: 'c1000000-0000-4000-8000-000000000002' }) })).json();
     const taskId: string = created.id || created.task?.id;
     const rev = await (
@@ -44,14 +53,14 @@ describe('an approval without a QA report', () => {
     });
 
     const res = await approve(app, taskId, rev.revisionId);
-    expect(res.status).toBe(201);
-    expect((await res.json()).qcReportHash).toBeNull();
+    expect(res.status).toBe(412);
+    expect((await res.json()).detail).toMatch(/passing critical QA run/);
   });
 });
 
 describe('an approval after QA ran', () => {
   it('shows the report\'s own SHA-256; echoing it passes the hash check, and the failing QA then refuses approval', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
+    const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
@@ -75,7 +84,12 @@ describe('an approval after QA ran', () => {
   });
 
   it('refuses an approval that echoes a different QC hash', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
+    // QA passes here, so the refusal can only be the hash check's (a failing run is refused first).
+    const passing = { run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+      ok: true as const,
+      value: { qcRunId: randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+    }) };
+    const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true }, qaEngine: passing as never });
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Forged QA' }) })).json();
     const taskId: string = created.id;
     await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });

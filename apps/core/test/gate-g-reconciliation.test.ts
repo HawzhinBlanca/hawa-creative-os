@@ -1,10 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import crypto from 'node:crypto';
+import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
+
+/** A QA engine whose every run passes: Postgres approves only a revision with a passing QA run. */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
+
 describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12)', () => {
   const exports = memoryExportStore();
-  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
   async function createPublishedTask(title: string = 'Aster Hotel') {
     // 1. A task for a client whose DNA names a Drive destination (a task without a client is never delivered)
@@ -31,9 +46,11 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
     });
     const { revisionId } = await revRes.json();
 
+    expect((await app.request(`/tasks/${taskId}/revisions/${revisionId}/qa`, { method: 'POST' })).status).toBe(200);
+
     // 3. Human Approval, pinning the export the reviewer saw
     const exportId = exports.add(taskId);
-    await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+    const approved = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -45,6 +62,7 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
         pinnedExportIds: [exportId],
       }),
     });
+    expect(approved.status).toBe(201);
 
     // 4. Omnichannel Publish
     const pubRes = await app.request(`/tasks/${taskId}/publish-omnichannel`, {

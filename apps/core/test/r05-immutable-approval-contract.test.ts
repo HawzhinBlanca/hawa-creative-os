@@ -1,7 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
+
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+/** KAAE's seeded client row; Postgres takes only a uuid client id. */
+const KAAE = 'c1000000-0000-4000-8000-000000000002';
+afterAll(() => testDb.destroy());
 
 describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-045, NFR-015, NFR-020)', () => {
   const defaultTenantId = '00000000-0000-4000-a000-000000000001';
@@ -20,13 +28,13 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('1. Positive approval succeeds when verified passing QC is present', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     // Create task
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { ...operatorHeaders, 'Idempotency-Key': `r05-pos-${Date.now()}` },
-      body: JSON.stringify({ title: 'Positive QC Task', priority: 'routine', clientId: 'client-office-1' }),
+      body: JSON.stringify({ title: 'Positive QC Task', priority: 'routine', clientId: KAAE }),
     });
     expect(taskRes.status).toBe(201);
     const task = await taskRes.json();
@@ -70,7 +78,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('2. Null or unknown QC strictly refuses approval (null/unknown QC cannot publish)', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     // Create task
     const taskRes = await app.request('/v1/tasks', {
@@ -109,8 +117,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
   it('3. Earlier PASS followed by later FAIL cannot qualify', async () => {
     let qaPass = true;
     const exports = memoryExportStore();
-    const app = createApp({
-      deliverableStore: exports.store,
+    const app = createApp({ db: testDb, deliverableStore: exports.store,
       qaEngine: {
         run: async (_ctx: any, params: any) => {
           if (!qaPass) {
@@ -189,7 +196,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('4. Concurrent edit/approve has one valid serial outcome via expectedTaskVersion', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -229,7 +236,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('5. Operator role cannot approve designs (FR-043 authority check)', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
@@ -264,13 +271,13 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('6. Post-approval edit invalidates approval and blocks publication', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     // 1. Create and approve rev1
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { ...operatorHeaders, 'Idempotency-Key': `r05-inval-${Date.now()}` },
-      body: JSON.stringify({ title: 'Invalidation Task', clientId: 'client-office-1' }),
+      body: JSON.stringify({ title: 'Invalidation Task', clientId: KAAE }),
     });
     const task = await taskRes.json();
 
@@ -318,7 +325,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
 
   it('7. Stale or revoked Canva binding cannot approve', async () => {
     const exports = memoryExportStore();
-    const app = createApp({ deliverableStore: exports.store });
+    const app = createApp({ db: testDb, deliverableStore: exports.store });
 
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',

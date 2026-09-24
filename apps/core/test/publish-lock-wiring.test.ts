@@ -86,8 +86,8 @@ describe('delivery through Core holds the per-task publish lock', () => {
       deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
       telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) } as any,
     });
-    // Two Core processes over one database. Within one process an in-flight map already coalesces
-    // a second call onto the first; the advisory lock is what stands between processes.
+    // Two Core processes over one database: the advisory lock is what stands between them (Core no
+    // longer keeps an in-flight map; the same lock serialises presses within one process too).
     const appA = process_();
     const appB = process_();
     const taskId = await approvedTask(db, appA, headers);
@@ -100,7 +100,7 @@ describe('delivery through Core holds the per-task publish lock', () => {
     expect(overlap).toBe(1);
 
     const refused = a.status === 409 ? await a.json() : await b.json();
-    expect(JSON.stringify(refused)).toMatch(/PUBLICATION_IN_PROGRESS|delivering this task right now/);
+    expect(JSON.stringify(refused)).toMatch(/PUBLICATION_IN_PROGRESS|delivery of this task is running/);
 
     // The refused process retries after the other finished, and adopts the record instead of publishing again.
     const again = await deliver(a.status === 409 ? appA : appB);

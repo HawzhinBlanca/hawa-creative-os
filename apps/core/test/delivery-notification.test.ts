@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {
   buildDeliveredNotificationPayload,
@@ -9,6 +10,11 @@ import {
 } from '../src/services/delivery-notification.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
+
 /**
  * The requester is told about a delivery once the approved files are verified in Drive, and the
  * notification carries the files themselves. Until now `notify.published` was written only when the
@@ -17,13 +23,25 @@ import { memoryExportStore } from './pinned-exports-fixture.js';
  */
 
 const KAAE = 'c1000000-0000-4000-8000-000000000002';
-const NO_SHEET_CLIENT = 'c1000000-0000-4000-8000-0000000000ab';
+// FastPay's seeded client row, given KAAE's DNA without a spreadsheet: Postgres keeps DNA only
+// for a client it holds.
+const NO_SHEET_CLIENT = 'c1000000-0000-4000-8000-000000000004';
+const REQUESTER_CHAT = 4343;
 const json = { 'Content-Type': 'application/json' };
 const auth = { ...json, Authorization: 'Bearer test_bearer' };
 
+/** A QA engine whose every run passes. */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
+
 async function setup() {
   const exports = memoryExportStore();
-  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true }, deliverableStore: exports.store });
+  // QA passes: a chat request's brief would fail the QA route's fixed manifest, and QA is not the subject.
+  const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true }, deliverableStore: exports.store, qaEngine: passingQa as never });
   const kaaeDna = await (await app.request(`/clients/${KAAE}/dna`)).json();
   const saveDna = async (spreadsheetId: string) => {
     const res = await app.request(`/clients/${NO_SHEET_CLIENT}/dna`, {
@@ -35,8 +53,16 @@ async function setup() {
   };
   await saveDna('');
 
-  const created = await (await app.request('/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Delivery <notice> & files', clientId: NO_SHEET_CLIENT }) })).json();
+  // A request from a Telegram chat, which the notification goes back to (a Desk task has no chat, and
+  // Postgres's outbox writes no notification for one), then routed to the client.
+  const created = await (await app.request('/api/webhooks/telegram', {
+    method: 'POST',
+    headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Delivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
+  })).json();
   const taskId: string = created.id || created.task?.id;
+  const routed = await app.request(`/tasks/${taskId}/route`, { method: 'POST', headers: auth, body: JSON.stringify({ clientId: NO_SHEET_CLIENT, reason: 'Client assigned' }) });
+  expect(routed.status).toBe(202);
   const rev = await (
     await app.request(`/tasks/${taskId}/revisions`, {
       method: 'POST',
@@ -44,6 +70,8 @@ async function setup() {
       body: JSON.stringify({ document: { id: 'd', pages: [{ id: 'p1', name: 'main', width: 1080, height: 1080, unit: 'px' }], nodes: [{ id: 'h', type: 'text', text: 'Delivery' }] } }),
     })
   ).json();
+  // Postgres approves only a revision with a passing critical QA run on record.
+  expect((await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/qa`, { method: 'POST' })).status).toBe(200);
   const exportId = exports.add(taskId, 'png');
   const approve = await app.request(`/tasks/${taskId}/revisions/${rev.revisionId}/decisions`, {
     method: 'POST',
@@ -71,7 +99,9 @@ describe('the delivery notification', () => {
     expect(notify).toBeDefined();
     expect(notify.payload).toMatchObject({
       taskId,
-      title: 'Delivery <notice> & files',
+      // The chat intake's title, which carries the message text as sent.
+      title: expect.stringContaining('Delivery <notice> & files'),
+      chatId: String(REQUESTER_CHAT),
       sheetsConfirmed: false,
       sheetProblem: 'No spreadsheet is configured for this client',
       sheetRowNumber: null,

@@ -3,11 +3,13 @@
  * ledger, and the approved files to the requester in Telegram. Moved unchanged from app.ts
  * (architecture programme 1.3, SPLIT_PLAN.md F7), where the publish, WhatsApp, Telegram and
  * omnichannel routes all called it. The one edit: the per-delivery `options` parameter is
- * `deliveryOptions`, since it shadowed createApp's own `options`.
+ * `deliveryOptions`, since it shadowed createApp's own `options`. Since group G5 of the split it
+ * keeps nothing of its own in memory: no receipts, no running deliveries, no outbox without a
+ * database. The publication, its files and its row are in Postgres, and so is the outbox.
  */
 import crypto from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, type Publisher, type RequestContext } from '@hawa/contracts';
-import { TaskStateMachine, type ApprovalDecision, type PinnedExport } from '@hawa/domain';
+import { TaskStateMachine, type PinnedExport } from '@hawa/domain';
 import {
   sql,
   withRlsContext,
@@ -33,15 +35,14 @@ export interface OmnichannelDeliveryDeps {
   publicationRepo: PublicationRepository | null;
   publisher: Publisher;
   deliverableStore: DeliverableStore;
-  /** Approvals held in memory; delivery reads them only when there is no database. */
-  decisions: Map<string, ApprovalDecision[]>;
   events: Map<string, any[]>;
-  /** What each task's last delivery in this process recorded (the publication-state routes read it). */
-  omnichannelReceipts: Map<string, any>;
-  /** Deliveries running in this process, by publication key: a second press joins the first. */
-  inFlightPublications: Map<string, Promise<any>>;
-  /** The outbox when there is no database (tests without one). */
-  inMemoryOutbox: Map<string, any[]>;
+  /**
+   * Read by nothing. Deliveries running in this process used to be kept here by publication key, so
+   * that a second press joined the first; the publish advisory lock (publishExclusively) serialises
+   * them across processes instead. CoreContext still names this type; the split's cleanup step
+   * removes both (architecture programme 1.3, SPLIT_PLAN.md section 7).
+   */
+  inFlightPublications?: Map<string, Promise<any>>;
   isProduction: boolean;
   readCurrentTask: TaskReader['readCurrentTask'];
   resolveClientDna: ClientDnaResolver;
@@ -52,8 +53,8 @@ export type OmnichannelDelivery = ReturnType<typeof createOmnichannelDelivery>;
 
 export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   const {
-    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, decisions, events, omnichannelReceipts,
-    inFlightPublications, inMemoryOutbox, isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
+    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, events,
+    isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
   } = deps;
 
   /**
@@ -75,7 +76,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       ok: false,
       error: {
         code: 'PUBLICATION_IN_PROGRESS',
-        message: 'Another process is delivering this task right now; try again in a moment',
+        // The other press may be in this process or another one: only that some delivery holds the lock is known.
+        message: 'A delivery of this task is running right now; try again in a moment',
         retryable: true,
       },
     };
@@ -101,9 +103,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     //
     // With a database, only a persisted approval can be delivered. The one in this process's memory
     // was trusted first, so an approval Postgres does not hold (its write never committed, or it is
-    // for a draft another process has since replaced) still sent the files. Memory answers only when
-    // there is no database at all (tests without one).
-    const recorded = db ? [] : [task?.latestApproval, ...[...(decisions.get(taskId) || [])].reverse()].filter(Boolean);
+    // for a draft another process has since replaced) still sent the files. The task this process
+    // holds answers only when there is no database at all (tests without one); the decision route no
+    // longer keeps a list of approvals in memory, since it records nothing without Postgres.
+    const recorded = db ? [] : [task?.latestApproval].filter(Boolean);
     const match: any = recorded.find(
       (a: any) =>
         a.decisionId &&
@@ -248,28 +251,50 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const sm = new TaskStateMachine(taskId, isDeliverApprovedStored && task.status !== 'PUBLISH_RECONCILIATION' ? 'APPROVED' : task.status);
 
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
-    if (inFlightPublications.has(publicationKey)) {
-      return await inFlightPublications.get(publicationKey);
-    }
 
-    if (task.status === 'COMPLETE') {
-      const existingReceipt = omnichannelReceipts.get(taskId);
-      if (existingReceipt) {
-        const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
-        const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
-        return {
-          ok: true,
-          taskId,
-          status: 'COMPLETE',
-          complete: true,
-          publicationReceipt: existingReceipt.receipt || existingReceipt,
-          driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-          sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber
-            ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${existingReceipt.sheetRow.rowNumber}`
-            : null,
-          filesCount: existingReceipt.files?.length || 1,
-          publishedAt: existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
-        };
+    /** The answer for a delivery Postgres already records as complete: nothing is sent again. */
+    const alreadyDeliveredAnswer = (pub: { id: unknown; completed_at?: unknown }) => {
+      const folderId = client?.destinations?.productionFolderId || client?.productionDestinations?.googleDriveFolderId;
+      const sheetId = client?.destinations?.spreadsheetId || client?.productionDestinations?.googleSheetId || '';
+      const completedAt = pub.completed_at ? new Date(pub.completed_at as string).toISOString() : new Date().toISOString();
+      const receipt = {
+        publicationId: pub.id,
+        publicationKey,
+        state: 'complete' as const,
+        driveFiles: [] as any[],
+        sheet: { spreadsheetId: sheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
+        completedAt,
+        detail: { verified: true, filesUploaded: deliverables.files.length, alreadyCompleted: true },
+      };
+      return {
+        ok: true,
+        taskId,
+        status: 'COMPLETE',
+        complete: true,
+        alreadyCompleted: true,
+        publicationReceipt: receipt,
+        driveFolderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+        sheetRowUrl: null,
+        filesCount: deliverables.files.length,
+        publishedAt: completedAt,
+      };
+    };
+
+    // A task already delivered is answered from its publication row, whichever process delivered it
+    // (it used to be answered from the receipt this process kept, which a restart lost). COMPLETE has
+    // no transitions, so this is read before the move to PUBLISHING, which would refuse it with 409;
+    // a chat approve on a delivered task then got an error instead of the stored delivery.
+    if (task.status === 'COMPLETE' && publicationRepo && db && isValidUuid(taskId)) {
+      const doneTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
+      const done = await withRlsContext(db, { tenantId: doneTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        publicationRepo.findByKey(publicationKey, doneTenantId, trx)
+      ).catch((err: unknown) => {
+        log.warn('[core:omnichannel] Could not read the stored publication:', err);
+        return null;
+      });
+      if (done && done.state === 'complete') {
+        task.status = 'COMPLETE';
+        return alreadyDeliveredAnswer(done);
       }
     }
 
@@ -492,27 +517,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       // a publisher-shaped { ok, value } that the routes do not read, so an adopted delivery was
       // reported as PUBLISH_RECONCILIATION with no receipt.
       task.status = 'COMPLETE';
-      const receipt = {
-        publicationId: dbPub.id,
-        publicationKey,
-        state: 'complete' as const,
-        driveFiles: [] as any[],
-        sheet: { spreadsheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
-        completedAt: dbPub.completed_at ? new Date(dbPub.completed_at).toISOString() : new Date().toISOString(),
-        detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
-      };
-      return {
-        ok: true,
-        taskId,
-        status: 'COMPLETE',
-        complete: true,
-        alreadyCompleted: true,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl: null,
-        filesCount: files.length,
-        publishedAt: receipt.completedAt,
-      };
+      return alreadyDeliveredAnswer(dbPub);
     }
 
     const publishResult: any = await publisher.publish(ctx, {
@@ -635,25 +640,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
     }
 
-    if (outboxPayload) {
-      const existingCmds = inMemoryOutbox.get(taskId) || [];
-      if (!existingCmds.some((c: any) => c.idempotency_key === notifyKey)) {
-        existingCmds.push({
-          id: crypto.randomUUID(),
-          tenant_id: task.tenantId || 'tenant-default',
-          aggregate_type: 'task',
-          aggregate_id: taskId,
-          command_type: 'notify.published',
-          idempotency_key: notifyKey,
-          payload: outboxPayload,
-          state: 'pending',
-          attempts: 0,
-          created_at: new Date().toISOString(),
-        });
-        inMemoryOutbox.set(taskId, existingCmds);
-      }
-    }
-
     // Persist per-file drive refs and sheet sync in PostgreSQL ledger (Task R06)
     if (publicationRepo && db && isValidUuid(taskId) && dbPub) {
       try {
@@ -701,30 +687,12 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
     }
 
-    // The recorded receipt holds only what Google confirmed: verified Drive files, and a Sheets row
-    // only when Sheets reported and read back the row. Anything else stays missing for the audit.
-    const receipt = publishResult.value;
+    // What Google confirmed is recorded above (drive_refs, sheet_syncs); the receipt routes read it
+    // from there (services/publication-receipt.ts), not from a copy kept in this process. The receipt
+    // is named by the publication row, the id a later read returns; the publisher makes up its own
+    // id on every call, which the copy in memory used to carry.
+    const receipt = dbPub ? { ...publishResult.value, publicationId: String(dbPub.id) } : publishResult.value;
     const verifiedFiles = receipt.driveFiles.filter((f: any) => f.verified);
-    omnichannelReceipts.set(taskId, {
-      files: verifiedFiles.map((f: any) => ({
-        taskId,
-        fileId: f.fileId,
-        folderId: f.folderId,
-        sha256: f.expectedSha256,
-        byteSize: f.observedSize,
-      })),
-      sheetRow:
-        receipt.sheet.synced && receipt.sheet.rowNumber !== undefined
-          ? {
-              taskId,
-              rowNumber: receipt.sheet.rowNumber,
-              status: 'COMPLETE',
-              packageHash: receipt.sheet.expectedHash,
-              syncedAt: receipt.completedAt || new Date().toISOString(),
-            }
-          : undefined,
-      receipt,
-    });
 
     if (!sheetsConfirmed) {
       broadcast('task:publish_reconciliation', { taskId, status: task.status, sheetProblem: receipt.detail?.sheetProblem ?? null });
@@ -783,12 +751,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         ? { ok: false, status: 409, code: 'PUBLICATION_IN_PROGRESS', message: outcome.error.message }
         : outcome
     );
-    inFlightPublications.set(publicationKey, pubPromise);
-    try {
-      return await pubPromise;
-    } finally {
-      inFlightPublications.delete(publicationKey);
-    }
+    return await pubPromise;
   }
 
   /**

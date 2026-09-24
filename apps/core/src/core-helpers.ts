@@ -74,7 +74,6 @@ export interface CreateAppOptions {
   /** Injectable QA engine for testing; defaults to DeterministicQAEngine. */
   qaEngine?: any;
   publisher?: any;
-  inMemoryOutbox?: Map<string, any[]>;
   /**
    * Test harness only, passed explicitly by a test. `principal`: every request without a bearer
    * token is this principal (a database-less unit test has no sessions to sign in to).

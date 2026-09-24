@@ -38,22 +38,53 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
   const testFileSha256 = crypto.createHash('sha256').update(testFileBytes).digest('hex');
   fs.writeFileSync(testFilePng, testFileBytes);
 
-  afterAll(() => {
+  // The outbox, the approvals and the publications are only held in Postgres (architecture programme
+  // 1.3, groups G3 and G5): there is no in-memory outbox any more, so these apps run on this file's own
+  // test database and a failed delivery is simulated on the command's row.
+  const testDb = createDb(testDbUrl);
+  const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
+  const operatorScope = { tenantId: '00000000-0000-4000-a000-000000000001', userId: '00000000-0000-4000-b000-000000000001', role: 'operator' };
+  /** QA passes: the subject is delivery and its outbox, and Postgres approves only after a passing run. */
+  const passingQa = {
+    run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+      ok: true as const,
+      value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+    }),
+  };
+  const r07App = (publisher: GooglePublisher, exports: ReturnType<typeof memoryExportStore>) =>
+    createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, publisher, deliverableStore: exports.store, qaEngine: passingQa as never, allowRoleHeader: true });
+  /** The task's delivery notice, as the outbox list reports it. */
+  const notifyCommand = async (app: ReturnType<typeof createApp>, taskId: string) => {
+    const res = await app.request(`/v1/tasks/${taskId}/outbox`, { headers: operatorHeaders });
+    expect(res.status).toBe(200);
+    const cmd = (await res.json()).commands.find((c: any) => c.commandType === 'notify.published');
+    expect(cmd).toBeDefined();
+    return cmd;
+  };
+  /** What the worker records when a send fails, written on the command's row. */
+  const failCommand = (commandId: string, lastError: string) =>
+    withRlsContext(testDb, operatorScope, (trx) =>
+      trx.updateTable('outbox_commands').set({ state: 'failed', last_error: lastError, attempts: 1 }).where('id', '=', commandId).execute());
+
+  afterAll(async () => {
     process.env = originalEnv;
     fs.rmSync(tempDir, { recursive: true, force: true });
+    await testDb.destroy();
   });
 
   async function createApprovedTaskWithExport(app: ReturnType<typeof createApp>, exports: ReturnType<typeof memoryExportStore>) {
-    const taskRes = await app.request('/v1/tasks', {
+    // A request from a Telegram chat, which the delivery notice goes back to (Postgres's outbox writes
+    // no notice for a Desk task, which has no chat), routed to Drustee.
+    const intake = await app.request('/api/webhooks/telegram', {
       method: 'POST',
-      headers: { ...operatorHeaders, 'Idempotency-Key': `r07-task-${Date.now()}-${crypto.randomUUID()}` },
-      body: JSON.stringify({
-        title: 'Terminal Workflow Task',
-        clientId: 'client-drustee',
-      }),
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Terminal Workflow Task', chat: { id: 7007 } } }),
     });
-    expect(taskRes.status).toBe(201);
-    const task = await taskRes.json();
+    const created = await intake.json();
+    const task = { id: (created.id || created.task?.id) as string };
+    expect(task.id).toBeTruthy();
+    const routed = await app.request(`/v1/tasks/${task.id}/route`, { method: 'POST', headers: operatorHeaders, body: JSON.stringify({ clientId: DRUSTEE, reason: 'Client assigned' }) });
+    expect(routed.status).toBe(202);
 
     const revRes = await app.request(`/v1/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -108,7 +139,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Publish
@@ -160,7 +191,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     const pubRes = await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -298,8 +329,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const inMemoryOutbox = new Map<string, any[]>();
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -309,27 +339,19 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
 
     // Fetch initial outbox command
-    const outboxRes1 = await app.request(`/v1/tasks/${task.id}/outbox`, { headers: operatorHeaders });
-    const body1 = await outboxRes1.json();
-    expect(body1.commands[0].actionableRecovery).toContain('pending worker pickup');
+    const serverCmd = await notifyCommand(app, task.id);
+    expect(serverCmd.actionableRecovery).toContain('pending worker pickup');
 
-    // Simulate marking command in server state as failed with permanent error
-    const serverCmd = inMemoryOutbox.get(task.id)![0];
-    serverCmd.state = 'failed';
-    serverCmd.last_error = 'CHAT_NOT_FOUND: chat id does not exist';
-    serverCmd.attempts = 1;
+    // The worker records a permanent failure on the command
+    await failCommand(serverCmd.id, 'CHAT_NOT_FOUND: chat id does not exist');
 
-    const outboxRes2 = await app.request(`/v1/tasks/${task.id}/outbox`, { headers: operatorHeaders });
-    const body2 = await outboxRes2.json();
-    const permCmd = body2.commands[0];
+    const permCmd = await notifyCommand(app, task.id);
     expect(permCmd.errorCategory).toBe('permanent');
     expect(permCmd.actionableRecovery).toContain('Permanent delivery failure');
 
-    // Simulate marking command in server state as failed with uncertain error
-    serverCmd.last_error = 'DELIVERY_UNCERTAIN: socket timeout after dispatch';
-    const outboxRes3 = await app.request(`/v1/tasks/${task.id}/outbox`, { headers: operatorHeaders });
-    const body3 = await outboxRes3.json();
-    const uncertCmd = body3.commands[0];
+    // The worker records an uncertain failure on the command
+    await failCommand(serverCmd.id, 'DELIVERY_UNCERTAIN: socket timeout after dispatch');
+    const uncertCmd = await notifyCommand(app, task.id);
     expect(uncertCmd.errorCategory).toBe('uncertain');
     expect(uncertCmd.requiresUncertainConfirmation).toBe(true);
     expect(uncertCmd.actionableRecovery).toContain('Uncertain delivery');
@@ -354,8 +376,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const inMemoryOutbox = new Map<string, any[]>();
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store, inMemoryOutbox, allowRoleHeader: true });
+    const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     await app.request(`/v1/tasks/${task.id}/publish`, {
@@ -364,7 +385,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       body: JSON.stringify({ approvalId: approval.decisionId }),
     });
 
-    const serverCmd = inMemoryOutbox.get(task.id)![0];
+    const serverCmd = await notifyCommand(app, task.id);
 
     // Non-operator is forbidden even before inspecting command state
     const viewerRedriveRes = await app.request(`/v1/tasks/${task.id}/outbox/${serverCmd.id}/redrive`, {
@@ -382,9 +403,8 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     });
     expect(earlyRedriveRes.status).toBe(409);
 
-    // Simulate uncertain delivery failure in server state
-    serverCmd.state = 'failed';
-    serverCmd.last_error = 'DELIVERY_UNCERTAIN: client disconnected before ACK';
+    // The worker records an uncertain delivery failure on the command
+    await failCommand(serverCmd.id, 'DELIVERY_UNCERTAIN: client disconnected before ACK');
 
     // Redrive without confirmUncertainReplay is rejected with 422
     const unconfirmedRedriveRes = await app.request(`/v1/tasks/${task.id}/outbox/${serverCmd.id}/redrive`, {
@@ -428,7 +448,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
       }),
     });
 
-    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true },  publisher, deliverableStore: exports.store });
+    const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
 
     // Before publish

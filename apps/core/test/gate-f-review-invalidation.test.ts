@@ -1,10 +1,28 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import crypto from 'node:crypto';
+import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
+// Revisions, decisions, receipts and the outbox are only held in Postgres (architecture programme
+// 1.3, groups G3 and G5), so these apps run on this file's own test database.
+const testDb = createDb(process.env.TEST_DATABASE_URL!);
+afterAll(() => testDb.destroy());
+
+/**
+ * A QA engine whose every run passes: Postgres approves only a revision with a passing QA run, and
+ * these tests are about what happens around the approval.
+ */
+const passingQa = {
+  run: async (_ctx: unknown, input: { designRevisionId: string }) => ({
+    ok: true as const,
+    value: { qcRunId: crypto.randomUUID(), revisionId: input.designRevisionId, status: 'passed', criticalPass: true, findings: [], profile: 'strict' },
+  }),
+};
+
 describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR-043, FR-044, Invariant #11)', () => {
   const exports = memoryExportStore();
-  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store, qaEngine: passingQa as never });
 
   async function createFixtureTask(clientName: string = 'Aster Hotel') {
     const res = await app.request('/api/webhooks/telegram', {
@@ -22,9 +40,14 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     return { ...json.task, taskId: json.task.id };
   }
 
+  /** The QA run Postgres wants on record before a revision is approved. */
+  async function passQa(taskId: string, revisionId: string) {
+    expect((await app.request(`/tasks/${taskId}/revisions/${revisionId}/qa`, { method: 'POST' })).status).toBe(200);
+  }
+
   it('binds human approval and permits omnichannel publication while approved', async () => {
     const task = await createFixtureTask('Aster Grand');
-    const revId = 'rev_initial_001';
+    const revId = crypto.randomUUID(); // Postgres names a revision by uuid
 
     // 1. Submit initial revision
     const revRes = await app.request(`/tasks/${task.taskId}/revisions`, {
@@ -42,6 +65,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       }),
     });
     expect(revRes.status).toBe(201);
+    await passQa(task.taskId, revId);
 
     // 2. Human review decision: approved
     const approveRes = await app.request(`/tasks/${task.taskId}/revisions/${revId}/decisions`, {
@@ -69,7 +93,14 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
 
   it('strictly invalidates approval upon canvas edit and blocks premature publication (Invariant #11)', async () => {
     const task = await createFixtureTask('Nova Tech Solutions');
-    const revId1 = 'rev_nova_approved';
+    // A client with a Drive destination: the chat request carries none, and delivery needs one.
+    const routed = await app.request(`/tasks/${task.taskId}/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: 'c1000000-0000-4000-8000-000000000002', reason: 'Client assigned' }),
+    });
+    expect(routed.status).toBe(202);
+    const revId1 = crypto.randomUUID();
 
     // 1. Initial revision
     await app.request(`/tasks/${task.taskId}/revisions`, {
@@ -85,8 +116,10 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       }),
     });
 
+    await passQa(task.taskId, revId1);
+
     // 2. Approve
-    await app.request(`/tasks/${task.taskId}/revisions/${revId1}/decisions`, {
+    const firstApproval = await app.request(`/tasks/${task.taskId}/revisions/${revId1}/decisions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,6 +130,8 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
         role: 'art_director',
       }),
     });
+
+    expect(firstApproval.status).toBe(201);
 
     const checkApproved = await app.request(`/tasks/${task.taskId}`);
     expect((await checkApproved.json()).status).toBe('APPROVED');
@@ -127,9 +162,15 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     const checkTask = await app.request(`/tasks/${task.taskId}`);
     const taskState = await checkTask.json();
     expect(taskState.status).toBe('AWAITING_APPROVAL');
-    expect(taskState.invalidationHistory).toBeDefined();
-    expect(taskState.invalidationHistory.length).toBeGreaterThan(0);
-    expect(taskState.invalidationHistory[0].reason).toBe('post_approval_edit');
+    // The invalidation is recorded in Postgres, on the task's timeline (the Desk reads the task from
+    // there, not from this process's copy).
+    const timeline = (await (await app.request(`/tasks/${task.taskId}/timeline`)).json()).events as Array<{ eventType: string; data: Record<string, unknown> }>;
+    const invalidated = timeline.filter((e) => e.eventType === 'approval.invalidated');
+    expect(invalidated).toHaveLength(1);
+    expect(timeline).toContainEqual(expect.objectContaining({
+      eventType: 'task.state_changed',
+      data: expect.objectContaining({ toState: 'human_review', reason: 'Post-approval edit invalidated previous approval', invalidatedApprovalId: invalidated[0].data.invalidatedApprovalId }),
+    }));
 
     // 5. Attempting to publish MUST fail with 409 Conflict (Publication Gate)
     const pubRes = await app.request(`/tasks/${task.taskId}/publish-omnichannel`, {
@@ -141,6 +182,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     expect(pubErr.title).toBe('Conflict');
 
     // 6. Re-approving the new revision re-enables publication
+    await passQa(task.taskId, postApprovalJson.revisionId);
     const reapproveRes = await app.request(`/tasks/${task.taskId}/revisions/${postApprovalJson.revisionId}/decisions`, {
       method: 'POST',
       headers: {
@@ -171,9 +213,10 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     // Authorized roles
     const roles = ['art_director', 'creative_director', 'client_reviewer', 'operator'];
     for (const role of roles) {
+      // The reviewer's role is the signed-in caller's (x-user-role here), not the body's.
       const res = await app.request(`/tasks/${task.taskId}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-role': role },
         body: JSON.stringify({
           nodeId: 'headline_layer_1',
           comment: `Looks great under ${role} review`,
@@ -192,7 +235,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     // Unauthorized role fails with 403
     const forbiddenRes = await app.request(`/tasks/${task.taskId}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-user-role': 'external_guest' },
       body: JSON.stringify({
         nodeId: 'headline_layer_1',
         comment: 'Illegal comment from unvetted account',

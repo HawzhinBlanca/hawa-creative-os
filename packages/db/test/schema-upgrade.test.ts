@@ -15,7 +15,7 @@ describe.skipIf(!url)('real PostgreSQL versioned upgrade', () => {
     const results = await Promise.all([upgradeCanvaSchema(url!), upgradeCanvaSchema(url!)]);
     for (const result of results) {
       expect(result.applied).toEqual([]);
-      expect(result.verified).toEqual(['001_canva_bindings.sql', '002_canva_binding_isolation.sql', '003_canva_connect.sql', '004_canva_task_scope_lock.sql', '005_canva_runtime_permissions.sql', '006_canva_editable_sources.sql', '007_canva_design_plans.sql', '008_canva_roundtrip_checks.sql', '009_correct_kaae_identity.sql', '010_canva_plan_abandon.sql', '011_desk_sessions.sql', '012_service_identities.sql', '013_design_studio.sql', '014_photo_cutouts.sql', '015_comparison_studies.sql', '016_rls_hoisted_membership_checks.sql', '017_comparison_link_reissue.sql', '018_desk_list_indexes.sql', '019_blob_store.sql', '020_inbox_event_dedupe.sql']);
+      expect(result.verified).toEqual(['001_canva_bindings.sql', '002_canva_binding_isolation.sql', '003_canva_connect.sql', '004_canva_task_scope_lock.sql', '005_canva_runtime_permissions.sql', '006_canva_editable_sources.sql', '007_canva_design_plans.sql', '008_canva_roundtrip_checks.sql', '009_correct_kaae_identity.sql', '010_canva_plan_abandon.sql', '011_desk_sessions.sql', '012_service_identities.sql', '013_design_studio.sql', '014_photo_cutouts.sql', '015_comparison_studies.sql', '016_rls_hoisted_membership_checks.sql', '017_comparison_link_reissue.sql', '018_desk_list_indexes.sql', '019_blob_store.sql', '020_inbox_event_dedupe.sql', '021_review_comments.sql']);
     }
   });
   it('rejects a changed applied checksum and leaves the receipt intact', async () => {

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
@@ -6,6 +7,14 @@ import { createHash } from 'node:crypto';
 describe('Core API: Ingress & Task Lifecycle', () => {
   const exports = memoryExportStore();
   const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  // Revisions, decisions and deliveries are only held in Postgres (architecture programme 1.3, groups
+  // G3 and G5): the tests that reach them use this app, on this file's own test database.
+  const testDb = createDb(process.env.TEST_DATABASE_URL!);
+  afterAll(() => testDb.destroy());
+  const dbApp = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  /** KAAE's seeded client row; Postgres takes only a uuid client id. */
+  const KAAE = 'c1000000-0000-4000-8000-000000000002';
+  const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
 
   it('responds to health checks', async () => {
     const res = await app.request('/health');
@@ -228,7 +237,9 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(currentTask.latestQAReport.criticalPass).toBe(false);
     expect(currentTask.latestQAReport.findings.map((f: any) => f.ruleId)).toContain('OFFICIAL_LOGO_MISSING_OR_MUTATED');
 
-    // 6. A design failing critical QA cannot be approved
+    // 6. A design failing critical QA cannot be approved. This app has no database, and an approval is
+    //    recorded only in Postgres, so it is refused before QA is weighed; the refusal for failing QA
+    //    itself is shown on a database in generate-real-qa.test.ts and r05-immutable-approval-contract.test.ts.
     const approveRes = await app.request(`/v1/tasks/${taskId}/revisions/${currentTask.latestRevisionId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,7 +249,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
         pinnedExportIds: [exports.add(taskId)],
       }),
     });
-    expect(approveRes.status).toBe(412);
+    expect(approveRes.status).toBe(503);
+    expect((await approveRes.json()).detail).toBe('A review decision is only recorded in the database');
     expect((await (await app.request(`/v1/tasks/${taskId}`)).json()).status).toBe('AWAITING_APPROVAL');
 
     // 7. Check timeline
@@ -248,6 +260,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   });
 
   it('enforces repair budget of max 2 cycles on revision requests', async () => {
+    const app = dbApp;
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -259,7 +272,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: 'client-office-1' }),
+      body: JSON.stringify({ clientId: KAAE }),
     });
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
 
@@ -549,7 +562,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(generatedTask.latestQAReport.criticalPass).toBe(false);
     expect(qaRuleIds).toEqual(expect.arrayContaining(['UNSOLICITED_CONTENT_DETECTED', 'OFFICIAL_LOGO_MISSING_OR_MUTATED']));
 
-    // 6. Approval is refused while critical QA fails
+    // 6. Approval is refused while critical QA fails. Without a database it is refused before QA is
+    //    weighed (an approval is recorded only in Postgres); see test 1 of this file.
     const decisionRes = await app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -559,7 +573,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
         pinnedExportIds: [exports.add(taskId)],
       }),
     });
-    expect(decisionRes.status).toBe(412);
+    expect(decisionRes.status).toBe(503);
 
     // Verify timeline has the audit trail so far
     const timelineRes = await app.request(`/v1/tasks/${taskId}/timeline`);
@@ -828,12 +842,13 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   });
 
   it('publishes exactly the pinned export to the client\'s Google Drive and Sheets, with an emulated receipt', async () => {
+    const app = dbApp;
     // 1. Create and approve task
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The Drustee template needs a headline and body; it refuses (COPY_REQUIRED) rather than drawing sample text.
-      body: JSON.stringify({ title: 'Omnichannel Publishing Test', clientId: 'client-drustee', headlineEn: 'Omnichannel Publishing Test', copyEn: 'Vitamin D3 + K2, laboratory tested.' }),
+      body: JSON.stringify({ title: 'Omnichannel Publishing Test', clientId: DRUSTEE, headlineEn: 'Omnichannel Publishing Test', copyEn: 'Vitamin D3 + K2, laboratory tested.' }),
     });
     const { id: taskId } = await createRes.json();
 
@@ -841,7 +856,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: 'client-drustee' }),
+      body: JSON.stringify({ clientId: DRUSTEE }),
     });
     // A submitted revision (generated designs fail real QA until the generators are fixed).
     const revRes = await app.request(`/tasks/${taskId}/revisions`, {
