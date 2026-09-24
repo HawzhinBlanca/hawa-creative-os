@@ -12,6 +12,8 @@ import type { CanvaConnectService, CanvaServiceOptions } from './services/canva-
 import type { DesignStudioService, DesignStudioServiceOptions } from './services/design-studio/index.js';
 import type { DeliverableStore } from './services/pinned-deliverables.js';
 import type { GuidelinesModel } from './services/brand-guidelines.js';
+import type { ClientDNA } from '@hawa/domain';
+import type { ClientDnaSnapshot } from './routes/types.js';
 
 export function canonicalJson(obj: any): string {
   if (obj === null || typeof obj !== 'object') {
@@ -95,6 +97,12 @@ export interface CreateAppOptions {
   /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
   guidelinesModel?: GuidelinesModel;
   persistDnaToDisk?: boolean;
+  /**
+   * Tests only: fills the client DNA map (and its snapshot list, for a test without a database) before
+   * the first request. Core seeds nothing itself; the invented offices a test may name live in
+   * apps/core/test/fixtures and come through createAppWithClientFixtures (SPLIT_PLAN.md section 6).
+   */
+  seedClientDna?: (clientDnas: Map<string, ClientDNA>, clientSnapshots: Map<string, ClientDnaSnapshot[]>) => void;
   verifyProviderKeys?: boolean;
   telegramClassifierOptions?: any;
   emulatePublisher?: boolean;

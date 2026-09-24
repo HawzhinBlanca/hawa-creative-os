@@ -17,8 +17,8 @@ export type ClientDnaResolver = (
 
 export function createClientDnaResolver({ db, clientDnas }: Pick<CoreContext, 'db' | 'clientDnas'>): ClientDnaResolver {
   /**
-   * The client's DNA as the office last saved it. PostgreSQL answers first; the map (fixtures at
-   * start-up, hydrated from the database, kept current by the routes that write) answers only when
+   * The client's DNA as the office last saved it. PostgreSQL answers first; the map (hydrated from
+   * the database, seeded with fixtures only by tests, kept current by the routes that write) answers only when
    * there is no database, or when it does not know the client. The map is a cache, not a truth:
    * it is what let a saved Drive folder be ignored by delivery after a restart. Every route that
    * used to call clientDnas.get() goes through here.

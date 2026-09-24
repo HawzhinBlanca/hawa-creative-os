@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createDb, withRlsContext, PublicationRepository } from '@hawa/db';
 import { GooglePublisher } from '@hawa/integrations';
@@ -53,7 +53,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     // STAGE 1: AUTHENTICATED INTAKE & DURABLE POSTGRESQL STORAGE
     // -------------------------------------------------------------------------
     const exports = memoryExportStore();
-    let app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
+    let app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
 
     // Negative control: unauthenticated intake is rejected with 401
     const unauthRes = await app.request('/v1/tasks', {
@@ -109,7 +109,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
     // Recovery Check 1: Process crash after intake
     // Re-create app instance and verify task recovered directly from PostgreSQL
-    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const readbackAfterIntake = await app.request(`/v1/tasks/${taskId}`, {
       headers: authHeaders,
     });
@@ -284,7 +284,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     );
 
     // Recovery Check 2: Process crash after revision creation
-    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const { dbRev, dbDoc } = await withRlsContext(
       db,
       { tenantId, userId: operatorUserId, role: 'operator' },
@@ -348,7 +348,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     expect(approveJson.qcReportHash).toBe(crypto.createHash('sha256').update(JSON.stringify(qaResult.value)).digest('hex'));
 
     // Recovery Check 3: Process crash after approval
-    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const taskAfterApprove = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const taskAfterApproveJson = await taskAfterApprove.json();
     expect(taskAfterApproveJson.status).toBe('APPROVED');
@@ -463,7 +463,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     });
 
     // Recovery Check 4: Final process restart & PostgreSQL independent verification
-    app = createApp({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db, publicationRepo, deliverableStore: exports.store });
     const finalTaskRes = await app.request(`/v1/tasks/${taskId}`, { headers: authHeaders });
     const finalTaskJson = await finalTaskRes.json();
     expect(finalTaskJson.status).toBe('COMPLETE');

@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { GooglePublisher } from '@hawa/integrations';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
@@ -248,7 +248,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
 
     it('enforces Client DNA destination isolation via core omnichannel endpoint', async () => {
       const exports = memoryExportStore();
-      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
       // Ingest task with valid client
       const ingestRes = await app.request('/api/webhooks/telegram', {
@@ -594,7 +594,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   describe('4. FR-051: Notification Failure Independence & Nonexistent File Defense', () => {
     it('notification failure does not undo or roll back valid Google Drive and Sheets publication', async () => {
       const exports = memoryExportStore();
-      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
       // A task for a client with a Drive destination (a task without a client is never delivered)
       const createRes = await app.request('/tasks', {
@@ -647,7 +647,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
     });
 
     it('a successful chat message cannot mark a nonexistent or unapproved file delivered', async () => {
-      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
+      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
 
       // Create an unapproved task
       const createRes = await app.request('/v1/tasks', {

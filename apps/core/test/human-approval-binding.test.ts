@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createHash } from 'node:crypto';
 import { HumanApprovalManager } from '@hawa/integrations';
@@ -18,7 +19,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
   beforeEach(() => {
     exports = memoryExportStore();
-    app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+    app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
     approvalManager = new HumanApprovalManager();
   });
 

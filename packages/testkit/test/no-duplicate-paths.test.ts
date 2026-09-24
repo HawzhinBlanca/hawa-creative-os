@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../../../apps/core/src/app.js';
+import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../../../apps/core/src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../../../apps/core/src/services/canva-connect-service.js';
 
@@ -68,7 +69,7 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
           detail: { verified: true, filesUploaded: req.files.length },
         },
       }));
-      const core = () => createApp({
+      const core = () => createAppWithClientFixtures({
         db, testAuth: { roleHeader: true }, publisher: { publish } as any,
         deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
         telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) } as any,
@@ -97,7 +98,7 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
   }, 30_000);
 
   it('proves POST /tasks/:taskId/:control does not allow unpinned approve bypass', async () => {
-    const app = createApp();
+    const app = createAppWithClientFixtures();
     const headers = {
       'Content-Type': 'application/json',
       Authorization: 'Bearer test_bearer',

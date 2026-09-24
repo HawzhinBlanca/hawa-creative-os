@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, PublicationRepository, type Kysely, type Database } from '@hawa/db';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { OutboxConsumer } from '../../worker/src/outbox-consumer.js';
@@ -42,7 +42,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const canvaService = new CanvaConnectService(db);
     const deliverableStore = canvaDeliverableStore(canvaService);
 
-    const app = createApp({ testAuth: { roleHeader: true }, 
+    const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
       telegramBridge: mockTelegramBridge as any,
@@ -348,7 +348,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {
     const canvaService = new CanvaConnectService(db);
     const deliverableStore = canvaDeliverableStore(canvaService);
-    const app = createApp({ testAuth: { roleHeader: true }, 
+    const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
     });

@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import type { Context } from 'hono';
+import { verifyTelegramMiniAppInitData } from '@hawa/integrations';
 import type { RouteContext } from './types.js';
+import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 
 export function registerAuthRoutes(ctx: RouteContext) {
   const {
@@ -14,7 +16,10 @@ export function registerAuthRoutes(ctx: RouteContext) {
     revokeSession,
     streamTickets,
     options,
+    telegramAllowedUsers,
   } = ctx;
+  const defaultTenantId = DEFAULT_TENANT_ID;
+  const operatorUserId = OPERATOR_USER_ID;
 
   // Authenticated Session Endpoints (H01, FR-076, FR-078)
   registerRoute('get', '/auth/session', async (c: any) => {
@@ -135,5 +140,49 @@ export function registerAuthRoutes(ctx: RouteContext) {
       await revokeSession(token);
     }
     return c.json({ ok: true }, 200);
+  });
+
+  // Telegram Mini App Identity Verification (FR-071)
+  registerRoute('post', '/auth/telegram-miniapp', async (c: any) => {
+    const body = await c.req.json().catch(() => ({}));
+    const initData = body.initData;
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      return problem(c, 503, 'Service Unavailable', 'Telegram bot token is not configured');
+    }
+    const verification = verifyTelegramMiniAppInitData(initData, botToken);
+    if (!verification.ok) {
+      return problem(c, 401, 'Unauthorized', verification.error);
+    }
+    const userIdStr = String(verification.value.user.id);
+    if (telegramAllowedUsers.length > 0 && !telegramAllowedUsers.includes(userIdStr)) {
+      return problem(c, 403, 'Forbidden', `Telegram user ${userIdStr} is not an authorized office operator`);
+    }
+    // A random token. It used to be the Telegram user record in base64, so anyone who knew an office
+    // member's Telegram id, name, username and language could compute their operator session for the
+    // 24 hours after they opened the Mini App.
+    const sessionToken = `tg_miniapp_sess_${crypto.randomBytes(32).toString('base64url')}`;
+    const displayName = [verification.value.user.first_name, verification.value.user.last_name].filter(Boolean).join(' ') || `Telegram User ${userIdStr}`;
+    const session = {
+      authenticated: true,
+      tenantId: defaultTenantId,
+      userId: operatorUserId,
+      actorId: `tg_${userIdStr}`,
+      role: 'operator',
+      displayName,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    saveSession?.(sessionToken, session);
+    // Written to hawa.desk_sessions like a Desk sign-in (SPLIT_PLAN G1): the session lived only in
+    // this process's map, so a restart or a second Core signed the office member out.
+    const durable = persistSession ? await persistSession(sessionToken, session) : false;
+    return c.json({
+      ok: true,
+      durable,
+      user: verification.value.user,
+      authDate: verification.value.authDate,
+      authenticated: true,
+      sessionToken,
+    });
   });
 }

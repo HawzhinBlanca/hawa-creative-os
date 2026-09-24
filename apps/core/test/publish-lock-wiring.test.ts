@@ -3,7 +3,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 
 /**
  * Two deliveries of the same task at the same instant must reach the publisher once.
@@ -81,7 +81,7 @@ describe('delivery through Core holds the per-task publish lock', () => {
         },
       };
     });
-    const process_ = () => createApp({
+    const process_ = () => createAppWithClientFixtures({
       db, testAuth: { roleHeader: true }, publisher: { publish },
       deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
       telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) } as any,

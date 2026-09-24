@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { createApp } from '../../../apps/core/src/app.js';
+import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
 import { createDb } from '@hawa/db';
 import { BriefBuilder, CreativeDirectorRunner } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
@@ -25,7 +25,7 @@ describe('Task R14: Controlled Office Pilot Protocol (FR-080, NFR-010, NFR-018, 
 
   const connectionString = getTestDbUrl();
   const db = createDb(connectionString);
-  const app = createApp({ db });
+  const app = createAppWithClientFixtures({ db });
 
   afterAll(async () => {
     if (db) await db.destroy();

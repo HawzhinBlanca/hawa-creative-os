@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR-043, FR-044, Invariant #11)', () => {
   const exports = memoryExportStore();
-  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   async function createFixtureTask(clientName: string = 'Aster Hotel') {
     const res = await app.request('/api/webhooks/telegram', {

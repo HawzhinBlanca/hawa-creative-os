@@ -21,6 +21,18 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
     return { ...json.task, taskId: json.task.id };
   }
 
+  // A task that names its client: the rubric scores against the client's brand colours and refuses
+  // a task without one (SPLIT_PLAN G1). A Telegram message in a test without a database names none.
+  async function createClientTask(text: string) {
+    const res = await app.request('/v1/ingress/rehearsal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: 'client-rabar', text }),
+    });
+    const json = await res.json();
+    return { ...json.task, taskId: json.task.id };
+  }
+
   describe('Horizon 1: Universal Multi-Tenant Search Engine (FR-077, Invariant #6)', () => {
     it('indexes tasks, clients, and assets with sub-10ms query execution', async () => {
       const task = await createFixtureTask('Zagros Roastery');
@@ -83,7 +95,7 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
 
   describe('Horizon 2: Multilingual Visual QA Vision Rubric Scorer (FR-039, Invariant #9, Gate E)', () => {
     it('evaluates visual QA rubric with copy, typography, contrast, safe-zones, and SHA-256 seal', async () => {
-      const task = await createFixtureTask('Rabar Fashion');
+      const task = await createClientTask('Rabar Fashion');
       const revId = 'rev_test_rubric_01';
 
       const res = await app.request(`/tasks/${task.taskId}/revisions/${revId}/evaluate-rubric`, {
@@ -152,16 +164,13 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
       expect(report.criteriaScores.layoutSafeZones).toBe(20);
       expect(report.cryptographicSeal).toMatch(/^[a-f0-9]{64}$/);
 
-      // Verify report retrieval endpoint
+      // Reports are returned to the caller and not stored (SPLIT_PLAN G1): the list route says so.
       const listRes = await app.request(`/tasks/${task.taskId}/rubric-reports`);
-      expect(listRes.status).toBe(200);
-      const reports = await listRes.json();
-      expect(reports.length).toBeGreaterThan(0);
-      expect(reports[0].reportId).toBe(report.reportId);
+      expect(listRes.status).toBe(410);
     });
 
     it('flags unapproved price modifications as hard failures', async () => {
-      const task = await createFixtureTask('Price Check');
+      const task = await createClientTask('Price Check');
       const revId = 'rev_price_mismatch';
 
       const res = await app.request(`/tasks/${task.taskId}/revisions/${revId}/evaluate-rubric`, {

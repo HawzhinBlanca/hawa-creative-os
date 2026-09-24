@@ -54,7 +54,8 @@ describe('Vision rubric route', () => {
     const res = await app.request(`/v1/tasks/${task.id}/revisions/rev_no_nodes/evaluate-rubric`, json({ format: 'feed' }));
     expect(res.status).toBe(422);
     expect((await res.json()).title).toBe('NODES_REQUIRED');
-    expect(await (await app.request(`/v1/tasks/${task.id}/rubric-reports`)).json()).toEqual([]);
+    // Reports are not stored at all (SPLIT_PLAN G1): the list route says so.
+    expect((await app.request(`/v1/tasks/${task.id}/rubric-reports`)).status).toBe(410);
   });
 
   it('checks the design against the copy the client sent, with no sample price or phone', async () => {

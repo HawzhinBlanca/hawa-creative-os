@@ -1,15 +1,16 @@
 import crypto from 'node:crypto';
 import { kaaeClientDNA, type ClientDNA } from '@hawa/domain';
-import type { ClientDnaSnapshot } from '../routes/types.js';
+import type { ClientDnaSnapshot } from '../../src/routes/types.js';
 
 /**
- * Development fixtures: six invented offices and the KAAE DNA, with one snapshot each. They were
- * inline in createApp (architecture programme 1.3, SPLIT_PLAN.md section 6, stage 1) and moved here
- * unchanged. They are still seeded on every start: production replaces them from PostgreSQL before
- * it serves (hydrateClientDnaFromDb with dropUnknown, awaited by index.ts), and about a hundred test
- * files still name these client ids. Stage 2 (SPLIT_PLAN G2) makes seeding opt-in for tests only.
+ * Test fixtures: six invented offices and the KAAE DNA, with one snapshot each. They were inline in
+ * createApp and were seeded on every start, production included, until PostgreSQL replaced them
+ * (architecture programme 1.3, SPLIT_PLAN.md section 6). Stage 2 (SPLIT_PLAN G2) moved them here:
+ * Core seeds nothing, and a test that needs an invented office asks for one through
+ * createAppWithClientFixtures (app-with-client-fixtures.ts), which passes this function as
+ * CreateAppOptions.seedClientDna.
  *
- * `computeDnaHash` is passed in rather than imported from app.ts, which imports this file.
+ * `computeDnaHash` is passed in so that this file imports nothing from Core but types.
  */
 export function seedClientDnaFixtures(
   clientDnas: Map<string, ClientDNA>,

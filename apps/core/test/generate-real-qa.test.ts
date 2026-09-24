@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { manifestFromOperations } from '../src/services/generated-manifest.js';
 
 /**
@@ -50,7 +51,7 @@ describe('the generated design is what QA inspects', () => {
 
 describe('/generate runs real QA', () => {
   it('stores the engine\'s report, with its findings and a real hash, and sends a failing design to review', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const { task } = await generate(app, 'client-nova', { title: 'Nova launch' });
 
     const report = task.latestQAReport;
@@ -65,7 +66,7 @@ describe('/generate runs real QA', () => {
   });
 
   it('the revision keeps typed nodes, so the review desk lists the exact copy', async () => {
-    const app = createApp({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
+    const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'operator' }, roleHeader: true } });
     const { taskId } = await generate(app, 'client-drustee', { title: 'Vitamin D3', headlineEn: 'Pure Vitamin D3 + K2 Drops', copyEn: '5000 IU, lab tested' });
     const desk = await (await app.request(`/tasks/${taskId}/review-desk`, { headers: { Authorization: 'Bearer test_bearer' } })).json();
     expect(desk.exactCopy.map((c: any) => c.text)).toEqual(expect.arrayContaining(['Pure Vitamin D3 + K2 Drops']));
@@ -78,7 +79,7 @@ describe('/generate with a database', () => {
     const db = createDb(process.env.TEST_DATABASE_URL!);
     const tenantId = '00000000-0000-4000-a000-000000000001';
     const auth = { ...json, Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
-    const app = createApp({ testAuth: { roleHeader: true },  db });
+    const app = createAppWithClientFixtures({ testAuth: { roleHeader: true },  db });
     const { taskId } = await generate(
       app,
       'c1000000-0000-4000-8000-000000000002',

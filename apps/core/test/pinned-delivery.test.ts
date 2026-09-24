@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { computeActionSignature } from '@hawa/integrations';
-import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 
 /**
@@ -16,7 +16,7 @@ const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest(
 
 function setup() {
   const exports = memoryExportStore();
-  const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+  const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
 
   /** withClient false: a Telegram-ingested task, which carries no client until one is routed. */
   async function taskAwaitingApproval(withClient = true) {
@@ -226,7 +226,7 @@ describe('only the test suite emulates Google', () => {
     vi.stubEnv('GOOGLE_OAUTH_TOKEN', '');
     try {
       const exports = memoryExportStore();
-      const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
+      const app = createAppWithClientFixtures({ testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
       const auth = { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' };
       const created = await (await app.request('/tasks', { method: 'POST', headers: auth, body: JSON.stringify({ title: 'Dev delivery', clientId: KAAE }) })).json();
       const taskId: string = created.id || created.task?.id;

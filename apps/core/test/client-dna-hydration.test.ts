@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, ClientRepository, sql } from '@hawa/db';
 import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { hydrateClientDnaFromDb } from '../src/services/client-dna-hydration.js';
 
 /**
@@ -23,7 +24,7 @@ describe('client DNA survives a restart', () => {
   it('a folder saved through the API is what a fresh process delivers to', async () => {
     const folderId = `folder_saved_${randomUUID().slice(0, 8)}`;
     // Start from whatever the fixture says, change only the destination, save through the API.
-    const first = createApp({ db });
+    const first = createAppWithClientFixtures({ db });
     await (first as any).clientDnaHydrated;
     const current = await (await first.request(`/v1/clients/${kaaeId}/dna`, { headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` } })).json();
     const edited = { ...current, destinations: { ...(current.destinations || {}), productionFolderId: folderId } };
@@ -50,7 +51,7 @@ describe('client DNA survives a restart', () => {
 
     // And through createApp itself: the second process answers with the saved folder from memory
     // paths too, not only from the DB-first GET.
-    const second = createApp({ db });
+    const second = createAppWithClientFixtures({ db });
     expect(await (second as any).clientDnaHydrated).toBeGreaterThanOrEqual(1);
   }, 60_000);
 
@@ -109,7 +110,7 @@ describe('loadActiveClientDna: PostgreSQL answers first, by uuid, code or client
   }, 30_000);
 
   it('100 task creates at once no longer exhaust the pool through the DNA lookup', async () => {
-    const app = createApp({ db });
+    const app = createAppWithClientFixtures({ db });
     const headers = { 'content-type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
     const results = await Promise.all(Array.from({ length: 100 }, (_, i) =>
       app.request('/v1/tasks', { method: 'POST', headers, body: JSON.stringify({ title: `Pool check ${i}`, clientId: kaaeId }) }).then((r) => r.status)));

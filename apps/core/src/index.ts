@@ -48,9 +48,9 @@ process.on('uncaughtException', (err: Error) => {
 // reached intake for 80 minutes. production-entrypoint.test.ts pins it.
 const app = createApp({ enableTelegramPolling: true, enableDraftReminders: process.env.HAWA_DRAFT_REMINDERS !== 'off', enableCanvaSweeper: true });
 
-// Client DNA starts as source-code fixtures and is replaced from PostgreSQL. The port used to open
-// before that finished, so the first requests after a start could be answered with an invented
-// office's DNA; a failed load in production (the promise rejects there) surfaced only afterwards.
+// Client DNA is loaded from PostgreSQL; Core seeds no fixtures (only tests do, SPLIT_PLAN G2). The
+// port used to open before that finished, so the first requests after a start were answered with an
+// invented office's DNA, seeded then on every start; a failed load in production (the promise rejects there) surfaced only afterwards.
 // No HTTP request is served, and no Telegram update is polled (app.ts waits for the same promise),
 // until the office's own DNA is in place, and a start that cannot load it stops. The wait is
 // bounded: a database that accepts the connection and never answers would otherwise leave the
