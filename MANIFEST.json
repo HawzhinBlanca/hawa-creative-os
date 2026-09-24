@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T23:05:36Z",
+  "generatedAt": "2026-09-24T23:19:00Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 273,
+  "fileCount": 276,
   "files": [
     {
       "path": ".dockerignore",
@@ -256,6 +256,11 @@
       "path": "adrs/037_desk_server_state.md",
       "sha256": "1df8aecde35b83db90eee4c30c8aaefc317a4d36cd62f05795cc70029465f02c",
       "bytes": 3738
+    },
+    {
+      "path": "adrs/038_release_identity_is_two_phase.md",
+      "sha256": "be5a0f28c8ce0b05d8417b3d4c230bd1f8521819381fcbfaacf241a8f8b30c1c",
+      "bytes": 2648
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -534,8 +539,8 @@
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
-      "sha256": "ac931a3b2cf93dfbc065786501bf728fd3f3d0d816a9c4d5bf4c5763f11029d4",
-      "bytes": 5773
+      "sha256": "a66ef22ea336e139e8d4b33344545b0ab383fb2c0395fbf0c8466a5fd9733c32",
+      "bytes": 6514
     },
     {
       "path": "docs/15_DATABASE_DESIGN.md",
@@ -714,13 +719,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_EVIDENCE.md",
-      "sha256": "2b87c6ca35ff91c3f89b9153dd6baa2907cba97fab549d12a24dfd5dfbd5e9e0",
-      "bytes": 3008
+      "sha256": "dffed5017beea28565af0e8996ce1214e5f03b533ce1f2015d6dc01b826464b4",
+      "bytes": 3291
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R03_EVIDENCE.md",
+      "sha256": "54c88b7ec375e9b731ae47718c07b6c95a42daadefa6770bf1665f9f14f35792",
+      "bytes": 3098
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
-      "sha256": "0983523b752bddca5d2e24c4968a6178a2bfb71b88d9ccc3939f25b888f38c64",
-      "bytes": 9333
+      "sha256": "70160799f511eabab9fcb20d02f764ea1e590dc04bf625a940d521300380d456",
+      "bytes": 9337
     },
     {
       "path": "plans/risk-register.csv",
@@ -729,8 +739,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "bd77b27dd804be82e8091e68aefb83678f111373979adefc96d34195cfcc9016",
-      "bytes": 74788
+      "sha256": "14ba21293e34b20be2089d8ca4b83ac5ae331405594ffda5fc1917bb5f70069c",
+      "bytes": 76126
     },
     {
       "path": "plans/user-stories.csv",
@@ -1044,8 +1054,8 @@
     },
     {
       "path": "scripts/generate_release_manifest.ts",
-      "sha256": "3d7c864742658774d16fcc3db6a483830d84988af4ae72d457df345150d9390e",
-      "bytes": 5207
+      "sha256": "db200b4f5da328d41805e4bb1ce4e76a7625c4e6183b3408801283c57c7acdf2",
+      "bytes": 5845
     },
     {
       "path": "scripts/generate_symbol_fallback_faces.py",
@@ -1161,6 +1171,11 @@
       "path": "scripts/reconcile_production_tasks.ts",
       "sha256": "4bb501b454ad044ef8b007d4934822101a2475520370ecbf11d43bc998ef5014",
       "bytes": 1491
+    },
+    {
+      "path": "scripts/record_deployment_receipt.ts",
+      "sha256": "bc3357d689295c15ee057d58f8f1ae49e985662a642e62b7208d3ede4658a17e",
+      "bytes": 7276
     },
     {
       "path": "scripts/recover_stranded_canva_jobs.ts",
@@ -1344,8 +1359,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "c1905fcbdb00ac1051d5f2b62318e79348cc415b0fff0385e82daf1c3cb77bc8",
-      "bytes": 8718
+      "sha256": "71f69664cb555d43393c9e74fa0251f3c49dc4c7c72b7b595f9e3cc9d74fa89d",
+      "bytes": 9936
     },
     {
       "path": "scripts/verify_t8_ratings.ts",

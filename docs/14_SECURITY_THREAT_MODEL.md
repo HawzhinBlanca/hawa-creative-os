@@ -16,7 +16,7 @@
 |---|---|---|
 | User browser | authenticated but potentially compromised | Hawa Desk |
 | Core services | highest controlled trust | API, Restate workers, PostgreSQL |
-| Editable studio | trusted only through scoped adapter | HyCanvas |
+| Editable studio | trusted only through scoped adapter | Canva (active; ADR-025) |
 | GPU/Comfy worker | untrusted compute sandbox | custom nodes/models |
 | Messaging adapters | untrusted external edge | Telegram, WAHA |
 | AI providers | external processors | frontier/image APIs |
@@ -137,7 +137,7 @@ No user gains access solely because a chat platform says they sent a message.
 - routine rotation and revocation;
 - never write secrets to traces, model prompts, source packages, or errors;
 - secret scanning in CI;
-- ComfyUI/HyCanvas receive only scoped credentials they need.
+- Active Canva integration and optional cut-out compute receive only the scoped credentials they need.
 
 ## 7. Network
 
@@ -186,3 +186,7 @@ Per client/project define:
 - ComfyUI/WAHA network isolation verified;
 - source hashes and approval invalidation verified;
 - least-privilege Drive/Sheets access proven.
+
+### Release identity (ADR-038, 2026-09-25)
+
+A committed source manifest describes a candidate, not a deployed image. The deployment must reject a build stamp different from the clean checkout and inspect the built Core, Desk and Worker image IDs and OCI revision labels before traffic switches. An observed deployment receipt records those immutable IDs, the applied database migration name/hash, and effective non-secret runtime flags/models. A mutable image tag, local source checksum, or source-default model list cannot stand in for this receipt. The receipt proves those observations only; exact task/export provenance and the full release gate are still required for admission.

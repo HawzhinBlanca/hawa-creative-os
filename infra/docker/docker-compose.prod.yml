@@ -27,6 +27,8 @@ x-worker: &worker
   build:
     context: ../..
     dockerfile: infra/docker/Dockerfile.worker
+    args:
+      HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
   profiles: ["worker"]
   restart: unless-stopped
   logging: *logging
@@ -81,6 +83,8 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.desk
+      args:
+        HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
     restart: unless-stopped
     logging: *logging
     networks:
@@ -95,6 +99,8 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.core
+      args:
+        HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
     restart: unless-stopped
     logging: *logging
     env_file:

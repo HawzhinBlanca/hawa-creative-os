@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { ReleaseManifest } from '../packages/contracts/src/release-manifest.js';
+import { PRODUCTION_MODELS } from '../packages/domain/src/provider-policy.js';
+import { PROMPT_VERSION } from '../apps/core/src/services/design-studio/prompts.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -44,9 +46,11 @@ export function generateReleaseManifest(): ReleaseManifest {
   const targetVersion = latestMigrationFile.replace('.sql', '');
 
   const manifest: Omit<ReleaseManifest, 'sha256'> = {
-    manifestVersion: '1.0.0',
-    generatedAt: new Date().toISOString(),
-    environment: 'production',
+    manifestVersion: '2.0.0',
+    evidenceKind: 'source_candidate',
+    // The commit timestamp makes the source candidate reproducible for the same checkout.
+    generatedAt: commitTimestamp,
+    targetEnvironment: 'production',
     topology: {
       canonical: 'infra/docker/docker-compose.prod.yml',
       description: 'Canonical production multi-service container topology (Core, Desk UI, Worker, PostgreSQL, Nginx)',
@@ -81,7 +85,7 @@ export function generateReleaseManifest(): ReleaseManifest {
     components: {
       core: {
         service: 'core',
-        image: 'hawa-core:latest',
+        imageStatus: 'unbuilt',
         sourceFileHashes: {
           'apps/core/src/app.ts': hashFile('apps/core/src/app.ts'),
           'apps/core/src/index.ts': hashFile('apps/core/src/index.ts'),
@@ -90,7 +94,7 @@ export function generateReleaseManifest(): ReleaseManifest {
       },
       desk: {
         service: 'desk',
-        image: 'hawa-desk:latest',
+        imageStatus: 'unbuilt',
         sourceFileHashes: {
           'apps/desk/src/App.tsx': hashFile('apps/desk/src/App.tsx'),
           'apps/desk/src/main.tsx': hashFile('apps/desk/src/main.tsx'),
@@ -98,31 +102,35 @@ export function generateReleaseManifest(): ReleaseManifest {
       },
       worker: {
         service: 'worker',
-        image: 'hawa-worker:latest',
+        imageStatus: 'unbuilt',
         sourceFileHashes: {
           'apps/worker/src/index.ts': hashFile('apps/worker/src/index.ts'),
         },
       },
     },
     models: {
-      registryVersion: '2026-09-18.1',
-      pinnedModels: {
-        intake_router: { provider: 'google', model: 'gemini-3.8-flash' },
-        brief_builder: { provider: 'google', model: 'gemini-3.8-flash' },
-        creative_director: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
-        visual_judge: { provider: 'openai', model: 'gpt-6-astra' },
-      },
-      promptVersions: {
-        intake_router: '1.0',
-        brief_builder: '1.0',
-        creative_director: '2.0',
-        visual_judge: '2.0',
-      },
+      policySourceSha256: hashFile('packages/domain/src/provider-policy.ts'),
+      productionDefaults: { ...PRODUCTION_MODELS },
+      runtimeOverrides: 'unobserved',
+      promptVersion: PROMPT_VERSION,
+      promptSourcesSha256: Object.fromEntries([
+        'apps/core/src/services/design-studio/prompts.ts',
+        'apps/core/src/services/canva-design-planner.ts',
+        'packages/creative/src/studio/layout-generator-v3.ts',
+        'packages/creative/src/studio/pairwise-judge-v3.ts',
+        'packages/creative/src/studio/box-critique-v3.ts',
+      ].map((source) => [source, hashFile(source)])),
     },
     qa: {
-      engineVersion: '2.0.0',
-      rulesVersion: 'kaae-ka-2026-09',
-      rubricVersion: 'visual-rubric-v2',
+      versionStatus: 'unobserved',
+      sourceHashes: Object.fromEntries([
+        'packages/qa/src/engine.ts',
+        'packages/qa/src/vision-rubric.ts',
+        'packages/qa/src/canva-pptx-check.ts',
+        'packages/qa/src/rtl-validator.ts',
+        'packages/qa/src/contrast.ts',
+        'packages/qa/src/copy-validator.ts',
+      ].map((source) => [source, hashFile(source)])),
     },
   };
 

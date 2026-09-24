@@ -83,7 +83,27 @@ if [[ -z "$BUILD_COMMIT" || "$BUILD_COMMIT" == "unknown" ]]; then
   echo "ERROR: HAWA_BUILD_COMMIT is unknown or unset. Unstamped deployments are strictly refused." >&2
   exit 1
 fi
+CHECKOUT_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
+if [[ ! "$BUILD_COMMIT" =~ ^[0-9a-f]{40}$ || "$BUILD_COMMIT" != "$CHECKOUT_COMMIT" ]]; then
+  echo "ERROR: HAWA_BUILD_COMMIT must equal this checkout's HEAD (${CHECKOUT_COMMIT:-unknown}); refusing a mislabeled deployment." >&2
+  exit 1
+fi
 export HAWA_BUILD_COMMIT="$BUILD_COMMIT"
+
+# Compose tags are mutable. Inspect the just-built image itself before starting Core/Desk or
+# switching Restate to a new worker. The deployment receipt will later record these image IDs.
+verify_built_image() {
+  local service="$1" ref label image_id
+  ref="$("${COMPOSE[@]}" --env-file "$INTERP_FILE" --profile worker config --format json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const v=JSON.parse(s).services[process.argv[1]];if(!v?.image)process.exit(2);process.stdout.write(v.image)})' "$service")" \
+    || { echo "ERROR: could not resolve the built ${service} image reference" >&2; exit 1; }
+  image_id="$(docker image inspect -f '{{.Id}}' "$ref" 2>/dev/null || true)"
+  label="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ref" 2>/dev/null || true)"
+  if [[ ! "$image_id" =~ ^sha256:[0-9a-f]{64}$ || "$label" != "$BUILD_COMMIT" ]]; then
+    echo "ERROR: ${service} image ${ref} has identity ${image_id:-missing} and revision ${label:-missing}; expected revision ${BUILD_COMMIT}." >&2
+    exit 1
+  fi
+  echo "✓ ${service} image ${image_id} carries checkout revision ${label}"
+}
 
 # Enforce clean working tree (Step 2: No uncommitted deployments)
 if [[ -n "$(git -C "$ROOT_DIR" status --porcelain 2>/dev/null)" ]]; then
@@ -275,6 +295,8 @@ echo "✓ schema upgrades applied or verified"
 # 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
 # profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" build core desk cutout
+verify_built_image core
+verify_built_image desk
 # The cut-out engine's own tests, run in the image that ships, against the pinned model.
 docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/models:ro" \
   -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
@@ -317,6 +339,7 @@ echo "worker: live colour ${LIVE}, deploying to ${IDLE}"
 refuse_stuck_legacy "$PLAN"
 [[ $PREVIOUS_DRAINS_DONE == 1 ]] || finish_previous_drains "$IDLE"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
+verify_built_image "worker-${IDLE}"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"
 # The new colour is removed only when Restate holds no deployment at its address. A registration can be
 # accepted even when its answer was lost or the check after it failed, and then Restate already sends
@@ -368,6 +391,20 @@ echo "worker: ${WORKER:-unavailable}"
 CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "cutout: ${CUTOUT:-unavailable}"
 check_blob_store_private || exit 1
+
+# Record what actually started, not what mutable Compose tags or the source candidate suggest.
+# The versioned upgrader wrote this row in the same transaction as the schema change. Read it back
+# from PostgreSQL, then compare its hash with the source file in the receipt builder.
+MIGRATION_ROW="$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" hawa-production-postgres-1 \
+  psql -X -qAt -F '|' -U hawa_owner -d hawa \
+  -c 'SELECT name, sha256 FROM hawa.schema_upgrades ORDER BY name DESC LIMIT 1' 2>/dev/null)" \
+  || { echo "ERROR: could not read the applied schema migration; deployment is not admitted." >&2; exit 1; }
+IFS='|' read -r MIGRATION_NAME MIGRATION_SHA256 <<< "$MIGRATION_ROW"
+RECEIPT_DIR="${ROOT_DIR}/infra/backup/release-receipts"
+mkdir -p "$RECEIPT_DIR"; chmod 700 "$RECEIPT_DIR"
+RECEIPT="${RECEIPT_DIR}/deploy_${STAMP}_${BUILD_COMMIT:0:12}.json"
+printf '%s' "$HEALTH" | (cd "$ROOT_DIR" && npx tsx scripts/record_deployment_receipt.ts "$BUILD_COMMIT" "$IDLE" "$RECEIPT" "$MIGRATION_NAME" "$MIGRATION_SHA256") \
+  || { echo "ERROR: could not verify and record the deployed image identities; deployment is not admitted." >&2; exit 1; }
 
 # 9. Hawa's own disk use: older pre-deploy dumps, Docker's build cache (a full disk is an outage).
 bash "${ROOT_DIR}/infra/ops/disk_cleanup.sh" | sed 's/^/disk: /' || echo "! disk cleanup did not finish (the deploy itself succeeded)"

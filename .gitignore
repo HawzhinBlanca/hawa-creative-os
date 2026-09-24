@@ -61,5 +61,6 @@ exports/
 scratch/
 *staged-exports/
 infra/backup/snapshots/
+infra/backup/release-receipts/
 packages/creative/assets/fonts/private/
 data/

@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateReleaseManifest, type ReleaseManifest } from '../packages/contracts/src/release-manifest.js';
+import { PRODUCTION_MODELS } from '../packages/domain/src/provider-policy.js';
+import { PROMPT_VERSION } from '../apps/core/src/services/design-studio/prompts.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -132,9 +134,8 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
         errors.push(`Manifest missing required component: ${req}`);
       } else {
         const comp = components[req];
-        const validImagePattern = /^([a-z0-9_.-]+\/)?hawa-(core|desk|worker)(:[a-zA-Z0-9_.-]+)?$/;
-        if (!comp.image || typeof comp.image !== 'string' || !comp.image.includes(':') || !validImagePattern.test(comp.image)) {
-          errors.push(`Component ${req} missing valid or approved image reference: ${comp.image}`);
+        if (comp.imageStatus !== 'unbuilt' || 'image' in comp || 'digest' in comp) {
+          errors.push(`Component ${req} falsely claims an image identity in a source candidate`);
         }
         const fileHashes = comp.sourceFileHashes || {};
         const sourcePaths = Object.keys(fileHashes);
@@ -152,27 +153,50 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
   }
 
   // 8. Model coverage check
-  const expectedRoles = ['intake_router', 'brief_builder', 'creative_director', 'visual_judge'];
-  const allowedProviders = new Set(['google', 'anthropic', 'openai', 'local']);
-  if (!manifest.models || !manifest.models.pinnedModels || Object.keys(manifest.models.pinnedModels).length === 0) {
-    errors.push('Manifest models coverage cannot be empty; requires pinnedModels');
+  if (!manifest.models || !manifest.models.productionDefaults || Object.keys(manifest.models.productionDefaults).length === 0) {
+    errors.push('Manifest models coverage cannot be empty; requires productionDefaults');
   } else {
-    for (const role of expectedRoles) {
-      const pin = manifest.models.pinnedModels[role];
-      if (!pin) {
-        errors.push(`Manifest missing pinned model for required role: ${role}`);
-      } else {
-        if (!allowedProviders.has(pin.provider)) {
-          errors.push(`Model role ${role} uses unapproved provider: ${pin.provider}`);
-        }
-        if (!pin.model || typeof pin.model !== 'string' || pin.model.includes('invented')) {
-          errors.push(`Model role ${role} uses invalid or invented model: ${pin.model}`);
-        }
+    for (const [role, model] of Object.entries(PRODUCTION_MODELS)) {
+      if (manifest.models.productionDefaults[role] !== model) {
+        errors.push(`Source model default for ${role} differs from provider policy`);
       }
     }
+    if (manifest.models.runtimeOverrides !== 'unobserved') {
+      errors.push('Runtime model overrides cannot be declared by a source candidate');
+    }
   }
-  if (manifest.models?.registryVersion !== '2026-09-18.1') {
-    errors.push(`Manifest models registryVersion is invalid: ${manifest.models?.registryVersion}`);
+  const policySource = 'packages/domain/src/provider-policy.ts';
+  if (manifest.models?.policySourceSha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.join(root, policySource))).digest('hex')) {
+    errors.push('Model policy source hash mismatch');
+  }
+  if (manifest.models?.promptVersion !== PROMPT_VERSION) {
+    errors.push('Prompt version differs from source');
+  }
+  const requiredPromptSources = [
+    'apps/core/src/services/design-studio/prompts.ts',
+    'apps/core/src/services/canva-design-planner.ts',
+    'packages/creative/src/studio/layout-generator-v3.ts',
+    'packages/creative/src/studio/pairwise-judge-v3.ts',
+    'packages/creative/src/studio/box-critique-v3.ts',
+  ];
+  for (const source of requiredPromptSources) {
+    const declared = manifest.models?.promptSourcesSha256?.[source];
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, source))).digest('hex');
+    if (!declared || declared !== actual) errors.push(`Prompt source hash mismatch for ${source}`);
+  }
+
+  if (manifest.qa?.versionStatus !== 'unobserved') errors.push('QA runtime version cannot be declared by a source candidate');
+  for (const source of [
+    'packages/qa/src/engine.ts',
+    'packages/qa/src/vision-rubric.ts',
+    'packages/qa/src/canva-pptx-check.ts',
+    'packages/qa/src/rtl-validator.ts',
+    'packages/qa/src/contrast.ts',
+    'packages/qa/src/copy-validator.ts',
+  ]) {
+    const declared = manifest.qa?.sourceHashes?.[source];
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, source))).digest('hex');
+    if (!declared || declared !== actual) errors.push(`QA source hash mismatch for ${source}`);
   }
 
   return { ok: errors.length === 0, errors };

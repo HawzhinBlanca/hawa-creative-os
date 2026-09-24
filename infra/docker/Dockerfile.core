@@ -42,6 +42,8 @@ COPY apps/core/ ./apps/core/
 RUN pnpm --filter @hawa/core... build
 
 FROM base AS runner
+ARG HAWA_BUILD_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$HAWA_BUILD_COMMIT
 ENV NODE_ENV=production
 ENV FONTCONFIG_FILE=/app/packages/creative/assets/fonts/fonts.conf
 RUN useradd --system --uid 10001 --create-home hawa

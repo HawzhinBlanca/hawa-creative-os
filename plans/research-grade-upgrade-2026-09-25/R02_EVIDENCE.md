@@ -12,7 +12,7 @@
 ## Verification
 
 - Focused Core and Desk tests: 6 files, **89 passed** (`/private/tmp/hawdesign-r02-6.log`). These cover unrun paid probe truth, integration-state truth, a stalled automatic task alongside a completed draft, manual-task control, unavailable-DB control, route behavior, and Desk API authentication.
-- `pnpm exec tsc -b --pretty false` passed after the core changes; rerun after this document/UI slice before commit.
+- A clean-commit `pnpm test` on `4636c53` passed **400 files / 3,011 tests**, with 4 files / 48 tests skipped (`/private/tmp/hawdesign-r02-full-suite.log`). Typecheck and blueprint validation passed. The release script passed stages 1–5 and stage 6 database isolation, then stopped at missing remote tracking (`/private/tmp/hawdesign-r02-release-gate.log`); stage 7 was not reached in that script.
 - One earlier parallel targeted run failed the health 200 assertion while test databases were being terminated; the same fault-recovery file passed all seven tests isolated. No production conclusion is drawn from that transient run.
 
 ## Remaining before R02 acceptance

@@ -1,14 +1,14 @@
-export interface ImageDigestEntry {
-  service: 'core' | 'desk' | 'worker' | 'postgres' | 'nginx';
-  image: string;
-  digest?: string;
-  sourceFileHashes?: Record<string, string>;
+export interface SourceComponentEntry {
+  service: 'core' | 'desk' | 'worker';
+  imageStatus: 'unbuilt';
+  sourceFileHashes: Record<string, string>;
 }
 
 export interface ReleaseManifest {
-  manifestVersion: '1.0.0';
+  manifestVersion: '2.0.0';
+  evidenceKind: 'source_candidate';
   generatedAt: string;
-  environment: 'production' | 'staging' | 'development' | 'test';
+  targetEnvironment: 'production' | 'staging' | 'development' | 'test';
   topology: {
     canonical: 'infra/docker/docker-compose.prod.yml';
     description: string;
@@ -33,19 +33,20 @@ export interface ReleaseManifest {
     [key: string]: string;
   };
   components: {
-    core: ImageDigestEntry;
-    desk: ImageDigestEntry;
-    worker: ImageDigestEntry;
+    core: SourceComponentEntry;
+    desk: SourceComponentEntry;
+    worker: SourceComponentEntry;
   };
   models: {
-    registryVersion: string;
-    pinnedModels: Record<string, { provider: string; model: string }>;
-    promptVersions: Record<string, string>;
+    policySourceSha256: string;
+    productionDefaults: Record<'layout' | 'critique' | 'judge' | 'text' | 'image', string>;
+    runtimeOverrides: 'unobserved';
+    promptVersion: string;
+    promptSourcesSha256: Record<string, string>;
   };
   qa: {
-    engineVersion: string;
-    rulesVersion: string;
-    rubricVersion: string;
+    versionStatus: 'unobserved';
+    sourceHashes: Record<string, string>;
   };
   sha256?: string;
 }
@@ -55,8 +56,14 @@ export function validateReleaseManifest(data: unknown): { ok: true; manifest: Re
     return { ok: false, error: 'Manifest must be an object' };
   }
   const m = data as Partial<ReleaseManifest>;
-  if (m.manifestVersion !== '1.0.0') {
+  if (m.manifestVersion !== '2.0.0') {
     return { ok: false, error: `Unsupported manifestVersion: ${m.manifestVersion}` };
+  }
+  if (m.evidenceKind !== 'source_candidate') {
+    return { ok: false, error: 'Release manifest must identify itself as a source candidate' };
+  }
+  if (m.targetEnvironment !== 'production') {
+    return { ok: false, error: 'This source candidate must name production as its target environment' };
   }
   if (!m.build?.commit || typeof m.build.commit !== 'string') {
     return { ok: false, error: 'Manifest missing build.commit' };
@@ -69,6 +76,14 @@ export function validateReleaseManifest(data: unknown): { ok: true; manifest: Re
   }
   if (m.flags?.DESIGN_PIPELINE_V3 !== 'off' || m.flags?.DESIGN_STUDIO_V2 !== 'off') {
     return { ok: false, error: 'Production flags must remain "off" until admission gates pass' };
+  }
+  for (const component of Object.values(m.components || {})) {
+    if (component?.imageStatus !== 'unbuilt' || 'image' in component || 'digest' in component) {
+      return { ok: false, error: 'A source candidate cannot claim a built image or digest' };
+    }
+  }
+  if (m.models?.runtimeOverrides !== 'unobserved') {
+    return { ok: false, error: 'Runtime model overrides belong in the inspected deployment receipt' };
   }
   return { ok: true, manifest: data as ReleaseManifest };
 }
