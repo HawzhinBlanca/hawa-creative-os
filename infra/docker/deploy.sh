@@ -13,6 +13,48 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 COMPOSE=(docker compose -f "${SCRIPT_DIR}/docker-compose.prod.yml")
 [[ -f "${SCRIPT_DIR}/canva-release.override.yml" ]] && COMPOSE+=(-f "${SCRIPT_DIR}/canva-release.override.yml")
 APPLY=0; [[ "${1:-}" == "--apply" ]] && APPLY=1
+# Blue/green worker (architecture programme 0.1, ADR-034): the decisions are made by
+# scripts/restate-bluegreen.ts (unit-tested); Restate's admin port is not published, so its calls
+# are made by node inside the running Core container.
+CORE_CONTAINER="hawa-production-core-1"
+LEGACY_WORKER_CONTAINER="hawa-production-worker-1"
+bluegreen() { (cd "$ROOT_DIR" && npx tsx scripts/restate-bluegreen.ts "$@" --via-container "$CORE_CONTAINER"); }
+core_running() { [[ "$(docker inspect -f '{{.State.Running}}' "$CORE_CONTAINER" 2>/dev/null || true)" == "true" ]]; }
+# Stops and removes the container of a colour whose Restate deployment has drained and been deleted.
+stop_worker_slot() {
+  case "$1" in
+    blue|green) "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-$1" >/dev/null ;;
+    # The single `worker` service of every deploy before blue/green; it is no longer in the compose file.
+    legacy) docker stop "$LEGACY_WORKER_CONTAINER" >/dev/null 2>&1 || true; docker rm "$LEGACY_WORKER_CONTAINER" >/dev/null 2>&1 || true ;;
+  esac
+  echo "✓ stopped the drained ${1} worker"
+}
+# Reads finish-drains output: stops what was deleted, reports what is still draining.
+report_drains() {
+  local line slot
+  while IFS= read -r line; do
+    case "$line" in
+      deleted=*) stop_worker_slot "${line#deleted=}" ;;
+      draining=*) slot="${line#draining=}"
+        echo "! the ${slot%%:*} worker still has ${slot#*:} invocation(s) pinned to it and keeps running; new work already goes to the live colour, and the next deploy finishes this drain first" ;;
+    esac
+  done <<< "$1"
+}
+# A drain an earlier deploy left running is finished before this deploy replaces anything: the colour
+# it drains is the one this deploy would replace, and replacing it with invocations still pinned to it
+# would replay them on new code. A drained colour is removed; if the idle colour has not drained, stop.
+PREVIOUS_DRAINS_DONE=0
+finish_previous_drains() {
+  local out rc=0
+  out="$(bluegreen finish-drains --wait-seconds "${HAWA_PREVIOUS_DRAIN_WAIT_SECONDS:-600}" --require-drained "$1")" || rc=$?
+  report_drains "$out"
+  if [[ $rc == 3 ]]; then
+    echo "ERROR: the ${1} worker still runs invocations from an earlier deploy ($(tr '\n' ' ' <<< "$out")). Replacing it now would replay them on new code, so no worker was changed. Deploy again once they finish (Restate UI, or SELECT * FROM sys_invocation WHERE status <> 'completed')."
+    exit 1
+  fi
+  [[ $rc == 0 ]] || { echo "ERROR: could not read Restate's deployments (exit ${rc}); no worker was changed"; exit 1; }
+  PREVIOUS_DRAINS_DONE=1
+}
 # The running build must be able to say which commit it is (GET /v1/system/cutover/status).
 # Unstamped deployments are strictly refused.
 if [[ -n "${HAWA_BUILD_COMMIT+x}" ]]; then
@@ -128,10 +170,22 @@ bash "${ROOT_DIR}/infra/security/local_state_audit.sh"
 bash "${ROOT_DIR}/scripts/enforce_release_gate.sh"
 echo "✓ master release gate and evidence attestation verified"
 
+# Where the worker would go (read-only; needs the running Core container to reach Restate).
+if core_running; then
+  if PLAN="$(bluegreen plan 2>&1)"; then echo "✓ worker: $(tr '\n' ' ' <<< "$PLAN")"; else echo "! could not read the live worker colour: ${PLAN}"; fi
+fi
+
 if [[ $APPLY == 0 ]]; then
   echo ""
   echo "Pre-flight complete. Apply with: bash infra/docker/deploy.sh --apply"
   exit 0
+fi
+
+# 4b. An earlier deploy's drain is finished first (see finish_previous_drains). Core must be running to
+# reach Restate; on a stack that is down this happens in 7b instead.
+if core_running; then
+  PLAN="$(bluegreen plan)" || { echo "ERROR: could not read the live worker colour from Restate"; exit 1; }
+  finish_previous_drains "$(sed -n 's/^idle=//p' <<< "$PLAN")"
 fi
 
 # 5. Backup before anything changes
@@ -162,8 +216,9 @@ echo "✓ backup written: infra/backup/snapshots/predeploy_${STAMP}.dump (${BACK
 (cd "$ROOT_DIR" && DATABASE_URL="postgresql://hawa_owner:${POSTGRES_PASSWORD}@127.0.0.1:54332/hawa" npx tsx packages/db/src/upgrade.ts)
 echo "✓ schema upgrades applied or verified"
 
-# 7. Build and start
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" build core worker desk cutout
+# 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
+# profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" build core desk cutout
 # The cut-out engine's own tests, run in the image that ships, against the pinned model.
 docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/models:ro" \
   -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
@@ -189,29 +244,41 @@ else
 fi
 echo "✓ containers started"
 
-# 7b. Register the worker's services with Restate. Its registry lives in the restate_data volume, and
-# nothing else creates it: after that volume was recreated on 2026-09-17, every task failed with
-# "service 'TaskWorkflow' not found" for 23 hours. The worker serves HTTP/1.1. Registering the same
-# endpoint again changes nothing; if its handlers changed, the forced retry records a new revision.
-REGISTER_WORKER='
-const post = (force) => fetch("http://restate:9070/deployments", { method: "POST", headers: { "content-type": "application/json" },
-  body: JSON.stringify({ uri: "http://worker:9080", use_http_11: true, force }) });
-(async () => {
-  for (let i = 0; i < 30; i++) {
-    try {
-      let r = await post(false);
-      if (!r.ok) r = await post(true);
-      if (r.ok) {
-        const names = ((await (await fetch("http://restate:9070/services")).json()).services || []).map((s) => s.name);
-        if (names.includes("TaskWorkflow") && names.includes("TaskService")) { console.log("✓ restate holds the worker services: " + names.join(", ")); process.exit(0); }
-      }
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-  console.error("ERROR: the worker could not be registered with Restate; tasks would fail with service not found");
-  process.exit(1);
-})();'
-docker exec hawa-production-core-1 node -e "$REGISTER_WORKER" || exit 1
+# 7b. The worker, blue/green (architecture programme 0.1, ADR-034). Restate pins each invocation to the
+# deployment that started it, and a deployment is an address. This step used to replace the one worker
+# container behind http://worker:9080 and re-register it with a force:true fallback, so a design in
+# flight replayed on the new code (RT0016). Now the new build goes to the colour that is not live, at
+# its own address. Registering it (force:false, no fallback) sends new work there, while invocations
+# already running finish on the old colour. Once nothing is pinned to the old deployment it is deleted
+# and its container stopped; a drain still running at the timeout is left running and reported, and
+# the next deploy finishes it first (4b). The registry lives in the restate_data volume and nothing
+# else creates it (after that volume was recreated on 2026-09-17, every task failed with "service
+# 'TaskWorkflow' not found" for 23 hours), so a Restate that holds no worker at all gets blue. The first
+# deploy after this change drains the single `worker` service the same way.
+PLAN="$(bluegreen plan)" || { echo "ERROR: could not read the live worker colour from Restate"; exit 1; }
+LIVE="$(sed -n 's/^live=//p' <<< "$PLAN")"; IDLE="$(sed -n 's/^idle=//p' <<< "$PLAN")"
+echo "worker: live colour ${LIVE}, deploying to ${IDLE}"
+[[ $PREVIOUS_DRAINS_DONE == 1 ]] || finish_previous_drains "$IDLE"
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"
+abandon_idle() {
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-${IDLE}" >/dev/null 2>&1 || true
+  echo "ERROR: $1 The new ${IDLE} worker was removed; the live worker (${LIVE}) was not touched."
+  exit 1
+}
+for i in $(seq 1 30); do
+  docker exec "hawa-production-worker-${IDLE}-1" node -e "fetch('http://localhost:9080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1 && break
+  [[ $i == 30 ]] && abandon_idle "the new ${IDLE} worker did not become healthy within 60 s."
+  sleep 2
+done
+REGISTERED="$(bluegreen register "$IDLE")" || abandon_idle "Restate did not register the new ${IDLE} worker (its reason is above)."
+echo "✓ restate sends new work to the ${IDLE} worker ($(sed -n 's/^deployment=//p' <<< "$REGISTERED"))"
+# Not a failure when it times out: new work already goes to the new colour.
+if DRAINS="$(bluegreen finish-drains --wait-seconds "${HAWA_DRAIN_TIMEOUT_SECONDS:-900}")"; then
+  report_drains "$DRAINS"
+else
+  echo "! could not finish the drain of the ${LIVE} worker; it keeps running, and the next deploy finishes it first"
+fi
 
 # 8. Verify health truthfully (dependencies, not just HTTP 200)
 for i in $(seq 1 30); do
@@ -226,7 +293,7 @@ bad=[k for k,v in d.items() if v in ("unauthorized","unreachable","disconnected"
 print("health:", h.get("status"), json.dumps(d))
 if bad: print("ERROR: unhealthy dependencies:", bad); sys.exit(1)
 '
-WORKER="$(docker exec hawa-production-worker-1 node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
+WORKER="$(docker exec "hawa-production-worker-${IDLE}-1" node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "worker: ${WORKER:-unavailable}"
 CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "cutout: ${CUTOUT:-unavailable}"

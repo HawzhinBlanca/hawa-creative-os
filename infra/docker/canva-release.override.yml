@@ -3,5 +3,8 @@ services:
     image: hawa-core:canva-only-20260913
   desk:
     image: hawa-desk:canva-only-20260913
-  worker:
-    image: hawa-worker:canva-only-20260913
+  # Each colour has its own tag: building the idle colour must never retag the image the live one runs.
+  worker-blue:
+    image: hawa-worker:canva-only-20260913-blue
+  worker-green:
+    image: hawa-worker:canva-only-20260913-green
