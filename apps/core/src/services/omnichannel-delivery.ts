@@ -24,7 +24,7 @@ import { log } from '../logging.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
 import { pendingChangeOf } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
-import type { createTaskReader } from './task-reader.js';
+import type { TaskReader } from './task-reader.js';
 
 export interface OmnichannelDeliveryDeps {
   db: Kysely<Database> | null;
@@ -43,10 +43,12 @@ export interface OmnichannelDeliveryDeps {
   /** The outbox when there is no database (tests without one). */
   inMemoryOutbox: Map<string, any[]>;
   isProduction: boolean;
-  readCurrentTask: ReturnType<typeof createTaskReader>['readCurrentTask'];
+  readCurrentTask: TaskReader['readCurrentTask'];
   resolveClientDna: ClientDnaResolver;
   broadcastEvent: (type: string, data: unknown) => void;
 }
+
+export type OmnichannelDelivery = ReturnType<typeof createOmnichannelDelivery>;
 
 export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   const {

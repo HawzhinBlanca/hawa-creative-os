@@ -85,22 +85,6 @@ describe('N2: route order', () => {
    * with its reason, before it is accepted.
    */
   const ALLOWED: Record<string, string> = {
-    // The `:control` catch-all answers 404 for an unknown task before it checks the control word,
-    // and calls next() for words other than pause/resume/cancel/retry. SPLIT_PLAN F9 replaces it with
-    // four explicit paths, which removes all thirteen pairs.
-    'POST /tasks/:taskId/briefs -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/canva-binding -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/design-feedback -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/generate -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/leases -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/publish -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/route -> /tasks/:taskId/:control': 'catch-all, registered after (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/chat-approval-action': 'intercepted by the catch-all (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/comments': 'intercepted by the catch-all (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/feedback': 'intercepted by the catch-all (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/publish-omnichannel': 'intercepted by the catch-all (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/redrive': 'intercepted by the catch-all (F9 removes)',
-    'POST /tasks/:taskId/:control -> /tasks/:taskId/revisions': 'intercepted by the catch-all (F9 removes)',
     // The one order that must survive the split: `diff` is a word, not a revision id.
     'GET /tasks/:taskId/revisions/diff -> /tasks/:taskId/revisions/:revisionId': 'diff must stay first (revisions module)',
     // The Figma tombstone registers both `/figma/status` and `/v1/figma/status`, so `/v1/figma/status`
@@ -135,7 +119,7 @@ describe('N2: route order', () => {
    * module to register or seed from it. The helpers such modules need live in core-helpers.ts and
    * core-context.ts (SPLIT_PLAN F1 and F2).
    */
-  it('has no module under src/routes, src/services or src/fixtures importing app.js', () => {
+  it('has no module under src/routes, src/services or src/fixtures, nor core-helpers.ts or core-context.ts, importing app.js', () => {
     const src = path.join(here, '../src');
     const importsApp = /(?:from\s+|import\s*\(\s*)['"](?:\.\.?\/)+app(?:\.js)?['"]/;
     const offenders: string[] = [];
@@ -145,6 +129,42 @@ describe('N2: route order', () => {
         if (importsApp.test(fs.readFileSync(path.join(src, dir, file), 'utf8'))) offenders.push(`${dir}/${file.split(path.sep).join('/')}`);
       }
     }
+    for (const file of ['core-helpers.ts', 'core-context.ts']) {
+      if (importsApp.test(fs.readFileSync(path.join(src, file), 'utf8'))) offenders.push(file);
+    }
     expect(offenders.sort()).toEqual([]);
+  });
+});
+
+describe('the route modules the app.ts split fills (SPLIT_PLAN F11)', () => {
+  /**
+   * One module per target of section 2, each already registered by createApp, so a group moving its
+   * routes edits only its own module and app.ts's blocks it deletes. A module that is renamed or
+   * loses its register function fails here before it fails at start-up.
+   */
+  const MODULES: Record<string, string> = {
+    'migration.routes.ts': 'registerMigrationRoutes',
+    'assets.routes.ts': 'registerAssetsRoutes',
+    'simulators.routes.ts': 'registerSimulatorsRoutes',
+    'fonts.routes.ts': 'registerFontsRoutes',
+    'rubric.routes.ts': 'registerRubricRoutes',
+    'system-status.routes.ts': 'registerSystemStatusRoutes',
+    'client-learning.routes.ts': 'registerClientLearningRoutes',
+    'revisions.routes.ts': 'registerRevisionsRoutes',
+    'decisions.routes.ts': 'registerDecisionsRoutes',
+    'canva-outcome.routes.ts': 'registerCanvaOutcomeRoutes',
+    'delivery.routes.ts': 'registerDeliveryRoutes',
+    'outbox.routes.ts': 'registerOutboxRoutes',
+    'controls.routes.ts': 'registerControlsRoutes',
+    'tasks.routes.ts': 'registerTasksRoutes',
+    'task-pipeline.routes.ts': 'registerTaskPipelineRoutes',
+    'search.routes.ts': 'registerSearchRoutes',
+    'whatsapp.routes.ts': 'registerWhatsappRoutes',
+    'telegram-webhook.routes.ts': 'registerTelegramWebhookRoutes',
+  };
+
+  it.each(Object.entries(MODULES))('routes/%s exports %s', async (file, register) => {
+    const mod = await import(`../src/routes/${file.replace(/\.ts$/, '.js')}`);
+    expect(typeof mod[register]).toBe('function');
   });
 });

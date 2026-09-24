@@ -177,6 +177,24 @@ import { registerClientsRoutes } from './routes/clients.routes.js';
 import { registerEvalsRoutes } from './routes/evals.routes.js';
 import { registerComparisonRoutes } from './routes/comparison.routes.js';
 import { registerIngressRoutes } from './routes/ingress.routes.js';
+import { registerMigrationRoutes } from './routes/migration.routes.js';
+import { registerAssetsRoutes } from './routes/assets.routes.js';
+import { registerSimulatorsRoutes } from './routes/simulators.routes.js';
+import { registerFontsRoutes } from './routes/fonts.routes.js';
+import { registerRubricRoutes } from './routes/rubric.routes.js';
+import { registerSystemStatusRoutes } from './routes/system-status.routes.js';
+import { registerClientLearningRoutes } from './routes/client-learning.routes.js';
+import { registerRevisionsRoutes } from './routes/revisions.routes.js';
+import { registerDecisionsRoutes } from './routes/decisions.routes.js';
+import { registerCanvaOutcomeRoutes } from './routes/canva-outcome.routes.js';
+import { registerDeliveryRoutes } from './routes/delivery.routes.js';
+import { registerOutboxRoutes } from './routes/outbox.routes.js';
+import { registerControlsRoutes } from './routes/controls.routes.js';
+import { registerTasksRoutes } from './routes/tasks.routes.js';
+import { registerTaskPipelineRoutes } from './routes/task-pipeline.routes.js';
+import { registerSearchRoutes } from './routes/search.routes.js';
+import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
+import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import {
   parseRequesterAction,
@@ -220,7 +238,8 @@ import {
   cutText,
   type CreateAppOptions,
 } from './core-helpers.js';
-import type { ClientDnaSnapshot } from './routes/types.js';
+import type { ClientDnaSnapshot, RouteContext } from './routes/types.js';
+import type { QAEngine } from '@hawa/contracts';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID, ADMIN_USER_ID, DEFAULT_CLIENT_ID } from './core-context.js';
 import { createTaskReader } from './services/task-reader.js';
 import { createClientDnaResolver } from './services/client-dna-resolver.js';
@@ -326,7 +345,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
-  const qaEngine = options?.qaEngine || new DeterministicQAEngine();
+  const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
   const canvaStudio = new CanvaDesignStudioAdapter(undefined, {
     resolveBinding: async (ctx) => {
       if (!db || !ctx.taskId || !ctx.clientId) return undefined;
@@ -962,6 +981,12 @@ export function createApp(options?: CreateAppOptions) {
   // A task as Postgres has it, for routes about to act on its status (services/task-reader.ts).
   const { resolveTaskWithFallback, readCurrentTask } = createTaskReader({ db, taskRepo, tasks });
 
+  // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
+  const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = createOmnichannelDelivery({
+    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, decisions, events, omnichannelReceipts,
+    inFlightPublications, inMemoryOutbox, isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
+  });
+
   // Helper to register routes for /v1/..., /api/v1/..., /api/... and /...
   // All routes are deny-by-default: unless the route is an explicit public probe/asset/webhook
   // or the session endpoint, an unauthenticated caller gets 401 before the handler runs.
@@ -1022,11 +1047,16 @@ export function createApp(options?: CreateAppOptions) {
     );
   };
 
-  const routeContext = {
+  // Everything a route module or shared service reads from createApp (core-context.ts). Typed, so a
+  // field the context names and this object lacks fails the build.
+  const routeContext: RouteContext = {
     app,
     registerRoute,
+    options,
+    isProduction,
     db,
     taskRepo,
+    clientRepo,
     outboxRepo,
     revisionRepo,
     publicationRepo,
@@ -1036,6 +1066,15 @@ export function createApp(options?: CreateAppOptions) {
     sloDaemon,
     evaluationRunner: evalRunner,
     reconciliationService,
+    canvaConnectService,
+    deliverableStore,
+    qaEngine,
+    creativeDirector,
+    publisher,
+    voiceTranscriber,
+    telegramAllowedUsers,
+    telegramIntakeUsers,
+    guidelineReadings,
     tasks,
     events,
     briefs,
@@ -1050,6 +1089,8 @@ export function createApp(options?: CreateAppOptions) {
     rubricReports,
     taskComments,
     omnichannelReceipts,
+    inFlightPublications,
+    inMemoryOutbox,
     historicalMigrator: globalHistoricalMigrator,
     globalCanvaNativeAdapter,
     globalCanvaCircuitBreaker,
@@ -1059,6 +1100,12 @@ export function createApp(options?: CreateAppOptions) {
     verifyRequestAuth,
     problem,
     broadcastEvent: broadcast,
+    broadcastTransition,
+    resolveTaskWithFallback,
+    readCurrentTask,
+    resolveClientDna,
+    delivery: { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery },
+    probeModelProvider,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
     ensureSessionLoaded,
@@ -1067,8 +1114,6 @@ export function createApp(options?: CreateAppOptions) {
     persistSession,
     revokeSession,
     streamTickets,
-    clientRepo,
-    options,
   };
 
   registerSystemRoutes(routeContext);
@@ -1079,6 +1124,30 @@ export function createApp(options?: CreateAppOptions) {
   registerEvalsRoutes(routeContext);
   registerComparisonRoutes(routeContext);
   registerIngressRoutes(routeContext);
+
+  // The route groups being moved out of createApp (architecture programme 1.3, SPLIT_PLAN.md section
+  // 2), in the plan's order. Each module is filled by one group; nothing else here changes when it is.
+  // Registration order between modules decides nothing: no two routes of one method can match one URL
+  // except GET revisions/diff before revisions/:revisionId, both in revisions.routes.ts (route-inventory
+  // test, N2).
+  registerMigrationRoutes(routeContext);
+  registerAssetsRoutes(routeContext);
+  registerSimulatorsRoutes(routeContext);
+  registerFontsRoutes(routeContext);
+  registerRubricRoutes(routeContext);
+  registerSystemStatusRoutes(routeContext);
+  registerClientLearningRoutes(routeContext);
+  registerRevisionsRoutes(routeContext);
+  registerDecisionsRoutes(routeContext);
+  registerCanvaOutcomeRoutes(routeContext);
+  registerDeliveryRoutes(routeContext);
+  registerOutboxRoutes(routeContext);
+  registerControlsRoutes(routeContext);
+  registerTasksRoutes(routeContext);
+  registerTaskPipelineRoutes(routeContext);
+  registerSearchRoutes(routeContext);
+  registerWhatsappRoutes(routeContext);
+  registerTelegramWebhookRoutes(routeContext);
 
   // Autonomous Inbound Chat Ingress & Vector Composition Engine (Invariants #1, #2, #4, #8, #10)
   async function ingestChatCampaignTask(input: {
@@ -1919,12 +1988,6 @@ export function createApp(options?: CreateAppOptions) {
     }
     return { swept: failedRows.length, redriven: results.filter(r => r.success).length, results };
   }
-
-  // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
-  const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = createOmnichannelDelivery({
-    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, decisions, events, omnichannelReceipts,
-    inFlightPublications, inMemoryOutbox, isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
-  });
 
   /**
    * Whether this Telegram update already saved something: a request or revision (persistChatIntake
@@ -6453,10 +6516,12 @@ export function createApp(options?: CreateAppOptions) {
     return c.json(exportPackage);
   });
 
-  // Task Control Commands (pause, resume, cancel, retry)
-  registerRoute('post', '/tasks/:taskId/:control', async (c: any, next: any) => {
+  // Task Control Commands (pause, resume, cancel, retry), one explicit path each. They were one
+  // POST /tasks/:taskId/:control route, registered before six other POST /tasks/:taskId/<word> routes,
+  // which it answered 404 for an unknown task before handing them on: registration order decided
+  // who answered (architecture programme 1.3, SPLIT_PLAN.md F9). Those six now check the task themselves.
+  const controlTask = (control: 'pause' | 'resume' | 'cancel' | 'retry') => async (c: any) => {
     const taskId = c.req.param('taskId');
-    const control = c.req.param('control');
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
@@ -6472,11 +6537,6 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
-
-    const allowedControls = ['pause', 'resume', 'cancel', 'retry'];
-    if (!allowedControls.includes(control)) {
-      return next();
-    }
 
     const currentStatus = task ? task.status : toApiTaskStatus(dbTask.state);
     const sm = new TaskStateMachine(taskId, currentStatus);
@@ -6525,13 +6585,16 @@ export function createApp(options?: CreateAppOptions) {
       workflowId: `wf_${taskId}`,
       acceptedAt: new Date().toISOString(),
     }, 202);
-  });
+  };
+  for (const control of ['pause', 'resume', 'cancel', 'retry'] as const) registerRoute('post', `/tasks/:taskId/${control}`, controlTask(control));
 
   // Re-drive Failed Task Generation (ADR-025 / Audit 2026-09-16)
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const taskId = c.req.param('taskId');
+    // 404 for a task nobody knows, 503 when Postgres cannot be read (the `:control` catch-all answered these).
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     try {
       const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
@@ -7189,7 +7252,8 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for chat approval action');
     }
 
-    const task = await resolveTaskWithFallback(taskId);
+    // Postgres's status, or 503 when it cannot be read: this acts on the task's current revision.
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -7385,7 +7449,8 @@ export function createApp(options?: CreateAppOptions) {
   // Register Task Node Reviewer Comment (Gate F: Reviewer comments with role policy)
   registerRoute('post', '/tasks/:taskId/comments', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = await resolveTaskWithFallback(taskId);
+    // Postgres's copy, or 503 when it cannot be read: the comment names the task's current revision.
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -7521,6 +7586,8 @@ export function createApp(options?: CreateAppOptions) {
   // Record Operator Feedback
   registerRoute('post', '/tasks/:taskId/feedback', async (c: any) => {
     const taskId = c.req.param('taskId');
+    // Feedback on a task nobody knows is refused (the `:control` catch-all used to answer this 404).
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     const body = await c.req.json();
 
     const feedback: FeedbackEvent = {

@@ -9,6 +9,8 @@ import { isValidUuid, TaskStoreUnavailableError } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
 
+export type TaskReader = ReturnType<typeof createTaskReader>;
+
 export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db' | 'taskRepo' | 'tasks'>) {
   // Handlers that still read the in-memory task map fall back to PostgreSQL after a restart and
   // hydrate the map, so a persisted task never answers 404 only because this process is new.

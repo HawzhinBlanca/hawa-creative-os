@@ -34,15 +34,28 @@ describe('Adversarial Bug Hunt: Unauthenticated Route Escalations & Auth Gate By
     const created = await createRes.json();
     const taskId = created.id;
 
-    // 2. Adversary attempts to control or approve the task with NO credentials
-    const attackRes = await app.request(`/v1/tasks/${taskId}/approve`, {
+    // 2. Adversary attempts to control or approve the task with NO credentials. The controls are four
+    // explicit routes (SPLIT_PLAN F9), each behind the sign-in check; `approve` was never a control and
+    // now matches no route at all, so it is refused as not found rather than as unauthenticated.
+    for (const control of ['pause', 'resume', 'cancel', 'retry']) {
+      const attackRes = await app.request(`/v1/tasks/${taskId}/${control}`, {
+        method: 'POST',
+        headers: {
+          'x-enforce-auth': 'true',
+        },
+      });
+      expect(attackRes.status, control).toBe(401);
+    }
+    const approveRes = await app.request(`/v1/tasks/${taskId}/approve`, {
       method: 'POST',
       headers: {
         'x-enforce-auth': 'true',
       },
     });
+    expect([401, 404]).toContain(approveRes.status);
 
-    expect(attackRes.status).toBe(401);
+    const after = await app.request(`/v1/tasks/${taskId}`, { headers: { Authorization: `Bearer ${testOperatorToken}` } });
+    expect((await after.json()).status).toBe(created.status);
   });
 
   it('Bug 54: denies unauthenticated omnichannel publication on POST /v1/tasks/:taskId/publish-omnichannel', async () => {
