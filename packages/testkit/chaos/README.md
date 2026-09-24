@@ -15,6 +15,7 @@ npx tsx packages/testkit/chaos/run.ts                  # every scenario, then te
 npx tsx packages/testkit/chaos/run.ts --only R1.0,R4   # some scenarios
 npx tsx packages/testkit/chaos/run.ts --keep           # leave hawa-chaos running to inspect it
 npx tsx packages/testkit/chaos/run.ts --down           # take a kept project down, with its volumes
+npx tsx packages/testkit/chaos/run.ts --poller worker  # the worker polls Telegram (Phase 2.1); default core
 ```
 
 `run.ts` sets `HAWA_CHAOS=1` (and `HAWA_CHAOS_KEEP`, `HAWA_CHAOS_ONLY`) and runs `chaos.test.ts` with
@@ -117,11 +118,12 @@ Placed today, in the worker only:
 | `worker.dispatch.after-submit` | `workflow-dispatcher.ts`, after Restate accepted the workflow | a re-dispatch must meet Restate's 409 |
 | `worker.step.after-action` (`detail.step`) | `durable-context.ts` `withStepChaosPoints`, inside every `TaskWorkflow` step after its action, before Restate journals it | the step runs again on replay; Core's idempotency keys must make it harmless |
 | `worker.sender.after-telegram` (`detail.kind`, `step`) | `outbox-consumer.ts` `sendOnce`, after the Telegram send, before the `sent` mark | the send is only `attempted` on record: must end uncertain, never sent twice, one office alert |
+| `worker.poller.after-getupdates` (`detail.chats`) | `lifecycle/telegram-poller.ts`, after getUpdates returned updates, before any is handed on | nothing handed on, offset unmoved: the next poll asks again |
+| `worker.poller.after-enqueue` (`detail.chat`, `updateId`) | after Restate accepted an update (key `tg-<update_id>`), before the offset is stored | the update is asked for and sent again with the same key: one invocation |
+| `core.intake.after-decision` (`detail.chat`, `updateId`) | `apps/core/src/routes/lifecycle-internal.routes.ts`, after intake saved the request, before ChatInbox has the answer | ChatInbox's step runs again; intake answers it as a duplicate |
 
-**Follow-ups (not placed: `apps/core/src/app.ts` is being split by another stream).** The design names
-`core.intake.after-decision`, `core.project.after-commit`, `core.outcome.after-bridge` and
-`core.delivery.after-drive`; `worker.poller.after-enqueue` and `worker.rl.after-project` belong to
-Phase 2 code that does not exist yet. Until then Core, Postgres and Restate are killed time-based:
+**Follow-ups.** The design also names `core.project.after-commit`, `core.outcome.after-bridge`,
+`core.delivery.after-drive` and `worker.rl.after-project`, which belong to later Phase 2 slices. Until then Core, Postgres and Restate are killed time-based:
 while a worker point is held (`killWhileHeld`), or a fixed time into a request.
 
 ## Scenarios (`chaos.test.ts`)
@@ -158,7 +160,23 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the invocation must stay pinned to blue |
 | R4 | two chats: a 19.9 MB picture whose download takes 30 s in chat A; chat B's text must be answered in under 5 s |
 
-Not yet: R1 kill points that need Phase 2 code (poller, `ChatInbox`, `RequestLifecycle`); the design's
+Phase 2.1 scenarios (`--poller worker`: the worker's poller hands each update to its chat's `ChatInbox`,
+which calls Core's `/v1/internal/telegram/intake`; skipped when Core polls). Each takes a brief to its
+draft and adds the checks of 2.1: one `ChatInbox` invocation per key `tg-<update_id>`, completed; every
+invocation of the chat completed; the stored offset past the update; nothing dead-lettered.
+
+| Name | What |
+|---|---|
+| R1.W0 | brief to delivery through `ChatInbox`, no faults |
+| R1.S1.K1 | worker killed at `worker.poller.after-enqueue` (Restate has the update, the offset is not stored) |
+| R1.S1.K2 | Restate killed while the poller is held at `worker.poller.after-getupdates` |
+| R1.S1.K3 | Postgres killed while the poller is held at `worker.poller.after-enqueue` (the offset cannot be stored, so the update is sent again with the same key) |
+| R1.S2.K4 | Core killed at `core.intake.after-decision` |
+| R1.S2.K5 | worker killed while Core is held at `core.intake.after-decision` |
+| R1.S2.K5b | worker killed while the intake classifier (slowed to 4 s) answers; classifier allowance 2 |
+| R1.DUP | the same update handed to `ChatInbox` again, with the poller's key and then with another: one task, nothing new in the chat |
+
+Not yet: R1 kill points that need later Phase 2 code (`RequestLifecycle`: R1 S3 onwards); the design's
 K9 with a *patched* worker build (R1.D1 deploys the same build, so it proves the drain and the pinning
 but cannot show replay on changed code); R2 (reminders), R3 (question and answer; no fixtures for
 feedback revisions yet), R5 (rollback of the per-chat flag, which does not exist yet).
@@ -196,3 +214,17 @@ Found while building the stack (not scenarios):
 - Postgres with `synchronous_commit=off` (as `docker-compose.test.yml` runs it) loses commits it had
   acknowledged when the process is killed; the first run of R1.K7 reported lost Canva rows for that
   reason alone. This project keeps `synchronous_commit` on.
+
+## Phase 2.1 (2026-09-24, the worker's Telegram poller and `ChatInbox`)
+
+`run.ts --poller worker --only R1.W0,R1.S1.K1,R1.S1.K2,R1.S1.K3,R1.S2.K4,R1.S2.K5,R1.S2.K5b,R1.DUP,R4,R1.K1,R1.K2`:
+all 11 hold every invariant, in 355 s, peak memory 1,120 MiB (Restate 665, Core 223, Postgres 109,
+fakes 78, worker 68), no `unmatched` model call. R4: chat B answered after 207 ms while chat A's
+30 s download ran (chat A after 31.0 s). R1.S2.K5b classified the update twice (allowed: Core's first
+intake call was still classifying when Restate retried the step); every other scenario once. R1.DUP:
+the update handed on again with the poller's key and with another key left the chat with the same
+three messages and one task.
+
+`run.ts --poller core --only R1.0,R4` (the default, unchanged): R1.0 holds; R4 fails as before, chat B
+answered after 31.0 s.
+

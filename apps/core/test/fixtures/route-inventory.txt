@@ -636,6 +636,8 @@ POST /v1/ingress/rehearsal
 POST /v1/ingress/unified
 POST /v1/integrations/canva/authorize
 POST /v1/integrations/canva/disconnect
+POST /v1/internal/telegram/intake
+POST /v1/internal/telegram/park
 POST /v1/judge/:token/judgments
 POST /v1/messages/:messageId/promote
 POST /v1/migration/archive

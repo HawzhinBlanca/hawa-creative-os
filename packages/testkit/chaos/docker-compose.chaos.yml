@@ -56,6 +56,11 @@ x-app-environment: &app-environment
   AUTO_GENERATE_DAILY_CAP_PER_SENDER: "1000"
   AUTO_GENERATE_DAILY_CAP_GLOBAL: "1000"
   HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos
+  # Phase 2.1: `core` (default) polls Telegram in Core, as production does today; `worker` (run.ts
+  # --poller worker) polls in the live worker colour and hands each update to its chat's ChatInbox,
+  # which calls Core's /v1/internal/* with the worker's own token.
+  HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-core}
+  HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
 

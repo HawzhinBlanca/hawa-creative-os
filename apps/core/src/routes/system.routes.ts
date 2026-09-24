@@ -9,6 +9,7 @@ import { readDeliveredRecords } from '../services/publication-receipt.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { log } from '../logging.js';
+import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -93,6 +94,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
       activeStudio: 'canva',
       botConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       secretConfigured: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET),
+      // Which process asks Telegram for updates: core, or the worker (HAWA_TELEGRAM_POLLER, Phase 2.1).
+      poller: telegramPollerOf(process.env),
     }, 200);
   });
 
@@ -103,6 +106,12 @@ export function registerSystemRoutes(ctx: RouteContext) {
   // and stored offset. With the kill switch on it refuses as the webhook does.
   registerRoute('post', '/adapters/telegram/poll-now', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
+    // With HAWA_TELEGRAM_POLLER=worker the worker's poller is the bot's one getUpdates consumer
+    // (Phase 2.1). A second one here would take updates from the same offset outside ChatInbox's
+    // per-chat order; Telegram answers two consumers with 409 besides.
+    if (telegramPollerOf(process.env) === 'worker') {
+      return problem(c, 409, 'The worker polls Telegram', 'HAWA_TELEGRAM_POLLER=worker: the worker asks Telegram for updates, and Core does not poll');
+    }
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }

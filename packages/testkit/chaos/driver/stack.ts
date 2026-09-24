@@ -23,6 +23,7 @@ const ENV_FILE = join(RUN_DIR, 'chaos.env');
 export const PORTS = { postgres: 56432, restateAdmin: 56070, restateIngress: 56080, fakes: 56090 } as const;
 export const FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
 export const RESTATE_ADMIN_URL = `http://127.0.0.1:${PORTS.restateAdmin}`;
+export const RESTATE_INGRESS_URL = `http://127.0.0.1:${PORTS.restateIngress}`;
 
 export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes';
 const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes'];
@@ -38,6 +39,8 @@ export interface ChaosSecrets {
   CHAOS_WEBHOOK_SECRET: string;
   CHAOS_CANVA_SECRET: string;
   CHAOS_CANVA_KEY: string;
+  /** HAWA_WORKER_TOKEN (Phase 2.1): the worker's credential for Core's /v1/internal/*. */
+  CHAOS_WORKER_TOKEN: string;
 }
 
 /**
@@ -46,14 +49,6 @@ export interface ChaosSecrets {
  * takes new ones. Never printed.
  */
 export function secrets(): ChaosSecrets {
-  if (existsSync(ENV_FILE)) {
-    const out: Record<string, string> = {};
-    for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
-      const m = /^([A-Z_]+)=(.*)$/.exec(line);
-      if (m) out[m[1]] = m[2];
-    }
-    return out as unknown as ChaosSecrets;
-  }
   const hex = (n: number) => randomBytes(n).toString('hex');
   const made: ChaosSecrets = {
     CHAOS_OWNER_PASSWORD: hex(16),
@@ -67,7 +62,22 @@ export function secrets(): ChaosSecrets {
     CHAOS_WEBHOOK_SECRET: hex(24),
     CHAOS_CANVA_SECRET: hex(16),
     CHAOS_CANVA_KEY: hex(32),
+    CHAOS_WORKER_TOKEN: hex(24),
   };
+  if (existsSync(ENV_FILE)) {
+    const out: Record<string, string> = {};
+    for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
+      const m = /^([A-Z_]+)=(.*)$/.exec(line);
+      if (m) out[m[1]] = m[2];
+    }
+    // A kept project from before a key was added gets the new key; the existing ones stay (the
+    // Postgres volume holds their passwords).
+    const missing = Object.keys(made).filter((k) => !out[k]);
+    if (!missing.length) return out as unknown as ChaosSecrets;
+    for (const k of missing) out[k] = made[k as keyof ChaosSecrets];
+    writeFileSync(ENV_FILE, Object.entries(out).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
+    return out as unknown as ChaosSecrets;
+  }
   mkdirSync(RUN_DIR, { recursive: true });
   writeFileSync(ENV_FILE, Object.entries(made).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600 });
   return made;

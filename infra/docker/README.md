@@ -92,6 +92,38 @@ the two consumers are kept apart by the lease alone. To keep that window short, 
 while any paused or backing-off invocation is pinned to the old `worker` (they would never finish on
 their own), and every later deploy stops until the old `worker` is gone.
 
+### The Telegram poller (Phase 2.1)
+
+Core asks Telegram for updates by default (`HAWA_TELEGRAM_POLLER=core`, or unset). Core handled one
+update at a time for every chat, so a 20 MB file in one chat held all the others for as long as its
+download took (the chaos suite's R4 measured 30.9 s). With `HAWA_TELEGRAM_POLLER=worker` the worker's
+live colour polls instead (`apps/worker/src/lifecycle/telegram-poller.ts`): it sends each update to its
+chat's `ChatInbox` in Restate (key `tg-<update_id>`, so the same update twice is one invocation) and
+moves the stored offset only after Restate accepted it. `ChatInbox` runs one update at a time per chat,
+chats side by side, and hands each to Core's intake unchanged through `POST /v1/internal/telegram/intake`.
+An update intake keeps failing is dead-lettered as before, through `POST /v1/internal/telegram/park`.
+Core's "Poll now" answers 409 while the worker polls.
+
+**Before switching, the owner adds `HAWA_WORKER_TOKEN` to `infra/docker/.env.production`**: a long random
+value of its own (for example `openssl rand -hex 32`), not the same as any other key. Core and both
+worker colours read it from that file. It is the worker's credential for Core's `/v1/internal/*`, the
+only routes that accept it, and those routes accept nothing else. Without it the worker does not start
+its poller (worker `/health` reports `telegramPoller: misconfigured`), so with `worker` set and no token
+nobody polls: set the token first.
+
+- Switch: set `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` (the compose interpolation file; a
+  value in `.env.production` is overridden by compose's `environment:` block), then deploy. Core stops
+  polling on its restart; the live worker colour starts polling once it has held the role for 30 s
+  (`HAWA_POLLER_TAKEOVER_MS`).
+- Roll back: set it to `core` (or remove it) and deploy again. Both pollers keep the offset in the same
+  Postgres row, so the other one carries on from there. Updates already queued in Restate still go to
+  Core's intake, which deduplicates them.
+- The kill switch stops the worker's poller too: it reads the channel's `office-kill-switch` row in
+  Postgres before every poll (cached 5 s), and asks Telegram for nothing while the switch is thrown or
+  cannot be read.
+- Worker `/health` shows `telegramPoller`: `off`, `misconfigured` with the reason, or `on` with the
+  offset, the count handed on, the last poll and the last error.
+
 ### Operating it
 
 - Where would a deploy go: `bash infra/docker/deploy.sh` (pre-flight) prints `live=… idle=…`.

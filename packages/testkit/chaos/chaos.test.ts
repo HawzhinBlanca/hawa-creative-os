@@ -7,23 +7,27 @@
  *   HAWA_CHAOS=1 npx vitest run packages/testkit/chaos/chaos.test.ts
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
+ *   CHAOS_TELEGRAM_POLLER=worker   the worker polls Telegram through ChatInbox (Phase 2.1; run.ts --poller worker)
  *
- * Today it drives the legacy path. The results (per scenario: invariants, time, memory) are written to
+ * It drives the legacy path; with the worker poller, intake goes through ChatInbox first. The results (per scenario: invariants, time, memory) are written to
  * .run/last-run.json and printed; a failed invariant fails its scenario.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, restateQuery, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, restateQuery, RESTATE_INGRESS_URL, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
-  approve, briefToDraft, checkRequest, deliver, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sentTo, sleep,
-  tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  approve, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  sendToChatInbox, sentTo, sleep, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
 const only = (process.env.HAWA_CHAOS_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const keep = process.env.HAWA_CHAOS_KEEP === '1';
+// Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
+// does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
+const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
 
 interface ScenarioReport {
   name: string;
@@ -60,10 +64,12 @@ interface Expectation {
   extra?: InvariantResult[];
   /** The scenario made no design request in its chat (R4), so only `extra` applies. */
   skipRequestChecks?: boolean;
+  /** Checks made after quiescence (what Restate recorded once every invocation has finished). */
+  after?: () => Promise<InvariantResult[]>;
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
-  const run = enabled && (only.length === 0 || only.includes(name));
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, needs?: 'worker-poller') {
+  const run = enabled && (only.length === 0 || only.includes(name)) && (needs !== 'worker-poller' || poller === 'worker');
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = newChat();
     const events: string[] = [];
@@ -76,7 +82,11 @@ function scenario(name: string, what: string, script: (chat: string, events: str
       const expectation = await script(chat, events);
       await fakes.release();
       await quiescent();
-      report.invariants = [...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, ledgerSince })), ...(expectation.extra || [])];
+      report.invariants = [
+        ...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, ledgerSince })),
+        ...(expectation.extra || []),
+        ...(expectation.after ? await expectation.after() : []),
+      ];
     } catch (err) {
       report.error = err instanceof Error ? err.message : String(err);
     } finally {
@@ -126,6 +136,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     sampleMemory();
     const result = {
       finishedAt: new Date().toISOString(),
+      telegramPoller: poller,
       totalMs: Date.now() - suiteStarted,
       peakMemoryMiB: peakMemory,
       peakTotalMiB: Math.max(0, ...samples.map((s) => s.totalMiB)),
@@ -322,6 +333,103 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       ],
     };
   });
+
+  // Phase 2.1 (PHASE2_DESIGN.md slice 2.1; R1 steps S1 and S2): the worker polls Telegram, each
+  // update goes to its chat's ChatInbox with key tg-<update_id>, and ChatInbox hands it to Core's
+  // intake. Each scenario takes its brief to the draft; S1 kills are around the hand-off to Restate,
+  // S2 kills around Core's intake. Run with `run.ts --poller worker`.
+  const toDraft = async (chat: string, tag: string, events: string[]) => {
+    const update = await sendBrief(chat, tag);
+    events.push(`update ${update.update_id} in chat ${chat}`);
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in chat`);
+    return { update, taskId };
+  };
+
+  scenario('R1.W0', 'the worker polls: brief to delivery through ChatInbox, no faults', async (chat, events) => {
+    const { update, taskId } = await toDraft(chat, 'R1.W0', events);
+    const approved = await approve(taskId);
+    events.push(`approve: HTTP ${approved.status}`);
+    const delivered = await deliver(taskId);
+    events.push(`deliver: HTTP ${delivered.status}`);
+    await waitDelivered(chat, taskId);
+    return { delivered: true, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S1.K1', 'worker killed after Restate accepted the update, before the offset was stored', async (chat, events) => {
+    const k = await killAtPoint('worker.poller.after-enqueue', { chat });
+    const { update } = await toDraft(chat, 'R1.S1.K1', events);
+    events.push(`killed ${(await k.done).killed} at worker.poller.after-enqueue`);
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S1.K2', 'Restate killed right after getUpdates returned the update, back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('worker.poller.after-getupdates', { chats: chat }, 'restate');
+    const { update } = await toDraft(chat, 'R1.S1.K2', events);
+    events.push(`killed ${(await k.done).killed} while the poller was held after getUpdates`);
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S1.K3', 'Postgres killed after Restate accepted the update, before the offset was stored; back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('worker.poller.after-enqueue', { chat }, 'postgres');
+    const { update } = await toDraft(chat, 'R1.S1.K3', events);
+    events.push(`killed ${(await k.done).killed} while the poller was held after the enqueue`);
+    // The offset could not be stored, so the update was asked for and sent again with the same key.
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S2.K4', 'Core killed after intake saved the request, before it answered ChatInbox', async (chat, events) => {
+    const k = await killAtPoint('core.intake.after-decision', { chat });
+    const { update } = await toDraft(chat, 'R1.S2.K4', events);
+    events.push(`killed ${(await k.done).killed} at core.intake.after-decision`);
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S2.K5', 'worker killed while Core\'s intake of its update was answering; back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('core.intake.after-decision', { chat }, 'worker-blue');
+    const { update } = await toDraft(chat, 'R1.S2.K5', events);
+    events.push(`killed ${(await k.done).killed} while Core was held at core.intake.after-decision`);
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.S2.K5b', 'worker killed while the intake classifier (a paid call, slowed to 4 s) answers its update', async (chat, events) => {
+    await fakes.modelDelay({ schema: 'telegram_classifier', delayMs: 4000, n: 1 });
+    const before = (await fakes.modelLedger()).arrivals.length;
+    const update = await sendBrief(chat, 'R1.S2.K5b');
+    events.push(`update ${update.update_id} in chat ${chat}`);
+    await waitUntil('the classifier request', async () => (await fakes.modelLedger()).arrivals.slice(before).some((a: any) => a.schema === 'telegram_classifier'), 60_000, 200);
+    kill('worker-blue');
+    events.push('killed worker-blue while the classifier was answering');
+    await sleep(2000);
+    start('worker-blue');
+    await waitHealthy('worker-blue');
+    const taskId = await draftOf(chat);
+    events.push(`task ${taskId}: draft in chat`);
+    // Core's first intake call may still be classifying when Restate retries the step on the restarted
+    // worker, so the design allows the classifier twice here (PHASE2_DESIGN.md 2.1 acceptance (c)).
+    return { delivered: false, classifierAllowance: 2, after: () => checkIntake(chat, [update.update_id]) };
+  }, 12 * 60_000, 'worker-poller');
+
+  scenario('R1.DUP', 'the same update handed on twice (Restate\'s key, then past it) makes one task and one acknowledgement', async (chat, events) => {
+    const { update } = await toDraft(chat, 'R1.DUP', events);
+    const acksBefore = (await sentTo(chat)).length;
+    // The poller's key again: Restate answers with the invocation it has.
+    const again = await sendToChatInbox(chat, update, `tg-${update.update_id}`);
+    // Past Restate's key (a rollback to Core's poller, or the key's 7 days gone): a new invocation,
+    // and Core's intake answers it as the duplicate it is.
+    const other = await sendToChatInbox(chat, update, `chaos-dup-${update.update_id}`);
+    events.push(`sent again: tg key HTTP ${again}, another key HTTP ${other}`);
+    await waitUntil('the second hand-off to finish', async () => {
+      const res = await fetch(`${RESTATE_INGRESS_URL}/ChatInbox/${chat}/get`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null' });
+      const view = res.ok ? await res.json() as { lastUpdateId?: number; lastIntakeStatus?: number; at?: number } : null;
+      return view && view.lastUpdateId === update.update_id && view.lastIntakeStatus === 200 ? view : null;
+    }, 120_000, 500).then((view) => events.push(`ChatInbox view after the second hand-off: ${JSON.stringify(view)}`));
+    return {
+      delivered: false,
+      extra: [{ name: 'nothing new reached the chat after the update was handed on again', ok: (await sentTo(chat)).length === acksBefore, detail: `sends before=${acksBefore} after=${(await sentTo(chat)).length}` }],
+      after: () => checkIntake(chat, [update.update_id]),
+    };
+  }, 12 * 60_000, 'worker-poller');
 
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();

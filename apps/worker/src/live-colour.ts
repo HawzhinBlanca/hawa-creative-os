@@ -27,11 +27,14 @@ export function normaliseWorkerUri(uri: string): string {
   }
 }
 
-/** The address of the deployment that serves TaskWorkflow now, or null when none does. Throws when Restate does not answer. */
-export async function liveWorkerUri(adminUrl: string, fetcher: FetchLike, timeoutMs = 2000): Promise<string | null> {
-  const service = await fetcher(`${adminUrl}/services/TaskWorkflow`, { signal: AbortSignal.timeout(timeoutMs) });
+/**
+ * The address of the deployment that serves `serviceName` (TaskWorkflow unless named) now, or null
+ * when none does. Throws when Restate does not answer.
+ */
+export async function liveWorkerUri(adminUrl: string, fetcher: FetchLike, timeoutMs = 2000, serviceName = 'TaskWorkflow'): Promise<string | null> {
+  const service = await fetcher(`${adminUrl}/services/${encodeURIComponent(serviceName)}`, { signal: AbortSignal.timeout(timeoutMs) });
   if (service.status === 404) return null;
-  if (!service.ok) throw new Error(`Restate answered ${service.status} for TaskWorkflow`);
+  if (!service.ok) throw new Error(`Restate answered ${service.status} for ${serviceName}`);
   const deploymentId = ((await service.json()) as { deployment_id?: string }).deployment_id;
   if (!deploymentId) return null;
   const deployment = await fetcher(`${adminUrl}/deployments/${encodeURIComponent(deploymentId)}`, { signal: AbortSignal.timeout(timeoutMs) });
@@ -59,6 +62,13 @@ export interface LiveColourGateOptions {
   takeoverMs?: number;
   timeoutMs?: number;
   now?: () => number;
+  /**
+   * The service whose deployment decides the live colour. TaskWorkflow for the outbox; the Telegram
+   * poller (Phase 2.1) asks for ChatInbox, the service it hands updates to: a colour whose build is
+   * not the one Restate sends ChatInbox work to must not poll, and one that hosts no ChatInbox at all
+   * (a build from before 2.1) never does.
+   */
+  service?: string;
 }
 
 export class LiveColourGate {
@@ -76,7 +86,7 @@ export class LiveColourGate {
 
   private async refresh(): Promise<void> {
     try {
-      const live = await liveWorkerUri(this.options.adminUrl, this.options.fetcher || fetch, this.options.timeoutMs ?? 2000);
+      const live = await liveWorkerUri(this.options.adminUrl, this.options.fetcher || fetch, this.options.timeoutMs ?? 2000, this.options.service);
       const isSelf = live === this.selfUri;
       if (isSelf && this.liveSince === null) {
         this.liveSince = (await this.alone()) ? this.now - (this.options.takeoverMs ?? 70_000) : this.now;

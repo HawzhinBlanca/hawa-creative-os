@@ -1,7 +1,7 @@
 import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
 import { withStepChaosPoints, type WorkflowDurableContext, type WorkflowStepRetry } from './durable-context.js';
-import { withRlsContext, sql, createDb } from '@hawa/db';
+import { withRlsContext, sql, createDb, PostgresTelegramPollState, readTelegramKillSwitch, telegramBotKey } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
@@ -9,6 +9,10 @@ import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import { LiveColourGate, runWhileLive, backgroundLoopsFromEnv, type LoopHandle } from './live-colour.js';
 import { log, withInvocationLogContext } from './logging.js';
 import { automationMembershipGaps, servedTenantIds } from './automation-identity.js';
+import { chatInbox, useChatInboxCore } from './lifecycle/chat-inbox.js';
+import { createCoreClient } from './lifecycle/core-client.js';
+import { TelegramPoller, pollerConfigFromEnv, runPoller, type PollerLoopHandle } from './lifecycle/telegram-poller.js';
+import { WORKER_SERVICE_NAMES } from './services.js';
 
 const SERVICE_NAME = 'hawa-worker';
 // A long-running service that dies without saying why is the hardest kind of outage to diagnose,
@@ -117,10 +121,26 @@ const taskWorkflow = restate.workflow({
   },
 });
 
+// ChatInbox calls Core's internal intake with its own credential (HAWA_WORKER_TOKEN), never the
+// operator's bearer. Without it an update waits in its chat until the worker is configured.
+if (process.env.HAWA_WORKER_TOKEN?.trim()) {
+  useChatInboxCore(createCoreClient({ baseUrl: process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001', token: process.env.HAWA_WORKER_TOKEN.trim() }));
+}
+
+// Every service any build ever hosted stays bound (services.ts). A build that binds another set
+// would strand what Restate still routes to the old one, so it does not start.
+const boundServices = [taskService, taskWorkflow, chatInbox];
+const boundNames = boundServices.map((s) => s.name).sort();
+if (boundNames.join(',') !== [...WORKER_SERVICE_NAMES].sort().join(',')) {
+  log.fatal(`[${SERVICE_NAME}] FATAL this build binds ${boundNames.join(', ')} but hosts ${WORKER_SERVICE_NAMES.join(', ')} (services.ts); not serving`);
+  process.exit(1);
+}
+
 const restateHandler = restate
   .endpoint()
   .bind(taskService)
   .bind(taskWorkflow)
+  .bind(chatInbox)
   .http1Handler();
 
 let outboxConsumer: OutboxConsumer | null = null;
@@ -172,6 +192,29 @@ if (sharedDb && backgroundMode.mode !== 'misconfigured') {
   }
 }
 
+// The Telegram poller (Phase 2.1): only with HAWA_TELEGRAM_POLLER=worker, and only in the colour
+// Restate sends ChatInbox work to. Core stops polling under the same setting (apps/core/src/index.ts).
+const pollerConfig = pollerConfigFromEnv();
+let telegramPoller: TelegramPoller | null = null;
+let pollerLoop: PollerLoopHandle | null = null;
+let pollerGate: LiveColourGate | null = null;
+if (pollerConfig.mode === 'misconfigured') log.error(`[Worker] ${pollerConfig.reason}`);
+if (pollerConfig.mode === 'on' && sharedDb && backgroundMode.mode !== 'misconfigured') {
+  const scope = { tenantId: process.env.HAWA_TENANT_ID || '00000000-0000-4000-a000-000000000001', userId: SYSTEM_AUTOMATION_USER_ID };
+  const db = sharedDb;
+  telegramPoller = new TelegramPoller({
+    botToken: pollerConfig.botToken,
+    ingressUrl: pollerConfig.ingressUrl,
+    offsets: new PostgresTelegramPollState(db, scope, telegramBotKey(pollerConfig.botToken)),
+    killSwitch: () => readTelegramKillSwitch(db, scope),
+  });
+  pollerGate = backgroundMode.mode === 'live-colour'
+    ? new LiveColourGate({ adminUrl: backgroundMode.adminUrl, selfUri: backgroundMode.selfUri, takeoverMs: pollerConfig.takeoverMs, refreshMs: backgroundMode.refreshMs, service: 'ChatInbox' })
+    : null;
+  pollerLoop = runPoller(telegramPoller, { gate: pollerGate ?? { isLive: async () => true } });
+  log.info(`[Worker] Telegram poller runs${pollerGate ? ` while ${process.env.HAWA_WORKER_SELF_URI} serves ChatInbox` : ''}`);
+}
+
 const port = Number(process.env.PORT || 9080);
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -191,7 +234,7 @@ const server = http.createServer((req, res) => {
       const healthy = postgres !== 'disconnected';
       // Backlog or dead letters degrade the worker without failing the container health check.
       const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured'
-        || Boolean(automationGaps?.length);
+        || Boolean(automationGaps?.length) || pollerConfig.mode === 'misconfigured';
       res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
@@ -207,6 +250,10 @@ const server = http.createServer((req, res) => {
         background: backgroundMode.mode === 'always' ? 'always' : backgroundMode.mode === 'misconfigured' ? 'misconfigured' : liveGate!.state(),
         dependencies: { postgres },
         outbox,
+        // The Telegram poller (Phase 2.1): off (Core polls), misconfigured, or where it is.
+        telegramPoller: pollerConfig.mode === 'on'
+          ? { mode: 'on', background: telegramPoller ? (pollerGate ? pollerGate.state() : 'always') : 'not_started', ...(telegramPoller?.status() ?? {}) }
+          : pollerConfig.mode === 'misconfigured' ? { mode: 'misconfigured', reason: pollerConfig.reason } : { mode: 'off' },
         // Served tenants where the worker's own database user has no membership (see automationGaps).
         tenantsWithoutAutomationMembership: automationGaps,
         timestamp: new Date().toISOString(),
@@ -218,7 +265,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ready',
-      services: ['TaskService', 'TaskWorkflow'],
+      services: [...WORKER_SERVICE_NAMES],
       outboxConsumer: outboxConsumer ? 'active' : 'idle',
     }));
     return;
@@ -227,11 +274,12 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  log.info(`Hawa Worker listening on port ${port} with Restate services [TaskService, TaskWorkflow]`);
+  log.info(`Hawa Worker listening on port ${port} with Restate services [${WORKER_SERVICE_NAMES.join(', ')}]`);
 });
 
 const shutdown = () => {
   gatedLoop?.stop();
+  pollerLoop?.stop();
   if (outboxConsumer) {
     outboxConsumer.stop();
   }
