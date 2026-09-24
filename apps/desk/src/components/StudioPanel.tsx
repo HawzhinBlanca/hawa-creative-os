@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
+import { AuthorizedImage } from './AuthorizedImage.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -134,6 +135,8 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
   activeTask.current = taskId;
   const idempotencyKey = useRef<string>(crypto.randomUUID());
 
+  // Candidate pictures are signed-in Core addresses; <AuthorizedImage> fetches them with the
+  // session's header (ADR-035). A plain image tag sent none, so these showed nothing.
   const getMediaUrl = (url?: string | null): string => {
     if (!url) return '';
     return url;
@@ -768,7 +771,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                         title="Click to zoom candidate image"
                       >
                         {mediaPreviewUrl ? (
-                          <img
+                          <AuthorizedImage
                             src={mediaPreviewUrl}
                             alt={cand.concept?.name}
                             style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -878,7 +881,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                     }}
                     onClick={() => setZoomModalUrl(getMediaUrl(activeCandidate.previewUrl))}
                   >
-                    <img
+                    <AuthorizedImage
                       src={getMediaUrl(activeCandidate.previewUrl)}
                       alt={activeCandidate.concept?.name}
                       style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -955,7 +958,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                     onClick={() => activeCandidate.artUrl && setZoomModalUrl(getMediaUrl(activeCandidate.artUrl))}
                   >
                     {activeCandidate.artUrl ? (
-                      <img
+                      <AuthorizedImage
                         src={getMediaUrl(activeCandidate.artUrl)}
                         alt="Generated Artwork"
                         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
@@ -1286,7 +1289,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
               </button>
             </div>
             <div style={{ overflow: 'auto', padding: 12, display: 'flex', justifyContent: 'center' }}>
-              <img
+              <AuthorizedImage
                 src={zoomModalUrl}
                 alt="Zoomed candidate"
                 style={{ maxHeight: '80vh', maxWidth: '80vw', objectFit: 'contain' }}

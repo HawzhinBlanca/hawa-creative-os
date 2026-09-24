@@ -19,6 +19,16 @@ import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { validateLayoutV2 } from '../src/studio/validate-layout-v2.js';
 import { scaleNormalizedLayoutToV2, type NormalizedLayoutCandidate } from '../src/studio/layout-generator-v3.js';
 
+import { inlineSvgFiles } from '../src/studio/svg-files.js';
+/**
+ * The render's markup with its picture files put back inline: pictures are files beside the SVG
+ * (ADR-035), and these assertions read the markup as the one document it used to be.
+ */
+const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
+  const r = renderLayoutV2ToSvg(...args);
+  return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
+};
+
 /**
  * Designer photo treatments: zoom, circle and arch masks, fades, black-and-white, duotone and tint
  * filters, and outlines and glows around cut-out people. Each is deterministic and works on the
@@ -97,7 +107,7 @@ const BODY = { left: 240, right: 440, top: 520, bottom: 1040 };
 
 async function preview(layout: StudioLayoutV2, photos: Buffer[], cutouts?: Array<PhotoCutoutAsset | undefined>) {
   const result = await renderLayoutV2Async(layout, { copyText, photoDataUris: photos.map(uriOf), ...(cutouts ? { photoCutouts: cutouts } : {}) });
-  return { png: PNG.sync.read(result.png), noText: PNG.sync.read(result.noTextPng), svg: result.svg };
+  return { png: PNG.sync.read(result.png), noText: PNG.sync.read(result.noTextPng), svg: inlineSvgFiles(result.svg, result.files) };
 }
 
 interface DeckPicture {
@@ -273,7 +283,7 @@ describe('coverCrop with a zoom', () => {
     // Red top half, blue bottom half; zoom 2 on the middle shows the boundary at the box's centre.
     const halves = rgbaPng(200, 200, (_x, y) => (y < 100 ? RED : [30, 30, 200, 255]));
     const layout = withPhotos(framed({ zoom: 2 }));
-    const svg = renderLayoutV2ToSvg(layout, { copyText, photoDataUris: [uriOf(halves)] }).svg;
+    const svg = inlinedSvgOf(layout, { copyText, photoDataUris: [uriOf(halves)] }).svg;
     expect(svg).toContain('<svg id="photo-0" x="86" y="440" width="400" height="400" viewBox="50 50 100 100" preserveAspectRatio="none">');
     const { png } = await preview(layout, [halves]);
     expect(near(at(png, 286, 460), RED)).toBe(true);
@@ -409,14 +419,14 @@ describe('the preview draws each treatment', () => {
       framed({ filter: { kind: 'bw' }, mask: 'circle' }),
       { photoIndex: 1, role: 'portrait', x: 594, y: 440, width: 400, height: 400, filter: { kind: 'bw' }, fade: { edge: 'bottom', length: 0.3 } },
     );
-    const svg = renderLayoutV2ToSvg(layout, { copyText, photoDataUris: [uriOf(redPhoto()), uriOf(redPhoto())] }).svg;
+    const svg = inlinedSvgOf(layout, { copyText, photoDataUris: [uriOf(redPhoto()), uriOf(redPhoto())] }).svg;
     const ids = [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ['photo-0', 'photo-1', 'photo-clip-0', 'photo-clip-1', 'photo-filter-0', 'photo-filter-1', 'photo-fade-1']) {
       expect(ids).toContain(id);
     }
     // A cut-out's effects have their own ids too.
-    const cut = renderLayoutV2ToSvg(withPhotos(cutout({ outline: { color: GOLD, width: 4 }, glow: { color: GOLD, radius: 10 }, filter: { kind: 'bw' } })), {
+    const cut = inlinedSvgOf(withPhotos(cutout({ outline: { color: GOLD, width: 4 }, glow: { color: GOLD, radius: 10 }, filter: { kind: 'bw' } })), {
       copyText, photoCutouts: [person()],
     }).svg;
     const cutIds = [...cut.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
@@ -428,13 +438,13 @@ describe('the preview draws each treatment', () => {
 describe('untreated photos are drawn exactly as before', () => {
   it('in the preview: a framed photo, a zoom of 1, and a cut-out keep their markup', () => {
     const uri = uriOf(redPhoto());
-    const svg = renderLayoutV2ToSvg(withPhotos(framed({ radius: 24 })), { copyText, photoDataUris: [uri] }).svg;
+    const svg = inlinedSvgOf(withPhotos(framed({ radius: 24 })), { copyText, photoDataUris: [uri] }).svg;
     expect(svg).toContain(`<clipPath id="photo-clip-0"><rect x="86" y="440" width="400" height="400" rx="24" ry="24"/></clipPath>`);
     expect(svg).toContain(`<image id="photo-0" xlink:href="${uri}" x="86" y="440" width="400" height="400" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo-clip-0)"/>`);
-    expect(renderLayoutV2ToSvg(withPhotos(framed({ radius: 24, zoom: 1 })), { copyText, photoDataUris: [uri] }).svg).toBe(svg);
+    expect(inlinedSvgOf(withPhotos(framed({ radius: 24, zoom: 1 })), { copyText, photoDataUris: [uri] }).svg).toBe(svg);
 
     const asset = person();
-    const cut = renderLayoutV2ToSvg(withPhotos(cutout()), { copyText, photoCutouts: [asset] }).svg;
+    const cut = inlinedSvgOf(withPhotos(cutout()), { copyText, photoCutouts: [asset] }).svg;
     expect(cut).toContain(`<image id="photo-0" xlink:href="${uriOf(asset.png)}" x="140" y="440" width="400" height="600" preserveAspectRatio="none"/>`);
     expect(cut).not.toContain('<defs>');
   });
@@ -442,8 +452,8 @@ describe('untreated photos are drawn exactly as before', () => {
   it('in the preview: treating one photo leaves the other\'s markup and the rest of the design alone', () => {
     const uri = uriOf(redPhoto());
     const other: PhotoElement = { photoIndex: 1, role: 'portrait', x: 594, y: 440, width: 400, height: 400 };
-    const plain = renderLayoutV2ToSvg(withPhotos(framed(), other), { copyText, photoDataUris: [uri, uri] }).svg;
-    const treated = renderLayoutV2ToSvg(withPhotos(framed({ mask: 'arch', filter: { kind: 'bw' } }), other), { copyText, photoDataUris: [uri, uri] }).svg;
+    const plain = inlinedSvgOf(withPhotos(framed(), other), { copyText, photoDataUris: [uri, uri] }).svg;
+    const treated = inlinedSvgOf(withPhotos(framed({ mask: 'arch', filter: { kind: 'bw' } }), other), { copyText, photoDataUris: [uri, uri] }).svg;
     const untouched = `<image id="photo-1" xlink:href="${uri}" x="594" y="440" width="400" height="400" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo-clip-1)"/>`;
     expect(plain).toContain(untouched);
     expect(treated).toContain(untouched);
@@ -597,7 +607,7 @@ describe('outlines and glows as pictures (ADR-036 section 2.2)', () => {
 
   it('draws an outline and a glow with no SVG filter: pictures at the preview\'s pixels and at the deck\'s', async () => {
     const layout = withPhotos(cutout({ outline: { color: '#FFFFFF', width: 24 }, glow: { color: GOLD, radius: 30 } }));
-    const svg = renderLayoutV2ToSvg(layout, { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [big()] }).svg;
+    const svg = inlinedSvgOf(layout, { copyText, photoDataUris: [uriOf(redPhoto())], photoCutouts: [big()] }).svg;
     expect(svg).not.toContain('feMorphology');
     expect(svg).not.toContain('<filter');
     const embedded = (kind: string) => PNG.sync.read(Buffer.from(svg.match(new RegExp(`<image id="photo-${kind}-0" xlink:href="data:image/png;base64,([^"]+)"`))![1], 'base64'));

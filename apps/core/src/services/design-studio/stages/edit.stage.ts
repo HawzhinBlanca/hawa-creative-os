@@ -184,7 +184,7 @@ export async function runDirectedEditStage(
   // run failed after paying for the edit (2026-09-23), so the edit is held to it here.
   const qaContext = hardQaContextFor(ctx);
   const renderOptions = {
-    photoDataUris: ctx.photos?.map((p) => p.dataUrl),
+    photoFiles: ctx.photos?.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })),
     photoCutouts: ctx.photoCutouts,
     copyText,
     artImagePath: parent.artPng ? `data:image/png;base64,${parent.artPng.toString('base64')}` : undefined,

@@ -52,11 +52,14 @@ export async function blobResponse(c: Context, store: BlobStore, ref: BlobRef, o
     return new Response(null, { status: 200, headers });
   }
 
-  const etag = `"sha256-${checked.sha256}"`;
-  headers.set('ETag', etag);
-  if (etagMatches(c.req.header('If-None-Match'), etag)) {
-    headers.delete('Content-Type');
-    return new Response(null, { status: 304, headers });
+  // The ETag is the hash too, so a response that hides the hash has none.
+  if (o.exposeSha !== false) {
+    const etag = `"sha256-${checked.sha256}"`;
+    headers.set('ETag', etag);
+    if (etagMatches(c.req.header('If-None-Match'), etag)) {
+      headers.delete('Content-Type');
+      return new Response(null, { status: 304, headers });
+    }
   }
   const stream = await store.open(checked);
   headers.set('Content-Length', String(checked.size));

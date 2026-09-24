@@ -66,6 +66,8 @@ export interface CreateAppOptions {
   designStudioOptions?: DesignStudioServiceOptions;
   designStudioService?: DesignStudioService;
   db?: Kysely<Database>;
+  /** The file store (ADR-035); defaults to HAWA_BLOB_DIR's (services/blob-store-context.ts). */
+  blobStore?: import('@hawa/db').BlobStore;
   publicationRepo?: PublicationRepository;
   telegramActionTokenService?: TelegramActionTokenService;
   telegramBridge?: TelegramBridgeDaemon;

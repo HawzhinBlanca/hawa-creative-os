@@ -1,6 +1,7 @@
 import { checkCanvaPptx } from '@hawa/qa';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
-import { sql, withRlsContext, CanvaBindingRepository, type Database, type Kysely } from '@hawa/db';
+import { sql, withRlsContext, CanvaBindingRepository, type BlobStore, type Database, type Kysely } from '@hawa/db';
+import { blobStoreFor, putToStore } from './blob-store-context.js';
 import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestNeverSent } from '@hawa/integrations';
 
 type Scope = { tenantId: string; actorId: string; role?: string };
@@ -50,6 +51,8 @@ export class CanvaTokenCipher {
 export interface CanvaServiceOptions {
   clientId?: string; clientSecret?: string; redirectUri?: string; encryptionKey?: string;
   fetcher?: typeof fetch;
+  /** Where editable sources are stored (ADR-035); HAWA_BLOB_DIR's when absent. */
+  blobStore?: BlobStore | null;
   /**
    * The client's waits between attempts (packages/integrations canva-connect-client.ts): status reads,
    * and create calls Canva refused for the moment. Tests shorten them; production keeps the defaults.
@@ -307,6 +310,9 @@ export class CanvaConnectService {
     if(!task?.client_id)fail(404,'CANVA_TASK_NOT_FOUND','Select a client before creating a design');
     const requestHash=hash(JSON.stringify(source.manifest));
     const client=await this.authorizedClient(s);
+    // The source to the file store first (ADR-035). A studio or planner source is already there under
+    // the same hash, so this finds the file and writes nothing; its bytes stay in the row until the strip.
+    await putToStore(blobStoreFor(this.db,this.options.blobStore),source.bytes,'application/vnd.openxmlformats-officedocument.presentationml.presentation','an editable source');
     const claimed=await this.tx(s,async db=>{
       const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');

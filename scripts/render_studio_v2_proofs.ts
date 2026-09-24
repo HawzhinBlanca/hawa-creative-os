@@ -5,6 +5,7 @@ import {
   comparePngBuffers,
   type RenderLayoutV2Result,
 } from '../packages/creative/src/studio/render-layout-v2.js';
+import { inlineSvgFiles } from '../packages/creative/src/studio/svg-files.js';
 import type { StudioLayoutV2 } from '../packages/creative/src/studio/layout-v2.js';
 import { validateLayoutV2 } from '../packages/creative/src/studio/validate-layout-v2.js';
 
@@ -444,8 +445,9 @@ async function main() {
 
     fs.writeFileSync(fullPngPath, res.png);
     fs.writeFileSync(noTextPngPath, res.noTextPng);
-    fs.writeFileSync(fullSvgPath, res.svg, 'utf-8');
-    fs.writeFileSync(noTextSvgPath, res.noTextSvg, 'utf-8');
+    // The render's SVGs read their pictures as files beside them (ADR-035); a saved proof opens alone.
+    fs.writeFileSync(fullSvgPath, inlineSvgFiles(res.svg, res.files), 'utf-8');
+    fs.writeFileSync(noTextSvgPath, inlineSvgFiles(res.noTextSvg, res.files), 'utf-8');
 
     // Save golden if not present or initialize
     if (!fs.existsSync(goldenPngPath)) {

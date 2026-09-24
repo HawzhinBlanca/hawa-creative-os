@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
-import { createDb, withRlsContext, sql } from '@hawa/db';
+import { createHash, randomUUID } from 'node:crypto';
+import { blobStoreFromEnv, createDb, withRlsContext, sql } from '@hawa/db';
 import { type StudioLayoutV2, type PhotoCutoutAsset } from '@hawa/creative';
 import { PhotoCutouts, arrangeCutouts, CUTOUT_WORDS, reasonFor } from '../src/services/design-studio/photo-cutouts.js';
 import { editMeans, carryOver } from '../src/services/design-studio/stages/edit.stage.js';
@@ -187,6 +187,35 @@ describe.skipIf(!url)('cut-outs are made once and kept (PostgreSQL, application 
     const again = await cutouts.forPhotos(tx, tenantId, [photo]);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(again.assets[0]?.png.equals(first.assets[0]!.png)).toBe(true);
+  });
+
+  it('writes the cut-out and its shadow to the file store too, and reads them back from it (ADR-035)', async () => {
+    const store = blobStoreFromEnv(db);
+    // A cut-out distinct from the other tests': two different one-pixel PNGs.
+    const person = Buffer.from(ONE_PIXEL, 'base64');
+    const shadow = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgEpFrAAABJQC97kY5HgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const fetcher = vi.fn(async () =>
+      new Response(JSON.stringify({ ...reply(true), png: person.toString('base64'), shadow: { png: shadow.toString('base64'), width: 1, height: 1, x: 0, y: 0 } }), { status: 200 })
+    );
+    const photo = { dataUrl: '', bytes: Buffer.from(`photo ${randomUUID()}`), mimeType: 'image/jpeg' as const };
+    const cutouts = new PhotoCutouts({ url: 'http://cutout:8090', fetcher: fetcher as unknown as typeof fetch, blobStore: store });
+    await cutouts.forPhotos(tx, tenantId, [photo]);
+    const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+    const source = createHash('sha256').update(photo.bytes).digest('hex');
+    const row = await tx(async (trx) =>
+      (await sql<{ png_sha256: string; shadow_sha256: string; has_png: boolean }>`SELECT png_sha256, shadow_sha256, png IS NOT NULL AS has_png
+        FROM hawa.photo_cutouts WHERE source_sha256 = ${source}`.execute(trx)).rows[0]
+    );
+    expect(row).toEqual({ png_sha256: sha(person), shadow_sha256: sha(shadow), has_png: true });
+    expect((await store.read(sha(person), { verify: true })).equals(person)).toBe(true);
+    expect((await store.read(sha(shadow), { verify: true })).equals(shadow)).toBe(true);
+    const again = await cutouts.forPhotos(tx, tenantId, [photo]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(again.assets[0]?.png.equals(person)).toBe(true);
+    expect(again.assets[0]?.shadowPng?.equals(shadow)).toBe(true);
   });
 
   it('keeps a failed cut-out with why, and never places it', async () => {

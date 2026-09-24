@@ -10,11 +10,11 @@ import {
   decodeBase64Image,
   getStudy,
   isUuid,
-  judgeImage,
+  judgeImageSource,
   judgeNext,
   listStudies,
   lockStudy,
-  readPairImage,
+  pairImageSource,
   recordJudgment,
   resolveJudge,
   revokeJudge,
@@ -22,8 +22,11 @@ import {
   studyResults,
   type ComparisonScope,
   type JudgeSession,
+  type PairImageSource,
 } from '../services/comparison-study.js';
 import { judgePageHtml, judgePagePolicy } from './judge-page.js';
+import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
+import { blobResponse } from '../services/blob-response.js';
 
 /**
  * The blinded comparison of Hawa with the office's designer (services/comparison-study.ts).
@@ -64,6 +67,49 @@ export function judgeLink(token: string): { path: string; url: string | null } {
 
 export function registerComparisonRoutes(ctx: RouteContext) {
   const { app, registerRoute, db, verifyRequestAuth, problem } = ctx;
+  // Pair pictures are stored files (ADR-035); a pair from before the store still has its bytes.
+  const blobStore = blobStoreFor(db, ctx.options?.blobStore);
+
+  /**
+   * Answers with a pair's picture, authorised already on its row: the stored file through
+   * blobResponse (nginx sends it in production), else the row's bytes with the same headers.
+   */
+  const servePairImage = async (
+    c: Context,
+    source: PairImageSource | null,
+    o: { cacheControl: string; disposition?: string; exposeSha?: boolean; accelPrefix?: string; headers?: Record<string, string> },
+    /** The same source with the row's bytes, read only when the stored file turns out to be lost. */
+    withBytes: () => Promise<PairImageSource | null>
+  ): Promise<Response> => {
+    if (!source) return problem(c, 404, 'Not Found');
+    // The judge routes set no-store on the context, and Hono copies the context's headers onto a
+    // returned Response: the picture's own caching is set there too, or it would be overwritten.
+    c.header('Cache-Control', o.cacheControl);
+    let res: Response | undefined;
+    if (source.ref && blobStore) {
+      try {
+        res = await blobResponse(c, blobStore, source.ref, o);
+      } catch (err) {
+        // A lost file in stream mode: the row's bytes, still there until the strip.
+        if (!storedFileLost(err, 'a comparison picture')) throw err;
+        source = (await withBytes()) ?? source;
+      }
+    }
+    if (!res && source.bytes) {
+      res = new Response(new Uint8Array(source.bytes), {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': o.cacheControl,
+          'X-Content-Type-Options': 'nosniff',
+          ...(o.disposition ? { 'Content-Disposition': o.disposition } : {}),
+        },
+      });
+    }
+    if (!res) return problem(c, 404, 'Not Found');
+    for (const [name, value] of Object.entries(o.headers ?? {})) res.headers.set(name, value);
+    return res;
+  };
 
   /** The office's scope, or a response refusing the caller. */
   const officeScope = (c: Context): ComparisonScope | Response => {
@@ -139,11 +185,8 @@ export function registerComparisonRoutes(ctx: RouteContext) {
     const file = c.req.param('file');
     const arm = file === 'hawa.png' ? 'hawa' : file === 'designer.png' ? 'designer' : null;
     if (!arm) return problem(c, 404, 'Not Found');
-    const png = await readPairImage(database, scope, c.req.param('id') || '', c.req.param('pairId') || '', arm);
-    if (!png) return problem(c, 404, 'Not Found');
-    c.header('Content-Type', 'image/png');
-    c.header('Cache-Control', 'private, no-store');
-    return c.body(new Uint8Array(png), 200);
+    const at = [database, scope, c.req.param('id') || '', c.req.param('pairId') || '', arm] as const;
+    return servePairImage(c, await pairImageSource(...at), { cacheControl: 'private, no-store' }, () => pairImageSource(...at, { withBytes: true }));
   }));
 
   // ---- Judge routes: the token in the path is the only credential. ----
@@ -212,14 +255,19 @@ export function registerComparisonRoutes(ctx: RouteContext) {
     const side = c.req.param('side');
     const pairId = c.req.param('pairId') || '';
     if ((side !== 'left' && side !== 'right') || !isUuid(pairId)) return notFound(c);
-    const png = await judgeImage(database, session, pairId, side);
-    if (!png) return notFound(c);
-    c.header('Content-Type', 'image/png');
-    // A neutral name, so a saved image says nothing about where it came from.
-    c.header('Content-Disposition', 'inline; filename="design.png"');
-    // The address holds the judge's token, so only that judge's browser can reuse it.
-    c.header('Cache-Control', 'private, max-age=3600');
-    return c.body(new Uint8Array(png), 200);
+    const source = await judgeImageSource(database, session, pairId, side);
+    if (!source) return notFound(c);
+    // A neutral name, so a saved image says nothing about where it came from. The address holds the
+    // judge's token, so only that judge's browser can reuse it. No hash: it would tell a judge which
+    // arm a picture came from. Core sends it itself, never through nginx's X-Accel-Redirect, which
+    // drops the no-referrer and noindex headers below; a judge sees a few small pictures.
+    return servePairImage(c, source, {
+      cacheControl: 'private, max-age=3600',
+      disposition: 'inline; filename="design.png"',
+      exposeSha: false,
+      accelPrefix: '',
+      headers: { 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow' },
+    }, () => judgeImageSource(database, session, pairId, side, { withBytes: true }));
   }));
 
   onJudgePaths('post', '/judge/:token/judgments', judge(async (c, session, database) => {

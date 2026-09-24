@@ -21,6 +21,16 @@ import { sniffImageType, relabelDataUri } from '../src/studio/image-type.js';
 import { uprightPhotoDataUrl } from '../src/studio/photo-upright.js';
 import type { StudioLayoutV2, TextElement } from '../src/studio/layout-v2.js';
 
+import { inlineSvgFiles } from '../src/studio/svg-files.js';
+/**
+ * The render's markup with its picture files put back inline: pictures are files beside the SVG
+ * (ADR-035), and these assertions read the markup as the one document it used to be.
+ */
+const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
+  const r = renderLayoutV2ToSvg(...args);
+  return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
+};
+
 /**
  * ADR-036 section 2.1: SVG the rasteriser cannot misread. Each block below failed on the renderer as it
  * was at f143aa9.
@@ -76,7 +86,7 @@ function inkColumns(png: Buffer, y0: number, y1: number): { left: number; right:
 
 describe('text markup the rasteriser cannot misread', () => {
   it('puts no whitespace between tspans and no whitespace-only text inside <text>', () => {
-    const { svg } = renderLayoutV2ToSvg(
+    const { svg } = inlinedSvgOf(
       layoutWith([
         { align: 'center' },
         { align: 'right', y: 300, accentColor: '#F7B500', accentText: 'Quality' },
@@ -107,7 +117,7 @@ describe('text markup the rasteriser cannot misread', () => {
       { align: 'left' as const, anchor: 'start', x: 100 },
     ];
     for (const c of cases) {
-      const { svg } = renderLayoutV2ToSvg(layoutWith([{ align: c.align, rtl: true, fontFamily: 'Noto Sans Arabic', width: 800 }]), {
+      const { svg } = inlinedSvgOf(layoutWith([{ align: c.align, rtl: true, fontFamily: 'Noto Sans Arabic', width: 800 }]), {
         copyText: { 0: copy },
       });
       expect(svg).not.toContain('direction=');
@@ -199,7 +209,7 @@ describe('image types from magic bytes', () => {
         logo: { x: 20, y: 20, width: 100, height: 100 },
         photos: [{ photoIndex: 0, role: 'portrait', x: 600, y: 200, width: 200, height: 200 }] as any,
       });
-      const { svg } = renderLayoutV2ToSvg(layout, {
+      const { svg } = inlinedSvgOf(layout, {
         artImagePath: artJpgHoldingPng,
         logoPath: logoPngHoldingSvg,
         photoDataUris: [`data:image/png;base64,${jpeg.toString('base64')}`],
@@ -229,8 +239,8 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
 
   it('embeds the logo at the size it is drawn, and reuses it', () => {
     const before = logoPrescaleStats();
-    const a = renderLayoutV2ToSvg(layout(), {}).svg;
-    const b = renderLayoutV2ToSvg(layout(), {}).svg;
+    const a = inlinedSvgOf(layout(), {}).svg;
+    const b = inlinedSvgOf(layout(), {}).svg;
     const after = logoPrescaleStats();
     const href = /<image id="logo" xlink:href="data:image\/png;base64,([^"]+)"/.exec(a)?.[1];
     expect(href).toBeDefined();
@@ -242,14 +252,18 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
   });
 
   it('draws the same pixels as scaling the full-size logo inside the design', async () => {
-    const { svg, noTextSvg } = renderLayoutV2ToSvg(layout(), {});
-    const original = getKaaeOfficialLogoDataUri();
+    // Both logos are files beside the SVG (ADR-035): the full-size one as a data URI is 2 MB.
+    const { svg, noTextSvg, files } = renderLayoutV2ToSvg(layout(), {});
+    const original = Buffer.from(getKaaeOfficialLogoDataUri().split(',')[1], 'base64');
     const unscaled = svg.replace(
       /<image id="logo"[^>]*\/>/,
-      `<image id="logo" xlink:href="${original}" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" preserveAspectRatio="xMidYMid meet"/>`
+      `<image id="logo" xlink:href="logo-full.png" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" preserveAspectRatio="xMidYMid meet"/>`
     );
     expect(unscaled).not.toBe(svg);
-    const [now, then] = await Promise.all([svgToPngAsync(svg, 1000, 600), svgToPngAsync(unscaled, 1000, 600)]);
+    const [now, then] = await Promise.all([
+      svgToPngAsync(svg, 1000, 600, undefined, files),
+      svgToPngAsync(unscaled, 1000, 600, undefined, { ...files, 'logo-full.png': original }),
+    ]);
     const diff = comparePngBuffers(now, then);
     expect(diff.diffPixels, `${diff.diffPixels} of ${diff.totalPixels} pixels differ by more than 5`).toBe(0);
     expect(noTextSvg).toContain('id="logo"');
@@ -257,7 +271,7 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
 
   it('leaves a vector logo as it is', () => {
     const vector = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>').toString('base64')}`;
-    const { svg } = renderLayoutV2ToSvg(layout(), { logoDataUri: vector });
+    const { svg } = inlinedSvgOf(layout(), { logoDataUri: vector });
     expect(svg).toContain(`xlink:href="${vector}"`);
   });
 

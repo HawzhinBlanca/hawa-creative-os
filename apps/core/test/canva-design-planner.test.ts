@@ -2,7 +2,7 @@ import { describe,it,expect,vi,beforeAll,afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createDb,sql } from '@hawa/db';
+import { blobStoreFromEnv,createDb,sql } from '@hawa/db';
 import { CanvaDesignPlanner,savedDesignCopy } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
@@ -57,6 +57,9 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('planned');expect(saved.result.manifest.copy).toEqual(['EXACT TITLE','Exact body. Never rewrite it.']);
     expect(saved.result.receipt.returnedModel).toBe('gpt-6-astra');
+    // The source is in the file store too (ADR-035), under the hash the plan names, and the import reads it.
+    const stored=await blobStoreFromEnv(db).read(saved.source_sha256,{verify:true});
+    expect(stored.equals(Buffer.from(saved.source_content))).toBe(true);
     await new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher:remote}).resume(scope,id,saved.id);
     expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).toHaveBeenCalledWith(scope,id,'plan-'+saved.id,expect.objectContaining({sha256:saved.source_sha256}));
     await expect(sql`UPDATE hawa.canva_design_plans SET request='{}'::jsonb WHERE id=${saved.id}::uuid`.execute(db)).rejects.toThrow('immutable');

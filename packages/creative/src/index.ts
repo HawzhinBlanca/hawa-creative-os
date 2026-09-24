@@ -18,6 +18,7 @@ export * from './studio/layout-v2.js';
 export * from './studio/photo-cutout.js';
 export * from './studio/photo-crop.js';
 export * from './studio/photo-upright.js';
+export * from './studio/svg-files.js';
 export * from './studio/photo-treatments.js';
 export * from './studio/validate-layout-v2.js';
 export * from './studio/layout-metrics.js';

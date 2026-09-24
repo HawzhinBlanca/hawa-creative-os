@@ -25,7 +25,7 @@ export async function runRenderStage(
       copyText: copyMap,
       artImagePath: artDataUri,
       logoDataUri,
-      photoDataUris: ctx.photos?.map((p) => p.dataUrl),
+      photoFiles: ctx.photos?.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })),
       photoCutouts: ctx.photoCutouts,
     });
 

@@ -15,6 +15,7 @@ import {
 import { coverCrop, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import { hexToRgb } from './color-science.js';
 import { cutoutEffectRasterCached, type FadeRamp, type OutlineCorners } from './cutout-effect-raster.js';
+import { svgFileName } from './svg-files.js';
 
 /**
  * Designer treatments of a client's photo: a circle or arch mask, a fade into the background, a
@@ -103,6 +104,12 @@ export interface PhotoFragment {
    * pixels, which `svg` embeds. The deck places these bytes as they are, with no rasterising.
    */
   raster?: Buffer;
+  /**
+   * The pictures `defs` and `svg` read by file name, which the rasteriser writes beside the SVG
+   * (svg-files.ts): a cut-out's PNG, an outline's or a glow's. A framed photo's picture is the
+   * caller's, named by it. None of them is inlined as a data URI (ADR-035).
+   */
+  files?: Record<string, Buffer>;
 }
 
 /**
@@ -311,7 +318,9 @@ export function croppedPhotoSvg(
 export function framedPhotoFragment(
   photo: PhotoElement,
   href: string,
-  pixels: { width: number; height: number } | null
+  pixels: { width: number; height: number } | null,
+  /** The file `href` names, when it is a file beside the SVG, so the deck's bake can write it. */
+  files?: Record<string, Buffer>
 ): PhotoFragment {
   const box: Box = { x: photo.x, y: photo.y, width: photo.width, height: photo.height };
   const index = photo.photoIndex;
@@ -333,19 +342,21 @@ export function framedPhotoFragment(
     `<g><defs>${defs}</defs>` +
     `<g clip-path="url(#${clipId})"${photo.fade ? ` mask="url(#${fadeId})"` : ''}>${filtered}</g>` +
     `</g>`;
-  return { defs: '', svg, rect: box, ...(crop ? { sourceScale: crop.sw / box.width } : {}) };
+  return { defs: '', svg, rect: box, ...(crop ? { sourceScale: crop.sw / box.width } : {}), ...(files ? { files } : {}) };
 }
 
 /**
  * The cut-out's picture at the person's rect, as a definition the treated person `<use>`s (id
  * `photo-source-<index>`), and its source pixels per layout pixel.
  */
-function cutoutSource(index: number, png: Buffer, rect: Box): { id: string; defs: string; sourceScale?: number } {
+function cutoutSource(index: number, png: Buffer, rect: Box): { id: string; defs: string; files: Record<string, Buffer>; sourceScale?: number } {
   const id = `photo-source-${index}`;
   const pixels = pngPixelSize(png);
+  const file = svgFileName(png, 'cutout');
   return {
     id,
-    defs: `<image id="${id}" xlink:href="data:image/png;base64,${png.toString('base64')}" x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" preserveAspectRatio="none"/>`,
+    defs: `<image id="${id}" xlink:href="${file}" x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" preserveAspectRatio="none"/>`,
+    files: { [file]: png },
     ...(pixels && rect.width > 0 ? { sourceScale: pixels.width / rect.width } : {}),
   };
 }
@@ -379,7 +390,7 @@ export function cutoutPersonFragment(photo: PhotoElement, png: Buffer, rect: Box
     (photo.filter ? colourFilterDef(filterId, photo.filter, region) : '');
   const person = `<use id="photo-${index}" xlink:href="#${source.id}"${photo.filter ? ` filter="url(#${filterId})"` : ''}/>`;
   const svg = `<g>${defs ? `<defs>${defs}</defs>` : ''}${photo.fade ? `<g mask="url(#${fadeId})">${person}</g>` : person}</g>`;
-  return { defs: source.defs, svg, rect: region, ...(source.sourceScale !== undefined ? { sourceScale: source.sourceScale } : {}) };
+  return { defs: source.defs, svg, rect: region, files: source.files, ...(source.sourceScale !== undefined ? { sourceScale: source.sourceScale } : {}) };
 }
 
 /**
@@ -515,10 +526,11 @@ export function cutoutEffectFragment(
     // As the person's fade mask writes the ramp, to a thousandth of a pixel.
     ...(fade ? { fade: { x1: n(fade.x1), y1: n(fade.y1), x2: n(fade.x2), y2: n(fade.y2) } } : {}),
   });
+  const file = svgFileName(raster, kind);
   const svg =
-    `<image id="photo-${kind}-${photo.photoIndex}" xlink:href="data:image/png;base64,${raster.toString('base64')}" ` +
+    `<image id="photo-${kind}-${photo.photoIndex}" xlink:href="${file}" ` +
     `x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" preserveAspectRatio="none"/>`;
-  return { ...placed, svg, ...(target === 'deck' ? { raster } : {}) };
+  return { ...placed, svg, files: { [file]: raster }, ...(target === 'deck' ? { raster } : {}) };
 }
 
 /**

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import {
   sql,
   withRlsContext,
+  type BlobStore,
   type Database,
   type Kysely,
   DesignStudioRepository,
@@ -30,6 +31,7 @@ import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
+import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -136,6 +138,8 @@ export interface DesignStudioServiceOptions {
   maxRetries?: number;
   /** Minutes without a write after which an unfinished run no longer holds a studio slot. */
   staleRunMinutes?: number;
+  /** The file store candidate pictures are written to (ADR-035); HAWA_BLOB_DIR's when absent. */
+  blobStore?: BlobStore | null;
 }
 
 export interface StudioResumeResult {
@@ -157,15 +161,20 @@ export class DesignStudioService {
   private repo: DesignStudioRepository;
   private inFlightResumes = new Map<string, Promise<StudioResumeResult>>();
   /** People cut out of client photos (ADR-032); unconfigured without CUTOUT_URL, and then photos stay framed. */
-  private cutouts = new PhotoCutouts();
+  private cutouts: PhotoCutouts;
 
   constructor(
     private db: Kysely<Database>,
     private canva?: CanvaConnectService,
     private options: DesignStudioServiceOptions = {}
   ) {
-    this.repo = new DesignStudioRepository(db);
+    this.blobs = blobStoreFor(db, options.blobStore);
+    this.repo = new DesignStudioRepository(db, this.blobs);
+    this.cutouts = new PhotoCutouts({ blobStore: this.blobs });
   }
+
+  /** Where candidate pictures and cut-outs are stored (ADR-035); null keeps them in rows only. */
+  private readonly blobs: BlobStore | null;
 
   private tx<T>(s: Scope, fn: (db: Kysely<Database>) => Promise<T>): Promise<T> {
     return withRlsContext(this.db, { tenantId: s.tenantId, userId: s.actorId, role: 'operator' }, fn);
@@ -729,7 +738,7 @@ export class DesignStudioService {
   ): Promise<{ runId: string; candidateId: string; layout: StudioLayoutV2; previewPng?: Buffer; artPng?: Buffer; concept: unknown } | undefined> {
     const row = await this.tx(s, async (db) =>
       (
-        await sql<{ run_id: string; candidate_id: string; layouts: unknown; preview_png: Buffer | null; art_png: Buffer | null; concept: unknown }>`SELECT r.id AS run_id, c.id AS candidate_id, c.layouts, c.preview_png, c.art_png, c.concept
+        await sql<{ run_id: string; candidate_id: string; layouts: unknown; preview_png: Buffer | null; preview_sha256: string | null; art_png: Buffer | null; art_sha256: string | null; concept: unknown }>`SELECT r.id AS run_id, c.id AS candidate_id, c.layouts, c.preview_png, c.preview_sha256, c.art_png, c.art_sha256, c.concept
           FROM hawa.design_studio_runs r JOIN hawa.design_studio_candidates c ON c.id = r.winner_candidate_id AND c.tenant_id = r.tenant_id
           WHERE r.tenant_id = ${s.tenantId}::uuid
             AND ${candidateId ? sql`c.id = ${candidateId}::uuid` : sql`r.task_id = ${parentTaskId}::uuid AND r.status IN ('transferred', 'degraded')`}
@@ -744,8 +753,8 @@ export class DesignStudioService {
       runId: String(row.run_id),
       candidateId: String(row.candidate_id),
       layout,
-      previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
-      artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+      previewPng: await this.repo.readCandidateImage(row, 'preview'),
+      artPng: await this.repo.readCandidateImage(row, 'art'),
       concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
     };
   }
@@ -1934,7 +1943,10 @@ export class DesignStudioService {
           if (ownPlan) {
             const result: { manifest?: Record<string, unknown> } | null = typeof ownPlan.result === 'string' ? JSON.parse(ownPlan.result) : ownPlan.result;
             planId = ownPlan.id;
-            source = { bytes: Buffer.from(ownPlan.source_content), sha256: ownPlan.source_sha256, manifest: result?.manifest || {} };
+            // The stored file when there is one, else the row's bytes (a plan from before the store).
+            const bytes = await readPreferringStore(this.blobs, ownPlan.source_sha256, ownPlan.source_content);
+            if (!bytes) return this.executeRung4Fallback(s, run, 'The saved studio plan has no source to import');
+            source = { bytes, sha256: ownPlan.source_sha256, manifest: result?.manifest || {} };
           } else {
             const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
             const activeRows = candidateRows.filter(
@@ -1989,6 +2001,8 @@ export class DesignStudioService {
               },
             };
 
+            // The deck to the file store before the plan row names it (ADR-035); its bytes stay in the row too.
+            await putToStore(this.blobs, transferResult.pptxBytes, 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'a studio plan source');
             await this.tx(s, async (db) => {
               // An earlier studio run's plan for this task (that run has ended: a task has one unfinished
               // run) is retired, so this run's plan can be written (canva_one_active_plan).

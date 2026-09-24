@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
 import type { ArtConfig, Box, Hex, StudioLayoutV2 } from './layout-v2.js';
+import { svgFileName } from './svg-files.js';
 import { ARABIC_SCRIPT_FAMILIES, effectiveLetterSpacingEm, fittedTextOf, fontFaceSupports, svgToPngAsync } from './render-layout-v2.js';
 import { photoLayers, type PhotoCutoutAsset } from './photo-cutout.js';
 import { coverCrop, imagePixelSize, photoZoomFactor, pngPixelSize, type CoverCropRect } from './photo-crop.js';
@@ -90,7 +91,7 @@ function focusedPicture(box: Box, pixels: { width: number; height: number }, cro
 async function bakePhotoFragment(fragment: PhotoFragment, rsvgConvertPath: string | undefined): Promise<Buffer> {
   if (fragment.raster) return fragment.raster;
   const size = photoBakePixelSize(fragment);
-  return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {});
+  return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {}, fragment.files);
 }
 
 /** One flat piece of the scrim, in layout pixels. */
@@ -527,7 +528,10 @@ export async function encodeStudioTransferV2(
     const trueCircle = p.width === p.height && (p.radius ?? 0) >= p.width / 2;
     const roundedCorners = (p.radius ?? 0) > 0 && !trueCircle;
     if (framedPhotoTreated(p) || roundedCorners) {
-      const framed = framedPhotoFragment(p, `data:${photo.mimeType};base64,${photo.bytes.toString('base64')}`, pixels);
+      // The photo is a file beside the fragment's SVG, not a data URI in it (ADR-035): a 12 MP photo
+      // as base64 is several times rsvg's attribute limit.
+      const file = svgFileName(photo.bytes, 'photo');
+      const framed = framedPhotoFragment(p, file, pixels, { [file]: photo.bytes });
       placeBaked(framed, await bakePhotoFragment(framed, options.rsvgConvertPath), `Photo ${p.photoIndex}`);
       continue;
     }

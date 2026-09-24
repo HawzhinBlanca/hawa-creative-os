@@ -11,6 +11,16 @@ import { prepareGeneratedLayoutV3, settlePhotos } from '../src/studio/pipeline-v
 import { scaleNormalizedLayoutToV2, type NormalizedLayoutCandidate } from '../src/studio/layout-generator-v3.js';
 import type { PhotoCutoutAsset } from '../src/studio/photo-cutout.js';
 
+import { inlineSvgFiles } from '../src/studio/svg-files.js';
+/**
+ * The render's markup with its picture files put back inline: pictures are files beside the SVG
+ * (ADR-035), and these assertions read the markup as the one document it used to be.
+ */
+const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
+  const r = renderLayoutV2ToSvg(...args);
+  return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
+};
+
 /**
  * Face-aware cropping of framed photos. A centred crop of a tall portrait into a square or wide box
  * cuts off the head; a focus point (from face detection) moves the crop to keep that part of the
@@ -146,7 +156,7 @@ describe('the preview crops a framed photo around its focus', () => {
 
   it('as a nested viewport whose viewBox is the coverCrop rectangle, clipped to the rounded box', () => {
     const uri = portraitUri();
-    const svg = renderLayoutV2ToSvg(focused(), { copyText, photoDataUris: [uri] }).svg;
+    const svg = inlinedSvgOf(focused(), { copyText, photoDataUris: [uri] }).svg;
     const crop = coverCrop(square, { width: 40, height: 80 }, headFocus);
     expect(crop).toEqual({ sx: 0, sy: 0, sw: 40, sh: 40 });
     const nested = svg.match(/<g clip-path="url\(#photo-clip-0\)"><svg id="photo-0" ([^>]*)><image ([^>]*)\/><\/svg><\/g>/);
@@ -168,7 +178,7 @@ describe('the preview crops a framed photo around its focus', () => {
     const uri = `data:image/png;base64,${rgbaPng(30, 70, () => BLUE).toString('base64')}`;
     const focus = { x: 0.5, y: 0.37 };
     const box = { x: 86, y: 420, width: 440, height: 333 };
-    const svg = renderLayoutV2ToSvg(withPhotos({ photoIndex: 0, role: 'portrait', ...box, focus }), { copyText, photoDataUris: [uri] }).svg;
+    const svg = inlinedSvgOf(withPhotos({ photoIndex: 0, role: 'portrait', ...box, focus }), { copyText, photoDataUris: [uri] }).svg;
     const viewBox = svg.match(/<svg id="photo-0" [^>]*viewBox="([^"]+)"/)![1].split(' ').map(Number);
     const crop = coverCrop(box, { width: 30, height: 70 }, focus);
     [crop.sx, crop.sy, crop.sw, crop.sh].forEach((v, i) => expect(Math.abs(viewBox[i] - v)).toBeLessThanOrEqual(0.0005));
@@ -194,10 +204,10 @@ describe('the preview crops a framed photo around its focus', () => {
 
   it('leaves a photo without a focus exactly as it was drawn before', () => {
     const uri = portraitUri();
-    const svg = renderLayoutV2ToSvg(unfocused(), { copyText, photoDataUris: [uri] }).svg;
+    const svg = inlinedSvgOf(unfocused(), { copyText, photoDataUris: [uri] }).svg;
     expect(svg).toContain(`<image id="photo-0" xlink:href="${uri}" x="86" y="420" width="440" height="440" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo-clip-0)"/>`);
     // A focus changes the photo's own markup and nothing else in the design.
-    const withFocus = renderLayoutV2ToSvg(focused(), { copyText, photoDataUris: [uri] }).svg;
+    const withFocus = inlinedSvgOf(focused(), { copyText, photoDataUris: [uri] }).svg;
     const focusedMarkup = withFocus.match(/<g clip-path="url\(#photo-clip-0\)"><svg id="photo-0"[\s\S]*?<\/svg><\/g>/)![0];
     const unfocusedMarkup = svg.match(/<image id="photo-0"[^>]*\/>/)![0];
     expect(withFocus.replace(focusedMarkup, unfocusedMarkup)).toBe(svg);
@@ -205,14 +215,14 @@ describe('the preview crops a framed photo around its focus', () => {
 
   it('falls back to the centred crop when the photo\'s size cannot be read, and never touches a cut-out', () => {
     const webp = 'data:image/webp;base64,UklGRgAAAABXRUJQ';
-    const before = renderLayoutV2ToSvg(unfocused(), { copyText, photoDataUris: [webp] }).svg;
-    expect(renderLayoutV2ToSvg(focused(), { copyText, photoDataUris: [webp] }).svg).toBe(before);
+    const before = inlinedSvgOf(unfocused(), { copyText, photoDataUris: [webp] }).svg;
+    expect(inlinedSvgOf(focused(), { copyText, photoDataUris: [webp] }).svg).toBe(before);
 
     const person: PhotoCutoutAsset = { png: rgbaPng(100, 150, () => RED), width: 100, height: 150 };
     const cut = (focus?: { x: number; y: number }) =>
       withPhotos({ photoIndex: 0, role: 'portrait', ...square, treatment: 'cutout', ...(focus ? { focus } : {}) });
-    const plain = renderLayoutV2ToSvg(cut(), { copyText, photoDataUris: [portraitUri()], photoCutouts: [person] }).svg;
-    expect(renderLayoutV2ToSvg(cut(headFocus), { copyText, photoDataUris: [portraitUri()], photoCutouts: [person] }).svg).toBe(plain);
+    const plain = inlinedSvgOf(cut(), { copyText, photoDataUris: [portraitUri()], photoCutouts: [person] }).svg;
+    expect(inlinedSvgOf(cut(headFocus), { copyText, photoDataUris: [portraitUri()], photoCutouts: [person] }).svg).toBe(plain);
   });
 });
 
