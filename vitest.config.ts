@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { existsSync, readFileSync, mkdtempSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { assertTestDatabaseEnv } from './packages/db/src/test-database-guard.js';
@@ -44,6 +44,18 @@ assertTestDatabaseEnv({ ...process.env, ...databaseEnv });
  */
 const spendStateDir = mkdtempSync(join(tmpdir(), 'hawa-test-spend-'));
 
+/**
+ * The content-addressed file store (ADR-035) has no default directory, and a test must never write
+ * into the office's (~/.hawa/blobs). This one is for files without a database, which can store
+ * nothing (a put needs its row), so one fixed directory serves every run; a file that clones databases
+ * gets its own (packages/db/test-support/test-database-clone.ts). The marker is what deploy.sh writes:
+ * the store refuses a directory without it.
+ */
+const blobDir = join(tmpdir(), 'hawa-test-blobs-nodb');
+mkdirSync(join(blobDir, 'sha256'), { recursive: true, mode: 0o755 });
+mkdirSync(join(blobDir, 'tmp'), { recursive: true, mode: 0o755 });
+writeFileSync(join(blobDir, '.hawa-blob-store'), 'sha256-v1\n', { mode: 0o644 });
+
 export default defineConfig({
   test: {
     globals: true,
@@ -76,6 +88,7 @@ export default defineConfig({
       HAWA_ACTION_HMAC_SECRET: 'test_hmac_sec',
       TELEGRAM_WEBHOOK_SECRET: ['expected', 'office', 'secret'].join('_'),
       HAWA_SPEND_STATE_DIR: spendStateDir,
+      HAWA_BLOB_DIR: blobDir,
       HAWA_RETRY_DELAY_MS: '10',
       HISTORICAL_DESIGNS_ARCHIVE_ROOT: resolve(import.meta.dirname, 'node_modules/.cache/historical-designs-test'),
       HAWA_EMULATE_PUBLISHER: 'true',

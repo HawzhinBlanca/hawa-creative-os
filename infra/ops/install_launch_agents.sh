@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Installs (or removes) the two per-user launch agents that keep the office stack alive unattended:
-#   design.hawa.watchdog        every 5 minutes and at login: infra/ops/watchdog.sh
-#   design.hawa.nightly-backup  03:30 local time:              infra/backup/nightly_backup.sh
+# Installs (or removes) the per-user launch agents that keep the office stack alive unattended:
+#   design.hawa.watchdog              every 5 minutes and at login: infra/ops/watchdog.sh
+#   design.hawa.nightly-backup        03:30 local time:              infra/backup/nightly_backup.sh
+#   design.hawa.backup-restore-drill  Sundays 04:00:                 infra/backup/backup_restore_drill.sh (schema parity)
+#   design.hawa.restore-drill         the 1st of each month, 05:00:  infra/backup/restore_drill.sh (data and files, ADR-035)
 #
 #   bash infra/ops/install_launch_agents.sh            # install or refresh
 #   bash infra/ops/install_launch_agents.sh --uninstall
@@ -24,8 +26,9 @@ carried_env() { # label -> <key>/<string> pairs for every HAWA_* variable the in
       printf '<key>%s</key><string>%s</string>' "$key" "$value"
     done
 }
-write_plist() { # label, script, schedule-xml
+write_plist() { # label, script, schedule-xml, [label whose HAWA_* settings to carry when this one has none]
   local carried; carried="$(carried_env "$1")"
+  if [[ -z "$carried" && -n "${4:-}" ]]; then carried="$(carried_env "$4")"; fi
   cat > "$AGENTS/$1.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -40,12 +43,17 @@ write_plist() { # label, script, schedule-xml
 </dict></plist>
 PLIST
 }
-for label in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill; do launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true; done
+AGENT_LABELS=(design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill)
+for label in "${AGENT_LABELS[@]}"; do launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true; done
 if [[ "${1:-}" == "--uninstall" ]]; then rm -f "$AGENTS"/design.hawa.*.plist; echo "launch agents removed"; exit 0; fi
 write_plist design.hawa.watchdog "$ROOT/infra/ops/watchdog.sh" "<key>RunAtLoad</key><true/><key>StartInterval</key><integer>300</integer>"
 write_plist design.hawa.nightly-backup "$ROOT/infra/backup/nightly_backup.sh" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>"
 write_plist design.hawa.backup-restore-drill "$ROOT/infra/backup/backup_restore_drill.sh" "<key>StartCalendarInterval</key><dict><key>Weekday</key><integer>7</integer><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>"
-for label in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill; do
+# The monthly drill restores the newest archived dump and its files; it carries the nightly job's
+# archive settings (destination, passphrase file) over from that agent's installed plist when it has
+# none of its own, since it reads the same archive.
+write_plist design.hawa.restore-drill "$ROOT/infra/backup/restore_drill.sh" "<key>StartCalendarInterval</key><dict><key>Day</key><integer>1</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>0</integer></dict>" design.hawa.nightly-backup
+for label in "${AGENT_LABELS[@]}"; do
   launchctl bootstrap "gui/$uid" "$AGENTS/$label.plist"
   launchctl print "gui/$uid/$label" >/dev/null 2>&1 && echo "✓ $label loaded" || { echo "ERROR: $label did not load"; exit 1; }
 done

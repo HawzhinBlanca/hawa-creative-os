@@ -15,6 +15,8 @@ x-worker-environment: &worker-environment
   RESTATE_INGRESS_URL: http://restate:8080
   RESTATE_ADMIN_URL: http://restate:9070
   HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
+  # The content-addressed file store (ADR-035), the same host directory as Core's.
+  HAWA_BLOB_DIR: /var/lib/hawa/blobs
 
 x-worker: &worker
   build:
@@ -28,6 +30,10 @@ x-worker: &worker
   networks:
     - core
     - egress
+  # Both colours write to the file store (ADR-035): Telegram intake, and with it the photo puts, moves
+  # into the worker in Phase 2.1. deploy.sh creates the directory and its marker before any container.
+  volumes:
+    - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs
   depends_on:
     core:
       condition: service_healthy
@@ -49,6 +55,9 @@ services:
       - "${HAWA_BIND_IP:-127.0.0.1}:${HAWA_PORT:-8080}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # The file store, read-only, for the internal /_blobs/ location that Core's X-Accel-Redirect
+      # answers point at (ADR-035). Files are 0444 and directories 0755, so nginx's user can read them.
+      - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/srv/hawa-blobs:ro
     networks:
       - edge
       - core
@@ -96,6 +105,12 @@ services:
       HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
       # People cut out of client photos (ADR-032). Optional: without it a photo is placed framed.
       CUTOUT_URL: http://cutout:8090
+      # The content-addressed file store (ADR-035): Core writes it and answers file requests with an
+      # X-Accel-Redirect to nginx's internal location under this prefix.
+      HAWA_BLOB_DIR: /var/lib/hawa/blobs
+      HAWA_BLOB_ACCEL_PREFIX: /_blobs/
+    volumes:
+      - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs
     extra_hosts:
       - "api.telegram.org:149.154.167.99"
     networks:
@@ -153,6 +168,10 @@ services:
       CUTOUT_THREADS: "4"
     volumes:
       - ${HAWA_MODELS_DIR:-${HOME}/.hawa/models}:/models:ro
+      # No file store mount in 3.1 (ADR-035): the service receives the upright photo's bytes, a derived
+      # picture that is not a blob, and Core stores the cut-outs it returns. If upright variants ever
+      # become blobs, mount the store read-only and accept {"blob":"<sha>.<ext>"} requests:
+      # - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/blobs:ro
     mem_limit: 12g
     networks:
       - core

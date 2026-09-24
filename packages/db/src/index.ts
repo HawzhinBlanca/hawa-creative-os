@@ -15,3 +15,4 @@ export * from './check.js';
 export * from './task-reconciliation.js';
 export { sql, CompiledQuery, type Kysely } from 'kysely';
 export * from './session-lock.js';
+export * from './blobs/index.js';

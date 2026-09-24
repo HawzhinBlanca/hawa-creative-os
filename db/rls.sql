@@ -212,6 +212,9 @@ CREATE POLICY eval_results_write ON eval_results FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM eval_runs r WHERE r.id=eval_results.eval_run_id AND r.tenant_id IS NOT NULL AND has_tenant_role(r.tenant_id,ARRAY['administrator','model_evaluator']::membership_role[]))
 );
 
+-- hawa.task_files (migration 019, ADR-035) carries its own tenant policy there. hawa.blobs has no
+-- tenant and no policy on purpose: routes authorise on the referencing row, never on a hash.
+
 -- Global lookup tables are read-only to application roles; grants should be explicit.
 -- `users`, `model_roles`, and `tenants` require API-layer endpoints or SECURITY DEFINER functions.
 

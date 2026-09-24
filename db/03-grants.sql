@@ -28,6 +28,21 @@ DO $$ BEGIN
     REVOKE UPDATE, DELETE ON hawa.canva_export_bytes FROM hawa_app;
   END IF;
 END $$;
+-- The file store (migration 019, ADR-035) is granted narrowly by its migration: blob rows are deleted
+-- only by the collector's functions, and the reference view lists every tenant's files. If this file
+-- is ever run again after 019, the blanket grant above must not undo that.
+DO $$ BEGIN
+  IF to_regclass('hawa.blobs') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE ON hawa.blobs FROM hawa_app;
+    GRANT UPDATE (unreferenced_since) ON hawa.blobs TO hawa_app;
+  END IF;
+  IF to_regclass('hawa.task_files') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE ON hawa.task_files FROM hawa_app;
+  END IF;
+  IF to_regclass('hawa.blob_references') IS NOT NULL THEN
+    REVOKE ALL ON hawa.blob_references FROM hawa_app;
+  END IF;
+END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.publications FROM hawa_app;
