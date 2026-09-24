@@ -1,0 +1,230 @@
+# The chaos suite's own stack (PHASE2_DESIGN.md section 6.1): Postgres, Restate 1.7.10, Core, the
+# blue and green workers and the fakes, built from this checkout's Dockerfiles.
+#
+# It shares nothing with the office's projects: its own project name (hawa-chaos), volumes, networks
+# and images (hawa-chaos-*:local); host ports only on 127.0.0.1, all above 56000. Start it through
+# the driver (README.md), which writes the throwaway secrets this file reads into .run/chaos.env.
+#
+# Core and the workers are on the `chaos` network only, which is internal: they cannot reach the
+# internet at all. The provider hosts written into the code (api.telegram.org, api.openai.com, …)
+# are network aliases of the fakes container there, and the fakes' CA is trusted through
+# NODE_EXTRA_CA_CERTS, so the real URL code runs unchanged and every call lands in the fakes. A host
+# nobody faked does not resolve: no request can become a paid call by accident.
+name: hawa-chaos
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "2"
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://hawa_app_a:${CHAOS_APP_PASSWORD:?run the chaos driver, which writes .run/chaos.env}@postgres:5432/hawa_chaos
+  RESTATE_INGRESS_URL: http://restate:8080
+  RESTATE_ADMIN_URL: http://restate:9070
+  HAWA_CORE_INTERNAL_URL: http://core:3001
+  HAWA_BEARER_TOKEN: ${CHAOS_BEARER_TOKEN:?}
+  HAWA_ART_DIRECTOR_KEY: ${CHAOS_REVIEWER_KEY:?}
+  HAWA_ADMIN_KEY: ${CHAOS_ADMIN_KEY:?}
+  HAWA_ACTION_HMAC_SECRET: ${CHAOS_HMAC_SECRET:?}
+  TELEGRAM_BOT_TOKEN: ${CHAOS_BOT_TOKEN:?}
+  TELEGRAM_WEBHOOK_SECRET: ${CHAOS_WEBHOOK_SECRET:?}
+  # The office (director) chat, and the requesters the scripted requests come from.
+  TELEGRAM_ALLOWED_USERS: "9000001"
+  TELEGRAM_INTAKE_ALLOWED_USERS: "9100001,9100002,9100003"
+  # Provider keys are placeholders: every provider host is the fakes container.
+  OPENAI_API_KEY: chaos-not-a-real-key
+  GEMINI_API_KEY: chaos-not-a-real-key
+  ANTHROPIC_API_KEY: chaos-not-a-real-key
+  CANVA_BASE_URL: http://fakes:9000/canva/rest/v1
+  CANVA_CLIENT_ID: chaos-canva-client
+  CANVA_CLIENT_SECRET: ${CHAOS_CANVA_SECRET:?}
+  CANVA_REDIRECT_URI: http://localhost:3001/v1/integrations/canva/callback
+  CANVA_TOKEN_ENCRYPTION_KEY: ${CHAOS_CANVA_KEY:?}
+  GOOGLE_DRIVE_API_BASE_URL: http://fakes:9000/google
+  GOOGLE_DRIVE_UPLOAD_BASE_URL: http://fakes:9000/google
+  GOOGLE_SHEETS_API_BASE_URL: http://fakes:9000/google
+  # Written by the fakes into the CA volume; the token request goes to the fake oauth2.googleapis.com.
+  GOOGLE_APPLICATION_CREDENTIALS: /chaos-ca/google-service-account.json
+  # The legacy path this suite measures today: planner drafts, no studio (fixtures cover no studio stage).
+  DESIGN_PIPELINE_V3: "off"
+  DESIGN_STUDIO_V2: "off"
+  HAWA_DRAFT_REMINDERS: "off"
+  # One sender makes every scripted request of a run; the office's ceilings (5 a day) would stop
+  # the automatic draft after the fifth. Intake still counts and checks them.
+  AUTO_GENERATE_DAILY_CAP_PER_SENDER: "1000"
+  AUTO_GENERATE_DAILY_CAP_GLOBAL: "1000"
+  HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos
+  NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
+  HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
+
+x-worker: &worker
+  build:
+    context: ../../..
+    dockerfile: infra/docker/Dockerfile.worker
+  image: hawa-chaos-worker:local
+  restart: "no"
+  logging: *logging
+  mem_limit: 384m
+  networks: [chaos]
+  volumes:
+    - chaos_ca:/chaos-ca:ro
+  depends_on:
+    fakes: { condition: service_healthy }
+    postgres: { condition: service_healthy }
+    restate: { condition: service_healthy }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: "no"
+    logging: *logging
+    mem_limit: 512m
+    shm_size: 128mb
+    environment:
+      POSTGRES_DB: hawa_chaos
+      POSTGRES_USER: hawa_owner
+      POSTGRES_PASSWORD: ${CHAOS_OWNER_PASSWORD:?}
+      HAWA_APP_DATABASE_URL: postgresql://hawa_app_a:${CHAOS_APP_PASSWORD:?}@postgres:5432/hawa_chaos
+      PGDATA: /var/lib/postgresql/data/pgdata
+    # fsync off is safe here: the suite kills processes, and the Docker VM (which keeps the page
+    # cache) never loses power; it models no power loss. synchronous_commit stays on, as in
+    # production: off, a killed Postgres forgets commits it had already acknowledged, and the suite
+    # would report losses production cannot have (seen in the first run on 2026-09-24).
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=80", "-c", "fsync=off", "-c", "full_page_writes=off"]
+    ports:
+      - "127.0.0.1:56432:5432"
+    volumes:
+      - chaos_postgres:/var/lib/postgresql/data
+      - ../../../infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
+      - ../../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      - ../../../db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
+      # Not db/03-grants.sql: it revokes UPDATE on hawa.outbox_commands (and inbox_events, approvals,
+      # publications …) from hawa_app, and a worker on such a database cannot lease a command
+      # ("permission denied for table outbox_commands", seen here on 2026-09-24). The driver grants
+      # as the test template does (packages/db/src/test-template.ts buildDatabase), then upgrades.
+    networks: [chaos, chaos-edge]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hawa_owner -d hawa_chaos"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  restate:
+    image: ghcr.io/restatedev/restate:1.7.10
+    restart: "no"
+    logging: *logging
+    mem_limit: 768m
+    environment:
+      RESTATE_NODE_NAME: hawa-restate-chaos-1
+      # The default RocksDB budget is sized for a server; the chaos stack runs beside production.
+      RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 256 MiB
+    ports:
+      - "127.0.0.1:56070:9070"
+      - "127.0.0.1:56080:8080"
+    volumes:
+      - chaos_restate:/restate-data
+    networks: [chaos, chaos-edge]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:9070/health || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  fakes:
+    build:
+      context: ../../..
+      dockerfile: infra/docker/Dockerfile.worker
+      # The node base stage only: the fakes use nothing but Node itself.
+      target: base
+    image: hawa-chaos-fakes:local
+    restart: "no"
+    logging: *logging
+    mem_limit: 256m
+    working_dir: /repo/packages/testkit/chaos
+    command: ["node", "/repo/packages/testkit/chaos/fakes/server.ts"]
+    environment:
+      CHAOS_CA_DIR: /chaos-ca
+      CHAOS_CORE_URL: http://core:3001
+    ports:
+      - "127.0.0.1:56090:9000"
+    volumes:
+      - ./:/repo/packages/testkit/chaos:ro
+      - ../../integrations/test/fake-drive-server.ts:/repo/packages/integrations/test/fake-drive-server.ts:ro
+      - chaos_ca:/chaos-ca
+    networks:
+      chaos:
+        aliases:
+          - api.telegram.org
+          - api.openai.com
+          - generativelanguage.googleapis.com
+          - api.anthropic.com
+          - api.canva.com
+          - export-download.canva.com
+          - document-export.canva.com
+          - oauth2.googleapis.com
+          - www.googleapis.com
+          - sheets.googleapis.com
+      chaos-edge: {}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('fs').accessSync('/chaos-ca/ca.pem');fetch('http://127.0.0.1:9000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  core:
+    build:
+      context: ../../..
+      dockerfile: infra/docker/Dockerfile.core
+    image: hawa-chaos-core:local
+    restart: "no"
+    logging: *logging
+    mem_limit: 768m
+    environment:
+      <<: *app-environment
+      PORT: 3001
+      HAWA_CHAOS_SERVICE: core
+    volumes:
+      - chaos_ca:/chaos-ca:ro
+    networks: [chaos]
+    depends_on:
+      fakes: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      restate: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/ready').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  worker-blue:
+    <<: *worker
+    environment:
+      <<: *app-environment
+      PORT: 9080
+      HAWA_WORKER_COLOUR: blue
+      HAWA_WORKER_SELF_URI: http://worker-blue:9080
+      HAWA_CHAOS_SERVICE: worker-blue
+
+  worker-green:
+    <<: *worker
+    # Started only for a deploy scenario; blue is the live colour.
+    profiles: ["green"]
+    environment:
+      <<: *app-environment
+      PORT: 9080
+      HAWA_WORKER_COLOUR: green
+      HAWA_WORKER_SELF_URI: http://worker-green:9080
+      HAWA_CHAOS_SERVICE: worker-green
+
+networks:
+  chaos:
+    internal: true
+  chaos-edge: {}
+
+volumes:
+  chaos_postgres: {}
+  chaos_restate: {}
+  chaos_ca: {}

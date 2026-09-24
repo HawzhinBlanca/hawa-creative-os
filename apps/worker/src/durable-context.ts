@@ -6,6 +6,7 @@
  * `restate.WorkflowContext` / `restate.Context` and an in-memory journal for
  * restart/resume traces, deterministic replays, and crash simulation.
  */
+import { chaosPoint } from '@hawa/observability';
 
 /**
  * A step's own retry bound. `maxRetryAttempts` alone keeps the SDK's quick spacing (the paid parity
@@ -136,4 +137,26 @@ export class DurableStepJournal implements WorkflowDurableContext {
 
     return result;
   }
+}
+
+/**
+ * The same context, with a chaos point after each step's action and before its result is journalled
+ * (packages/observability chaosPoint; a no-op outside the chaos suite). A worker killed there has
+ * done the step's side effect without the journal knowing, so Restate runs the step again: the
+ * crash that Core's idempotency keys must make harmless. A step replayed from the journal does not
+ * run its action, so it does not reach the point either.
+ */
+export function withStepChaosPoints(ctx: WorkflowDurableContext, taskId?: string): WorkflowDurableContext {
+  const wrapped: WorkflowDurableContext = {
+    key: ctx.key,
+    run: (name, action, options) =>
+      ctx.run(name, async () => {
+        const out = await action();
+        await chaosPoint('worker.step.after-action', { step: name, taskId });
+        return out;
+      }, options),
+  };
+  if (ctx.sleep) wrapped.sleep = (millis) => ctx.sleep!(millis);
+  if (ctx.console) wrapped.console = ctx.console;
+  return wrapped;
 }
