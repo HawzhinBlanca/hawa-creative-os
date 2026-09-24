@@ -65,7 +65,6 @@ x-app-environment: &app-environment
   # --poller worker) polls in the live worker colour and hands each update to its chat's ChatInbox,
   # which calls Core's /v1/internal/* with the worker's own token.
   HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-core}
-  HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
 
@@ -129,7 +128,10 @@ services:
     logging: *logging
     mem_limit: 768m
     environment:
-      RESTATE_NODE_NAME: hawa-restate-chaos-1
+      # Restate keeps its data under /restate-data/<node name>/ and starts empty under another name.
+      # The restore drill sets CHAOS_RESTATE_NODE_NAME to the node an archive holds (production's is
+      # hawa-restate-prod-1) so the restored data is the data it serves (infra/backup/restate-restore.sh).
+      RESTATE_NODE_NAME: ${CHAOS_RESTATE_NODE_NAME:-hawa-restate-chaos-1}
       # The default RocksDB budget is sized for a server; the chaos stack runs beside production.
       RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 256 MiB
     ports:

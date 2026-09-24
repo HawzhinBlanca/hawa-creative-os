@@ -7,6 +7,7 @@
  *   npx tsx packages/testkit/chaos/run.ts --only R1.0,R4  # some scenarios
  *   npx tsx packages/testkit/chaos/run.ts --down          # take a kept project down (with its volumes)
  *   npx tsx packages/testkit/chaos/run.ts --poller worker # the worker polls Telegram (Phase 2.1)
+ *   npx tsx packages/testkit/chaos/run.ts --restore-drill # the Restate backup and restore drill, RD1 (2.6)
  *
  * The scenarios are chaos.test.ts (vitest); this sets HAWA_CHAOS and friends and runs it alone.
  */
@@ -22,6 +23,13 @@ if (args.includes('--down')) {
 }
 const onlyAt = args.indexOf('--only');
 const pollerAt = args.indexOf('--poller');
+// The restore drill needs the worker's poller (ChatInbox holds state for it to restore) and runs RD1
+// alone unless --only names more: it rolls Restate back under every other scenario.
+const restoreDrill = args.includes('--restore-drill');
+if (restoreDrill && pollerAt >= 0 && args[pollerAt + 1] !== 'worker') {
+  console.error('--restore-drill runs with the worker poller');
+  process.exit(2);
+}
 if (pollerAt >= 0 && !['core', 'worker'].includes(args[pollerAt + 1] ?? '')) {
   console.error('--poller takes core or worker');
   process.exit(2);
@@ -34,6 +42,7 @@ const env = {
   // Who polls Telegram in the stack: core (as production today) or worker (Phase 2.1). Compose reads
   // it from this environment (docker-compose.chaos.yml); the scenarios read it to know which apply.
   ...(pollerAt >= 0 && args[pollerAt + 1] ? { CHAOS_TELEGRAM_POLLER: args[pollerAt + 1] } : {}),
+  ...(restoreDrill ? { HAWA_CHAOS_RESTORE_DRILL: '1', CHAOS_TELEGRAM_POLLER: 'worker', ...(onlyAt >= 0 ? {} : { HAWA_CHAOS_ONLY: 'RD1' }) } : {}),
   // The Mac also runs the office: one test file, one worker.
   HAWA_TEST_WORKERS: '1',
 };

@@ -18,10 +18,14 @@
 #   blobs/index.tsv                       "<path>\t<pack>" for every packed file
 # Files never change, so a file is packed once; a pack goes when no kept manifest lists any of its files.
 #
+# With HAWA_RESTATE_BACKUP=on it first backs up Restate's volume (infra/backup/restate-nightly.sh):
+#   restate_<STAMP>.tar[.enc] (+ .sha256)  the volume, same cipher and retention as the dump
+#
 # Every location and the database can be pointed elsewhere, which the tests do (packages/db/test/
 # blob-backup.test.ts runs this whole script against a test database and temporary directories):
 #   HAWA_BACKUP_SNAPSHOT_DIR, HAWA_BACKUP_PG_CONTAINER, HAWA_BACKUP_DB, HAWA_BACKUP_NOTIFY_ENV,
-#   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off).
+#   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off),
+#   HAWA_RESTATE_BACKUP (off), HAWA_RESTATE_BACKUP_CMD (the Restate step, for packages/db/test/restate-backup-nightly.test.ts).
 set -Eeuo pipefail; umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"; mkdir -p "$DIR"; chmod 700 "$DIR"
@@ -74,6 +78,24 @@ find "$DIR" -maxdepth 1 -name '.work_*' -mmin +120 -exec rm -rf {} + 2>/dev/null
 [[ "$ARCHIVE_KEEP" =~ ^[0-9]+$ && "$GRACE_DAYS" =~ ^[0-9]+$ ]] || fail "HAWA_BACKUP_ARCHIVE_KEEP and HAWA_BLOB_GRACE_DAYS must be whole numbers"
 (( ARCHIVE_KEEP < GRACE_DAYS )) \
   || fail "HAWA_BACKUP_ARCHIVE_KEEP (${ARCHIVE_KEEP}) must be less than HAWA_BLOB_GRACE_DAYS (${GRACE_DAYS}): the oldest kept dump would reference files the collector may already have deleted"
+
+# The Restate volume (ADR-034, infra/backup/restate-nightly.sh), behind HAWA_RESTATE_BACKUP (off by
+# default; on once the lead has deployed it). It runs before the dump, so a restore of both finds
+# Postgres at or ahead of Restate: the request lifecycle reconciles a Postgres that is ahead (AHEAD),
+# never one that is behind. Its failure never stops the dump: the dump runs, and the night fails at
+# the end. The archive, cipher, retention and log are this job's; the stamp pairs the two files.
+RESTATE_RESULT="off"; RESTATE_S=0
+if [[ "${HAWA_RESTATE_BACKUP:-off}" == on ]]; then
+  RESTATE_START="$(date +%s)"
+  if (trap - ERR; HAWA_BACKUP_STAMP="$STAMP" HAWA_BACKUP_SNAPSHOT_DIR="$DIR" HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" \
+      HAWA_BACKUP_ARCHIVE_KEEP="$ARCHIVE_KEEP" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" HAWA_BACKUP_NOTIFY_ENV="$PROD" \
+      bash -c "${HAWA_RESTATE_BACKUP_CMD:-bash \"$ROOT/infra/backup/restate-nightly.sh\"}"); then
+    RESTATE_RESULT="ok"
+  else
+    RESTATE_RESULT="failed"
+  fi
+  RESTATE_S=$(( $(date +%s) - RESTATE_START ))
+fi
 
 docker exec "$PG" pg_isready -U hawa_owner -d "$DB" >/dev/null 2>&1 || fail "postgres container not ready"
 # zstd with long-distance matching: the dump repeats the same images many times, so it is about an
@@ -265,5 +287,12 @@ elif [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   fi
 fi
 
-echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} gc_deleted=${GC_DELETED}" >> "$LOG"
+echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} gc_deleted=${GC_DELETED} restate=${RESTATE_RESULT} restate_s=${RESTATE_S}" >> "$LOG"
 echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, files=${BLOB_COUNT} (${NEW_BLOBS} new), archived to ${ARCHIVE_DEST}"
+# The dump and the files are safe; a failed Restate backup still fails the night. Its own line above
+# says why, and it has already alerted the operator (loudly, if Restate or intake is not back).
+if [[ "$RESTATE_RESULT" == failed ]]; then
+  echo "$(date -u +%FT%TZ) FAIL ${STAMP}: the Restate backup failed (its RESTATE line above says why); the dump and the files are backed up" >> "$LOG"
+  echo "✗ the Restate backup failed; see ${LOG/#$HOME/~}" >&2
+  exit 1
+fi

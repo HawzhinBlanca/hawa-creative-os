@@ -28,6 +28,13 @@ notify() {
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
 if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login, nightly backup 03:30."; echo "announced"; exit 0; fi
+# The nightly Restate backup stops Restate for the length of a tar (infra/backup/restate-nightly.sh):
+# starting it then would tear the archive, and the outage is planned. Skipped while that run is alive
+# and made progress in the last 30 minutes; it puts Restate back on every path itself.
+rb="$HOME/.hawa/restate-backup.state"; rb_pid="$(sed -nE 's/^pid=([0-9]+)$/\1/p' "$rb" 2>/dev/null | head -1 || true)"
+if [[ -n "$rb_pid" && -n "$(find "$rb" -mmin -30 2>/dev/null || true)" ]] && ps -p "$rb_pid" -o command= 2>/dev/null | grep -q restate-nightly; then
+  echo "the nightly Restate backup is running (pid $rb_pid); this pass is skipped"; exit 0
+fi
 
 problems=()
 # 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)

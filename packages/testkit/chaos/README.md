@@ -16,6 +16,7 @@ npx tsx packages/testkit/chaos/run.ts --only R1.0,R4   # some scenarios
 npx tsx packages/testkit/chaos/run.ts --keep           # leave hawa-chaos running to inspect it
 npx tsx packages/testkit/chaos/run.ts --down           # take a kept project down, with its volumes
 npx tsx packages/testkit/chaos/run.ts --poller worker  # the worker polls Telegram (Phase 2.1); default core
+npx tsx packages/testkit/chaos/run.ts --restore-drill  # the Restate backup and restore drill, RD1 alone (2.6)
 ```
 
 `run.ts` sets `HAWA_CHAOS=1` (and `HAWA_CHAOS_KEEP`, `HAWA_CHAOS_ONLY`) and runs `chaos.test.ts` with
@@ -257,3 +258,36 @@ three messages and one task.
 `run.ts --poller core --only R1.0,R4` (the default, unchanged): R1.0 holds; R4 fails as before, chat B
 answered after 31.0 s.
 
+
+## Restore drill (architecture programme 2.6, `run.ts --restore-drill`)
+
+RD1 runs only in this mode, with the worker's poller, and alone unless `--only` names more: it
+restores Restate from an archive, which rolls back every scenario's Restate state. It uses the office's
+own scripts, pointed at this project: `infra/backup/restate-nightly.sh` (`HAWA_RESTATE_PROJECT=hawa-chaos`)
+and `infra/backup/restate-restore.sh` (`driver/restore-drill.ts`; the archive, its throwaway passphrase
+and the log stay in `.run/restore-drill`, and no alert can be sent). Steps and checks:
+
+1. a request in a flagged chat, delivered (ChatInbox, TaskWorkflow, the Delivery workflow);
+2. the nightly Restate backup; a brief sent to a second flagged chat while its kill switch is thrown
+   must get no answer until the release and must not be refused or parked; that request is then
+   delivered (Postgres, the chat and Drive move past the archive);
+3. the archive restored into this project's Restate: Restate must know the first request's runs and
+   not the second's, and nothing may be sent again once it has settled;
+4. R1 on the restored copy, with every invariant above, plus the Postgres, Drive and chat checks of
+   both earlier requests.
+
+`CHAOS_RESTATE_NODE_NAME` runs Restate under another node name, to restore an archive of another
+node (production's is `hawa-restate-prod-1`; Restate starts empty under a name it has no data for).
+
+`docker-compose.chaos.yml` on `studio-v2` at 1c1316d declared `HAWA_WORKER_TOKEN` twice in
+`x-app-environment` (slices 2.1 and 2.2 each added it); Docker Compose 5.5 refuses the file
+("mapping key already defined"), so no scenario could start. The second line is removed.
+
+First run (2026-09-25, `run.ts --restore-drill`, 116 s with a cached build, peak 976 MiB): RD1 held
+every invariant (55). Backup 16.6 s (drain clean at once, Restate down 6 s, volume 683,316 bytes,
+encrypted archive 727,072 bytes); the brief sent while the switch was thrown was first answered 17.1 s
+after it was sent, 1.1 s after the release, and delivered; restore 2.9 s (Restate down 1 s); after it
+Restate held the first request's 2 runs and none of the second's, nothing was sent again, and R1 on
+the restored copy was delivered in 10.1 s. AHEAD reconciliations: 0 (no `RequestLifecycle` yet).
+Second run the same day, after renaming `HAWA_RESTATE_CORE_AUTH_VAR`: 55 of 55 again; backup 16.8 s
+(Restate down 6 s, volume 684,228 bytes, archive 727,072), restore 2.9 s, R1 9.1 s.

@@ -8,6 +8,7 @@
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
  *   CHAOS_TELEGRAM_POLLER=worker   the worker polls Telegram through ChatInbox (Phase 2.1; run.ts --poller worker)
+ *   HAWA_CHAOS_RESTORE_DRILL=1   the Restate restore drill, RD1 (2.6; run.ts --restore-drill)
  *
  * It drives the legacy path; with the worker poller, intake goes through ChatInbox first. The results (per scenario: invariants, time, memory) are written to
  * .run/last-run.json and printed; a failed invariant fails its scenario.
@@ -15,7 +16,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, restateQuery, RESTATE_INGRESS_URL, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, logs, memory, PORTS, restateQuery, RESTATE_INGRESS_URL, start, up, waitHealthy } from './driver/stack.js';
+import { archivePath, archives, backupLog, field, intakeSwitchedOff, prepareDrill, restore, startBackup } from './driver/restore-drill.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
@@ -28,6 +30,9 @@ const keep = process.env.HAWA_CHAOS_KEEP === '1';
 // Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
 // does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
 const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
+// The restore drill (RD1) restores Restate from an archive, which rolls back every scenario's Restate
+// state: it runs only when asked for (run.ts --restore-drill), and last.
+const restoreDrill = process.env.HAWA_CHAOS_RESTORE_DRILL === '1';
 
 interface ScenarioReport {
   name: string;
@@ -78,8 +83,9 @@ interface Expectation {
   executor?: 'core' | 'restate';
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller' } = {}) {
-  const run = enabled && (only.length === 0 || only.includes(name)) && (options.needs !== 'worker-poller' || poller === 'worker');
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller' | 'restore-drill' } = {}) {
+  const needsMet = options.needs === 'worker-poller' ? poller === 'worker' : options.needs === 'restore-drill' ? restoreDrill && poller === 'worker' : true;
+  const run = enabled && (only.length === 0 || only.includes(name)) && needsMet;
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = options.flagged ? flaggedChat() : newChat();
     const events: string[] = [];
@@ -553,6 +559,102 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       skipRequestChecks: true,
     };
   });
+
+  // The restore drill (PHASE2_DESIGN.md 2.6, ADR-034; run.ts --restore-drill). The nightly Restate
+  // backup runs against this stack with the office's own script (infra/backup/restate-nightly.sh), a
+  // brief arrives while its kill switch is thrown, and that request is delivered after the backup, so
+  // Postgres, the chat and Drive move past the archive. The archive is then restored into this stack's
+  // Restate (infra/backup/restate-restore.sh), which rolls Restate back behind them, as a real restore
+  // would, and R1 runs on the restored copy. Nothing may be sent again. The design's AHEAD
+  // reconciliations belong to RequestLifecycle (slice 2.3), which this drill counts but cannot require.
+  scenario('RD1', 'restore drill: nightly Restate backup of this stack, a brief during the kill switch, restore of the archive, then R1 on the restored copy', async (chat, events) => {
+    prepareDrill();
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const preChat = flaggedChat();
+    const postChat = flaggedChat();
+
+    // 1. A request delivered before the backup: its ChatInbox, TaskWorkflow and Delivery runs are in the archive.
+    const pre = await workflowRequest(preChat, 'RD1.pre', events);
+    await quiescent();
+
+    // 2. The backup, with a brief sent while its kill switch is thrown.
+    const backup = startBackup();
+    await waitUntil('the kill switch thrown by the backup', async () => (await intakeSwitchedOff()) === true, 120_000, 200);
+    const waiting = await sendBrief(postChat, 'RD1.post');
+    const sentWhileThrownAt = Date.now();
+    events.push(`kill switch thrown; brief ${waiting.update_id} sent to chat ${postChat} while it was`);
+    let releasedAt = 0;
+    let backupDone = false;
+    const watch = (async () => {
+      while (!releasedAt) {
+        if ((await intakeSwitchedOff().catch(() => null)) === false) releasedAt = Date.now();
+        else if (backupDone) break;
+        else await sleep(200);
+      }
+    })();
+    const b = await backup;
+    backupDone = true;
+    await watch;
+    const ok = backupLog().find((l) => / RESTATE OK /.test(l)) ?? '';
+    events.push(`backup: exit ${b.code} in ${b.ms} ms; ${ok || backupLog().slice(-2).join(' | ') || b.out.slice(-400)}`);
+    events.push(`kill switch released ${releasedAt ? `${releasedAt - sentWhileThrownAt} ms after the brief was sent` : 'never seen'}`);
+
+    // 3. The waiting brief is taken after the release, then the request is delivered.
+    const postTask = await draftOf(postChat);
+    const postShown = await sentTo(postChat);
+    const answeredWhileThrown = postShown.filter((s: any) => !releasedAt || Date.parse(s.at) < releasedAt);
+    const firstAnswerMs = postShown.length ? Date.parse(postShown[0].at) - sentWhileThrownAt : -1;
+    const postApproved = await approve(postTask, { pinDeck: true });
+    const postDelivered = await deliver(postTask);
+    events.push(`post-backup request ${postTask}: approve HTTP ${postApproved.status}, deliver HTTP ${postDelivered.status}`);
+    await waitDelivered(postChat, postTask, 300_000, 2);
+    await quiescent();
+
+    // 4. The archive, restored into this stack's Restate.
+    const [archive] = archives().slice(-1);
+    if (!archive) throw new Error(`the backup wrote no archive: ${b.out.slice(-600)}`);
+    const sentBefore = (await fakes.sent()).length;
+    const r = await restore(archivePath(archive));
+    const restoreLine = r.out.split('\n').find((l) => l.startsWith('RESTORE OK')) ?? '';
+    events.push(`restore: exit ${r.code} in ${r.ms} ms; ${restoreLine || r.out.slice(-400)}`);
+    await waitHealthy('restate');
+    // The restored Restate and the workers settle; anything it would run again runs now.
+    await sleep(15_000);
+    await quiescent(10_000, 300_000);
+    const resent = (await fakes.sent()).slice(sentBefore);
+    const [postRuns] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_key LIKE '%${postTask}%'`);
+    const [preRuns] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_key LIKE '%${pre.taskId}%'`);
+    events.push(`after the restore: sends=${resent.length}; Restate invocations for the pre-backup request=${preRuns?.n}, for the post-backup request=${postRuns?.n}`);
+
+    // 5. R1 on the restored copy.
+    const r1Started = Date.now();
+    await workflowRequest(chat, 'RD1.R1', events);
+    events.push(`R1 on the restored copy: delivered in ${Date.now() - r1Started} ms`);
+    const ahead = (logs('worker-blue', 5000).match(/AHEAD/g) || []).length;
+    events.push(`AHEAD reconciliations in the worker log: ${ahead} (RequestLifecycle, slice 2.3, is not on this base)`);
+    events.push(`numbers: backup_ms=${b.ms} total_s=${field(ok, 'total_s')} drain=${field(ok, 'drain')} down_s=${field(ok, 'down_s')} volume_bytes=${field(ok, 'volume_bytes')} archive_bytes=${field(ok, 'archive_bytes')} restore_ms=${r.ms} restore_s=${field(restoreLine, 'restore_s')} restate_down_during_restore_s=${field(restoreLine, 'down_s')}`);
+
+    const restateNamed = /TaskWorkflow|Delivery run|paused|RT0016/;
+    return {
+      delivered: true, files: 2, executor: 'restate',
+      extra: [
+        { name: 'the nightly Restate backup of this stack finished (exit 0, RESTATE OK)', ok: b.code === 0 && Boolean(ok), detail: `exit ${b.code}; ${ok || b.out.slice(-300)}` },
+        { name: 'it wrote an encrypted archive with its checksum', ok: /\.tar\.enc$/.test(archive), detail: archive },
+        { name: 'the kill switch was released by the backup', ok: releasedAt > 0 && (await intakeSwitchedOff()) === false, detail: `released=${releasedAt > 0}` },
+        { name: 'a brief sent while the switch was thrown waited: nothing was sent to its chat until the release', ok: releasedAt > 0 && answeredWhileThrown.length === 0, detail: `answered while thrown=${answeredWhileThrown.length}; first answer ${firstAnswerMs} ms after it was sent` },
+        { name: 'and it was not refused or parked', ok: !postShown.some((s: any) => /could not process it automatically/.test(String(s.text ?? ''))), detail: `${postShown.length} sends to the chat` },
+        { name: 'the restore finished (exit 0, RESTORE OK), Restate healthy and serving the workers', ok: r.code === 0 && Boolean(restoreLine), detail: `exit ${r.code}; ${restoreLine || r.out.slice(-300)}` },
+        { name: 'the restore rolled Restate back: it has the pre-backup runs and not the post-backup ones', ok: Number(preRuns?.n ?? 0) > 0 && Number(postRuns?.n ?? -1) === 0, detail: `pre=${preRuns?.n} post=${postRuns?.n}` },
+        { name: 'nothing is sent again after the restore', ok: resent.length === 0, detail: resent.length ? JSON.stringify(resent.map((s: any) => `${s.chat_id}:${s.method}`)) : 'no sends' },
+      ],
+      after: async () => [
+        ...(await checkRequest(preChat, { delivered: true, files: 2, executor: 'restate', ledgerSince })).map((i) => ({ ...i, name: `pre-backup request: ${i.name}` })),
+        // Restate forgot the post-backup request (checked above); its Postgres, Drive and chat checks stand.
+        ...(await checkRequest(postChat, { delivered: true, files: 2, executor: 'restate', ledgerSince }))
+          .filter((i) => !restateNamed.test(i.name)).map((i) => ({ ...i, name: `post-backup request: ${i.name}` })),
+      ],
+    };
+  }, 30 * 60_000, { flagged: true, needs: 'restore-drill' });
 });
 
 /**
