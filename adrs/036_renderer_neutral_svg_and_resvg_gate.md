@@ -1,7 +1,7 @@
 # ADR-036: Renderer-Neutral SVG, Raster Outlines, and a Gate Before Any Renderer Change
 
 **Date:** 2026-09-24
-**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phases 0.5, 3.2 and 3.3).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); 2.1 and 2.2 implemented (Phase 0.5, 3.2); the 2.3 gate ran on 2026-09-24 and is **NO-GO** (C1-C4 fail: missing-glyph warnings on 108 of 383 canvases, 164 text lines out of tolerance, cut-out treatments, minimum SSIM 0.88), so the product stays on rsvg-convert; report in output/gates/2026-09-resvg/REPORT.md.
 **Amends:** ADR-032's outline and glow treatments (drawn as rasters instead of SVG filters); the text markup in `render-layout-v2.ts`.
 
 ## 1. Context

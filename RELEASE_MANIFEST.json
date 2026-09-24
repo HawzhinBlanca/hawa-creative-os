@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T10:51:50.901Z",
+  "generatedAt": "2026-09-24T11:38:12.269Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,9 +19,9 @@
     ]
   },
   "build": {
-    "commit": "a2e8f3caf7d1eefb62cc9f6203ca57e90694444a",
-    "treeClean": true,
-    "commitTimestamp": "2026-09-24T13:51:42+03:00",
+    "commit": "06d532076f70432f387b49a71e98a8a12c3c918d",
+    "treeClean": false,
+    "commitTimestamp": "2026-09-24T14:36:34+03:00",
     "branch": "claude/reliability"
   },
   "migrations": {
@@ -38,8 +38,8 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "b44d02d803047aa4884867415c3f0f096d540371186e52a464f9ce85a68daca4",
-        "apps/core/src/index.ts": "c705260d45ed735e02c30093e6809f5fdb80440408b7903ce8640fbe077c3be8",
+        "apps/core/src/app.ts": "50756f1ecabef65449ed64916f66e83efc916e0e74feee9eebd4b6e8defd446b",
+        "apps/core/src/index.ts": "4a60c64d81e0de5475cc52d77550b80c2db3ce50ead3bba851f80821f945cfb0",
         "packages/integrations/src/google-publisher.ts": "b82e7ea5c04ab4c609b332b2d80753cc4be8366fdeb1e1fdd5dd46c6f574cdb1"
       }
     },
@@ -47,15 +47,15 @@
       "service": "desk",
       "image": "hawa-desk:latest",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "485de115daac6a041c30e849aeaa43028b2fcb0f9aebee1e9f578e4feade24b9",
-        "apps/desk/src/main.tsx": "49022dcc6d9c18cb846b994f5c94152e57ca8372c93fbbd82f44c77bf167dfa6"
+        "apps/desk/src/App.tsx": "5c46787943bb301f6819770a5592c5a90f90e3575aade7ff812ad7d0f77f7c88",
+        "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
     "worker": {
       "service": "worker",
       "image": "hawa-worker:latest",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "f86a36eb6e145a9f977031027ba9bdc8ea2561db158514cb0be433e3e19de3f3"
+        "apps/worker/src/index.ts": "c04600c9e6541579b6c6ade8bec159168ad1cdb4baa8cd142421f48ad7708b16"
       }
     }
   },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "620ac07db08f7a6197e180642527f3cc85478acb21c3ecfd569f82a379bad4cd"
+  "sha256": "f5f6144bc149d67c07e53e3a8532d62fc203f8f0eb907bacdf8e7029aad52486"
 }

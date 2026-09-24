@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T10:51:51Z",
+  "generatedAt": "2026-09-24T11:38:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 254,
+  "fileCount": 260,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "da7470dac2582592ae9dfaba911759f104dcbce0ea179f47df79042e310d4ec1",
-      "bytes": 2901
+      "sha256": "6dbead17934b3063596b4c70726fd339f49c6940594d77a4383cf861ff749e02",
+      "bytes": 2902
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -249,13 +249,13 @@
     },
     {
       "path": "adrs/036_renderer_neutral_svg_and_resvg_gate.md",
-      "sha256": "5eebb026f138f5a5249e9d971f60ef675d3d5256af47aa166730e736c029ef1f",
-      "bytes": 3924
+      "sha256": "37f3bfbe85759b613c3b85f8740258db9859469dc7265327eea597288f6cd811",
+      "bytes": 7361
     },
     {
       "path": "adrs/037_desk_server_state.md",
-      "sha256": "8c73125cab229027d2da24360c479b6731e2c55f674a6c682318c8f1d6649abf",
-      "bytes": 2399
+      "sha256": "1df8aecde35b83db90eee4c30c8aaefc317a4d36cd62f05795cc70029465f02c",
+      "bytes": 3738
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -269,8 +269,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "4d6a112f2431a5c911b068d0f79c643dc20ee5964df0b39ace82c307e3fc14bb",
-      "bytes": 21330
+      "sha256": "a1e4784dcea506764872ed90fa02492829778a104caee204e40f66228d901fec",
+      "bytes": 22997
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -694,8 +694,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "a1229df5ece1f98bb9ed1e58205db5c8976986ccb216a0397342082caf4d7e4d",
-      "bytes": 63850
+      "sha256": "84f8a384b1564a1e42a10d70b68a31c7d41fd4b7c5fe439f583d13ca35018099",
+      "bytes": 67979
     },
     {
       "path": "plans/user-stories.csv",
@@ -834,8 +834,8 @@
     },
     {
       "path": "schemas/Task.schema.json",
-      "sha256": "4bc20739920fd2843cf8b2014feff90f2820ecc82f7c1c027553908e15a77eef",
-      "bytes": 2729
+      "sha256": "eda9d108c8764e7c96e0eaa32b0599ce04c0b5bda93dd689c33cd04c5f3781c1",
+      "bytes": 3429
     },
     {
       "path": "scripts/add_exemplar.ts",
@@ -851,6 +851,11 @@
       "path": "scripts/build_proof_manifest.ts",
       "sha256": "026f563439a271ad370cab8fb3371e0d187df8dce10570c4c3bf71307e9caf91",
       "bytes": 4150
+    },
+    {
+      "path": "scripts/compare_cutout_outlines.ts",
+      "sha256": "e96740e2227489884fea3c977f458f70ef3d0242bbc316732a689d2b6753003b",
+      "bytes": 22488
     },
     {
       "path": "scripts/compare_renderer_markup.ts",
@@ -978,6 +983,11 @@
       "bytes": 15875
     },
     {
+      "path": "scripts/generate_inter_static_instances.py",
+      "sha256": "ceae8a9184371f5162bc99bce20e1ebe33da4e12d1eed0b9f893e73fd6d4fdae",
+      "bytes": 4599
+    },
+    {
       "path": "scripts/generate_p11_proof.ts",
       "sha256": "ea1c0571c6d5a0f4bd9002cbe1311fea0a9a709fb12af317284d52177478e10f",
       "bytes": 10395
@@ -993,9 +1003,19 @@
       "bytes": 5207
     },
     {
+      "path": "scripts/generate_symbol_fallback_faces.py",
+      "sha256": "90442e66bc8e578436cf5f469b188b07560a804d1b21626582283cd640b79678",
+      "bytes": 5786
+    },
+    {
       "path": "scripts/generate_t06_motifs.ts",
       "sha256": "24fe320707b0e8f004a783f83ec9e54b42ca35d925740d16612157ee6b0f10ad",
       "bytes": 1934
+    },
+    {
+      "path": "scripts/generate_task_status_contract.ts",
+      "sha256": "4aaf25079d781ef0bf4dd34a79a919b950044bf346365e3607d57281f7490b79",
+      "bytes": 5620
     },
     {
       "path": "scripts/ingest_kaae_graphics.ts",
@@ -1136,6 +1156,16 @@
       "path": "scripts/render_studio_v2_proofs.ts",
       "sha256": "d03cfa9277cb552ee7812efa9a59308cbe4f1e491df30a6454e3428f5b2278e7",
       "bytes": 12981
+    },
+    {
+      "path": "scripts/request_logs.ts",
+      "sha256": "8d4d0c436d626919f628567e4b579b2e59c5ae36aec3f94b635c3e90520b261c",
+      "bytes": 7773
+    },
+    {
+      "path": "scripts/rerender_font_pinning.mjs",
+      "sha256": "0c3fea7a530353e60f812ddad32949041330411e4c189cf6a81a2181f93ec9ff",
+      "bytes": 14413
     },
     {
       "path": "scripts/restate-bluegreen.ts",
