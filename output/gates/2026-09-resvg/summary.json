@@ -1,0 +1,780 @@
+{
+  "generatedAt": "2026-09-24T10:56:25.259Z",
+  "canvases": 386,
+  "gateCanvases": 383,
+  "lines": 1777,
+  "perClass": {
+    "stored": {
+      "cases": 201,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 75,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9986495959131282,
+      "ssimMin": 0.9740383448441441,
+      "ssimBelow099": 17,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 201,
+      "rsvgRepeatIdentical": 201,
+      "msRsvg": {
+        "p50": 51.4,
+        "p95": 86.9,
+        "max": 108.2
+      },
+      "msResvg": {
+        "p50": 79.1,
+        "p95": 158.3,
+        "max": 197.3
+      },
+      "rssKbRsvgMax": 64756,
+      "rssKbResvgMax": 52728
+    },
+    "photo": {
+      "cases": 42,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9992814795335849,
+      "ssimMin": 0.9169925455671689,
+      "ssimBelow099": 2,
+      "ssimBelow097": 2,
+      "resvgRepeatIdentical": 42,
+      "rsvgRepeatIdentical": 42,
+      "msRsvg": {
+        "p50": 72.8,
+        "p95": 108.9,
+        "max": 123.2
+      },
+      "msResvg": {
+        "p50": 73.4,
+        "p95": 89.3,
+        "max": 104.6
+      },
+      "rssKbRsvgMax": 46212,
+      "rssKbResvgMax": 34688
+    },
+    "bake": {
+      "cases": 42,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9905898436821148,
+      "ssimMin": 0.9727591439341293,
+      "ssimBelow099": 18,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 42,
+      "rsvgRepeatIdentical": 42,
+      "msRsvg": {
+        "p50": 285.9,
+        "p95": 1299.2,
+        "max": 1970.7
+      },
+      "msResvg": {
+        "p50": 247,
+        "p95": 1166.2,
+        "max": 1772.4
+      },
+      "rssKbRsvgMax": 193596,
+      "rssKbResvgMax": 161280
+    },
+    "exif-raw": {
+      "cases": 8,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9992190229874602,
+      "ssimMin": 0.9991771836974639,
+      "ssimBelow099": 0,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 8,
+      "rsvgRepeatIdentical": 8,
+      "msRsvg": {
+        "p50": 67.8,
+        "p95": 77.3,
+        "max": 77.3
+      },
+      "msResvg": {
+        "p50": 66,
+        "p95": 77.2,
+        "max": 77.2
+      },
+      "rssKbRsvgMax": 35500,
+      "rssKbResvgMax": 21116
+    },
+    "exif-upright": {
+      "cases": 8,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9994326185640221,
+      "ssimMin": 0.9994152634784431,
+      "ssimBelow099": 0,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 8,
+      "rsvgRepeatIdentical": 8,
+      "msRsvg": {
+        "p50": 111.1,
+        "p95": 116.8,
+        "max": 116.8
+      },
+      "msResvg": {
+        "p50": 122.2,
+        "p95": 135.6,
+        "max": 135.6
+      },
+      "rssKbRsvgMax": 32068,
+      "rssKbResvgMax": 22628
+    },
+    "stress": {
+      "cases": 3,
+      "rsvgFailures": 1,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 1,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9503053688092161,
+      "ssimMin": 0.9503053688092161,
+      "ssimBelow099": 2,
+      "ssimBelow097": 2,
+      "resvgRepeatIdentical": 3,
+      "rsvgRepeatIdentical": 2,
+      "msRsvg": {
+        "p50": 279.9,
+        "p95": 421.7,
+        "max": 421.7
+      },
+      "msResvg": {
+        "p50": 303.7,
+        "p95": 360.4,
+        "max": 360.4
+      },
+      "rssKbRsvgMax": 118004,
+      "rssKbResvgMax": 129080
+    },
+    "cutout": {
+      "cases": 26,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9927058890008343,
+      "ssimMin": 0.9858800510562994,
+      "ssimBelow099": 7,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 26,
+      "rsvgRepeatIdentical": 26,
+      "msRsvg": {
+        "p50": 150.2,
+        "p95": 372,
+        "max": 542.1
+      },
+      "msResvg": {
+        "p50": 94.6,
+        "p95": 221.4,
+        "max": 313.6
+      },
+      "rssKbRsvgMax": 118228,
+      "rssKbResvgMax": 51424
+    },
+    "kurdish": {
+      "cases": 21,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 9,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9955319087323025,
+      "ssimMin": 0.8835119648217724,
+      "ssimBelow099": 9,
+      "ssimBelow097": 9,
+      "resvgRepeatIdentical": 21,
+      "rsvgRepeatIdentical": 21,
+      "msRsvg": {
+        "p50": 44.8,
+        "p95": 51.3,
+        "max": 61
+      },
+      "msResvg": {
+        "p50": 74,
+        "p95": 101.7,
+        "max": 106
+      },
+      "rssKbRsvgMax": 25312,
+      "rssKbResvgMax": 17024
+    },
+    "latin": {
+      "cases": 24,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 24,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9878538656261255,
+      "ssimMin": 0.9855848224619492,
+      "ssimBelow099": 13,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 24,
+      "rsvgRepeatIdentical": 24,
+      "msRsvg": {
+        "p50": 42.4,
+        "p95": 46.1,
+        "max": 48.7
+      },
+      "msResvg": {
+        "p50": 48.7,
+        "p95": 59.2,
+        "max": 80.5
+      },
+      "rssKbRsvgMax": 25268,
+      "rssKbResvgMax": 16996
+    },
+    "logo": {
+      "cases": 6,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.9336031666438476,
+      "ssimMin": 0.9165318752075486,
+      "ssimBelow099": 6,
+      "ssimBelow097": 6,
+      "resvgRepeatIdentical": 6,
+      "rsvgRepeatIdentical": 6,
+      "msRsvg": {
+        "p50": 83.6,
+        "p95": 89.9,
+        "max": 89.9
+      },
+      "msResvg": {
+        "p50": 27.7,
+        "p95": 29.7,
+        "max": 29.7
+      },
+      "rssKbRsvgMax": 72776,
+      "rssKbResvgMax": 33456
+    },
+    "motif": {
+      "cases": 5,
+      "rsvgFailures": 0,
+      "resvgFailures": 0,
+      "resvgWarned": 0,
+      "rsvgWarned": 0,
+      "resvgBlank": 0,
+      "ssimMedian": 0.999650913383954,
+      "ssimMin": 0.9978323262782328,
+      "ssimBelow099": 0,
+      "ssimBelow097": 0,
+      "resvgRepeatIdentical": 5,
+      "rsvgRepeatIdentical": 5,
+      "msRsvg": {
+        "p50": 43.8,
+        "p95": 81.1,
+        "max": 81.1
+      },
+      "msResvg": {
+        "p50": 54.5,
+        "p95": 74.8,
+        "max": 74.8
+      },
+      "rssKbRsvgMax": 26656,
+      "rssKbResvgMax": 33472
+    }
+  },
+  "overall": {
+    "resvgCrashes": [],
+    "rsvgCrashes": [
+      "stress-12mp-png-datauri"
+    ],
+    "resvgBlank": [],
+    "resvgWarnedCanvases": 108,
+    "resvgWarnedByKind": {
+      "font": 108,
+      "decode": 0,
+      "other": 0
+    },
+    "rsvgWarnedCanvases": 0,
+    "ssimMedian": 0.998296816494572,
+    "ssimMin": 0.8835119648217724,
+    "ssimBelow099": 72,
+    "ssimBelow097": 17,
+    "resvgRepeatIdentical": "383/383",
+    "rsvgRepeatIdentical": "383/383",
+    "hostVsContainer": "386 identical of 386 compared",
+    "hostDifferent": [],
+    "msRsvg": {
+      "p50": 55.5,
+      "p95": 408.8,
+      "max": 1970.7
+    },
+    "msResvg": {
+      "p50": 78.4,
+      "p95": 347.8,
+      "max": 1772.4
+    },
+    "resvgOver5s": [],
+    "rssKbRsvgMax": 193596,
+    "rssKbResvgMax": 161280,
+    "rssRatioPerCaseMedian": 0.6107920555156736,
+    "rssRatioPerCaseMax": 1.262332176798914,
+    "bakes": [
+      {
+        "id": "bake-photo-arch-fade-duotone-x1",
+        "ssim": 0.9973813407489703,
+        "boxDelta": 0,
+        "coverageRatio": 1.0003481361528845
+      },
+      {
+        "id": "bake-photo-circle-x1",
+        "ssim": 0.9984093766814478,
+        "boxDelta": 0,
+        "coverageRatio": 0.9998181471008102
+      },
+      {
+        "id": "bake-photo-arch-x1",
+        "ssim": 0.9983380183073426,
+        "boxDelta": 0,
+        "coverageRatio": 0.99980056655379
+      },
+      {
+        "id": "bake-photo-fade-top-x1",
+        "ssim": 0.9965319770471437,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-fade-bottom-x1",
+        "ssim": 0.9943659835215228,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-fade-left-x1",
+        "ssim": 0.9967389900143242,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-fade-right-x1",
+        "ssim": 0.9901803276943901,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-bw-x1",
+        "ssim": 0.9958034714135814,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-tint-x1",
+        "ssim": 0.9986211040807657,
+        "boxDelta": 0,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-photo-circle-fade-bw-x1",
+        "ssim": 0.9958157659215352,
+        "boxDelta": 0,
+        "coverageRatio": 1.0005916469008846
+      },
+      {
+        "id": "bake-outline-1-cutout-outline-0-x2",
+        "ssim": 0.9925553582547945,
+        "boxDelta": 2,
+        "coverageRatio": 1.4081834354615537
+      },
+      {
+        "id": "bake-outline-2-cutout-outline-0-x2",
+        "ssim": 0.991980581843263,
+        "boxDelta": 2,
+        "coverageRatio": 1.2327978507593618
+      },
+      {
+        "id": "bake-outline-3-cutout-outline-0-x2",
+        "ssim": 0.990487528395932,
+        "boxDelta": 2,
+        "coverageRatio": 1.1555226487451113
+      },
+      {
+        "id": "bake-outline-4-cutout-outline-0-x2",
+        "ssim": 0.9905898436821148,
+        "boxDelta": 2,
+        "coverageRatio": 1.1185564014645202
+      },
+      {
+        "id": "bake-outline-5-cutout-outline-0-x2",
+        "ssim": 0.9906855334985663,
+        "boxDelta": 2,
+        "coverageRatio": 1.0987732805914625
+      },
+      {
+        "id": "bake-outline-6-cutout-outline-0-x2",
+        "ssim": 0.9865665327041169,
+        "boxDelta": 4,
+        "coverageRatio": 1.1455409284370979
+      },
+      {
+        "id": "bake-outline-8-cutout-outline-0-x2",
+        "ssim": 0.986827302228191,
+        "boxDelta": 4,
+        "coverageRatio": 1.1096271145698746
+      },
+      {
+        "id": "bake-outline-10-cutout-outline-0-x2",
+        "ssim": 0.9870775215000055,
+        "boxDelta": 4,
+        "coverageRatio": 1.0890646575740692
+      },
+      {
+        "id": "bake-outline-12-cutout-outline-0-x2",
+        "ssim": 0.9847105540517929,
+        "boxDelta": 6,
+        "coverageRatio": 1.1066356724493214
+      },
+      {
+        "id": "bake-outline-16-cutout-outline-0-x2",
+        "ssim": 0.9831228283870487,
+        "boxDelta": 8,
+        "coverageRatio": 1.1032596604552325
+      },
+      {
+        "id": "bake-outline-20-cutout-outline-0-x2",
+        "ssim": 0.9836567436461555,
+        "boxDelta": 8,
+        "coverageRatio": 1.0827725727960724
+      },
+      {
+        "id": "bake-outline-24-cutout-outline-0-x2",
+        "ssim": 0.9822283798020482,
+        "boxDelta": 10,
+        "coverageRatio": 1.0843354854679346
+      },
+      {
+        "id": "bake-glow-2-cutout-glow-0-x2",
+        "ssim": 0.9976445170693148,
+        "boxDelta": 0,
+        "coverageRatio": 1.0085945399393326
+      },
+      {
+        "id": "bake-glow-8-cutout-glow-0-x2",
+        "ssim": 0.996772488366078,
+        "boxDelta": 5,
+        "coverageRatio": 0.9399117971334069
+      },
+      {
+        "id": "bake-glow-16-cutout-glow-0-x2",
+        "ssim": 0.9975674593898063,
+        "boxDelta": 87,
+        "coverageRatio": 1
+      },
+      {
+        "id": "bake-glow-30-cutout-glow-0-x2",
+        "ssim": 0.9958875402561759,
+        "boxDelta": 5,
+        "coverageRatio": 1.0677867902665121
+      },
+      {
+        "id": "bake-glow-60-cutout-glow-0-x2",
+        "ssim": 0.995177319749166,
+        "boxDelta": 6,
+        "coverageRatio": 1.0353799559471366
+      },
+      {
+        "id": "bake-outline-12-glow-30-cutout-glow-0-x2",
+        "ssim": 0.986267549885077,
+        "boxDelta": 6,
+        "coverageRatio": 1.093783296234954
+      },
+      {
+        "id": "bake-outline-12-glow-30-cutout-outline-0-x2",
+        "ssim": 0.9844612807094818,
+        "boxDelta": 6,
+        "coverageRatio": 1.1066356724493214
+      },
+      {
+        "id": "bake-outline-24-glow-60-cutout-glow-0-x2",
+        "ssim": 0.9840096377417737,
+        "boxDelta": 10,
+        "coverageRatio": 1.075063294660991
+      },
+      {
+        "id": "bake-outline-24-glow-60-cutout-outline-0-x2",
+        "ssim": 0.9820045084128552,
+        "boxDelta": 10,
+        "coverageRatio": 1.0843354854679346
+      },
+      {
+        "id": "bake-fade-outline-8-cutout-outline-0-x2",
+        "ssim": 0.9878014599891007,
+        "boxDelta": 4,
+        "coverageRatio": 1.096316968383946
+      },
+      {
+        "id": "bake-fade-outline-8-cutout-person-0-x2",
+        "ssim": 0.9969618511929202,
+        "boxDelta": 0,
+        "coverageRatio": 1.0000341412944895
+      },
+      {
+        "id": "bake-duotone-outline-6-cutout-outline-0-x2",
+        "ssim": 0.9865665327041169,
+        "boxDelta": 4,
+        "coverageRatio": 1.1455409284370979
+      },
+      {
+        "id": "bake-duotone-outline-6-cutout-person-0-x2",
+        "ssim": 0.999483422609876,
+        "boxDelta": 0,
+        "coverageRatio": 0.9998788531579127
+      },
+      {
+        "id": "bake-overlap-two-cutout-outline-0-x2",
+        "ssim": 0.9866751284590856,
+        "boxDelta": 4,
+        "coverageRatio": 1.1003653839823562
+      },
+      {
+        "id": "bake-overlap-two-cutout-glow-1-x2",
+        "ssim": 0.9930131513718373,
+        "boxDelta": 4,
+        "coverageRatio": 1.097351803152376
+      },
+      {
+        "id": "bake-overlap-two-cutout-outline-1-x2",
+        "ssim": 0.9864279503627733,
+        "boxDelta": 4,
+        "coverageRatio": 1.1003653839823562
+      },
+      {
+        "id": "bake-offcanvas-left-cutout-outline-0-x2",
+        "ssim": 0.9727591439341293,
+        "boxDelta": 8,
+        "coverageRatio": 1.183509457419412
+      },
+      {
+        "id": "bake-offcanvas-top-cutout-glow-0-x2",
+        "ssim": 0.9870179716269047,
+        "boxDelta": 8,
+        "coverageRatio": 1.0992200182127727
+      },
+      {
+        "id": "bake-offcanvas-top-cutout-outline-0-x2",
+        "ssim": 0.9831228283870487,
+        "boxDelta": 8,
+        "coverageRatio": 1.1032596604552325
+      },
+      {
+        "id": "bake-offcanvas-right-cutout-outline-0-x2",
+        "ssim": 0.9969756185941894,
+        "boxDelta": 0,
+        "coverageRatio": 1.0120991503031915
+      }
+    ]
+  },
+  "lineSummary": {
+    "all": {
+      "lines": 1777,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 1777,
+      "withinTolerance": 1613,
+      "outsideTolerance": 164,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 11,
+      "maxDeltaMax": 272,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 137,
+      "wordOrderFlaggedAt090": 166,
+      "corrMin": 0.24034671546524505,
+      "corrP05": 0.5955780335904526,
+      "resvgWarned": 161
+    },
+    "latin": {
+      "lines": 1127,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 1127,
+      "withinTolerance": 1103,
+      "outsideTolerance": 24,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 1,
+      "maxDeltaMax": 17,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 0,
+      "wordOrderFlaggedAt090": 8,
+      "corrMin": 0.8863929250550054,
+      "corrP05": 0.9971910874513737,
+      "resvgWarned": 0
+    },
+    "arabic": {
+      "lines": 650,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 650,
+      "withinTolerance": 510,
+      "outsideTolerance": 140,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 39,
+      "maxDeltaMax": 272,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 137,
+      "wordOrderFlaggedAt090": 158,
+      "corrMin": 0.24034671546524505,
+      "corrP05": 0.41744527564726164,
+      "resvgWarned": 161
+    },
+    "arabicNoResvgWarning": {
+      "lines": 489,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 489,
+      "withinTolerance": 489,
+      "outsideTolerance": 0,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 1,
+      "maxDeltaMax": 1,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 0,
+      "wordOrderFlaggedAt090": 0,
+      "corrMin": 0.989573709268642,
+      "corrP05": 0.9991568553180702,
+      "resvgWarned": 0
+    },
+    "latinNoResvgWarning": {
+      "lines": 1127,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 1127,
+      "withinTolerance": 1103,
+      "outsideTolerance": 24,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 1,
+      "maxDeltaMax": 17,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 0,
+      "wordOrderFlaggedAt090": 8,
+      "corrMin": 0.8863929250550054,
+      "corrP05": 0.9971910874513737,
+      "resvgWarned": 0
+    },
+    "storedLatin": {
+      "lines": 941,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 941,
+      "withinTolerance": 922,
+      "outsideTolerance": 19,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 1,
+      "maxDeltaMax": 17,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 0,
+      "wordOrderFlaggedAt090": 8,
+      "corrMin": 0.8863929250550054,
+      "corrP05": 0.9970735679963462,
+      "resvgWarned": 0
+    },
+    "storedArabic": {
+      "lines": 422,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 422,
+      "withinTolerance": 359,
+      "outsideTolerance": 63,
+      "maxDeltaMedian": 0,
+      "maxDeltaP95": 15,
+      "maxDeltaMax": 44,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 65,
+      "wordOrderFlaggedAt090": 83,
+      "corrMin": 0.339837557666259,
+      "corrP05": 0.4916788610976796,
+      "resvgWarned": 83
+    },
+    "kurdishMatrix": {
+      "lines": 204,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 204,
+      "withinTolerance": 151,
+      "outsideTolerance": 53,
+      "maxDeltaMedian": 1,
+      "maxDeltaP95": 32,
+      "maxDeltaMax": 62,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 48,
+      "wordOrderFlaggedAt090": 51,
+      "corrMin": 0.24034671546524505,
+      "corrP05": 0.33684877807613695,
+      "resvgWarned": 54
+    },
+    "latinMatrix": {
+      "lines": 210,
+      "failed": 0,
+      "inkMissingInResvg": 0,
+      "measured": 210,
+      "withinTolerance": 181,
+      "outsideTolerance": 29,
+      "maxDeltaMedian": 1,
+      "maxDeltaP95": 134,
+      "maxDeltaMax": 272,
+      "horizontalShiftMedian": 0,
+      "wordOrderFlagged": 24,
+      "wordOrderFlaggedAt090": 24,
+      "corrMin": 0.37733618022346804,
+      "corrP05": 0.5478860802817443,
+      "resvgWarned": 24
+    }
+  },
+  "wordOrderDetector": {
+    "threshold": 0.8,
+    "controls": 174,
+    "controlsDetected": 174,
+    "controlCorrMax": 0.6741746204102576,
+    "controlCorrMedian": 0.3754740110848137
+  },
+  "exifOrientationSsimAgainstTag1": {
+    "rsvg": {
+      "1": 1,
+      "2": 0.887,
+      "3": 0.782,
+      "4": 0.78,
+      "5": 0.778,
+      "6": 0.775,
+      "7": 0.779,
+      "8": 0.774
+    },
+    "resvg": {
+      "1": 1,
+      "2": 0.885,
+      "3": 0.781,
+      "4": 0.78,
+      "5": 0.777,
+      "6": 0.774,
+      "7": 0.778,
+      "8": 0.773
+    }
+  },
+  "warningCatalogue": {
+    "resvg: Warning (in usvg::text::layout:N): No fonts with a <char> character were found.": 1174,
+    "resvg: Warning (in usvg::text:N): Fallback from Noto Sans Arabic to Verdana.": 107,
+    "resvg: Warning (in usvg::text:N): Fallback from Cairo to Noto Sans Arabic.": 18,
+    "resvg: Warning (in usvg::text:N): Fallback from Verdana to Noto Sans Arabic.": 12,
+    "resvg: Warning (in usvg::text::layout:N): No fonts with ": 6,
+    "resvg: Warning (in usvg::text:N): Fallback from Cinzel to Noto Sans Arabic.": 6,
+    "resvg: Warning (in usvg::text:N): Fallback from Playfair Display to Noto Sans Arabic.": 6,
+    "resvg: Warning (in usvg::text::layout:N): No fonts with a <char> charac": 3,
+    "rsvg: Error reading SVG /work/cases/stress-Nmp-png-datauri/design.svg: XML parse error: Error domain N code N on line N column N of data: Couldn't find end of Start T": 1
+  }
+}
