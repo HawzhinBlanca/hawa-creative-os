@@ -27,6 +27,7 @@ export * from './studio/render-layout-v2.js';
 export * from './studio/composite-contrast.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';
+export * from './studio/png-export.js';
 export * from './studio/gemini-image-provider.js';
 export * from './studio/openai-studio-client.js';
 export * from './studio/transfer-v2.js';

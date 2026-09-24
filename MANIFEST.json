@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T23:42:26Z",
+  "generatedAt": "2026-09-24T23:54:49Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 281,
+  "fileCount": 283,
   "files": [
     {
       "path": ".dockerignore",
@@ -704,8 +704,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EVALUATION_PROTOCOL.md",
-      "sha256": "80323c81425e18f87ddaf5635874e5fec5d5243da733a70c08da3ee9cd172c76",
-      "bytes": 11995
+      "sha256": "28e6f4b938d30f4b767f18899b358c5ea1867f05e6314a66fd2a9adc349c5ac3",
+      "bytes": 13029
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -739,8 +739,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R05_EVIDENCE.md",
-      "sha256": "3c2eedd2b10ad8c75b8c77232db52d02dad3f9f90acbae7139555ae977061ed1",
-      "bytes": 1295
+      "sha256": "268af32e666019a76bc370bc0b943a98685858ba094fc4bb3f8356c2141b69e7",
+      "bytes": 4908
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -754,8 +754,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c6667f77745d9b6e80b703ee21248a796bfde6e5dca0d52dd752fbf3ac0f62dc",
-      "bytes": 79431
+      "sha256": "25451583d661a761cdeae7bbeb63edc2a2332dcdf6df5e112f6f2a702bf16a0e",
+      "bytes": 79483
     },
     {
       "path": "plans/user-stories.csv",
@@ -901,6 +901,11 @@
       "path": "scripts/add_exemplar.ts",
       "sha256": "be7833be052c106e15962af873b2113590e1bf6f1de57691eed4ff9aad5c6845",
       "bytes": 6775
+    },
+    {
+      "path": "scripts/analyze_current_export_study.ts",
+      "sha256": "f6a742b8d156b3a33e46ee798e272fe32bf4038e2625b559cb8ec911e764b153",
+      "bytes": 3577
     },
     {
       "path": "scripts/bench_cutout_outline.ts",
@@ -1111,6 +1116,11 @@
       "path": "scripts/measure_operations_slo.ts",
       "sha256": "3c2bdb4b02362a5109cfa29b18e664b383a1e58678efeb85435271dd9fe8595c",
       "bytes": 16912
+    },
+    {
+      "path": "scripts/package_current_export_study.ts",
+      "sha256": "d6708f6031d65ad4970691ae86a1768b9af1cda4d6064dc98d2ad4df7f412b96",
+      "bytes": 16441
     },
     {
       "path": "scripts/package_t8_blind_eval.ts",
