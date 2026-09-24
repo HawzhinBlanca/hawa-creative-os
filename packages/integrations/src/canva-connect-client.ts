@@ -10,6 +10,11 @@ export interface CanvaConnectClientOptions {
   customFetch?: typeof fetch;
   /** Waits between attempts of a status read (GET) that failed with 429, 5xx or a network error. */
   readRetryDelaysMs?: number[];
+  /**
+   * Waits between attempts of a create call (POST /exports, /imports, /designs) that Canva refused
+   * for the moment. Which failures are repeated depends on the call: see `createWithRetry`.
+   */
+  createRetryDelaysMs?: number[];
 }
 
 export interface CanvaDesignResponse {
@@ -70,6 +75,37 @@ export class CanvaHttpError extends Error {
   }
 }
 
+/** Network errors raised before a connection to Canva existed: the request never left. */
+const PRE_SEND_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
+/** Whether a failed fetch certainly never reached Canva (so Canva cannot have acted on it). */
+export function canvaRequestNeverSent(err: unknown): boolean {
+  const code = (err as { cause?: { code?: unknown } } | null)?.cause?.code;
+  return typeof code === 'string' && PRE_SEND_CODES.has(code);
+}
+/** The longest Retry-After the client waits for. Asked to wait longer, it reports the 429 instead. */
+const MAX_RETRY_AFTER_MS = 30_000;
+/**
+ * Retry-After in milliseconds (delta-seconds or an HTTP date), or null when absent or unreadable.
+ * Test doubles may hand back a bare object with no headers, so a missing `headers` is allowed.
+ */
+function retryAfterMs(res: Response): number | null {
+  const value = typeof res.headers?.get === 'function' ? res.headers.get('retry-after') : null;
+  if (!value) return null;
+  if (/^\d+$/.test(value.trim())) return Number(value.trim()) * 1000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
+/**
+ * How long to wait before the next attempt: Canva's Retry-After when it sent one, otherwise the
+ * backoff step. Null means do not try again (Canva asked for a longer wait than the bound).
+ */
+function nextWaitMs(res: Response | null, backoffMs: number): number | null {
+  const asked = res ? retryAfterMs(res) : null;
+  if (asked === null) return backoffMs;
+  return asked > MAX_RETRY_AFTER_MS ? null : asked;
+}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Authentic Canva Connect REST API client (CV-22, R01, Phase 3).
  * Connects to official Canva Connect Cloud API (https://api.canva.com/rest/v1).
@@ -92,6 +128,7 @@ export class CanvaConnectClient {
   private readonly baseUrl: string;
   private readonly fetcher: typeof fetch;
   private readonly readRetryDelaysMs: number[];
+  private readonly createRetryDelaysMs: number[];
   private accessToken?: string;
   private refreshToken?: string;
   private tokenExpiresAt = 0;
@@ -110,6 +147,9 @@ export class CanvaConnectClient {
     const transport = options.customFetch || globalThis.fetch;
     this.fetcher = (input, init) => transport(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(15000) });
     this.readRetryDelaysMs = options.readRetryDelaysMs ?? [1000, 3000];
+    // Five attempts over about 15 s: the chaos suite's R1.K9 (three 503s and a 429) is answered on
+    // the fifth. Canva's export limit is 20 requests a minute per user, so this stays under it.
+    this.createRetryDelaysMs = options.createRetryDelaysMs ?? [1000, 2000, 4000, 8000];
   }
 
   /**
@@ -120,13 +160,50 @@ export class CanvaConnectClient {
   private async readWithRetry(url: string): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       const last = attempt >= this.readRetryDelaysMs.length;
+      let wait = this.readRetryDelaysMs[attempt];
       try {
         const res = await this.fetcher(url, { method: 'GET', headers: { Authorization: await this.getAuthHeader() } });
         if (res.ok || !(res.status === 429 || res.status >= 500) || last) return res;
+        const asked = nextWaitMs(res, wait);
+        if (asked === null) return res;
+        wait = asked;
       } catch (err) {
         if (last) throw err;
       }
-      await new Promise((resolve) => setTimeout(resolve, this.readRetryDelaysMs[attempt]));
+      await sleep(wait);
+    }
+  }
+
+  /**
+   * A create call Canva refused for the moment is asked again, within a bound, before the design
+   * is failed: one 503 on POST /exports ended a draft as CANVA_PREVIEW_FAILED (chaos R1.K9,
+   * 2026-09-24). Canva documents no idempotency key for any create call, so a repeat is a second
+   * request, and what may be repeated depends on what a duplicate would cost:
+   *  - Every call: a 429 (Canva's rate limit refuses before acting, and says how long to wait in
+   *    Retry-After) and a network error raised before the request left.
+   *  - `repeatServerErrors` (POST /exports only): a 5xx too. A 5xx carries no job id and may come
+   *    from a gateway after Canva made the job, but an export job only reads the design; a duplicate
+   *    is a file nobody fetches, and Canva's error guide says to retry internal_error after a delay.
+   *    An import or a new design is a design in the owner's Canva account, so a 5xx there is not
+   *    repeated: the caller records it and reconciles.
+   * A connection lost after the request was sent is never repeated here; the caller records it as
+   * uncertain.
+   */
+  private async createWithRetry(url: string, init: () => Promise<RequestInit>, repeatServerErrors: boolean): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      const last = attempt >= this.createRetryDelaysMs.length;
+      let wait = this.createRetryDelaysMs[attempt];
+      try {
+        const res = await this.fetcher(url, await init());
+        const transient = res.status === 429 || (repeatServerErrors && res.status >= 500);
+        if (res.ok || !transient || last) return res;
+        const asked = nextWaitMs(res, wait);
+        if (asked === null) return res;
+        wait = asked;
+      } catch (err) {
+        if (last || !canvaRequestNeverSent(err)) throw err;
+      }
+      await sleep(wait);
     }
   }
 
@@ -338,7 +415,7 @@ export class CanvaConnectClient {
   }
 
   public async createDesign(params: CreateDesignParams): Promise<CanvaDesignResponse> {
-    const authHeader = await this.getAuthHeader();
+    this.assertConfigured();
     const payload: Record<string, any> = {
       title: params.title,
     };
@@ -350,14 +427,14 @@ export class CanvaConnectClient {
       payload.design_type = params.designType;
     }
 
-    const res = await this.fetcher(`${this.baseUrl}/designs`, {
+    const res = await this.createWithRetry(`${this.baseUrl}/designs`, async () => ({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: authHeader,
+        Authorization: await this.getAuthHeader(),
       },
       body: JSON.stringify(payload),
-    });
+    }), false);
 
     if (!res.ok) {
       throw new CanvaHttpError(`Canva createDesign failed (HTTP ${res.status})`, res.status);
@@ -378,11 +455,12 @@ export class CanvaConnectClient {
 
   public async createImportJob(bytes: Uint8Array, title: string) {
     if (bytes.byteLength < 32 || bytes.byteLength > 25 * 1024 * 1024) throw new Error('Import must be between 32 bytes and 25 MiB');
-    const response = await this.fetcher(`${this.baseUrl}/imports`, { method: 'POST', headers: {
+    this.assertConfigured();
+    const response = await this.createWithRetry(`${this.baseUrl}/imports`, async () => ({ method: 'POST', headers: {
       Authorization: await this.getAuthHeader(), 'Content-Type': 'application/octet-stream',
       'Import-Metadata': JSON.stringify({ title_base64: Buffer.from(title.slice(0, 50)).toString('base64'),
         mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }),
-    }, body: new Uint8Array(bytes) });
+    }, body: new Uint8Array(bytes) }), false);
     if (!response.ok) throw new CanvaHttpError(`Canva import failed (HTTP ${response.status})`, response.status);
     return this.validateImport(await response.json());
   }
@@ -401,20 +479,20 @@ export class CanvaConnectClient {
   }
 
   public async createExportJob(designId: string, format: 'png' | 'pdf' | 'pptx' = 'png'): Promise<CanvaExportJobResponse> {
-    const authHeader = await this.getAuthHeader();
+    this.assertConfigured();
     const formatSpec = format === 'png' ? { type: 'png', lossless: true } : {type:format}; 
 
-    const res = await this.fetcher(`${this.baseUrl}/exports`, {
+    const res = await this.createWithRetry(`${this.baseUrl}/exports`, async () => ({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: authHeader,
+        Authorization: await this.getAuthHeader(),
       },
       body: JSON.stringify({
         design_id: designId,
         format: formatSpec,
       }),
-    });
+    }), true);
 
     if (!res.ok) {
       throw new CanvaHttpError(`Canva createExportJob failed (HTTP ${res.status})`, res.status);

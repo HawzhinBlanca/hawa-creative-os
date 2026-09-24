@@ -181,6 +181,20 @@ CREATE TABLE inbox_events (
   processing_error text,
   UNIQUE (integration_id, source_account_id, source_event_id)
 );
+-- One row per source event (migration 020): the constraint above never fires, because intake leaves
+-- integration_id NULL. The outbox's send marks ('telegram_delivery') append a row per outcome and are
+-- left out.
+CREATE UNIQUE INDEX inbox_events_source_event_uidx
+  ON inbox_events (tenant_id, integration_id, source_account_id, source_event_id) NULLS NOT DISTINCT
+  WHERE source_account_id <> 'telegram_delivery';
+-- Rows migration 020 moved out of inbox_events when it found them duplicated, with the row kept.
+CREATE TABLE inbox_event_duplicates (
+  LIKE inbox_events,
+  kept_id uuid NOT NULL,
+  removed_at timestamptz NOT NULL DEFAULT now(),
+  removed_by text NOT NULL DEFAULT '020_inbox_event_dedupe.sql',
+  PRIMARY KEY (id)
+);
 
 CREATE TABLE message_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

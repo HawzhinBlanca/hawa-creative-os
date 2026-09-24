@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 
 import fs from 'node:fs';
 import { log } from './logging.js';
+import { checkDatabaseUpgrades, describeMissingUpgrades, type SchemaCheck } from './schema-check.js';
 
 try {
   if (fs.existsSync('.env')) {
@@ -41,6 +42,31 @@ process.on('uncaughtException', (err: Error) => {
   log.fatal(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err);
   process.exit(1);
 });
+
+// Before anything reads the database: a database the versioned upgrades have not reached (a fresh
+// data directory gets only db/schema.sql from its init scripts; deploy.sh runs the upgrades) stops
+// the start here with one line naming what is missing (schema-check.ts). Core used to start on it
+// and fail later, request by request, or die on the first missing table. Compose restarts Core, and
+// the first start after deploy.sh has migrated serves.
+if (process.env.DATABASE_URL) {
+  let check: SchemaCheck | undefined;
+  try {
+    check = await checkDatabaseUpgrades(process.env.DATABASE_URL);
+  } catch (err) {
+    // Unreachable is not a missing upgrade. Production does not serve unchecked (compose restarts
+    // it); a development start goes on, and loads its client DNA fixtures as before.
+    const reason = err instanceof Error ? err.message : String(err);
+    if ((process.env.NODE_ENV || '').trim().toLowerCase() === 'production') {
+      log.fatal(`[${SERVICE_NAME}] FATAL could not check the database's versioned upgrades; not serving: ${reason}`);
+      process.exit(1);
+    }
+    log.warn(`[${SERVICE_NAME}] could not check the database's versioned upgrades: ${reason}`);
+  }
+  if (check && !check.ok) {
+    log.fatal(`[${SERVICE_NAME}] FATAL ${describeMissingUpgrades(check)}`);
+    process.exit(1);
+  }
+}
 
 // The production process is the one that polls Telegram. Commit 36f6958 moved this from an
 // environment check to an option and did not set it here, so the 2026-09-22 deploy started with

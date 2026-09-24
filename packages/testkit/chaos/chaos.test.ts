@@ -14,7 +14,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHAOS_DIR, closeDb, down, fakes, kill, memory, restateQuery, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, restateQuery, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, checkRequest, deliver, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sentTo, sleep,
@@ -110,6 +110,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   beforeAll(async () => {
     // Always from nothing: a kept project from an earlier run would carry its tasks and journals.
     down({ volumes: true });
+    // Core and the worker start below with --no-build, so their images are built from this checkout here.
+    build(['core', 'worker-blue']);
     up({ services: ['postgres', 'restate', 'fakes'] });
     await upgradeSchema();
     await connectCanva();

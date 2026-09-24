@@ -100,11 +100,12 @@ services:
       - ../../../infra/docker/00-init-roles.sql:/docker-entrypoint-initdb.d/00-init-roles.sql:ro
       - ../../../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../../../db/rls.sql:/docker-entrypoint-initdb.d/02-rls.sql:ro
+      # The runtime grants production's init runs. The first runs left this file out, because it
+      # revoked UPDATE on hawa.outbox_commands and a worker on such a database could not lease a
+      # command ("permission denied for table outbox_commands", 2026-09-24); it now grants the columns
+      # the code moves, and every run checks that a database built as production's is works end to end.
+      - ../../../db/03-grants.sql:/docker-entrypoint-initdb.d/03-grants.sql:ro
       - ../../../db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
-      # Not db/03-grants.sql: it revokes UPDATE on hawa.outbox_commands (and inbox_events, approvals,
-      # publications …) from hawa_app, and a worker on such a database cannot lease a command
-      # ("permission denied for table outbox_commands", seen here on 2026-09-24). The driver grants
-      # as the test template does (packages/db/src/test-template.ts buildDatabase), then upgrades.
     networks: [chaos, chaos-edge]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hawa_owner -d hawa_chaos"]

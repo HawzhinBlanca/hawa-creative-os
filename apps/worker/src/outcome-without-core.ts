@@ -1,3 +1,4 @@
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { composeOutcomeUnrecordedAlert, composeOutcomeUnrecordedMessage } from './delivery-notification.js';
 
@@ -44,7 +45,8 @@ export function outcomeRecorder(
   options: { userId?: string; officeChatId?: string | null } = {}
 ): OutcomeRecorder {
   const outbox = new OutboxRepository(db);
-  const userId = options.userId || '00000000-0000-4000-b000-000000000002';
+  // The worker's own identity, not a person's (outbox-consumer.ts scopeFor).
+  const userId = options.userId || SYSTEM_AUTOMATION_USER_ID;
   return async ({ tenantId, taskId, report }) => {
     if (!UUID.test(String(tenantId)) || !UUID.test(String(taskId))) return { skipped: 'the task or tenant is not a stored id' };
     const status = clean(report.status) || 'DRAFT_READY';
@@ -57,7 +59,7 @@ export function outcomeRecorder(
         ? options.officeChatId || null
         : (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean) || null;
 
-    return withRlsContext(db, { tenantId, userId, role: 'administrator' }, async (trx) => {
+    return withRlsContext(db, { tenantId, userId, role: 'operator' }, async (trx) => {
       const row = (
         await sql<{ title: string | null; data: (IntakeSource & { payload?: IntakeSource }) | null }>`
           SELECT t.title, e.data FROM hawa.tasks t

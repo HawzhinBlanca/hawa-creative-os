@@ -1,9 +1,9 @@
 /**
  * Makes a fresh hawa-chaos project ready for scripted requests, the way production's database and
  * Restate are made ready:
- *  - Postgres ran schema, RLS and seed at first start (docker-compose.chaos.yml mounts them as init
- *    scripts, like docker-compose.prod.yml); the runtime grants and the versioned upgrades run here,
- *    in the order and through the runner the test template uses (packages/db/src/test-template.ts);
+ *  - Postgres ran the roles, schema, RLS, runtime grants and seed at first start (docker-compose.chaos.yml
+ *    mounts the files docker-compose.prod.yml mounts as init scripts); the versioned upgrades run here,
+ *    through the runner deploy.sh uses (packages/db/src/upgrade.ts);
  *  - the Primary Operator's Canva connection is stored, sealed with the chaos key, as the OAuth
  *    callback would store it (the worker calls Core as that operator);
  *  - KAAE's client DNA names a Drive folder and sheet, so a delivery is archived (to the fake Drive);
@@ -21,11 +21,9 @@ export const TENANT_ID = '00000000-0000-4000-a000-000000000001';
 export const OPERATOR_USER_ID = '00000000-0000-4000-b000-000000000001';
 
 export async function upgradeSchema(): Promise<{ applied: string[]; verified: string[] }> {
-  // Before the upgrades, which grant their own tables narrowly (test-template.ts buildDatabase).
-  await query(sql`GRANT CONNECT ON DATABASE hawa_chaos TO hawa_app`);
-  await query(sql`GRANT USAGE ON SCHEMA hawa TO hawa_app`);
-  await query(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA hawa TO hawa_app`);
-  await query(sql`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hawa TO hawa_app`);
+  // No grants of its own: db/03-grants.sql ran at init, as in production, and the upgrades grant
+  // their own tables. The driver used to grant every table in full, which hid that production's init
+  // left the worker unable to lease a command (2026-09-24).
   return upgradeCanvaSchema(`postgresql://hawa_owner:${secrets().CHAOS_OWNER_PASSWORD}@127.0.0.1:${PORTS.postgres}/hawa_chaos`);
 }
 

@@ -36,11 +36,11 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     expect(snapshotBundle).toContain('INSERT INTO');
   });
 
-  it('verifies exact schema invariant counts: 52 tables, 11 enums, 24 RLS policies', async () => {
+  it('verifies exact schema invariant counts: 53 tables, 11 enums, 24 RLS policies', async () => {
     const result = await checkDatabaseSchema();
 
     expect(result.valid).toBe(true);
-    expect(result.tableCount).toBe(52);
+    expect(result.tableCount).toBe(53);
     expect(result.enumsCount).toBe(11);
     expect(result.policiesCount).toBe(24);
   });
@@ -67,7 +67,7 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     simulatedCleanHost.policies = [...parsedSchema.policies, ...parsedRls.policies];
 
     // 3. Verify post-restore integrity
-    expect(simulatedCleanHost.tables).toHaveLength(52);
+    expect(simulatedCleanHost.tables).toHaveLength(53);
     expect(simulatedCleanHost.enums).toHaveLength(11);
     expect(simulatedCleanHost.policies).toHaveLength(24);
 
@@ -78,6 +78,8 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     expect(simulatedCleanHost.tables).toContain('client_rules');
     expect(simulatedCleanHost.tables).toContain('brand_assets');
     expect(simulatedCleanHost.tables).toContain('outbox_commands');
+    // Migration 020 keeps what its duplicate sweep removed from inbox_events.
+    expect(simulatedCleanHost.tables).toContain('inbox_event_duplicates');
 
     // Multi-tenant isolation policies must be present
     expect(simulatedCleanHost.policies).toContain('tasks_select');

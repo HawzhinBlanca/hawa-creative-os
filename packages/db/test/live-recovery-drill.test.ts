@@ -75,7 +75,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
       `SELECT pol.polname FROM pg_policy pol JOIN pg_class c ON pol.polrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = 'hawa' ORDER BY pol.polname;`
     );
 
-    expect(tableRes.rows.length).toBeGreaterThanOrEqual(52);
+    expect(tableRes.rows.length).toBeGreaterThanOrEqual(53);
     expect(enumRes.rows.length).toBe(11);
     expect(policyRes.rows.length).toBe(94);
 
@@ -133,7 +133,7 @@ describe.skipIf(!process.env.POSTGRES_DISASTER_DRILL_ENABLED)('Milestone 7: Prod
     expect(restoreDurationSec).toBeLessThan(14400);
   });
 
-  it('4. Verifies 100% schema invariant parity: 52 tables, 11 enums, 94 RLS policies', async () => {
+  it('4. Verifies 100% schema invariant parity: 53 tables, 11 enums, 94 RLS policies', async () => {
     const drillClient = new pg.Client({ connectionString: DRILL_DB_URL });
     await drillClient.connect();
 
