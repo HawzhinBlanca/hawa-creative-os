@@ -12,6 +12,13 @@ import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
 import { log } from '../../logging.js';
 import { LIVE_RUN } from '../live-run.js';
 
+/**
+ * A Telegram update's body as the webhook parsed it (JSON.parse), and the message in it. Left untyped,
+ * as it was in app.ts: intake reads messages, channel posts, callbacks, edits and test bodies with
+ * fields no one Telegram type names, and typing it is its own change.
+ */
+export type TelegramUpdateJson = ReturnType<typeof JSON.parse>;
+
 export type TelegramUpdateState = ReturnType<typeof createTelegramUpdateState>;
 
 export function createTelegramUpdateState({ db }: Pick<CoreContext, 'db'>) {
