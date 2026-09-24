@@ -9,7 +9,7 @@ import {
   OUTBOX_MAX_ATTEMPTS,
   OUTBOX_BACKOFF_BASE_SECONDS,
 } from '@hawa/db';
-import { OfficeTracer } from '@hawa/observability';
+import { OfficeTracer, chaosPoint } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import {
@@ -365,6 +365,8 @@ export class OutboxConsumer {
       // The bridge answers with a result; a throw is unexpected, and whether anything left is unknown.
       res = { success: false, error: `TELEGRAM_DELIVERY_UNCERTAIN: ${err instanceof Error ? err.message : String(err)}` };
     }
+    // The chaos suite kills the worker here: sent, and only 'attempted' on record.
+    await chaosPoint('worker.sender.after-telegram', { commandId: cmd.id, commandType: cmd.command_type, step, kind });
     if (res.success) {
       await mark('sent').catch(unrecorded('sent'));
       return 'sent';
@@ -722,12 +724,16 @@ export class OutboxConsumer {
           `[OutboxConsumer] Unknown command_type '${cmd.command_type}'. Unknown commands fail visibly; no no-op handler can claim useful completion.`
         );
       }
+      // The chaos suite kills the worker here: claimed, nothing done yet.
+      await chaosPoint('worker.outbox.after-claim', { commandId: cmd.id, commandType: cmd.command_type, aggregateId: cmd.aggregate_id });
       await handler(cmd, this.db, heldScope);
     } catch (err) {
       failed = true;
       failure = err;
     }
     const { token } = await hold.release();
+    // The chaos suite kills the worker here: the handler has acted, and its result is not recorded.
+    await chaosPoint('worker.outbox.before-record', { commandId: cmd.id, commandType: cmd.command_type, aggregateId: cmd.aggregate_id, failed });
 
     if (!failed) {
       try {

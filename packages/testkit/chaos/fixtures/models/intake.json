@@ -1,0 +1,14 @@
+{
+  "about": "Answers for Core's Telegram intake classifier (apps/core/src/services/telegram-classifier.ts, schema telegram_classifier). Written by hand from the schema; nothing here was recorded from a real provider. The first fixture whose schema matches and whose whenText (if any) appears in the first user message answers.",
+  "fixtures": [
+    {
+      "schema": "telegram_classifier",
+      "whenText": "make the logo bigger",
+      "answer": { "kind": "feedback", "confidence": 0.93, "reason": "chaos fixture: a change to the latest design", "isInstructionOnly": false, "documentKind": "design_piece", "directive": "make the logo bigger", "standingRule": "" }
+    },
+    {
+      "schema": "telegram_classifier",
+      "answer": { "kind": "new_brief", "confidence": 0.95, "reason": "chaos fixture: a message carrying copy to set", "isInstructionOnly": false, "documentKind": "design_piece", "directive": "", "standingRule": "" }
+    }
+  ]
+}

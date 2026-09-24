@@ -1,6 +1,6 @@
 import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
-import type { WorkflowDurableContext, WorkflowStepRetry } from './durable-context.js';
+import { withStepChaosPoints, type WorkflowDurableContext, type WorkflowStepRetry } from './durable-context.js';
 import { withRlsContext, sql, createDb } from '@hawa/db';
 import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
@@ -65,9 +65,10 @@ const recordOutcome = sharedDb ? outcomeRecorder(sharedDb) : undefined;
  * scope mismatch) surface as Restate TerminalErrors. Without this, Restate would retry the
  * failing step forever and the requester would never hear the outcome.
  */
-function durableContext(ctx: restate.Context | restate.WorkflowContext): WorkflowDurableContext {
+function durableContext(ctx: restate.Context | restate.WorkflowContext, taskId?: string): WorkflowDurableContext {
   const isTerminal = (error: any) => Boolean(error?.terminal || error?.cause?.terminal);
-  return {
+  // The chaos suite can stop the worker between a step's side effect and its journal entry.
+  return withStepChaosPoints({
     key: (ctx as any).key,
     run: (name, action, options) => ctx.run(name, async () => {
       try { return await action(); }
@@ -82,7 +83,7 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
       }
     }, stepRetry(options)),
     sleep: (millis) => ctx.sleep(millis),
-  };
+  }, taskId);
 }
 
 const taskService = restate.service({
@@ -90,10 +91,10 @@ const taskService = restate.service({
   handlers: {
     runTask: async (ctx: restate.Context, input: WorkflowInput) => {
       if (input.canvaAutoGenerate) {
-        return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
+        return await runCanvaDraft(input, durableContext(ctx, input.taskId), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
-      try { return await runner.run(input, durableContext(ctx)); }
+      try { return await runner.run(input, durableContext(ctx, input.taskId)); }
       catch (error) { throw asTerminalIfNotRunnable(error); }
     },
   },
@@ -104,10 +105,10 @@ const taskWorkflow = restate.workflow({
   handlers: {
     run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => {
       if (input.canvaAutoGenerate) {
-        return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
+        return await runCanvaDraft(input, durableContext(ctx, input.taskId), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
-      try { return await runner.run(input, durableContext(ctx)); }
+      try { return await runner.run(input, durableContext(ctx, input.taskId)); }
       catch (error) { throw asTerminalIfNotRunnable(error); }
     },
   },

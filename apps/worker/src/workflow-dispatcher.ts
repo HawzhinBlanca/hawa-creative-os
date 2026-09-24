@@ -9,6 +9,7 @@
 
 import crypto from 'node:crypto';
 import type { Database, Kysely } from '@hawa/db';
+import { chaosPoint } from '@hawa/observability';
 import { TaskWorkflowRunner, type WorkflowInput, type WorkflowOutput } from './workflow.js';
 import { DurableStepJournal } from './durable-context.js';
 import type { OutboxCommandRecord } from './outbox-consumer.js';
@@ -99,6 +100,9 @@ export class TaskWorkflowDispatcher {
             requesterToldAtIntake,
           }),
         });
+
+        // The chaos suite kills the worker here: the workflow has started, the outbox command is not done.
+        if (res.ok || res.status === 409) await chaosPoint('worker.dispatch.after-submit', { workflowId, taskId: cmd.aggregate_id });
 
         if (res.status === 409) {
           const receipt: WorkflowSubmissionReceipt = {
