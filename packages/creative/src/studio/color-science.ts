@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { PNG } from 'pngjs';
 import type { Hex } from './layout-v2.js';
+import { sniffImageType } from './image-type.js';
 
 export interface LabColor {
   L: number;
@@ -181,7 +182,8 @@ function decodeToThumbnail(imageBuffer: Buffer, mimeType: string): { width: numb
     : 'rsvg-convert';
 
   const base64Data = imageBuffer.toString('base64');
-  const safeMime = mimeType || (isPng ? 'image/png' : 'image/jpeg');
+  // The bytes name the decoder, not the declared type: librsvg picks its loader from the data URI.
+  const safeMime = sniffImageType(imageBuffer) || mimeType || 'image/jpeg';
   const svg = `<svg width="128" height="160" viewBox="0 0 128 160" xmlns="http://www.w3.org/2000/svg">
   <image width="128" height="160" href="data:${safeMime};base64,${base64Data}"/>
 </svg>`;
