@@ -21,15 +21,18 @@ LEGACY_WORKER_CONTAINER="hawa-production-worker-1"
 bluegreen() { (cd "$ROOT_DIR" && npx tsx scripts/restate-bluegreen.ts "$@" --via-container "$CORE_CONTAINER"); }
 core_running() { [[ "$(docker inspect -f '{{.State.Running}}' "$CORE_CONTAINER" 2>/dev/null || true)" == "true" ]]; }
 # Stops and removes the container of a colour whose Restate deployment has drained and been deleted.
+# Its deployment is already gone, so a container that will not stop is reported, not fatal: the deploy
+# goes on to its health check, and the watchdog and the next deploy see the leftover.
 stop_worker_slot() {
+  local ok=1
   case "$1" in
-    blue|green) "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-$1" >/dev/null ;;
+    blue|green) "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-$1" >/dev/null 2>&1 || ok=0 ;;
     # The single `worker` service of every deploy before blue/green; it is no longer in the compose file.
     legacy) docker stop "$LEGACY_WORKER_CONTAINER" >/dev/null 2>&1 || true; docker rm "$LEGACY_WORKER_CONTAINER" >/dev/null 2>&1 || true ;;
   esac
-  echo "✓ stopped the drained ${1} worker"
+  if [[ $ok == 1 ]]; then echo "✓ stopped the drained ${1} worker"; else echo "! the ${1} worker's Restate deployment was deleted but its container could not be removed; remove it by hand (infra/docker/README.md)"; fi
 }
-# Reads finish-drains output: stops what was deleted, reports what is still draining.
+# Reads finish-drains output: stops what was deleted, reports what is still draining or kept.
 report_drains() {
   local line slot
   while IFS= read -r line; do
@@ -37,6 +40,8 @@ report_drains() {
       deleted=*) stop_worker_slot "${line#deleted=}" ;;
       draining=*) slot="${line#draining=}"
         echo "! the ${slot%%:*} worker still has ${slot#*:} invocation(s) pinned to it and keeps running; new work already goes to the live colour, and the next deploy finishes this drain first" ;;
+      kept=*) slot="${line#kept=}"
+        echo "! the ${slot%%:*} worker's deployment was kept and its container keeps running: ${slot#*:}" ;;
     esac
   done <<< "$1"
 }
@@ -49,11 +54,23 @@ finish_previous_drains() {
   out="$(bluegreen finish-drains --wait-seconds "${HAWA_PREVIOUS_DRAIN_WAIT_SECONDS:-600}" --require-drained "$1")" || rc=$?
   report_drains "$out"
   if [[ $rc == 3 ]]; then
-    echo "ERROR: the ${1} worker still runs invocations from an earlier deploy ($(tr '\n' ' ' <<< "$out")). Replacing it now would replay them on new code, so no worker was changed. Deploy again once they finish (Restate UI, or SELECT * FROM sys_invocation WHERE status <> 'completed')."
+    echo "ERROR: a worker from an earlier deploy is still registered with Restate ($(tr '\n' ' ' <<< "$out")), so no worker was changed: replacing the ${1} colour now would replay what is pinned to it on new code, and the old single worker runs its outbox with no colour gate."
+    echo "       draining=<colour>:<n>: n invocations are still pinned to it. Running ones finish by themselves; a paused one never does: resume or cancel it (restate invocations list --status paused, then resume or cancel; or the Restate UI). Then deploy again."
+    echo "       kept=<colour>:<reason>: a service is still routed to it, or its delete failed; see infra/docker/README.md."
     exit 1
   fi
   [[ $rc == 0 ]] || { echo "ERROR: could not read Restate's deployments (exit ${rc}); no worker was changed"; exit 1; }
   PREVIOUS_DRAINS_DONE=1
+}
+# The first blue/green deploy leaves the old single `worker` running, with no outbox gate, until what is
+# pinned to it finishes. A paused or retrying invocation would keep it there indefinitely, beside the
+# new colour's outbox consumer; so that deploy waits until there are none.
+refuse_stuck_legacy() {
+  [[ "$(sed -n 's/^live=//p' <<< "$1")" == "legacy" ]] || return 0
+  local stuck; stuck="$(sed -n 's/^live_stuck=//p' <<< "$1")"
+  [[ "$stuck" == "0" ]] && return 0
+  echo "ERROR: the old single worker has ${stuck:-an unknown number of} paused or backing-off invocation(s) pinned to it. It would keep running its outbox, with no colour gate, until they finish, beside the new colour's. Resume or cancel them first (restate invocations list --status paused; the Restate UI), then deploy again. No worker was changed."
+  exit 1
 }
 # The running build must be able to say which commit it is (GET /v1/system/cutover/status).
 # Unstamped deployments are strictly refused.
@@ -185,6 +202,7 @@ fi
 # reach Restate; on a stack that is down this happens in 7b instead.
 if core_running; then
   PLAN="$(bluegreen plan)" || { echo "ERROR: could not read the live worker colour from Restate"; exit 1; }
+  refuse_stuck_legacy "$PLAN"
   finish_previous_drains "$(sed -n 's/^idle=//p' <<< "$PLAN")"
 fi
 
@@ -258,12 +276,24 @@ echo "✓ containers started"
 PLAN="$(bluegreen plan)" || { echo "ERROR: could not read the live worker colour from Restate"; exit 1; }
 LIVE="$(sed -n 's/^live=//p' <<< "$PLAN")"; IDLE="$(sed -n 's/^idle=//p' <<< "$PLAN")"
 echo "worker: live colour ${LIVE}, deploying to ${IDLE}"
+refuse_stuck_legacy "$PLAN"
 [[ $PREVIOUS_DRAINS_DONE == 1 ]] || finish_previous_drains "$IDLE"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"
+# The new colour is removed only when Restate holds no deployment at its address. A registration can be
+# accepted even when its answer was lost or the check after it failed, and then Restate already sends
+# new work to this container: removing it would leave every task pointing at a container that is gone,
+# and the old colour's outbox would stand down too. So Restate is asked, and anything but "holds
+# nothing there" keeps both colours running and stops the deploy for a person.
 abandon_idle() {
-  "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-${IDLE}" >/dev/null 2>&1 || true
-  echo "ERROR: $1 The new ${IDLE} worker was removed; the live worker (${LIVE}) was not touched."
+  local held rc=0
+  held="$(bluegreen removable "$IDLE" 2>&1)" || rc=$?
+  if [[ $rc == 0 ]]; then
+    "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-${IDLE}" >/dev/null 2>&1 || true
+    echo "ERROR: $1 Restate holds no deployment at the new ${IDLE} worker's address, so it was removed; what Restate routes to the live worker (${LIVE}) was not changed."
+  else
+    echo "ERROR: $1 Restate holds a deployment at the new ${IDLE} worker's address, or could not say ($(tr '\n' ' ' <<< "$held")), so it may already send work there: the ${IDLE} worker was NOT removed, and the ${LIVE} worker was not drained. Both keep running. Check where each service goes (GET /services on Restate's admin API) and finish by hand: infra/docker/README.md, 'A switch that did not complete'."
+  fi
   exit 1
 }
 for i in $(seq 1 30); do
@@ -271,7 +301,9 @@ for i in $(seq 1 30); do
   [[ $i == 30 ]] && abandon_idle "the new ${IDLE} worker did not become healthy within 60 s."
   sleep 2
 done
-REGISTERED="$(bluegreen register "$IDLE")" || abandon_idle "Restate did not register the new ${IDLE} worker (its reason is above)."
+# Exit 2 is a refusal, 4 a switch Restate accepted but that did not move every service; abandon_idle
+# asks Restate again either way before it removes anything.
+REGISTERED="$(bluegreen register "$IDLE")" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker (its reason is above)."
 echo "✓ restate sends new work to the ${IDLE} worker ($(sed -n 's/^deployment=//p' <<< "$REGISTERED"))"
 # Not a failure when it times out: new work already goes to the new colour.
 if DRAINS="$(bluegreen finish-drains --wait-seconds "${HAWA_DRAIN_TIMEOUT_SECONDS:-900}")"; then

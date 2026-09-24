@@ -52,6 +52,8 @@ export interface LiveColourGateOptions {
    * How long this colour must have been the live one before its loops start. The old colour stops
    * leasing within one refresh of the switch, and a batch it had already leased runs out within one
    * lease (60 s), so waiting both out keeps the two consumers from ever holding the same command.
+   * Skipped when Restate holds no deployment but this one: then no other worker is left to wait for,
+   * and a restart of the live colour does not stop the outbox for a minute.
    */
   takeoverMs?: number;
   timeoutMs?: number;
@@ -75,7 +77,9 @@ export class LiveColourGate {
     try {
       const live = await liveWorkerUri(this.options.adminUrl, this.options.fetcher || fetch, this.options.timeoutMs ?? 2000);
       const isSelf = live === this.selfUri;
-      if (isSelf && this.liveSince === null) this.liveSince = this.now;
+      if (isSelf && this.liveSince === null) {
+        this.liveSince = (await this.alone()) ? this.now - (this.options.takeoverMs ?? 70_000) : this.now;
+      }
       if (!isSelf) this.liveSince = null;
       this.known = isSelf;
     } catch {
@@ -83,6 +87,24 @@ export class LiveColourGate {
       // restart; a worker that has never heard from Restate stays still rather than guess.
     }
     this.checkedAt = this.now;
+  }
+
+  /**
+   * Whether Restate holds no deployment but this worker's. A deploy deletes the old colour's
+   * deployment only after it has drained, and stops its container straight after, so then no other
+   * worker is left. Anything uncertain is "not alone", which keeps the takeover delay.
+   */
+  private async alone(): Promise<boolean> {
+    if ((this.options.takeoverMs ?? 70_000) <= 0) return true;
+    try {
+      const res = await (this.options.fetcher || fetch)(`${this.options.adminUrl}/deployments`, { signal: AbortSignal.timeout(this.options.timeoutMs ?? 2000) });
+      if (!res.ok) return false;
+      const deployments = ((await res.json()) as { deployments?: Array<{ uri?: string }> }).deployments;
+      return Array.isArray(deployments) && deployments.length > 0
+        && deployments.every((d) => typeof d.uri === 'string' && normaliseWorkerUri(d.uri) === this.selfUri);
+    } catch {
+      return false;
+    }
   }
 
   /** Whether this worker's background loops may run now. Asks Restate at most once per refresh interval. */

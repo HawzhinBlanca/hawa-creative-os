@@ -194,9 +194,10 @@ services:
       retries: 10
 
   restate:
-    # 1.7.10 (2026-09-14): patch releases of 1.7 (VQueue, RocksDB and HTTP/2 fixes). Its optional
-    # obsolete-VQueue cleanup is one-way; it stays off. A minor upgrade (1.8) migrates partitions one way:
-    # test it on a copy of restate_data first (ADR-034).
+    # 1.7.10 (2026-09-14): patch releases of 1.7 (VQueue, RocksDB and HTTP/2 fixes). Its opt-in
+    # migrations (VQueues, preflight retention, obsolete-VQueue cleanup) are one-way and stay off, so
+    # rolling back to 1.7.0 stays possible (infra/docker/README.md). A minor upgrade (1.8) migrates
+    # partitions one way: test it on a copy of restate_data first (ADR-034).
     image: ghcr.io/restatedev/restate:1.7.10
     restart: unless-stopped
     logging: *logging

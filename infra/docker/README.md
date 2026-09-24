@@ -34,22 +34,38 @@ first call failed).
   leaves nothing to reconcile.
 - `deploy.sh --apply` (step 4b, then 7b), using `scripts/restate-bluegreen.ts` for every decision:
   1. `plan`: the live colour and the idle one (the other colour; blue after the old single `worker`,
-     or when Restate holds no worker at all).
+     or when Restate holds no worker at all). While the old single `worker` is live, it also counts the
+     paused and backing-off invocations pinned to it (`live_stuck`); the deploy refuses until there
+     are none (see "First deploy" below).
   2. `finish-drains --require-drained <idle>`: a drain an earlier deploy left running is finished first.
-     Drained deployments are deleted and their containers removed. If the idle colour still has
-     invocations pinned to it after `HAWA_PREVIOUS_DRAIN_WAIT_SECONDS` (default 600), the deploy stops
-     before changing anything about the workers, since replacing that colour would replay them.
+     Drained deployments are deleted and their containers removed. If the idle colour, or the old
+     single `worker`, is still registered after `HAWA_PREVIOUS_DRAIN_WAIT_SECONDS` (default 600), the
+     deploy stops before changing anything about the workers, and prints why for each:
+     `draining=<colour>:<n>` (n invocations still pinned to it; a paused one never finishes on its own,
+     resume or cancel it) or `kept=<colour>:<reason>` (a service is still routed to it, or its delete
+     failed).
   3. Build and start the idle colour; wait for its `/health`.
-  4. `register <idle>`: `POST /deployments` with `force: false` and no fallback. Success is a 201 after
-     which Restate sends both `TaskWorkflow` and `TaskService` to the new deployment. A 200 (address
-     already held), any 4xx, or an address that stays unreachable (`META0003`, retried for 60 s) is a
-     refusal: the new colour is removed, the live colour is untouched, and the deploy fails with
-     Restate's reason.
+  4. `register <idle>`: `POST /deployments` with `force: false` and no fallback. Success is a new
+     deployment at the idle address after which Restate sends every worker service (`TaskWorkflow`,
+     `TaskService`, and any other it routed to a worker) there. A 200 counts as that success when
+     Restate did not hold the address before this deploy: an earlier attempt was committed and its
+     answer lost. When an answer is lost and nothing more comes back, Restate's registry decides.
+     - Refused (exit 2): an address Restate held before (never replaced under `force: false`), any
+       4xx, or an address that stays unreachable (`META0003`, retried for 60 s).
+     - Partial (exit 4): Restate registered the new colour but some service still goes elsewhere (a
+       build that no longer hosts it: Restate 1.7.10 moves only the services the new build hosts), or
+       where a service goes could not be read.
+     Either way the deploy then asks Restate once more (`removable <idle>`). Only when Restate holds no
+     deployment at the idle address is the new colour removed; otherwise both colours keep running,
+     nothing is drained, and the deploy fails for a person (see "A switch that did not complete").
   5. `finish-drains`: polls `SELECT count(*) FROM sys_invocation WHERE pinned_deployment_id = '<old>'
      AND status <> 'completed'` every 10 s. At 0 the old deployment is deleted (`DELETE
      /deployments/<id>?force=true`; Restate 1.7 answers 501 to a delete without force) and its container
-     stopped. At `HAWA_DRAIN_TIMEOUT_SECONDS` (default 900) the old colour is left running and the
-     deploy says so and still succeeds: new work already goes to the new colour.
+     stopped, unless a service is still routed to it (`GET /services`, read afresh every round):
+     deleting that would bring back "service not found" (2026-09-17). At `HAWA_DRAIN_TIMEOUT_SECONDS`
+     (default 900) the old colour is left running and the deploy says so and still succeeds: new work
+     already goes to the new colour. A container whose deployment was deleted but that will not stop is
+     reported and the deploy goes on.
 - Restate's admin port is not published. The script runs on the host and makes each admin call with
   node inside the running Core container (`--via-container hawa-production-core-1`).
 
@@ -61,7 +77,9 @@ lease is leased again by the other colour and a Telegram delivery goes out twice
 would run old handlers on commands the new Core writes. So a colour runs it only while it is the live
 one (`apps/worker/src/live-colour.ts`): it asks Restate at most every 10 s, stops leasing within one
 check of losing the role, and starts only after it has held the role for 70 s
-(`HAWA_WORKER_TAKEOVER_MS`), by which time the old colour's last lease has run out. A worker that has
+(`HAWA_WORKER_TAKEOVER_MS`), by which time the old colour's last lease has run out. The delay is
+skipped when Restate holds no deployment but its own (a restart of the live colour after the old one
+was removed), so a crash does not stop the outbox for a minute. A worker that has
 never reached Restate stays still; one that was live stays live through a Restate restart. A worker
 without `HAWA_WORKER_SELF_URI` (development, tests) runs the consumer as before.
 
@@ -70,7 +88,9 @@ registered), `unknown` (Restate not reached yet) or `misconfigured`.
 
 **First deploy after this change:** the old single `worker` container runs code without this gate,
 so it keeps consuming the outbox until its drain finishes and the deploy removes it; for that window
-the two consumers are kept apart by the lease alone.
+the two consumers are kept apart by the lease alone. To keep that window short, the deploy refuses
+while any paused or backing-off invocation is pinned to the old `worker` (they would never finish on
+their own), and every later deploy stops until the old `worker` is gone.
 
 ### Operating it
 
@@ -78,13 +98,20 @@ the two consumers are kept apart by the lease alone.
 - By hand, from the repository root:
   `npx tsx scripts/restate-bluegreen.ts plan --via-container hawa-production-core-1`, and
   `finish-drains --wait-seconds 0 --via-container hawa-production-core-1` (reports `draining=<colour>:<n>`
-  and deletes what has drained; stop a deleted colour's container with
+  and `kept=<colour>:<reason>` and deletes what has drained; `removable <colour>` says whether Restate
+  holds a deployment at that colour's address; stop a deleted colour's container with
   `docker compose -f infra/docker/docker-compose.prod.yml -f infra/docker/canva-release.override.yml --env-file infra/docker/.env rm -sf worker-<colour>`).
 - Compose and the profile (checked on a scratch project with Docker Compose 5.5.1 on 2026-09-24): a
   plain `up -d`, even with `--force-recreate` and with the service's `depends_on` target recreated,
   leaves a profile service's container alone; `start` does not start one (the watchdog starts existing
   worker containers itself), and `down` does not remove one without `--profile worker`; naming the
   service in `build`, `up` or `rm` works without `--profile`.
+- A switch that did not complete (deploy failed with "was NOT removed"): Restate holds the new colour
+  and may already send it work. Read `GET /services` (admin API, from inside the Core container) to see
+  where each service goes. If every service is on the new colour, run `finish-drains` by hand. If some
+  service is still on the old one only (the new build dropped or renamed it), either ship a build that
+  hosts it and deploy again, or, once nothing needs that service any more, leave the old colour to
+  drain. Never remove a colour any service is routed to.
 - A colour that will not drain: look at what is pinned to it in the Restate UI or with
   `SELECT id, target, status, last_failure FROM sys_invocation WHERE pinned_deployment_id = '<id>' AND status <> 'completed'`.
   A suspended invocation waits for a timer or a promise; a paused one waits for a person (resume or
@@ -94,6 +121,10 @@ the two consumers are kept apart by the lease alone.
   `dependencies.restatePausedInvocations`. Any paused invocation makes health `degraded`, and the
   watchdog alerts on it. `/ready` is the container liveness check (one database ping, nothing else).
 - Memory: two workers run only while one drains; the idle colour is otherwise removed.
-- Restate: `ghcr.io/restatedev/restate:1.7.10` (patch releases of 1.7). Leave
-  `experimental-enable-vqueue-obsolete-cleanup` off (it is one-way). Test a minor upgrade (1.8) on a
-  copy of `restate_data` first: it migrates partitions one way.
+- Restate: `ghcr.io/restatedev/restate:1.7.10` (patch releases of 1.7). Rolling the image back to
+  1.7.0 is safe only while the opt-in one-way migrations of 1.7.x stay off, and all of them are off
+  here. The changelog (read 2026-09-24) lists `experimental_enable_vqueues` (1.7.3; one-way, no
+  migration back), `experimental-enable-preflight-invocation-termination-retention` (1.7.5; needs 1.7.8
+  or newer once applied) and `experimental-enable-vqueue-obsolete-cleanup` (1.7.9; needs 1.7.10 or
+  newer once applied). A `restate_data` volume on which any of them has run cannot go back to 1.7.0.
+  Test a minor upgrade (1.8) on a copy of `restate_data` first: it migrates partitions one way.

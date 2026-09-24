@@ -1723,9 +1723,10 @@ export function createApp(options?: CreateAppOptions) {
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
-    const restateStatus = (await probeRestate()).status;
     // Paused invocations wait for a person and are otherwise silent (architecture programme 0.1).
-    const restateWork = await restateInvocations();
+    // Asked side by side, so a hung Restate adds one timeout to /health, not two.
+    const [restateProbe, restateWork] = await Promise.all([probeRestate(), restateInvocations()]);
+    const restateStatus = restateProbe.status;
 
     let funnelMetrics: any = null;
     let funnelStatus: string = 'idle';

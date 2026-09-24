@@ -12,10 +12,14 @@
  * running; the next deploy finishes it first.
  *
  * Behaviour of Restate 1.7.10 this relies on, measured on a scratch server on 2026-09-24:
- * - POST /deployments with a new address answers 201 and moves every service it hosts to it.
+ * - POST /deployments with a new address answers 201 and moves every service it hosts to it. A
+ *   service the new build does not host stays on the old deployment (TaskService did, when a build
+ *   hosted TaskWorkflow only), so a registration can move some services and not others.
  * - POST /deployments with an address Restate already holds answers 200 and changes nothing, even
  *   when the handlers at that address have changed. Only force:true would replace them, and that
- *   is what breaks invocations in flight. So a 200 is a refusal here, never a success.
+ *   is what breaks invocations in flight. So an address Restate held before this deploy is refused
+ *   without asking; a 200 for an address it did not hold means an earlier attempt of ours was
+ *   committed and its answer lost, which is a success.
  * - An address it cannot reach is 500 with META0003 (a colour still starting); it is retried.
  * - DELETE /deployments/{id} without force answers 501; with ?force=true, 202.
  * - POST /query {"query": …} answers {"rows": […]} from sys_invocation.
@@ -26,6 +30,7 @@
  *   npx tsx scripts/restate-bluegreen.ts plan [--via-container hawa-production-core-1]
  *   npx tsx scripts/restate-bluegreen.ts finish-drains --wait-seconds 900 [--require-drained blue]
  *   npx tsx scripts/restate-bluegreen.ts register green
+ *   npx tsx scripts/restate-bluegreen.ts removable green
  */
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -83,6 +88,14 @@ export class RestateAdmin {
     return ((await res.json()) as { deployment_id?: string }).deployment_id || null;
   }
 
+  /** Every service Restate knows, with the deployment its new invocations go to. */
+  async services(): Promise<Array<{ name: string; deploymentId: string | null }>> {
+    const res = await this.call('/services');
+    if (!res.ok) throw new Error(`GET /services answered ${res.status}`);
+    return (((await res.json()) as { services?: Array<{ name: string; deployment_id?: string }> }).services || [])
+      .map((s) => ({ name: s.name, deploymentId: s.deployment_id || null }));
+  }
+
   register(uri: string): Promise<Response> {
     // force stays false: forcing replaces the handlers under invocations in flight, which is what
     // this whole procedure exists to avoid. There is no fallback.
@@ -100,12 +113,21 @@ export class RestateAdmin {
   }
 
   /** Invocations pinned to a deployment that have not completed: running, suspended, backing off, paused. */
-  async inFlight(deploymentId: string): Promise<number> {
+  inFlight(deploymentId: string): Promise<number> {
+    return this.countPinned(deploymentId, "status <> 'completed'");
+  }
+
+  /** Invocations pinned to a deployment that will not finish without a person: paused, or retrying. */
+  stuck(deploymentId: string): Promise<number> {
+    return this.countPinned(deploymentId, "status IN ('paused', 'backing-off')");
+  }
+
+  private async countPinned(deploymentId: string, condition: string): Promise<number> {
     if (!/^[A-Za-z0-9_]+$/.test(deploymentId)) throw new Error(`not a deployment id: ${deploymentId}`);
     const res = await this.call('/query', {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ query: `SELECT count(*) AS n FROM sys_invocation WHERE pinned_deployment_id = '${deploymentId}' AND status <> 'completed'` }),
+      body: JSON.stringify({ query: `SELECT count(*) AS n FROM sys_invocation WHERE pinned_deployment_id = '${deploymentId}' AND ${condition}` }),
     });
     if (!res.ok) throw new Error(`POST /query answered ${res.status}`);
     const n = Number(((await res.json()) as { rows?: Array<{ n?: number | string }> }).rows?.[0]?.n);
@@ -142,39 +164,76 @@ export function planDeploy(topology: Topology): DeployPlan {
 interface Clock { sleep?: (ms: number) => Promise<void>; now?: () => number }
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export type RegisterOutcome = { ok: true; deploymentId: string } | { ok: false; reason: string };
+/**
+ * - ok: Restate holds the colour as a new deployment and routes every worker service to it.
+ * - refused: Restate holds no deployment at the colour's address (or held one before this deploy,
+ *   which force:false never replaces), so nothing it routes changed and the colour may be removed.
+ * - partial: Restate registered the colour, so it may already be sending work there, but some
+ *   service still goes elsewhere, or that could not be confirmed. The colour must not be removed.
+ */
+export type RegisterOutcome =
+  | { ok: true; deploymentId: string }
+  | { ok: false; state: 'refused'; reason: string }
+  | { ok: false; state: 'partial'; deploymentId: string | null; reason: string };
+
+/** The services a worker build hosts (apps/worker/src/index.ts); checked even when GET /services is short. */
+export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService'] as const;
+
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+async function retrying<T>(attempts: number, fn: () => Promise<T>, sleep: (ms: number) => Promise<void>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= attempts) throw err;
+      await sleep(1000);
+    }
+  }
+}
 
 export async function registerColour(
   admin: RestateAdmin,
   colour: Colour,
   options: Clock & { attempts?: number; intervalMs?: number; addresses?: WorkerAddresses } = {},
 ): Promise<RegisterOutcome> {
-  const uri = (options.addresses || DEFAULT_WORKER_ADDRESSES)[colour];
+  const addresses = options.addresses || DEFAULT_WORKER_ADDRESSES;
+  const uri = addresses[colour];
   const attempts = Math.max(1, options.attempts ?? 30);
   const sleep = options.sleep || realSleep;
+  const atAddress = (list: Array<{ id: string; uri: string }>) => list.find((d) => normaliseUri(d.uri) === normaliseUri(uri)) || null;
+
+  // What Restate held before anything was sent. An address it already holds keeps its old handlers
+  // under force:false, so that is a refusal without asking; any deployment at the address after this
+  // point was made by this call, even when Restate's answer to it was lost.
+  const before = await admin.deployments();
+  const held = atAddress(before);
+  if (held) {
+    return { ok: false, state: 'refused', reason: `${uri} is already registered as ${held.id}; force:false never replaces its handlers (finish that colour's drain first)` };
+  }
+
+  let accepted: string | null = null;
+  let answerLost = false;
   let lastReason = 'no attempt made';
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  for (let attempt = 1; attempt <= attempts && !accepted; attempt++) {
     let res: Response;
+    let text: string;
     try {
       res = await admin.register(uri);
+      text = await res.text();
     } catch (err) {
-      lastReason = `Restate did not answer: ${err instanceof Error ? err.message : String(err)}`;
+      // Restate may have committed the registration before the answer was lost.
+      answerLost = true;
+      lastReason = `Restate did not answer: ${messageOf(err)}`;
       if (attempt < attempts) await sleep(options.intervalMs ?? 2000);
       continue;
     }
-    const text = await res.text();
     let body: { id?: string; message?: string } = {};
     try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text }; }
-    if (res.status === 201 && body.id) {
-      // Restate moves every service the new deployment hosts to it; check the two a task needs.
-      for (const service of ['TaskWorkflow', 'TaskService']) {
-        const serving = await admin.serviceDeployment(service);
-        if (serving !== body.id) return { ok: false, reason: `registered as ${body.id}, but Restate still sends ${service} to ${serving ?? 'nothing'}` };
-      }
-      return { ok: true, deploymentId: body.id };
-    }
-    if (res.ok) {
-      return { ok: false, reason: `${uri} is already registered as ${body.id ?? 'an existing deployment'}; Restate answered ${res.status} and kept that deployment's handlers (force:false never replaces them)` };
+    if (res.ok && body.id) {
+      // 201, or 200 for the registration an earlier attempt made (the address was not held before).
+      accepted = body.id;
+      break;
     }
     const message = String(body.message || text || '').trim();
     lastReason = `${res.status}${message ? `: ${message}` : ''}`;
@@ -183,22 +242,63 @@ export async function registerColour(
       if (attempt < attempts) await sleep(options.intervalMs ?? 2000);
       continue;
     }
-    return { ok: false, reason: lastReason };
+    if (!answerLost) return { ok: false, state: 'refused', reason: lastReason };
+    break;
   }
-  return { ok: false, reason: `gave up after ${attempts} attempts: ${lastReason}` };
+
+  if (!accepted) {
+    if (!answerLost) return { ok: false, state: 'refused', reason: `gave up after ${attempts} attempts: ${lastReason}` };
+    // Some answer was lost: only Restate's registry says whether that attempt was committed.
+    try {
+      const now = atAddress(await retrying(3, () => admin.deployments(), sleep));
+      if (!now) return { ok: false, state: 'refused', reason: `${lastReason}; Restate holds no deployment at ${uri}` };
+      accepted = now.id;
+    } catch (err) {
+      return { ok: false, state: 'partial', deploymentId: null, reason: `${lastReason}, and whether Restate registered ${uri} could not be read (${messageOf(err)})` };
+    }
+  }
+
+  // Restate moves every service the new build hosts. One it does not host stays where it was, and a
+  // registration that moved TaskWorkflow alone would leave TaskService on the old colour: say so, and
+  // keep both colours, rather than call it done or call it refused.
+  const names = new Set<string>(WORKER_SERVICES);
+  const workerIds = new Set(before.filter((d) => slotOf(d.uri, addresses)).map((d) => d.id));
+  try {
+    for (const s of await admin.services()) if (s.deploymentId && workerIds.has(s.deploymentId)) names.add(s.name);
+  } catch {
+    // Older answers, or a hiccup: the services a worker build hosts are still checked one by one.
+  }
+  const elsewhere: string[] = [];
+  for (const name of names) {
+    let serving: string | null;
+    try {
+      serving = await retrying(3, () => admin.serviceDeployment(name), sleep);
+    } catch (err) {
+      return { ok: false, state: 'partial', deploymentId: accepted, reason: `registered as ${accepted}, but where Restate sends ${name} could not be read (${messageOf(err)})` };
+    }
+    if (serving !== accepted) elsewhere.push(`${name} -> ${serving ?? 'nothing'}`);
+  }
+  if (elsewhere.length) {
+    return { ok: false, state: 'partial', deploymentId: accepted, reason: `registered as ${accepted}, but Restate still sends ${elsewhere.join(', ')} (does the new build host every service?)` };
+  }
+  return { ok: true, deploymentId: accepted };
 }
 
 export interface DrainReport {
   deleted: Array<{ slot: WorkerSlot; deploymentId: string }>;
-  /** inFlight null: Restate did not say, so the deployment is kept. */
+  /** Invocations are still pinned to these (inFlight null: Restate did not say, so it is kept). */
   draining: Array<{ slot: WorkerSlot; deploymentId: string; inFlight: number | null }>;
+  /** Not deleted for another reason: a service is still routed to it, or the delete kept failing. */
+  kept: Array<{ slot: WorkerSlot; deploymentId: string; reason: string }>;
 }
 
 /**
  * Every worker deployment that is not the live one is drained: once no invocation pinned to it is
- * unfinished, it is deleted (the caller then stops its container). Waits up to `waitMs`; what has not
- * drained by then is reported and left alone. The live deployment is never touched, and nothing is
- * deleted while Restate names no live deployment at all.
+ * unfinished and no service is routed to it, it is deleted (the caller then stops its container).
+ * Waits up to `waitMs`; what has not drained by then is reported and left alone. The live deployment
+ * is never touched, nothing is deleted while Restate names no live deployment at all, and a
+ * deployment any service still points at is never deleted: that is the "service not found" outage
+ * of 2026-09-17 by another road.
  */
 export async function finishDrains(
   admin: RestateAdmin,
@@ -207,38 +307,56 @@ export async function finishDrains(
   const sleep = options.sleep || realSleep;
   const now = options.now || Date.now;
   const topology = await readTopology(admin, options.addresses);
-  const report: DrainReport = { deleted: [], draining: [] };
+  const report: DrainReport = { deleted: [], draining: [], kept: [] };
   if (!topology.liveDeploymentId) return report;
-  let pending = topology.deployments
+  type Pending = { slot: WorkerSlot; deploymentId: string; inFlight: number | null; deleteError: string | null };
+  let pending: Pending[] = topology.deployments
     .filter((d) => d.slot && d.id !== topology.liveDeploymentId)
-    .map((d) => ({ slot: d.slot as WorkerSlot, deploymentId: d.id, inFlight: null as number | null }));
+    .map((d) => ({ slot: d.slot as WorkerSlot, deploymentId: d.id, inFlight: null, deleteError: null }));
   const deadline = now() + Math.max(0, options.waitMs);
   for (;;) {
+    // Read afresh every round: which deployment each service goes to is what a delete must not break.
+    let routes: Array<{ name: string; deploymentId: string | null }> | null = null;
+    try {
+      routes = await admin.services();
+    } catch (err) {
+      options.log?.(`could not read which deployment each service goes to, so nothing is deleted this round: ${messageOf(err)}`);
+    }
     for (const d of pending) {
+      const serves = routes?.filter((s) => s.deploymentId === d.deploymentId).map((s) => s.name) || [];
+      if (serves.length) {
+        // Waiting does not change this; a person does (see the runbook).
+        report.kept.push({ slot: d.slot, deploymentId: d.deploymentId, reason: `Restate still sends ${serves.join(', ')} to it` });
+        continue;
+      }
       try {
         d.inFlight = await admin.inFlight(d.deploymentId);
       } catch (err) {
         d.inFlight = null;
-        options.log?.(`could not count invocations pinned to ${d.slot} (${d.deploymentId}): ${err instanceof Error ? err.message : String(err)}`);
+        options.log?.(`could not count invocations pinned to ${d.slot} (${d.deploymentId}): ${messageOf(err)}`);
         continue;
       }
-      if (d.inFlight === 0) {
+      if (d.inFlight === 0 && routes) {
         try {
           await admin.deleteDeployment(d.deploymentId);
           report.deleted.push({ slot: d.slot, deploymentId: d.deploymentId });
         } catch (err) {
-          options.log?.(`could not delete the drained ${d.slot} deployment ${d.deploymentId}: ${err instanceof Error ? err.message : String(err)}`);
+          d.deleteError = messageOf(err);
+          options.log?.(`could not delete the drained ${d.slot} deployment ${d.deploymentId}: ${d.deleteError}`);
         }
       }
     }
-    const done = new Set(report.deleted.map((d) => d.deploymentId));
+    const done = new Set([...report.deleted, ...report.kept].map((d) => d.deploymentId));
     pending = pending.filter((d) => !done.has(d.deploymentId));
     const remaining = deadline - now();
     if (!pending.length || remaining <= 0) break;
     options.log?.(`waiting for ${pending.map((d) => `${d.slot}: ${d.inFlight ?? 'unknown'} in flight`).join(', ')}`);
     await sleep(Math.min(options.intervalMs ?? 10_000, remaining));
   }
-  report.draining = pending;
+  for (const d of pending) {
+    if (d.inFlight === 0 && d.deleteError) report.kept.push({ slot: d.slot, deploymentId: d.deploymentId, reason: `drained, but its delete failed: ${d.deleteError}` });
+    else report.draining.push({ slot: d.slot, deploymentId: d.deploymentId, inFlight: d.inFlight });
+  }
   return report;
 }
 
@@ -279,8 +397,14 @@ export interface CliDeps extends Clock {
 }
 
 /**
- * Exit codes: 0 done; 2 registration refused (nothing live was touched); 3 the colour named by
- * --require-drained still has invocations pinned to it; 1 Restate could not be read; 64 bad usage.
+ * Exit codes: 0 done; 1 Restate could not be read; 64 bad usage.
+ * register: 2 refused, Restate holds nothing new at the colour's address (removing it is safe);
+ *   4 Restate registered it but not every service moved there, or that could not be confirmed
+ *   (the colour must stay).
+ * removable: 0 Restate holds no deployment at the colour's address; 4 it holds one.
+ * finish-drains --require-drained C: 3 when colour C, or the old single `worker` (whose outbox has
+ *   no colour gate), is still registered: invocations pinned to it, a service routed to it, or a
+ *   delete that failed. The reasons are printed.
  */
 export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number> {
   const out = deps.out || ((line: string) => console.log(line));
@@ -309,6 +433,14 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
       out(`live=${plan.live ?? 'none'}`);
       out(`live_deployment=${plan.liveDeploymentId ?? ''}`);
       out(`idle=${plan.idle}`);
+      // The old single `worker` runs its outbox with no colour gate for as long as its drain lasts, and
+      // a paused or retrying invocation pinned to it never finishes on its own: deploy.sh refuses the
+      // first blue/green deploy until there are none, rather than leave two consumers running.
+      let stuck = '';
+      if (plan.live === 'legacy' && plan.liveDeploymentId) {
+        try { stuck = String(await admin.stuck(plan.liveDeploymentId)); } catch { stuck = 'unknown'; }
+      }
+      out(`live_stuck=${stuck}`);
       return 0;
     }
     if (command === 'register') {
@@ -317,12 +449,28 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
       const outcome = await registerColour(admin, colour, {
         attempts: seconds('attempts', 30), intervalMs: seconds('interval-seconds', 2) * 1000, sleep: deps.sleep, now: deps.now, addresses,
       });
-      if ('reason' in outcome) {
-        err(`ERROR: Restate refused to register the ${colour} colour (${addresses[colour]}): ${outcome.reason}. The live colour was not touched.`);
+      if (!outcome.ok && outcome.state === 'refused') {
+        err(`ERROR: Restate refused to register the ${colour} colour (${addresses[colour]}): ${outcome.reason}. Restate holds nothing new at that address, so what it routes was not changed.`);
         return 2;
+      }
+      if (!outcome.ok) {
+        err(`ERROR: Restate registered the ${colour} colour (${addresses[colour]}) but the switch is not complete: ${outcome.reason}. Restate may already send work to ${colour}, so it must keep running.`);
+        if (outcome.deploymentId) out(`deployment=${outcome.deploymentId}`);
+        return 4;
       }
       out(`deployment=${outcome.deploymentId}`);
       return 0;
+    }
+    if (command === 'removable') {
+      const colour = colourArg(positional[0]);
+      if (!colour) { err('usage: removable blue|green'); return 64; }
+      const held = (await admin.deployments()).find((d) => normaliseUri(d.uri) === normaliseUri(addresses[colour]));
+      if (!held) { out('registered='); return 0; }
+      out(`registered=${held.id}`);
+      let serves = 'unknown';
+      try { serves = (await admin.services()).filter((x) => x.deploymentId === held.id).map((x) => x.name).join(',') || 'none'; } catch { /* reported as unknown */ }
+      out(`serves=${serves}`);
+      return 4;
     }
     if (command === 'finish-drains') {
       const required = flags.has('require-drained') ? colourArg(flags.get('require-drained')) : null;
@@ -333,9 +481,12 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
       });
       for (const d of report.deleted) out(`deleted=${d.slot}`);
       for (const d of report.draining) out(`draining=${d.slot}:${d.inFlight ?? 'unknown'}`);
-      return required && report.draining.some((d) => d.slot === required) ? 3 : 0;
+      for (const d of report.kept) out(`kept=${d.slot}:${d.reason}`);
+      if (!required) return 0;
+      const blocking = [...report.draining, ...report.kept].filter((d) => d.slot === required || d.slot === 'legacy');
+      return blocking.length ? 3 : 0;
     }
-    err('usage: restate-bluegreen.ts plan | register blue|green | finish-drains [--wait-seconds N] [--require-drained blue|green]  [--via-container NAME] [--admin URL]');
+    err('usage: restate-bluegreen.ts plan | register blue|green | removable blue|green | finish-drains [--wait-seconds N] [--require-drained blue|green]  [--via-container NAME] [--admin URL]');
     return 64;
   } catch (e) {
     err(`ERROR: ${e instanceof Error ? e.message : String(e)}`);

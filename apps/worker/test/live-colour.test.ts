@@ -14,7 +14,7 @@ const BLUE = 'http://worker-blue:9080';
 const GREEN = 'http://worker-green:9080';
 
 /** A fake Restate admin API whose TaskWorkflow is served by the deployment at `live()`. */
-function fakeRestate(live: () => string | null, opts: { down?: () => boolean } = {}) {
+function fakeRestate(live: () => string | null, opts: { down?: () => boolean; registered?: () => string[] } = {}) {
   const calls: string[] = [];
   const fetcher = vi.fn(async (url: string) => {
     calls.push(url);
@@ -23,6 +23,9 @@ function fakeRestate(live: () => string | null, opts: { down?: () => boolean } =
     if (url === `${ADMIN}/services/TaskWorkflow`) {
       if (!uri) return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
       return Response.json({ name: 'TaskWorkflow', deployment_id: `dp_${uri.includes('blue') ? 'blue' : 'green'}` });
+    }
+    if (url === `${ADMIN}/deployments` && opts.registered) {
+      return Response.json({ deployments: opts.registered().map((u, i) => ({ id: `dp_${i}`, uri: `${u}/` })) });
     }
     const m = /\/deployments\/(dp_\w+)$/.exec(url);
     if (m && uri) return Response.json({ id: m[1], uri: `${uri}/` });
@@ -77,6 +80,31 @@ describe('LiveColourGate: the live colour is the deployment Restate routes new w
     expect(await gate.isLive()).toBe(false);
     t = 70_000;
     expect(await gate.isLive()).toBe(true);
+  });
+
+  it('waits out the takeover delay while Restate still holds another worker deployment', async () => {
+    const { fetcher } = fakeRestate(() => GREEN, { registered: () => [BLUE, GREEN] });
+    let t = 0;
+    const gate = new LiveColourGate({ adminUrl: ADMIN, selfUri: GREEN, fetcher, now: () => t, refreshMs: 1000, takeoverMs: 70_000 });
+    expect(await gate.isLive()).toBe(false);
+    expect(gate.state()).toBe('taking_over');
+    t = 70_000;
+    expect(await gate.isLive()).toBe(true);
+  });
+
+  it('a restart of the live colour when it is the only deployment left starts its loops at once', async () => {
+    // Otherwise every crash or restart of the live worker stopped the outbox for about 80 s.
+    const { fetcher } = fakeRestate(() => GREEN, { registered: () => [GREEN] });
+    const gate = new LiveColourGate({ adminUrl: ADMIN, selfUri: GREEN, fetcher, now: () => 5_000, refreshMs: 1000, takeoverMs: 70_000 });
+    expect(await gate.isLive()).toBe(true);
+    expect(gate.state()).toBe('live');
+  });
+
+  it('keeps the takeover delay when the list of deployments cannot be read', async () => {
+    const { fetcher } = fakeRestate(() => GREEN); // no list: 404
+    const gate = new LiveColourGate({ adminUrl: ADMIN, selfUri: GREEN, fetcher, now: () => 5_000, refreshMs: 1000, takeoverMs: 70_000 });
+    expect(await gate.isLive()).toBe(false);
+    expect(gate.state()).toBe('taking_over');
   });
 
   it('keeps its last answer while Restate does not answer, and starts as not live', async () => {

@@ -28,6 +28,9 @@ interface FakeInvocation { pinned: string | null; status: string }
 class FakeRestate {
   deployments: FakeDeployment[] = [];
   serving: string | null = null; // deployment id TaskWorkflow and TaskService route to
+  /** A service routed somewhere other than `serving` (a build that did not host it, say). */
+  routedElsewhere: Record<string, string> = {};
+  failServiceLists = false;
   invocations: FakeInvocation[] = [];
   unreachable = new Set<string>();
   refuse: { status: number; message: string } | null = null;
@@ -45,6 +48,7 @@ class FakeRestate {
   }
 
   idOf(uri: string) { return this.deployments.find((d) => d.uri === uri)?.id; }
+  route(name: string): string | null { return this.routedElsewhere[name] ?? this.serving; }
 
   fetch = async (url: string, init: any = {}): Promise<Response> => {
     const method = (init.method || 'GET').toUpperCase();
@@ -59,9 +63,14 @@ class FakeRestate {
       const d = this.deployments.find((x) => x.id === m![1]);
       return d ? Response.json({ id: d.id, uri: `${d.uri}/` }) : new Response('', { status: 404 });
     }
+    if (method === 'GET' && path === '/services') {
+      if (this.failServiceLists) return new Response('', { status: 503 });
+      return Response.json({ services: ['TaskWorkflow', 'TaskService'].map((name) => ({ name, deployment_id: this.route(name) })).filter((x) => x.deployment_id) });
+    }
     m = /^\/services\/(\w+)$/.exec(path);
     if (method === 'GET' && m) {
-      return this.serving ? Response.json({ name: m[1], deployment_id: this.serving }) : Response.json({ message: 'not found' }, { status: 404 });
+      const id = this.route(m[1]);
+      return id ? Response.json({ name: m[1], deployment_id: id }) : Response.json({ message: 'not found' }, { status: 404 });
     }
     if (method === 'POST' && path === '/deployments') {
       const body = JSON.parse(init.body);
@@ -89,7 +98,8 @@ class FakeRestate {
       this.queries++;
       const query: string = JSON.parse(init.body).query;
       const pinned = /pinned_deployment_id = '([\w]+)'/.exec(query)?.[1];
-      const n = this.invocations.filter((i) => i.pinned === pinned && i.status !== 'completed').length;
+      const stuckOnly = /status IN \('paused', 'backing-off'\)/.test(query);
+      const n = this.invocations.filter((i) => i.pinned === pinned && (stuckOnly ? ['paused', 'backing-off'].includes(i.status) : i.status !== 'completed')).length;
       return Response.json({ rows: [{ n }] });
     }
     return new Response('', { status: 404 });
@@ -264,7 +274,18 @@ describe('the command line deploy.sh calls', () => {
   it('plan prints the live and idle colours as key=value lines', async () => {
     const r = await run(new FakeRestate([{ uri: LEGACY, live: true }]), ['plan', '--admin', ADMIN]);
     expect(r.code).toBe(0);
-    expect(r.out).toEqual(['live=legacy', 'live_deployment=dp_1', 'idle=blue']);
+    expect(r.out).toEqual(['live=legacy', 'live_deployment=dp_1', 'idle=blue', 'live_stuck=0']);
+  });
+
+  it('plan counts paused and backing-off invocations pinned to the old single worker (it has no outbox gate)', async () => {
+    const restate = new FakeRestate([{ uri: LEGACY, live: true }]);
+    restate.invocations.push({ pinned: 'dp_1', status: 'paused' }, { pinned: 'dp_1', status: 'backing-off' }, { pinned: 'dp_1', status: 'running' });
+    expect((await run(restate, ['plan', '--admin', ADMIN])).out).toContain('live_stuck=2');
+    // Colours have the gate, so only the migration asks.
+    const colours = new FakeRestate([{ uri: BLUE, live: true }]);
+    colours.invocations.push({ pinned: 'dp_1', status: 'paused' });
+    expect((await run(colours, ['plan', '--admin', ADMIN])).out).toContain('live_stuck=');
+    expect((await run(colours, ['plan', '--admin', ADMIN])).out).not.toContain('live_stuck=1');
   });
 
   it('register exits 2 with a clear message when Restate refuses', async () => {
@@ -272,7 +293,7 @@ describe('the command line deploy.sh calls', () => {
     restate.refuse = { status: 400, message: 'bad manifest' };
     const r = await run(restate, ['register', 'green', '--admin', ADMIN, '--attempts', '1']);
     expect(r.code).toBe(2);
-    expect(r.err).toMatch(/refused.*green.*live colour was not touched/is);
+    expect(r.err).toMatch(/refused.*green.*was not changed/is);
   });
 
   it('finish-drains exits 3 when the colour a deploy needs is still draining, 0 otherwise', async () => {
@@ -318,5 +339,139 @@ describe('containerFetch: Restate admin calls made from inside the Core containe
   it('keeps a 202 or 204 answer without a body', async () => {
     const res = await containerFetch('c', () => ({ status: 0, stdout: JSON.stringify({ status: 202, body: '' }), stderr: '' }))('http://restate:9070/deployments/dp_1?force=true', { method: 'DELETE' });
     expect(res.status).toBe(202);
+  });
+});
+
+describe('registration Restate accepted is never reported as a refusal (phase 0.1 review)', () => {
+  it('an answer lost after Restate committed, then no answer at all: Restate\'s registry decides, and it says registered', async () => {
+    const restate = new FakeRestate([{ uri: BLUE, live: true }]);
+    const admin = new RestateAdmin(ADMIN, async (url, init) => {
+      if (init?.method === 'POST' && url.endsWith('/deployments')) {
+        await restate.fetch(url, init); // committed on the first attempt; every answer is lost
+        throw new TypeError('fetch failed inside hawa-production-core-1: TimeoutError');
+      }
+      return restate.fetch(url, init);
+    });
+    const out = await registerColour(admin, 'green', { ...clock(), attempts: 3, intervalMs: 1000 });
+    expect(out).toEqual({ ok: true, deploymentId: 'dp_2' });
+    expect(restate.serving).toBe('dp_2');
+  });
+
+  it('answers lost and Restate holds nothing at the address: a refusal, safe to remove the colour', async () => {
+    const restate = new FakeRestate([{ uri: BLUE, live: true }]);
+    const admin = new RestateAdmin(ADMIN, async (url, init) => {
+      if (init?.method === 'POST' && url.endsWith('/deployments')) throw new TypeError('fetch failed');
+      return restate.fetch(url, init);
+    });
+    const out = await registerColour(admin, 'green', { ...clock(), attempts: 3, intervalMs: 1000 });
+    expect(out).toMatchObject({ ok: false, state: 'refused' });
+    expect((out as any).reason).toMatch(/holds no deployment/);
+  });
+
+  it('an address Restate held before the deploy is refused without being sent at all', async () => {
+    const restate = new FakeRestate([{ uri: BLUE, live: true }, { uri: GREEN }]);
+    const out = await registerColour(new RestateAdmin(ADMIN, restate.fetch), 'green', { ...clock() });
+    expect(out).toMatchObject({ ok: false, state: 'refused' });
+    expect(restate.posts).toEqual([]);
+  });
+
+  it('a service left on the old deployment is a partial switch (exit 4), never a refusal (exit 2)', async () => {
+    const restate = new FakeRestate([{ uri: LEGACY, live: true }]);
+    const admin = new RestateAdmin(ADMIN, async (url, init) => {
+      const res = await restate.fetch(url, init);
+      if (init?.method === 'POST' && res.status === 201) restate.routedElsewhere.TaskService = 'dp_1';
+      return res;
+    });
+    const out = await registerColour(admin, 'blue', { ...clock() });
+    expect(out).toMatchObject({ ok: false, state: 'partial', deploymentId: 'dp_2' });
+    expect((out as any).reason).toMatch(/TaskService -> dp_1/);
+
+    const lines: string[] = []; const errs: string[] = [];
+    const restate2 = new FakeRestate([{ uri: LEGACY, live: true }]);
+    const code = await runCli(['register', 'blue', '--admin', ADMIN], {
+      fetcher: async (url, init) => {
+        const res = await restate2.fetch(url, init);
+        if (init?.method === 'POST' && res.status === 201) restate2.routedElsewhere.TaskService = 'dp_1';
+        return res;
+      },
+      out: (l) => lines.push(l), err: (l) => errs.push(l), ...clock(),
+    });
+    expect(code).toBe(4);
+    expect(lines).toEqual(['deployment=dp_2']);
+    expect(errs.join(' ')).toMatch(/must keep running/);
+  });
+
+  it('a check that cannot read the routes after a 201 is a partial switch, not a thrown error or a refusal', async () => {
+    const restate = new FakeRestate([{ uri: BLUE, live: true }]);
+    let posted = false;
+    const admin = new RestateAdmin(ADMIN, async (url, init) => {
+      if (init?.method === 'POST' && url.endsWith('/deployments')) posted = true;
+      else if (posted && /\/services/.test(url)) throw new TypeError('docker exec hawa-production-core-1 failed');
+      return restate.fetch(url, init);
+    });
+    const out = await registerColour(admin, 'green', { ...clock() });
+    expect(out).toMatchObject({ ok: false, state: 'partial', deploymentId: 'dp_2' });
+  });
+});
+
+describe('removable: deploy.sh removes a colour only when Restate holds nothing at its address', () => {
+  const run = async (restate: FakeRestate, colour: string) => {
+    const out: string[] = [];
+    const code = await runCli(['removable', colour, '--admin', ADMIN], { fetcher: restate.fetch, out: (l) => out.push(l), err: () => {} });
+    return { code, out };
+  };
+
+  it('0 for an address Restate does not hold, 4 with what it serves for one it does', async () => {
+    const restate = new FakeRestate([{ uri: BLUE }, { uri: GREEN, live: true }]);
+    expect(await run(new FakeRestate([{ uri: BLUE, live: true }]), 'green')).toEqual({ code: 0, out: ['registered='] });
+    expect(await run(restate, 'green')).toEqual({ code: 4, out: ['registered=dp_2', 'serves=TaskWorkflow,TaskService'] });
+    expect(await run(restate, 'blue')).toEqual({ code: 4, out: ['registered=dp_1', 'serves=none'] });
+  });
+
+  it('1 when Restate cannot be read, so the caller keeps the colour', async () => {
+    const code = await runCli(['removable', 'green', '--admin', ADMIN], { fetcher: async () => { throw new TypeError('fetch failed'); }, out: () => {}, err: () => {} });
+    expect(code).toBe(1);
+  });
+});
+
+describe('finishDrains keeps what a service still needs, and says why (phase 0.1 review)', () => {
+  const run = async (restate: FakeRestate, argv: string[]) => {
+    const out: string[] = [];
+    const code = await runCli(argv, { fetcher: restate.fetch, out: (l) => out.push(l), err: () => {}, ...clock() });
+    return { code, out };
+  };
+
+  it('a drained deployment still routed to by TaskService is kept and reported as such', async () => {
+    const restate = new FakeRestate([{ uri: LEGACY }, { uri: BLUE, live: true }]);
+    restate.routedElsewhere.TaskService = 'dp_1';
+    const r = await run(restate, ['finish-drains', '--admin', ADMIN, '--wait-seconds', '600', '--require-drained', 'green']);
+    expect(restate.deletes).toEqual([]);
+    expect(r.out).toEqual(['kept=legacy:Restate still sends TaskService to it']);
+    expect(r.code).toBe(3);
+  });
+
+  it('nothing is deleted while the routes cannot be read', async () => {
+    const restate = new FakeRestate([{ uri: BLUE }, { uri: GREEN, live: true }]);
+    restate.failServiceLists = true;
+    const report = await finishDrains(new RestateAdmin(ADMIN, restate.fetch), { ...clock(), waitMs: 30_000, intervalMs: 10_000 });
+    expect(restate.deletes).toEqual([]);
+    expect(report.draining).toEqual([{ slot: 'blue', deploymentId: 'dp_1', inFlight: 0 }]);
+  });
+
+  it('a delete that keeps failing is reported as kept with its reason, not as draining with 0', async () => {
+    const restate = new FakeRestate([{ uri: BLUE }, { uri: GREEN, live: true }]);
+    const fetcher = async (url: string, init?: RequestInit) => (init?.method === 'DELETE' ? new Response('boom', { status: 500 }) : restate.fetch(url, init));
+    const out: string[] = [];
+    const code = await runCli(['finish-drains', '--admin', ADMIN, '--wait-seconds', '20', '--require-drained', 'blue'], { fetcher, out: (l) => out.push(l), err: () => {}, ...clock() });
+    expect(out).toEqual(['kept=blue:drained, but its delete failed: DELETE /deployments/dp_1 answered 500']);
+    expect(code).toBe(3);
+  });
+
+  it('the old single worker still draining blocks every later deploy, whichever colour it goes to', async () => {
+    const restate = new FakeRestate([{ uri: LEGACY }, { uri: BLUE, live: true }]);
+    restate.invocations.push({ pinned: 'dp_1', status: 'suspended' });
+    const r = await run(restate, ['finish-drains', '--admin', ADMIN, '--wait-seconds', '0', '--require-drained', 'green']);
+    expect(r.out).toEqual(['draining=legacy:1']);
+    expect(r.code).toBe(3);
   });
 });
