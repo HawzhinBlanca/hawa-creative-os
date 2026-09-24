@@ -1,8 +1,14 @@
 /**
- * The file store's check (fsck): every hawa.blobs row and every referenced hash has its file, and
- * each file's bytes hash to its name and have the row's size. Run weekly against the live store and by
- * the monthly restore drill (infra/backup/restore_drill.sh) against a restored database and the files
- * unpacked from the archive: `missing` must be 0.
+ * The file store's check (fsck): every hawa.blobs row has its file, and each file's bytes hash to its
+ * name and have the row's size. Run weekly against the live store and by the monthly restore drill
+ * (infra/backup/restore_drill.sh) against a restored database and the files unpacked from the archive:
+ * `missing` must be 0.
+ *
+ * A referenced hash with no row is counted apart (referencedWithoutRow), never as missing. Until the
+ * copy backfill has run, the running Core writes hashes into columns hawa.blob_references reads while
+ * the bytes still live in bytea beside them (design_studio_candidates.preview_sha256 and others): those
+ * hashes have no row and no file, and nothing is lost. Once migration 020 adds the foreign keys to
+ * hawa.blobs, a reference without a row cannot exist, and every reference is a row this check covers.
  *
  * fsync through Docker Desktop's file sharing ends in macOS fsync, not F_FULLFSYNC, so a power cut can
  * lose a file whose row committed. This check and the drill are how that would be found.
@@ -27,7 +33,10 @@ export interface BlobVerifyReport {
   checked: number;
   missing: number;
   corrupt: number;
-  /** Referenced hashes with no hawa.blobs row: impossible once every foreign key exists (migration 020). */
+  /**
+   * Referenced hashes with no hawa.blobs row: bytes the backfill has not copied yet. Not a failure, and
+   * not in `missing`; impossible once every foreign key exists (migration 020).
+   */
   referencedWithoutRow: number;
   /** Files on disk with no row; the collector removes them after the grace. Not a failure. */
   orphanFiles: number;
@@ -86,16 +95,13 @@ export async function verifyBlobStore(db: Kysely<Database>, root: string, opts: 
   }
   for (const ref of references) {
     if (known.has(ref.sha256)) continue;
-    // Without a row the extension is unknown: the file counts as present under any extension.
+    // Listed for the record only. Without a row the extension is unknown, so a file under any
+    // extension counts as there.
     report.referencedWithoutRow++;
     const shard = path.join(root, 'sha256', ref.sha256.slice(0, 2));
     const names = await fs.promises.readdir(shard).catch(() => [] as string[]);
-    if (!names.some((n) => n.startsWith(`${ref.sha256}.`))) {
-      report.missing++;
-      report.problems.push({ sha256: ref.sha256, problem: 'referenced_without_row', detail: 'and no file' });
-    } else {
-      report.problems.push({ sha256: ref.sha256, problem: 'referenced_without_row' });
-    }
+    const hasFile = names.some((n) => n.startsWith(`${ref.sha256}.`));
+    report.problems.push({ sha256: ref.sha256, problem: 'referenced_without_row', ...(hasFile ? {} : { detail: 'and no file' }) });
   }
   for (const file of await listStoreFiles(root)) {
     if (!known.has(file.sha256)) report.orphanFiles++;

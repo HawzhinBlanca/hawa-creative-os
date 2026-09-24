@@ -23,9 +23,10 @@ function fn(name: string): string {
   return deploySh.slice(start + 1, end + 3);
 }
 
-function run(body: string, stubs = '') {
-  const script = ['set -Eeuo pipefail', 'exec 9>&2', 'CORE_CONTAINER=hawa-production-core-1; BLOBS_DIR=/somewhere', stubs, fn('ensure_blob_store'), fn('check_blob_store_private'), body].join('\n');
-  const res = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH || '' } });
+function run(body: string, stubs = '', env: Record<string, string> = {}) {
+  const interp = path.join(tmp, 'no-such-env-file');
+  const script = ['set -Eeuo pipefail', 'exec 9>&2', `CORE_CONTAINER=hawa-production-core-1; BLOBS_DIR=/somewhere; INTERP_FILE=\${INTERP_FILE:-${interp}}`, stubs, fn('compose_value'), fn('ensure_blob_store'), fn('check_blob_store_private'), body].join('\n');
+  const res = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH || '', HOME: '/home/owner', ...env } });
   return { code: res.status, out: res.stdout, calls: res.stderr.split('\n').filter((l) => l.startsWith('CALL ')) };
 }
 
@@ -72,6 +73,15 @@ describe('check_blob_store_private', () => {
     }
   });
 
+  it('probes the port compose publishes: the shell\'s HAWA_PORT, else infra/docker/.env\'s, else 8080', () => {
+    const envFile = path.join(tmp, 'interp.env');
+    fs.writeFileSync(envFile, 'POSTGRES_PASSWORD=x\nHAWA_PORT="9091"\n');
+    const fromFile = run('check_blob_store_private', `${curl('404')}\n${docker(true)}`, { INTERP_FILE: envFile });
+    expect(fromFile.calls.some((c) => /curl .*http:\/\/127\.0\.0\.1:9091\/_blobs\//.test(c))).toBe(true);
+    const fromShell = run('check_blob_store_private', `${curl('404')}\n${docker(true)}`, { INTERP_FILE: envFile, HAWA_PORT: '9092' });
+    expect(fromShell.calls.some((c) => /127\.0\.0\.1:9092\/_blobs\//.test(c))).toBe(true);
+  });
+
   it('fails when Core does not see the store', () => {
     const r = run('check_blob_store_private || echo FAILED', `${curl('404')}\n${docker(false)}`);
     expect(r.out).toMatch(/Core does not see the file store/);
@@ -88,5 +98,19 @@ describe('check_blob_store_private', () => {
     expect(ensure).toBeLessThan(backup);
     expect(ensure).toBeLessThan(up);
     expect(check).toBeGreaterThan(health);
+  });
+});
+
+describe('compose_value', () => {
+  it('reads the shell, then infra/docker/.env, then the default, and expands a leading HOME as compose does', () => {
+    const envFile = path.join(tmp, 'blobs.env');
+    fs.writeFileSync(envFile, 'HAWA_BLOBS_DIR=${HOME}/store-from-env\n');
+    expect(run('compose_value HAWA_BLOBS_DIR /default', '', { INTERP_FILE: envFile }).out).toBe('/home/owner/store-from-env');
+    expect(run('compose_value HAWA_BLOBS_DIR /default', '', { INTERP_FILE: envFile, HAWA_BLOBS_DIR: '/from/shell' }).out).toBe('/from/shell');
+    expect(run('compose_value HAWA_BLOBS_DIR /default').out).toBe('/default');
+  });
+
+  it('is what the deploy uses for the store directory', () => {
+    expect(deploySh).toMatch(/\nBLOBS_DIR="\$\(compose_value HAWA_BLOBS_DIR "\$\{HOME\}\/\.hawa\/blobs"\)"\n/);
   });
 });

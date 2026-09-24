@@ -171,12 +171,22 @@ for model in BiRefNet-portrait-epoch_150.onnx face_detection_yunet_2023mar.onnx;
 done
 echo "✓ cut-out model files present in ${MODELS_DIR}"
 
+# The value compose itself interpolates: the shell's, else infra/docker/.env's, else the default.
+# Reading only the shell would let the directory made here, or the port probed below, drift from the
+# ones the containers get when .env sets them. A leading ${HOME} or $HOME in .env is expanded as compose does.
+compose_value() {
+  local v="${!1:-}"
+  [[ -n "$v" ]] || v="$(grep -E "^$1=" "$INTERP_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  v="${v%\"}"; v="${v#\"}"
+  case "$v" in '${HOME}'*) v="${HOME}${v#'${HOME}'}" ;; '$HOME'*) v="${HOME}${v#'$HOME'}" ;; esac
+  printf '%s' "${v:-$2}"
+}
 # 2c. The content-addressed file store (ADR-035) is a host directory bind-mounted into Core, both worker
 # colours (read-write) and nginx (read-only). It is created here, before any container starts, with the
 # marker the store requires: Docker would otherwise create a missing mount source itself, and the store
 # refuses a directory without the marker, so a mount that went wrong cannot fill an empty directory.
 # Files are 0444 and directories 0755, which nginx's own user needs to read them.
-BLOBS_DIR="${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}"
+BLOBS_DIR="$(compose_value HAWA_BLOBS_DIR "${HOME}/.hawa/blobs")"
 ensure_blob_store() {
   install -d -m 0755 "$1" "$1/sha256" "$1/tmp"
   if [[ ! -f "$1/.hawa-blob-store" ]]; then
@@ -187,8 +197,9 @@ ensure_blob_store() {
 # After the stack is up: nginx must not serve /_blobs/ to anyone (it is `internal`, reached only by
 # Core's X-Accel-Redirect after Core has authorised the request), and Core must see the store.
 check_blob_store_private() {
-  local code
-  code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:${HAWA_PORT:-8080}/_blobs/.hawa-blob-store" || true)"
+  local code port
+  port="$(compose_value HAWA_PORT 8080)"
+  code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:${port}/_blobs/.hawa-blob-store" || true)"
   [[ "$code" == 404 ]] || { echo "ERROR: /_blobs/ answered ${code:-nothing} to a direct request; it must be internal to nginx (infra/docker/nginx.conf)"; return 1; }
   docker exec "$CORE_CONTAINER" test -f /var/lib/hawa/blobs/.hawa-blob-store \
     || { echo "ERROR: Core does not see the file store at /var/lib/hawa/blobs (the bind mount of ${BLOBS_DIR})"; return 1; }

@@ -1,6 +1,8 @@
 /**
- * The file store's check (packages/db/src/blobs/verify.ts): every hawa.blobs row and every referenced
- * hash has its file, with the right size and hash. Exit 0 only when nothing is missing or corrupt.
+ * The file store's check (packages/db/src/blobs/verify.ts): every hawa.blobs row has its file, with
+ * the right size and hash. Exit 0 only when nothing is missing or corrupt. A referenced hash without a
+ * row (bytes the backfill has not copied out of Postgres yet) is reported as referencedWithoutRow and
+ * does not fail the check.
  *
  * Usage:
  *   docker exec hawa-production-core-1 node /app/apps/core/dist/tools/blob-verify.js           # the live store

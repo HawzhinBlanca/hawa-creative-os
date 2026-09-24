@@ -115,8 +115,9 @@ export async function claimAndUnlink(db: Kysely<Database>, file: string, sha256:
 }
 
 export async function runBlobGc(store: BlobStore, db: Kysely<Database>, opts: BlobGcOptions): Promise<BlobGcReport> {
-  if (!Number.isFinite(opts.graceDays) || opts.graceDays < BLOB_GC_MIN_GRACE_DAYS) {
-    throw new Error(`The blob grace period must be at least ${BLOB_GC_MIN_GRACE_DAYS} days (got ${opts.graceDays})`);
+  // Whole days: make_interval(days => …) takes an integer, and the backup's retention guard compares days.
+  if (!Number.isInteger(opts.graceDays) || opts.graceDays < BLOB_GC_MIN_GRACE_DAYS) {
+    throw new Error(`The blob grace period must be a whole number of days, at least ${BLOB_GC_MIN_GRACE_DAYS} (got ${opts.graceDays})`);
   }
   const limit = Math.max(1, Math.min(10000, Math.floor(opts.limit ?? 500)));
   const dryRun = opts.dryRun === true;

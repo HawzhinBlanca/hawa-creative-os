@@ -1,7 +1,7 @@
 # ADR-035: Pictures and Design Sources Live in a Content-Addressed File Store
 
 **Date:** 2026-09-24
-**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 3.1). Amended 2026-09-24 (sections 2.3 and 3, marked below) from the implementation design's findings 2 and 3 (`output/plans/2026-09-24-architecture-programme/FILESTORE_DESIGN.md`).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 3.1). Amended 2026-09-24 (sections 2.3, 2.6 and 3, marked below) from the implementation design's findings 2 and 3 (`output/plans/2026-09-24-architecture-programme/FILESTORE_DESIGN.md`).
 **Amends:** the storage of reference photos (`studioOptions.referenceImageBase64`), studio candidate PNGs, Canva plan sources, cut-out PNGs and comparison images. Canva export bytes (`canva_export_bytes`) are unchanged.
 
 ## 1. Context
@@ -20,6 +20,7 @@
 4. Serving: Core authorises on the referencing row, never on the hash, and answers with `X-Accel-Redirect` to an `internal` nginx location with `Cache-Control: private, max-age=31536000, immutable`.
 5. The renderer reads pictures as files beside the SVG (librsvg reads files in the SVG's own folder; the upright step already does this), so no picture is inlined as a data URI.
 6. Backups: the Postgres dump first, then the blob directory, into the existing encrypted archive; blobs never change and the grace period exceeds the backup interval, so every reference in a dump has its file. The restore drill restores both.
+   *Amended 2026-09-24.* A reference counts as a file the store owes only when it has a `hawa.blobs` row. Before the copy backfill, the running Core writes hashes into columns the reference view reads (studio previews and art, plan sources, editable sources, comparison images) while the bytes stay in bytea beside them; those hashes have no row and no file, and nothing is lost. The nightly backup and the store check (weekly and in the restore drill) count them apart (`refs_without_row`, `referencedWithoutRow`) and do not fail on them. Once migration 020 adds the foreign keys, such a reference cannot exist.
 7. Order of moves: reference photos (the payload carries `{sha256, media_type}`, written once), plan sources, candidate PNGs, cut-outs, comparison images.
 
 ## 3. Consequences

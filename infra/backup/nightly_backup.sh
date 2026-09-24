@@ -57,6 +57,9 @@ fail() {
 }
 # Anything else that stops the script is a failure too, and says so, instead of ending in silence.
 trap 'fail "stopped unexpectedly at line $LINENO"' ERR
+# A command substitution whose failure is handled (`|| X=`) drops the trap inside with `trap - ERR`:
+# bash 3.2 fires it in the $(...) subshell too, and fail() there would log and alert a FAIL for a night
+# that then carries on (a failed collector run was reported as a failed backup).
 # Scratch space for this run (reference lists, the pack being checked). Temporary copies never outlive
 # the run, whatever happens: the encrypted dump, and a pack still named .part.
 WORK="$(mktemp -d "$DIR/.work_${STAMP}.XXXXXX")"; PACK_PART=""
@@ -88,21 +91,28 @@ docker exec "$PG" createdb -U hawa_owner "$VDB" || fail "could not create verifi
 if ! docker exec -i "$PG" pg_restore -U hawa_owner -d "$VDB" --no-owner --no-privileges --exit-on-error < "$OUT"; then
   docker exec "$PG" dropdb -U hawa_owner "$VDB" || true; fail "pg_restore rejected the dump"
 fi
-LIVE="$(docker exec "$PG" psql -U hawa_owner -d "$DB" -Atc 'SELECT count(*) FROM hawa.tasks')" || LIVE=""
-REST="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.tasks')" || REST=""
-EVENTS="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.task_events')" || EVENTS="?"
+LIVE="$(trap - ERR; docker exec "$PG" psql -U hawa_owner -d "$DB" -Atc 'SELECT count(*) FROM hawa.tasks')" || LIVE=""
+REST="$(trap - ERR; docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.tasks')" || REST=""
+EVENTS="$(trap - ERR; docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(*) FROM hawa.task_events')" || EVENTS="?"
 # Every file the dump references, read from the restored copy (so exactly what a restore would need)
 # before it is dropped. A database from before migration 019 has no store yet.
-HAS_STORE="$(docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc "SELECT to_regclass('hawa.blob_references') IS NOT NULL")" || HAS_STORE=""
-REFS_OK=1
+# Only references with a hawa.blobs row are files the store owes. Until the copy backfill has run, the
+# running Core writes hashes into columns the view reads (design_studio_candidates.preview_sha256 and
+# others) while the bytes still live in bytea beside them: no row, no file, nothing lost. They are
+# counted (refs_without_row in the log line) and never fail the night. Once migration 020 adds the
+# foreign keys, a reference without a row cannot exist.
+HAS_STORE="$(trap - ERR; docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc "SELECT to_regclass('hawa.blob_references') IS NOT NULL")" || HAS_STORE=""
+REFS_OK=1; REFS_WITHOUT_ROW=0
 if [[ "$HAS_STORE" == t ]]; then
-  docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT DISTINCT sha256 FROM hawa.blob_references' > "$WORK/refs" || REFS_OK=0
+  docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT DISTINCT r.sha256 FROM hawa.blob_references r JOIN hawa.blobs b USING (sha256)' > "$WORK/refs" || REFS_OK=0
+  REFS_WITHOUT_ROW="$(trap - ERR; docker exec "$PG" psql -U hawa_owner -d "$VDB" -Atc 'SELECT count(DISTINCT r.sha256) FROM hawa.blob_references r WHERE NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.sha256)')" || REFS_OK=0
 fi
 docker exec "$PG" dropdb -U hawa_owner "$VDB" || fail "could not drop verification database"
 [[ "$LIVE" =~ ^[0-9]+$ && "$REST" =~ ^[0-9]+$ ]] || fail "could not count the tasks (live '${LIVE}', restored '${REST}')"
 [[ "$REST" -gt 0 && "$LIVE" -ge "$REST" && $((LIVE - REST)) -lt 50 ]] || fail "restored task count ${REST} does not match live ${LIVE}"
 [[ "$HAS_STORE" == t || "$HAS_STORE" == f ]] || fail "could not tell whether the dump has the file store tables"
 [[ "$REFS_OK" == 1 ]] || fail "could not read the file references from the restored dump"
+[[ "$REFS_WITHOUT_ROW" =~ ^[0-9]+$ ]] || fail "could not count the references without a file row in the restored dump"
 DUMP_VERIFIED=1
 
 # The file store's manifest: every file present now, right after the dump. The dump cannot reference a
@@ -117,7 +127,7 @@ if [[ "$HAS_STORE" == t ]]; then
   if [[ "$BLOB_COUNT" -gt 0 ]]; then
     BLOB_BYTES="$(cd "$BLOBS" && tr '\n' '\0' < "$WORK/manifest" | xargs -0 stat -f '%z' 2>/dev/null | awk '{s+=$1} END {print s+0}')" || BLOB_BYTES="?"
   fi
-  # The nightly restore check for files: nothing the dump references may be missing.
+  # The nightly restore check for files: no file the dump references with a row may be missing.
   sed -E 's#^.*/([0-9a-f]{64})\.[a-z]+$#\1#' "$WORK/manifest" | LC_ALL=C sort -u > "$WORK/present"
   LC_ALL=C sort -u "$WORK/refs" | grep -E '^[0-9a-f]{64}$' > "$WORK/refs.sorted" || true
   MISSING="$(LC_ALL=C comm -23 "$WORK/refs.sorted" "$WORK/present" | wc -l | tr -d ' ')"
@@ -230,12 +240,16 @@ if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
 fi
 
 # The collector, only now: a file is deleted only after tonight's dump and its files are archived.
-# A failure is reported and does not fail the backup, which is already complete.
-if [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
+# A failure is reported and does not fail the backup, which is already complete. With a gs://
+# destination the files are not archived at all, so nothing may be deleted: the disk copy is the only one.
+if [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off && "$ARCHIVE_DEST" == gs://* ]]; then
+  GC_DELETED="skipped_unarchived"
+  echo "WARNING: the file store collector did not run: the files are not archived to ${ARCHIVE_DEST}" >&2
+elif [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   if [[ -n "${HAWA_BLOB_GC_CMD:-}" ]]; then
-    GC_OUT="$(bash -c "$HAWA_BLOB_GC_CMD --grace-days $GRACE_DAYS" 2>&1)" && GC_RC=0 || GC_RC=$?
+    GC_OUT="$(trap - ERR; bash -c "$HAWA_BLOB_GC_CMD --grace-days $GRACE_DAYS" 2>&1)" && GC_RC=0 || GC_RC=$?
   else
-    GC_OUT="$(docker exec hawa-production-core-1 node /app/apps/core/dist/tools/blob-gc.js --grace-days "$GRACE_DAYS" 2>&1)" && GC_RC=0 || GC_RC=$?
+    GC_OUT="$(trap - ERR; docker exec hawa-production-core-1 node /app/apps/core/dist/tools/blob-gc.js --grace-days "$GRACE_DAYS" 2>&1)" && GC_RC=0 || GC_RC=$?
   fi
   GC_LINE="$(printf '%s\n' "$GC_OUT" | grep -E '^\{' | tail -1 || true)"
   if [[ "$GC_RC" == 0 && -n "$GC_LINE" ]]; then
@@ -248,5 +262,5 @@ if [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   fi
 fi
 
-echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} gc_deleted=${GC_DELETED}" >> "$LOG"
+echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} gc_deleted=${GC_DELETED}" >> "$LOG"
 echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, files=${BLOB_COUNT} (${NEW_BLOBS} new), archived to ${ARCHIVE_DEST}"

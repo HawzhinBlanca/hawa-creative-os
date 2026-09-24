@@ -298,7 +298,8 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
   });
 
   it('refuses a grace period under seven days, in the tool and in the database', async () => {
-    await expect(runBlobGc(store, app, { graceDays: 3 })).rejects.toThrow(/at least 7 days/);
+    await expect(runBlobGc(store, app, { graceDays: 3 })).rejects.toThrow(/at least 7 \(got 3\)/);
+    await expect(runBlobGc(store, app, { graceDays: 7.5 })).rejects.toThrow(/whole number of days/);
     await expect(sql`SELECT * FROM hawa.blob_gc_sweep(interval '6 days')`.execute(app)).rejects.toThrow(/at least 7 days/);
   });
 
