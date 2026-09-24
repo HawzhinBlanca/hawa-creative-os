@@ -94,7 +94,17 @@ function containerOf(service: Service): string {
   return name;
 }
 
-/** Builds the images (Core, worker, fakes base) from this checkout and starts the project. */
+/**
+ * Builds the images of these services from this checkout. `up` builds only the services it starts,
+ * and Core and the worker are started later with --no-build (after the database is provisioned), so
+ * they ran whatever hawa-chaos-core:local and hawa-chaos-worker:local an earlier run, possibly of
+ * another worktree, had left: a fix under test was not in the containers (R1.K9, 2026-09-24).
+ */
+export function build(services: Service[]): void {
+  compose(['build', ...services], { timeoutMs: 45 * 60 * 1000 });
+}
+
+/** Starts these services, building their images from this checkout unless `build` is false. */
 export function up(options: { build?: boolean; services?: Service[] } = {}): void {
   compose(['up', '-d', '--wait', '--wait-timeout', '240', ...(options.build === false ? ['--no-build'] : ['--build']), ...(options.services || ['postgres', 'restate', 'fakes', 'core', 'worker-blue'])], { timeoutMs: 45 * 60 * 1000 });
 }
