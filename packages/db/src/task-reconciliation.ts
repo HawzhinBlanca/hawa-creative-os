@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Kysely } from 'kysely';
 import type { Database, TaskState } from './types.js';
 import { withRlsContext } from './client.js';
+import { currentTraceId } from './trace-context.js';
 
 export interface TaskReconciliationResult {
   totalScanned: number;
@@ -82,7 +83,7 @@ export async function reconcileTasksFromEvents(
                 actor_id: 'reconciliation_worker',
                 correlation_id: crypto.randomUUID(),
                 causation_id: null,
-                trace_id: null,
+                trace_id: currentTraceId(),
                 data: {
                   fromState: task.state,
                   toState: 'complete',
@@ -137,7 +138,7 @@ export async function reconcileTasksFromEvents(
                 actor_id: 'reconciliation_worker',
                 correlation_id: crypto.randomUUID(),
                 causation_id: null,
-                trace_id: null,
+                trace_id: currentTraceId(),
                 data: {
                   fromState: task.state,
                   toState: 'approved',
@@ -191,7 +192,7 @@ export async function reconcileTasksFromEvents(
                 actor_id: 'reconciliation_worker',
                 correlation_id: crypto.randomUUID(),
                 causation_id: null,
-                trace_id: null,
+                trace_id: currentTraceId(),
                 data: {
                   fromState: task.state,
                   toState: 'human_review',

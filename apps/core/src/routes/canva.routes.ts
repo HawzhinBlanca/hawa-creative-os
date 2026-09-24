@@ -3,6 +3,7 @@ import type { RouteContext } from './types.js';
 import { CanvaConnectService, CanvaFlowError, type CanvaServiceOptions } from '../services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
+import { log } from '../logging.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -83,7 +84,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
       }
       if (recorded.recorded && recorded.revisionCreated) ctx.broadcastEvent('task:transitioned', { taskId, fromStatus: 'REVISION_REQUESTED', toStatus: 'AWAITING_APPROVAL', revisionId: recorded.revisionId });
     } catch (err) {
-      console.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
+      log.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
     }
   };
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{

@@ -13,6 +13,7 @@
  * changes when it registers the new colour, so the two can never disagree, and a deploy that stops
  * between steps leaves nothing to reconcile.
  */
+import { log } from './logging.js';
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -148,11 +149,11 @@ export function runWhileLive(options: {
       if (await options.gate.isLive()) {
         const res = (await options.tick()) as { leased?: number; succeeded?: number; retried?: number; deadLettered?: number } | undefined;
         if (res && typeof res.leased === 'number' && res.leased > 0) {
-          console.log(`[OutboxConsumer] Batch completed: ${res.succeeded ?? 0}/${res.leased} succeeded, ${res.retried ?? 0} retried, ${res.deadLettered ?? 0} dead-lettered`);
+          log.info(`[OutboxConsumer] Batch completed: ${res.succeeded ?? 0}/${res.leased} succeeded, ${res.retried ?? 0} retried, ${res.deadLettered ?? 0} dead-lettered`);
         }
       }
     } catch (error) {
-      (options.onError || ((e) => console.error('[OutboxConsumer] Error during poll cycle:', e)))(error);
+      (options.onError || ((e) => log.error('[OutboxConsumer] Error during poll cycle:', e)))(error);
     } finally {
       if (running) handle = schedule(turn, options.intervalMs);
     }

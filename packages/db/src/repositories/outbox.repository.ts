@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import type { Database } from '../types.js';
+import { withRequestId } from '../trace-context.js';
 
 export interface EnqueueCommandParams {
   tenantId: string;
@@ -296,7 +297,7 @@ export class OutboxRepository {
         aggregate_id: (typeof taskIdOrTrx === 'string' ? taskIdOrTrx : null) || crypto.randomUUID(),
         command_type: destination || 'task.dispatch',
         idempotency_key: `outbox-${crypto.randomUUID()}`,
-        payload: payload || {},
+        payload: withRequestId(payload || {}),
         state: 'pending' as const,
         attempts: 0,
         last_error: null,
@@ -309,7 +310,7 @@ export class OutboxRepository {
         aggregate_id: paramsOrTenantId.aggregateId,
         command_type: paramsOrTenantId.commandType,
         idempotency_key: paramsOrTenantId.idempotencyKey,
-        payload: paramsOrTenantId.payload,
+        payload: withRequestId(paramsOrTenantId.payload),
         available_at: paramsOrTenantId.availableAt || new Date(),
         state: 'pending' as const,
         attempts: 0,

@@ -6,8 +6,48 @@ Scripts the owner runs on the office Mac. Each explains itself in its header.
 |---|---|
 | `install_launch_agents.sh` | Installs the watchdog and the nightly backup as launch agents |
 | `watchdog.sh` | Starts Docker and the stack at login, alerts the operator chat |
-| `disk_cleanup.sh` | Keeps dumps and Docker's build cache bounded |
+| `disk_cleanup.sh` | Keeps dumps, Docker's build cache and container logs (30 days) bounded |
 | `rotate_app_role.sh` | Rotates the application's database password without downtime (below) |
+| `../../scripts/request_logs.ts` | Prints every log line of one request or task (below) |
+
+## Logs of one request
+
+Core and the worker write one JSON line per event (pino, `apps/*/src/logging.ts`, shared code in
+`packages/observability/src/logging.ts`). Every line carries the context of the work it belongs to:
+`requestId`, and `taskId`, `chatId`, `tenantId` once they are known. The request id is:
+
+| Where the work started | Its request id |
+|---|---|
+| An HTTP request through nginx (the Desk, a webhook) | the caller's `X-Request-Id` when it is a plain token, else one nginx makes; nginx logs it as `rid=` and passes it to Core |
+| A Telegram update the poller read | `tg-<update_id>`, the same for every retry of that update |
+| A design the worker runs | the id of the request that queued it: Core stores it in the outbox command's `payload.requestId`, the worker sends it to Restate as `x-request-id`, the handler logs under it and sends it back to Core on every call |
+| An outbox command written outside any request | `outbox-<command id>` |
+
+Core returns it in the `x-request-id` response header, and a task event written inside a request
+records its id in `task_events.trace_id` (Core's background loops, such as the Canva sweeper and the
+draft reminders, run outside any request: their lines and events have none). Secrets never reach a line: any key named like a token, secret,
+password, authorization, API key or cookie is replaced, and so are tokens in query strings, bot URLs,
+bearer headers and database URLs.
+
+The `vector` service (`infra/docker/vector.yaml`) copies the logs of every `hawa-production`
+container into `~/.hawa/logs/containers/<YYYY-MM-DD>/<service>.ndjson` (UTC days). The files outlive
+the containers, so a deploy loses nothing. `disk_cleanup.sh` deletes days older than 30, nightly.
+
+```bash
+npx tsx scripts/request_logs.ts <requestId>               # one request: nginx, Core, worker, in time order
+npx tsx scripts/request_logs.ts <taskId>                  # a task, and every request that touched it
+npx tsx scripts/request_logs.ts <id> --since 2026-09-20   # read fewer days
+npx tsx scripts/request_logs.ts <id> --json               # the stored lines, for jq
+```
+
+To find an id: the `x-request-id` header of a response, `trace_id` on the task's events, or
+`tg-<update_id>`. Things to know:
+
+- **Vector reads through the Docker socket**, mounted read-only, but the socket is the whole Docker
+  API. The image is pinned by digest and the container has no network.
+- **Lines written while Vector is down are not in the files.** It starts reading at the moment it
+  starts; `docker logs` still has them until the container is replaced.
+- **Log level** is `LOG_LEVEL` (default `info`; `debug` adds a line for every `/ready` and `/health`).
 
 ## Rotating the application's database password
 

@@ -1,6 +1,7 @@
 import type { StageContext, CreativeBrief } from '../types.js';
 import { nearestPaletteColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP1Prompt } from '../prompts.js';
+import { log } from '../../../logging.js';
 
 export const CREATIVE_BRIEF_SCHEMA = {
   type: 'object',
@@ -176,7 +177,7 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
   brief.referenceSeen = images.length > 0;
   brief.styleSpec = { ...NEUTRAL_STYLE_SPEC, ...(brief.styleSpec || {}) };
   if (dropped.length > 0) {
-    console.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
+    log.warn(`[studio] creative brief listed ${dropped.length} surplus role(s) (${dropped.join('; ')}); kept one role per copy block`);
   }
   return brief;
 }

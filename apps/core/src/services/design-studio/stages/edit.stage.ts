@@ -25,6 +25,7 @@ import { REVISION_SCHEMA } from './revise.stage.js';
 import { hardQaContextFor } from './v3.stage.js';
 import { arrangeCutouts } from '../photo-cutouts.js';
 import { applyOp, verifyOp, opParams, RULE_OPS, OP_PARAMS_SCHEMA, type OpContext, type OpParams } from '../edit-ops.js';
+import { log } from '../../../logging.js';
 
 /**
  * A change the client asked for on a design they received ("move the logo up", "make the title
@@ -200,7 +201,7 @@ export async function runDirectedEditStage(
       try {
         contrastValues = evaluateCompositeContrast(render.noTextPng, layout).p05PerBox;
       } catch (err) {
-        console.warn(`[edit.stage] Composite contrast could not be measured (${(err as Error)?.message || err}); the declared background decides legibility.`);
+        log.warn(`[edit.stage] Composite contrast could not be measured (${(err as Error)?.message || err}); the declared background decides legibility.`);
       }
     }
     const metrics = computeLayoutMetrics(layout, { copyText, measuredLines: render.wrappedLines, contrastValues });
@@ -340,7 +341,7 @@ export async function runDirectedEditStage(
     // band behind the words) before it is reported not done.
     const undone = 'result' in byRules ? ruled.filter((a) => !verifyOp(parent.layout, byRules.result.layout, a.op, a.params ?? {}, opCtx)) : ruled;
     if ('result' in byRules && !undone.length) return finish(byRules.result, []);
-    console.info(`[edit.stage] the rules' change ${'error' in byRules ? `did not pass (${byRules.error})` : `was undone by the checks (${undone.map((a) => a.ask).join('; ')})`}; the edit model makes it.`);
+    log.info(`[edit.stage] the rules' change ${'error' in byRules ? `did not pass (${byRules.error})` : `was undone by the checks (${undone.map((a) => a.ask).join('; ')})`}; the edit model makes it.`);
     if ('result' in byRules) {
       // An ask the checks undid is the edit model's to make: listed for it as a change, not shown as
       // already made on a layout that still carries it, and not re-applied to its answer. It was sent

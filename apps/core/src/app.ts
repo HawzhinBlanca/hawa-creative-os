@@ -6,6 +6,7 @@ import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
+import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -552,6 +553,8 @@ export function createApp(options?: CreateAppOptions) {
   const unifiedIngress = new UnifiedIngressService(ingressPersistence);
 
   // Middleware
+  // First, so every later middleware, handler and error line carries the request's id (logging.ts).
+  app.use('*', requestLogContext());
   app.use('*', cors({
     origin: '*',
     allowHeaders: [
@@ -566,6 +569,7 @@ export function createApp(options?: CreateAppOptions) {
       'baggage',
       'sentry-trace',
       'traceparent',
+      'x-request-id',
     ],
   }));
 
@@ -589,10 +593,10 @@ export function createApp(options?: CreateAppOptions) {
 
   app.onError((err, c) => {
     if (err instanceof TaskStoreUnavailableError) {
-      console.warn('[core:task_read]', err.message, (err as { cause?: unknown }).cause);
+      log.warn('[core:task_read]', err.message, (err as { cause?: unknown }).cause);
       return problem(c, 503, 'Database Unavailable', err.message);
     }
-    console.error('[core:unhandled_error]', err);
+    log.error('[core:unhandled_error]', err);
     if (process.env.NODE_ENV === 'production') {
       return problem(c, 500, 'Internal Server Error', 'An unexpected internal server error occurred');
     }
@@ -708,7 +712,7 @@ export function createApp(options?: CreateAppOptions) {
         const fromDb = await loadActiveClientDna(db, { tenantId: identity?.tenantId || defaultTenantId, userId: identity?.userId || operatorUserId, role: identity?.role }, clientId, trx);
         if (fromDb) return fromDb as unknown as ClientDNA;
       } catch (err) {
-        console.warn('[core:client_dna] PostgreSQL read failed, answering from memory:', err instanceof Error ? err.message : err);
+        log.warn('[core:client_dna] PostgreSQL read failed, answering from memory:', err instanceof Error ? err.message : err);
       }
     }
     return clientDnas.get(clientId);
@@ -1366,7 +1370,7 @@ export function createApp(options?: CreateAppOptions) {
         VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)})`.execute(trx));
       return true;
     } catch (err) {
-      console.error('[core:sessions] could not persist session; it will not survive a restart:', err);
+      log.error('[core:sessions] could not persist session; it will not survive a restart:', err);
       return false;
     }
   }
@@ -1376,7 +1380,7 @@ export function createApp(options?: CreateAppOptions) {
     try {
       await withRlsContext(db, sessionRls, (trx) => sql`UPDATE hawa.desk_sessions SET revoked_at=now() WHERE token_hash=${sessionHash(token)} AND revoked_at IS NULL`.execute(trx));
     } catch (err) {
-      console.error('[core:sessions] could not record revocation:', err);
+      log.error('[core:sessions] could not record revocation:', err);
     }
   }
   /**
@@ -1401,7 +1405,7 @@ export function createApp(options?: CreateAppOptions) {
       });
     } catch (err) {
       // Database trouble must not log everyone out: keep whatever the cache already knows.
-      console.warn('[core:sessions] lookup failed; using cached sessions only:', err);
+      log.warn('[core:sessions] lookup failed; using cached sessions only:', err);
     }
   }
   const bearerTokenOf = (c: any): string | undefined => {
@@ -1645,7 +1649,7 @@ export function createApp(options?: CreateAppOptions) {
             });
             lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : `alert_${now}`);
           } catch (err) {
-            console.error('[HealthProbe] Watchdog alert delivery failed:', err);
+            log.error('[HealthProbe] Watchdog alert delivery failed:', err);
           }
         }
       }
@@ -1675,7 +1679,7 @@ export function createApp(options?: CreateAppOptions) {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
       } catch (err) {
-        console.error('[HealthProbe] Initial probe failed:', err);
+        log.error('[HealthProbe] Initial probe failed:', err);
       }
     }, 2000);
     setInterval(async () => {
@@ -1683,7 +1687,7 @@ export function createApp(options?: CreateAppOptions) {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
       } catch (err) {
-        console.error('[HealthProbe] Scheduled probe failed:', err);
+        log.error('[HealthProbe] Scheduled probe failed:', err);
       }
     }, billingProbeMs);
   }
@@ -1882,7 +1886,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         } catch (err) {
           if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
-          console.warn('[core:task_hydrate] PostgreSQL sync failed:', err);
+          log.warn('[core:task_hydrate] PostgreSQL sync failed:', err);
         }
       }
       return cached;
@@ -1903,7 +1907,7 @@ export function createApp(options?: CreateAppOptions) {
       return hydrated;
     } catch (err) {
       if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
-      console.warn('[core:task_hydrate] PostgreSQL lookup failed:', err);
+      log.warn('[core:task_hydrate] PostgreSQL lookup failed:', err);
       return undefined;
     }
   }
@@ -1939,6 +1943,7 @@ export function createApp(options?: CreateAppOptions) {
           await ensureSessionLoaded(bearerTokenOf(c));
           const auth = verifyRequestAuth(c);
           if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
+          bindLogContext({ tenantId: auth.tenantId });
           return handler(c, next);
         };
     (app as any)[method](`/v1${path}`, guarded);
@@ -2099,7 +2104,7 @@ export function createApp(options?: CreateAppOptions) {
             clientId = recentClient.rows[0].client_id;
           }
         } catch (err) {
-          console.warn('[ingestChatCampaignTask] Failed to check recent client for channel:', err);
+          log.warn('[ingestChatCampaignTask] Failed to check recent client for channel:', err);
         }
       }
     }
@@ -2307,7 +2312,7 @@ export function createApp(options?: CreateAppOptions) {
         }
       } catch (err) {
         generatedOps = [];
-        console.warn(
+        log.warn(
           `[ingestChatCampaignTask] Task ${taskId} is saved; its inline preview was not drawn ` +
             `(${err instanceof Error ? err.message : String(err)}). The design is produced in the studio.`
         );
@@ -2435,7 +2440,7 @@ export function createApp(options?: CreateAppOptions) {
       // The task is created either way, so without this the request simply lands in the queue and
       // the person who sent it is never acknowledged — indistinguishable, from their side, from
       // the system ignoring them.
-      console.error(
+      log.error(
         `[telegram] Task accepted but the sender cannot be acknowledged: no usable source channel ` +
           `(got ${JSON.stringify(sourceChannelId)}). Sender=${JSON.stringify(senderName)} ` +
           `event=${JSON.stringify(sourceEventId)}.`
@@ -2489,7 +2494,7 @@ export function createApp(options?: CreateAppOptions) {
       });
     }
 
-    if (notification && !notification.success) console.warn(`[TelegramBridge] Request saved but notification failed: ${notification.error}`);
+    if (notification && !notification.success) log.warn(`[TelegramBridge] Request saved but notification failed: ${notification.error}`);
     return { task, brief, costReceipt, latestQAReport, notification };
   }
 
@@ -2600,7 +2605,7 @@ export function createApp(options?: CreateAppOptions) {
           }
           broadcast('task:transitioned', { taskId, action: 'recheck', revisionId: done.revisionId });
         } catch (err) {
-          console.error(`[redrive] Task ${taskId}: re-checking bound Canva draft ${existingBinding.canva_design_id} failed:`, err);
+          log.error(`[redrive] Task ${taskId}: re-checking bound Canva draft ${existingBinding.canva_design_id} failed:`, err);
           recheck = { error: String((err as Error)?.message || err).slice(0, 300) };
         }
       }
@@ -2941,7 +2946,7 @@ export function createApp(options?: CreateAppOptions) {
         clientId: row.decision_payload?.clientId,
       };
     } catch (err) {
-      console.error('[core:publish:approval_lookup] DB lookup error:', err);
+      log.error('[core:publish:approval_lookup] DB lookup error:', err);
       return null;
     }
   }
@@ -2957,7 +2962,7 @@ export function createApp(options?: CreateAppOptions) {
     const tenantId = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
     const stored = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
       publicationRepo.findByTaskId(taskId, tenantId, trx)).catch((err: unknown) => {
-      console.warn('[core:publish] Could not read the stored publication:', err);
+      log.warn('[core:publish] Could not read the stored publication:', err);
       return null;
     });
     if (stored?.state !== 'complete') return null;
@@ -3071,7 +3076,7 @@ export function createApp(options?: CreateAppOptions) {
               }, trx);
             });
           } catch (err) {
-            console.error('[core:omnichannel:auto_approve] DB transition error:', err);
+            log.error('[core:omnichannel:auto_approve] DB transition error:', err);
           }
         }
       }
@@ -3104,7 +3109,7 @@ export function createApp(options?: CreateAppOptions) {
             }, trx);
           });
         } catch (err) {
-          console.error('[core:omnichannel:publishing] DB transition error:', err);
+          log.error('[core:omnichannel:publishing] DB transition error:', err);
         }
       }
 
@@ -3177,7 +3182,7 @@ export function createApp(options?: CreateAppOptions) {
             requesterNotified = !earlierSendFailed;
           }
         } catch (err) {
-          console.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
+          log.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
         }
         // Nothing reached Drive, so the task goes back to APPROVED and Deliver can be pressed again
         // once Drive works; it used to stay PUBLISHING, which the publish route refuses.
@@ -3198,7 +3203,7 @@ export function createApp(options?: CreateAppOptions) {
                 actorId: 'publisher',
                 reason: `Delivery failed before Drive: ${failure.code}`,
               }, trx)
-            ).catch((err: unknown) => console.error('[core:omnichannel:publish] Could not return the task to approved:', err));
+            ).catch((err: unknown) => log.error('[core:omnichannel:publish] Could not return the task to approved:', err));
           }
         }
       return {
@@ -3254,7 +3259,7 @@ export function createApp(options?: CreateAppOptions) {
           dbPub = null;
         }
         if (!dbPub) {
-          console.error('[core:omnichannel:intent] Error persisting publication intent:', err);
+          log.error('[core:omnichannel:intent] Error persisting publication intent:', err);
           return failBeforeDrive({
             status: 503,
             code: 'PUBLICATION_INTENT_PERSISTENCE_FAILED',
@@ -3373,7 +3378,7 @@ export function createApp(options?: CreateAppOptions) {
 
     // A task made in Desk has no chat to tell; writing the command anyway only dead-lettered it.
     if (outboxPayload && !outboxPayload.chatId) {
-      console.log(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
+      log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
     } else if (outboxPayload && outboxRepo && db && isValidUuid(taskId)) {
       try {
         await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -3388,7 +3393,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err) {
-        console.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox:', err);
+        log.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox:', err);
       }
     }
 
@@ -3407,7 +3412,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err) {
-        console.error('[core:omnichannel:complete] DB transition error:', err);
+        log.error('[core:omnichannel:complete] DB transition error:', err);
       }
     }
 
@@ -3473,7 +3478,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         });
       } catch (err) {
-        console.error('[core:omnichannel:receipts] Error persisting drive/sheet receipts:', err);
+        log.error('[core:omnichannel:receipts] Error persisting drive/sheet receipts:', err);
       }
     }
 
@@ -3529,7 +3534,7 @@ export function createApp(options?: CreateAppOptions) {
       } catch (err: any) {
         notificationDelivered = false;
         notificationError = err?.message || String(err);
-        console.warn(`[core:omnichannel:publish] Thread notification failed for task ${taskId}:`, notificationError);
+        log.warn(`[core:omnichannel:publish] Thread notification failed for task ${taskId}:`, notificationError);
       }
     }
 
@@ -3599,7 +3604,7 @@ export function createApp(options?: CreateAppOptions) {
             AND source_account_id = 'telegram' AND source_event_id = ${`${chat}:${updateId}`})`.execute(trx);
       });
     } catch (err) {
-      console.warn(`[TelegramIngress] Could not record update ${updateId} as handled (${kind}):`, err);
+      log.warn(`[TelegramIngress] Could not record update ${updateId} as handled (${kind}):`, err);
     }
   }
 
@@ -3611,7 +3616,7 @@ export function createApp(options?: CreateAppOptions) {
   async function enqueueOfficeAlert(taskId: string, key: string, message: { text: string; parse_mode: 'HTML' }, requesterChat?: string): Promise<boolean> {
     const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
     if (!db || !outboxRepo || !office || office === requesterChat) {
-      console.warn(`[office-alert] ${key}: not sent (${!db || !outboxRepo ? 'no database' : !office ? 'no office chat configured' : "the office chat is the requester's own"})`);
+      log.warn(`[office-alert] ${key}: not sent (${!db || !outboxRepo ? 'no database' : !office ? 'no office chat configured' : "the office chat is the requester's own"})`);
       return false;
     }
     const outbox = outboxRepo;
@@ -3628,7 +3633,7 @@ export function createApp(options?: CreateAppOptions) {
       return true;
     } catch (err) {
       // The key is unique: a second alert for the same thing ends here, which is the point.
-      console.warn(`[office-alert] ${key}: not written (${(err as Error)?.message || err})`);
+      log.warn(`[office-alert] ${key}: not written (${(err as Error)?.message || err})`);
       return false;
     }
   }
@@ -3862,7 +3867,7 @@ export function createApp(options?: CreateAppOptions) {
       broadcast('task:created', persisted.task);
       return { ok: true, sizeTaskId: persisted.task.id };
     } catch (err) {
-      console.error(`[Core] Task ${input.taskId}: the ${size.label} version could not be started:`, err);
+      log.error(`[Core] Task ${input.taskId}: the ${size.label} version could not be started:`, err);
       return { ok: false };
     }
   }
@@ -3997,14 +4002,14 @@ export function createApp(options?: CreateAppOptions) {
       const { closeAnsweredQuestion } = await import('./services/canva-task-outcome.js');
       await withRlsContext(db!, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
         closeAnsweredQuestion(trx, { tenantId: DEFAULT_TENANT_ID, taskId: pending.taskId, revisionTaskId: persisted.task.id })
-      ).catch((err) => console.warn(`[Core] Task ${pending.taskId}: answered, but could not be closed:`, err));
+      ).catch((err) => log.warn(`[Core] Task ${pending.taskId}: answered, but could not be closed:`, err));
       await markTelegramUpdateHandled(chat, input.updateId, 'telegram_requester_answer', { taskId: pending.taskId, revisionTaskId: persisted.task.id });
       broadcast('task:created', persisted.task);
       return { ok: true, revisionTaskId: persisted.task.id };
     } catch (err) {
       // Nothing is sent from here: a tapped answer is told in its pop-up, and a typed one is retried
       // with the update (a message here would repeat on every retry).
-      console.error(`[Core] Task ${pending.taskId}: the answer to its question could not be saved:`, err);
+      log.error(`[Core] Task ${pending.taskId}: the answer to its question could not be saved:`, err);
       return { ok: false };
     }
   }
@@ -4094,7 +4099,7 @@ export function createApp(options?: CreateAppOptions) {
       const returned = await withRlsContext(db, { tenantId: tenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
         taskRepo.transitionState({ taskId, tenantId: tenant, fromState: 'publishing', toState: 'approved', actorType: 'user', actorId: userId, reason: 'Delivery interrupted; delivered again' }, trx)
       ).then(() => true, (err: unknown) => {
-        console.error('[core:publish] Could not take an interrupted delivery back to approved:', err);
+        log.error('[core:publish] Could not take an interrupted delivery back to approved:', err);
         return false;
       });
       if (!returned) return 'failed';
@@ -4108,7 +4113,7 @@ export function createApp(options?: CreateAppOptions) {
     if (!db || !isValidUuid(taskId)) return undefined;
     const tenant = task.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
     return pendingChangeOf(tenant, taskId).catch((err: unknown) => {
-      console.warn('[core:publish] Could not check for a change the client asked for:', err);
+      log.warn('[core:publish] Could not check for a change the client asked for:', err);
       return null;
     });
   }
@@ -4207,7 +4212,7 @@ export function createApp(options?: CreateAppOptions) {
           return { isDuplicate: true };
         }
       } catch (err) {
-        console.error(`[core:ingress_dedup:${adapterKind}] DB error:`, err);
+        log.error(`[core:ingress_dedup:${adapterKind}] DB error:`, err);
       }
     }
     return { isDuplicate: false };
@@ -4237,6 +4242,8 @@ export function createApp(options?: CreateAppOptions) {
 
     const sourceEventId = String(json.update_id ?? json.eventId ?? '');
     if (json.update_id == null && !json.eventId) return problem(c, 400, 'Missing event ID', 'Telegram must supply a stable update ID');
+    // Every line written while this update is handled names its chat (logging.ts).
+    bindLogContext({ chatId: String(json.message?.chat?.id ?? json.callback_query?.message?.chat?.id ?? json.channel_post?.chat?.id ?? json.edited_message?.chat?.id ?? json.sourceChannelId ?? '') });
     const verifiedSender = String(json.callback_query?.from?.id || json.message?.from?.id || json.edited_message?.from?.id || '');
     const isIntakeOpen = telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
     if (isProduction && !isIntakeOpen && (!telegramIntakeUsers.length || !telegramIntakeUsers.includes(verifiedSender))) {
@@ -4404,7 +4411,7 @@ export function createApp(options?: CreateAppOptions) {
       // With the database unreachable nothing could be saved anyway: the update waits for it here,
       // not after a paid transcription and classification that the poller repeats every 30 s.
       const handledBefore = await telegramUpdateHandled(updateChat, sourceEventId).catch((err: unknown) => {
-        console.warn('[TelegramIngress] Could not check whether the update was handled before:', err);
+        log.warn('[TelegramIngress] Could not check whether the update was handled before:', err);
         return null;
       });
       if (handledBefore === null) return problem(c, 503, 'Database Unavailable', 'The update is retried when the database answers');
@@ -4429,7 +4436,7 @@ export function createApp(options?: CreateAppOptions) {
             audioBuf = downloaded;
           }
         } catch (err) {
-          console.warn('[TelegramIngress] Failed to download audio file:', err);
+          log.warn('[TelegramIngress] Failed to download audio file:', err);
         }
       } else if (json.audioBase64) {
         audioBuf = Buffer.from(json.audioBase64, 'base64');
@@ -4494,7 +4501,7 @@ export function createApp(options?: CreateAppOptions) {
           else referenceImageBase64 = `data:${mime};base64,${photoBuf.toString('base64')}`;
         }
       } catch (err) {
-        console.warn('[TelegramIngress] Failed to download reference photo:', err);
+        log.warn('[TelegramIngress] Failed to download reference photo:', err);
       }
       if (unusable) return refuseImageFile(`is a ${unusable} file, which the design cannot use.`, 'IMAGE_FORMAT_UNSUPPORTED');
       // A picture Telegram could not hand over is fetched again with the whole update: the poller
@@ -4610,14 +4617,14 @@ export function createApp(options?: CreateAppOptions) {
       // A photo from the album whose captioned photo is the request belongs to that request.
       const album = albumId
         ? await findAlbumRequest(db, { sourceChannelId, mediaGroupId: albumId }).catch((err) => {
-            console.warn('[TelegramIngress] Could not look for the album request:', err);
+            log.warn('[TelegramIngress] Could not look for the album request:', err);
             return null;
           })
         : null;
       // An album photo belongs to its album's request or to none yet: with the caption on a later
       // photo, the first one was attached to whichever request the chat made last.
       const target = album || (albumId ? null : await findRequestAwaitingReference(db, { sourceChannelId }).catch((err) => {
-        console.warn('[TelegramIngress] Could not look for a request to attach the photo to:', err);
+        log.warn('[TelegramIngress] Could not look for a request to attach the photo to:', err);
         return null;
       }));
       if (target) {
@@ -4701,7 +4708,7 @@ export function createApp(options?: CreateAppOptions) {
     // previous change is still being made" and being dropped with the caption (review of 2026-09-24).
     if (albumId && !firstOfAlbum && msg.reply_to_message && referenceImageBase64 && !captionless && db && sourceChannelId !== 'tg_default') {
       const album = await findAlbumRequest(db, { sourceChannelId, mediaGroupId: albumId }).catch((err) => {
-        console.warn('[TelegramIngress] Could not look for the album change:', err);
+        log.warn('[TelegramIngress] Could not look for the album change:', err);
         return undefined;
       });
       if (album === undefined) return problem(c, 503, 'Database unavailable', 'The album this photo belongs to could not be looked up; retry');
@@ -4747,7 +4754,7 @@ export function createApp(options?: CreateAppOptions) {
           ORDER BY t.created_at DESC LIMIT 5`.execute(trx)).rows
       ).catch((err: unknown) => {
         // A read that failed answered "No requests from this chat yet", which is untrue.
-        console.warn('[TelegramIngress] /status could not read the chat\'s requests:', err);
+        log.warn('[TelegramIngress] /status could not read the chat\'s requests:', err);
         return null;
       });
       if (!rows) {
@@ -4878,7 +4885,7 @@ export function createApp(options?: CreateAppOptions) {
                 targetTaskId = recentFailed.rows[0].task_id;
               }
             } catch (err) {
-              console.warn('[TelegramBridge] Failed to find recent failed task for redrive:', err);
+              log.warn('[TelegramBridge] Failed to find recent failed task for redrive:', err);
             }
           }
           if (!targetTaskId) {
@@ -4951,14 +4958,14 @@ export function createApp(options?: CreateAppOptions) {
           } catch (dbErr) {
             // A database that cannot answer now may answer on the next attempt; a 404 here was final
             // for the poller, and the sender's reply was dropped without a word.
-            console.warn('[Core] Failed to find reply task in DB:', dbErr);
+            log.warn('[Core] Failed to find reply task in DB:', dbErr);
             return problem(c, 503, 'Database unavailable', 'The replied-to design could not be looked up; retry');
           }
         }
         if (!replyTarget) {
           // The reply names a task this office does not hold (a message from another deployment,
           // or a test). The message is read as if it were not a reply, rather than dropped.
-          console.warn(`[Core] Telegram reply referenced unknown task UUID ${uuidMatch[1]}; reading the message on its own.`);
+          log.warn(`[Core] Telegram reply referenced unknown task UUID ${uuidMatch[1]}; reading the message on its own.`);
         }
       }
     }
@@ -4967,12 +4974,12 @@ export function createApp(options?: CreateAppOptions) {
       try {
         replyDesignOf = { ...(await replyDesign(String(replyTarget.id))), of: String(replyTarget.id) };
       } catch (err) {
-        console.warn('[Core] Could not look up the design a reply is about:', err);
+        log.warn('[Core] Could not look up the design a reply is about:', err);
         return problem(c, 503, 'Database unavailable', 'The replied-to design could not be looked up; retry');
       }
       if (replyDesignOf.chat && replyDesignOf.chat !== sourceChannelId) {
         // A draft forwarded from another chat: its design is not this chat's to change.
-        console.warn('[Core] A reply named a design made for another chat; reading the message on its own.');
+        log.warn('[Core] A reply named a design made for another chat; reading the message on its own.');
         replyTarget = null;
         replyDesignOf = null;
       }
@@ -4988,7 +4995,7 @@ export function createApp(options?: CreateAppOptions) {
         if (!pending) followUp = await questionFollowUp(String(replyTarget.id));
       } catch (err) {
         // Read as a change instead, the reply would start a new design; retried, it reaches the answer.
-        console.warn('[Core] Could not tell whether a reply answers a question:', err);
+        log.warn('[Core] Could not tell whether a reply answers a question:', err);
         return problem(c, 503, 'Database unavailable', 'Whether this reply answers a question could not be checked; retry');
       }
       if (pending) {
@@ -5066,7 +5073,7 @@ export function createApp(options?: CreateAppOptions) {
               tasks.set(dbTask.id, feedbackTargetTask);
             }
           } catch (dbErr) {
-            console.warn('[Core] Failed to find text UUID task in DB:', dbErr);
+            log.warn('[Core] Failed to find text UUID task in DB:', dbErr);
           }
         }
         // Like a reply, "revise <id>" changes only a design made for this chat, as it now is.
@@ -5074,7 +5081,7 @@ export function createApp(options?: CreateAppOptions) {
           const named = await replyDesign(String(feedbackTargetTask.id)).catch(() => null);
           if (!named) return problem(c, 503, 'Database unavailable', 'The named design could not be looked up; retry');
           if (named.chat && named.chat !== sourceChannelId) {
-            console.warn('[Core] A message named a design made for another chat; reading it on its own.');
+            log.warn('[Core] A message named a design made for another chat; reading it on its own.');
             feedbackTargetTask = null;
           } else if (named.newest !== String(feedbackTargetTask.id) && taskRepo) {
             const next = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) => taskRepo.findById(named.newest, DEFAULT_TENANT_ID, trx)).catch(() => null);
@@ -5137,7 +5144,7 @@ export function createApp(options?: CreateAppOptions) {
             pendingTasks = [rehydrated];
           }
         } catch (dbErr) {
-          console.warn('[Core] Failed to query recent task by sourceChannelId:', dbErr);
+          log.warn('[Core] Failed to query recent task by sourceChannelId:', dbErr);
         }
       }
 
@@ -5171,7 +5178,7 @@ export function createApp(options?: CreateAppOptions) {
             pendingTasks[0].previewImageBase64 = imgRow.rows[0].b64;
           }
         } catch (imgErr) {
-          console.warn('[Core] Failed to fetch previewImageBase64 for pending task:', imgErr);
+          log.warn('[Core] Failed to fetch previewImageBase64 for pending task:', imgErr);
         }
       }
 
@@ -5349,14 +5356,14 @@ export function createApp(options?: CreateAppOptions) {
               }
             });
           } catch (inqErr) {
-            console.warn('[TelegramIngress] Failed to persist inquiry event to inbox_events:', inqErr);
+            log.warn('[TelegramIngress] Failed to persist inquiry event to inbox_events:', inqErr);
           }
         }
         if (!sourceChannelId || sourceChannelId === 'tg_default') {
           // Returning PROCESSED here without sending anything is how a person ends up messaging
           // the system and getting silence — the reported symptom that started this work. The
           // reply still cannot be sent without a channel, but the drop is no longer invisible.
-          console.error(
+          log.error(
             `[telegram] Cannot reply to a '${classification.kind}' message: no usable source ` +
               `channel (got ${JSON.stringify(sourceChannelId)}). Sender=${JSON.stringify(senderName)} ` +
               `event=${JSON.stringify(sourceEventId)}. The sender received no answer.`
@@ -5413,7 +5420,7 @@ export function createApp(options?: CreateAppOptions) {
     if (feedbackTargetTask && db && sourceChannelId !== 'tg_default' && isValidUuid(feedbackTargetTask.id)) {
       const [designState, pendingChange] = await Promise.all([
         taskDesignState(feedbackTargetTask.id).catch((err: unknown) => {
-          console.warn('[TelegramIngress] Could not read the design state of the change target:', err);
+          log.warn('[TelegramIngress] Could not read the design state of the change target:', err);
           return 'none' as const;
         }),
         revisionInFlight(feedbackTargetTask.id).catch(() => null),
@@ -5494,7 +5501,7 @@ export function createApp(options?: CreateAppOptions) {
               .execute();
           });
         } catch (dbErr) {
-          console.warn('[Core] Could not persist feedback_event to PostgreSQL:', dbErr);
+          log.warn('[Core] Could not persist feedback_event to PostgreSQL:', dbErr);
         }
       }
 
@@ -5578,7 +5585,7 @@ export function createApp(options?: CreateAppOptions) {
             `\n\n<i>To add a new typeface, the owner has to install it in the studio first.</i>`,
           parse_mode: 'HTML',
         }).catch((err: unknown) => {
-          console.error('[TelegramBridge] Could not send unavailable-font notice:', err);
+          log.error('[TelegramBridge] Could not send unavailable-font notice:', err);
         });
       }
       // What this message did, said in the message production senders receive (the revision
@@ -5646,7 +5653,7 @@ export function createApp(options?: CreateAppOptions) {
                 }
               }
             } catch (e) {
-              console.warn('[Core] Failed to resolve parent task payload:', e);
+              log.warn('[Core] Failed to resolve parent task payload:', e);
             }
           }
 
@@ -5742,7 +5749,7 @@ export function createApp(options?: CreateAppOptions) {
         } catch (revErr) {
           // Saying "feedback is recorded" here reported a revision that was never saved. The update
           // is retried instead (the revision's event id makes the retry idempotent).
-          console.error('[TelegramBridge] Failed to enqueue revision draft:', revErr);
+          log.error('[TelegramBridge] Failed to enqueue revision draft:', revErr);
           return problem(c, 503, 'Revision not saved', 'The revision could not be saved; the message will be retried');
         }
       }
@@ -5861,7 +5868,7 @@ export function createApp(options?: CreateAppOptions) {
 
     return c.json({ ok: true, task: result.task, duplicate: result.duplicate === true, voiceTranscript, notification: result.notification }, result.duplicate ? 200 : 201);
     } catch (error) {
-      console.error('[chat-intake] Durable Telegram intake failed:', error);
+      log.error('[chat-intake] Durable Telegram intake failed:', error);
       return problem(c, 503, 'Intake not committed', 'The request was not acknowledged. Retry with the same source event ID.');
     }
   });
@@ -6333,7 +6340,7 @@ export function createApp(options?: CreateAppOptions) {
         });
         return c.json({ items, total: page.total, limit: page.limit, ...(cursor ? {} : { offset }), nextCursor: page.nextCursor });
       } catch (err: any) {
-        console.error('[core:tasks:list] DB list query error:', err);
+        log.error('[core:tasks:list] DB list query error:', err);
         return problem(c, 500, 'Database Error', `Failed to query tasks from database: ${err.message}`);
       }
     }
@@ -6484,7 +6491,7 @@ export function createApp(options?: CreateAppOptions) {
             'Idempotency conflict: key already used with differing payload'
           );
         }
-        console.error('[core:tasks:create] DB Aggregate Intake Failure:', err);
+        log.error('[core:tasks:create] DB Aggregate Intake Failure:', err);
         return problem(
           c,
           503,
@@ -6745,7 +6752,7 @@ export function createApp(options?: CreateAppOptions) {
           return problem(c, 404, 'Task Not Found', `No task found with id ${taskId}`);
         }
       } catch (err) {
-        console.error('[core:tasks:get] DB fetch error:', err);
+        log.error('[core:tasks:get] DB fetch error:', err);
       }
     }
 
@@ -6783,7 +6790,7 @@ export function createApp(options?: CreateAppOptions) {
       } catch (err) {
         // Answered with the in-memory events (usually none), a failed read showed the Desk's History
         // tab as "no recorded events" (review of 2026-09-24).
-        console.error('[core:tasks:timeline] DB timeline error:', err);
+        log.error('[core:tasks:timeline] DB timeline error:', err);
         return problem(c, 503, 'Database Unavailable', 'The task history could not be read; try again');
       }
     }
@@ -6858,7 +6865,7 @@ export function createApp(options?: CreateAppOptions) {
           return await taskRepo.findById(taskId, tenantId, trx);
         });
       } catch (err) {
-        console.error('[core:route:lookup] DB task error:', err);
+        log.error('[core:route:lookup] DB task error:', err);
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
@@ -6917,7 +6924,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err) {
-        console.error('[core:route] DB update error:', err);
+        log.error('[core:route] DB update error:', err);
       }
     }
 
@@ -6945,7 +6952,7 @@ export function createApp(options?: CreateAppOptions) {
           return await taskRepo.findById(taskId, tenantId, trx);
         });
       } catch (err) {
-        console.error('[core:briefs:lookup] DB task error:', err);
+        log.error('[core:briefs:lookup] DB task error:', err);
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
@@ -7024,7 +7031,7 @@ export function createApp(options?: CreateAppOptions) {
           })).execute();
         });
       } catch (err) {
-        console.error('[core:briefs:db] DB transition error:', err);
+        log.error('[core:briefs:db] DB transition error:', err);
       }
     }
 
@@ -7048,7 +7055,7 @@ export function createApp(options?: CreateAppOptions) {
           return await taskRepo.findById(taskId, tenantId, trx);
         });
       } catch (err) {
-        console.error('[core:generate:lookup] DB task error:', err);
+        log.error('[core:generate:lookup] DB task error:', err);
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
@@ -7276,7 +7283,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         });
       } catch (err) {
-        console.error('[core:generate:db] DB transition error:', err);
+        log.error('[core:generate:db] DB transition error:', err);
       }
     }
 
@@ -7418,7 +7425,7 @@ export function createApp(options?: CreateAppOptions) {
           async (trx) => await outboxRepo.findByAggregateId(auth.tenantId, 'task', taskId, trx)
         );
       } catch (err) {
-        console.error('[core:outbox:query] DB outbox query error:', err);
+        log.error('[core:outbox:query] DB outbox query error:', err);
       }
     }
 
@@ -7532,7 +7539,7 @@ export function createApp(options?: CreateAppOptions) {
           message: 'Outbox command queued for redelivery',
         });
       } catch (err: any) {
-        console.error('[core:outbox:redrive] DB error:', err);
+        log.error('[core:outbox:redrive] DB error:', err);
       }
     }
 
@@ -7651,7 +7658,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         );
       } catch (err) {
-        console.error('[core:pub_state:query] DB error:', err);
+        log.error('[core:pub_state:query] DB error:', err);
       }
     }
 
@@ -7841,7 +7848,7 @@ export function createApp(options?: CreateAppOptions) {
         // The requester reads plain words about their draft; the studio's own summary (models, score,
         // the edit's coordinates) is for the office, in the log and on the notification's record.
         studioSummary = studioStatusNote({ run: studioRun, candidates: studioCandidates, parityNote, models });
-        console.log(`[canvaStatusHandler] Task ${taskId} studio summary: ${studioSummary}`);
+        log.info(`[canvaStatusHandler] Task ${taskId} studio summary: ${studioSummary}`);
         notes.push(...requesterDraftNotes({ run: studioRun, candidates: studioCandidates }));
         const runStages = typeof studioRun.stages === 'string' ? JSON.parse(studioRun.stages || '{}') : studioRun.stages || {};
         const recordedAsks = Array.isArray(runStages?.directed?.asks) ? runStages.directed.asks : [];
@@ -7895,7 +7902,7 @@ export function createApp(options?: CreateAppOptions) {
       } catch (revErr: any) {
         // This used to be one log line and nothing else: the draft existed in Canva, the Desk could
         // not show it, and the task sat in RECEIVED. The task is now marked for an operator, saying why.
-        console.error(
+        log.error(
           `[canvaStatusHandler] Task ${taskId}: Canva draft ${designId || '(no design id)'} (${status}) could NOT be recorded as a Desk revision; ` +
             `the task is marked OPERATOR_REQUIRED instead:`,
           revErr
@@ -7923,11 +7930,11 @@ export function createApp(options?: CreateAppOptions) {
         broadcast('task:transitioned', { taskId, fromStatus: moved.fromState.toUpperCase(), toStatus: deskStatus });
       }
       if (outcomeState === 'failed_operator') {
-        console.warn(`[canvaStatusHandler] Task ${taskId} needs an operator: ${outcomeReason}`);
+        log.warn(`[canvaStatusHandler] Task ${taskId} needs an operator: ${outcomeReason}`);
       }
     } catch (stateErr) {
       // Never fail the delivery over bookkeeping, but never hide it either.
-      console.error(`[canvaStatusHandler] Task ${taskId}: could not record outcome ${status} as state ${outcomeState}:`, stateErr);
+      log.error(`[canvaStatusHandler] Task ${taskId}: could not record outcome ${status} as state ${outcomeState}:`, stateErr);
     }
 
     let notificationSent = false;
@@ -8005,7 +8012,7 @@ export function createApp(options?: CreateAppOptions) {
             notificationDeduplicated: true,
           });
         }
-        console.error(`[canvaStatusHandler] Task ${taskId} status ${status} could not be written to the outbox:`, enqueueErr);
+        log.error(`[canvaStatusHandler] Task ${taskId} status ${status} could not be written to the outbox:`, enqueueErr);
         return problem(c, 500, 'Notification Enqueue Failed', `Failed to persist notification command to durable outbox: ${String(enqueueErr)}`);
       }
 
@@ -8093,7 +8100,7 @@ export function createApp(options?: CreateAppOptions) {
         }
       } catch (photoErr) {
         // Photo failures never fail the status message
-        console.warn('[canvaStatusHandler] Photo delivery warning:', photoErr);
+        log.warn('[canvaStatusHandler] Photo delivery warning:', photoErr);
       }
     } else {
       notificationError = sourceChannelId ? 'REQUESTER_TOLD_AT_INTAKE' : 'NO_TELEGRAM_SOURCE';
@@ -8201,7 +8208,7 @@ export function createApp(options?: CreateAppOptions) {
           return await taskRepo.findById(taskId, tenantId, trx);
         });
       } catch (err) {
-        console.error('[core:control:lookup] DB task error:', err);
+        log.error('[core:control:lookup] DB task error:', err);
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
@@ -8245,7 +8252,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx);
         });
       } catch (err) {
-        console.error('[core:control:db] DB transition error:', err);
+        log.error('[core:control:db] DB transition error:', err);
       }
     }
 
@@ -8398,7 +8405,7 @@ export function createApp(options?: CreateAppOptions) {
             .execute();
         });
       } catch (err) {
-        console.error('[core:qa:db] Failed to persist qc_run:', err);
+        log.error('[core:qa:db] Failed to persist qc_run:', err);
       }
     }
     return c.json(qaRes.value, 200);
@@ -8534,7 +8541,7 @@ export function createApp(options?: CreateAppOptions) {
     // is never left with nothing to approve.
     if (isApproved && db && isValidUuid(taskId)) {
       const newer = await pendingChangeOf(tenantId, taskId).catch((err: unknown) => {
-        console.warn('[core:approval] Could not check for a newer revision:', err);
+        log.warn('[core:approval] Could not check for a newer revision:', err);
         return null;
       });
       if (newer === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
@@ -8599,7 +8606,7 @@ export function createApp(options?: CreateAppOptions) {
             }
           }
         } catch (err) {
-          console.error('[core:approvals:qc_lookup] DB QC run lookup error:', err);
+          log.error('[core:approvals:qc_lookup] DB QC run lookup error:', err);
         }
       }
 
@@ -8726,7 +8733,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx)
         );
       } catch (err: any) {
-        console.error('[core:approvals:create] DB approval error:', err);
+        log.error('[core:approvals:create] DB approval error:', err);
         if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification')) {
           return problem(c, 409, 'Conflict', err.message);
         }
@@ -8824,7 +8831,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         );
       } catch (err: any) {
-        console.error('[core:approvals:transition] DB state transition error:', err);
+        log.error('[core:approvals:transition] DB state transition error:', err);
       }
     }
 
@@ -9009,7 +9016,7 @@ export function createApp(options?: CreateAppOptions) {
           }, trx)
         );
       } catch (err: any) {
-        console.error('[core:revisions:create] DB revision error:', err);
+        log.error('[core:revisions:create] DB revision error:', err);
         return problem(c, 503, 'Durable Storage Unavailable', `Failed to persist revision: ${err.message}`);
       }
     }
@@ -9091,7 +9098,7 @@ export function createApp(options?: CreateAppOptions) {
             }
           );
         } catch (err) {
-          console.error('[core:revisions:invalidate] DB approval invalidation error:', err);
+          log.error('[core:revisions:invalidate] DB approval invalidation error:', err);
         }
       }
     } else {
@@ -9238,7 +9245,7 @@ export function createApp(options?: CreateAppOptions) {
           revisions.set(revisionId, rev);
         }
       } catch (err) {
-        console.error('[core:revisions:get] DB fetch error:', err);
+        log.error('[core:revisions:get] DB fetch error:', err);
       }
     }
 
@@ -10249,7 +10256,7 @@ export function createApp(options?: CreateAppOptions) {
           }
         }
       } catch (dnaErr) {
-        console.warn('[Core] Failed to update client DNA JSON on disk:', dnaErr);
+        log.warn('[Core] Failed to update client DNA JSON on disk:', dnaErr);
       }
     }
 
@@ -10885,7 +10892,7 @@ export function createApp(options?: CreateAppOptions) {
             }, trx);
           });
         } catch (err) {
-          console.error('[core:whatsapp:approve] DB transition error:', err);
+          log.error('[core:whatsapp:approve] DB transition error:', err);
         }
       }
 
@@ -10931,7 +10938,7 @@ export function createApp(options?: CreateAppOptions) {
             }, trx);
           });
         } catch (err) {
-          console.error('[core:whatsapp:revision] DB transition error:', err);
+          log.error('[core:whatsapp:revision] DB transition error:', err);
         }
       }
 
@@ -11215,7 +11222,7 @@ export function createApp(options?: CreateAppOptions) {
     const reminderOutbox = outboxRepo;
     const pass = () =>
       remindUnansweredDrafts({ db: reminderDb, outbox: reminderOutbox, tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID })
-        .catch((err) => console.warn('[draft-reminders] pass failed:', (err as Error)?.message || err));
+        .catch((err) => log.warn('[draft-reminders] pass failed:', (err as Error)?.message || err));
     setInterval(pass, 15 * 60_000).unref?.();
     setTimeout(pass, 90_000).unref?.();
   }
@@ -11231,15 +11238,15 @@ export function createApp(options?: CreateAppOptions) {
     const pass = async () => {
       try {
         const swept = await sweeper.sweepStrandedOperations({ tenantId: DEFAULT_TENANT_ID, actorId: SYSTEM_AUTOMATION_USER_ID });
-        if (swept.sweptCount) console.log(`[canva-sweeper] settled ${swept.sweptCount} operation(s):`, JSON.stringify(swept.settled));
+        if (swept.sweptCount) log.info(`[canva-sweeper] settled ${swept.sweptCount} operation(s):`, JSON.stringify(swept.settled));
         const { recordCheckedExportQc } = await import('./services/canva-task-outcome.js');
         const checked = new Set(swept.settled.filter((o) => o.kind === 'export' && o.format === 'pptx' && o.status === 'retrieved').map((o) => o.taskId));
         for (const taskId of checked) {
           await withRlsContext(sweepDb, scope, (trx) => recordCheckedExportQc(trx, evaluateCanvaExportQc, { tenantId: DEFAULT_TENANT_ID, taskId }))
-            .catch((err) => console.warn(`[canva-sweeper] task ${taskId}: check not recorded:`, (err as Error)?.message || err));
+            .catch((err) => log.warn(`[canva-sweeper] task ${taskId}: check not recorded:`, (err as Error)?.message || err));
         }
       } catch (err) {
-        console.warn('[canva-sweeper] pass failed:', (err as Error)?.message || err);
+        log.warn('[canva-sweeper] pass failed:', (err as Error)?.message || err);
       }
     };
     setInterval(pass, 5 * 60_000).unref?.();
@@ -11263,10 +11270,11 @@ export function createApp(options?: CreateAppOptions) {
         if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET is not configured');
         const res = await app.request('/api/webhooks/telegram?generate=true', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret },
+          // The update's own id (tg-<update_id>, set below) carries on into intake and what it writes.
+          headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
           body: JSON.stringify(update),
         });
-        if (!res.ok) console.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, await res.text().catch(() => ''));
+        if (!res.ok) log.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, await res.text().catch(() => ''));
         return res.status;
       },
       ...(pollState ? { recordFailure: (update: TelegramUpdate, reason: string) => pollState.recordFailure(update.update_id, reason) } : {}),
@@ -11285,17 +11293,23 @@ export function createApp(options?: CreateAppOptions) {
         if (!sent.success) throw new Error(sent.error || 'send failed');
       },
     });
-    telegramBridge.useUpdateHandler?.(handlePolledUpdate);
-    if (options?.enableTelegramPolling) telegramBridge.startPolling(handlePolledUpdate);
+    // One log context per update, retries included: tg-<update_id> finds every attempt at it.
+    const handleUpdateInContext = (update: TelegramUpdate) =>
+      runWithLogContext(
+        { requestId: `tg-${update.update_id}`, chatId: String(update.message?.chat?.id ?? update.callback_query?.message?.chat?.id ?? '') },
+        () => handlePolledUpdate(update)
+      );
+    telegramBridge.useUpdateHandler?.(handleUpdateInContext);
+    if (options?.enableTelegramPolling) telegramBridge.startPolling(handleUpdateInContext);
   }
 
   // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
   // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
   const clientDnaHydrated: Promise<number> = db
     ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
-        (n) => { console.log(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
+        (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
         (err) => {
-          console.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
+          log.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
           if (isProduction) throw err;
           return 0;
         }

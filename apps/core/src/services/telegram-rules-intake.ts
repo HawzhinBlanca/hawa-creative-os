@@ -4,6 +4,7 @@ import { escapeTelegramHtml } from '@hawa/integrations';
 import { readBrandGuidelines, fontCaveat, type GuidelinesModel } from './brand-guidelines.js';
 import { isPdf } from './telegram-media.js';
 import { formatRuleSaved, formatRulesList, ruleNumber, type RulesCommand } from './standing-rules-chat.js';
+import { log } from '../logging.js';
 
 /**
  * The chat side of a client's standing rules: which client a message is about, saving a rule said
@@ -314,7 +315,7 @@ export async function handleGuidelinesPdf(
         parse_mode: 'HTML',
       });
     } catch (err) {
-      console.error(`[telegram] brand guidelines ${name} could not be read:`, (err as Error)?.message || err);
+      log.error(`[telegram] brand guidelines ${name} could not be read:`, (err as Error)?.message || err);
       await deps.bridge
         .dispatchOutboundMessage(params.sourceChannelId, {
           text: `⚠️ <b>${escapeTelegramHtml(name)} could not be read</b>, so no rules were saved from it.\n\n<i>Please send it again; if it fails twice, the office will add the rules by hand.</i>`,

@@ -1,0 +1,70 @@
+# Vector (architecture programme 1.4): copies the logs of every hawa-production container into daily
+# NDJSON files on the host, one file per service and day:
+#
+#   ~/.hawa/logs/containers/2026-09-24/core.ndjson
+#   ~/.hawa/logs/containers/2026-09-24/worker-blue.ndjson
+#   ~/.hawa/logs/containers/2026-09-24/nginx.ndjson
+#
+# Docker's own logs go with their container: a deploy that replaces Core or a worker colour takes the
+# old container's lines with it. These files stay, so scripts/request_logs.ts <requestId|taskId> can
+# show one request across Core, the worker and nginx after any number of deploys.
+#
+# Retention is 30 days, kept by infra/ops/disk_cleanup.sh (Vector never deletes). The day in a path
+# is the line's own UTC timestamp.
+#
+# What it cannot see: lines written while this container is down. The docker_logs source starts
+# reading at the moment it starts; older lines are still in `docker logs` until their container goes.
+
+data_dir: /var/lib/vector
+
+sources:
+  hawa_containers:
+    type: docker_logs
+    # Every container compose starts for the production project carries this label (the worker
+    # colours included); the test database and one-off `docker run` containers do not.
+    include_labels:
+      - "com.docker.compose.project=hawa-production"
+    # Its own lines would feed back into itself.
+    exclude_containers:
+      - "hawa-production-vector"
+
+transforms:
+  # When a container stops or restarts, the source reopens its stream from the last timestamp it saw,
+  # and Docker sends that last line again (seen in a test on 0.58.0): it is written once.
+  hawa_unique:
+    type: dedupe
+    inputs: ["hawa_containers"]
+    fields:
+      match: ["container_id", "timestamp", "stream", "message"]
+    cache:
+      num_events: 5000
+
+  hawa_lines:
+    type: remap
+    inputs: ["hawa_unique"]
+    source: |
+      service = .label."com.docker.compose.service"
+      if !is_string(service) { service = .container_name }
+      if !is_string(service) { service = "unknown" }
+      .service = service
+      # Core and the worker write one JSON object per line (pino): keep it as an object, once.
+      # nginx and Restate write text, kept as `message`.
+      parsed, err = parse_json(.message)
+      if err == null && is_object(parsed) {
+        .log = parsed
+        del(.message)
+      }
+      del(.label)
+      del(.source_type)
+
+sinks:
+  daily_files:
+    type: file
+    inputs: ["hawa_lines"]
+    path: "/logs/%Y-%m-%d/{{ service }}.ndjson"
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    # A day's file is closed a minute after its last line, so yesterday's is not held open.
+    idle_timeout_secs: 60

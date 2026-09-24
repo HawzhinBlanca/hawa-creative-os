@@ -8,6 +8,7 @@ import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
 import { isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
+import { log } from '../logging.js';
 
 type Scope={tenantId:string;actorId:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
@@ -41,11 +42,11 @@ function loadConfirmedExemplars(): Array<{ label: string; sha256?: string; base6
       }
     }
     if (!results.length) {
-      console.error('[canva-planner] No confirmed exemplar image resolved; the plan is being drafted without one.');
+      log.error('[canva-planner] No confirmed exemplar image resolved; the plan is being drafted without one.');
     }
     return results;
   } catch (err: any) {
-    console.error(`[canva-planner] Confirmed exemplars could not be loaded (${err?.message || err}).`);
+    log.error(`[canva-planner] Confirmed exemplars could not be loaded (${err?.message || err}).`);
     return [];
   }
 }

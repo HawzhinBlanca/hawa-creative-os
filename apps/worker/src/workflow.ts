@@ -37,6 +37,11 @@ export interface WorkflowInput {
    * state, but no second message is sent.
    */
   requesterToldAtIntake?: boolean;
+  /**
+   * The request that started this work (the id Core wrote with the outbox command). The handler logs
+   * under it when the invocation's own x-request-id header is missing.
+   */
+  requestId?: string;
 }
 
 export interface WorkflowOutput {

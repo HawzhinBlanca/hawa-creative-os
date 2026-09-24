@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 
 import fs from 'node:fs';
+import { log } from './logging.js';
 
 try {
   if (fs.existsSync('.env')) {
@@ -32,12 +33,12 @@ const SERVICE_NAME = 'hawa-core';
 // process on an unhandled rejection by default; these handlers make the reason survive the exit.
 process.on('unhandledRejection', (reason: unknown) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
-  console.error(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err.stack);
+  log.fatal(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err);
   process.exit(1);
 });
 
 process.on('uncaughtException', (err: Error) => {
-  console.error(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err.stack);
+  log.fatal(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err);
   process.exit(1);
 });
 
@@ -49,7 +50,7 @@ const app = createApp({ enableTelegramPolling: true, enableDraftReminders: proce
 const port = Number(process.env.PORT || 3001);
 const hostname = process.env.HOST || '0.0.0.0';
 
-console.log(`Starting Hawa Core API on http://${hostname}:${port}...`);
+log.info(`Starting Hawa Core API on http://${hostname}:${port}...`);
 const server = serve({
   fetch: app.fetch,
   port,
@@ -60,10 +61,10 @@ let isShuttingDown = false;
 const shutdown = (signal: string) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[${SERVICE_NAME}] Received ${signal}, starting graceful shutdown...`);
+  log.info(`[${SERVICE_NAME}] Received ${signal}, starting graceful shutdown...`);
 
   const forceTimeout = setTimeout(() => {
-    console.error(`[${SERVICE_NAME}] Graceful shutdown timed out after 10s, forcing exit`);
+    log.error(`[${SERVICE_NAME}] Graceful shutdown timed out after 10s, forcing exit`);
     if (typeof (server as any).closeAllConnections === 'function') {
       (server as any).closeAllConnections();
     }
@@ -78,10 +79,10 @@ const shutdown = (signal: string) => {
   server.close((err?: Error) => {
     clearTimeout(forceTimeout);
     if (err) {
-      console.error(`[${SERVICE_NAME}] Error during server close:`, err);
+      log.error(`[${SERVICE_NAME}] Error during server close:`, err);
       process.exit(1);
     }
-    console.log(`[${SERVICE_NAME}] Server stopped gracefully`);
+    log.info(`[${SERVICE_NAME}] Server stopped gracefully`);
     process.exit(0);
   });
 };

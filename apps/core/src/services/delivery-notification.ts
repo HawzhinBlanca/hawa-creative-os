@@ -1,5 +1,6 @@
 import type { PinnedExport } from '@hawa/domain';
 import { deliverableFormat } from './pinned-deliverables.js';
+import { log } from '../logging.js';
 
 /**
  * The `notify.published` outbox command: what the worker needs to tell the requester that the
@@ -72,7 +73,7 @@ export async function resolveRequesterChat(task: IntakeSource, readIntakeEvent?:
   try {
     return requesterChatFromIntake(await readIntakeEvent());
   } catch (err) {
-    console.warn('[core:delivery-notification] Could not read the task intake to find the requester chat:', err);
+    log.warn('[core:delivery-notification] Could not read the task intake to find the requester chat:', err);
     return null;
   }
 }

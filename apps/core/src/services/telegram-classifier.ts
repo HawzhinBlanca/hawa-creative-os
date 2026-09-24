@@ -1,6 +1,7 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { resolveModel } from '@hawa/domain';
 import { isStandingRule } from './standing-rules-chat.js';
+import { log } from '../logging.js';
 
 export type DocumentKind = 'formal_document' | 'design_piece';
 /**
@@ -582,7 +583,7 @@ Also fill:
       },
     };
   } catch (err) {
-    console.warn('[telegram-classifier] model classification failed; keyword rules decide:', (err as Error)?.message || err);
+    log.warn('[telegram-classifier] model classification failed; keyword rules decide:', (err as Error)?.message || err);
   }
 
   return classifyWithHeuristics(messageText, Boolean(recentTask), hasReplyTo);

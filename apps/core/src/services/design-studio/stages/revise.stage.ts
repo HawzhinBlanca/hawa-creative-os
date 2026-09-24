@@ -4,6 +4,7 @@ import type { StudioLayoutV2 } from '@hawa/creative';
 import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
 import { LAYOUT_SCHEMA, normalizeCandidateLayout } from './layouts.stage.js';
+import { log } from '../../../logging.js';
 
 export const REVISION_SCHEMA = {
   type: 'object',
@@ -134,7 +135,7 @@ export async function runReviseStage(
           } catch (err: any) {
             // Falling back from measured contrast to the declared background colour can let text that is
             // genuinely illegible over its actual backdrop pass the legibility gate, so say when it happens.
-            console.warn(
+            log.warn(
               `[revise.stage] Composite contrast could not be measured (${err?.message || err}); ` +
                 `falling back to the declared background colour for legibility scoring.`
             );
