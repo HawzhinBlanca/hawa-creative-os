@@ -6,7 +6,8 @@ Scripts the owner runs on the office Mac. Each explains itself in its header.
 |---|---|
 | `install_launch_agents.sh` | Installs the watchdog and the nightly backup as launch agents |
 | `watchdog.sh` | Starts Docker and the stack at login, alerts the operator chat |
-| `disk_cleanup.sh` | Keeps dumps, Docker's build cache and container logs (30 days) bounded |
+| `stack_containers.sh` | The watchdog's container checks: the six stack services by name, the worker, Vector |
+| `disk_cleanup.sh` | Keeps dumps, Docker's build cache and container logs (30 days, 2 GB) bounded |
 | `rotate_app_role.sh` | Rotates the application's database password without downtime (below) |
 | `../../scripts/request_logs.ts` | Prints every log line of one request or task (below) |
 
@@ -27,11 +28,14 @@ Core returns it in the `x-request-id` response header, and a task event written 
 records its id in `task_events.trace_id` (Core's background loops, such as the Canva sweeper and the
 draft reminders, run outside any request: their lines and events have none). Secrets never reach a line: any key named like a token, secret,
 password, authorization, API key or cookie is replaced, and so are tokens in query strings, bot URLs,
-bearer headers and database URLs.
+bearer headers, database URLs, secret-named fields inside JSON strings, and a comparison judge's
+link token (`/judge/<token>` is written `/judge/***`, as nginx writes it).
 
 The `vector` service (`infra/docker/vector.yaml`) copies the logs of every `hawa-production`
 container into `~/.hawa/logs/containers/<YYYY-MM-DD>/<service>.ndjson` (UTC days). The files outlive
-the containers, so a deploy loses nothing. `disk_cleanup.sh` deletes days older than 30, nightly.
+the containers, so a deploy loses nothing. `disk_cleanup.sh` deletes days older than 30, nightly,
+and then the oldest days until the rest fit in `HAWA_LOG_MAX_MB` (2048; Docker's own driver capped
+each container at 250 MB, Vector caps nothing). Today's day is never deleted.
 
 ```bash
 npx tsx scripts/request_logs.ts <requestId>               # one request: nginx, Core, worker, in time order
@@ -46,7 +50,8 @@ To find an id: the `x-request-id` header of a response, `trace_id` on the task's
 - **Vector reads through the Docker socket**, mounted read-only, but the socket is the whole Docker
   API. The image is pinned by digest and the container has no network.
 - **Lines written while Vector is down are not in the files.** It starts reading at the moment it
-  starts; `docker logs` still has them until the container is replaced.
+  starts; `docker logs` still has them until the container is replaced. The watchdog starts a
+  stopped Vector with the rest of the stack and alerts while it is not running.
 - **Log level** is `LOG_LEVEL` (default `info`; `debug` adds a line for every `/ready` and `/health`).
 
 ## Rotating the application's database password

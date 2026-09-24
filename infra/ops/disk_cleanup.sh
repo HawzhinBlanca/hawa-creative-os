@@ -9,7 +9,8 @@
 #     17 times smaller, because a dump repeats the same images many times);
 #   - Docker's build cache held to $HAWA_BUILD_CACHE_MAX (8 GB), and images no tag or container uses;
 #   - container logs Vector writes (infra/docker/vector.yaml, ~/.hawa/logs/containers/<YYYY-MM-DD>/):
-#     the last $HAWA_LOG_DAYS (30) days. Vector never deletes, so this is their only retention.
+#     the last $HAWA_LOG_DAYS (30) days, and the oldest days beyond $HAWA_LOG_MAX_MB (2048 MB). Vector
+#     never deletes, so this is their only retention.
 #
 # Nightly dumps (hawa_*.dump) keep their own retention in nightly_backup.sh. Nothing else is touched.
 #
@@ -25,6 +26,7 @@ ARCHIVE_DAYS="${HAWA_ARCHIVE_DAYS:-30}"
 CACHE_MAX="${HAWA_BUILD_CACHE_MAX:-8GB}"
 CONTAINER_LOGS="${HAWA_CONTAINER_LOGS_DIR:-$HOME/.hawa/logs/containers}"
 LOG_DAYS="${HAWA_LOG_DAYS:-30}"
+LOG_MAX_MB="${HAWA_LOG_MAX_MB:-2048}"
 MODE="${1:-}"
 export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin"
 
@@ -53,14 +55,23 @@ compress() {
   fi
 }
 
-# Deletes the day directories of container logs older than $2 days (UTC). Only directories named as a
-# day are looked at, so nothing else under the logs directory can go.
+# Deletes the day directories of container logs older than $2 days (UTC), then, oldest first, until
+# the rest fits in $3 MB: Docker's own driver capped each container at 5 x 50 MB, Vector caps nothing,
+# and an error loop can write gigabytes in a day. Today's directory is never deleted. Only directories
+# named as a day are looked at, so nothing else under the logs directory can go.
 prune_container_logs() {
-  local dir="$1" days="$2" cutoff d
+  local dir="$1" days="$2" max_mb="$3" cutoff today d
   [[ -d "$dir" ]] || return 0
   cutoff="$(date -u -v-"${days}"d +%Y-%m-%d 2>/dev/null || date -u -d "-${days} days" +%Y-%m-%d)"
+  today="$(date -u +%Y-%m-%d)"
   for d in "$dir"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]; do
     if [[ -d "$d" && "$(basename "$d")" < "$cutoff" ]]; then rm -rf -- "$d"; fi
+  done
+  for d in "$dir"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]; do
+    [[ -d "$d" && "$(basename "$d")" != "$today" ]] || continue
+    (( $(du -sk "$dir" | awk '{print $1}') > max_mb * 1024 )) || break
+    echo "container logs over ${max_mb} MB: removed $(basename "$d")"
+    rm -rf -- "$d"
   done
 }
 
@@ -117,8 +128,9 @@ for f in ${to_compress[@]+"${to_compress[@]}"}; do
   compress "$f" || echo "WARNING: $(basename "$f") could not be compressed; it is kept as it is" >&2
 done
 
-# 3. Container logs: $LOG_DAYS days, in the nightly run too (--backups), since nothing else prunes them.
-prune_container_logs "$CONTAINER_LOGS" "$LOG_DAYS"
+# 3. Container logs: $LOG_DAYS days and $LOG_MAX_MB MB, in the nightly run too (--backups), since
+#    nothing else prunes them.
+prune_container_logs "$CONTAINER_LOGS" "$LOG_DAYS" "$LOG_MAX_MB"
 
 # 4. Docker: build cache held to a ceiling (a rebuild recreates what it needs), and dangling images.
 #    Images a container uses, even a stopped one, are never removed.

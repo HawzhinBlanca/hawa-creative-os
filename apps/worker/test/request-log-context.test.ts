@@ -123,4 +123,17 @@ describe('an outbox command carries the id of the request that wrote it to Resta
     expect((init.headers as Record<string, string>)['x-request-id']).toBe('req-core-outbox-1');
     expect(JSON.parse(String(init.body)).requestId).toBe('req-core-outbox-1');
   });
+
+  it('a workflow outcome sent to Core again from the outbox carries the id it was written under', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_CORE_INTERNAL_URL', 'http://core.test');
+    const coreFetcher = vi.fn(async () => new Response('{}', { status: 200 }));
+    // The handler is driven directly, inside the context the consumer gives each command.
+    const handler = (new OutboxConsumer(db, { tenantIds: [tenantId], telegramBotToken: null, coreFetcher: coreFetcher as any }) as any).handlers.get('task.outcome');
+    const cmd = { id: 'cmd-outcome-1', tenant_id: tenantId, aggregate_type: 'task', aggregate_id: taskId, command_type: 'task.outcome', payload: { taskId, report: { status: 'DESIGN_READY' }, requestId: 'req-outcome-1' } };
+    await runWithLogContext({ requestId: 'req-outcome-1' }, () => handler(cmd, db));
+    const [url, init] = coreFetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`http://core.test/v1/tasks/${taskId}/notifications/canva-status`);
+    expect((init.headers as Record<string, string>)['x-request-id']).toBe('req-outcome-1');
+  });
 });

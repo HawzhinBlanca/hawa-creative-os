@@ -12,7 +12,7 @@ import {
 import { OfficeTracer } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
-import { log, outboxLogContext, runWithLogContext } from './logging.js';
+import { log, outboxLogContext, requestIdHeaders, runWithLogContext } from './logging.js';
 import {
   composeDeliveredMessage,
   composeDeliveryFailedAlert,
@@ -454,7 +454,7 @@ export class OutboxConsumer {
         const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
         const res = await (this.options.coreFetcher || fetch)(`${base}/v1/tasks/${encodeURIComponent(taskId)}/notifications/canva-status`, {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...requestIdHeaders() },
           body: JSON.stringify(payload?.report || {}),
           signal: AbortSignal.timeout(60000),
         });

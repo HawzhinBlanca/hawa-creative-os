@@ -5,6 +5,7 @@ import {
   captureLogs,
   createLogger,
   getLogContext,
+  redactLogString,
   redactLogValue,
   requestIdHeaders,
   runWithLogContext,
@@ -85,6 +86,14 @@ describe('the log serializer', () => {
     expect(parsed.access_token).toBe('[REDACTED]');
     expect(parsed.nested[0].inputTokens).toBe(1234);
     expect(parsed.url).toBe('/v1/events/stream?tenant=1&access_token=[REDACTED]&x=2');
+  });
+
+  it('strips secret-named keys inside a string that is itself JSON, and keeps counts', () => {
+    const body = JSON.stringify({ access_token: accessToken, refresh_token: accessToken, client_secret: apiKey, inputTokens: 12, scope: 'design:read' });
+    const cleaned = redactLogString(`canva answered 400: ${body}`);
+    for (const secret of [accessToken, apiKey]) expect(cleaned).not.toContain(secret);
+    const parsed = JSON.parse(cleaned.slice(cleaned.indexOf('{')));
+    expect(parsed).toEqual({ access_token: '[REDACTED]', refresh_token: '[REDACTED]', client_secret: '[REDACTED]', inputTokens: 12, scope: 'design:read' });
   });
 
   it('applies to every written line: message, fields and errors', () => {

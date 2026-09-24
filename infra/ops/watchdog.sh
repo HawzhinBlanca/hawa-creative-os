@@ -36,17 +36,14 @@ if ! docker info >/dev/null 2>&1; then
   for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
   docker info >/dev/null 2>&1 || problems+=("Docker is not running and could not be started")
 fi
-# 2. Stack containers: nginx, desk, core, postgres, restate and cutout (ADR-032), and at least one
-#    worker. The worker is blue/green (architecture programme 0.1): hawa-production-worker-blue-1 and/or
-#    -green-1 (both while the old colour drains), or hawa-production-worker-1 before the first
-#    blue/green deploy. Only deploy.sh creates a colour; a colour it removed must stay removed.
-WORKER_NAME='^hawa-production-worker(-blue|-green)?-1$'
+# 2. Stack containers: the six stack services by name, at least one worker, and the vector log
+#    shipper (stack_containers.sh says why each is matched by name). Only deploy.sh creates a worker
+#    colour; a colour it removed must stay removed.
 running_names() { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; }
-count_stack() { running_names | grep -cvE "$WORKER_NAME" || true; }
-count_workers() { running_names | grep -cE "$WORKER_NAME" || true; }
+source "$ROOT/infra/ops/stack_containers.sh"
 if [[ ${#problems[@]} -eq 0 ]]; then
   running="$(count_stack)"; workers="$(count_workers)"
-  if [[ "$running" -lt 6 || "$workers" -lt 1 ]]; then
+  if [[ "$running" -lt "$STACK_SIZE" || "$workers" -lt 1 ]] || ! vector_running; then
     if [[ "$MODE" != "--status" ]]; then
       export HAWA_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       # Existing containers first, exactly as they were deployed. `up` then only creates what is
@@ -61,13 +58,14 @@ if [[ ${#problems[@]} -eq 0 ]]; then
       done
       sleep 10
       running="$(count_stack)"
-      if [[ "$running" -lt 6 ]]; then
+      if [[ "$running" -lt "$STACK_SIZE" ]] || ! vector_running; then
         "${COMPOSE[@]}" up -d --no-build --no-recreate >/dev/null 2>&1 || problems+=("compose up failed")
       fi
       sleep 20
       running="$(count_stack)"; workers="$(count_workers)"
     fi
-    [[ "$running" -ge 6 ]] || problems+=("only ${running}/6 containers besides the worker running")
+    [[ "$running" -ge "$STACK_SIZE" ]] || problems+=("only ${running}/${STACK_SIZE} stack containers running (down: $(missing_stack))")
+    vector_running || problems+=("vector is not running: container logs are not reaching ~/.hawa/logs")
     [[ "$workers" -ge 1 ]] || problems+=("no worker container is running (run infra/docker/deploy.sh --apply to start one)")
   fi
 fi

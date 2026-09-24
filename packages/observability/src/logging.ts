@@ -111,6 +111,18 @@ const SECRET_QUERY = /([?&;](?:access_token|[A-Za-z0-9_-]*(?:token|secret|passwo
 const TELEGRAM_BOT_PATH = /(\/bot)\d+:[A-Za-z0-9_-]+/g;
 const BEARER = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/g;
 const URL_USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi;
+/**
+ * A comparison judge's link token is the judge's only credential and sits in the path
+ * (/judge/<token>, comparison.routes.ts). nginx writes it as *** in its access log; so does every
+ * line here, the access line's path included.
+ */
+const JUDGE_PATH = /(\/judge\/)[^/?#\s"'<>]+/g;
+/**
+ * A secret-named key inside a string that is itself JSON (a stringified response body in an error
+ * message): the object redaction never sees those keys, so they are matched here.
+ */
+const SECRET_JSON_FIELD =
+  /("(?:[A-Za-z0-9_-]*(?:token|secret|password|passwd|authorization|api_?key|cookie|credentials?)|password[A-Za-z0-9_-]*|secret[A-Za-z0-9_-]*)"\s*:\s*")(?:[^"\\]|\\.)*"/gi;
 
 /** Long strings (a base64 picture in an error) are cut: a log line is for reading. */
 const MAX_STRING = 4000;
@@ -120,7 +132,9 @@ export function redactLogString(input: string): string {
     .replace(SECRET_QUERY, `$1${REDACTED}`)
     .replace(TELEGRAM_BOT_PATH, `$1${REDACTED}`)
     .replace(BEARER, `$1 ${REDACTED}`)
-    .replace(URL_USERINFO, `$1${REDACTED}@`);
+    .replace(URL_USERINFO, `$1${REDACTED}@`)
+    .replace(JUDGE_PATH, '$1***')
+    .replace(SECRET_JSON_FIELD, `$1${REDACTED}"`);
   out = redactSecrets(out);
   return out.length > MAX_STRING ? `${out.slice(0, MAX_STRING)}…[${out.length - MAX_STRING} more chars]` : out;
 }
