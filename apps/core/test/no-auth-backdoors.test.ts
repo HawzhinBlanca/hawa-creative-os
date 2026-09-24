@@ -53,11 +53,33 @@ describe('no authentication backdoor survives outside an explicit test option', 
     expect((await app.request('/v1/tasks', { headers: { Authorization: 'Bearer not_a_real_token' } })).status).toBe(401);
   });
 
-  it('the production source contains no environment switch for either backdoor', async () => {
-    const { readFileSync } = await import('node:fs');
-    const src = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
-    expect(src).not.toMatch(/HAWA_ALLOW_ROLE_HEADER/);
-    expect(src).not.toMatch(/bypassAuthWithoutDb\s*\?\?\s*!db/);
-    expect(src).not.toMatch(/x-user-role\x27\)\s*\|\|\s*body\.role/);
+  // These used to search app.ts's text for the three switches, which moving the code to another file
+  // would pass. They now ask the app, on an administrator-only route, what each switch would grant.
+  const requeue = (app: ReturnType<typeof createApp>, headers: Record<string, string>, body: Record<string, unknown> = { all: true }) =>
+    app.request('/v1/system/outbox/requeue', { method: 'POST', headers: { ...json, ...headers }, body: JSON.stringify(body) });
+
+  it('neither the environment switch nor a missing database lets a token-less caller act as an administrator', async () => {
+    for (const env of ['production', 'development', 'test']) {
+      process.env.NODE_ENV = env;
+      process.env.HAWA_ALLOW_ROLE_HEADER = 'true';
+      // No database, no options: the old harness shortcut made every token-less request the operator.
+      const app = createApp();
+      expect((await requeue(app, { 'x-user-role': 'administrator' })).status, `NODE_ENV=${env}`).toBe(401);
+      expect((await requeue(app, {}, { all: true, role: 'administrator' })).status, `NODE_ENV=${env}`).toBe(401);
+    }
+  });
+
+  it('an operator naming the administrator role in the body or the header is still an operator', async () => {
+    asProduction();
+    const app = createApp();
+    const operator = { Authorization: 'Bearer test_bearer' };
+    expect((await requeue(app, operator, { all: true, role: 'administrator' })).status).toBe(403);
+    expect((await requeue(app, { ...operator, 'x-user-role': 'administrator' }, { all: true, role: 'administrator' })).status).toBe(403);
+    const killSwitch = await app.request('/v1/waha/kill-switch', {
+      method: 'POST', headers: { ...json, ...operator, 'x-user-role': 'administrator' }, body: JSON.stringify({ enabled: true, role: 'administrator' }),
+    });
+    expect(killSwitch.status).toBe(403);
+    // Control: the administrator's own key gets past the role check, to the missing database.
+    expect((await requeue(app, { Authorization: 'Bearer test_admin_key' })).status).toBe(503);
   });
 });

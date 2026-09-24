@@ -1,0 +1,314 @@
+/**
+ * The module-level helpers app.ts used to hold above createApp, moved here unchanged so that route
+ * modules and services can use them without importing app.ts (which imports them back to register or
+ * build from them: a cycle). app.ts re-exports the ones it always exported (architecture programme
+ * 1.3, SPLIT_PLAN.md F1).
+ */
+import crypto from 'node:crypto';
+import { sql, type Database, type Kysely, type PublicationRepository } from '@hawa/db';
+import { checkCanvaPptx } from '@hawa/qa';
+import type { TelegramActionTokenService, TelegramBridgeDaemon } from '@hawa/integrations';
+import type { CanvaConnectService, CanvaServiceOptions } from './services/canva-connect-service.js';
+import type { DesignStudioService, DesignStudioServiceOptions } from './services/design-studio/index.js';
+import type { DeliverableStore } from './services/pinned-deliverables.js';
+import type { GuidelinesModel } from './services/brand-guidelines.js';
+
+export function canonicalJson(obj: any): string {
+  if (obj === null || typeof obj !== 'object') {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalJson).join(',') + ']';
+  }
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
+}
+
+export function computeDnaHash(dna: any): string {
+  const canonical = canonicalJson(dna);
+  return 'sha256_' + crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+export function isValidUuid(id: unknown): boolean {
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+type TaskCopyFields = { headlineEn?: string | null; headlineCkb?: string | null; copyEn?: string | null; copyCkb?: string | null };
+
+/**
+ * True when the client sent too little copy for an inline template to design around. Every
+ * inline template draws only the copy it is given and leaves an empty slot out. A KAAE design
+ * needs a headline. A brand design (FastPay, Aster, Drustee) is laid out around a headline and
+ * a body card, so it needs both, in one language. Callers refuse with COPY_REQUIRED.
+ */
+export function inlineTemplateCopyMissing(template: 'kaae' | 'brand', copy: TaskCopyFields): boolean {
+  const has = (text?: string | null) => Boolean(text && text.trim());
+  if (template === 'kaae') return !has(copy.headlineCkb) && !has(copy.headlineEn);
+  return !(has(copy.headlineCkb) && has(copy.copyCkb)) && !(has(copy.headlineEn) && has(copy.copyEn));
+}
+
+export const COPY_REQUIRED_DETAIL = 'The client has not sent the copy this design needs. No placeholder copy will be invented.';
+
+/** Postgres, which holds a task's status, is connected and could not be read: nothing acts on a stale copy. */
+export class TaskStoreUnavailableError extends Error {
+  constructor(taskId: string, cause: unknown) {
+    super(`The task ${taskId} could not be read from the database; try again`);
+    this.name = 'TaskStoreUnavailableError';
+    (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+export interface CreateAppOptions {
+  canvaOptions?: CanvaServiceOptions;
+  canvaConnectService?: CanvaConnectService;
+  designStudioOptions?: DesignStudioServiceOptions;
+  designStudioService?: DesignStudioService;
+  db?: Kysely<Database>;
+  publicationRepo?: PublicationRepository;
+  telegramActionTokenService?: TelegramActionTokenService;
+  telegramBridge?: TelegramBridgeDaemon;
+  /** Where approved exports are read from; defaults to the Canva export store when a database is connected. */
+  deliverableStore?: DeliverableStore;
+  /** Injectable QA engine for testing; defaults to DeterministicQAEngine. */
+  qaEngine?: any;
+  publisher?: any;
+  inMemoryOutbox?: Map<string, any[]>;
+  /**
+   * Test harness only, passed explicitly by a test. `principal`: every request without a bearer
+   * token is this principal (a database-less unit test has no sessions to sign in to).
+   * `roleHeader`: the x-user-role header sets the role, so a test can act as several people.
+   * Production code has no environment switch that turns either on; there is nothing to leave on.
+   */
+  testAuth?: { principal?: { role: string; userId?: string; displayName?: string }; roleHeader?: boolean };
+  /** @deprecated use testAuth.roleHeader */
+  allowRoleHeader?: boolean;
+  extraBearerTokens?: Record<string, { role: string; email?: string; sub?: string } | string>;
+  bypassAuthWithoutDb?: boolean;
+  skipPaidModelProbe?: boolean;
+  enableBillingProbeSchedule?: boolean;
+  skipTelegramProbe?: boolean;
+  enableTelegramPolling?: boolean;
+  /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
+  enableDraftReminders?: boolean;
+  /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
+  enableCanvaSweeper?: boolean;
+  /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
+  guidelinesModel?: GuidelinesModel;
+  persistDnaToDisk?: boolean;
+  verifyProviderKeys?: boolean;
+  telegramClassifierOptions?: any;
+  emulatePublisher?: boolean;
+}
+
+/**
+ * The hash that names a QA report: the report's own reportSha256 when it states one, otherwise the
+ * SHA-256 of the report as stored (what qc_runs.report_sha256 holds). No report, no hash: approvals
+ * used to record the literal 'verified_qc_pass' instead.
+ */
+export function qaReportSha256(report: any): string | null {
+  if (!report) return null;
+  if (typeof report.reportSha256 === 'string' && report.reportSha256) return report.reportSha256;
+  return crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex');
+}
+
+/**
+ * Compares a presented secret with the configured one in constant time. Both sides are hashed first,
+ * so neither the position of the first wrong byte nor the secret's length shows in the timing.
+ */
+export function secretsEqual(presented: string | undefined | null, configured: string | undefined | null): boolean {
+  if (!presented || !configured) return false;
+  const a = crypto.createHash('sha256').update(presented).digest();
+  const b = crypto.createHash('sha256').update(configured).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+export type DatabaseProbeStatus = 'connected' | 'disconnected' | 'uninitialized';
+
+/**
+ * Whether PostgreSQL answers, for /health. "connected" is a result, never a starting value.
+ *
+ * The probe used to start at 'connected' and turn to 'disconnected' only for ECONNREFUSED or an
+ * error message containing "connect". A wrong password, a missing schema, an exhausted pool, a
+ * statement timeout or a hung server all left health green, and the watchdog reads this route.
+ * Any failure and any answer slower than the timeout is 'disconnected' now. No handle at all is
+ * 'uninitialized', which production treats as unhealthy.
+ */
+export async function probeDatabase(db: unknown, timeoutMs = 2000): Promise<DatabaseProbeStatus> {
+  if (!db) return 'uninitialized';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const query = sql`SELECT 1`.execute(db as any);
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`database probe exceeded ${timeoutMs}ms`)), timeoutMs);
+    });
+    await Promise.race([query, timeout]);
+    return 'connected';
+  } catch {
+    return 'disconnected';
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export interface CanvaQcEvaluationResult {
+  qaReport: {
+    status: 'passed' | 'failed';
+    criticalPass: boolean;
+    passed: boolean;
+    bidiIsolation: boolean;
+    fontCoverage: boolean;
+    copyFidelity: boolean;
+    /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
+    contrastCompliant: boolean | null;
+    safeMargins: boolean | null;
+    errors: string[];
+    checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
+    exportSha256: string | null;
+    exportFormat: string | null;
+    verifiedAt: string;
+  };
+  criticalPass: boolean;
+  status: 'passed' | 'failed';
+}
+
+export function evaluateCanvaExportQc(
+  exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any },
+  expectedCopy?: string[],
+  requiredFont?: string
+): CanvaQcEvaluationResult {
+  const contentCheck = exportRow?.content_check;
+  const errors: string[] = [];
+
+  if (!exportRow) {
+    errors.push('No Canva export artifact retrieved for task; quality verification unavailable');
+    return {
+      status: 'failed',
+      criticalPass: false,
+      qaReport: {
+        status: 'failed',
+        criticalPass: false,
+        passed: false,
+        bidiIsolation: false,
+        fontCoverage: false,
+        copyFidelity: false,
+        contrastCompliant: false,
+        safeMargins: false,
+        errors,
+        checks: [
+          { name: 'exportRetrieved', passed: false },
+          { name: 'copyPass', passed: false },
+          { name: 'fontPass', passed: false },
+        ],
+        exportSha256: null,
+        exportFormat: null,
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  // If check is missing and bytes are PPTX, attempt real checkCanvaPptx
+  let resolvedCheck = contentCheck;
+  if (!resolvedCheck && exportRow.format === 'pptx' && exportRow.content && expectedCopy && expectedCopy.length > 0) {
+    try {
+      resolvedCheck = checkCanvaPptx(
+        exportRow.content instanceof Uint8Array ? exportRow.content : new Uint8Array(exportRow.content),
+        expectedCopy,
+        requiredFont || 'Verdana'
+      );
+    } catch (err: any) {
+      errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
+    }
+  }
+
+  if (!resolvedCheck) {
+    errors.push('No verified copy or font check recorded on Canva export bytes');
+    return {
+      status: 'failed',
+      criticalPass: false,
+      qaReport: {
+        status: 'failed',
+        criticalPass: false,
+        passed: false,
+        bidiIsolation: false,
+        fontCoverage: false,
+        copyFidelity: false,
+        contrastCompliant: false,
+        safeMargins: false,
+        errors,
+        checks: [
+          { name: 'exportRetrieved', passed: true },
+          { name: 'copyPass', passed: false },
+          { name: 'fontPass', passed: false },
+        ],
+        exportSha256: exportRow.sha256 || null,
+        exportFormat: exportRow.format || null,
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  const copyPass = resolvedCheck.copyPass === true;
+  const fontPass = resolvedCheck.fontPass === true;
+  // checkCanvaPptx always reports rtlPass as a boolean, so an absent value means the record is not
+  // one of its results. Absence is a failure here, never a pass.
+  // A Canva export with no rtl attribute at all is left to the visual review (checkCanvaPptx says so
+  // since 2026-09-23); checks stored before that recorded it as a failure, and are read the same way.
+  const rtlPass = resolvedCheck.rtlPass === true
+    || (resolvedCheck.rtlPass === false && resolvedCheck.source === 'canva_exported_pptx'
+      && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
+  const checkStatus = resolvedCheck.status !== 'failed';
+  const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
+  const status: 'passed' | 'failed' = criticalPass ? 'passed' : 'failed';
+
+  if (!copyPass) {
+    errors.push(
+      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
+        ? `Copy mismatch: ${resolvedCheck.offendingObjects.map((o: any) => o.text || o.reason).join('; ')}`
+        : 'Exported copy does not match verified source copy exactly'
+    );
+  }
+  if (!fontPass) {
+    errors.push(
+      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
+        ? `Brand font violation: ${resolvedCheck.offendingObjects.map((o: any) => o.reason || o.observedFont).join('; ')}`
+        : 'Exported typography violates brand font policy'
+    );
+  }
+  if (!rtlPass) {
+    errors.push('RTL text direction violation detected in exported design');
+  }
+
+  return {
+    status,
+    criticalPass,
+    qaReport: {
+      status,
+      criticalPass,
+      passed: criticalPass,
+      bidiIsolation: rtlPass,
+      fontCoverage: fontPass,
+      copyFidelity: copyPass,
+      contrastCompliant: null,
+      safeMargins: null,
+      errors,
+      checks: [
+        { name: 'exportRetrieved', passed: true },
+        { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
+        { name: 'fontPass', passed: fontPass, observedFonts: resolvedCheck.observedFonts || [] },
+        { name: 'bidiIsolation', passed: rtlPass },
+      ],
+      exportSha256: exportRow.sha256 || null,
+      exportFormat: exportRow.format || null,
+      verifiedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * The first `max` characters of `text`, cut between characters, never inside one: String.slice counts
+ * UTF-16 units and left half an emoji at the cut, a lone surrogate that Telegram may refuse along with
+ * the whole message (review of 2026-09-24).
+ */
+export function cutText(text: string, max: number): string {
+  return text.length <= max ? text : Array.from(text).slice(0, max).join('');
+}

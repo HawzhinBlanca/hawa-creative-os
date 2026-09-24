@@ -1,5 +1,6 @@
 import type { RouteContext } from './types.js';
 import { withRlsContext } from '@hawa/db';
+import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 
 export function registerClientsRoutes(ctx: RouteContext) {
   const {
@@ -12,8 +13,8 @@ export function registerClientsRoutes(ctx: RouteContext) {
     clientRepo,
   } = ctx;
 
-  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
-  const operatorUserId = '00000000-0000-4000-b000-000000000001';
+  const defaultTenantId = DEFAULT_TENANT_ID;
+  const operatorUserId = OPERATOR_USER_ID;
 
   // Client DNA Listing
   registerRoute('get', '/clients', (c: any) => {
@@ -70,10 +71,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
     return c.json(dna);
   });
 
-  // Client Snapshots
-  registerRoute('get', '/clients/:clientId/snapshots', async (c: any) => {
-    const clientId = c.req.param('clientId');
-    const snapshots = clientSnapshots.get(clientId) || [];
-    return c.json(snapshots, 200);
-  });
+  // GET /clients/:clientId/snapshots is app.ts's, which reads hawa.client_dna_versions. This module
+  // had a memory-only copy registered first, so the Desk's DNA history never showed what Postgres
+  // held (architecture programme 1.3, SPLIT_PLAN G0; test N5).
 }

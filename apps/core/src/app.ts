@@ -4,6 +4,7 @@ import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-p
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from './services/feedback-font-request.js';
 import { peelTrailingRemarks } from './services/request-remarks.js';
 import { hydrateClientDnaFromDb, loadActiveClientDna } from './services/client-dna-hydration.js';
+import { seedClientDnaFixtures } from './fixtures/client-dna-fixtures.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
@@ -176,6 +177,24 @@ import { registerClientsRoutes } from './routes/clients.routes.js';
 import { registerEvalsRoutes } from './routes/evals.routes.js';
 import { registerComparisonRoutes } from './routes/comparison.routes.js';
 import { registerIngressRoutes } from './routes/ingress.routes.js';
+import { registerMigrationRoutes } from './routes/migration.routes.js';
+import { registerAssetsRoutes } from './routes/assets.routes.js';
+import { registerSimulatorsRoutes } from './routes/simulators.routes.js';
+import { registerFontsRoutes } from './routes/fonts.routes.js';
+import { registerRubricRoutes } from './routes/rubric.routes.js';
+import { registerSystemStatusRoutes } from './routes/system-status.routes.js';
+import { registerClientLearningRoutes } from './routes/client-learning.routes.js';
+import { registerRevisionsRoutes } from './routes/revisions.routes.js';
+import { registerDecisionsRoutes } from './routes/decisions.routes.js';
+import { registerCanvaOutcomeRoutes } from './routes/canva-outcome.routes.js';
+import { registerDeliveryRoutes } from './routes/delivery.routes.js';
+import { registerOutboxRoutes } from './routes/outbox.routes.js';
+import { registerControlsRoutes } from './routes/controls.routes.js';
+import { registerTasksRoutes } from './routes/tasks.routes.js';
+import { registerTaskPipelineRoutes } from './routes/task-pipeline.routes.js';
+import { registerSearchRoutes } from './routes/search.routes.js';
+import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
+import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import {
   parseRequesterAction,
@@ -205,327 +224,37 @@ import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { revisionMetrics } from './services/revision-metrics.js';
 import { askLedger } from './services/ask-ledger.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
+import {
+  canonicalJson,
+  computeDnaHash,
+  isValidUuid,
+  inlineTemplateCopyMissing,
+  COPY_REQUIRED_DETAIL,
+  TaskStoreUnavailableError,
+  qaReportSha256,
+  secretsEqual,
+  probeDatabase,
+  evaluateCanvaExportQc,
+  cutText,
+  type CreateAppOptions,
+} from './core-helpers.js';
+import type { ClientDnaSnapshot, RouteContext } from './routes/types.js';
+import type { QAEngine } from '@hawa/contracts';
+import { DEFAULT_TENANT_ID, OPERATOR_USER_ID, ADMIN_USER_ID, DEFAULT_CLIENT_ID } from './core-context.js';
+import { createTaskReader } from './services/task-reader.js';
+import { createClientDnaResolver } from './services/client-dna-resolver.js';
+import { LIVE_RUN } from './services/live-run.js';
+import { pendingChangeOf as findPendingChange, pendingChangeWords } from './services/pending-change.js';
+import { createOmnichannelDelivery, type OmnichannelDeliveryDeps } from './services/omnichannel-delivery.js';
 
-export interface ClientDnaSnapshot {
-  snapshotId: string;
-  clientId: string;
-  version: number;
-  sha256: string;
-  commitMessage: string;
-  createdBy: string;
-  createdAt: string;
-  dna: ClientDNA;
-}
-
-export function canonicalJson(obj: any): string {
-  if (obj === null || typeof obj !== 'object') {
-    return JSON.stringify(obj);
-  }
-  if (Array.isArray(obj)) {
-    return '[' + obj.map(canonicalJson).join(',') + ']';
-  }
-  const keys = Object.keys(obj).sort();
-  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
-}
-
-export function computeDnaHash(dna: any): string {
-  const canonical = canonicalJson(dna);
-  return 'sha256_' + crypto.createHash('sha256').update(canonical).digest('hex');
-}
-
-export function isValidUuid(id: unknown): boolean {
-  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
-
-type TaskCopyFields = { headlineEn?: string | null; headlineCkb?: string | null; copyEn?: string | null; copyCkb?: string | null };
-
-/**
- * True when the client sent too little copy for an inline template to design around. Every
- * inline template draws only the copy it is given and leaves an empty slot out. A KAAE design
- * needs a headline. A brand design (FastPay, Aster, Drustee) is laid out around a headline and
- * a body card, so it needs both, in one language. Callers refuse with COPY_REQUIRED.
- */
-export function inlineTemplateCopyMissing(template: 'kaae' | 'brand', copy: TaskCopyFields): boolean {
-  const has = (text?: string | null) => Boolean(text && text.trim());
-  if (template === 'kaae') return !has(copy.headlineCkb) && !has(copy.headlineEn);
-  return !(has(copy.headlineCkb) && has(copy.copyCkb)) && !(has(copy.headlineEn) && has(copy.copyEn));
-}
-
-const COPY_REQUIRED_DETAIL = 'The client has not sent the copy this design needs. No placeholder copy will be invented.';
+// What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
+export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
+export type { CreateAppOptions, DatabaseProbeStatus, CanvaQcEvaluationResult } from './core-helpers.js';
+export type { ClientDnaSnapshot } from './routes/types.js';
 
 const globalHistoricalMigrator = new HistoricalDesignMigrator();
 const globalCanvaNativeAdapter = new CanvaNativeAdapter();
 const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failureThreshold: 3, cooldownMs: 5000 });
-const channelKillSwitches = {
-  telegram: false,
-  waha: false,
-};
-
-/** Postgres, which holds a task's status, is connected and could not be read: nothing acts on a stale copy. */
-class TaskStoreUnavailableError extends Error {
-  constructor(taskId: string, cause: unknown) {
-    super(`The task ${taskId} could not be read from the database; try again`);
-    this.name = 'TaskStoreUnavailableError';
-    (this as { cause?: unknown }).cause = cause;
-  }
-}
-
-export interface CreateAppOptions {
-  canvaOptions?: CanvaServiceOptions;
-  canvaConnectService?: CanvaConnectService;
-  designStudioOptions?: DesignStudioServiceOptions;
-  designStudioService?: DesignStudioService;
-  db?: Kysely<Database>;
-  publicationRepo?: PublicationRepository;
-  telegramActionTokenService?: TelegramActionTokenService;
-  telegramBridge?: TelegramBridgeDaemon;
-  /** Where approved exports are read from; defaults to the Canva export store when a database is connected. */
-  deliverableStore?: DeliverableStore;
-  /** Injectable QA engine for testing; defaults to DeterministicQAEngine. */
-  qaEngine?: any;
-  publisher?: any;
-  inMemoryOutbox?: Map<string, any[]>;
-  /**
-   * Test harness only, passed explicitly by a test. `principal`: every request without a bearer
-   * token is this principal (a database-less unit test has no sessions to sign in to).
-   * `roleHeader`: the x-user-role header sets the role, so a test can act as several people.
-   * Production code has no environment switch that turns either on; there is nothing to leave on.
-   */
-  testAuth?: { principal?: { role: string; userId?: string; displayName?: string }; roleHeader?: boolean };
-  /** @deprecated use testAuth.roleHeader */
-  allowRoleHeader?: boolean;
-  extraBearerTokens?: Record<string, { role: string; email?: string; sub?: string } | string>;
-  bypassAuthWithoutDb?: boolean;
-  skipPaidModelProbe?: boolean;
-  enableBillingProbeSchedule?: boolean;
-  skipTelegramProbe?: boolean;
-  enableTelegramPolling?: boolean;
-  /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
-  enableDraftReminders?: boolean;
-  /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
-  enableCanvaSweeper?: boolean;
-  /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
-  guidelinesModel?: GuidelinesModel;
-  persistDnaToDisk?: boolean;
-  verifyProviderKeys?: boolean;
-  telegramClassifierOptions?: any;
-  emulatePublisher?: boolean;
-}
-
-const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
-
-/**
- * The hash that names a QA report: the report's own reportSha256 when it states one, otherwise the
- * SHA-256 of the report as stored (what qc_runs.report_sha256 holds). No report, no hash: approvals
- * used to record the literal 'verified_qc_pass' instead.
- */
-export function qaReportSha256(report: any): string | null {
-  if (!report) return null;
-  if (typeof report.reportSha256 === 'string' && report.reportSha256) return report.reportSha256;
-  return crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex');
-}
-
-/**
- * Compares a presented secret with the configured one in constant time. Both sides are hashed first,
- * so neither the position of the first wrong byte nor the secret's length shows in the timing.
- */
-export function secretsEqual(presented: string | undefined | null, configured: string | undefined | null): boolean {
-  if (!presented || !configured) return false;
-  const a = crypto.createHash('sha256').update(presented).digest();
-  const b = crypto.createHash('sha256').update(configured).digest();
-  return crypto.timingSafeEqual(a, b);
-}
-
-export type DatabaseProbeStatus = 'connected' | 'disconnected' | 'uninitialized';
-
-/**
- * Whether PostgreSQL answers, for /health. "connected" is a result, never a starting value.
- *
- * The probe used to start at 'connected' and turn to 'disconnected' only for ECONNREFUSED or an
- * error message containing "connect". A wrong password, a missing schema, an exhausted pool, a
- * statement timeout or a hung server all left health green, and the watchdog reads this route.
- * Any failure and any answer slower than the timeout is 'disconnected' now. No handle at all is
- * 'uninitialized', which production treats as unhealthy.
- */
-export async function probeDatabase(db: unknown, timeoutMs = 2000): Promise<DatabaseProbeStatus> {
-  if (!db) return 'uninitialized';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const query = sql`SELECT 1`.execute(db as any);
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`database probe exceeded ${timeoutMs}ms`)), timeoutMs);
-    });
-    await Promise.race([query, timeout]);
-    return 'connected';
-  } catch {
-    return 'disconnected';
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-export interface CanvaQcEvaluationResult {
-  qaReport: {
-    status: 'passed' | 'failed';
-    criticalPass: boolean;
-    passed: boolean;
-    bidiIsolation: boolean;
-    fontCoverage: boolean;
-    copyFidelity: boolean;
-    /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
-    contrastCompliant: boolean | null;
-    safeMargins: boolean | null;
-    errors: string[];
-    checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
-    exportSha256: string | null;
-    exportFormat: string | null;
-    verifiedAt: string;
-  };
-  criticalPass: boolean;
-  status: 'passed' | 'failed';
-}
-
-export function evaluateCanvaExportQc(
-  exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any },
-  expectedCopy?: string[],
-  requiredFont?: string
-): CanvaQcEvaluationResult {
-  const contentCheck = exportRow?.content_check;
-  const errors: string[] = [];
-
-  if (!exportRow) {
-    errors.push('No Canva export artifact retrieved for task; quality verification unavailable');
-    return {
-      status: 'failed',
-      criticalPass: false,
-      qaReport: {
-        status: 'failed',
-        criticalPass: false,
-        passed: false,
-        bidiIsolation: false,
-        fontCoverage: false,
-        copyFidelity: false,
-        contrastCompliant: false,
-        safeMargins: false,
-        errors,
-        checks: [
-          { name: 'exportRetrieved', passed: false },
-          { name: 'copyPass', passed: false },
-          { name: 'fontPass', passed: false },
-        ],
-        exportSha256: null,
-        exportFormat: null,
-        verifiedAt: new Date().toISOString(),
-      },
-    };
-  }
-
-  // If check is missing and bytes are PPTX, attempt real checkCanvaPptx
-  let resolvedCheck = contentCheck;
-  if (!resolvedCheck && exportRow.format === 'pptx' && exportRow.content && expectedCopy && expectedCopy.length > 0) {
-    try {
-      resolvedCheck = checkCanvaPptx(
-        exportRow.content instanceof Uint8Array ? exportRow.content : new Uint8Array(exportRow.content),
-        expectedCopy,
-        requiredFont || 'Verdana'
-      );
-    } catch (err: any) {
-      errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
-    }
-  }
-
-  if (!resolvedCheck) {
-    errors.push('No verified copy or font check recorded on Canva export bytes');
-    return {
-      status: 'failed',
-      criticalPass: false,
-      qaReport: {
-        status: 'failed',
-        criticalPass: false,
-        passed: false,
-        bidiIsolation: false,
-        fontCoverage: false,
-        copyFidelity: false,
-        contrastCompliant: false,
-        safeMargins: false,
-        errors,
-        checks: [
-          { name: 'exportRetrieved', passed: true },
-          { name: 'copyPass', passed: false },
-          { name: 'fontPass', passed: false },
-        ],
-        exportSha256: exportRow.sha256 || null,
-        exportFormat: exportRow.format || null,
-        verifiedAt: new Date().toISOString(),
-      },
-    };
-  }
-
-  const copyPass = resolvedCheck.copyPass === true;
-  const fontPass = resolvedCheck.fontPass === true;
-  // checkCanvaPptx always reports rtlPass as a boolean, so an absent value means the record is not
-  // one of its results. Absence is a failure here, never a pass.
-  // A Canva export with no rtl attribute at all is left to the visual review (checkCanvaPptx says so
-  // since 2026-09-23); checks stored before that recorded it as a failure, and are read the same way.
-  const rtlPass = resolvedCheck.rtlPass === true
-    || (resolvedCheck.rtlPass === false && resolvedCheck.source === 'canva_exported_pptx'
-      && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
-  const checkStatus = resolvedCheck.status !== 'failed';
-  const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
-  const status: 'passed' | 'failed' = criticalPass ? 'passed' : 'failed';
-
-  if (!copyPass) {
-    errors.push(
-      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
-        ? `Copy mismatch: ${resolvedCheck.offendingObjects.map((o: any) => o.text || o.reason).join('; ')}`
-        : 'Exported copy does not match verified source copy exactly'
-    );
-  }
-  if (!fontPass) {
-    errors.push(
-      resolvedCheck.offendingObjects && resolvedCheck.offendingObjects.length > 0
-        ? `Brand font violation: ${resolvedCheck.offendingObjects.map((o: any) => o.reason || o.observedFont).join('; ')}`
-        : 'Exported typography violates brand font policy'
-    );
-  }
-  if (!rtlPass) {
-    errors.push('RTL text direction violation detected in exported design');
-  }
-
-  return {
-    status,
-    criticalPass,
-    qaReport: {
-      status,
-      criticalPass,
-      passed: criticalPass,
-      bidiIsolation: rtlPass,
-      fontCoverage: fontPass,
-      copyFidelity: copyPass,
-      contrastCompliant: null,
-      safeMargins: null,
-      errors,
-      checks: [
-        { name: 'exportRetrieved', passed: true },
-        { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
-        { name: 'fontPass', passed: fontPass, observedFonts: resolvedCheck.observedFonts || [] },
-        { name: 'bidiIsolation', passed: rtlPass },
-      ],
-      exportSha256: exportRow.sha256 || null,
-      exportFormat: exportRow.format || null,
-      verifiedAt: new Date().toISOString(),
-    },
-  };
-}
-
-/**
- * The first `max` characters of `text`, cut between characters, never inside one: String.slice counts
- * UTF-16 units and left half an emoji at the cut, a lone surrogate that Telegram may refuse along with
- * the whole message (review of 2026-09-24).
- */
-function cutText(text: string, max: number): string {
-  return text.length <= max ? text : Array.from(text).slice(0, max).join('');
-}
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
@@ -543,7 +272,6 @@ export function createApp(options?: CreateAppOptions) {
   const ingressRepo = db ? new IngressRepository(db) : null;
   const outboxRepo = db ? new OutboxRepository(db) : null;
   const revisionRepo = db ? new RevisionRepository(db) : null;
-  const canvaBindingRepo = db ? new CanvaBindingRepository(db) : null;
   const canvaConnectService = options?.canvaConnectService || (db ? new CanvaConnectService(db, options?.canvaOptions) : null);
   const deliverableStore: DeliverableStore =
     options?.deliverableStore || (canvaConnectService ? canvaDeliverableStore(canvaConnectService) : EMPTY_DELIVERABLE_STORE);
@@ -615,34 +343,9 @@ export function createApp(options?: CreateAppOptions) {
     }, status);
   }
 
-  /**
-   * One publisher per task at a time, across processes. The Drive lookup makes a retry safe, but two
-   * publishers starting in the same instant both find an empty folder and both upload. The second is
-   * refused and told to retry; by then the first has finished and the lookup adopts its file.
-   * Without a database there is one process and nothing to race.
-   *
-   * Restored 2026-09-23: this helper and its two call sites were dropped by the merge of the Gemini
-   * remediation branch (6790b0e) although that merge said the reliability fixes were kept, and the
-   * concurrency test kept passing because it wrapped the publisher itself instead of calling Core.
-   */
-  async function publishExclusively<T extends { ok: boolean }>(taskId: string, publish: () => Promise<T>): Promise<T | { ok: false; error: { code: string; message: string; retryable: boolean } }> {
-    if (!db) return await publish();
-    const held = await withSessionAdvisoryLock(db, `publish:${taskId}`, publish);
-    if (held.acquired) return held.value;
-    // The same shape a failed publish has, so the caller's error mapping handles it.
-    return {
-      ok: false,
-      error: {
-        code: 'PUBLICATION_IN_PROGRESS',
-        message: 'Another process is delivering this task right now; try again in a moment',
-        retryable: true,
-      },
-    };
-  }
-
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
-  const qaEngine = options?.qaEngine || new DeterministicQAEngine();
+  const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
   const canvaStudio = new CanvaDesignStudioAdapter(undefined, {
     resolveBinding: async (ctx) => {
       if (!db || !ctx.taskId || !ctx.clientId) return undefined;
@@ -656,7 +359,6 @@ export function createApp(options?: CreateAppOptions) {
   });
   // Production Studio is strictly Canva Native Studio under ADR 021 & CV-22/CV-23
   const activeStudioType = 'canva';
-  const studio: DesignStudioAdapter = canvaStudio;
   const publisher = options?.publisher || new GooglePublisher();
   const humanApprovalManager = new HumanApprovalManager();
   const modelGateway = new ResilientModelGateway();
@@ -685,6 +387,13 @@ export function createApp(options?: CreateAppOptions) {
       actionTokenService: telegramActionTokenService,
       allowedUserIds: telegramAllowedUsers,
     });
+  // One app's switches. They were module-level, so every createApp() in a process shared them and
+  // switching Telegram off in one app switched it off in all of them. They still live in memory and
+  // are lost on a restart; persisting them is WhatsApp/ingress work (architecture programme 1.3, G8).
+  const channelKillSwitches = {
+    telegram: false,
+    waha: false,
+  };
   // The office's Telegram kill switch stops intake at the source: while it is on, the poller asks
   // Telegram for nothing (the webhook route refuses with 503 below). It used to change only the
   // health report, and messages kept being read and designs kept being started.
@@ -693,33 +402,13 @@ export function createApp(options?: CreateAppOptions) {
   // Local instance-scoped data structures
   const tasks = new Map<string, any>();
   const events = new Map<string, any[]>();
-  const rawEvents = new Map<string, any>();
   const briefs = new Map<string, DesignBrief>();
   const revisions = new Map<string, any>();
   const decisions = new Map<string, ApprovalDecision[]>();
   const feedbacks = new Map<string, FeedbackEvent[]>();
   const clientDnas = new Map<string, ClientDNA>();
-  /**
-   * The client's DNA as the office last saved it. PostgreSQL answers first; the map (fixtures at
-   * start-up, hydrated from the database, kept current by the routes that write) answers only when
-   * there is no database, or when it does not know the client. The map is a cache, not a truth:
-   * it is what let a saved Drive folder be ignored by delivery after a restart. Every route that
-   * used to call clientDnas.get() goes through here.
-   */
-  const resolveClientDna = async (clientId: string | undefined | null, identity?: { tenantId?: string; userId?: string; role?: string }, trx?: Kysely<Database>): Promise<ClientDNA | undefined> => {
-    if (!clientId) return undefined;
-    if (db) {
-      try {
-        const fromDb = await loadActiveClientDna(db, { tenantId: identity?.tenantId || defaultTenantId, userId: identity?.userId || operatorUserId, role: identity?.role }, clientId, trx);
-        if (fromDb) return fromDb as unknown as ClientDNA;
-      } catch (err) {
-        log.warn('[core:client_dna] PostgreSQL read failed, answering from memory:', err instanceof Error ? err.message : err);
-      }
-    }
-    return clientDnas.get(clientId);
-  };
+  const resolveClientDna = createClientDnaResolver({ db, clientDnas });
 
-  interface LocalClientDnaSnapshot extends ClientDnaSnapshot {}
   const clientSnapshots = new Map<string, ClientDnaSnapshot[]>();
 
   const evalRuns = new Map<string, any>();
@@ -728,12 +417,12 @@ export function createApp(options?: CreateAppOptions) {
   const rubricReports = new Map<string, QualityRubricReport[]>();
   const taskComments = new Map<string, any[]>();
   const omnichannelReceipts = new Map<string, any>();
-  const inFlightPublications = new Map<string, Promise<any>>();
+  const inFlightPublications: OmnichannelDeliveryDeps['inFlightPublications'] = new Map();
   const inMemoryOutbox = options?.inMemoryOutbox ?? new Map<string, any[]>();
 
-  const defaultTenantId = '00000000-0000-4000-a000-000000000001';
-  const operatorUserId = '00000000-0000-4000-b000-000000000001';
-  const adminUserId = '00000000-0000-4000-b000-000000000002';
+  const defaultTenantId = DEFAULT_TENANT_ID;
+  const operatorUserId = OPERATOR_USER_ID;
+  const adminUserId = ADMIN_USER_ID;
 
   // Real-time Event System (Server-Sent Events)
   type SystemEvent = {
@@ -781,587 +470,8 @@ export function createApp(options?: CreateAppOptions) {
   }
 
   // Seed default client DNA
-  const defaultClientId = 'client-office-1';
-  if (clientDnas.size === 0) {
-  clientDnas.set(defaultClientId, {
-    tenantId: 'tenant-default',
-    clientId: defaultClientId,
-    name: 'Hawa Creative',
-    code: 'HAWA',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Dark Slate', hex: '#0B0F19', role: 'background' },
-      { name: 'Sky Accent', hex: '#38BDF8', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Noto Sans Arabic',
-        style: 'Regular',
-        weight: 400,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: crypto.randomUUID(),
-        name: 'Primary Logo',
-        role: 'logo_primary',
-        storageKey: 'assets/logo.png',
-        sha256: 'sha256_logo_verified_primary',
-        mimeType: 'image/png',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Sophisticated Kurdish visual studio',
-      prohibitedPhrases: ['cheap', 'guaranteed'],
-      requiredDisclaimers: [],
-      layoutRules: ['Always align brand logo to the top right in RTL'],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_office_main',
-      productionFolderId: 'folder_prod_root',
-      archiveFolderId: 'folder_archive',
-      spreadsheetId: 'sheet_tracker_123',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Drustee Evidence-First Health DNA
-  clientDnas.set('client-drustee', {
-    tenantId: 'tenant-drustee',
-    clientId: 'client-drustee',
-    name: 'Drustee Evidence-First Health',
-    code: 'DRUSTEE',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Botanical Deep Emerald', hex: '#0D5C3A', role: 'primary' },
-      { name: 'Forest Pine', hex: '#062E1D', role: 'background' },
-      { name: 'Warm Amber Gold', hex: '#D4AF37', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'ExtraBold',
-        weight: 800,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-      {
-        family: 'Noto Sans Arabic',
-        style: 'SemiBold',
-        weight: 600,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_drustee_logo_1',
-        name: 'Official Drustee Wordmark & Leaf Seal',
-        role: 'logo_primary',
-        storageKey: 'assets/drustee/logo_official.svg',
-        sha256: 'sha256_d892a01fc348be91',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_vitd3_1',
-        name: 'Vitamin D3 + K2 Amber Dropper Bottle Vector',
-        role: 'logo_secondary',
-        storageKey: 'assets/drustee/vit_d3_bottle.svg',
-        sha256: 'sha256_e1098b1c4320987a',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_omega3_1',
-        name: 'Wild Alaskan Omega-3 Softgels Bottle Vector',
-        role: 'badge',
-        storageKey: 'assets/drustee/omega3_bottle.svg',
-        sha256: 'sha256_f9018237cb1092e4',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_gmp_seal',
-        name: 'GMP Certified Manufacturing Badge',
-        role: 'badge',
-        storageKey: 'assets/drustee/badge_gmp.svg',
-        sha256: 'sha256_g88123490bca1123',
-        mimeType: 'image/svg+xml',
-      },
-      {
-        assetId: 'asset_drustee_lab_seal',
-        name: 'Third-Party Independent Lab Tested Badge',
-        role: 'badge',
-        storageKey: 'assets/drustee/badge_lab.svg',
-        sha256: 'sha256_h77123908fca9944',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Evidence-first clinical rigor in Sorani Kurdish; transparent dosages and preventative wellness without medical disease cure claims.',
-      prohibitedPhrases: [
-        'معجزة',
-        'دەرمانی هەموو دەردێک',
-        'بێ وێنە لە جیهان',
-        '١٠٠٪ گەرەنتی',
-        'چارەسەری نەخۆشی',
-        'miracle cure',
-        'cure-all',
-      ],
-      requiredDisclaimers: [
-        'تەواوکەری خۆراکی جێگرەوەی ژەمی خۆراکی تەندروست و ڕاوێژی پزیشک نییە.',
-      ],
-      layoutRules: [
-        'Always preserve UAX #9 bidi isolation for Sorani Kurdish typography',
-        'Maintain minimum 10% safe zone margins on all export aspect ratios',
-        'Display Third-Party Lab Tested and GMP Certification badges prominently',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_drustee_main',
-      productionFolderId: 'folder_drustee_prod_verified',
-      archiveFolderId: 'folder_drustee_archive',
-      spreadsheetId: 'sheet_drustee_campaigns_456',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director', 'pharmacist_reviewer'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Aster Hotel DNA
-  clientDnas.set('client-aster', {
-    tenantId: 'tenant-aster',
-    clientId: 'client-aster',
-    name: 'Aster Hotel & Resort',
-    code: 'ASTER',
-    version: 12,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Forest Green', hex: '#164a3a', role: 'primary' },
-      { name: 'Warm Cream', hex: '#f4ecdd', role: 'background' },
-      { name: 'Warm Gold', hex: '#e9b666', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'Bold',
-        weight: 700,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_aster_logo_1',
-        name: 'White Official Logo',
-        role: 'logo_primary',
-        storageKey: 'assets/aster/logo_white.svg',
-        sha256: 'sha256_a81f3b90214c718d',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Luxury Kurdish hospitality with understated elegance',
-      prohibitedPhrases: ['budget', 'discount', 'cheap'],
-      requiredDisclaimers: ['بە گەرەنتی خزمەتگوزاری تایبەت'],
-      layoutRules: [
-        'Use the white official logo; minimum clear space equals cap height',
-        'Preserve source numeral system; never normalize final copy silently',
-        'Maintain minimum 32px safe margins on 4:5 Meta feed format',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_aster_hospitality',
-      productionFolderId: 'folder_aster_prod',
-      archiveFolderId: 'folder_aster_archive',
-      spreadsheetId: 'sheet_aster_deliverables',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Nova Tech DNA
-  clientDnas.set('client-nova', {
-    tenantId: 'tenant-nova',
-    clientId: 'client-nova',
-    name: 'Nova Tech Systems',
-    code: 'NOVA',
-    version: 8,
-    status: 'active',
-    defaultLocale: 'en',
-    defaultDirection: 'ltr',
-    colors: [
-      { name: 'Deep Navy', hex: '#0b192c', role: 'background' },
-      { name: 'Slate Blue', hex: '#1e3e62', role: 'secondary' },
-      { name: 'Safety Orange', hex: '#ff6500', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Noto Sans Arabic',
-        style: 'Bold',
-        weight: 700,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar', 'en'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_nova_logo_1',
-        name: 'Nova Symbol Primary',
-        role: 'logo_primary',
-        storageKey: 'assets/nova/symbol.svg',
-        sha256: 'sha256_7f41d3b9e2810a9c',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Cutting-edge tech minimalism, precise and assertive',
-      prohibitedPhrases: ['slow', 'legacy', 'deprecated'],
-      requiredDisclaimers: [],
-      layoutRules: [
-        'Maintain generous padding (minimum 64px); max 2 focal elements per artboard',
-        'CTA elements must use safety orange with WCAG AAA contrast against background',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_nova_systems',
-      productionFolderId: 'folder_nova_prod',
-      archiveFolderId: 'folder_nova_archive',
-      spreadsheetId: 'sheet_nova_campaigns',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['creative_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed Rona Couture DNA
-  clientDnas.set('client-rona', {
-    tenantId: 'tenant-rona',
-    clientId: 'client-rona',
-    name: 'Rona Haute Couture',
-    code: 'RONA',
-    version: 4,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Royal Plum', hex: '#4a154b', role: 'primary' },
-      { name: 'Off White', hex: '#f8f5fa', role: 'background' },
-      { name: 'Warm Amber', hex: '#ecb22e', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'Regular',
-        weight: 400,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_rona_logo_1',
-        name: 'Rona Signature Crest',
-        role: 'logo_primary',
-        storageKey: 'assets/rona/signature.svg',
-        sha256: 'sha256_e39a174c81b2901a',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Haute couture luxury, poetic Kurdish Sorani phrasing',
-      prohibitedPhrases: ['cheap', 'standard', 'mass-produced'],
-      requiredDisclaimers: [],
-      layoutRules: [
-        'Headline scale must be at least 2.5x body text with open leading',
-        'Product photography must use smooth organic masks rather than sharp rectangular borders',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_rona_fashion',
-      productionFolderId: 'folder_rona_prod',
-      archiveFolderId: 'folder_rona_archive',
-      spreadsheetId: 'sheet_rona_lookbook',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed FastPay Mobile Wallet DNA
-  clientDnas.set('client-fastpay', {
-    tenantId: 'tenant-fastpay',
-    clientId: 'client-fastpay',
-    name: 'FastPay Mobile Wallet',
-    code: 'FASTPAY',
-    version: 1,
-    status: 'active',
-    defaultLocale: 'ckb',
-    defaultDirection: 'rtl',
-    colors: [
-      { name: 'Electric Cobalt', hex: '#0045F5', role: 'primary' },
-      { name: 'Midnight Navy', hex: '#071033', role: 'background' },
-      { name: 'Fintech Magenta', hex: '#F72585', role: 'accent' },
-    ],
-    fonts: [
-      {
-        family: 'Vazirmatn',
-        style: 'ExtraBold',
-        weight: 800,
-        role: 'display',
-        license: 'OFL',
-        supportedLocales: ['ckb', 'ar'],
-      },
-      {
-        family: 'Inter',
-        style: 'Bold',
-        weight: 700,
-        role: 'body',
-        license: 'OFL',
-        supportedLocales: ['en'],
-      },
-    ],
-    assets: [
-      {
-        assetId: 'asset_fastpay_logo_1',
-        name: 'Official FastPay Vector Wordmark & Lightning Bolt',
-        role: 'logo_primary',
-        storageKey: 'assets/fastpay/logo_official.svg',
-        sha256: 'sha256_fastpay_fintech_verified_c89b21',
-        mimeType: 'image/svg+xml',
-      },
-    ],
-    guidelines: {
-      voiceAndTone: 'Dynamic, high-trust Kurdish fintech messaging with Central Bank compliance',
-      prohibitedPhrases: ['hidden fees', 'delayed', 'unlicensed'],
-      requiredDisclaimers: ['مۆڵەتپێدراو لەلایەن بانکی ناوەندی عێراق (CBI)'],
-      layoutRules: [
-        'Central Bank regulatory badge must be pinned top-right',
-        'Fintech badge 0% fee must use high-contrast cyan/magenta glow',
-        'Official 1:1 format requires 32px safe margins',
-      ],
-    },
-    destinations: {
-      googleSharedDriveId: 'drive_fastpay_fintech',
-      productionFolderId: 'folder_fastpay_prod',
-      archiveFolderId: 'folder_fastpay_archive',
-      spreadsheetId: 'sheet_fastpay_deliverables',
-      sheetId: 0,
-    },
-    approvalPolicy: {
-      requiredRoles: ['compliance_officer', 'art_director'],
-      allowAutoApproval: false,
-      autoApprovalEligibleTemplates: [],
-    },
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Seed KAAE (Kurdistan Accrediting Association for Education)
-  clientDnas.set('c1000000-0000-4000-8000-000000000002', kaaeClientDNA);
-  clientDnas.set('kaae', kaaeClientDNA);
-
-  const drusteeDna = clientDnas.get('client-drustee')!;
-  if (drusteeDna) {
-    clientDnas.set('c1000000-0000-4000-8000-000000000003', drusteeDna);
-    clientDnas.set('drustee', drusteeDna);
-    clientSnapshots.set('c1000000-0000-4000-8000-000000000003', [
-      {
-        snapshotId: 'snap_init_drustee_1',
-        clientId: 'c1000000-0000-4000-8000-000000000003',
-        version: 1,
-        sha256: computeDnaHash(drusteeDna),
-        commitMessage: 'Initial baseline Drustee health DNA with clinical green palette',
-        createdBy: 'art_director',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        dna: drusteeDna,
-      },
-    ]);
-  }
-
-  const fastpayDna = clientDnas.get('client-fastpay')!;
-  if (fastpayDna) {
-    clientDnas.set('c1000000-0000-4000-8000-000000000004', fastpayDna);
-    clientDnas.set('fastpay', fastpayDna);
-    clientSnapshots.set('c1000000-0000-4000-8000-000000000004', [
-      {
-        snapshotId: 'snap_init_fastpay_1',
-        clientId: 'c1000000-0000-4000-8000-000000000004',
-        version: 1,
-        sha256: computeDnaHash(fastpayDna),
-        commitMessage: 'Initial baseline FastPay FinTech DNA',
-        createdBy: 'art_director',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        dna: fastpayDna,
-      },
-    ]);
-  }
-  }
-
-  if (!clientSnapshots.has('client-office-1')) {
-  clientSnapshots.set('c1000000-0000-4000-8000-000000000002', [
-    {
-      snapshotId: 'snap_init_kaae_1',
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      version: 1,
-      sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Initial baseline KAAE institutional DNA with Cairo/Verdana and Navy/Gold',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      dna: kaaeClientDNA,
-    },
-  ]);
-  clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
-
-  // Seed baseline governance snapshots for all clients
-  clientSnapshots.set('client-office-1', [
-    {
-      snapshotId: 'snap_init_office_1',
-      clientId: 'client-office-1',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-office-1')!),
-      commitMessage: 'Initial baseline studio DNA with verified Kurdish typography registry',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      dna: structuredClone(clientDnas.get('client-office-1')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-drustee', [
-    {
-      snapshotId: 'snap_init_drustee_1',
-      clientId: 'client-drustee',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-drustee')!),
-      commitMessage: 'Initial canonical Drustee DNA lock: Emerald/Gold palette, Kurdish medical disclaimers, and Vitamin D3 / Omega-3 assets',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: structuredClone(clientDnas.get('client-drustee')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-aster', [
-    {
-      snapshotId: 'snap_init_aster_12',
-      clientId: 'client-aster',
-      version: 12,
-      sha256: computeDnaHash(clientDnas.get('client-aster')!),
-      commitMessage: 'Promoted numeral preservation rule and gold brand asset registry',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      dna: structuredClone(clientDnas.get('client-aster')!),
-    },
-    {
-      snapshotId: 'snap_init_aster_11',
-      clientId: 'client-aster',
-      version: 11,
-      sha256: 'sha256_8291ba4c9201f8e2',
-      commitMessage: 'Added Kurdish Sorani hospitality tone and Meta 4:5 safe margins',
-      createdBy: 'operator',
-      createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-      dna: { ...structuredClone(clientDnas.get('client-aster')!), version: 11 },
-    },
-  ]);
-
-  clientSnapshots.set('client-nova', [
-    {
-      snapshotId: 'snap_init_nova_8',
-      clientId: 'client-nova',
-      version: 8,
-      sha256: computeDnaHash(clientDnas.get('client-nova')!),
-      commitMessage: 'Enforced WCAG AAA contrast ratio on high-impact safety orange CTA targets',
-      createdBy: 'creative_director',
-      createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-      dna: structuredClone(clientDnas.get('client-nova')!),
-    },
-    {
-      snapshotId: 'snap_init_nova_7',
-      clientId: 'client-nova',
-      version: 7,
-      sha256: 'sha256_3fa90812bca01e74',
-      commitMessage: 'Registered Noto Sans Arabic typography and deep navy background token',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-      dna: { ...structuredClone(clientDnas.get('client-nova')!), version: 7 },
-    },
-  ]);
-
-  clientSnapshots.set('client-rona', [
-    {
-      snapshotId: 'snap_init_rona_4',
-      clientId: 'client-rona',
-      version: 4,
-      sha256: computeDnaHash(clientDnas.get('client-rona')!),
-      commitMessage: 'Haute couture luxury voice guidelines and organic product masking invariants',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      dna: structuredClone(clientDnas.get('client-rona')!),
-    },
-  ]);
-
-  clientSnapshots.set('client-fastpay', [
-    {
-      snapshotId: 'snap_init_fastpay_1',
-      clientId: 'client-fastpay',
-      version: 1,
-      sha256: computeDnaHash(clientDnas.get('client-fastpay')!),
-      commitMessage: 'Initial FastPay DNA lock: Electric Cobalt, CBI compliance, and 1:1 fintech promo layout',
-      createdBy: 'art_director',
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      dna: structuredClone(clientDnas.get('client-fastpay')!),
-    },
-  ]);
-
-  clientSnapshots.set('c1000000-0000-4000-8000-000000000002', [
-    {
-      snapshotId: 'snap_init_kaae_1',
-      clientId: 'c1000000-0000-4000-8000-000000000002',
-      version: 1,
-      sha256: computeDnaHash(kaaeClientDNA),
-      commitMessage: 'Official KAAE Brand DNA lock: Law No. 6 of 2022 statutory authority, 21-ray sunburst emblem, and dual Verdana/Cairo typography',
-      createdBy: 'autonomous_creative_director',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      dna: structuredClone(kaaeClientDNA),
-    },
-  ]);
-  clientSnapshots.set('kaae', clientSnapshots.get('c1000000-0000-4000-8000-000000000002')!);
-  }
+  const defaultClientId = DEFAULT_CLIENT_ID;
+  seedClientDnaFixtures(clientDnas, clientSnapshots, computeDnaHash);
 
   interface IssuedSession {
     authenticated: boolean;
@@ -1580,17 +690,6 @@ export function createApp(options?: CreateAppOptions) {
     lastAlertMessageId?: string;
   }
   let lastPaidProbe: PaidProbeState = { at: 0, status: 'unverified' };
-
-  const recordPaidModelBillingError = (status: string = 'billing_exhausted', detail?: any) => {
-    lastPaidProbe = {
-      at: Date.now(),
-      status,
-      detail: detail || { message: 'Paid call failed' },
-      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
-      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
-    };
-    lastVerifiedProgressAt = new Date().toISOString();
-  };
 
   const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
     const key = process.env.OPENAI_API_KEY;
@@ -1879,61 +978,18 @@ export function createApp(options?: CreateAppOptions) {
     }, isUnhealthy ? 503 : 200);
   };
 
+  // A task as Postgres has it, for routes about to act on its status (services/task-reader.ts).
+  const { resolveTaskWithFallback, readCurrentTask } = createTaskReader({ db, taskRepo, tasks });
+
+  // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
+  const { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery } = createOmnichannelDelivery({
+    db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, decisions, events, omnichannelReceipts,
+    inFlightPublications, inMemoryOutbox, isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
+  });
+
   // Helper to register routes for /v1/..., /api/v1/..., /api/... and /...
   // All routes are deny-by-default: unless the route is an explicit public probe/asset/webhook
   // or the session endpoint, an unauthenticated caller gets 401 before the handler runs.
-  // Handlers that still read the in-memory task map fall back to PostgreSQL after a restart and
-  // hydrate the map, so a persisted task never answers 404 only because this process is new.
-  //
-  // `strict` is for a handler about to act on the task's status (deliver, publish, approve, route,
-  // control, a revision): when the database is connected and cannot be read, it throws
-  // TaskStoreUnavailableError (answered 503) instead of acting on the status this process last saw.
-  // Those handlers used to read `tasks.get(id) || resolveTaskWithFallback(id)`, so a cached task was
-  // never refreshed at all: a status changed by the worker, another process or an operator in
-  // Postgres was ignored, and a task already delivered or sent back could be delivered again.
-  async function resolveTaskWithFallback(taskId: string, opts: { strict?: boolean } = {}): Promise<any | undefined> {
-    const cached = tasks.get(taskId);
-    if (cached) {
-      if (db && taskRepo && isValidUuid(taskId)) {
-        try {
-          const dbTask: any = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-            (trx) => taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx));
-          if (dbTask) {
-            cached.status = toApiTaskStatus(dbTask.state || 'received');
-            cached.state = dbTask.state;
-            cached.version = Number(dbTask.version); // bigint: pg returns a string, and version checks compare with ===
-            cached.latestRevisionId = dbTask.current_design_revision_id || cached.latestRevisionId;
-          }
-        } catch (err) {
-          if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
-          log.warn('[core:task_hydrate] PostgreSQL sync failed:', err);
-        }
-      }
-      return cached;
-    }
-    if (!db || !taskRepo || !isValidUuid(taskId)) return undefined;
-    try {
-      const dbTask: any = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-        (trx) => taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx));
-      if (!dbTask) return undefined;
-      const hydrated: any = {
-        id: dbTask.id, tenantId: dbTask.tenant_id, clientId: dbTask.client_id, projectId: dbTask.project_id,
-        status: toApiTaskStatus(dbTask.state || 'received'), state: dbTask.state, priority: dbTask.priority,
-        title: dbTask.title, description: dbTask.description, version: Number(dbTask.version),
-        latestRevisionId: dbTask.current_design_revision_id || undefined,
-        createdAt: dbTask.created_at, updatedAt: dbTask.updated_at,
-      };
-      tasks.set(taskId, hydrated);
-      return hydrated;
-    } catch (err) {
-      if (opts.strict) throw new TaskStoreUnavailableError(taskId, err);
-      log.warn('[core:task_hydrate] PostgreSQL lookup failed:', err);
-      return undefined;
-    }
-  }
-
-  /** The task as Postgres has it now, for a handler about to act on its status. See resolveTaskWithFallback. */
-  const readCurrentTask = (taskId: string) => resolveTaskWithFallback(taskId, { strict: true });
 
   const PUBLIC_MUTATION_PATHS = new Set(['/auth/session', '/auth/telegram-miniapp']);
   const isPublicMutation = (path: string) => PUBLIC_MUTATION_PATHS.has(path) || path.startsWith('/webhooks/');
@@ -1991,15 +1047,18 @@ export function createApp(options?: CreateAppOptions) {
     );
   };
 
-  const routeContext = {
+  // Everything a route module or shared service reads from createApp (core-context.ts). Typed, so a
+  // field the context names and this object lacks fails the build.
+  const routeContext: RouteContext = {
     app,
     registerRoute,
+    options,
+    isProduction,
     db,
     taskRepo,
-    ingressRepo,
+    clientRepo,
     outboxRepo,
     revisionRepo,
-    canvaBindingRepo,
     publicationRepo,
     unifiedIngress,
     telegramBridge,
@@ -2007,9 +1066,17 @@ export function createApp(options?: CreateAppOptions) {
     sloDaemon,
     evaluationRunner: evalRunner,
     reconciliationService,
+    canvaConnectService,
+    deliverableStore,
+    qaEngine,
+    creativeDirector,
+    publisher,
+    voiceTranscriber,
+    telegramAllowedUsers,
+    telegramIntakeUsers,
+    guidelineReadings,
     tasks,
     events,
-    rawEvents,
     briefs,
     revisions,
     decisions,
@@ -2022,6 +1089,8 @@ export function createApp(options?: CreateAppOptions) {
     rubricReports,
     taskComments,
     omnichannelReceipts,
+    inFlightPublications,
+    inMemoryOutbox,
     historicalMigrator: globalHistoricalMigrator,
     globalCanvaNativeAdapter,
     globalCanvaCircuitBreaker,
@@ -2031,6 +1100,12 @@ export function createApp(options?: CreateAppOptions) {
     verifyRequestAuth,
     problem,
     broadcastEvent: broadcast,
+    broadcastTransition,
+    resolveTaskWithFallback,
+    readCurrentTask,
+    resolveClientDna,
+    delivery: { executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery },
+    probeModelProvider,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
     ensureSessionLoaded,
@@ -2039,8 +1114,6 @@ export function createApp(options?: CreateAppOptions) {
     persistSession,
     revokeSession,
     streamTickets,
-    clientRepo,
-    options,
   };
 
   registerSystemRoutes(routeContext);
@@ -2051,6 +1124,30 @@ export function createApp(options?: CreateAppOptions) {
   registerEvalsRoutes(routeContext);
   registerComparisonRoutes(routeContext);
   registerIngressRoutes(routeContext);
+
+  // The route groups being moved out of createApp (architecture programme 1.3, SPLIT_PLAN.md section
+  // 2), in the plan's order. Each module is filled by one group; nothing else here changes when it is.
+  // Registration order between modules decides nothing: no two routes of one method can match one URL
+  // except GET revisions/diff before revisions/:revisionId, both in revisions.routes.ts (route-inventory
+  // test, N2).
+  registerMigrationRoutes(routeContext);
+  registerAssetsRoutes(routeContext);
+  registerSimulatorsRoutes(routeContext);
+  registerFontsRoutes(routeContext);
+  registerRubricRoutes(routeContext);
+  registerSystemStatusRoutes(routeContext);
+  registerClientLearningRoutes(routeContext);
+  registerRevisionsRoutes(routeContext);
+  registerDecisionsRoutes(routeContext);
+  registerCanvaOutcomeRoutes(routeContext);
+  registerDeliveryRoutes(routeContext);
+  registerOutboxRoutes(routeContext);
+  registerControlsRoutes(routeContext);
+  registerTasksRoutes(routeContext);
+  registerTaskPipelineRoutes(routeContext);
+  registerSearchRoutes(routeContext);
+  registerWhatsappRoutes(routeContext);
+  registerTelegramWebhookRoutes(routeContext);
 
   // Autonomous Inbound Chat Ingress & Vector Composition Engine (Invariants #1, #2, #4, #8, #10)
   async function ingestChatCampaignTask(input: {
@@ -2892,716 +1989,6 @@ export function createApp(options?: CreateAppOptions) {
     return { swept: failedRows.length, redriven: results.filter(r => r.success).length, results };
   }
 
-  // --- Reusable Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, ADR-0038) ---
-  /**
-   * The approval a delivery must honour: the task's current approval, from memory or, after a
-   * restart, from durable storage. Its pinned exports are what gets delivered.
-   */
-  const NO_APPROVAL_TO_DELIVER =
-    'Nothing to deliver: the task has no approval. Approve in the Desk with the captured export selected.';
-
-  async function findApprovalForDelivery(
-    tenantId: string,
-    taskId: string,
-    task: any,
-    revisionId?: string,
-    opts: { approvalId?: string; allowInvalidated?: boolean } = {}
-  ): Promise<{ approvalId: string; designRevisionId: string; pinnedExports?: PinnedExport[]; [key: string]: any } | null> {
-    // An approval invalidated by a later edit still names exactly what it approved, so it may be
-    // delivered, but only under the explicit deliver_approved_stored policy.
-    //
-    // With a database, only a persisted approval can be delivered. The one in this process's memory
-    // was trusted first, so an approval Postgres does not hold (its write never committed, or it is
-    // for a draft another process has since replaced) still sent the files. Memory answers only when
-    // there is no database at all (tests without one).
-    const recorded = db ? [] : [task?.latestApproval, ...[...(decisions.get(taskId) || [])].reverse()].filter(Boolean);
-    const match: any = recorded.find(
-      (a: any) =>
-        a.decisionId &&
-        a.decision === 'approved' &&
-        (!revisionId || a.designRevisionId === revisionId) &&
-        (!opts.approvalId || a.decisionId === opts.approvalId) &&
-        (opts.allowInvalidated || !a.invalidated)
-    );
-    if (match) {
-      if ((isProduction || task?.requireQc || (opts as any).requireQc) && !match.qcReportHash && !opts.allowInvalidated) {
-        // Task R05: null/unknown QC cannot publish in production or when requireQc is set
-        return null;
-      }
-      return {
-        approvalId: match.decisionId,
-        designRevisionId: match.designRevisionId,
-        pinnedExports: match.pinnedExports,
-        qcReportHash: match.qcReportHash,
-        exportHashes: match.exportHashes,
-        canvaBindingId: match.canvaBindingId,
-        canvaBindingVersion: match.canvaBindingVersion,
-        tenantId: match.tenantId,
-        clientId: match.clientId,
-      };
-    }
-    if (!db || !revisionId || !isValidUuid(taskId) || !isValidUuid(revisionId)) return null;
-    try {
-      const row: any = await withRlsContext(
-        db,
-        { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-        async (trx) =>
-          await trx
-            .selectFrom('approvals' as any)
-            .selectAll()
-            .where('task_id', '=', taskId)
-            .where('design_revision_id', '=', revisionId)
-            .where('decision', '=', 'approved')
-            .$if(Boolean(opts.approvalId && isValidUuid(opts.approvalId)), (q: any) => q.where('id', '=', opts.approvalId))
-            .orderBy('created_at', 'desc')
-            .executeTakeFirst()
-      );
-      if (!row) return null;
-      if (!opts.allowInvalidated && row.decision_payload?.invalidated === true) {
-        return null;
-      }
-      if (!opts.allowInvalidated && !row.decision_payload?.qcReportHash && !row.qc_run_id) {
-        // Task R05: null/unknown QC cannot publish
-        return null;
-      }
-      return {
-        approvalId: row.id,
-        designRevisionId: row.design_revision_id,
-        pinnedExports: row.decision_payload?.pinnedExports,
-        qcReportHash: row.decision_payload?.qcReportHash,
-        exportHashes: row.decision_payload?.exportHashes,
-        canvaBindingId: row.decision_payload?.canvaBindingId,
-        canvaBindingVersion: row.decision_payload?.canvaBindingVersion,
-        tenantId: row.tenant_id,
-        clientId: row.decision_payload?.clientId,
-      };
-    } catch (err) {
-      log.error('[core:publish:approval_lookup] DB lookup error:', err);
-      return null;
-    }
-  }
-
-  /**
-   * A task delivered by another Core process (or before a restart) has its receipt in that process's
-   * memory, but its publication in Postgres: Deliver pressed again answers with that. The route used
-   * to reach "adopt the stored publication" only because its stale copy of the status still said
-   * APPROVED. Null when there is no completed publication, or it could not be read.
-   */
-  async function storedCompletePublication(task: { tenantId?: string } | undefined, taskId: string) {
-    if (!db || !publicationRepo || !isValidUuid(taskId)) return null;
-    const tenantId = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-    const stored = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-      publicationRepo.findByTaskId(taskId, tenantId, trx)).catch((err: unknown) => {
-      log.warn('[core:publish] Could not read the stored publication:', err);
-      return null;
-    });
-    if (stored?.state !== 'complete') return null;
-    return { publicationId: String(stored.id), publicationKey: stored.publication_key, state: stored.state, recordedIn: 'postgres' as const };
-  }
-
-  /** Tasks whose delivery is running in this process: a task left PUBLISHING with none is stranded. */
-  const deliveriesInFlight = new Set<string>();
-
-  async function executeOmnichannelPublish(
-    taskId: string,
-    actor: { type: string; id: string } = { type: 'workflow', id: 'publisher' },
-    reason: string = 'Omnichannel campaign published',
-    autoApproveFromAwaiting: boolean = false,
-    options?: { policy?: string; designRevisionId?: string; approvalId?: string }
-  ) {
-    deliveriesInFlight.add(taskId);
-    try {
-      return await deliverOmnichannel(taskId, actor, reason, autoApproveFromAwaiting, options);
-    } finally {
-      deliveriesInFlight.delete(taskId);
-    }
-  }
-
-  async function deliverOmnichannel(
-    taskId: string,
-    actor: { type: string; id: string },
-    reason: string,
-    autoApproveFromAwaiting: boolean,
-    options?: { policy?: string; designRevisionId?: string; approvalId?: string }
-  ) {
-    // Postgres's status, not this process's copy: a delivery decided on a stale APPROVED sent a task
-    // that had since been sent back or delivered by another path.
-    let task: Awaited<ReturnType<typeof readCurrentTask>>;
-    try {
-      task = await readCurrentTask(taskId);
-    } catch (err) {
-      if (err instanceof TaskStoreUnavailableError) return { ok: false, status: 503, title: 'Database Unavailable', message: err.message };
-      throw err;
-    }
-    if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
-
-    // Only the task's own client DNA names a destination; another client's folder is never a fallback.
-    const deliveryTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-    let client: any = await resolveClientDna(task.clientId, { tenantId: deliveryTenantId });
-    const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
-    const approval = await findApprovalForDelivery(deliveryTenantId, taskId, task, options?.designRevisionId || task.latestRevisionId, {
-      approvalId: options?.approvalId,
-      allowInvalidated: options?.policy === 'deliver_approved_stored',
-    });
-    if (!approval) {
-      return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
-    }
-    const deliverables = await loadPinnedDeliverables(
-      deliverableStore,
-      { tenantId: deliveryTenantId, userId: SYSTEM_AUTOMATION_USER_ID, taskId, filePrefix: clientSlug },
-      approval.pinnedExports
-    );
-    if (!deliverables.ok) {
-      return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: deliverables.code, message: deliverables.message };
-    }
-
-    const isDeliverApprovedStored = options?.policy === 'deliver_approved_stored';
-    const sm = new TaskStateMachine(taskId, isDeliverApprovedStored && task.status !== 'PUBLISH_RECONCILIATION' ? 'APPROVED' : task.status);
-
-    const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
-    if (inFlightPublications.has(publicationKey)) {
-      return await inFlightPublications.get(publicationKey);
-    }
-
-    if (task.status === 'COMPLETE') {
-      const existingReceipt = omnichannelReceipts.get(taskId);
-      if (existingReceipt) {
-        const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
-        const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
-        return {
-          ok: true,
-          taskId,
-          status: 'COMPLETE',
-          complete: true,
-          publicationReceipt: existingReceipt.receipt || existingReceipt,
-          driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-          sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber
-            ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${existingReceipt.sheetRow.rowNumber}`
-            : null,
-          filesCount: existingReceipt.files?.length || 1,
-          publishedAt: existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
-        };
-      }
-    }
-
-    const doPublish = async () => {
-      if (autoApproveFromAwaiting && task.status === 'AWAITING_APPROVAL') {
-        const approveTrans = sm.transition('APPROVED', actor as any, 'Approved via chat trigger');
-        if (approveTrans.ok) {
-          task.status = 'APPROVED';
-          events.get(taskId)?.push(approveTrans.value);
-          broadcast('task:approved', { taskId, approvedBy: actor.id });
-        }
-        if (taskRepo && db && isValidUuid(taskId)) {
-          try {
-            const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-            await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
-              await taskRepo.transitionState({
-                taskId,
-                tenantId,
-                toState: 'approved',
-                actorType: 'adapter',
-                actorId: actor.id || 'chat_trigger',
-                reason: 'Approved via chat trigger',
-              }, trx);
-            });
-          } catch (err) {
-            log.error('[core:omnichannel:auto_approve] DB transition error:', err);
-          }
-        }
-      }
-
-      // Files already delivered with the Sheets row unconfirmed: publishing again retries only the row.
-      const retryingSheetRow = task.status === 'PUBLISH_RECONCILIATION';
-      if (!retryingSheetRow) {
-        const trans = sm.transition('PUBLISHING', actor as any, 'Omnichannel publication started');
-        if (!trans.ok) {
-          return { ok: false, status: 409, message: trans.error.message };
-        }
-
-        if (!isDeliverApprovedStored) {
-          task.status = 'PUBLISHING';
-          events.get(taskId)?.push(trans.value);
-        }
-      }
-
-      if (taskRepo && db && isValidUuid(taskId) && !retryingSheetRow) {
-        try {
-          const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-          await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
-            await taskRepo.transitionState({
-              taskId,
-              tenantId,
-              toState: 'publishing',
-              actorType: 'adapter',
-              actorId: actor.id || 'chat_trigger',
-              reason: 'Omnichannel publication started',
-            }, trx);
-          });
-        } catch (err) {
-          log.error('[core:omnichannel:publishing] DB transition error:', err);
-        }
-      }
-
-      const files = deliverables.files;
-
-      const ctx: RequestContext = {
-        tenantId: 'tenant-default',
-        taskId,
-        actor: actor as any,
-        correlationId: crypto.randomUUID(),
-        deadline: new Date(Date.now() + 60000).toISOString(),
-        idempotencyKey: publicationKey,
-      };
-
-    // Every failure before a file reaches Drive ends the same way: the requester still gets the
-    // design the office approved, and the task goes back to APPROVED so Deliver can be pressed
-    // again. A missing destination and an unrecorded publication intent used to return straight
-    // after the move to PUBLISHING, leaving the task there for good with nothing sent.
-    const failTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-    const failBeforeDrive = async (failure: { status: number; code: string; message: string }) => {
-      // The Drive archive could not be written, and the requester still gets the design the office
-        // approved: the pinned exports are stored and hash-checked, and the worker sends those bytes.
-        // The archive stays failed here (and in Desk) until Drive works; a later successful delivery
-        // does not send the files twice (same notification key).
-        let requesterNotified = false;
-        try {
-          const notification = await import('./services/delivery-notification.js');
-          const chatId = await notification.resolveRequesterChat(
-            task,
-            db && isValidUuid(taskId)
-              ? () => withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-                  (await sql<{ data: Parameters<typeof notification.requesterChatFromIntake>[0] }>`SELECT data FROM hawa.task_events
-                    WHERE tenant_id = ${failTenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
-                    ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
-              : undefined
-          );
-          const chatOnly = chatId
-            ? notification.buildChatOnlyNotificationPayload({
-                taskId,
-                clientId: task.clientId || null,
-                title: task.title || null,
-                chatId,
-                publicationKey,
-                pins: approval.pinnedExports,
-                files,
-                archiveProblem: failure.code === 'CREDENTIALS_MISSING'
-                  ? 'the office Google account is not connected'
-                  : String(failure.code || 'Drive refused the upload'),
-              })
-            : null;
-          if (chatOnly && outboxRepo && db && isValidUuid(taskId)) {
-            const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
-            let earlierSendFailed = false;
-            await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-              const earlier = await outboxRepo.findByIdempotencyKey(failTenantId, notifyKey, trx);
-              // A second Deliver said "sent" whatever became of the first send, even one that failed.
-              if (earlier) {
-                earlierSendFailed = (earlier as { state?: string }).state === 'failed';
-                return;
-              }
-              await outboxRepo.enqueue({
-                tenantId: failTenantId,
-                aggregateType: 'task',
-                aggregateId: taskId,
-                commandType: 'notify.published',
-                idempotencyKey: notifyKey,
-                payload: chatOnly as unknown as Record<string, unknown>,
-              }, trx);
-            });
-            requesterNotified = !earlierSendFailed;
-          }
-        } catch (err) {
-          log.error('[core:omnichannel:notify] Could not queue the approved files for the requester after the Drive failure:', err);
-        }
-        // Nothing reached Drive, so the task goes back to APPROVED and Deliver can be pressed again
-        // once Drive works; it used to stay PUBLISHING, which the publish route refuses.
-        if (task.status === 'PUBLISHING') {
-          const back = sm.transition('APPROVED', actor as Parameters<typeof sm.transition>[1], `Delivery failed before Drive: ${failure.code}`);
-          if (back.ok) {
-            task.status = 'APPROVED';
-            events.get(taskId)?.push(back.value);
-          }
-          if (taskRepo && db && isValidUuid(taskId)) {
-            await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-              taskRepo.transitionState({
-                taskId,
-                tenantId: failTenantId,
-                fromState: 'publishing',
-                toState: 'approved',
-                actorType: 'workflow',
-                actorId: 'publisher',
-                reason: `Delivery failed before Drive: ${failure.code}`,
-              }, trx)
-            ).catch((err: unknown) => log.error('[core:omnichannel:publish] Could not return the task to approved:', err));
-          }
-        }
-      return {
-        ok: false as const,
-        status: failure.status,
-        code: failure.code,
-        message: requesterNotified
-          // Queued, not known to have arrived: the office is alerted if Telegram does not take it
-          // (outbox consumer). "Was sent" was said the moment it was queued (review of 2026-09-24).
-          ? `${String(failure.message).replace(/[.\s]+$/, '')}. The approved file is queued for the requester in Telegram; the Drive archive is not written.`
-          : failure.message,
-        requesterNotified,
-      };
-    };
-
-    const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
-    if (!targetFolderId || targetFolderId === 'unauthorized_folder' || targetFolderId.includes('audit-invented') || targetFolderId.includes('nonexistent')) {
-      return failBeforeDrive({
-        status: 400,
-        code: 'INVALID_DESTINATION',
-        message: `Client '${task.clientId}' has no authorized Google Drive production destination folder configured in Client DNA. Refusing publication to unconfigured destination.`,
-      });
-    }
-    // No fallback sheet or Shared Drive: a client without one gets no Sheets row, reported as unsynced.
-    const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
-
-    // Persist publication intent before provider calls (Task R06)
-    let dbPub: any = null;
-    const pubTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-    if (publicationRepo && db && isValidUuid(taskId)) {
-      try {
-        await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          const recorded = await publicationRepo.findByKey(publicationKey, pubTenantId, trx);
-          dbPub = recorded || await publicationRepo.createPublication({
-            tenantId: pubTenantId,
-            taskId,
-            designRevisionId: approval.designRevisionId,
-            approvalId: approval.approvalId,
-            publicationKey,
-            packageManifest: { files: files.map((f: any) => ({ name: f.filename, sha256: f.sha256, size: f.byteSize })) },
-            packageSha256: deliverables.packageHash,
-            initialState: 'pending',
-          }, trx);
-        });
-      } catch (err: any) {
-        // Two processes delivering the same task race on this row; the loser's insert fails on the
-        // key. That is not a persistence failure: the row is there, written by the other process.
-        // Read it back and go on to the lock, which decides who delivers.
-        try {
-          dbPub = await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-            publicationRepo.findByKey(publicationKey, pubTenantId, trx));
-        } catch {
-          dbPub = null;
-        }
-        if (!dbPub) {
-          log.error('[core:omnichannel:intent] Error persisting publication intent:', err);
-          return failBeforeDrive({
-            status: 503,
-            code: 'PUBLICATION_INTENT_PERSISTENCE_FAILED',
-            message: `Failed to persist publication intent to database before external publish: ${err?.message || String(err)}`,
-          });
-        }
-      }
-    }
-    if (dbPub && dbPub.state === 'complete') {
-      // Delivered already, by this process before a restart or by another one. This used to return
-      // a publisher-shaped { ok, value } that the routes do not read, so an adopted delivery was
-      // reported as PUBLISH_RECONCILIATION with no receipt.
-      task.status = 'COMPLETE';
-      const receipt = {
-        publicationId: dbPub.id,
-        publicationKey,
-        state: 'complete' as const,
-        driveFiles: [] as any[],
-        sheet: { spreadsheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
-        completedAt: dbPub.completed_at ? new Date(dbPub.completed_at).toISOString() : new Date().toISOString(),
-        detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
-      };
-      return {
-        ok: true,
-        taskId,
-        status: 'COMPLETE',
-        complete: true,
-        alreadyCompleted: true,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl: null,
-        filesCount: files.length,
-        publishedAt: receipt.completedAt,
-      };
-    }
-
-    const publishResult: any = await publisher.publish(ctx, {
-      taskId,
-      clientId: task.clientId || defaultClientId,
-      designRevisionId: approval.designRevisionId,
-      approvalId: approval.approvalId,
-      publicationKey,
-      packageHash: deliverables.packageHash,
-      files,
-      destination: {
-        sharedDriveId: client?.destinations?.googleSharedDriveId || (client as any)?.productionDestinations?.googleSharedDriveId || '',
-        productionRootFolderId: targetFolderId,
-        relativeFolderParts: ['Clients', client?.name || 'Hawa', new Date().getFullYear().toString()],
-        spreadsheetId,
-        sheetId: 0,
-      },
-      sheetRow: {
-        taskId,
-        client: task.clientId || defaultClientId,
-        status: 'COMPLETE',
-        publishedAt: new Date().toISOString(),
-      },
-    });
-
-    if (!publishResult.ok) {
-      return failBeforeDrive({
-        status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : 422,
-        code: publishResult.error.code,
-        message: publishResult.error.message,
-      });
-    }
-
-    // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
-    // unconfirmed leave the task in PUBLISH_RECONCILIATION (the database keeps 'publishing'); it used
-    // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
-    const sheetsConfirmed = publishResult.value.state === 'complete';
-    const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
-    if (task.status !== finalStatus) {
-      const finishTrans = sm.transition(
-        finalStatus,
-        actor as any,
-        sheetsConfirmed ? reason : `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
-      );
-      if (!finishTrans.ok) {
-        return { ok: false, status: 409, message: finishTrans.error.message };
-      }
-      task.status = finalStatus;
-      events.get(taskId)?.push(finishTrans.value);
-    }
-
-    // The requester is told once the approved files are verified in Drive, and receives the files
-    // themselves: the payload names the pinned exports, which the worker reads and sends to the chat,
-    // with each file's Drive link. It used to wait for the Sheets row too, so a client with no ledger,
-    // or a row Google did not confirm, left the requester unnotified for good. The Sheets outcome
-    // travels in the payload and is reported separately; the task still becomes COMPLETE only when
-    // the row is confirmed. The key is the publication's, so the retry that later confirms the row
-    // does not notify twice. The notification is written in its own transaction, so a refused
-    // completion transition can no longer take it down with it.
-    const notification = await import('./services/delivery-notification.js');
-    const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
-    const outboxPayload = notification.buildDeliveredNotificationPayload({
-      taskId,
-      clientId: task.clientId || null,
-      title: task.title || null,
-      chatId: await notification.resolveRequesterChat(
-        task,
-        db && isValidUuid(taskId)
-          ? () => withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-              (await sql<any>`SELECT data FROM hawa.task_events
-                WHERE tenant_id = ${pubTenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.created'
-                ORDER BY aggregate_version LIMIT 1`.execute(trx)).rows[0]?.data)
-          : undefined
-      ),
-      publicationKey,
-      driveFolderId: targetFolderId,
-      spreadsheetId,
-      receipt: publishResult.value,
-      pins: approval.pinnedExports,
-      files,
-    });
-
-    // A task made in Desk has no chat to tell; writing the command anyway only dead-lettered it.
-    if (outboxPayload && !outboxPayload.chatId) {
-      log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
-    } else if (outboxPayload && outboxRepo && db && isValidUuid(taskId)) {
-      try {
-        await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          if (await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx)) return;
-          await outboxRepo.enqueue({
-            tenantId: pubTenantId,
-            aggregateType: 'task',
-            aggregateId: taskId,
-            commandType: 'notify.published',
-            idempotencyKey: notifyKey,
-            payload: outboxPayload as unknown as Record<string, unknown>,
-          }, trx);
-        });
-      } catch (err) {
-        log.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox:', err);
-      }
-    }
-
-    if (sheetsConfirmed && taskRepo && db && isValidUuid(taskId)) {
-      try {
-        const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-        await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          await taskRepo.transitionState({
-            taskId,
-            tenantId,
-            toState: 'complete',
-            actorType: 'workflow',
-            actorId: 'publisher',
-            reason: reason || 'Omnichannel publication completed',
-            data: { publicationKey },
-          }, trx);
-        });
-      } catch (err) {
-        log.error('[core:omnichannel:complete] DB transition error:', err);
-      }
-    }
-
-    if (outboxPayload) {
-      const existingCmds = inMemoryOutbox.get(taskId) || [];
-      if (!existingCmds.some((c: any) => c.idempotency_key === notifyKey)) {
-        existingCmds.push({
-          id: crypto.randomUUID(),
-          tenant_id: task.tenantId || 'tenant-default',
-          aggregate_type: 'task',
-          aggregate_id: taskId,
-          command_type: 'notify.published',
-          idempotency_key: notifyKey,
-          payload: outboxPayload,
-          state: 'pending',
-          attempts: 0,
-          created_at: new Date().toISOString(),
-        });
-        inMemoryOutbox.set(taskId, existingCmds);
-      }
-    }
-
-    // Persist per-file drive refs and sheet sync in PostgreSQL ledger (Task R06)
-    if (publicationRepo && db && isValidUuid(taskId) && dbPub) {
-      try {
-        await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          for (const file of publishResult.value.driveFiles || []) {
-            await publicationRepo.recordDriveRef({
-              tenantId: pubTenantId,
-              publicationId: dbPub.id,
-              sharedDriveId: client?.destinations?.googleSharedDriveId || '',
-              folderId: file.folderId || targetFolderId,
-              fileId: file.fileId,
-              fileName: file.name,
-              mimeType: file.mimeType,
-              expectedSha256: file.expectedSha256,
-              observedSize: file.observedSize,
-              status: file.verified ? 'verified' : 'uploaded',
-            }, trx);
-          }
-
-          if (publishResult.value.sheet?.spreadsheetId) {
-            await publicationRepo.recordSheetSync({
-              tenantId: pubTenantId,
-              publicationId: dbPub.id,
-              spreadsheetId: publishResult.value.sheet.spreadsheetId,
-              sheetId: publishResult.value.sheet.sheetId || 0,
-              taskId,
-              rowKey: taskId,
-              rowNumber: publishResult.value.sheet.rowNumber,
-              expectedHash: publishResult.value.sheet.expectedHash,
-              observedHash: publishResult.value.sheet.observedHash,
-              status: publishResult.value.sheet.synced ? 'synced' : 'pending',
-            }, trx);
-          }
-
-          if (sheetsConfirmed) {
-            await publicationRepo.markComplete({
-              tenantId: pubTenantId,
-              publicationId: dbPub.id,
-              taskId,
-            }, trx);
-          }
-        });
-      } catch (err) {
-        log.error('[core:omnichannel:receipts] Error persisting drive/sheet receipts:', err);
-      }
-    }
-
-    // The recorded receipt holds only what Google confirmed: verified Drive files, and a Sheets row
-    // only when Sheets reported and read back the row. Anything else stays missing for the audit.
-    const receipt = publishResult.value;
-    const verifiedFiles = receipt.driveFiles.filter((f: any) => f.verified);
-    omnichannelReceipts.set(taskId, {
-      files: verifiedFiles.map((f: any) => ({
-        taskId,
-        fileId: f.fileId,
-        folderId: f.folderId,
-        sha256: f.expectedSha256,
-        byteSize: f.observedSize,
-      })),
-      sheetRow:
-        receipt.sheet.synced && receipt.sheet.rowNumber !== undefined
-          ? {
-              taskId,
-              rowNumber: receipt.sheet.rowNumber,
-              status: 'COMPLETE',
-              packageHash: receipt.sheet.expectedHash,
-              syncedAt: receipt.completedAt || new Date().toISOString(),
-            }
-          : undefined,
-      receipt,
-    });
-
-    if (!sheetsConfirmed) {
-      broadcast('task:publish_reconciliation', { taskId, status: task.status, sheetProblem: receipt.detail?.sheetProblem ?? null });
-      return {
-        ok: true,
-        taskId,
-        status: task.status,
-        complete: false,
-        sheetProblem: receipt.detail?.sheetProblem ?? null,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl: null,
-        filesCount: verifiedFiles.length,
-      };
-    }
-
-    broadcast('task:published', { taskId, status: task.status, receipt });
-    broadcast('omnichannel:published', { taskId, driveFolderId: targetFolderId, spreadsheetId });
-
-    // Decoupled notification dispatch (FR-051: notification failure shall not roll back publication)
-    let notificationDelivered = true;
-    let notificationError: string | undefined;
-    if (options && (options as any).notifyAdapter) {
-      try {
-        await (options as any).notifyAdapter(receipt);
-      } catch (err: any) {
-        notificationDelivered = false;
-        notificationError = err?.message || String(err);
-        log.warn(`[core:omnichannel:publish] Thread notification failed for task ${taskId}:`, notificationError);
-      }
-    }
-
-      return {
-        ok: true,
-        taskId,
-        status: task.status,
-        complete: true,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl:
-          spreadsheetId && receipt.sheet.rowNumber !== undefined
-            ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${receipt.sheet.rowNumber}`
-            : null,
-        filesCount: verifiedFiles.length,
-        publishedAt: new Date().toISOString(),
-        notificationDelivered,
-        notificationError,
-      };
-    };
-
-    // The lock is taken before any state is written. It used to wrap only the provider call, so
-    // two processes had already both moved the task to PUBLISHING and both tried to insert the
-    // intent row before one of them was refused, and the loser's cached task was left unpublishable.
-    const pubPromise = publishExclusively(taskId, doPublish).then((outcome: any) =>
-      outcome && outcome.ok === false && outcome.error?.code === 'PUBLICATION_IN_PROGRESS'
-        ? { ok: false, status: 409, code: 'PUBLICATION_IN_PROGRESS', message: outcome.error.message }
-        : outcome
-    );
-    inFlightPublications.set(publicationKey, pubPromise);
-    try {
-      return await pubPromise;
-    } finally {
-      inFlightPublications.delete(publicationKey);
-    }
-  }
-
   /**
    * Whether this Telegram update already saved something: a request or revision (persistChatIntake
    * keys it `<chat>:<update>` and `<chat>:<update>_<suffix>`), an answered question, a rule, a PDF
@@ -4044,10 +2431,6 @@ export function createApp(options?: CreateAppOptions) {
     }
   }
 
-  // A studio run counts as being made only while it moves: a run left mid-stage by a restart stays
-  // non-terminal for ever (one from 2026-09-14 still read 'briefing' on 2026-09-23).
-  const LIVE_RUN = sql`r.status NOT IN ('transferred', 'degraded', 'failed', 'abandoned') AND r.updated_at > now() - interval '30 minutes'`;
-
   /** Where a task's design is: being made, finished (a draft exists), failed, or never started. */
   async function taskDesignState(taskId: string): Promise<'running' | 'finished' | 'failed' | 'none'> {
     if (!db || !isValidUuid(taskId)) return 'none';
@@ -4096,68 +2479,8 @@ export function createApp(options?: CreateAppOptions) {
     });
   }
 
-  /**
-   * The newest change the client asked for on this design that is not cancelled, rejected or
-   * failed (another size is not a change), or undefined; approval and delivery wait for it.
-   */
-  async function pendingChangeOf(tenantId: string, taskId: string, after?: Date): Promise<{ id: string; state: string; live: boolean } | undefined> {
-    return withRlsContext(db!, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-      (await sql<{ id: string; state: string; live: boolean }>`SELECT t.id, t.state,
-          EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN}) AS live
-        FROM hawa.tasks t
-        JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created'
-        WHERE t.tenant_id = ${tenantId}::uuid
-          AND o.payload->'studioOptions'->>'parentTaskId' = ${taskId}
-          AND COALESCE(o.payload->'studioOptions'->>'reformat', '') = ''
-          AND t.state NOT IN ('cancelled', 'rejected', 'failed_operator')
-          ${after ? sql`AND t.created_at > ${after.toISOString()}::timestamptz` : sql``}
-        ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
-  }
-
-  /**
-   * A delivery a restart cut short left the task PUBLISHING, which the publish route refused, and
-   * nothing took it back: the approved design could never be delivered (review of 2026-09-24). With no
-   * delivery of it running in this process it goes back to APPROVED to be delivered again; files
-   * already sent are keyed per command and not sent twice.
-   */
-  async function reopenInterruptedDelivery(task: { status?: string; tenantId?: string }, taskId: string, userId: string): Promise<'reopened' | 'failed' | 'no'> {
-    if (String(task?.status || '').toLowerCase() !== 'publishing' || deliveriesInFlight.has(taskId)) return 'no';
-    const machine = new TaskStateMachine(taskId, 'PUBLISHING');
-    const back = machine.transition('APPROVED', { type: 'user', id: userId } as Parameters<typeof machine.transition>[1], 'Delivery interrupted; delivered again');
-    if (taskRepo && db && isValidUuid(taskId)) {
-      const tenant = task.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-      const returned = await withRlsContext(db, { tenantId: tenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-        taskRepo.transitionState({ taskId, tenantId: tenant, fromState: 'publishing', toState: 'approved', actorType: 'user', actorId: userId, reason: 'Delivery interrupted; delivered again' }, trx)
-      ).then(() => true, (err: unknown) => {
-        log.error('[core:publish] Could not take an interrupted delivery back to approved:', err);
-        return false;
-      });
-      if (!returned) return 'failed';
-    }
-    if (back.ok) task.status = 'APPROVED';
-    return 'reopened';
-  }
-
-  /** A change the client asked for that delivery would leave out (null: it could not be checked). */
-  async function changeBlockingDelivery(task: { tenantId?: string }, taskId: string): Promise<{ id: string; state: string; live: boolean } | undefined | null> {
-    if (!db || !isValidUuid(taskId)) return undefined;
-    const tenant = task.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
-    return pendingChangeOf(tenant, taskId).catch((err: unknown) => {
-      log.warn('[core:publish] Could not check for a change the client asked for:', err);
-      return null;
-    });
-  }
-
-  function pendingChangeWords(newer: { id: string; state: string; live: boolean }): string {
-    if (newer.live) return `A change to this design is still being made (task ${newer.id}). Approve its draft when it arrives.`;
-    if (['human_review', 'approved', 'publishing', 'complete'].includes(newer.state)) {
-      return `This design was changed at the client's request. Approve the newer version instead (task ${newer.id}).`;
-    }
-    if (newer.state === 'paused') {
-      return `The client was asked a question about the change they want (task ${newer.id}) and has not answered yet. Approve the changed design once it is made.`;
-    }
-    return `The client asked for a change (task ${newer.id}) that has not been made yet. Make it, or cancel that task, before approving this version.`;
-  }
+  // A change the client asked for, which approval waits for (services/pending-change.ts).
+  const pendingChangeOf = (tenantId: string, taskId: string, after?: Date) => findPendingChange(db!, tenantId, taskId, after);
 
   /** A revision of this design that is still being made, if any. */
   async function revisionInFlight(parentTaskId: string): Promise<{ taskId: string; title: string } | null> {
@@ -4193,59 +2516,6 @@ export function createApp(options?: CreateAppOptions) {
           AND EXISTS (SELECT 1 FROM hawa.design_studio_runs r WHERE r.task_id = t.id AND r.tenant_id = t.tenant_id AND ${LIVE_RUN})
         ORDER BY t.created_at DESC LIMIT 1`.execute(trx)).rows[0]);
     return row ? { taskId: row.id, title: row.title || 'your request' } : null;
-  }
-
-  async function checkAndRecordIngressEvent(
-    adapterKind: string,
-    sourceEventId: string,
-    payload: any,
-    payloadText: string
-  ): Promise<{ isDuplicate: boolean }> {
-    if (rawEvents.has(sourceEventId)) {
-      return { isDuplicate: true };
-    }
-    rawEvents.set(sourceEventId, payload);
-
-    if (db) {
-      try {
-        const tenantId = '00000000-0000-4000-a000-000000000001';
-        const userId = '00000000-0000-4000-b000-000000000002';
-        const isDup = await withRlsContext(
-          db,
-          { tenantId, userId, role: 'administrator' },
-          async (trx) => {
-            const existing = await trx
-              .selectFrom('inbox_events')
-              .selectAll()
-              .where('source_event_id', '=', sourceEventId)
-              .executeTakeFirst();
-            if (existing) {
-              return true;
-            }
-            const hash = crypto.createHash('sha256').update(payloadText || JSON.stringify(payload)).digest('hex');
-            await trx
-              .insertInto('inbox_events')
-              .values({
-                tenant_id: tenantId,
-                source_account_id: adapterKind,
-                source_event_id: sourceEventId,
-                event_kind: `${adapterKind}_update`,
-                payload: typeof payload === 'object' && payload !== null ? payload : { raw: payload },
-                payload_hash: hash,
-                verified: true,
-              } as any)
-              .execute();
-            return false;
-          }
-        );
-        if (isDup) {
-          return { isDuplicate: true };
-        }
-      } catch (err) {
-        log.error(`[core:ingress_dedup:${adapterKind}] DB error:`, err);
-      }
-    }
-    return { isDuplicate: false };
   }
 
   // Webhooks
@@ -8246,10 +6516,12 @@ export function createApp(options?: CreateAppOptions) {
     return c.json(exportPackage);
   });
 
-  // Task Control Commands (pause, resume, cancel, retry)
-  registerRoute('post', '/tasks/:taskId/:control', async (c: any, next: any) => {
+  // Task Control Commands (pause, resume, cancel, retry), one explicit path each. They were one
+  // POST /tasks/:taskId/:control route, registered before six other POST /tasks/:taskId/<word> routes,
+  // which it answered 404 for an unknown task before handing them on: registration order decided
+  // who answered (architecture programme 1.3, SPLIT_PLAN.md F9). Those six now check the task themselves.
+  const controlTask = (control: 'pause' | 'resume' | 'cancel' | 'retry') => async (c: any) => {
     const taskId = c.req.param('taskId');
-    const control = c.req.param('control');
     const auth = verifyRequestAuth(c);
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
@@ -8265,11 +6537,6 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
-
-    const allowedControls = ['pause', 'resume', 'cancel', 'retry'];
-    if (!allowedControls.includes(control)) {
-      return next();
-    }
 
     const currentStatus = task ? task.status : toApiTaskStatus(dbTask.state);
     const sm = new TaskStateMachine(taskId, currentStatus);
@@ -8318,13 +6585,16 @@ export function createApp(options?: CreateAppOptions) {
       workflowId: `wf_${taskId}`,
       acceptedAt: new Date().toISOString(),
     }, 202);
-  });
+  };
+  for (const control of ['pause', 'resume', 'cancel', 'retry'] as const) registerRoute('post', `/tasks/:taskId/${control}`, controlTask(control));
 
   // Re-drive Failed Task Generation (ADR-025 / Audit 2026-09-16)
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
     const taskId = c.req.param('taskId');
+    // 404 for a task nobody knows, 503 when Postgres cannot be read (the `:control` catch-all answered these).
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     try {
       const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
@@ -8982,7 +7252,8 @@ export function createApp(options?: CreateAppOptions) {
       return problem(c, 401, 'Unauthorized', 'Authentication required for chat approval action');
     }
 
-    const task = await resolveTaskWithFallback(taskId);
+    // Postgres's status, or 503 when it cannot be read: this acts on the task's current revision.
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -9024,7 +7295,9 @@ export function createApp(options?: CreateAppOptions) {
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
     let task = await readCurrentTask(taskId);
     let dbTask: any = null;
-    if (taskRepo && db) {
+    // An id that is not a uuid names no task in Postgres, and the query would fail on the cast (a
+    // 500) rather than find nothing; the :control catch-all used to answer 404 before it got here.
+    if (taskRepo && db && isValidUuid(taskId)) {
       dbTask = await withRlsContext(
         db,
         { tenantId, userId: auth.userId, role: auth.role },
@@ -9178,7 +7451,8 @@ export function createApp(options?: CreateAppOptions) {
   // Register Task Node Reviewer Comment (Gate F: Reviewer comments with role policy)
   registerRoute('post', '/tasks/:taskId/comments', async (c: any) => {
     const taskId = c.req.param('taskId');
-    const task = await resolveTaskWithFallback(taskId);
+    // Postgres's copy, or 503 when it cannot be read: the comment names the task's current revision.
+    const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
     const body = await c.req.json().catch(() => ({}));
@@ -9314,6 +7588,8 @@ export function createApp(options?: CreateAppOptions) {
   // Record Operator Feedback
   registerRoute('post', '/tasks/:taskId/feedback', async (c: any) => {
     const taskId = c.req.param('taskId');
+    // Feedback on a task nobody knows is refused (the `:control` catch-all used to answer this 404).
+    if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     const body = await c.req.json();
 
     const feedback: FeedbackEvent = {
@@ -9341,59 +7617,6 @@ export function createApp(options?: CreateAppOptions) {
   });
 
   // Client DNA
-  registerRoute('get', '/clients', (c: any) => {
-    const uniqueDnas = Array.from(new Map(Array.from(clientDnas.values()).map((d) => [d.clientId, d])).values());
-    const list = uniqueDnas.map((d) => ({
-      clientId: d.clientId,
-      name: d.name,
-      code: d.code,
-      version: d.version,
-      status: d.status,
-      defaultLocale: d.defaultLocale,
-      defaultDirection: d.defaultDirection,
-      updatedAt: d.updatedAt,
-      colorsCount: d.colors.length,
-      rulesCount: d.guidelines.layoutRules.length,
-      snapshotsCount: (clientSnapshots.get(d.clientId) || []).length,
-    }));
-    return c.json(list, 200);
-  });
-
-  registerRoute('get', '/clients/:clientId/dna', async (c: any) => {
-    const clientId = c.req.param('clientId');
-    if (db && clientRepo) {
-      try {
-        const auth = verifyRequestAuth(c);
-        const tenantId = auth.tenantId || defaultTenantId;
-        const rlsContext = { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' };
-        let targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
-          ? clientId
-          : await withRlsContext(db, rlsContext, async (trx) => {
-              const res = await clientRepo.findByCode(tenantId, clientId, trx);
-              if (res) return res.id;
-              if (clientId.startsWith('client-')) {
-                return (await clientRepo.findByCode(tenantId, clientId.replace(/^client-/, ''), trx))?.id;
-              }
-              return undefined;
-            });
-        if (targetId) {
-          const row = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
-            return await clientRepo.findActiveDna(tenantId, targetId, trx);
-          });
-          if (row && row.dna) {
-            const parsed = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
-            return c.json(parsed);
-          }
-        }
-      } catch {
-        // Fallback to in-memory
-      }
-    }
-    const dna = await resolveClientDna(clientId);
-    if (!dna) return problem(c, 404, 'DNA Not Found', `No DNA found for client ${clientId}`);
-    return c.json(dna);
-  });
-
   registerRoute('post', '/clients/:clientId/dna', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) {
@@ -9531,9 +7754,12 @@ export function createApp(options?: CreateAppOptions) {
       try {
         const auth = verifyRequestAuth(c);
         const tenantId = auth.tenantId || defaultTenantId;
+        // hawa.clients is under RLS: looked up outside a context, a code finds nothing and the
+        // answer fell back to Core's memory (the fixture snapshots). findByCode also reads client-<code>.
         const targetId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
           ? clientId
-          : (await clientRepo.findByCode(tenantId, clientId))?.id;
+          : await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) =>
+              (await clientRepo.findByCode(tenantId, clientId, trx))?.id);
         if (targetId) {
           const rows = await withRlsContext(db, { tenantId, clientId: targetId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, async (trx) => {
             return await clientRepo.listDnaSnapshots(tenantId, targetId, trx);
@@ -9691,63 +7917,6 @@ export function createApp(options?: CreateAppOptions) {
   registerRoute('post', '/system/cutover/rollback-rehearsal', (c: any) => {
     if (!verifyRequestAuth(c).authenticated) return problem(c, 401, 'Authentication Required');
     return problem(c, 422, 'Recovery Drill Required', 'This endpoint cannot certify recovery. Run an isolated restore drill and attach its measured evidence');
-  });
-
-  // Evaluation Runs
-  registerRoute('post', '/evaluations/runs', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const runId = crypto.randomUUID();
-
-    const evalReport = await evalRunner.runFullTournament();
-    const run = {
-      runId,
-      name: body.name || 'Hawa Creative Full Tournament',
-      report: evalReport,
-      createdAt: new Date().toISOString(),
-    };
-    evalRuns.set(runId, run);
-
-    return c.json(run, 201);
-  });
-
-  registerRoute('get', '/evaluations/runs', (c: any) => {
-    return c.json(Array.from(evalRuns.values()));
-  });
-
-  registerRoute('get', '/evaluations/runs/:runId', (c: any) => {
-    const runId = c.req.param('runId');
-    const run = evalRuns.get(runId);
-    if (!run) return problem(c, 404, 'Evaluation Run Not Found');
-    return c.json(run);
-  });
-
-  registerRoute('get', '/evaluations/datasets', (c: any) => {
-    return c.json([
-      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
-      { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
-      { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
-    ]);
-  });
-
-  registerRoute('get', '/evaluations/datasets/:datasetId/cases', (c: any) => {
-    const datasetId = c.req.param('datasetId');
-    let relFile = 'evals/routing_brief.jsonl';
-    if (datasetId === 'rtl') relFile = 'evals/rtl_golden_cases.jsonl';
-    else if (datasetId === 'retrieval') relFile = 'evals/retrieval_eval.jsonl';
-
-    try {
-      const p1 = path.resolve(process.cwd(), relFile);
-      const p2 = path.resolve(process.cwd(), '../../', relFile);
-      const targetPath = fs.existsSync(p1) ? p1 : p2;
-      const content = fs.readFileSync(targetPath, 'utf-8');
-      const cases = content
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .map((line) => JSON.parse(line));
-      return c.json({ datasetId, total: cases.length, cases });
-    } catch (err: any) {
-      return problem(c, 500, 'Dataset Read Error', `Unable to load dataset ${datasetId}: ${err.message}`);
-    }
   });
 
   // Asset Security & Ingestion
@@ -10703,16 +8872,14 @@ export function createApp(options?: CreateAppOptions) {
       const client = clientDnas.get(clientId); // search labels only; the hydrated cache is current enough
       const brief = briefs.get(taskId);
       const briefText = brief?.objective || (task as any).title || '';
-      const rawEv = rawEvents.get((task as any).sourceEventId);
-      const eventText = rawEv?.message?.text || rawEv?.text || '';
       engine.indexItem({
         id: taskId,
         category: 'tasks',
         clientId,
         clientName: client?.name,
-        title: (task as any).title || (eventText ? eventText.slice(0, 60) : `Task ${taskId.slice(0, 8)}`),
+        title: (task as any).title || `Task ${taskId.slice(0, 8)}`,
         subtitle: `Status: ${task.status} · Phase: ${task.currentPhase || 'INTAKE'}`,
-        bodyText: `${briefText} ${eventText} ${(task as any).objective || ''} ${taskId} ${(task as any).tags?.join(' ') || ''}`,
+        bodyText: `${briefText} ${(task as any).objective || ''} ${taskId} ${(task as any).tags?.join(' ') || ''}`,
         tags: (task as any).tags || [task.status],
         status: task.status,
         metadata: { currentPhase: task.currentPhase, status: task.status, latestRevisionId: task.latestRevisionId },
@@ -11268,13 +9435,6 @@ export function createApp(options?: CreateAppOptions) {
     return problem(c, 400, 'Unknown Action', 'Supported actions: pause, resume, cancel, crash, checkpoint, replay');
   });
 
-  // --- Live Provider Credentials & Model Gateway Management ---
-  const maskKey = (key?: string) => {
-    if (!key) return '';
-    if (key.length <= 8) return '********';
-    return key.substring(0, 4) + '...' + key.substring(key.length - 4);
-  };
-
   // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
   // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
   if (db && outboxRepo && process.env.TELEGRAM_BOT_TOKEN && options?.enableDraftReminders) {
@@ -11312,6 +9472,19 @@ export function createApp(options?: CreateAppOptions) {
     setInterval(pass, 5 * 60_000).unref?.();
     setTimeout(pass, 120_000).unref?.();
   }
+
+  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
+  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
+  const clientDnaHydrated: Promise<number> = db
+    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
+        (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
+        (err) => {
+          log.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
+          if (isProduction) throw err;
+          return 0;
+        }
+      )
+    : Promise.resolve(0);
 
   // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
   // administrator's "poll now" hands updates to intake exactly as the background loop does (through
@@ -11360,22 +9533,14 @@ export function createApp(options?: CreateAppOptions) {
         () => handlePolledUpdate(update)
       );
     telegramBridge.useUpdateHandler?.(handleUpdateInContext);
-    if (options?.enableTelegramPolling) telegramBridge.startPolling(handleUpdateInContext);
+    // An update polled before client DNA has loaded would go through intake against the fixture
+    // offices, so the loop starts once the load is done. If it fails in production, index.ts stops
+    // the process, and there is nothing to poll for.
+    if (options?.enableTelegramPolling) {
+      clientDnaHydrated.then(() => telegramBridge.startPolling(handleUpdateInContext), () => {});
+    }
   }
 
-  // The fixtures above are a starting point. What the operator saved is in PostgreSQL, and it
-  // must win: see client-dna-hydration.ts. Production refuses to serve on fixtures alone.
-  const clientDnaHydrated: Promise<number> = db
-    ? hydrateClientDnaFromDb(db, clientDnas, { tenantId: defaultTenantId, userId: operatorUserId }, { dropUnknown: isProduction }).then(
-        (n) => { log.info(`[core:client_dna] hydrated ${n} client(s) from PostgreSQL`); return n; },
-        (err) => {
-          log.error('[core:client_dna] could not hydrate client DNA from PostgreSQL:', err?.message || err);
-          if (isProduction) throw err;
-          return 0;
-        }
-      )
-    : Promise.resolve(0);
-  Object.assign(app, { clientDnaHydrated, guidelineReadings });
-
-  return app;
+  // index.ts awaits clientDnaHydrated before it opens the port.
+  return Object.assign(app, { clientDnaHydrated, guidelineReadings });
 }

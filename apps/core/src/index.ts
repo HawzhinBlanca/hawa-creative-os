@@ -47,6 +47,30 @@ process.on('uncaughtException', (err: Error) => {
 // the bridge idle (adapters/telegram/status: active=false) and nothing from the two client chats
 // reached intake for 80 minutes. production-entrypoint.test.ts pins it.
 const app = createApp({ enableTelegramPolling: true, enableDraftReminders: process.env.HAWA_DRAFT_REMINDERS !== 'off', enableCanvaSweeper: true });
+
+// Client DNA starts as source-code fixtures and is replaced from PostgreSQL. The port used to open
+// before that finished, so the first requests after a start could be answered with an invented
+// office's DNA; a failed load in production (the promise rejects there) surfaced only afterwards.
+// No HTTP request is served, and no Telegram update is polled (app.ts waits for the same promise),
+// until the office's own DNA is in place, and a start that cannot load it stops. The wait is
+// bounded: a database that accepts the connection and never answers would otherwise leave the
+// process up with its port closed and nothing in the log. Compose restarts a process that exits.
+const hydrationTimeoutMs = Number(process.env.HAWA_DNA_HYDRATION_TIMEOUT_MS) || 60_000;
+let hydrationTimer: ReturnType<typeof setTimeout> | undefined;
+try {
+  await Promise.race([
+    app.clientDnaHydrated,
+    new Promise<never>((_, reject) => {
+      hydrationTimer = setTimeout(() => reject(new Error(`no answer within ${hydrationTimeoutMs} ms`)), hydrationTimeoutMs);
+    }),
+  ]);
+} catch (err) {
+  log.fatal(`[${SERVICE_NAME}] FATAL could not load client DNA from PostgreSQL; not serving: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+} finally {
+  clearTimeout(hydrationTimer);
+}
+
 const port = Number(process.env.PORT || 3001);
 const hostname = process.env.HOST || '0.0.0.0';
 

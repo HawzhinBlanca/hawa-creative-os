@@ -480,7 +480,7 @@ export class DesignStudioService {
       // 3. Check for existing run by request_key OR in-flight active run for this task.
       // A task keeps at most one unfinished run (unique index design_studio_one_active_run): it is
       // resumed or abandoned, never silently replaced. `stale`: the run has not moved for as long as
-      // the Desk and /redo count a run as live (LIVE_RUN in app.ts).
+      // the Desk and /redo count a run as live (LIVE_RUN in services/live-run.ts).
       const staleMinutes = this.options.staleRunMinutes ?? 30;
       const prior = (
         await sql<any>`SELECT *, updated_at <= now() - make_interval(mins => ${staleMinutes}) AS stale FROM hawa.design_studio_runs
