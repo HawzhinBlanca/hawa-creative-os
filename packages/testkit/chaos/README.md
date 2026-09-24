@@ -55,7 +55,7 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
 
 | Service | Image | Notes |
 |---|---|---|
-| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, seed); `fsync=off` (process kills only). The driver then grants the runtime role and runs the versioned upgrades exactly as the test template does (`packages/db/src/test-template.ts`), stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
+| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, `03-grants.sql`, seed); `fsync=off` (process kills only). The driver then runs the versioned upgrades through deploy.sh's runner (`packages/db/src/upgrade.ts`), with no grants of its own, stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
 | `restate` | `ghcr.io/restatedev/restate:1.7.10` | The blue worker is registered by `scripts/restate-bluegreen.ts register blue --admin http://127.0.0.1:56070`, the deploy's own code. |
 | `core` | `infra/docker/Dockerfile.core` | `NODE_ENV=production`, polls the fake Telegram, `DESIGN_PIPELINE_V3=off` (planner path), `CANVA_BASE_URL` and `GOOGLE_*_BASE_URL` at the fakes, `GOOGLE_APPLICATION_CREDENTIALS` a throwaway key the fakes write. |
 | `worker-blue`, `worker-green` | `infra/docker/Dockerfile.worker` | `HAWA_WORKER_SELF_URI` per colour; the outbox runs in the live colour only. |
@@ -179,13 +179,20 @@ call was answered by a fixture (no `unmatched` calls). 16 scenarios hold every i
 | R1.K14 | **fails**: Core killed during a Deliver request (Drive upload in progress) leaves the task in `publishing` after the restart, until someone presses Deliver again (PHASE2_DESIGN.md 1.1 step 9: `reopenInterruptedDelivery` checks an in-memory set). The second press delivered once: one Drive file, one document in Telegram |
 | R4 | **fails, as expected before Phase 2.1**: chat B's text was answered after 30.9 s, behind chat A's 30 s picture download (Core's poller handles one update at a time) |
 
+Since then (2026-09-24, Phase 2 fixes): R1.K9 holds every invariant. The Canva client asks a
+create call again within about 15 s when Canva refused it for the moment (429 on every create call,
+5xx on `POST /exports` only; `packages/integrations/src/canva-connect-client.ts` `createWithRetry`).
+`--only R1.0,R1.K9` passed on a database built with `db/03-grants.sql`, in 76 s, peak 851 MiB.
+
 Found while building the stack (not scenarios):
 - A database built by `docker-compose.prod.yml`'s init scripts includes `db/03-grants.sql`, which
-  revokes `UPDATE` on `hawa.outbox_commands` (and `inbox_events`, `approvals`, `publications`, …) from
-  `hawa_app`; a worker on it fails every poll with "permission denied for table outbox_commands". The
-  suite grants as the test template does instead.
-- Core started on a database without the versioned upgrades exits at once (unhandled rejection:
-  relation "client_dna_versions" does not exist): the upgrades must run before Core starts.
+  revoked `UPDATE` on `hawa.outbox_commands` (and `inbox_events`, `approvals`, `publications`, …) from
+  `hawa_app`; a worker on it failed every poll with "permission denied for table outbox_commands".
+  Fixed: the file grants back the columns the code moves, and this project now mounts it
+  (`apps/worker/test/fresh-production-init.test.ts` builds such a database on every test run).
+- Core started on a database without the versioned upgrades exited at once (unhandled rejection:
+  relation "client_dna_versions" does not exist). Fixed: Core checks `hawa.schema_upgrades` before it
+  starts, logs one line naming the missing upgrades and exits 1 (`apps/core/src/schema-check.ts`).
 - Postgres with `synchronous_commit=off` (as `docker-compose.test.yml` runs it) loses commits it had
   acknowledged when the process is killed; the first run of R1.K7 reported lost Canva rows for that
   reason alone. This project keeps `synchronous_commit` on.
