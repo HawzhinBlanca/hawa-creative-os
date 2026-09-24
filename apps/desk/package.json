@@ -10,6 +10,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@hawa/contracts": "workspace:*",
     "dompurify": "^3.4.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

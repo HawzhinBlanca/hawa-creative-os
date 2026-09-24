@@ -725,7 +725,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(data.ok).toBe(true);
     expect(data.task.sourcePlatform).toBe('whatsapp');
     expect(data.task.clientId).toBe('client-drustee');
-    expect(['RECEIVED', 'BRIEF_READY']).toContain(data.task.status);
+    expect(['RECEIVED', 'BRIEF_REVIEW']).toContain(data.task.status);
     expect(data.task.kurdishText).toContain('ڤیتامین دی٣');
     expect(data.task.costReceipt).toBeDefined();
 

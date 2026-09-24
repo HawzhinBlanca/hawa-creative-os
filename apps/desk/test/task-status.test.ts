@@ -2,42 +2,59 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../src/api/client.js';
-import { TASK_EVENTS } from '../src/services/eventStream.js';
+import { TASK_EVENTS, readTaskTransitioned } from '../src/services/eventStream.js';
 import { keepLoadedDetail, queueEntryChanged } from '../src/services/taskDetail.js';
-import { FILTER_GROUPS, inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../src/services/taskStatus.js';
-import { toApiTaskStatus } from '../../../packages/db/src/repositories/task.repository.js';
-import { LEGAL_TRANSITIONS } from '../../../packages/domain/src/state-machine.js';
+import { FILTER_GROUPS, approveButtonState, inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../src/services/taskStatus.js';
+import { TASK_API_STATUSES, TASK_DB_STATES, TASK_STATUS_LABELS, toApiTaskStatus } from '@hawa/contracts/task-status';
 
 /**
  * 2026-09-24: the Work screen labelled most of Core's statuses RECEIVED, left failed drafts out of
  * "Needs Action", heard only six of Core's task events, and noticed an expired session only in the
- * queue. These check the shared pieces against Core's own lists.
+ * queue. These check the shared pieces against the one status vocabulary (packages/contracts
+ * task-status.ts, architecture programme 1.2), which Core, the database and the Desk all use.
  */
 const REPO = path.resolve(__dirname, '../../..');
 
-/** Every status Core can report: each database state through toApiTaskStatus, the domain statuses, and the in-memory ones. */
+/** Every status Core can report: each database state's API status, and every API status. */
 function coreStatuses(): string[] {
-  const types = fs.readFileSync(path.join(REPO, 'packages/db/src/types.ts'), 'utf8');
-  const union = /export type TaskState =([^;]+);/.exec(types)![1];
-  const dbStates = [...union.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-  expect(dbStates).toContain('failed_operator');
-  const app = fs.readFileSync(path.join(REPO, 'apps/core/src/app.ts'), 'utf8');
-  const inMemory = ['IN_PROGRESS', 'PAUSED', 'CHANGES_REQUESTED', 'COMPLETED'].filter((s) => app.includes(`'${s}'`));
-  return [...new Set([...dbStates.map(toApiTaskStatus), ...Object.keys(LEGAL_TRANSITIONS), ...inMemory])];
+  return [...new Set([...TASK_DB_STATES.map(toApiTaskStatus), ...TASK_API_STATUSES])];
 }
 
 describe('the label and next step of every status Core reports', () => {
   it('gives each its own view; only RECEIVED reads as a new request to design', () => {
     const statuses = coreStatuses();
-    expect(statuses.length).toBeGreaterThan(20);
+    expect(statuses.length).toBe(21);
     for (const status of statuses) {
       const view = taskStatusView(status);
+      expect(view.known, status).toBe(true);
       expect(view.message, status).not.toMatch(/does not know/);
+      expect(view.pill, status).toBe(TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]);
       if (status !== 'RECEIVED') {
         expect(view.pill, status).not.toBe('RECEIVED');
         expect(view.message, status).not.toMatch(/Use the Canva controls below to design/);
       }
     }
+  });
+
+  it('every non-received database state reads as something other than RECEIVED', () => {
+    for (const state of TASK_DB_STATES.filter((s) => s !== 'received')) {
+      const view = taskStatusView(toApiTaskStatus(state));
+      expect(view.pill, state).not.toBe('RECEIVED');
+      expect(view.group === 'needs_action' && view.primaryButton === 'edit' && /saved/.test(view.message), state).toBe(false);
+    }
+  });
+
+  it('offers approval only for a draft awaiting approval, and never for a status it does not know', () => {
+    const ready = { hasRevision: true, qaPassed: true, busy: false };
+    expect(approveButtonState('AWAITING_APPROVAL', ready)).toBe('enabled');
+    for (const status of TASK_API_STATUSES.filter((s) => s !== 'AWAITING_APPROVAL')) expect(approveButtonState(status, ready), status).toBe('disabled');
+    for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', 'awaiting_approval', '', undefined, null]) {
+      expect(taskStatusView(unknown).canApprove, String(unknown)).toBe(false);
+      expect(taskStatusView(unknown).primaryButton, String(unknown)).toBe('none');
+      expect(approveButtonState(unknown, ready), String(unknown)).toBe('hidden');
+    }
+    expect(approveButtonState('AWAITING_APPROVAL', { ...ready, qaPassed: false })).toBe('disabled');
+    expect(approveButtonState('AWAITING_APPROVAL', { ...ready, hasRevision: false })).toBe('disabled');
   });
 
   it('decides by status: an approval of an earlier revision does not make a changed or new revision APPROVED', () => {
@@ -49,11 +66,15 @@ describe('the label and next step of every status Core reports', () => {
     expect(taskStatusView('REVISION_REQUESTED').primaryButton).not.toBe('deliver');
   });
 
-  it('shows a status it does not know as itself, under Needs Action, without guessing', () => {
+  it('shows a status it does not know as unknown, under Needs Action, without guessing and without approval', () => {
     const view = taskStatusView('ON_HOLD');
-    expect(view.pill).toBe('ON HOLD');
+    expect(view.known).toBe(false);
+    expect(view.pill).toBe('UNKNOWN: ON HOLD');
+    expect(view.pill).not.toBe('RECEIVED');
     expect(view.message).toMatch(/does not know/);
+    expect(view.canApprove).toBe(false);
     expect(inQueueFilter('ON_HOLD', 'needs_action')).toBe(true);
+    expect(taskStatusView(undefined).pill).toBe('UNKNOWN: NO STATUS');
   });
 });
 
@@ -64,9 +85,9 @@ describe('the queue filters, built from the same groups', () => {
     expect(where('OPERATOR_REQUIRED')).toEqual(['needs_action']);
     expect(where('AWAITING_APPROVAL')).toEqual(['needs_action', 'review']);
     expect(where('REVISION_REQUESTED')).toEqual(['needs_action']);
-    for (const s of ['ROUTING', 'BRIEFING', 'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING', 'IN_PROGRESS']) expect(where(s), s).toEqual(['in_progress']);
+    for (const s of ['PROMOTION_PENDING', 'ROUTING', 'BRIEFING', 'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING']) expect(where(s), s).toEqual(['in_progress']);
     expect(where('COMPLETE')).toEqual(['complete']);
-    for (const s of ['PAUSED', 'NEEDS_INFORMATION', 'CANCELLED', 'REJECTED', 'PUBLISHING']) expect(where(s), s).toEqual([]);
+    for (const s of ['PAUSED', 'CANCELLED', 'REJECTED', 'PUBLISHING']) expect(where(s), s).toEqual([]);
     expect(inQueueFilter('CANCELLED', 'all')).toBe(true);
   });
 
@@ -104,6 +125,20 @@ describe('a background refresh of the queue', () => {
     expect(queueEntryChanged(entry, { ...entry, status: 'APPROVED' })).toBe(true);
     expect(queueEntryChanged(entry, { ...entry, version: 4 })).toBe(true);
     expect(queueEntryChanged(undefined, entry)).toBe(true);
+  });
+});
+
+describe('task:transitioned as the Desk reads it (eventStream readTaskTransitioned)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('reads the one shape as a move, and an old or unknown shape only as the task to read again', () => {
+    const move = { tenantId: 'x', taskId: 't1', from: 'AWAITING_APPROVAL', to: 'REVISION_REQUESTED', version: 5, at: '2026-09-24T10:00:00.000Z' };
+    expect(readTaskTransitioned(move)).toEqual({ move: { taskId: 't1', from: 'AWAITING_APPROVAL', to: 'REVISION_REQUESTED', version: 5, at: move.at }, taskId: 't1' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(readTaskTransitioned({ taskId: 't2', fromStatus: 'AWAITING_APPROVAL', toStatus: 'IN_PROGRESS' })).toEqual({ move: null, taskId: 't2' });
+    expect(readTaskTransitioned({ ...move, to: 'IN_PROGRESS' })).toEqual({ move: null, taskId: 't1' });
+    expect(readTaskTransitioned(null)).toEqual({ move: null, taskId: null });
+    expect(warn).toHaveBeenCalledTimes(3);
   });
 });
 

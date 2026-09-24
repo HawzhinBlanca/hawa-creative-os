@@ -1,4 +1,19 @@
 import { getAuthToken } from './auth.js';
+import { parseTaskTransitioned, type TaskTransitionedEvent } from '@hawa/contracts/task-status';
+
+/**
+ * A `task:transitioned` payload as the Desk reads it. Core sends one shape, {taskId, from, to,
+ * version, at} in the shared status words (packages/contracts task-status.ts); it used to send four.
+ * A payload in any other shape is not read as a move: it is reported, and only the task it names is
+ * read again from Core, so the screen shows what Core stores rather than a guessed status.
+ */
+export function readTaskTransitioned(data: unknown): { move: TaskTransitionedEvent | null; taskId: string | null } {
+  const move = parseTaskTransitioned(data);
+  if (move) return { move, taskId: move.taskId };
+  console.warn('[Desk] task:transitioned in a shape this Desk does not know; reading the task again from Core', data);
+  const taskId = (data as { taskId?: unknown } | null)?.taskId;
+  return { move: null, taskId: typeof taskId === 'string' && taskId ? taskId : null };
+}
 
 export type StreamConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 

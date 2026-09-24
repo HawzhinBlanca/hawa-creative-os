@@ -8,6 +8,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./task-status": {
+      "import": "./dist/task-status.js",
+      "types": "./dist/task-status.d.ts"
     }
   },
   "scripts": {

@@ -19,7 +19,7 @@ import type {
   DesignStudioAdapter,
   StudioOperation,
 } from '@hawa/contracts';
-import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, isTaskApiStatus, isTaskDbState, taskTransitioned, type TaskDbState } from '@hawa/contracts';
 import {
   TaskStateMachine,
   extractProtectedTokens,
@@ -757,6 +757,21 @@ export function createApp(options?: CreateAppOptions) {
       } catch {
         subscribers.delete(subscriber);
       }
+    }
+  }
+
+  /**
+   * Tells the Desk a task moved, in the one shape {taskId, from, to, version, at} (packages/contracts
+   * task-status.ts). `from` and `to` are database states or API statuses; `version` is tasks.version
+   * after the move, or null when the move was not written to the database. The event had four shapes
+   * and carried words the Desk did not know. A word the vocabulary does not have is a bug: it is
+   * logged and not sent, rather than failing a request whose change is already committed.
+   */
+  function broadcastTransition(taskId: string, from: string | null | undefined, to: string, version?: number | string | null) {
+    try {
+      broadcast(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from, to, version }));
+    } catch (err) {
+      console.error(`[core:events] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
     }
   }
 
@@ -2202,7 +2217,8 @@ export function createApp(options?: CreateAppOptions) {
       copyEn = undefined;
       copyCkb = undefined;
       title = `${senderName}: Directive (${rawText.slice(0, 35).trim()}…)`;
-      taskStatus = 'CLARIFICATION_REQUIRED';
+      // A directive stays RECEIVED, as the database records it; isInstructionOnly marks it. It was
+      // CLARIFICATION_REQUIRED here, a word no other layer had, until the database row overwrote it.
     } else if (primaryLanguage === 'en') {
       headlineEn = firstNonEmptyPayloadLine;
       copyEn = remainingPayloadText;
@@ -2356,6 +2372,7 @@ export function createApp(options?: CreateAppOptions) {
       };
     }
 
+    let persistedVersion: number | null = null;
     if (db) {
       // Known chat aliases resolve to the seeded client rows. Unknown aliases stay unscoped:
       // the art director assigns the client in Hawa Desk. Guessing a client would attribute a
@@ -2390,6 +2407,7 @@ export function createApp(options?: CreateAppOptions) {
       task.id = taskId; task.tenantId = persisted.tenantId; task.clientId = persisted.task.client_id;
       task.status = toApiTaskStatus(persisted.task.state); task.state = persisted.task.state;
       task.createdAt = persisted.task.created_at; task.updatedAt = persisted.task.updated_at;
+      persistedVersion = Number(persisted.task.version) || null;
       brief.taskId = taskId;
       if (!persisted.created) {
         drawLegacyPreviewOperations();
@@ -2412,8 +2430,8 @@ export function createApp(options?: CreateAppOptions) {
       {
         eventId: crypto.randomUUID(),
         taskId,
-        fromStatus: 'NONE',
-        toStatus: taskStatus,
+        fromStatus: null,
+        toStatus: task.status,
         actor: ctx.actor,
         reason: `Incoming ${platform} message processed`,
         occurredAt: new Date().toISOString(),
@@ -2423,7 +2441,7 @@ export function createApp(options?: CreateAppOptions) {
     broadcast('webhook:received', { platform, updateId: sourceEventId, taskId });
     broadcast('task:created', task);
     if (autoGenerate) {
-      broadcast('task:transitioned', { taskId, status: taskStatus, revisionId });
+      broadcastTransition(taskId, null, task.status, persistedVersion);
       if (latestQAReport) {
         broadcast('task:qa_completed', { taskId, revisionId, qaReport: latestQAReport });
       }
@@ -2591,14 +2609,14 @@ export function createApp(options?: CreateAppOptions) {
           const memTask = tasks.get(taskId);
           if (memTask && done.revisionId) {
             memTask.latestRevisionId = done.revisionId;
-            if (done.qc) {
-              memTask.qaReport = done.qc.qaReport;
-              if (['AWAITING_APPROVAL', 'CHANGES_REQUESTED', 'OPERATOR_REQUIRED', 'RECEIVED'].includes(memTask.status)) {
-                memTask.status = done.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
-              }
-            }
+            if (done.qc) memTask.qaReport = done.qc.qaReport;
+            // The status is the database's: a failed check keeps the draft in review with approval
+            // blocked by its QC run. Memory said CHANGES_REQUESTED, which no other layer had.
+            if (done.transition?.changed) memTask.status = toApiTaskStatus(done.transition.toState);
           }
-          broadcast('task:transitioned', { taskId, action: 'recheck', revisionId: done.revisionId });
+          if (done.transition?.changed) broadcastTransition(taskId, done.transition.fromState, done.transition.toState, done.transition.version);
+          // A new check without a move is still news to the Desk, which re-reads the task on it.
+          if (done.qc) broadcast('task:qa_completed', { taskId, revisionId: done.revisionId, qaReport: done.qc.qaReport });
         } catch (err) {
           console.error(`[redrive] Task ${taskId}: re-checking bound Canva draft ${existingBinding.canva_design_id} failed:`, err);
           recheck = { error: String((err as Error)?.message || err).slice(0, 300) };
@@ -2721,6 +2739,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // 6. Update task state to human review and bridge revision/qc_run
+    let redriveMove: import('./services/canva-task-outcome.js').OutcomeTransition | undefined;
     await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
       const currentTask = await taskRepo?.findById(taskId, tenantId, trx);
       if (revisionRepo && !currentTask?.current_design_revision_id) {
@@ -2752,7 +2771,7 @@ export function createApp(options?: CreateAppOptions) {
         };
         const sourceSha256 = exportRow?.sha256 || crypto.createHash('sha256').update(JSON.stringify(neutralManifest)).digest('hex');
         // Recorded as an event before the revision, which sets the same state without one.
-        await redriveOutcome.transitionTaskForOutcome(trx, {
+        redriveMove = await redriveOutcome.transitionTaskForOutcome(trx, {
           tenantId, taskId, toState: 'human_review', actorId,
           reason: `Canva draft re-driven${finalDesignId ? ` as ${finalDesignId}` : ''}; awaiting visual review.`,
         });
@@ -2787,7 +2806,7 @@ export function createApp(options?: CreateAppOptions) {
       } else {
         // Forward only, with an event: this used to set the state outright, and could drag an
         // approved task back to review.
-        await redriveOutcome.transitionTaskForOutcome(trx, {
+        redriveMove = await redriveOutcome.transitionTaskForOutcome(trx, {
           tenantId, taskId, toState: 'human_review', actorId,
           reason: `Canva draft re-driven${finalDesignId ? ` as ${finalDesignId}` : ''}; awaiting visual review.`,
         });
@@ -2805,8 +2824,9 @@ export function createApp(options?: CreateAppOptions) {
       await telegramBridge?.dispatchOutboundMessage(channelId, statusMsg);
     }
 
-    // The API's name for human_review (the Desk showed 'HUMAN_REVIEW' as RECEIVED; review of 2026-09-24).
-    broadcast('task:transitioned', { taskId, status: 'AWAITING_APPROVAL', toStatus: 'AWAITING_APPROVAL', action: 'redrive' });
+    // Only a move is a transition; the move's own words (the Desk showed 'HUMAN_REVIEW' as RECEIVED).
+    // A re-drive that found the task past review moved nothing and says nothing.
+    if (redriveMove?.changed) broadcastTransition(taskId, redriveMove.fromState, redriveMove.toState, redriveMove.version);
 
     return {
       ok: true,
@@ -4370,18 +4390,21 @@ export function createApp(options?: CreateAppOptions) {
         return c.json({ ok: true, action: 'pick_layout', taskId: targetTaskId, status: task.status });
       } else {
         await telegramBridge.answerCallbackQuery(cb.id, '✏️ Revision Requested');
-        task.status = 'IN_PROGRESS';
+        // REVISION_REQUESTED, the status the database uses for a design sent back for changes. This
+        // said IN_PROGRESS, a word only Core's memory had. The move is not written here (version null).
+        const fromStatus = task.status;
+        task.status = 'REVISION_REQUESTED';
         events.get(targetTaskId)?.push({
           eventId: crypto.randomUUID(),
           taskId: targetTaskId,
-          fromStatus: 'AWAITING_APPROVAL',
-          toStatus: 'IN_PROGRESS',
+          fromStatus,
+          toStatus: 'REVISION_REQUESTED',
           actor: { type: 'adapter', id: String(cb.from?.id || 'telegram') },
           reason: 'Revision requested via Telegram inline button',
           occurredAt: new Date().toISOString(),
         });
         broadcast('task:revision_requested', { taskId: targetTaskId, notes: 'Revision requested via Telegram button', requestedBy: cb.from?.id });
-        broadcast('task:transitioned', { taskId: targetTaskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'IN_PROGRESS' });
+        broadcastTransition(targetTaskId, isTaskApiStatus(fromStatus) ? fromStatus : null, 'REVISION_REQUESTED', null);
 
         if (chatId) {
           await telegramBridge.dispatchOutboundMessage(chatId, {
@@ -4390,7 +4413,7 @@ export function createApp(options?: CreateAppOptions) {
           });
         }
 
-        return c.json({ ok: true, action: 'revision', taskId: targetTaskId, status: 'IN_PROGRESS' });
+        return c.json({ ok: true, action: 'revision', taskId: targetTaskId, status: 'REVISION_REQUESTED' });
       }
     }
 
@@ -4756,7 +4779,8 @@ export function createApp(options?: CreateAppOptions) {
         });
         return c.json({ ok: false, command: true, status: 'UNAVAILABLE' }, 200);
       }
-      const stateLabel: Record<string, string> = {
+      // Keyed by every database state, so a state added to the vocabulary does not compile until it has words.
+      const stateLabel: Record<TaskDbState, string> = {
         received: 'being designed', promotion_pending: 'being designed', routing: 'being designed', routing_review: 'being designed',
         brief_draft: 'being designed', brief_review: 'being designed', context_ready: 'being designed', design_planning: 'being designed',
         asset_production: 'being designed', studio_composition: 'being designed', qa: 'being checked', auto_repair: 'being checked',
@@ -4772,7 +4796,7 @@ export function createApp(options?: CreateAppOptions) {
         if (r.state === 'paused' && (await pendingQuestion(r.id, sourceChannelId).catch(() => null))) stillAsking.add(r.id);
       }
       const labelOf = (r: { id: string; state: string }) =>
-        r.state === 'paused' && !stillAsking.has(r.id) ? 'no longer waiting: answered, or replaced by a newer change' : stateLabel[r.state] || r.state;
+        r.state === 'paused' && !stillAsking.has(r.id) ? 'no longer waiting: answered, or replaced by a newer change' : (isTaskDbState(r.state) ? stateLabel[r.state] : r.state);
       const lines = rows.map((r, i) =>
         `${i + 1}. <b>${escapeTelegramHtml(cutText(String(r.title || 'Request').replace(/^[^:]*:\s*/, ''), 60))}</b>\n` +
         `   ${escapeTelegramHtml(labelOf(r))}` +
@@ -4847,20 +4871,22 @@ export function createApp(options?: CreateAppOptions) {
             });
             return problem(c, 404, 'Task Not Found', `Task ${cmdReply.taskId} does not exist; no revision was logged`);
           }
-          task.status = 'IN_PROGRESS';
+          // REVISION_REQUESTED, as the database names it (this said IN_PROGRESS); not written here.
+          const fromStatus = task.status;
+          task.status = 'REVISION_REQUESTED';
           events.get(cmdReply.taskId)?.push({
             eventId: crypto.randomUUID(),
             taskId: cmdReply.taskId,
-            fromStatus: task.status,
-            toStatus: 'IN_PROGRESS',
+            fromStatus,
+            toStatus: 'REVISION_REQUESTED',
             actor: { type: 'adapter', id: sourceChannelId },
             reason: cmdReply.notes || 'Revision requested via Telegram slash command',
             occurredAt: new Date().toISOString(),
           });
           broadcast('task:revision_requested', { taskId: cmdReply.taskId, notes: cmdReply.notes, requestedBy: sourceChannelId });
-          broadcast('task:transitioned', { taskId: cmdReply.taskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'IN_PROGRESS' });
+          broadcastTransition(cmdReply.taskId, isTaskApiStatus(fromStatus) ? fromStatus : null, 'REVISION_REQUESTED', null);
           await telegramBridge.dispatchOutboundMessage(sourceChannelId, cmdReply);
-          return c.json({ ok: true, command: true, action: 'revision', taskId: cmdReply.taskId, status: 'IN_PROGRESS' });
+          return c.json({ ok: true, command: true, action: 'revision', taskId: cmdReply.taskId, status: 'REVISION_REQUESTED' });
         } else if (cmdReply.action === 'redrive') {
           let targetTaskId = cmdReply.taskId;
           if (!targetTaskId && db) {
@@ -5151,9 +5177,10 @@ export function createApp(options?: CreateAppOptions) {
             t.clientId !== 'client-office-1' &&
             isValidUuid(t.clientId) &&
             !t.isInstructionOnly &&
-            t.status !== 'CLARIFICATION_REQUIRED' &&
             (nowMs - new Date(t.createdAt).getTime() <= maxAgeMs) &&
-            (t.status === 'RECEIVED' || t.status === 'AWAITING_APPROVAL' || t.status === 'IN_PROGRESS' || t.status === 'OPERATOR_REQUIRED' || t.status === 'COMPLETED')
+            // IN_PROGRESS (a change asked for in chat) is REVISION_REQUESTED now; COMPLETED and
+            // CLARIFICATION_REQUIRED were words no task carried in the database.
+            (t.status === 'RECEIVED' || t.status === 'AWAITING_APPROVAL' || t.status === 'REVISION_REQUESTED' || t.status === 'OPERATOR_REQUIRED')
           )
           .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
@@ -5441,7 +5468,9 @@ export function createApp(options?: CreateAppOptions) {
         : KAAE_CLIENT_ID;
       const actor = { id: senderName, role: 'operator', name: senderName };
 
-      feedbackTargetTask.status = 'IN_PROGRESS';
+      // REVISION_REQUESTED, as the database names a design sent back for changes (this said
+      // IN_PROGRESS, a word only Core's memory had). This path writes no move to the database.
+      feedbackTargetTask.status = 'REVISION_REQUESTED';
       feedbackTargetTask.updatedAt = new Date().toISOString();
 
       if (!feedbacks.has(targetId)) {
@@ -5505,7 +5534,7 @@ export function createApp(options?: CreateAppOptions) {
         eventId: crypto.randomUUID(),
         taskId: targetId,
         fromStatus: prevStatus,
-        toStatus: 'IN_PROGRESS',
+        toStatus: 'REVISION_REQUESTED',
         actor: { type: 'adapter', id: sourceChannelId },
         reason: `Feedback received via Telegram: "${rawText.slice(0, 100)}"`,
         occurredAt: new Date().toISOString(),
@@ -5517,11 +5546,7 @@ export function createApp(options?: CreateAppOptions) {
         requestedBy: senderName,
         source: 'telegram',
       });
-      broadcast('task:transitioned', {
-        taskId: targetId,
-        fromStatus: prevStatus,
-        toStatus: 'IN_PROGRESS',
-      });
+      broadcastTransition(targetId, isTaskApiStatus(prevStatus) ? prevStatus : null, 'REVISION_REQUESTED', null);
 
       // --- Governed Learning & Adaptive Memory (CV-18, ADR-0022, ADR-0044) ---
       // 1. Record negative feedback on previous draft so it is never treated as a positive benchmark
@@ -6249,7 +6274,13 @@ export function createApp(options?: CreateAppOptions) {
     // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
     let states: TaskState[] | undefined;
     if (statusList !== undefined) states = dbStatesForApiStatuses(String(statusList).split(','));
-    else if (status) states = [toDbTaskState(status)];
+    else if (status) {
+      // One word of the vocabulary; an unknown one used to list the new requests ('received').
+      if (!isTaskApiStatus(status) && !isTaskDbState(status)) {
+        return problem(c, 400, 'Bad Request', `status "${status}" is not a task status`);
+      }
+      states = [toDbTaskState(status)];
+    }
 
     if (db) {
       try {
@@ -6539,7 +6570,7 @@ export function createApp(options?: CreateAppOptions) {
       {
         eventId: crypto.randomUUID(),
         taskId,
-        fromStatus: 'NONE',
+        fromStatus: null,
         toStatus: 'RECEIVED',
         actor: { type: 'user', id: auth.actorId || 'desk_user' },
         reason: 'Task created via Hawa Desk',
@@ -6829,7 +6860,7 @@ export function createApp(options?: CreateAppOptions) {
       {
         eventId: crypto.randomUUID(),
         taskId,
-        fromStatus: 'NONE',
+        fromStatus: null,
         toStatus: 'RECEIVED',
         actor: { type: 'user', id: 'operator' },
         reason: `Promoted message ${messageId}`,
@@ -6894,6 +6925,7 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     // Update database record if database is connected
+    let routedVersion: number | null = null;
     if (db && taskRepo) {
       try {
         await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
@@ -6906,7 +6938,7 @@ export function createApp(options?: CreateAppOptions) {
               .execute();
           }
 
-          await taskRepo.transitionState({
+          routedVersion = Number((await taskRepo.transitionState({
             taskId,
             tenantId,
             toState: 'brief_draft',
@@ -6914,14 +6946,14 @@ export function createApp(options?: CreateAppOptions) {
             actorId: auth.actorId || auth.userId || 'operator',
             reason: body.reason || `Client locked to ${body.clientId}`,
             data: { clientId: resolvedClientId },
-          }, trx);
+          }, trx))?.version) || null;
         });
       } catch (err) {
         console.error('[core:route] DB update error:', err);
       }
     }
 
-    broadcast('task:transitioned', { taskId, status: task?.status ?? 'BRIEFING', clientId: task?.clientId ?? resolvedClientId });
+    broadcastTransition(taskId, currentStatus, 'BRIEFING', routedVersion);
 
     return c.json({
       commandId: crypto.randomUUID(),
@@ -6983,7 +7015,8 @@ export function createApp(options?: CreateAppOptions) {
 
     briefs.set(taskId, brief);
 
-    const sm = new TaskStateMachine(taskId, task ? task.status : toApiTaskStatus(dbTask.state));
+    const briefFromStatus = task ? task.status : toApiTaskStatus(dbTask.state);
+    const sm = new TaskStateMachine(taskId, briefFromStatus);
     const trans = sm.transition('PLANNING', { type: 'workflow', id: 'brief_builder' }, 'Brief approved');
     if (task) {
       if (trans.ok) {
@@ -6993,10 +7026,11 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
+    let briefVersion: number | null = null;
     if (db && taskRepo) {
       try {
         await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
-          await taskRepo.transitionState({
+          briefVersion = Number((await taskRepo.transitionState({
             taskId,
             tenantId,
             toState: 'design_planning',
@@ -7004,7 +7038,7 @@ export function createApp(options?: CreateAppOptions) {
             actorId: 'brief_builder',
             reason: 'Brief approved',
             data: { briefId: brief.briefId, objective: brief.objective },
-          }, trx);
+          }, trx))?.version) || null;
 
           const briefJson = JSON.stringify(brief);
           const briefHash = crypto.createHash('sha256').update(briefJson).digest('hex');
@@ -7028,7 +7062,7 @@ export function createApp(options?: CreateAppOptions) {
       }
     }
 
-    broadcast('task:transitioned', { taskId, status: 'PLANNING', briefId: brief.briefId });
+    broadcastTransition(taskId, briefFromStatus, 'PLANNING', briefVersion);
 
     return c.json(brief, 201);
   });
@@ -7226,10 +7260,11 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     let finalRevisionId: string = revisionId;
+    let generatedVersion: number | null = null;
     if (db && taskRepo) {
       try {
         await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
-          await taskRepo.transitionState({
+          generatedVersion = Number((await taskRepo.transitionState({
             taskId,
             tenantId,
             toState: 'human_review',
@@ -7237,7 +7272,7 @@ export function createApp(options?: CreateAppOptions) {
             actorId: 'generator',
             reason: qaSummary,
             data: { revisionId, qaReport },
-          }, trx);
+          }, trx))?.version) || null;
 
           if (revisionRepo) {
             const dbRev = await revisionRepo.createRevision({
@@ -7292,7 +7327,8 @@ export function createApp(options?: CreateAppOptions) {
       task.latestRevisionId = finalRevisionId;
     }
 
-    broadcast('task:transitioned', { taskId, status: task ? task.status : 'AWAITING_APPROVAL', revisionId: finalRevisionId });
+    // The database moved the task to review (human_review) whatever the in-memory machine allowed.
+    broadcastTransition(taskId, currentStatus, generatedVersion !== null ? 'AWAITING_APPROVAL' : sm.getStatus(), generatedVersion);
     broadcast('task:qa_completed', { taskId, revisionId: finalRevisionId, qaReport });
 
     return c.json({
@@ -7883,14 +7919,16 @@ export function createApp(options?: CreateAppOptions) {
         const memTask = tasks.get(taskId);
         if (bridged.created && memTask) {
           memTask.latestRevisionId = bridged.revisionId;
-          memTask.status = bridged.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';
+          // In review either way, as the database records it; a failed check blocks approval through
+          // its QC run. Memory said CHANGES_REQUESTED, which no other layer had.
+          memTask.status = 'AWAITING_APPROVAL';
           memTask.qaReport = bridged.qc.qaReport;
         }
         // The bridge moves the task to review itself, so the transition below finds nothing to change
         // and told no one: the Desk kept the task as RECEIVED, Approve disabled, until a reload (review
         // of 2026-09-24).
         if (bridged.created && bridged.transition.changed) {
-          broadcast('task:transitioned', { taskId, fromStatus: bridged.transition.fromState.toUpperCase(), toStatus: bridged.qc.criticalPass ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED' });
+          broadcastTransition(taskId, bridged.transition.fromState, bridged.transition.toState, bridged.transition.version);
         }
       } catch (revErr: any) {
         // This used to be one log line and nothing else: the draft existed in Canva, the Desk could
@@ -7918,9 +7956,8 @@ export function createApp(options?: CreateAppOptions) {
         }));
       if (moved.changed) {
         const memTask = tasks.get(taskId);
-        const deskStatus = outcomeState === 'failed_operator' ? 'OPERATOR_REQUIRED' : outcomeState === 'paused' ? 'PAUSED' : 'AWAITING_APPROVAL';
-        if (memTask) memTask.status = outcomeState === 'human_review' && memTask.status === 'CHANGES_REQUESTED' ? memTask.status : deskStatus;
-        broadcast('task:transitioned', { taskId, fromStatus: moved.fromState.toUpperCase(), toStatus: deskStatus });
+        if (memTask) memTask.status = toApiTaskStatus(outcomeState);
+        broadcastTransition(taskId, moved.fromState, moved.toState, moved.version);
       }
       if (outcomeState === 'failed_operator') {
         console.warn(`[canvaStatusHandler] Task ${taskId} needs an operator: ${outcomeReason}`);
@@ -8231,10 +8268,11 @@ export function createApp(options?: CreateAppOptions) {
       events.get(taskId)?.push(trans.value);
     }
 
+    let controlVersion: number | null = null;
     if (taskRepo && db) {
       try {
         await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
-          await taskRepo.transitionState({
+          controlVersion = Number((await taskRepo.transitionState({
             taskId,
             tenantId,
             toState: toDbTaskState(targetStatus),
@@ -8242,14 +8280,14 @@ export function createApp(options?: CreateAppOptions) {
             actorId: auth.actorId || auth.userId || 'operator',
             reason,
             data: { control },
-          }, trx);
+          }, trx))?.version) || null;
         });
       } catch (err) {
         console.error('[core:control:db] DB transition error:', err);
       }
     }
 
-    broadcast('task:transitioned', { taskId, status: targetStatus, action: control });
+    broadcastTransition(taskId, currentStatus, targetStatus, controlVersion);
 
     return c.json({
       commandId: crypto.randomUUID(),
@@ -10036,7 +10074,8 @@ export function createApp(options?: CreateAppOptions) {
       tenantId: 'tenant-default',
       clientId,
       projectId: null,
-      status: 'BRIEF_READY',
+      // BRIEF_REVIEW: a brief waiting for a person (this said BRIEF_READY, a word no other layer had).
+      status: 'BRIEF_REVIEW',
       priority: 'high',
       sourcePlatform: platform,
       sourceEventId: `rehearsal_${Date.now()}`,
@@ -10060,8 +10099,8 @@ export function createApp(options?: CreateAppOptions) {
       {
         eventId: crypto.randomUUID(),
         taskId,
-        fromStatus: 'NONE',
-        toStatus: 'BRIEF_READY',
+        fromStatus: null,
+        toStatus: 'BRIEF_REVIEW',
         actor: { type: 'rehearsal', id: 'operator' },
         reason: 'Inbound message ingress rehearsal simulated',
         occurredAt: new Date().toISOString(),
@@ -10907,6 +10946,7 @@ export function createApp(options?: CreateAppOptions) {
       }
       return c.json({ ok: true, status: 'APPROVED', taskId, message: 'Campaign approved successfully' });
     } else {
+      const revisionFromStatus = task.status;
       if (task.status !== 'REVISION_REQUESTED') {
         const sm = new TaskStateMachine(taskId, task.status);
         const trans = sm.transition('REVISION_REQUESTED', { type: 'adapter', id: phone || 'whatsapp_client' }, notes || 'Revision requested via WhatsApp');
@@ -10917,18 +10957,19 @@ export function createApp(options?: CreateAppOptions) {
         events.get(taskId)?.push(trans.value);
       }
 
+      let revisionVersion: number | null = null;
       if (taskRepo && db) {
         try {
           const tenantId = task.tenantId && task.tenantId.includes('-') ? task.tenantId : defaultTenantId;
           await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
-            await taskRepo.transitionState({
+            revisionVersion = Number((await taskRepo.transitionState({
               taskId,
               tenantId,
               toState: 'revision_requested',
               actorType: 'adapter',
               actorId: phone || 'whatsapp_client',
               reason: notes || 'Revision requested via WhatsApp',
-            }, trx);
+            }, trx))?.version) || null;
           });
         } catch (err) {
           console.error('[core:whatsapp:revision] DB transition error:', err);
@@ -10936,7 +10977,7 @@ export function createApp(options?: CreateAppOptions) {
       }
 
       broadcast('task:revision_requested', { taskId, notes, requestedBy: phone });
-      broadcast('task:transitioned', { taskId, fromStatus: 'AWAITING_APPROVAL', toStatus: 'REVISION_REQUESTED' });
+      broadcastTransition(taskId, isTaskApiStatus(revisionFromStatus) ? revisionFromStatus : null, 'REVISION_REQUESTED', revisionVersion);
 
       if (isGet) {
         return c.html(`
@@ -11147,7 +11188,7 @@ export function createApp(options?: CreateAppOptions) {
     if (action === 'pause') {
       const ok = controller.pause(actor, reason);
       if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot pause workflow in state ${controller.getExecutionState()}`);
-      if (task) task.status = 'PAUSED' as any;
+      if (task) task.status = 'PAUSED';
       broadcast('workflow:state_changed', { taskId, action: 'pause', state: controller.getState() });
       return c.json({ ok: true, state: controller.getState() }, 200);
     }
@@ -11155,7 +11196,8 @@ export function createApp(options?: CreateAppOptions) {
     if (action === 'resume') {
       const ok = controller.resume(actor, reason);
       if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot resume workflow in state ${controller.getExecutionState()}`);
-      if (task) task.status = 'DESIGN_IN_PROGRESS' as any;
+      // COMPOSING: the design is being made again (this said DESIGN_IN_PROGRESS, a word no other layer had).
+      if (task) task.status = 'COMPOSING';
       broadcast('workflow:state_changed', { taskId, action: 'resume', state: controller.getState() });
       return c.json({ ok: true, state: controller.getState() }, 200);
     }
@@ -11163,7 +11205,7 @@ export function createApp(options?: CreateAppOptions) {
     if (action === 'cancel') {
       const ok = controller.cancel(actor, reason);
       if (!ok) return problem(c, 400, 'Invalid Workflow Transition', `Cannot cancel workflow in state ${controller.getExecutionState()}`);
-      if (task) task.status = 'CANCELLED' as any;
+      if (task) task.status = 'CANCELLED';
       broadcast('workflow:state_changed', { taskId, action: 'cancel', state: controller.getState() });
       return c.json({ ok: true, state: controller.getState() }, 200);
     }
@@ -11176,7 +11218,9 @@ export function createApp(options?: CreateAppOptions) {
 
     if (action === 'checkpoint') {
       const stage = body.stage || task?.currentPhase || 'SYNTHESIS';
-      const status = body.status || task?.status || 'DESIGN_IN_PROGRESS';
+      const status = body.status || task?.status || 'COMPOSING';
+      // A replay puts this status back on the task, so it must be one the vocabulary has.
+      if (!isTaskApiStatus(status)) return problem(c, 400, 'Bad Request', `Checkpoint status "${status}" is not a task status`);
       const idempotencyKey = body.idempotencyKey || `chk_${crypto.randomUUID()}`;
       const sideEffects = body.completedSideEffects || [];
       const payload = body.payload || {};

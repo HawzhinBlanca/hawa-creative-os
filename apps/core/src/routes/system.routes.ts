@@ -324,7 +324,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
   // Operations Failures
   registerRoute('get', '/operations/failures', (c: any) => {
     const failedTasks = Array.from(tasks.values()).filter((t) =>
-      t.status === 'OPERATOR_REQUIRED' || t.status === 'NEEDS_INFORMATION' || t.status === 'REJECTED'
+      // NEEDS_INFORMATION was listed too: no task ever carried it (a task waiting for its requester is PAUSED, not a failure).
+      t.status === 'OPERATOR_REQUIRED' || t.status === 'REJECTED'
     );
     return c.json({ items: failedTasks, total: failedTasks.length });
   });

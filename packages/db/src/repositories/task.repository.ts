@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { sql, type Kysely, type RawBuilder } from 'kysely';
-import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
+import { API_STATUS_OF_DB_STATE, CHANNEL_INGRESS_USER_ID, TASK_DB_STATES, toApiTaskStatus, toDbTaskState } from '@hawa/contracts';
 import type { Database, TasksTable, TaskEventsTable, TaskState } from '../types.js';
 import { withRlsContext, type RlsContext } from '../client.js';
 
@@ -48,84 +48,25 @@ export interface CreateTaskAggregateParams {
   enqueueOutbox?: boolean;
 }
 
-export function toDbTaskState(status: string): TaskState {
-  const s = (status || '').toUpperCase();
-  switch (s) {
-    case 'RECEIVED': return 'received';
-    case 'ROUTING': return 'routing';
-    case 'ROUTING_REVIEW': return 'routing_review';
-    case 'BRIEFING': return 'brief_draft';
-    case 'BRIEF_REVIEW': return 'brief_review';
-    case 'PLANNING': return 'design_planning';
-    case 'ASSET_GENERATION': return 'asset_production';
-    case 'COMPOSING': return 'studio_composition';
-    case 'QA': return 'qa';
-    case 'REPAIRING': return 'auto_repair';
-    case 'AWAITING_APPROVAL': return 'human_review';
-    case 'APPROVED': return 'approved';
-    case 'REVISION_REQUESTED': return 'revision_requested';
-    case 'REJECTED': return 'rejected';
-    case 'PUBLISHING': return 'publishing';
-    case 'COMPLETE': return 'complete';
-    case 'OPERATOR_REQUIRED': return 'failed_operator';
-    case 'CANCELLED': return 'cancelled';
-    // Waiting for the requester's answer, and delivered with its Sheets row unconfirmed (the database
-    // keeps that as publishing): both fell to 'received', so filtering the Desk by them listed new
-    // requests instead (review of 2026-09-24).
-    case 'PAUSED': return 'paused';
-    case 'PUBLISH_RECONCILIATION': return 'publishing';
-    default:
-      if (['received', 'routing', 'brief_draft', 'brief_review', 'design_planning', 'asset_production', 'studio_composition', 'qa', 'auto_repair', 'human_review', 'revision_requested', 'approved', 'publishing', 'complete', 'rejected', 'failed_operator', 'cancelled', 'paused'].includes(status.toLowerCase())) {
-        return status.toLowerCase() as TaskState;
-      }
-      return 'received';
-  }
-}
-
-export function toApiTaskStatus(state: TaskState | string): string {
-  const s = (state || '').toLowerCase();
-  switch (s) {
-    case 'received': return 'RECEIVED';
-    case 'routing': return 'ROUTING';
-    case 'routing_review': return 'ROUTING_REVIEW';
-    case 'brief_draft': return 'BRIEFING';
-    case 'brief_review': return 'BRIEF_REVIEW';
-    case 'context_ready': return 'BRIEFING';
-    case 'design_planning': return 'PLANNING';
-    case 'asset_production': return 'ASSET_GENERATION';
-    case 'studio_composition': return 'COMPOSING';
-    case 'qa': return 'QA';
-    case 'auto_repair': return 'REPAIRING';
-    case 'human_review': return 'AWAITING_APPROVAL';
-    case 'approved': return 'APPROVED';
-    case 'revision_requested': return 'REVISION_REQUESTED';
-    case 'rejected': return 'REJECTED';
-    case 'publishing': return 'PUBLISHING';
-    case 'complete': return 'COMPLETE';
-    case 'failed_operator': return 'OPERATOR_REQUIRED';
-    case 'failed_retryable': return 'OPERATOR_REQUIRED';
-    case 'cancelled': return 'CANCELLED';
-    default: return s.toUpperCase();
-  }
-}
+/**
+ * The mapping between database states and API statuses is the one vocabulary's (packages/contracts
+ * task-status.ts, architecture programme 1.2). Both functions throw on a word neither list has: this
+ * one used to store every unknown word as 'received', and toApiTaskStatus upper-cased it.
+ */
+export { toDbTaskState, toApiTaskStatus };
 
 /** Every value of the database's task_state enum (db/schema.sql), in its declared order. */
-export const TASK_STATES: readonly TaskState[] = [
-  'received', 'promotion_pending', 'routing', 'routing_review', 'brief_draft', 'brief_review',
-  'context_ready', 'design_planning', 'asset_production', 'studio_composition', 'qa',
-  'auto_repair', 'human_review', 'revision_requested', 'approved', 'publishing', 'complete',
-  'paused', 'failed_retryable', 'failed_operator', 'cancelled', 'rejected',
-];
+export const TASK_STATES: readonly TaskState[] = TASK_DB_STATES;
 
 /**
  * The database states the list shows under the given API statuses: every state whose API status is
- * one of them. Built from toApiTaskStatus rather than toDbTaskState, so a filter matches exactly the
- * tasks the list would label with that status (OPERATOR_REQUIRED takes failed_retryable too) and a
- * word the API never reports matches nothing, where toDbTaskState turns it into 'received'.
+ * one of them. Built from the state-to-status mapping rather than toDbTaskState, so a filter matches
+ * exactly the tasks the list would label with that status (OPERATOR_REQUIRED takes failed_retryable
+ * too). A word the API never reports is a filter that matches nothing, not an error.
  */
 export function dbStatesForApiStatuses(statuses: readonly string[]): TaskState[] {
   const wanted = new Set(statuses.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean));
-  return TASK_STATES.filter((state) => wanted.has(toApiTaskStatus(state)));
+  return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]));
 }
 
 /** Where a task page starts: the last row of the page before it, in list order. */
@@ -753,7 +694,7 @@ export class TaskRepository {
 
     const taskWithStatus = {
       ...result.task,
-      status: (result.task.state || 'received').toUpperCase(),
+      status: toApiTaskStatus(result.task.state),
       client_scope_locked: Boolean(result.task.client_id),
     };
 
@@ -781,7 +722,7 @@ export class TaskRepository {
       return {
         ...task,
         client_scope_locked: true,
-        status: (task.state || 'received').toUpperCase(),
+        status: toApiTaskStatus(task.state),
       };
     }
 
@@ -804,7 +745,7 @@ export class TaskRepository {
     return {
       ...updated,
       client_scope_locked: true,
-      status: (updated.state || 'received').toUpperCase(),
+      status: toApiTaskStatus(updated.state),
     };
   }
 

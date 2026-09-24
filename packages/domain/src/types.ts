@@ -1,25 +1,10 @@
-import type { UUID, ISODateTime, JsonObject, SHA256 } from '@hawa/contracts';
+import type { UUID, ISODateTime, JsonObject, SHA256, TaskApiStatus } from '@hawa/contracts';
 
-export type TaskStatus =
-  | 'RECEIVED'
-  | 'ROUTING'
-  | 'ROUTING_REVIEW'
-  | 'NEEDS_INFORMATION'
-  | 'BRIEFING'
-  | 'BRIEF_REVIEW'
-  | 'PLANNING'
-  | 'ASSET_GENERATION'
-  | 'COMPOSING'
-  | 'QA'
-  | 'REPAIRING'
-  | 'AWAITING_APPROVAL'
-  | 'OPERATOR_REQUIRED'
-  | 'REVISION_REQUESTED'
-  | 'REJECTED'
-  | 'APPROVED'
-  | 'PUBLISHING'
-  | 'COMPLETE'
-  | 'PUBLISH_RECONCILIATION';
+/**
+ * A task's status: the API statuses of the one vocabulary (packages/contracts task-status.ts,
+ * architecture programme 1.2). NEEDS_INFORMATION, which no database state stored, is PAUSED there.
+ */
+export type TaskStatus = TaskApiStatus;
 
 export type FailureClassification =
   | 'deterministic_validation_failure'

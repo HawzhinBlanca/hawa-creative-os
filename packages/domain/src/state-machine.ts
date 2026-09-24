@@ -1,28 +1,12 @@
-import type { UUID, ISODateTime, Result } from '@hawa/contracts';
+import { TASK_TRANSITIONS, type UUID, type ISODateTime, type Result } from '@hawa/contracts';
 import type { TaskStatus, FailureClassification, DomainFailure, TaskTransitionEvent, TaskActor } from './types.js';
 
-export const LEGAL_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  RECEIVED: ['ROUTING'],
-  ROUTING: ['ROUTING_REVIEW', 'NEEDS_INFORMATION', 'BRIEFING'],
-  ROUTING_REVIEW: ['ROUTING', 'NEEDS_INFORMATION', 'BRIEFING', 'REJECTED'],
-  NEEDS_INFORMATION: ['ROUTING', 'BRIEFING', 'REJECTED'],
-  BRIEFING: ['BRIEF_REVIEW', 'PLANNING', 'NEEDS_INFORMATION', 'OPERATOR_REQUIRED'],
-  BRIEF_REVIEW: ['PLANNING', 'NEEDS_INFORMATION', 'OPERATOR_REQUIRED', 'REJECTED'],
-  PLANNING: ['ASSET_GENERATION', 'COMPOSING', 'OPERATOR_REQUIRED'],
-  ASSET_GENERATION: ['COMPOSING', 'OPERATOR_REQUIRED'],
-  COMPOSING: ['QA', 'OPERATOR_REQUIRED'],
-  QA: ['REPAIRING', 'AWAITING_APPROVAL', 'OPERATOR_REQUIRED'],
-  REPAIRING: ['COMPOSING', 'QA', 'OPERATOR_REQUIRED'],
-  AWAITING_APPROVAL: ['REVISION_REQUESTED', 'REJECTED', 'APPROVED', 'OPERATOR_REQUIRED'],
-  OPERATOR_REQUIRED: ['ROUTING', 'BRIEFING', 'PLANNING', 'COMPOSING', 'QA', 'AWAITING_APPROVAL', 'PUBLISHING', 'REJECTED'],
-  REVISION_REQUESTED: ['PLANNING', 'COMPOSING', 'OPERATOR_REQUIRED'],
-  REJECTED: [],
-  APPROVED: ['PUBLISHING', 'AWAITING_APPROVAL', 'REVISION_REQUESTED'],
-  // Back to APPROVED when the delivery failed before any file reached Drive, so it can be retried.
-  PUBLISHING: ['COMPLETE', 'PUBLISH_RECONCILIATION', 'OPERATOR_REQUIRED', 'APPROVED'],
-  PUBLISH_RECONCILIATION: ['COMPLETE', 'OPERATOR_REQUIRED'],
-  COMPLETE: [],
-};
+/**
+ * The legal moves are the one vocabulary's (packages/contracts task-status.ts), which took this
+ * table as it stood on 2026-09-24 and reconciled it with the database's states and what Core records;
+ * the differences are listed there.
+ */
+export const LEGAL_TRANSITIONS: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = TASK_TRANSITIONS;
 
 export class TaskStateMachine {
   private currentStatus: TaskStatus;

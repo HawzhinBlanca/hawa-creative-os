@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { eventStream, TASK_EVENTS } from '../services/eventStream.js';
+import { eventStream, readTaskTransitioned, TASK_EVENTS } from '../services/eventStream.js';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
@@ -11,7 +11,7 @@ import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
 import { keepLoadedDetail, loadTaskDetail, mergeTaskDetail, queueEntryChanged } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
-import { inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
+import { approveButtonState, inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
 import { startQueueRefresh } from '../services/queueRefresh.js';
 
 /** Tasks per queue page (Core's default page). */
@@ -361,7 +361,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       }
     };
 
-    const unsubscribers = TASK_EVENTS.filter((name) => name !== 'task:created').map((name) => eventStream.on(name, onTaskEvent));
+    const unsubscribers = TASK_EVENTS.filter((name) => name !== 'task:created' && name !== 'task:transitioned').map((name) => eventStream.on(name, onTaskEvent));
+    // A move names its task in the one shape (readTaskTransitioned); the task is read again from Core.
+    unsubscribers.push(eventStream.on('task:transitioned', (data: unknown) => onTaskEvent({ taskId: readTaskTransitioned(data).taskId })));
     unsubscribers.push(
       eventStream.on('task:created', (data: any) => {
         const taskObj = data?.task || (data?.id ? data : null);
@@ -606,6 +608,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const getNextActionPrompt = (task: LiveTask) => taskStatusView(task.status);
 
   const nextAction = selectedTask ? getNextActionPrompt(selectedTask) : null;
+  // Hidden for a status the Desk does not know, which could be approved until 2026-09-24.
+  const approveState = selectedTask
+    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy: actionLoading })
+    : 'hidden';
 
   return (
     <div className="work-desk-container" role="main" aria-label="Hawa Work Desk">
@@ -1045,16 +1051,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </button>
 
                   {/* Action 4: Approve captured files */}
-                  <button
-                    id="btn-approve-captured"
-                    className="action-btn approve-btn"
-                    onClick={openApprovalModal}
-                    disabled={actionLoading || !selectedTask.latestRevisionId || selectedTask.qaReport?.passed !== true || nextAction?.canApprove !== true}
-                    title="Record human approval bound to captured revision (FR-041, FR-078)"
-                  >
-                    <span className="btn-icon" aria-hidden="true">✅</span>
-                    <span>Approve Captured Files</span>
-                  </button>
+                  {approveState !== 'hidden' && (
+                    <button
+                      id="btn-approve-captured"
+                      className="action-btn approve-btn"
+                      onClick={openApprovalModal}
+                      disabled={approveState !== 'enabled'}
+                      title="Record human approval bound to captured revision (FR-041, FR-078)"
+                    >
+                      <span className="btn-icon" aria-hidden="true">✅</span>
+                      <span>Approve Captured Files</span>
+                    </button>
+                  )}
 
                   {/* Action 5: Deliver approved files */}
                   <button

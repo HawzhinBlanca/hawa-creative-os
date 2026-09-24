@@ -9,10 +9,19 @@
  * database-backed list never returns. Each status now has its own label and next step, the status
  * decides (never an old approval), and the filters are built from the same groups as the labels.
  *
- * The statuses are Core's: toApiTaskStatus (packages/db task.repository.ts) for every database
- * state, the domain state machine's TaskStatus, and the ones Core sets on its in-memory tasks and
- * broadcasts (IN_PROGRESS, PAUSED, CHANGES_REQUESTED, COMPLETED).
+ * The statuses, their labels and which of them can be approved are the one vocabulary in
+ * packages/contracts/src/task-status.ts (architecture programme 1.2), which Core and the database use
+ * too. The Desk bundles that file from source (vite.config.ts and tsconfig.json point
+ * @hawa/contracts/task-status at it): the Desk image builds the Desk alone, so it needs no package
+ * build and can never bundle a stale copy. The views below are keyed by that list, so a status added
+ * there does not compile here until it has a view.
  */
+import {
+  TASK_STATUS_LABELS,
+  isApprovableTaskStatus,
+  isTaskApiStatus,
+  type TaskApiStatus,
+} from '@hawa/contracts/task-status';
 
 /** Who has the next move: the office, the approver, Core, the requester, or nobody. */
 export type StatusGroup = 'needs_action' | 'review' | 'in_design' | 'delivering' | 'waiting' | 'complete' | 'closed';
@@ -23,201 +32,176 @@ export interface TaskStatusView {
   message: string;
   primaryButton: 'edit' | 'capture' | 'approve' | 'deliver' | 'deliver_again' | 'none';
   group: StatusGroup;
-  /** False where Core refuses an approval (revision_requested, publishing, complete, cancelled, rejected, approved). */
+  /** Only a status the shared vocabulary lets a person approve (AWAITING_APPROVAL); never an unknown one. */
   canApprove: boolean;
+  /** False for a word the shared vocabulary does not have. */
+  known: boolean;
 }
 
-type View = Omit<TaskStatusView, 'canApprove'> & { canApprove?: boolean };
+type View = Omit<TaskStatusView, 'pill' | 'canApprove' | 'known'>;
 
 const WORKING = 'Nothing to do yet: the task moves on by itself, and this screen updates when it does.';
 
-const VIEWS: Record<string, View> = {
+/** The next step and filter group of each status. The pill label is the shared vocabulary's. */
+export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
   RECEIVED: {
-    pill: 'RECEIVED',
     pillClass: 'pill-received',
     message: 'Your request is saved. Use the Canva controls below to design, edit and check it.',
     primaryButton: 'edit',
     group: 'needs_action',
   },
   PROMOTION_PENDING: {
-    pill: 'STARTING',
     pillClass: 'pill-progress',
     message: `Core is turning the message into a design task. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   ROUTING: {
-    pill: 'ROUTING',
     pillClass: 'pill-progress',
     message: `Core is working out which client this request is for. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   ROUTING_REVIEW: {
-    pill: 'CHECK CLIENT',
     pillClass: 'pill-action',
     message: 'Core could not tell which client this request is for. A person must confirm the client before design starts.',
     primaryButton: 'none',
     group: 'needs_action',
   },
-  NEEDS_INFORMATION: {
-    pill: 'NEEDS INFORMATION',
-    pillClass: 'pill-waiting',
-    message: 'Waiting for the requester to send what is missing. Design starts when they answer.',
-    primaryButton: 'none',
-    group: 'waiting',
-  },
   BRIEFING: {
-    pill: 'BRIEFING',
     pillClass: 'pill-progress',
     message: `Core is writing the design brief. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   BRIEF_REVIEW: {
-    pill: 'CHECK BRIEF',
     pillClass: 'pill-action',
     message: 'The design brief waits for a person to check it before design starts.',
     primaryButton: 'none',
     group: 'needs_action',
   },
   PLANNING: {
-    pill: 'PLANNING',
     pillClass: 'pill-progress',
     message: `The design is being planned. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   ASSET_GENERATION: {
-    pill: 'MAKING IMAGES',
     pillClass: 'pill-progress',
     message: `Images for the design are being made. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   COMPOSING: {
-    pill: 'BEING MADE',
     pillClass: 'pill-progress',
     message: `The design is being made right now. Wait for the draft before starting another. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   QA: {
-    pill: 'CHECKING',
     pillClass: 'pill-progress',
     message: `The draft is being checked before it comes to review. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
   REPAIRING: {
-    pill: 'CORRECTING',
     pillClass: 'pill-progress',
     message: `The check found problems and the draft is being corrected. ${WORKING}`,
     primaryButton: 'none',
     group: 'in_design',
   },
-  IN_PROGRESS: {
-    pill: 'IN DESIGN',
-    pillClass: 'pill-progress',
-    message: 'Design work is in progress. Capture for Review stores a PNG export of the linked Canva design; it runs no QA and approves nothing.',
-    primaryButton: 'capture',
-    group: 'in_design',
-  },
   AWAITING_APPROVAL: {
-    pill: 'NEEDS APPROVAL',
     pillClass: 'pill-action',
     message: 'Review requested. Inspect the captured files and current QA result before approving.',
     primaryButton: 'approve',
     group: 'review',
   },
   REVISION_REQUESTED: {
-    pill: 'CHANGES REQUESTED',
     pillClass: 'pill-action',
     message: 'Changes were requested on this revision, so it can no longer be approved. It can be approved again only after a new revision with the changes is recorded.',
     primaryButton: 'edit',
     group: 'needs_action',
-    canApprove: false,
   },
   APPROVED: {
-    pill: 'APPROVED',
     pillClass: 'pill-approved',
     message: 'Approved. Deliver Approved Files sends the pinned exports; Core checks the approval against the current revision first.',
     primaryButton: 'deliver',
     group: 'needs_action',
-    canApprove: false,
   },
   PUBLISHING: {
-    pill: 'DELIVERING',
     pillClass: 'pill-progress',
     message: 'Delivery to Google Drive and Sheets is running. Wait for its result before delivering again.',
     primaryButton: 'none',
     group: 'delivering',
-    canApprove: false,
   },
   PUBLISH_RECONCILIATION: {
-    pill: 'SHEETS ROW PENDING',
     pillClass: 'pill-action',
     message: 'The approved files are in Google Drive, but the Sheets row is not confirmed. Deliver again to retry only the row.',
     primaryButton: 'deliver',
     group: 'needs_action',
-    canApprove: false,
   },
   COMPLETE: {
-    pill: 'COMPLETE',
     pillClass: 'pill-complete',
     message: 'Task is marked complete. Check its delivery receipt and audit history for destination evidence.',
     primaryButton: 'deliver_again',
     group: 'complete',
-    canApprove: false,
   },
   PAUSED: {
-    pill: 'WAITING FOR ANSWER',
     pillClass: 'pill-waiting',
-    message: 'Waiting for the requester to answer a question about their change. Nothing is designed until they answer.',
+    message: 'Waiting for the requester to answer a question about their request. Nothing is designed until they answer.',
     primaryButton: 'none',
     group: 'waiting',
   },
   OPERATOR_REQUIRED: {
-    pill: 'NEEDS A DESIGNER',
     pillClass: 'pill-failed',
     message: 'The automatic draft failed or stopped, so a designer must take this over. The panels below show what exists and why it stopped.',
     primaryButton: 'edit',
     group: 'needs_action',
   },
   REJECTED: {
-    pill: 'REJECTED',
     pillClass: 'pill-complete',
     message: 'Rejected. Nothing more happens on this task.',
     primaryButton: 'none',
     group: 'closed',
-    canApprove: false,
   },
   CANCELLED: {
-    pill: 'CANCELLED',
     pillClass: 'pill-complete',
     message: 'Cancelled. Nothing more happens on this task.',
     primaryButton: 'none',
     group: 'closed',
-    canApprove: false,
   },
 };
-// Names Core uses for the same state on its in-memory tasks.
-VIEWS.CHANGES_REQUESTED = VIEWS.REVISION_REQUESTED;
-VIEWS.COMPLETED = VIEWS.COMPLETE;
 
 /** The label, next step and filter group of a status Core reports. */
 export function taskStatusView(status: string | undefined | null): TaskStatusView {
-  const known = VIEWS[String(status || '').toUpperCase()];
-  if (known) return { ...known, canApprove: known.canApprove ?? true };
-  // A status this Desk does not know is shown as itself and kept in "Needs Action", never guessed.
+  // Core's words are exact (upper case); a word in another case is not one of them.
+  if (isTaskApiStatus(status)) {
+    return { ...STATUS_VIEWS[status], pill: TASK_STATUS_LABELS[status], canApprove: isApprovableTaskStatus(status), known: true };
+  }
+  // A status this Desk does not know is shown as unknown and kept in "Needs Action": never guessed,
+  // never RECEIVED, and never approvable (the Desk used to offer approval for it).
   return {
-    pill: status ? String(status).replace(/_/g, ' ').toUpperCase() : 'NO STATUS',
-    pillClass: 'pill-action',
-    message: `Core reports status "${status || 'none'}", which this Desk does not know. Nothing is assumed about it: check the task's history.`,
+    pill: `UNKNOWN: ${status ? String(status).replace(/_/g, ' ').toUpperCase() : 'NO STATUS'}`,
+    pillClass: 'pill-failed',
+    message: `Core reports status "${status || 'none'}", which this Desk does not know. Nothing is assumed about it and it cannot be approved here: check the task's history.`,
     primaryButton: 'none',
     group: 'needs_action',
-    canApprove: true,
+    canApprove: false,
+    known: false,
   };
+}
+
+/**
+ * The Work screen's Approve button: hidden for a status the Desk does not know; enabled only for an
+ * approvable status whose current revision passed QA; disabled otherwise.
+ */
+export function approveButtonState(
+  status: string | undefined | null,
+  task: { hasRevision: boolean; qaPassed: boolean; busy?: boolean }
+): 'hidden' | 'disabled' | 'enabled' {
+  const view = taskStatusView(status);
+  if (!view.known) return 'hidden';
+  return view.canApprove && task.hasRevision && task.qaPassed && !task.busy ? 'enabled' : 'disabled';
 }
 
 export type QueueFilter = 'all' | 'needs_action' | 'in_progress' | 'review' | 'complete';
@@ -242,7 +226,7 @@ export function inQueueFilter(status: string | undefined | null, filter: QueueFi
  */
 export function queueFilterStatuses(filter: QueueFilter): string[] | undefined {
   if (filter === 'all') return undefined;
-  return Object.keys(VIEWS).filter((status) => inQueueFilter(status, filter));
+  return (Object.keys(STATUS_VIEWS) as TaskApiStatus[]).filter((status) => inQueueFilter(status, filter));
 }
 
 /**

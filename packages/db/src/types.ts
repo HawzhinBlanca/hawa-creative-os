@@ -1,4 +1,5 @@
 import type { Generated, ColumnType } from 'kysely';
+import type { TaskDbState } from '@hawa/contracts';
 
 export interface TenantsTable {
   id: Generated<string>;
@@ -61,29 +62,8 @@ export interface ClientChannelsTable {
   updated_at: Generated<Date>;
 }
 
-export type TaskState =
-  | 'received'
-  | 'promotion_pending'
-  | 'routing'
-  | 'routing_review'
-  | 'brief_draft'
-  | 'brief_review'
-  | 'context_ready'
-  | 'design_planning'
-  | 'asset_production'
-  | 'studio_composition'
-  | 'qa'
-  | 'auto_repair'
-  | 'human_review'
-  | 'revision_requested'
-  | 'approved'
-  | 'publishing'
-  | 'complete'
-  | 'paused'
-  | 'failed_retryable'
-  | 'failed_operator'
-  | 'cancelled'
-  | 'rejected';
+/** The task_state enum: the one list is packages/contracts task-status.ts (architecture programme 1.2). */
+export type TaskState = TaskDbState;
 
 export interface TasksTable {
   id: Generated<string>;

@@ -61,7 +61,7 @@ export function validateBrief(brief: DesignBrief): Result<DesignBrief, AppError>
         code: 'BRIEF_HAS_MISSING_FACTS',
         message: `Brief cannot proceed: ${blockingFacts.length} missing fact(s) detected (${blockingFacts.map((f) => f.field).join(', ')})`,
         retryable: false,
-        safeAction: 'Transition task to NEEDS_INFORMATION and query user',
+        safeAction: 'Transition task to PAUSED (waiting for the requester) and query user',
         detail: { missingFacts: blockingFacts },
       },
     };

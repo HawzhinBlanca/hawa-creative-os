@@ -1,28 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { TaskStateMachine, LEGAL_TRANSITIONS } from '../src/state-machine.js';
 import type { TaskStatus, TaskActor } from '../src/types.js';
+import { TASK_API_STATUSES } from '@hawa/contracts';
 
-const ALL_STATUSES: TaskStatus[] = [
-  'RECEIVED',
-  'ROUTING',
-  'ROUTING_REVIEW',
-  'NEEDS_INFORMATION',
-  'BRIEFING',
-  'BRIEF_REVIEW',
-  'PLANNING',
-  'ASSET_GENERATION',
-  'COMPOSING',
-  'QA',
-  'REPAIRING',
-  'AWAITING_APPROVAL',
-  'OPERATOR_REQUIRED',
-  'REVISION_REQUESTED',
-  'REJECTED',
-  'APPROVED',
-  'PUBLISHING',
-  'COMPLETE',
-  'PUBLISH_RECONCILIATION',
-];
+// The one vocabulary's statuses (packages/contracts task-status.ts); the domain type is its type.
+const ALL_STATUSES: TaskStatus[] = [...TASK_API_STATUSES];
 
 const testActor: TaskActor = {
   type: 'system',
@@ -31,15 +13,16 @@ const testActor: TaskActor = {
 };
 
 describe('TaskStateMachine Exhaustive State Graph Verification', () => {
-  it('covers all 19 defined statuses in the transition matrix', () => {
+  it('covers every status of the vocabulary (21) in the transition matrix', () => {
     expect(Object.keys(LEGAL_TRANSITIONS).sort()).toEqual([...ALL_STATUSES].sort());
   });
 
-  it('enforces terminal status invariants for COMPLETE and REJECTED', () => {
+  it('enforces terminal status invariants for COMPLETE, REJECTED and CANCELLED', () => {
     expect(LEGAL_TRANSITIONS.COMPLETE).toEqual([]);
     expect(LEGAL_TRANSITIONS.REJECTED).toEqual([]);
+    expect(LEGAL_TRANSITIONS.CANCELLED).toEqual([]);
 
-    for (const terminal of ['COMPLETE', 'REJECTED'] as TaskStatus[]) {
+    for (const terminal of ['COMPLETE', 'REJECTED', 'CANCELLED'] as TaskStatus[]) {
       const sm = new TaskStateMachine('00000000-0000-0000-0000-000000000001', terminal);
       for (const target of ALL_STATUSES) {
         expect(sm.canTransitionTo(target)).toBe(false);
@@ -54,7 +37,7 @@ describe('TaskStateMachine Exhaustive State Graph Verification', () => {
     }
   });
 
-  it('exhaustively tests all 19x19 (361) status pairs for valid and invalid transitions', () => {
+  it('exhaustively tests all 21x21 (441) status pairs for valid and invalid transitions', () => {
     for (const fromStatus of ALL_STATUSES) {
       const allowedNext = new Set(LEGAL_TRANSITIONS[fromStatus]);
 
@@ -145,7 +128,7 @@ describe('TaskStateMachine Randomized Property-Based Path Fuzzing', () => {
       while (steps < maxSteps) {
         steps++;
         const current = sm.getStatus();
-        if (current === 'COMPLETE' || current === 'REJECTED') {
+        if (current === 'COMPLETE' || current === 'REJECTED' || current === 'CANCELLED') {
           break;
         }
 
