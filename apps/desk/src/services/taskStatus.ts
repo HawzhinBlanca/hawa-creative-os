@@ -11,10 +11,10 @@
  *
  * The statuses, their labels and which of them can be approved are the one vocabulary in
  * packages/contracts/src/task-status.ts (architecture programme 1.2), which Core and the database use
- * too. The Desk bundles that file from source (vite.config.ts and tsconfig.json point
- * @hawa/contracts/task-status at it): the Desk image builds the Desk alone, so it needs no package
- * build and can never bundle a stale copy. The views below are keyed by that list, so a status added
- * there does not compile here until it has a view.
+ * too. The Desk's build is `tsc -b`, which builds @hawa/contracts first through the tsconfig
+ * reference, so the Desk image (no package dist in it) and a checkout with an old dist both bundle
+ * today's list. The views below are keyed by that list, so a status added there does not compile
+ * here until it has a view.
  */
 import {
   TASK_STATUS_LABELS,

@@ -7666,6 +7666,7 @@ export function createApp(options?: CreateAppOptions) {
     let driveRefs: any[] = [];
     let sheetSyncs: any[] = [];
     let outboxCmds: any[] = [];
+    let storedState: string | null = null;
 
     if (db && publicationRepo && isValidUuid(taskId)) {
       try {
@@ -7684,6 +7685,7 @@ export function createApp(options?: CreateAppOptions) {
             if (outboxRepo) {
               outboxCmds = await outboxRepo.findByAggregateId(auth.tenantId, 'task', taskId, trx);
             }
+            if (taskRepo) storedState = (await taskRepo.findById(taskId, auth.tenantId, trx))?.state ?? null;
           }
         );
       } catch (err) {
@@ -7698,7 +7700,11 @@ export function createApp(options?: CreateAppOptions) {
     }
 
     const task = tasks.get(taskId);
-    const taskStatus = task?.status || (pubRecord?.state === 'complete' ? 'COMPLETE' : (pubRecord?.state === 'drive_complete' ? 'PUBLISH_RECONCILIATION' : 'PENDING'));
+    // The task's own status: the in-memory one, else the stored one (every task after a restart). It
+    // used to fall back to 'PENDING', a word no layer knows; with neither, there is no status to report.
+    const taskStatus = task?.status
+      ?? (storedState ? toApiTaskStatus(storedState) : null)
+      ?? (pubRecord?.state === 'complete' ? 'COMPLETE' : (pubRecord?.state === 'drive_complete' ? 'PUBLISH_RECONCILIATION' : null));
 
     const hasDriveFiles = driveRefs.length > 0 || (memReceipt?.files && memReceipt.files.length > 0);
     const driveVerified = hasDriveFiles && (

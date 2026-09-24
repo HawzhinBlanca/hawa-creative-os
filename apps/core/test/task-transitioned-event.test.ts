@@ -96,4 +96,15 @@ describe('task:transitioned payloads (PostgreSQL)', () => {
     expect(parsed[0]!.version).toBeLessThanOrEqual(version);
     expect(JSON.stringify(moves)).not.toMatch(/STUDIO_COMPOSITION|FAILED_OPERATOR|HUMAN_REVIEW|CHANGES_REQUESTED/);
   });
+
+  it('publication-state reports the stored status of a task Core does not hold in memory, never PENDING', async () => {
+    // After a restart no task is in memory; the route used to answer 'PENDING', a word outside the vocabulary.
+    const taskId = await beingMade('KAAE: members evening (publication state)');
+    const app = createApp({ db } as any);
+    const res = await app.request(`/v1/tasks/${taskId}/publication-state`, { headers: operator });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe('COMPOSING');
+    expect(body.state).toBe('unstarted');
+  });
 });

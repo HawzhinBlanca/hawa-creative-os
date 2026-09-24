@@ -6,6 +6,7 @@ import type { TaskStatus } from '@hawa/domain';
 import {
   API_STATUS_OF_DB_STATE,
   APPROVABLE_TASK_STATUSES,
+  IN_PROGRESS_TASK_STATUSES,
   DB_STATE_OF_API_STATUS,
   TASK_API_STATUSES,
   TASK_DB_STATES,
@@ -137,6 +138,11 @@ describe('the Desk (apps/desk taskStatus.ts)', () => {
       expect(taskStatusView(status).canApprove, status).toBe(APPROVABLE_TASK_STATUSES.includes(status));
     }
   });
+
+  it('splits the module\'s in-progress statuses into its "In Design" and "Delivering" filters, and nothing else', () => {
+    const working = TASK_API_STATUSES.filter((status) => ['in_design', 'delivering'].includes(STATUS_VIEWS[status].group));
+    expect([...working].sort()).toEqual([...IN_PROGRESS_TASK_STATUSES].sort());
+  });
 });
 
 /** Quoted upper-case words a source file sets on, or compares with, a task's status. */
@@ -150,6 +156,10 @@ function statusWordsIn(source: string): string[] {
     new RegExp(String.raw`${TASK}\s*=(?!=)[^;\n]*\?\s*'([A-Z][A-Z_]*)'\s*:\s*'([A-Z][A-Z_]*)'`, 'g'),
   ];
   for (const re of patterns) for (const m of source.matchAll(re)) words.push(...m.slice(1).filter(Boolean));
+  // A variable holding a task's status (taskStatus, currentTaskStatus, …): every word in its initialiser.
+  for (const m of source.matchAll(/\b(?:const|let|var)\s+\w*[tT]askStatus\b[^;]*;/g)) {
+    words.push(...[...m[0].matchAll(/'([A-Z][A-Z_]*)'/g)].map((w) => w[1]));
+  }
   for (const m of source.matchAll(new RegExp(String.raw`\[([^\]]*)\]\.includes\(${TASK}\)`, 'g'))) {
     words.push(...[...m[1].matchAll(/'([A-Z][A-Z_]*)'/g)].map((w) => w[1]));
   }
@@ -182,6 +192,8 @@ describe('the words Core, the worker and the Desk use for a task\'s status', () 
     expect(statusWordsIn("task.status = 'IN_PROGRESS';")).toEqual(['IN_PROGRESS']);
     expect(statusWordsIn("memTask.status = ok ? 'AWAITING_APPROVAL' : 'CHANGES_REQUESTED';")).toContain('CHANGES_REQUESTED');
     expect(statusWordsIn("if (['AWAITING_APPROVAL', 'COMPLETED'].includes(memTask.status)) {}")).toContain('COMPLETED');
+    // The publication-state route's fallback, which the first version of this scan missed.
+    expect(statusWordsIn("const taskStatus = task?.status || (done ? 'COMPLETE' : (drive ? 'PUBLISH_RECONCILIATION' : 'PENDING'));")).toContain('PENDING');
   });
 
   it('task:transitioned is sent only through taskTransitioned, never as a hand-made object', () => {

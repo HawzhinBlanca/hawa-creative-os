@@ -6,6 +6,8 @@ import { TASK_EVENTS, readTaskTransitioned } from '../src/services/eventStream.j
 import { keepLoadedDetail, queueEntryChanged } from '../src/services/taskDetail.js';
 import { FILTER_GROUPS, approveButtonState, inQueueFilter, searchFold, taskStatusView, type QueueFilter } from '../src/services/taskStatus.js';
 import { TASK_API_STATUSES, TASK_DB_STATES, TASK_STATUS_LABELS, toApiTaskStatus } from '@hawa/contracts/task-status';
+import * as vocabularyDist from '@hawa/contracts/task-status';
+import * as vocabularySource from '../../../packages/contracts/src/task-status.js';
 
 /**
  * 2026-09-24: the Work screen labelled most of Core's statuses RECEIVED, left failed drafts out of
@@ -19,6 +21,16 @@ const REPO = path.resolve(__dirname, '../../..');
 function coreStatuses(): string[] {
   return [...new Set([...TASK_DB_STATES.map(toApiTaskStatus), ...TASK_API_STATUSES])];
 }
+
+describe('the vocabulary these tests load', () => {
+  // The Desk's build refreshes packages/contracts/dist (tsc -b), but vitest reads that dist as it is.
+  // A dist older than the source would make every test below check yesterday's words, so say so.
+  it('is the source file\'s (rebuild packages/contracts when this fails)', () => {
+    for (const name of ['TASK_DB_STATES', 'TASK_API_STATUSES', 'TASK_STATUS_LABELS', 'TASK_TRANSITIONS', 'APPROVABLE_TASK_STATUSES', 'IN_PROGRESS_TASK_STATUSES'] as const) {
+      expect(vocabularyDist[name], name).toEqual(vocabularySource[name]);
+    }
+  });
+});
 
 describe('the label and next step of every status Core reports', () => {
   it('gives each its own view; only RECEIVED reads as a new request to design', () => {

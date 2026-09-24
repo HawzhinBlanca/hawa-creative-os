@@ -15,10 +15,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client", "node"],
-    "paths": {
-      "@hawa/contracts/task-status": ["../../packages/contracts/src/task-status.ts"]
-    }
+    "types": ["vite/client", "node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [{ "path": "../../packages/contracts" }]
 }

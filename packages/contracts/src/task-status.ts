@@ -11,7 +11,9 @@
  * are generated from it (scripts/generate_task_status_contract.ts), and a contract test fails when
  * any layer disagrees or adds a word.
  *
- * This file imports nothing, so the Desk bundles it straight from source.
+ * The Desk imports it as @hawa/contracts/task-status, which resolves to this package's dist. The
+ * Desk's build is `tsc -b`, which builds this package first through its tsconfig reference, so the
+ * Desk image (which starts with no dist) and a checkout with an old dist both bundle today's list.
  */
 
 /** Every value of the database's `task_state` enum (db/schema.sql), in its declared order. */
@@ -207,7 +209,11 @@ export const APPROVABLE_TASK_STATUSES: readonly TaskApiStatus[] = ['AWAITING_APP
 /** The statuses nothing moves a task out of. */
 export const TERMINAL_TASK_STATUSES: readonly TaskApiStatus[] = TASK_API_STATUSES.filter((s) => TASK_TRANSITIONS[s].length === 0);
 
-/** The statuses in which Core or the worker is working on the task and no person has a move to make. */
+/**
+ * The statuses in which Core or the worker is working on the task and no person has a move to make.
+ * The Desk splits them into its "In Design" filter and, for PUBLISHING, "Delivering"; the contract
+ * test holds the two to the same list.
+ */
 export const IN_PROGRESS_TASK_STATUSES: readonly TaskApiStatus[] = [
   'PROMOTION_PENDING', 'ROUTING', 'BRIEFING', 'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING', 'PUBLISHING',
 ];
