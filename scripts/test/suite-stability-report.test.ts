@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-// A plain script (scripts/** is outside the typed build), so its exports are untyped here.
+// A plain script; its types are in suite_stability_report.d.mts.
 import { runFailures, summarise } from '../suite_stability_report.mjs';
 
 /**
