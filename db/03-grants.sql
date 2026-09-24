@@ -20,7 +20,14 @@ REVOKE UPDATE, DELETE ON hawa.inbox_events FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.message_events FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.task_events FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.qc_runs FROM hawa_app;
-REVOKE UPDATE, DELETE ON hawa.canva_export_bytes FROM hawa_app;
+-- canva_export_bytes comes from migration 003, which runs after initdb (deploy.sh, upgrade.ts), and
+-- 005 grants it SELECT and INSERT only. An unconditional REVOKE here failed every fresh data
+-- directory with "relation does not exist" (found rehearsing the 2026-09-24 role rotation).
+DO $$ BEGIN
+  IF to_regclass('hawa.canva_export_bytes') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE ON hawa.canva_export_bytes FROM hawa_app;
+  END IF;
+END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.publications FROM hawa_app;
