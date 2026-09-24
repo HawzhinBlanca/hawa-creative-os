@@ -1,6 +1,6 @@
 {
   "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T19:20:00.616Z",
+  "generatedAt": "2026-09-24T20:44:40.199Z",
   "environment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -19,15 +19,15 @@
     ]
   },
   "build": {
-    "commit": "6b89a41c590ceec33ae35406e245f4aaacfdf726",
+    "commit": "f3d3cbb7ef1c031cca3d135211528746bd410ffc",
     "treeClean": true,
-    "commitTimestamp": "2026-09-24T22:19:52+03:00",
+    "commitTimestamp": "2026-09-24T23:44:31+03:00",
     "branch": "claude/reliability"
   },
   "migrations": {
-    "targetVersion": "021_review_comments",
-    "latestMigrationFile": "021_review_comments.sql",
-    "totalMigrations": 21
+    "targetVersion": "022_publication_executor",
+    "latestMigrationFile": "022_publication_executor.sql",
+    "totalMigrations": 22
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -38,8 +38,8 @@
       "service": "core",
       "image": "hawa-core:latest",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "26936568633cf4f4d412d407773e1279a277b105fd55c469896b4e39ee107f71",
-        "apps/core/src/index.ts": "fc66615bca59ad0e9316f229ba02396d6db14b290257eeca4d8a7440ce924ba9",
+        "apps/core/src/app.ts": "9611c56ea3fe9559ab373668ba42965b4753a9e104f8b3d741ec83c4f19a50d4",
+        "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "b82e7ea5c04ab4c609b332b2d80753cc4be8366fdeb1e1fdd5dd46c6f574cdb1"
       }
     },
@@ -55,7 +55,7 @@
       "service": "worker",
       "image": "hawa-worker:latest",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "52e4ce874ababd9b689321c3220274882baa891b5a6013d55a3be0b80939491c"
+        "apps/worker/src/index.ts": "45427dd03f7955e55a90900110258c7c5befea9be56c9a72ccb003378e18f61a"
       }
     }
   },
@@ -91,5 +91,5 @@
     "rulesVersion": "kaae-ka-2026-09",
     "rubricVersion": "visual-rubric-v2"
   },
-  "sha256": "93e983856214ab9d8c4004f4a4df34c2ccb38926b4fd43ce5c33fb025f425f0a"
+  "sha256": "6ddad901d2f5503c8e4c4f214a0487072190cf5d7e43769f557a3054c1b6a8bb"
 }
