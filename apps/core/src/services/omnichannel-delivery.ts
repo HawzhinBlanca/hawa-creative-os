@@ -76,7 +76,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       ok: false,
       error: {
         code: 'PUBLICATION_IN_PROGRESS',
-        message: 'Another process is delivering this task right now; try again in a moment',
+        // The other press may be in this process or another one: only that some delivery holds the lock is known.
+        message: 'A delivery of this task is running right now; try again in a moment',
         retryable: true,
       },
     };
@@ -250,9 +251,52 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const sm = new TaskStateMachine(taskId, isDeliverApprovedStored && task.status !== 'PUBLISH_RECONCILIATION' ? 'APPROVED' : task.status);
 
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
-    // A task already delivered is answered from its publication row below (dbPub.state 'complete'),
-    // whichever process delivered it. It used to be answered from the receipt this process kept,
-    // which a restart lost.
+
+    /** The answer for a delivery Postgres already records as complete: nothing is sent again. */
+    const alreadyDeliveredAnswer = (pub: { id: unknown; completed_at?: unknown }) => {
+      const folderId = client?.destinations?.productionFolderId || client?.productionDestinations?.googleDriveFolderId;
+      const sheetId = client?.destinations?.spreadsheetId || client?.productionDestinations?.googleSheetId || '';
+      const completedAt = pub.completed_at ? new Date(pub.completed_at as string).toISOString() : new Date().toISOString();
+      const receipt = {
+        publicationId: pub.id,
+        publicationKey,
+        state: 'complete' as const,
+        driveFiles: [] as any[],
+        sheet: { spreadsheetId: sheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
+        completedAt,
+        detail: { verified: true, filesUploaded: deliverables.files.length, alreadyCompleted: true },
+      };
+      return {
+        ok: true,
+        taskId,
+        status: 'COMPLETE',
+        complete: true,
+        alreadyCompleted: true,
+        publicationReceipt: receipt,
+        driveFolderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+        sheetRowUrl: null,
+        filesCount: deliverables.files.length,
+        publishedAt: completedAt,
+      };
+    };
+
+    // A task already delivered is answered from its publication row, whichever process delivered it
+    // (it used to be answered from the receipt this process kept, which a restart lost). COMPLETE has
+    // no transitions, so this is read before the move to PUBLISHING, which would refuse it with 409;
+    // a chat approve on a delivered task then got an error instead of the stored delivery.
+    if (task.status === 'COMPLETE' && publicationRepo && db && isValidUuid(taskId)) {
+      const doneTenantId = isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
+      const done = await withRlsContext(db, { tenantId: doneTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        publicationRepo.findByKey(publicationKey, doneTenantId, trx)
+      ).catch((err: unknown) => {
+        log.warn('[core:omnichannel] Could not read the stored publication:', err);
+        return null;
+      });
+      if (done && done.state === 'complete') {
+        task.status = 'COMPLETE';
+        return alreadyDeliveredAnswer(done);
+      }
+    }
 
     const doPublish = async () => {
       if (autoApproveFromAwaiting && task.status === 'AWAITING_APPROVAL') {
@@ -473,27 +517,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       // a publisher-shaped { ok, value } that the routes do not read, so an adopted delivery was
       // reported as PUBLISH_RECONCILIATION with no receipt.
       task.status = 'COMPLETE';
-      const receipt = {
-        publicationId: dbPub.id,
-        publicationKey,
-        state: 'complete' as const,
-        driveFiles: [] as any[],
-        sheet: { spreadsheetId, sheetId: 0, rowKey: taskId, expectedHash: deliverables.packageHash, synced: true },
-        completedAt: dbPub.completed_at ? new Date(dbPub.completed_at).toISOString() : new Date().toISOString(),
-        detail: { verified: true, filesUploaded: files.length, alreadyCompleted: true },
-      };
-      return {
-        ok: true,
-        taskId,
-        status: 'COMPLETE',
-        complete: true,
-        alreadyCompleted: true,
-        publicationReceipt: receipt,
-        driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
-        sheetRowUrl: null,
-        filesCount: files.length,
-        publishedAt: receipt.completedAt,
-      };
+      return alreadyDeliveredAnswer(dbPub);
     }
 
     const publishResult: any = await publisher.publish(ctx, {

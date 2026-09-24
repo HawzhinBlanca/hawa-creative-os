@@ -43,6 +43,17 @@ Task CV-15 establishes truthful, server-authenticated human review and approval 
 6. **Append-Only Cryptographic Audit Trail (FR-069)**:
    - Every approval, rejection, revision request, and invalidation is recorded with actor attribution and SHA-256 hash chaining to the preceding entry.
 
+### Addendum 2026-09-24 (architecture programme 1.3, groups G3 and G5)
+
+The last step of invariant 1 ("Revision B is successfully published") no longer holds once
+Revision A has been delivered under `deliver_approved_stored`. Decisions are now recorded only in
+Postgres (`hawa.approvals`), and Postgres refuses to approve a task that is already delivered
+(COMPLETE has no transitions), so approving B on that task answers HTTP 409 and B goes out as a new
+request. It used to be approved and delivered again from Core's in-memory copy, which production,
+reading Postgres, never did. Test 8 of `apps/core/test/human-approval-binding.test.ts` now asserts
+the 409 and that the recorded delivery is A's pinned export alone. The other steps are unchanged.
+The trace files below are the 2026-09-11 run and were not regenerated.
+
 ## Evidence Artifacts
 
 - `APPROVE_A_EDIT_B_PUBLISH_TRACES.json`: Full trace of the core invariant across all 8 lifecycle steps.

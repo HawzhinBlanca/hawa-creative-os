@@ -122,7 +122,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(delivered.length).toBeGreaterThanOrEqual(1);
     for (const refused of answers.filter((a) => a.status !== 200)) {
       expect(refused.status).toBe(409);
-      expect(refused.body.detail).toMatch(/delivering this task right now/);
+      expect(refused.body.detail).toMatch(/delivery of this task is running right now/);
     }
     const fresh = delivered.find((a) => a.body.alreadyCompleted !== true && a.body.publicationReceipt.driveFiles.length > 0)!;
     expect(fresh.body.status).toBe('COMPLETE');

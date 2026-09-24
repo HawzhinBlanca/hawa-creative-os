@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
+import { computeActionSignature } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -94,6 +95,25 @@ describe('design revisions are read from design_revisions', () => {
   });
 });
 
+describe('a revision is answered only under its own task', () => {
+  it('QA and diff refuse a revision of another task', async () => {
+    const { a } = twoProcesses();
+    const first = await newTask(a, 'Owner');
+    const revisionOfFirst = await newRevision(a, first, 'Owner headline');
+    const second = await newTask(a, 'Other');
+    const revisionOfSecond = await newRevision(a, second, 'Other headline');
+
+    expect((await a.request(`/tasks/${second}/revisions/${revisionOfFirst}/qa`, { method: 'POST' })).status).toBe(404);
+    const runs = await withRlsContext(testDb, { tenantId: TENANT, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (trx) =>
+      trx.selectFrom('qc_runs').select('id').where('design_revision_id', '=', revisionOfFirst).execute()
+    );
+    expect(runs).toEqual([]);
+
+    const diff = await a.request(`/tasks/${second}/revisions/diff?fromRevisionId=${revisionOfFirst}&toRevisionId=${revisionOfSecond}`);
+    expect(diff.status).toBe(404);
+  });
+});
+
 describe('review decisions are recorded in approvals or not at all', () => {
   it('without a database, no revision is taken and nothing is approved', async () => {
     const app = createApp({ testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
@@ -158,7 +178,38 @@ describe('what a delivery left is read from publications', () => {
     // Pressing publish again in the other process answers from the stored publication, uploading nothing.
     const again = await b.request(`/tasks/${taskId}/publish-omnichannel`, { method: 'POST', headers: json });
     expect(again.status).toBe(200);
-    expect((await again.json()).publicationReceipt.publicationId).toBe(publicationReceipt.publicationId);
+    const stored2 = await again.json();
+    expect(stored2.publicationReceipt.publicationId).toBe(publicationReceipt.publicationId);
+    // Marked as a stored answer, like one adopted in the delivery itself, so it is never counted as a
+    // second delivery.
+    expect(stored2.alreadyCompleted).toBe(true);
+    expect(stored2.publicationReceipt.detail.alreadyCompleted).toBe(true);
+  });
+
+  it('an approve from chat on a delivered task answers with the stored delivery, not a conflict', async () => {
+    const { exports, a, b } = twoProcesses();
+    const { taskId } = await approvedTask(a, exports);
+    const delivered = await a.request(`/tasks/${taskId}/publish-omnichannel`, { method: 'POST', headers: json });
+    expect(delivered.status).toBe(200);
+    const { publicationReceipt } = await delivered.json();
+
+    // Before the receipts moved to Postgres the process that delivered answered from its map; the
+    // task is COMPLETE, so moving it to PUBLISHING again fails with 409 unless the row answers first.
+    const sig = computeActionSignature(taskId, 'approve');
+    const res = await b.request(`/api/webhooks/whatsapp/actions?taskId=${taskId}&action=approve&sig=${sig}&publish=true`, { method: 'GET' });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('drive.google.com/drive/folders/');
+    const post = await b.request('/api/webhooks/whatsapp/actions', {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ taskId, action: 'approve', sig, publish: true }),
+    });
+    expect(post.status).toBe(200);
+    const answer = (await post.json()).publishRes;
+    expect(answer).toMatchObject({ alreadyCompleted: true, status: 'COMPLETE' });
+    expect(answer.publicationReceipt.publicationId).toBe(publicationReceipt.publicationId);
+    expect((await (await b.request(`/tasks/${taskId}`)).json()).status).toBe('COMPLETE');
   });
 
   it('two presses at once deliver once: the other is told to retry or answered from the stored delivery', async () => {
@@ -206,6 +257,26 @@ describe('reviewer comments are recorded in review_comments', () => {
 
     const listed = await (await b.request(`/tasks/${taskId}/comments`)).json();
     expect(listed.comments).toEqual([comment]);
+  });
+
+  it('records the signed-in caller\'s role, not the role the body claims', async () => {
+    const { a } = twoProcesses();
+    const taskId = await newTask(a, 'Comment roles');
+    const asOperator = await a.request(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: { ...json, 'x-user-role': 'operator' },
+      body: JSON.stringify({ comment: 'Operator note', author: { role: 'art_director' } }),
+    });
+    expect(asOperator.status).toBe(201);
+    expect((await asOperator.json()).comment.author.role).toBe('operator');
+
+    const asGuest = await a.request(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: { ...json, 'x-user-role': 'external_guest' },
+      body: JSON.stringify({ comment: 'Guest note', author: { role: 'art_director' } }),
+    });
+    expect(asGuest.status).toBe(403);
+    expect((await (await a.request(`/tasks/${taskId}/comments`)).json()).comments).toHaveLength(1);
   });
 
   it('refuses a comment on another task\'s revision', async () => {

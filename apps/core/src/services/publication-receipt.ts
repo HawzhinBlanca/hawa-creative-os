@@ -138,6 +138,11 @@ export async function readDeliveredRecords(
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '=', 'synced')
       .where('row_number', 'is not', null)
+      // Oldest first: the audit keeps the last row it sees for a task, which is then its latest sync
+      // rather than whichever row Postgres happened to return last.
+      .orderBy('synced_at')
+      .orderBy('updated_at')
+      .orderBy('id')
       .execute();
     return {
       driveFiles: files.map((f) => ({

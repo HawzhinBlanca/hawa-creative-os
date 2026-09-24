@@ -213,9 +213,10 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     // Authorized roles
     const roles = ['art_director', 'creative_director', 'client_reviewer', 'operator'];
     for (const role of roles) {
+      // The reviewer's role is the signed-in caller's (x-user-role here), not the body's.
       const res = await app.request(`/tasks/${task.taskId}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-role': role },
         body: JSON.stringify({
           nodeId: 'headline_layer_1',
           comment: `Looks great under ${role} review`,
@@ -234,7 +235,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
     // Unauthorized role fails with 403
     const forbiddenRes = await app.request(`/tasks/${task.taskId}/comments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-user-role': 'external_guest' },
       body: JSON.stringify({
         nodeId: 'headline_layer_1',
         comment: 'Illegal comment from unvetted account',

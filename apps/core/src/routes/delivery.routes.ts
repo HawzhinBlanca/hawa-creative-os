@@ -331,7 +331,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         taskId,
         status: 'COMPLETE',
         complete: true,
-        publicationReceipt: existingReceipt,
+        // Marked as stored, as a delivery adopted in deliverOmnichannel is: a caller counting
+        // deliveries told this one apart from a fresh one only by the marker.
+        alreadyCompleted: true,
+        publicationReceipt: { ...existingReceipt, detail: { verified: true, filesUploaded: existingReceipt.files.length, alreadyCompleted: true } },
         driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
         sheetRowUrl: spreadsheetId && existingReceipt.sheetRow?.rowNumber ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${existingReceipt.sheetRow.rowNumber}` : null,
         filesCount: existingReceipt.files.length,

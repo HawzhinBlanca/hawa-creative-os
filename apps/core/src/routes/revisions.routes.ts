@@ -137,7 +137,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const revisionId = c.req.param('revisionId');
     if (!db) return noDatabase(c, 'Design revisions');
     const rev = (await readRevisions(verifyRequestAuth(c), [revisionId])).get(revisionId);
-    if (!rev) return problem(c, 404, 'Revision Not Found');
+    // Another task's revision is not found here: its QA run would be recorded against this task.
+    if (!rev || rev.taskId !== taskId) return problem(c, 404, 'Revision Not Found');
 
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
@@ -428,7 +429,9 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
 
     const body = await c.req.json().catch(() => ({}));
     const allowedRoles = ['art_director', 'creative_director', 'client_reviewer', 'operator'];
-    const actorRole = body.author?.role || 'art_director';
+    // The role is the signed-in caller's. It used to come from the body, defaulting to art_director,
+    // so anyone signed in could file a comment as an art director, now kept for good.
+    const actorRole = auth.role;
 
     if (!allowedRoles.includes(actorRole)) {
       return problem(c, 403, 'Forbidden', `Role ${actorRole} is not permitted to submit review comments`);
@@ -504,8 +507,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     const found = await readRevisions(verifyRequestAuth(c), [fromRevId, toRevId]);
     const fromRev = found.get(fromRevId);
     const toRev = found.get(toRevId);
-    if (!fromRev || !toRev) {
-      return problem(c, 404, 'Revision Not Found', 'One or both revisions were not found');
+    if (!fromRev || !toRev || fromRev.taskId !== taskId || toRev.taskId !== taskId) {
+      return problem(c, 404, 'Revision Not Found', 'One or both revisions were not found for this task');
     }
 
     const baseManifest: any = {
