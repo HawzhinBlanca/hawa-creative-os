@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
-import { createStreamTicketStore, STREAM_TICKET_TTL_MS } from '../src/services/stream-tickets.js';
+import { createStreamTicketStore, STREAM_TICKET_TTL_MS, MAX_TICKETS_PER_CREDENTIAL } from '../src/services/stream-tickets.js';
 
 /**
  * Architecture programme 1.5 (ADR-037, 2026-09-24): the session token leaves the stream's address.
@@ -108,6 +108,33 @@ describe('stream tickets (POST /auth/stream-ticket, GET /events/stream?ticket=)'
   });
 });
 
+describe('a stream whose session ends', () => {
+  // With ADR-037 a stream that looks open means the Desk does not poll. A stream left open after its
+  // session ended would leave an idle tab with a frozen queue and no way to sign-in; ending it makes
+  // the browser reconnect, meet the 401 on the next ticket and show sign-in.
+  it('is closed at the next heartbeat', async () => {
+    const app = createApp();
+    const token = await signIn(app);
+    const { body } = await ticketFor(app, token);
+    const res = await app.request(`/v1/events/stream?ticket=${encodeURIComponent(body.ticket)}`, { headers: { 'x-enforce-auth': '1' } });
+    expect(res.status).toBe(200);
+    const reader = res.body!.getReader();
+    await reader.read(); // system:connected
+    await app.request('/v1/auth/session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const ended = await Promise.race([
+      (async () => {
+        for (;;) {
+          const r = await reader.read();
+          if (r.done) return true;
+        }
+      })(),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 20_000)),
+    ]);
+    expect(ended).toBe(true);
+    await reader.cancel().catch(() => undefined);
+  }, 30_000);
+});
+
 describe('the ticket store', () => {
   it('redeems a ticket once, for the credential it was issued with, and not after it expires', () => {
     let now = 1_000;
@@ -123,5 +150,16 @@ describe('the ticket store', () => {
     expect(store.outstanding()).toBe(0);
     expect(store.redeem(undefined)).toBeUndefined();
     expect(store.redeem('hawa_sess_a')).toBeUndefined();
+  });
+
+  it('lets one session asking in a loop spend only its own tickets, never another session\'s', () => {
+    const store = createStreamTicketStore();
+    const other = store.issue('hawa_sess_other');
+    const own = Array.from({ length: 20_000 }, () => store.issue('hawa_sess_loop').ticket);
+    expect(store.outstanding()).toBe(MAX_TICKETS_PER_CREDENTIAL + 1);
+    expect(store.redeem(other.ticket)).toBe('hawa_sess_other');
+    // Its newest tickets still work; its oldest were dropped.
+    expect(store.redeem(own[own.length - 1])).toBe('hawa_sess_loop');
+    expect(store.redeem(own[0])).toBeUndefined();
   });
 });

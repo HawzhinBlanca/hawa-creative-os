@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { WorkScreen } from './screens/WorkScreen.js';
-import { ClientsScreen } from './screens/ClientsScreen.js';
-import { SettingsScreen } from './screens/SettingsScreen.js';
-import { OpsScreen } from './screens/OpsScreen.js';
-import { EvalScreen } from './screens/EvalScreen.js';
-import { ComparisonScreen } from './screens/ComparisonScreen.js';
+
+// The Work queue is where the Desk opens, so it ships in the main chunk. The other screens load on
+// first visit: with TanStack Query added (ADR-037) one chunk would pass the 500 KiB budget CV-17 sets.
+const ClientsScreen = lazy(() => import('./screens/ClientsScreen.js').then((m) => ({ default: m.ClientsScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js').then((m) => ({ default: m.SettingsScreen })));
+const OpsScreen = lazy(() => import('./screens/OpsScreen.js').then((m) => ({ default: m.OpsScreen })));
+const EvalScreen = lazy(() => import('./screens/EvalScreen.js').then((m) => ({ default: m.EvalScreen })));
+const ComparisonScreen = lazy(() => import('./screens/ComparisonScreen.js').then((m) => ({ default: m.ComparisonScreen })));
 import { GuidedTour } from './components/GuidedTour.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
@@ -257,6 +260,7 @@ export const App: React.FC = () => {
           onOpenCommandPalette={() => setShowCommandPalette(true)}
         />
         <div className="content">
+          <Suspense fallback={<p role="status" style={{ color: 'var(--muted)' }}>Loading…</p>}>
           {sessionState.status === 'signed_out' && <SignIn reason={sessionState.reason} />}
           {sessionState.status === 'signed_in' && (currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
             <WorkScreen
@@ -273,6 +277,7 @@ export const App: React.FC = () => {
           {sessionState.status === 'signed_in' && currentScreen === 'ops' && <OpsScreen />}
           {sessionState.status === 'signed_in' && currentScreen === 'eval' && <EvalScreen />}
           {sessionState.status === 'signed_in' && currentScreen === 'comparison' && <ComparisonScreen />}
+          </Suspense>
         </div>
       </main>
 

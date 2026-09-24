@@ -117,6 +117,28 @@ describe('GET /tasks pages (PostgreSQL)', () => {
     expect((await list(`q=${encodeURIComponent(`ئاهەنگی کۆلێژ ${marker}x`)}`)).body.total).toBe(0);
   });
 
+  // Titles are often English while the Kurdish lives in the request's copy: the search reads the
+  // intake's headline and copy too, folded the same way.
+  it('finds a task by its Kurdish headline or copy when the title is English', async () => {
+    const res = await app.request('/v1/tasks', {
+      method: 'POST',
+      headers: operator,
+      body: JSON.stringify({
+        title: `Graduation ${marker}`,
+        headlineCkb: 'ڕێوڕەسمی دەرچوون',
+        copyCkb: 'بەخێربێن بۆ کۆلێژی پزیشکی',
+        idempotencyKey: `${marker}-copy`,
+      }),
+    });
+    expect(res.status).toBeLessThan(300);
+    const id = (await res.json()).id;
+    for (const typed of ['ڕێوڕەسمی دەرچوون', 'دهرچوون', 'كۆلێژي پزيشكي']) {
+      const found = await list(`q=${encodeURIComponent(typed)}&limit=200`);
+      expect(found.status, typed).toBe(200);
+      expect(found.body.items.map((t: any) => t.id), typed).toContain(id);
+    }
+  });
+
   it('refuses a cursor it did not issue and a client id that is not a UUID', async () => {
     expect((await list('cursor=bm90LWEtY3Vyc29y')).status).toBe(400);
     expect((await list('clientId=kaae')).status).toBe(400);

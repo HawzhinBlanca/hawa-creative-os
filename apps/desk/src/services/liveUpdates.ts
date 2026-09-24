@@ -9,9 +9,11 @@ import { POLL_WHILE_STREAM_DOWN_MS, queryKeys } from './queryClient.js';
  * The Work screen used to refresh itself: a 30 s poll, a read 1 s after each task event, a hand-made
  * debounce, one subscription per screen. Now one stream per tab feeds the cache:
  *
- * - a task event invalidates the list (`['tasks']`) and the task it names (`['task', id]`); the events
- *   of 300 ms are applied together, so a burst from one design run costs one read of the page on
- *   screen, and of each task it named;
+ * - a task event invalidates the list (`['tasks']`) and the task it names (`['task', id]`); events are
+ *   applied together once 300 ms pass without another (at the latest 1 s after the first), so a burst
+ *   from one design run costs one read of the page on screen, and of each task it named. A fixed
+ *   300 ms window cost one read per window for a run spread over longer, and each new invalidation
+ *   cancelled the read still under way;
  * - after the stream reconnects, everything is invalidated: events sent while it was away are lost;
  * - in a hidden tab the queries are only marked stale; the tab reads them once when it is shown
  *   (TanStack's refetch on focus), not once per event while nobody looks;
@@ -20,8 +22,10 @@ import { POLL_WHILE_STREAM_DOWN_MS, queryKeys } from './queryClient.js';
  * Nothing here changes a cached answer: it only says which answers to read again.
  */
 
-/** How long task events are gathered before the cache is told. */
+/** The pause after the last task event before the cache is told. */
 export const COALESCE_MS = 300;
+/** Under a steady stream of events, the cache is told at least this often. */
+export const COALESCE_MAX_WAIT_MS = 1_000;
 
 /** The part of the event stream (services/eventStream.ts) the Desk's server state uses. */
 export interface LiveEventSource {
@@ -69,6 +73,7 @@ export function bridgeTaskEvents(input: {
   const timers = input.timers ?? browserTimers;
 
   let pending: unknown = null;
+  let deadline: unknown = null;
   const named = new Set<string>();
   let up = false;
   let wasUp = false;
@@ -77,7 +82,10 @@ export function bridgeTaskEvents(input: {
   const refetchType = () => (doc?.hidden ? 'none' : 'active');
 
   const flush = () => {
+    if (pending !== null) timers.clearTimeout(pending);
+    if (deadline !== null) timers.clearTimeout(deadline);
     pending = null;
+    deadline = null;
     const ids = [...named];
     named.clear();
     void queryClient.invalidateQueries({ queryKey: queryKeys.tasks, refetchType: refetchType() });
@@ -87,7 +95,9 @@ export function bridgeTaskEvents(input: {
   const onTaskEvent = (data: unknown) => {
     const id = taskIdOf(data);
     if (id) named.add(id);
-    if (pending === null) pending = timers.setTimeout(flush, windowMs);
+    if (pending !== null) timers.clearTimeout(pending);
+    pending = timers.setTimeout(flush, windowMs);
+    if (deadline === null) deadline = timers.setTimeout(flush, Math.max(windowMs, COALESCE_MAX_WAIT_MS));
   };
 
   const unsubscribers = events.map((name) => stream.on(name, onTaskEvent));
@@ -105,7 +115,9 @@ export function bridgeTaskEvents(input: {
   return () => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
     if (pending !== null) timers.clearTimeout(pending);
+    if (deadline !== null) timers.clearTimeout(deadline);
     pending = null;
+    deadline = null;
   };
 }
 

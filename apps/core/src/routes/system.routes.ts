@@ -252,6 +252,18 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
     return streamSSE(c, async (stream) => {
       let closed = false;
+      // The callback holds the response open until `ended` resolves; streamSSE closes it on return.
+      let endStream: () => void = () => undefined;
+      const ended = new Promise<void>((resolve) => {
+        endStream = resolve;
+      });
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      const finish = () => {
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        subscribers.delete(subscriber as any);
+        endStream();
+      };
 
       const subscriber = (ev: { id: string; event: string; data: any }) => {
         if (closed) return;
@@ -280,10 +292,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
           id: ev.id,
           event: ev.event,
           data: JSON.stringify(ev.data),
-        }).catch(() => {
-          closed = true;
-          subscribers.delete(subscriber as any);
-        });
+        }).catch(finish);
       };
 
       subscribers.add(subscriber as any);
@@ -299,20 +308,15 @@ export function registerSystemRoutes(ctx: RouteContext) {
         }),
       });
 
-      // 2. Heartbeat Ping every 15 seconds
-      const heartbeat = setInterval(async () => {
-        if (closed) {
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
-          return;
-        }
+      // 2. Heartbeat Ping every 15 seconds. A session revoked or expired since the stream opened ends
+      // the response, not only the subscription: the browser's EventSource then reconnects, the ticket
+      // request meets the 401 and the Desk shows sign-in. An open but silent stream would read as
+      // "connected" to the Desk, which then neither polls nor signs out (ADR-037).
+      heartbeat = setInterval(async () => {
+        if (closed) return finish();
         const currentAuth = await authOf();
-        if (!currentAuth.authenticated) {
-          closed = true;
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
-          return;
-        }
+        if (closed) return;
+        if (!currentAuth.authenticated) return finish();
         try {
           await stream.writeSSE({
             id: crypto.randomUUID(),
@@ -320,23 +324,12 @@ export function registerSystemRoutes(ctx: RouteContext) {
             data: JSON.stringify({ ping: Date.now() }),
           });
         } catch {
-          closed = true;
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
+          finish();
         }
       }, 15000);
 
-      stream.onAbort(() => {
-        closed = true;
-        clearInterval(heartbeat);
-        subscribers.delete(subscriber as any);
-      });
-
-      await new Promise<void>((resolve) => {
-        stream.onAbort(() => {
-          resolve();
-        });
-      });
+      stream.onAbort(finish);
+      await ended;
     });
   });
 

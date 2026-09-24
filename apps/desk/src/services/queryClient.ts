@@ -11,7 +11,8 @@ import { reasonOf, type Reading } from './statusReport.js';
  * every screen but one. Here:
  *
  * - an answer is fresh for 30 s (a screen shown again within that reads nothing);
- * - a refused read (401, 403) is not retried; any other failure is retried at most twice;
+ * - a refused read (401, 403) or a missing one (404: a stale link, a deleted task) is not retried;
+ *   any other failure is retried at most twice;
  * - a mutation is never retried: approving or requesting changes has side effects on the server;
  * - every 401, from a query or a mutation, goes to one handler, which ends the session once.
  */
@@ -25,9 +26,9 @@ export const MAX_RETRIES = 2;
 
 export const isUnauthorized = (error: unknown): error is ApiError => error instanceof ApiError && error.status === 401;
 
-/** TanStack's `retry` option: never for 401 or 403 (asking again gets the same answer), else at most twice. */
+/** TanStack's `retry` option: never for 401, 403 or 404 (asking again gets the same answer), else at most twice. */
 export function retryUnlessRefused(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return false;
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) return false;
   return failureCount < MAX_RETRIES;
 }
 

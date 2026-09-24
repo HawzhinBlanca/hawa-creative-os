@@ -192,11 +192,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   }, [page, detail]);
 
   // The selection stays while its task is on the page (or was opened from a link); otherwise the
-  // first task of the page is selected.
+  // first task of the page is selected. Not while the previous page stands in for one being read.
+  const isPlaceholderPage = listQuery.isPlaceholderData;
   useEffect(() => {
-    if (!page) return;
+    if (!page || isPlaceholderPage) return;
     setSelectedTaskId((prev) => (prev && (page.items.some((t) => t.id === prev) || prev === initialTaskId) ? prev : page.items[0]?.id || ''));
-  }, [page, initialTaskId]);
+  }, [page, isPlaceholderPage, initialTaskId]);
 
   // While the stream is down the list is polled, and nothing names the task that changed: its detail
   // is read again when its list entry shows a change (not on every poll: the detail carries the

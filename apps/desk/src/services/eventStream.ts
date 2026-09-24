@@ -38,10 +38,15 @@ class EventStreamService {
   private maxReconnectDelayMs = 10000;
   private endpoint = '/v1/events/stream';
   private eventCount = 0;
-  /** A ticket is being fetched; the stream opens when it arrives. */
-  private opening = false;
+  /** The generation whose ticket is being fetched; the stream opens when it arrives. Keyed by
+   * generation, so a request left over from before a disconnect() does not block the next connect(). */
+  private openingGeneration: number | null = null;
   /** Bumped by disconnect(), so a ticket that arrives after it opens nothing. */
   private generation = 0;
+  /** Core pings every 15 s. An open stream silent for longer than this is treated as down, so the
+   * Desk polls and reconnects rather than trusting a stream that has stopped (ADR-037). */
+  private silenceLimitMs = 45_000;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // The stream is opened by the session (DeskProviders), once per tab, when the tab is signed in: it
   // needs a ticket, and a ticket needs a session. It used to open itself when this file loaded.
@@ -55,7 +60,7 @@ class EventStreamService {
   }
 
   public connect(): void {
-    if (this.eventSource || this.opening || typeof EventSource === 'undefined') {
+    if (this.eventSource || this.openingGeneration === this.generation || typeof EventSource === 'undefined') {
       return;
     }
 
@@ -64,16 +69,17 @@ class EventStreamService {
     // EventSource cannot send a header. The session token used to go in the stream's address, and so
     // into every access log on the way; now a one-use ticket, asked for with the bearer header, opens
     // the stream (ADR-037). Every reconnect asks for a new one.
-    this.opening = true;
     const generation = this.generation;
+    this.openingGeneration = generation;
     apiClient.auth.streamTicket().then(
       ({ ticket }) => {
-        this.opening = false;
-        if (generation === this.generation) this.open(`${this.endpoint}?ticket=${encodeURIComponent(ticket)}`);
+        if (generation !== this.generation) return;
+        this.openingGeneration = null;
+        this.open(`${this.endpoint}?ticket=${encodeURIComponent(ticket)}`);
       },
       () => {
-        this.opening = false;
         if (generation !== this.generation) return;
+        this.openingGeneration = null;
         this.setStatus('connecting');
         this.scheduleReconnect();
       }
@@ -83,18 +89,22 @@ class EventStreamService {
   private open(url: string): void {
     try {
       this.eventSource = new EventSource(url);
+      this.armSilenceTimer();
 
       this.eventSource.addEventListener('open', () => {
+        this.armSilenceTimer();
         this.setStatus('connected');
         this.reconnectAttempt = 0;
       });
 
       this.eventSource.addEventListener('system:connected', (event: MessageEvent) => {
+        this.armSilenceTimer();
         this.setStatus('connected');
         this.emit('system:connected', this.safeParse(event.data), event);
       });
 
       this.eventSource.addEventListener('system:ping', (event: MessageEvent) => {
+        this.armSilenceTimer();
         this.emit('system:ping', this.safeParse(event.data), event);
       });
 
@@ -112,6 +122,7 @@ class EventStreamService {
 
       domainEvents.forEach((eventType) => {
         this.eventSource?.addEventListener(eventType, (event: MessageEvent) => {
+          this.armSilenceTimer();
           this.eventCount++;
           const parsed = this.safeParse(event.data);
           this.emit(eventType, parsed, event);
@@ -141,7 +152,23 @@ class EventStreamService {
     this.setStatus('disconnected');
   }
 
+  /** (Re)starts the silence limit; when it runs out the stream is handled as if it had failed. */
+  private armSilenceTimer(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      this.silenceTimer = null;
+      if (!this.eventSource) return;
+      this.setStatus('connecting');
+      this.cleanup();
+      this.scheduleReconnect();
+    }, this.silenceLimitMs);
+  }
+
   private cleanup(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;

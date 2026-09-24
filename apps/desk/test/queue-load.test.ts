@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiClient } from '../src/api/client.js';
+import { ApiError, apiClient } from '../src/api/client.js';
 import { TASK_EVENTS } from '../src/services/eventStream.js';
 import { bridgeTaskEvents, pollIntervalFor, taskIdOf } from '../src/services/liveUpdates.js';
-import { POLL_WHILE_STREAM_DOWN_MS, queryKeys } from '../src/services/queryClient.js';
+import { POLL_WHILE_STREAM_DOWN_MS, queryKeys, retryUnlessRefused } from '../src/services/queryClient.js';
 import { inQueueFilter, queueFilterStatuses } from '../src/services/taskStatus.js';
 import { FakeStream } from './support/desk-harness.js';
 
@@ -14,7 +14,7 @@ import { FakeStream } from './support/desk-harness.js';
  *
  * Architecture programme 0.3 (2026-09-24) stopped the Work screen reading every page every 30 s and
  * 1 s after each event; ADR-037 (programme 1.5) replaced its hand-written refresh with the query
- * cache: the tab's one event stream invalidates what an event names, 300 ms of events at a time,
+ * cache: the tab's one event stream invalidates what an event names once events pause for 300 ms,
  * and nothing is polled while the stream is up. This drives the bridge (services/liveUpdates.ts) with
  * a fake stream and fake timers and records what it invalidates; test/server-state.test.ts counts the
  * requests of the rendered screen.
@@ -51,7 +51,22 @@ describe('task events reach the query cache (services/liveUpdates.ts bridgeTaskE
     stop();
   });
 
-  it('applies events at most every 300 ms under a steady stream of them, never later', async () => {
+  it('waits for a pause of 300 ms, so a run of events spread over more than 300 ms costs one read', async () => {
+    const stream = new FakeStream('connected');
+    const { client, invalidated } = recordingClient();
+    const stop = bridgeTaskEvents({ queryClient: client, stream });
+    // A design run: six events 150 ms apart (750 ms in all).
+    for (let i = 0; i < 6; i++) {
+      stream.emit('task:transitioned', { taskId: 't1' });
+      await vi.advanceTimersByTimeAsync(150);
+    }
+    expect(invalidated).toEqual([]);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(invalidated.filter((x) => x.key === queryKeys.tasks)).toHaveLength(1);
+    stop();
+  });
+
+  it('under a steady stream of events, applies them at least once a second (never later) and at most that often', async () => {
     const stream = new FakeStream('connected');
     const { client, invalidated } = recordingClient();
     const stop = bridgeTaskEvents({ queryClient: client, stream });
@@ -59,9 +74,10 @@ describe('task events reach the query cache (services/liveUpdates.ts bridgeTaskE
       stream.emit('task:transitioned', { taskId: 't1' });
       await vi.advanceTimersByTimeAsync(50);
     }
+    // 5 s of events, one every 50 ms: a pause never comes, so the 1 s cap applies them.
     const listReads = invalidated.filter((x) => x.key === queryKeys.tasks).length;
-    expect(listReads).toBeGreaterThanOrEqual(15);
-    expect(listReads).toBeLessThanOrEqual(17);
+    expect(listReads).toBeGreaterThanOrEqual(4);
+    expect(listReads).toBeLessThanOrEqual(5);
     stop();
   });
 
@@ -112,6 +128,15 @@ describe('task events reach the query cache (services/liveUpdates.ts bridgeTaskE
     expect(pollIntervalFor('connected')).toBe(false);
     expect(pollIntervalFor('connecting')).toBe(POLL_WHILE_STREAM_DOWN_MS);
     expect(pollIntervalFor('disconnected')).toBe(POLL_WHILE_STREAM_DOWN_MS);
+  });
+});
+
+describe('which failed reads are tried again (services/queryClient.ts retryUnlessRefused)', () => {
+  it('never a refusal or a missing task (a stale link), at most twice for anything else', () => {
+    for (const status of [401, 403, 404]) expect(retryUnlessRefused(0, new ApiError(status, 'no')), String(status)).toBe(false);
+    expect(retryUnlessRefused(0, new ApiError(503, 'busy'))).toBe(true);
+    expect(retryUnlessRefused(1, new TypeError('Failed to fetch'))).toBe(true);
+    expect(retryUnlessRefused(2, new ApiError(503, 'busy'))).toBe(false);
   });
 });
 

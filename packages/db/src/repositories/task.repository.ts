@@ -266,7 +266,10 @@ function searchPattern(search: string): string {
 /** The same folding in SQL: lower-case, then translate() with the same two lists. */
 const fold = (expr: RawBuilder<unknown>) => sql`translate(lower(${expr}), ${FOLD_FROM}, ${FOLD_TO})`;
 
-/** The filter every page and the total share. `t` is hawa.tasks. */
+/**
+ * The filter every page and the total share. `t` is hawa.tasks. The search also reads the request's
+ * headline and copy (the intake event), since titles are often English while the Kurdish lives there.
+ */
 function taskListFilter(params: TaskPageParams) {
   const conditions = [sql`t.tenant_id = ${params.tenantId}::uuid`, sql`t.deleted_at IS NULL`];
   if (params.clientId) conditions.push(sql`t.client_id = ${params.clientId}::uuid`);
@@ -278,6 +281,14 @@ function taskListFilter(params: TaskPageParams) {
       OR ${fold(sql`t.description`)} LIKE ${pattern} ESCAPE '\\'
       OR t.id::text LIKE ${pattern} ESCAPE '\\'
       OR EXISTS (SELECT 1 FROM hawa.clients cs WHERE cs.id = t.client_id AND ${fold(sql`cs.name`)} LIKE ${pattern} ESCAPE '\\')
+      OR EXISTS (
+        SELECT 1 FROM (
+          SELECT CASE WHEN jsonb_typeof(e.data -> 'payload') = 'object' THEN e.data -> 'payload' ELSE e.data END AS p
+          FROM hawa.task_events e
+          WHERE e.task_id = t.id AND e.event_type = 'task.created'
+        ) ev
+        WHERE ${fold(sql`concat_ws(' ', ${intakeText('headlineCkb')}, ${intakeText('copyCkb')}, ${intakeText('headlineEn')}, ${intakeText('copyEn')})`)} LIKE ${pattern} ESCAPE '\\'
+      )
     )`);
   }
   return conditions;
