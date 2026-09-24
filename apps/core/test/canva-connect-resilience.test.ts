@@ -28,6 +28,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
   let refreshCalls: number;
   let exportCreates: number;
   let exportCreateHttp: number;
+  /** Refusals Canva answers to POST /exports before exportCreateHttp applies (chaos R1.K9). */
+  let exportCreateFaults: number[];
   let service: CanvaConnectService;
   const remote = vi.fn(async (input: any, init: any = {}) => {
     const u = String(input);
@@ -49,6 +51,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
       return Response.json({ job: { id: u.split('/imports/')[1], status: importStatus, ...(importStatus === 'success' ? { result: { designs: [{ id: designId, urls: { edit_url: 'https://www.canva.com/d/x', view_url: 'https://www.canva.com/d/y' } }] } } : {}) } });
     }
     if (u.endsWith('/exports') && init.method === 'POST') {
+      const fault = exportCreateFaults.shift();
+      if (fault) return new Response('{"code":"internal_error"}', { status: fault, headers: fault === 429 ? { 'Retry-After': '0' } : {} });
       exportCreates++;
       if (exportCreateHttp !== 200) return new Response('{"code":"too_many_requests"}', { status: exportCreateHttp });
       return Response.json({ job: { id: 'export_' + taskId + '_' + exportCreates, status: 'in_progress' } });
@@ -58,7 +62,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     }
     throw new Error('Unexpected provider path ' + u);
   }) as typeof fetch;
-  const options = { clientId: 'test-client', clientSecret: 'test-secret', redirectUri: 'http://localhost:8772/v1/integrations/canva/callback', encryptionKey: key, fetcher: remote };
+  const options = { clientId: 'test-client', clientSecret: 'test-secret', redirectUri: 'http://localhost:8772/v1/integrations/canva/callback', encryptionKey: key, fetcher: remote,
+    retryDelaysMs: { read: [1, 1], create: [1, 1, 1, 1] } };
   const source = () => {
     const bytes = Buffer.from('Hunt-only editable PPTX source bytes, long enough for the transport check.');
     return { bytes, sha256: createHash('sha256').update(bytes).digest('hex'), manifest: { copy: ['Exact hunt copy'] } };
@@ -81,6 +86,7 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     refreshCalls = 0;
     exportCreates = 0;
     exportCreateHttp = 200;
+    exportCreateFaults = [];
     await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES (${taskId}::uuid,${tenant}::uuid,${clientId}::uuid,'Hunt Canva task')`.execute(db);
     service = new CanvaConnectService(db, options);
     const auth = await service.startAuthorization(scope);
@@ -148,6 +154,15 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     exportCreateHttp = 200;
     const again = await service.startExport(scope, taskId, 'desk-capture-hunt', 'png', 1).then((r) => r.status, (e) => String(e?.code));
     expect({ refused: refused.status, again }).toEqual({ refused: 'failed', again: 'submitted' });
+  });
+
+  it('a Canva 503 three times and a 429 on POST /exports are asked again: one export job, submitted (chaos R1.K9)', async () => {
+    const binding = await service.importEditableDesign(scope, taskId, 'studio-plan-eeee', source());
+    importStatus = 'success';
+    await service.resumeImport(scope, taskId, binding.operationId);
+    exportCreateFaults = [503, 503, 503, 429];
+    const preview = await service.startExport(scope, taskId, 'workflow-preview-k9', 'png', 1);
+    expect({ status: preview.status, faultsLeft: exportCreateFaults.length, jobsCreated: exportCreates }).toEqual({ status: 'submitted', faultsLeft: 0, jobsCreated: 1 });
   });
 
   it('a second Canva call during a token refresh is served, not refused as CANVA_RECONNECT_REQUIRED', async () => {

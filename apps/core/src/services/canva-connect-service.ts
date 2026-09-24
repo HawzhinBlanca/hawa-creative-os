@@ -1,7 +1,7 @@
 import { checkCanvaPptx } from '@hawa/qa';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql, withRlsContext, CanvaBindingRepository, type Database, type Kysely } from '@hawa/db';
-import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError } from '@hawa/integrations';
+import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestNeverSent } from '@hawa/integrations';
 
 type Scope = { tenantId: string; actorId: string; role?: string };
 export class CanvaFlowError extends Error {
@@ -15,19 +15,13 @@ const hash = (v: string | Buffer) => createHash('sha256').update(v).digest('hex'
  */
 const OVERRIDE_ROLES = ['administrator', 'art_director'];
 const overrides = (s: Scope) => OVERRIDE_ROLES.includes(s.role || '');
-/** Network errors raised before a connection to Canva existed: the request never left. */
-const PRE_SEND_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
-const notSent = (err: unknown) => {
-  const code = (err as { cause?: { code?: unknown } } | null)?.cause?.code;
-  return typeof code === 'string' && PRE_SEND_CODES.has(code);
-};
 /**
  * A failed create call that certainly created nothing: Canva answered with an error, or the request
  * never left. Only a loss after the request was sent leaves the outcome unknown ('uncertain'). A 429
  * on POST /exports was recorded as uncertain and then blocked every later export of the format with
  * CANVA_EXPORT_PENDING (2026-09-24).
  */
-const createdNothing = (err: unknown) => err instanceof CanvaHttpError || notSent(err);
+const createdNothing = (err: unknown) => err instanceof CanvaHttpError || canvaRequestNeverSent(err);
 /** A Canva connection row as the token refresh reads it. */
 type ConnectionRow = { status: string; generation: string; encrypted_tokens: string; expires_at: Date; claimedRefresh?: boolean; refresh_abandoned?: boolean };
 export class CanvaTokenCipher {
@@ -51,6 +45,11 @@ export class CanvaTokenCipher {
 export interface CanvaServiceOptions {
   clientId?: string; clientSecret?: string; redirectUri?: string; encryptionKey?: string;
   fetcher?: typeof fetch;
+  /**
+   * The client's waits between attempts (packages/integrations canva-connect-client.ts): status reads,
+   * and create calls Canva refused for the moment. Tests shorten them; production keeps the defaults.
+   */
+  retryDelaysMs?: { read?: number[]; create?: number[] };
 }
 /**
  * The blocks of a studio design in shape order, each with the face it was sent in: a manifest with
@@ -87,7 +86,8 @@ export class CanvaConnectService {
   }
   private client(token?: string, refreshToken?: string) {
     return new CanvaConnectClient({ clientId: this.options.clientId, clientSecret: this.options.clientSecret,
-      accessToken: token, refreshToken, customFetch: this.options.fetcher });
+      accessToken: token, refreshToken, customFetch: this.options.fetcher,
+      readRetryDelaysMs: this.options.retryDelaysMs?.read, createRetryDelaysMs: this.options.retryDelaysMs?.create });
   }
   private tx<T>(s: Scope, f: (db: Kysely<Database>) => Promise<T>): Promise<T> {
     return withRlsContext(this.db, { tenantId: s.tenantId, userId: s.actorId, role: s.role || 'operator' }, f);
@@ -179,7 +179,7 @@ export class CanvaConnectService {
       // on the token endpoint included.
       const status = err instanceof CanvaHttpError ? err.status : undefined;
       const grantRefused = err instanceof CanvaHttpError && err.oauthError === 'invalid_grant';
-      if (!grantRefused && (status !== undefined || notSent(err))) {
+      if (!grantRefused && (status !== undefined || canvaRequestNeverSent(err))) {
         await release('active');
         if (status === undefined || status === 429 || status >= 500) fail(503,'CANVA_TEMPORARILY_UNAVAILABLE','Canva could not refresh the connection just now; retry shortly');
         fail(502,'CANVA_TOKEN_REFRESH_REFUSED',`Canva refused the token refresh (HTTP ${status}); check the Canva integration settings`);
