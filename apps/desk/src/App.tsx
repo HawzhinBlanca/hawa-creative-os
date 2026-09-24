@@ -1,20 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { WorkScreen } from './screens/WorkScreen.js';
-import { ClientsScreen } from './screens/ClientsScreen.js';
-import { SettingsScreen } from './screens/SettingsScreen.js';
-import { OpsScreen } from './screens/OpsScreen.js';
-import { EvalScreen } from './screens/EvalScreen.js';
-import { ComparisonScreen } from './screens/ComparisonScreen.js';
+
+// The Work queue is where the Desk opens, so it ships in the main chunk. The other screens load on
+// first visit: with TanStack Query added (ADR-037) one chunk would pass the 500 KiB budget CV-17 sets.
+const ClientsScreen = lazy(() => import('./screens/ClientsScreen.js').then((m) => ({ default: m.ClientsScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen.js').then((m) => ({ default: m.SettingsScreen })));
+const OpsScreen = lazy(() => import('./screens/OpsScreen.js').then((m) => ({ default: m.OpsScreen })));
+const EvalScreen = lazy(() => import('./screens/EvalScreen.js').then((m) => ({ default: m.EvalScreen })));
+const ComparisonScreen = lazy(() => import('./screens/ComparisonScreen.js').then((m) => ({ default: m.ComparisonScreen })));
 import { GuidedTour } from './components/GuidedTour.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { draftStore } from './services/draftStore.js';
 import { submitManualTask, getPendingManualDraft } from './services/manualTaskIntake.js';
 import { useI18n } from './services/i18n.js';
+import { SignIn } from './components/SignIn.js';
+import { useSessionState, useSessionUser } from './DeskProviders.js';
+import { queryKeys } from './services/queryClient.js';
 
 export const App: React.FC = () => {
   const { t, isRtl } = useI18n();
+  const queryClient = useQueryClient();
+  // Signed out (never signed in, signed out, or a session Core ended), the App shows sign-in in place
+  // of any screen. The session read stays mounted while signed in, so an ended session is noticed on
+  // every screen, not only the Work queue (ADR-037).
+  const sessionState = useSessionState();
+  useSessionUser();
 
   const getInitialScreen = (): ScreenId => {
     if (typeof window !== 'undefined') {
@@ -121,7 +134,6 @@ export const App: React.FC = () => {
   const [taskReferenceAssets, setTaskReferenceAssets] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [, setRefreshCount] = useState<number>(0);
   const [selectedClientId, setSelectedClientId] = useState('c1000000-0000-4000-8000-000000000002');
   const taskTitleInputRef = useRef<HTMLInputElement>(null);
 
@@ -221,7 +233,7 @@ export const App: React.FC = () => {
         clientId: selectedClientId, designInstructions: taskDesignInstructions, referenceAssets: taskReferenceAssets });
       draftStore.clearActiveDraft();
       setSelectedTask(data);
-      setRefreshCount((k) => k + 1);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       setShowNewTaskModal(false);
       setTaskTitle('');
       setTaskCopyEn('');
@@ -248,7 +260,9 @@ export const App: React.FC = () => {
           onOpenCommandPalette={() => setShowCommandPalette(true)}
         />
         <div className="content">
-          {(currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
+          <Suspense fallback={<p role="status" style={{ color: 'var(--muted)' }}>Loading…</p>}>
+          {sessionState.status === 'signed_out' && <SignIn reason={sessionState.reason} />}
+          {sessionState.status === 'signed_in' && (currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
             <WorkScreen
               initialTaskId={selectedTask?.id}
               onNavigateToClients={() => handleNavigate('clients')}
@@ -256,13 +270,14 @@ export const App: React.FC = () => {
               onNewTask={handleOpenModal}
             />
           )}
-          {(currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
+          {sessionState.status === 'signed_in' && (currentScreen === 'clients' || currentScreen === 'dna' || currentScreen === 'library') && (
             <ClientsScreen initialView={currentScreen === 'library' ? 'library' : 'dna'} />
           )}
-          {currentScreen === 'settings' && <SettingsScreen />}
-          {currentScreen === 'ops' && <OpsScreen />}
-          {currentScreen === 'eval' && <EvalScreen />}
-          {currentScreen === 'comparison' && <ComparisonScreen />}
+          {sessionState.status === 'signed_in' && currentScreen === 'settings' && <SettingsScreen />}
+          {sessionState.status === 'signed_in' && currentScreen === 'ops' && <OpsScreen />}
+          {sessionState.status === 'signed_in' && currentScreen === 'eval' && <EvalScreen />}
+          {sessionState.status === 'signed_in' && currentScreen === 'comparison' && <ComparisonScreen />}
+          </Suspense>
         </div>
       </main>
 

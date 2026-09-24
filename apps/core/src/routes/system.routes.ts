@@ -30,6 +30,9 @@ export function registerSystemRoutes(ctx: RouteContext) {
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
+    ensureSessionLoaded,
+    bearerTokenOf,
+    streamTickets,
   } = ctx;
 
   const maskKey = (key?: string) => {
@@ -224,15 +227,43 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 200);
   });
 
-  // Real-time Server-Sent Events (SSE) Stream
-  registerRoute('get', '/events/stream', (c: any) => {
-    const auth = verifyRequestAuth(c);
+  // Real-time Server-Sent Events (SSE) Stream. A browser's EventSource cannot send a header, so the
+  // Desk opens it with a one-use ticket (`?ticket=`, from POST /auth/stream-ticket) instead of its
+  // session token, which it used to put in the address (ADR-037). A client that can send a header
+  // still may. The route authenticates itself (registerRoute's SELF_AUTHENTICATED_READS in app.ts):
+  // the ticket is the credential, and a ticket that is unknown, used or expired is refused outright,
+  // never answered with whatever else the request carries.
+  registerRoute('get', '/events/stream', async (c: any) => {
+    const ticket = c.req.query('ticket');
+    const credential = ticket !== undefined ? streamTickets?.redeem(ticket) : bearerTokenOf?.(c);
+    if (ticket !== undefined && !credential) {
+      return problem(c, 401, 'Authentication Required', 'This stream ticket is unknown, used or expired; ask for a new one');
+    }
+    // The credential is checked again on every heartbeat, from the database when the session cache is
+    // due: a session revoked or expired while the stream is open closes it.
+    const authOf = async () => {
+      if (credential) await ensureSessionLoaded?.(credential);
+      return ticket !== undefined ? verifyRequestAuth(c, credential) : verifyRequestAuth(c);
+    };
+    const auth = await authOf();
     if (!auth.authenticated) {
       return problem(c, 401, 'Authentication Required', 'Sign in to stream system events');
     }
 
     return streamSSE(c, async (stream) => {
       let closed = false;
+      // The callback holds the response open until `ended` resolves; streamSSE closes it on return.
+      let endStream: () => void = () => undefined;
+      const ended = new Promise<void>((resolve) => {
+        endStream = resolve;
+      });
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      const finish = () => {
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        subscribers.delete(subscriber as any);
+        endStream();
+      };
 
       const subscriber = (ev: { id: string; event: string; data: any }) => {
         if (closed) return;
@@ -261,10 +292,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
           id: ev.id,
           event: ev.event,
           data: JSON.stringify(ev.data),
-        }).catch(() => {
-          closed = true;
-          subscribers.delete(subscriber as any);
-        });
+        }).catch(finish);
       };
 
       subscribers.add(subscriber as any);
@@ -280,20 +308,15 @@ export function registerSystemRoutes(ctx: RouteContext) {
         }),
       });
 
-      // 2. Heartbeat Ping every 15 seconds
-      const heartbeat = setInterval(async () => {
-        if (closed) {
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
-          return;
-        }
-        const currentAuth = verifyRequestAuth(c);
-        if (!currentAuth.authenticated) {
-          closed = true;
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
-          return;
-        }
+      // 2. Heartbeat Ping every 15 seconds. A session revoked or expired since the stream opened ends
+      // the response, not only the subscription: the browser's EventSource then reconnects, the ticket
+      // request meets the 401 and the Desk shows sign-in. An open but silent stream would read as
+      // "connected" to the Desk, which then neither polls nor signs out (ADR-037).
+      heartbeat = setInterval(async () => {
+        if (closed) return finish();
+        const currentAuth = await authOf();
+        if (closed) return;
+        if (!currentAuth.authenticated) return finish();
         try {
           await stream.writeSSE({
             id: crypto.randomUUID(),
@@ -301,23 +324,12 @@ export function registerSystemRoutes(ctx: RouteContext) {
             data: JSON.stringify({ ping: Date.now() }),
           });
         } catch {
-          closed = true;
-          clearInterval(heartbeat);
-          subscribers.delete(subscriber as any);
+          finish();
         }
       }, 15000);
 
-      stream.onAbort(() => {
-        closed = true;
-        clearInterval(heartbeat);
-        subscribers.delete(subscriber as any);
-      });
-
-      await new Promise<void>((resolve) => {
-        stream.onAbort(() => {
-          resolve();
-        });
-      });
+      stream.onAbort(finish);
+      await ended;
     });
   });
 

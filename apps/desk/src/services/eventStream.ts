@@ -1,4 +1,3 @@
-import { getAuthToken } from './auth.js';
 import { parseTaskTransitioned, type TaskTransitionedEvent } from '@hawa/contracts/task-status';
 
 /**
@@ -14,6 +13,7 @@ export function readTaskTransitioned(data: unknown): { move: TaskTransitionedEve
   const taskId = (data as { taskId?: unknown } | null)?.taskId;
   return { move: null, taskId: typeof taskId === 'string' && taskId ? taskId : null };
 }
+import { apiClient } from '../api/client.js';
 
 export type StreamConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
@@ -53,13 +53,18 @@ class EventStreamService {
   private maxReconnectDelayMs = 10000;
   private endpoint = '/v1/events/stream';
   private eventCount = 0;
+  /** The generation whose ticket is being fetched; the stream opens when it arrives. Keyed by
+   * generation, so a request left over from before a disconnect() does not block the next connect(). */
+  private openingGeneration: number | null = null;
+  /** Bumped by disconnect(), so a ticket that arrives after it opens nothing. */
+  private generation = 0;
+  /** Core pings every 15 s. An open stream silent for longer than this is treated as down, so the
+   * Desk polls and reconnects rather than trusting a stream that has stopped (ADR-037). */
+  private silenceLimitMs = 45_000;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
-    // Automatically connect on initialization in browser context
-    if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
-      this.connect();
-    }
-  }
+  // The stream is opened by the session (DeskProviders), once per tab, when the tab is signed in: it
+  // needs a ticket, and a ticket needs a session. It used to open itself when this file loaded.
 
   public getStatus(): StreamConnectionStatus {
     return this.status;
@@ -70,28 +75,51 @@ class EventStreamService {
   }
 
   public connect(): void {
-    if (this.eventSource) {
+    if (this.eventSource || this.openingGeneration === this.generation || typeof EventSource === 'undefined') {
       return;
     }
 
     this.setStatus('connecting');
 
+    // EventSource cannot send a header. The session token used to go in the stream's address, and so
+    // into every access log on the way; now a one-use ticket, asked for with the bearer header, opens
+    // the stream (ADR-037). Every reconnect asks for a new one.
+    const generation = this.generation;
+    this.openingGeneration = generation;
+    apiClient.auth.streamTicket().then(
+      ({ ticket }) => {
+        if (generation !== this.generation) return;
+        this.openingGeneration = null;
+        this.open(`${this.endpoint}?ticket=${encodeURIComponent(ticket)}`);
+      },
+      () => {
+        if (generation !== this.generation) return;
+        this.openingGeneration = null;
+        this.setStatus('connecting');
+        this.scheduleReconnect();
+      }
+    );
+  }
+
+  private open(url: string): void {
     try {
-      // EventSource cannot send headers; the stream accepts the session token as a query parameter.
-      const token = getAuthToken();
-      this.eventSource = new EventSource(token ? `${this.endpoint}?access_token=${encodeURIComponent(token)}` : this.endpoint);
+      this.eventSource = new EventSource(url);
+      this.armSilenceTimer();
 
       this.eventSource.addEventListener('open', () => {
+        this.armSilenceTimer();
         this.setStatus('connected');
         this.reconnectAttempt = 0;
       });
 
       this.eventSource.addEventListener('system:connected', (event: MessageEvent) => {
+        this.armSilenceTimer();
         this.setStatus('connected');
         this.emit('system:connected', this.safeParse(event.data), event);
       });
 
       this.eventSource.addEventListener('system:ping', (event: MessageEvent) => {
+        this.armSilenceTimer();
         this.emit('system:ping', this.safeParse(event.data), event);
       });
 
@@ -109,6 +137,7 @@ class EventStreamService {
 
       domainEvents.forEach((eventType) => {
         this.eventSource?.addEventListener(eventType, (event: MessageEvent) => {
+          this.armSilenceTimer();
           this.eventCount++;
           const parsed = this.safeParse(event.data);
           this.emit(eventType, parsed, event);
@@ -128,6 +157,8 @@ class EventStreamService {
   }
 
   public disconnect(): void {
+    this.generation++;
+    this.reconnectAttempt = 0; // the next session starts without the last one's backoff
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -136,7 +167,23 @@ class EventStreamService {
     this.setStatus('disconnected');
   }
 
+  /** (Re)starts the silence limit; when it runs out the stream is handled as if it had failed. */
+  private armSilenceTimer(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      this.silenceTimer = null;
+      if (!this.eventSource) return;
+      this.setStatus('connecting');
+      this.cleanup();
+      this.scheduleReconnect();
+    }, this.silenceLimitMs);
+  }
+
   private cleanup(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;

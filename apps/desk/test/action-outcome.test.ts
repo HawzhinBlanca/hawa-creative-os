@@ -39,16 +39,15 @@ describe('the Work screen reports what Approve and Deliver actually did (2026-09
     });
   });
 
-  it('does not call a succeeded approval or delivery failed when only the refresh after it fails', () => {
-    const source = workScreen();
-    for (const name of ['handleApprove', 'handleDeliver']) {
-      const body = handler(source, name);
-      expect(body).toMatch(/await apiClient\.tasks\.get(<LiveTask>)?\(taskId\)\.catch\(\(\) => null\)/);
-      // The "failed" toast belongs to the action's own call only.
-      const failed = body.indexOf(name === 'handleApprove' ? 'Approval failed' : 'Delivery failed');
-      expect(failed).toBeGreaterThan(-1);
-      expect(failed).toBeLessThan(body.indexOf('apiClient.tasks.get'));
-    }
+  // Approval is a mutation since ADR-037; test/server-state.test.ts renders a recorded approval whose
+  // read afterwards fails. Delivery keeps its handler.
+  it('does not call a succeeded delivery failed when only the refresh after it fails', () => {
+    const body = handler(workScreen(), 'handleDeliver');
+    expect(body).toMatch(/const refreshedTask = await readTaskAgain\(taskId\);/);
+    // The "failed" toast belongs to the action's own call only.
+    const failed = body.indexOf('Delivery failed');
+    expect(failed).toBeGreaterThan(-1);
+    expect(failed).toBeLessThan(body.indexOf('readTaskAgain'));
   });
 
   it('shows the signed-in role instead of a role picker that was never sent, and an operator cannot approve', () => {

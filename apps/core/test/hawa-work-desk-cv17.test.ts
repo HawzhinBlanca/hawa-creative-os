@@ -126,13 +126,20 @@ describe('CV-17: Lean Hawa Work Desk Architecture & Contract Tests', () => {
     const deskDist = path.resolve(__dirname, '../../desk/dist/assets');
     expect(fs.existsSync(deskDist)).toBe(true);
 
-    const files = fs.readdirSync(deskDist);
-    const jsFile = files.find((f) => f.endsWith('.js'));
-    expect(jsFile).toBeDefined();
+    // The budget is for the entry chunk index.html loads. Since ADR-037 the secondary screens are
+    // separate chunks loaded on first visit, so "the first .js file in the folder" is no longer it.
+    const indexHtml = fs.readFileSync(path.resolve(deskDist, '../index.html'), 'utf8');
+    const entry = /<script type="module"[^>]*src="\/assets\/([^"]+\.js)"/.exec(indexHtml)?.[1];
+    expect(entry).toBeDefined();
 
-    const jsStat = fs.statSync(path.join(deskDist, jsFile!));
+    const jsStat = fs.statSync(path.join(deskDist, entry!));
     // Size must be less than 500 KB (previously ~2,000 KB)
     expect(jsStat.size).toBeLessThan(500 * 1024);
     expect(jsStat.size).toBeGreaterThan(100 * 1024);
+
+    // No lazily loaded chunk may exceed the budget either.
+    for (const f of fs.readdirSync(deskDist).filter((name) => name.endsWith('.js'))) {
+      expect(fs.statSync(path.join(deskDist, f)).size).toBeLessThan(500 * 1024);
+    }
   });
 });

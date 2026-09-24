@@ -91,9 +91,16 @@ export interface TaskTimelineEvent {
   occurredAt?: string;
 }
 
+/** A one-use ticket that opens the event stream (Core: POST /auth/stream-ticket, ADR-037). */
+export interface StreamTicket {
+  ticket: string;
+  /** Epoch milliseconds. */
+  expiresAt: number;
+}
+
 class HawaApiClient {
   private basePrefix = '/v1';
-  private sessionEndedListeners = new Set<(reason: string, hadSession: boolean) => void>();
+  private unauthorizedHint: ((error: ApiError) => void) | null = null;
 
   private getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
@@ -145,21 +152,20 @@ class HawaApiClient {
         } catch {}
       }
 
-      // Every 401 is a session Core no longer accepts (expired after 24 hours, revoked, or never
-      // signed in), whoever asked. Only the queue used to notice; a panel that swallowed it left the
-      // Desk frozen on stale data after the session expired (2026-09-24). The sign-in call's own
-      // 401 is a wrong key, which the sign-in form reports.
-      if (response.status === 401 && !url.endsWith('/auth/session')) {
-        this.sessionEndedListeners.forEach((listener) => {
-          try {
-            listener(errorMsg, Boolean(headers.Authorization));
-          } catch (err) {
-            console.error('Error in session-ended listener:', err);
-          }
-        });
+      const error = new ApiError(response.status, errorMsg, problem);
+      // A 401 may mean the session ended (expired after 24 hours or revoked). The Desk signs out in one
+      // place only, the query cache's error handler (services/queryClient.ts, ADR-037); a call made
+      // outside a query (a panel's action, a screen not yet on the query layer) only tells it to check
+      // the session now. The sign-in call's own 401 is a wrong key, which the sign-in form reports.
+      if (response.status === 401 && !(url.endsWith('/auth/session') && (options.method || 'GET') === 'POST')) {
+        try {
+          this.unauthorizedHint?.(error);
+        } catch (err) {
+          console.error('Error in the unauthorized hint:', err);
+        }
       }
 
-      throw new ApiError(response.status, errorMsg, problem);
+      throw error;
     }
 
     if (response.status === 204) {
@@ -207,14 +213,18 @@ class HawaApiClient {
     },
 
     /**
-     * Called whenever a request is refused with 401, with Core's reason and whether a session token
-     * was sent. Returns the unsubscribe.
+     * A ticket for the event stream, asked for with the bearer header. EventSource cannot send a
+     * header, and the session token the Desk put in the stream's address instead was written to every
+     * access log on the way; a ticket opens one stream, once, within 60 s (ADR-037).
      */
-    onSessionEnded: (listener: (reason: string, hadSession: boolean) => void): (() => void) => {
-      this.sessionEndedListeners.add(listener);
-      return () => {
-        this.sessionEndedListeners.delete(listener);
-      };
+    streamTicket: (): Promise<StreamTicket> => this.request<StreamTicket>('/auth/stream-ticket', { method: 'POST' }),
+
+    /**
+     * The one function told of a 401 (see `request`); the Desk sets it once, to a session check. Null
+     * clears it.
+     */
+    setUnauthorizedHint: (hint: ((error: ApiError) => void) | null): void => {
+      this.unauthorizedHint = hint;
     },
   };
 

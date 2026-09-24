@@ -91,7 +91,8 @@ export interface RouteContext {
   subscribers: Set<any>;
 
   // Shared utility functions
-  verifyRequestAuth: (c: any) => AuthContext;
+  /** `ticketCredential`: the bearer token a redeemed stream ticket stood for (the event stream only). */
+  verifyRequestAuth: (c: any, ticketCredential?: string) => AuthContext;
   problem: (c: any, status: number, title: string, detail?: string, ext?: Record<string, any>) => Response;
   broadcastEvent: (type: string, data: any) => void;
   honestHealthHandler: (c: any) => Promise<Response>;
@@ -101,6 +102,8 @@ export interface RouteContext {
   saveSession?: (token: string, session: any) => void;
   persistSession?: (token: string, session: any) => Promise<boolean>;
   revokeSession?: (token: string) => Promise<void>;
+  /** One-use stream tickets (services/stream-tickets.ts, ADR-037). */
+  streamTickets?: import('../services/stream-tickets.js').StreamTicketStore;
   clientRepo?: any;
   options?: any;
 }

@@ -175,16 +175,43 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(n, TASK_PAGE_MAX_LIMIT);
 }
 
-/** The search text as a LIKE pattern, with the Arabic-keyboard ي/ى and ك folded to Sorani ی and ک (as the Desk folds them). */
+/**
+ * Letters one Kurdish word can be typed with, folded to one before the search compares (both the
+ * search text and the stored text). Sorani is stored as the office writes it, with ە (U+06D5) for the
+ * vowel, ی and ک; an Arabic keyboard has none of these and types ه (usually with a zero-width
+ * non-joiner after it), ي or ى, and ك. Architecture programme 1.5 (2026-09-24) added the ە/ه pair and
+ * the joiners: a Kurdish title typed on an Arabic keyboard was never found.
+ *
+ * FOLD_FROM[i] becomes FOLD_TO[i]; the characters past the end of FOLD_TO (the zero-width non-joiner
+ * and the tatweel, which only shape the text) are dropped, as SQL translate() drops them.
+ */
+const FOLD_FROM = '\u064A\u0649\u0643\u06D5\u06BE\u200C\u0640'; // ي ى ك ە ھ ZWNJ tatweel
+const FOLD_TO = '\u06CC\u06CC\u06A9\u0647\u0647'; // ی ی ک ه ه
+
+/** `text` folded as the search compares it (see FOLD_FROM): lower case, one letter per variant. */
+function foldSearchText(text: string): string {
+  let out = '';
+  for (const ch of text.toLowerCase()) {
+    const i = FOLD_FROM.indexOf(ch);
+    if (i < 0) out += ch;
+    else if (i < FOLD_TO.length) out += FOLD_TO[i];
+  }
+  return out;
+}
+
+/** The search text as a LIKE pattern, folded (see FOLD_FROM). */
 function searchPattern(search: string): string {
-  const folded = search.trim().toLowerCase().replace(/[يى]/g, 'ی').replace(/ك/g, 'ک');
+  const folded = foldSearchText(search.trim());
   return `%${folded.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 }
 
-/** The same folding in SQL: lower-case, then ي and ى to ی and ك to ک. */
-const fold = (expr: RawBuilder<unknown>) => sql`translate(lower(${expr}), 'يىك', 'ییک')`;
+/** The same folding in SQL: lower-case, then translate() with the same two lists. */
+const fold = (expr: RawBuilder<unknown>) => sql`translate(lower(${expr}), ${FOLD_FROM}, ${FOLD_TO})`;
 
-/** The filter every page and the total share. `t` is hawa.tasks. */
+/**
+ * The filter every page and the total share. `t` is hawa.tasks. The search also reads the request's
+ * headline and copy (the intake event), since titles are often English while the Kurdish lives there.
+ */
 function taskListFilter(params: TaskPageParams) {
   const conditions = [sql`t.tenant_id = ${params.tenantId}::uuid`, sql`t.deleted_at IS NULL`];
   if (params.clientId) conditions.push(sql`t.client_id = ${params.clientId}::uuid`);
@@ -196,6 +223,14 @@ function taskListFilter(params: TaskPageParams) {
       OR ${fold(sql`t.description`)} LIKE ${pattern} ESCAPE '\\'
       OR t.id::text LIKE ${pattern} ESCAPE '\\'
       OR EXISTS (SELECT 1 FROM hawa.clients cs WHERE cs.id = t.client_id AND ${fold(sql`cs.name`)} LIKE ${pattern} ESCAPE '\\')
+      OR EXISTS (
+        SELECT 1 FROM (
+          SELECT CASE WHEN jsonb_typeof(e.data -> 'payload') = 'object' THEN e.data -> 'payload' ELSE e.data END AS p
+          FROM hawa.task_events e
+          WHERE e.task_id = t.id AND e.event_type = 'task.created'
+        ) ev
+        WHERE ${fold(sql`concat_ws(' ', ${intakeText('headlineCkb')}, ${intakeText('copyCkb')}, ${intakeText('headlineEn')}, ${intakeText('copyEn')})`)} LIKE ${pattern} ESCAPE '\\'
+      )
     )`);
   }
   return conditions;
