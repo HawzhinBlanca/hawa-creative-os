@@ -91,6 +91,8 @@ export interface TasksTable {
   updated_at: Generated<Date>;
   completed_at: Date | null;
   deleted_at: Date | null;
+  /** The request this task is a round of (migration 023); NULL for a request Core owns. */
+  request_id: Generated<string | null>;
 }
 
 export interface TaskEventsTable {
@@ -230,6 +232,35 @@ export interface OutboxCommandsTable {
   last_error: string | null;
   created_at: Generated<Date>;
   delivered_at: Date | null;
+}
+
+/** A request the RequestLifecycle object owns (migration 023, ADR-034). */
+export interface RequestsTable {
+  request_id: string;
+  tenant_id: string;
+  root_task_id: string;
+  current_task_id: string;
+  parent_request_id: string | null;
+  owner: 'core' | 'restate';
+  stage: string;
+  /** bigint: node-postgres returns it as a string. */
+  rev: Generated<string>;
+  chat_id: string | null;
+  draft_sent_at: Date | null;
+  question_asked_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/** One projection of a request, recorded under its idempotency key (migration 023). */
+export interface LifecycleProjectionsTable {
+  tenant_id: string;
+  request_id: string;
+  rev: string;
+  idempotency_key: string;
+  request_hash: string;
+  result: unknown;
+  applied_at: Generated<Date>;
 }
 
 export interface PublicationsTable {
@@ -648,6 +679,8 @@ export interface Database {
   projects: ProjectsTable;
   client_channels: ClientChannelsTable;
   tasks: TasksTable;
+  requests: RequestsTable;
+  lifecycle_projections: LifecycleProjectionsTable;
   task_events: TaskEventsTable;
   inbox_events: InboxEventsTable;
   message_events: MessageEventsTable;

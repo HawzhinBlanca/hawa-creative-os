@@ -12,3 +12,5 @@ export * from './workflow-controller.js';
 export * from './provider-policy.js';
 export * from './fixtures/index.js';
 export * from './retention.js';
+export * from './office-hours.js';
+export * from './request-lifecycle.js';

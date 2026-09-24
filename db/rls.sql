@@ -136,6 +136,33 @@ BEGIN
   END LOOP;
 END $$;
 
+-- The request lifecycle (ADR-034): a request, and each projection of it, follows its root task as the
+-- task-scoped tables above follow theirs. Migration 023 replaces these with the hoisted form of
+-- migration 016 (ADR-033), whose helper member_client_ids does not exist yet when this file runs.
+ALTER TABLE requests ENABLE ROW LEVEL SECURITY; ALTER TABLE requests FORCE ROW LEVEL SECURITY;
+CREATE POLICY requests_task_select ON requests FOR SELECT USING (
+  tenant_id=current_tenant_id() AND EXISTS (SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id)
+);
+CREATE POLICY requests_task_write ON requests FOR ALL USING (
+  tenant_id=current_tenant_id() AND EXISTS (
+    SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
+  )
+) WITH CHECK (
+  tenant_id=current_tenant_id() AND EXISTS (
+    SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
+  )
+);
+ALTER TABLE lifecycle_projections ENABLE ROW LEVEL SECURITY; ALTER TABLE lifecycle_projections FORCE ROW LEVEL SECURITY;
+CREATE POLICY lifecycle_projections_task_select ON lifecycle_projections FOR SELECT USING (
+  tenant_id=current_tenant_id() AND EXISTS (SELECT 1 FROM requests r WHERE r.request_id=lifecycle_projections.request_id)
+);
+CREATE POLICY lifecycle_projections_task_write ON lifecycle_projections FOR INSERT WITH CHECK (
+  tenant_id=current_tenant_id() AND EXISTS (
+    SELECT 1 FROM requests r JOIN tasks tx ON tx.id=r.root_task_id
+    WHERE r.request_id=lifecycle_projections.request_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
+  )
+);
+
 -- Tables without tenant_id or with indirect scopes get explicit policies/grants.
 -- Membership tables intentionally are not FORCE RLS: SECURITY DEFINER helper
 -- functions owned by the migration owner must read them without recursive policies.

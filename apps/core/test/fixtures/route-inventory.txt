@@ -263,6 +263,7 @@ GET /v1/ingress/status
 GET /v1/integrations/canva/callback
 GET /v1/integrations/canva/status
 GET /v1/integrations/health
+GET /v1/internal/lifecycle/:requestId
 GET /v1/judge/:token
 GET /v1/judge/:token/image/:pairId/:side
 GET /v1/judge/:token/next
@@ -637,6 +638,7 @@ POST /v1/ingress/unified
 POST /v1/integrations/canva/authorize
 POST /v1/integrations/canva/disconnect
 POST /v1/internal/lifecycle/:requestId/deliveries/:approvalId/prepare
+POST /v1/internal/lifecycle/:requestId/project
 POST /v1/internal/tasks/:taskId/delivery-finished
 POST /v1/internal/telegram/intake
 POST /v1/internal/telegram/park

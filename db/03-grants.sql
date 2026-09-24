@@ -50,6 +50,15 @@ DO $$ BEGIN
   IF to_regclass('hawa.review_comments') IS NOT NULL THEN
     REVOKE UPDATE, DELETE ON hawa.review_comments FROM hawa_app;
   END IF;
+  -- The request lifecycle (migration 023, ADR-034): a request is never removed and changes only its
+  -- stage, revision, current task and send times; a projection record is written once.
+  IF to_regclass('hawa.requests') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON hawa.requests FROM hawa_app;
+    GRANT UPDATE (current_task_id, stage, rev, draft_sent_at, question_asked_at, updated_at) ON hawa.requests TO hawa_app;
+  END IF;
+  IF to_regclass('hawa.lifecycle_projections') IS NOT NULL THEN
+    REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON hawa.lifecycle_projections FROM hawa_app;
+  END IF;
 END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;

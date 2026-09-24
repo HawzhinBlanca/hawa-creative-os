@@ -47,6 +47,15 @@ export interface CreateTaskAggregateParams {
   metadata?: Record<string, unknown>;
   payload?: Record<string, unknown>;
   enqueueOutbox?: boolean;
+  /**
+   * 'recorded': the task.created row is written already delivered, owned by the request lifecycle
+   * (PHASE2_DESIGN.md 2.8, ADR-034). Legacy queries still read it as the request's facts (the daily
+   * cap, reply lookups, reminders), and the outbox consumer never claims it: the RequestLifecycle
+   * object starts the design run itself. Default 'pending', as always.
+   */
+  outboxState?: 'pending' | 'recorded';
+  /** The request this task is a round of (tasks.request_id); only a lifecycle-owned task has one. */
+  requestId?: string | null;
 }
 
 /**
@@ -508,6 +517,7 @@ export class TaskRepository {
           assigned_to: null,
           due_at: null,
           version: 1,
+          ...(params.requestId ? { request_id: params.requestId } : {}),
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -541,6 +551,7 @@ export class TaskRepository {
 
       // 4. Insert into outbox_commands if requested
       if (params.enqueueOutbox !== false) {
+        const recorded = params.outboxState === 'recorded';
         await dbClient
           .insertInto('outbox_commands')
           .values({
@@ -556,9 +567,15 @@ export class TaskRepository {
               title: task.title,
               clientId: task.client_id,
               priority: task.priority,
+              // The hash is of the payload asked for, so a repeat with the same payload matches.
               requestHash: incomingHash,
+              ...(recorded ? { lifecycleOwner: 'restate' } : {}),
             }),
-            state: 'pending',
+            // A recorded row is a fact, not a command: claimDue selects only pending (or expired
+            // leased) rows, so it is never dispatched.
+            ...(recorded
+              ? { state: 'delivered' as const, delivered_at: new Date(), last_error: 'OWNED_BY_LIFECYCLE' }
+              : { state: 'pending' as const }),
           })
           .execute();
       }
