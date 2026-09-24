@@ -133,7 +133,9 @@ function render(renderer, job, rep) {
     timedOut: r.error?.code === 'ETIMEDOUT',
     ms: Math.round(ms * 10) / 10,
     rssKb,
-    stderr: own.trim().slice(0, 2000),
+    // Kept whole up to 1 MB: the first run cut it at 2,000 characters, which made the warning
+    // counts of 9 canvases lower bounds (recount.mjs re-counts them).
+    stderr: own.trim().slice(0, 1_000_000),
     pngBytes: bytes ? bytes.length : 0,
     sha256: bytes ? createHash('sha256').update(bytes).digest('hex') : null,
   };

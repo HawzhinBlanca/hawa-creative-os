@@ -1,0 +1,230 @@
+{
+  "reference": "rsvg-convert in hawa-resvg-gate:0.48.1",
+  "resvg": "0.48.1",
+  "setups": [
+    {
+      "setup": "verdana-then-noto",
+      "lines": [
+        {
+          "line": "verdana-with-sorani",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Verdana to Noto Sans Arabic.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ن/U+646 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ا/U+627 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ت/U+62A character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a س/U+633 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a د/U+62F character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ر/U+631 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a و/U+648 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ک/U+6A9 character were found."
+          ],
+          "inkWidth": 549,
+          "inkPixels": 4456,
+          "missingChars": 8,
+          "missingFamily": false,
+          "rsvgInkWidth": 382,
+          "boxDeltaVsRsvg": 167,
+          "drawn": false
+        },
+        {
+          "line": "noto-with-latin",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Noto Sans Arabic to Verdana.",
+            "Warning (in usvg::text::layout:1413): No fonts with a Q/U+51 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a u/U+75 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a a/U+61 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a l/U+6C character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a i/U+69 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a t/U+74 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a y/U+79 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a (/U+28 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a K/U+4B character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a )/U+29 character were found."
+          ],
+          "inkWidth": 468,
+          "inkPixels": 3179,
+          "missingChars": 10,
+          "missingFamily": false,
+          "rsvgInkWidth": 405,
+          "boxDeltaVsRsvg": 63,
+          "drawn": false
+        }
+      ],
+      "bothDrawn": false
+    },
+    {
+      "setup": "noto-then-verdana",
+      "lines": [
+        {
+          "line": "verdana-with-sorani",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Verdana to Noto Sans Arabic.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ن/U+646 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ا/U+627 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ت/U+62A character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a س/U+633 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a د/U+62F character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ر/U+631 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a و/U+648 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ک/U+6A9 character were found."
+          ],
+          "inkWidth": 549,
+          "inkPixels": 4456,
+          "missingChars": 8,
+          "missingFamily": false,
+          "rsvgInkWidth": 382,
+          "boxDeltaVsRsvg": 167,
+          "drawn": false
+        },
+        {
+          "line": "noto-with-latin",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Noto Sans Arabic to Verdana.",
+            "Warning (in usvg::text::layout:1413): No fonts with a Q/U+51 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a u/U+75 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a a/U+61 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a l/U+6C character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a i/U+69 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a t/U+74 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a y/U+79 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a (/U+28 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a K/U+4B character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a )/U+29 character were found."
+          ],
+          "inkWidth": 468,
+          "inkPixels": 3179,
+          "missingChars": 10,
+          "missingFamily": false,
+          "rsvgInkWidth": 405,
+          "boxDeltaVsRsvg": 63,
+          "drawn": false
+        }
+      ],
+      "bothDrawn": false
+    },
+    {
+      "setup": "fonts-dir",
+      "lines": [
+        {
+          "line": "verdana-with-sorani",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Verdana to Amiri."
+          ],
+          "inkWidth": 348,
+          "inkPixels": 2708,
+          "missingChars": 0,
+          "missingFamily": false,
+          "rsvgInkWidth": 382,
+          "boxDeltaVsRsvg": 37,
+          "drawn": false
+        },
+        {
+          "line": "noto-with-latin",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Noto Sans Arabic to Amiri."
+          ],
+          "inkWidth": 393,
+          "inkPixels": 3106,
+          "missingChars": 0,
+          "missingFamily": false,
+          "rsvgInkWidth": 405,
+          "boxDeltaVsRsvg": 10,
+          "drawn": false
+        }
+      ],
+      "bothDrawn": false
+    },
+    {
+      "setup": "dejavu-and-noto",
+      "lines": [
+        {
+          "line": "verdana-with-sorani",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:143): No match for '\"Verdana\"' font-family."
+          ],
+          "inkWidth": 0,
+          "inkPixels": 0,
+          "missingChars": 0,
+          "missingFamily": true,
+          "rsvgInkWidth": 382,
+          "boxDeltaVsRsvg": null,
+          "drawn": false
+        },
+        {
+          "line": "noto-with-latin",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Noto Sans Arabic to DejaVu Sans."
+          ],
+          "inkWidth": 445,
+          "inkPixels": 3466,
+          "missingChars": 0,
+          "missingFamily": false,
+          "rsvgInkWidth": 405,
+          "boxDeltaVsRsvg": 42,
+          "drawn": false
+        }
+      ],
+      "bothDrawn": false
+    },
+    {
+      "setup": "gate-order",
+      "lines": [
+        {
+          "line": "verdana-with-sorani",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Verdana to Noto Sans Arabic.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ن/U+646 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ا/U+627 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ت/U+62A character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a س/U+633 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a د/U+62F character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ر/U+631 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a و/U+648 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a ک/U+6A9 character were found."
+          ],
+          "inkWidth": 549,
+          "inkPixels": 4456,
+          "missingChars": 8,
+          "missingFamily": false,
+          "rsvgInkWidth": 382,
+          "boxDeltaVsRsvg": 167,
+          "drawn": false
+        },
+        {
+          "line": "noto-with-latin",
+          "status": 0,
+          "warnings": [
+            "Warning (in usvg::text:197): Fallback from Noto Sans Arabic to Verdana.",
+            "Warning (in usvg::text::layout:1413): No fonts with a Q/U+51 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a u/U+75 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a a/U+61 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a l/U+6C character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a i/U+69 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a t/U+74 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a y/U+79 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a (/U+28 character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a K/U+4B character were found.",
+            "Warning (in usvg::text::layout:1413): No fonts with a )/U+29 character were found."
+          ],
+          "inkWidth": 468,
+          "inkPixels": 3179,
+          "missingChars": 10,
+          "missingFamily": false,
+          "rsvgInkWidth": 405,
+          "boxDeltaVsRsvg": 63,
+          "drawn": false
+        }
+      ],
+      "bothDrawn": false
+    }
+  ]
+}

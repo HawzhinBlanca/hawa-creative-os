@@ -186,9 +186,9 @@ for (const job of jobs.filter((j) => j.kind === 'canvas')) {
         coverageRatio: ba && bb ? bb.pixels / ba.pixels : null,
       };
     }
-  } else if (a && !b) {
-    res.blank = false;
   }
+  // A canvas where rsvg draws and resvg writes no PNG is counted by resvgFailed (a crash), not as
+  // blank: blank is kept for a PNG that exists and is nearly empty.
   canvases.push(res);
   if (++done % 50 === 0) console.log(`canvases ${done}`);
 }
