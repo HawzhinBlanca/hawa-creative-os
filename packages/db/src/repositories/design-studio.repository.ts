@@ -150,14 +150,19 @@ export class DesignStudioRepository {
     if (!row) return undefined;
     const columns = CANDIDATE_IMAGE_COLUMNS[kind];
     const sha = row[columns.sha];
+    const bytes = row[columns.bytes];
     if (this.blobStore && sha) {
       try {
         return await this.blobStore.read(sha);
       } catch (err) {
-        if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) throw err;
+        // A store that cannot be read at all (a missed mount) must not stop a run whose rows still
+        // have their bytes; only a row without them fails with it.
+        if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) {
+          if (!bytes) throw err;
+          console.warn(`[design-studio] the file store could not be read, so the row's ${kind} bytes are used: ${err instanceof Error ? err.message : err}`);
+        }
       }
     }
-    const bytes = row[columns.bytes];
     return bytes ? Buffer.from(bytes) : undefined;
   }
 

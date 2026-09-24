@@ -54,7 +54,12 @@ export async function readPreferringStore(
     try {
       return await store.read(sha256);
     } catch (err) {
-      if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) throw err;
+      // A store that cannot be read at all (a missed mount, no marker) must not take down a reader
+      // whose row still has the bytes; it is logged, and only a row without bytes fails with it.
+      if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) {
+        if (!bytes) throw err;
+        log.warn(`[blobs] the file store could not be read, so the row's bytes are used: ${(err as Error)?.message || err}`);
+      }
     }
   }
   return bytes ? Buffer.from(bytes) : null;

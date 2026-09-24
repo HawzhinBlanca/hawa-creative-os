@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { sql, BlobCorruptError, BlobMissingError, type BlobStore, type Database, type Kysely } from '@hawa/db';
+import { sql, type BlobStore, type Database, type Kysely } from '@hawa/db';
+import { readPreferringStore } from '../blob-store-context.js';
 import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
 import type { ContentPhoto } from './types.js';
 import { SOFT_PHOTO_SCALE } from './studio-status-note.js';
@@ -244,17 +245,11 @@ export class PhotoCutouts {
    */
   private async withStoredPngs(row: StoredRow | undefined): Promise<StoredRow | undefined> {
     if (!row || !this.blobStore) return row;
-    const read = async (sha: string | null | undefined, bytes: Buffer | null) => {
-      if (sha) {
-        try {
-          return await this.blobStore!.read(sha);
-        } catch (err) {
-          if (!(err instanceof BlobMissingError) && !(err instanceof BlobCorruptError)) throw err;
-        }
-      }
-      return bytes;
+    return {
+      ...row,
+      png: await readPreferringStore(this.blobStore, row.png_sha256, row.png),
+      shadow_png: await readPreferringStore(this.blobStore, row.shadow_sha256, row.shadow_png),
     };
-    return { ...row, png: await read(row.png_sha256, row.png), shadow_png: await read(row.shadow_sha256, row.shadow_png) };
   }
 
   /** Puts a cut-out PNG to the file store; its hash, or null when there is no store or the put failed. */
