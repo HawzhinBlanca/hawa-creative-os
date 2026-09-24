@@ -1,4 +1,4 @@
-> **Current studio decision (2026-09-13, ADR 025): Canva is the only active editor/export studio. Telegram is the user-facing request/result channel; Hawa retains operational records. All HyCanvas, Figma and Penpot selection/fallback passages below are historical and must not be re-enabled. Their original implementation is archived under `archive/retired-studios/2026-09-13/`.**
+> **Current studio decision (2026-09-13, ADR 025): Canva is the only active editor/export studio.** Telegram is the user-facing request/result channel; Hawa retains operational records. The active source and recovery rules are in [docs/30_CURRENT_STUDIO_CONTRACT.md](docs/30_CURRENT_STUDIO_CONTRACT.md). HyCanvas, Figma and Penpot selection/fallback claims from the 2026-09-03 research freeze are superseded by ADR 025; their implementation is archived under `archive/retired-studios/2026-09-13/`.
 
 # Hawa Creative OS — Master Specification
 
@@ -50,11 +50,9 @@ flowchart LR
 
     CD --> AL[Asset Lab\nComfyUI + direct model adapters]
     AL --> ST[Editable Studio Adapter]
-    ST --> HY[HyCanvas v0.3.9 candidate\ncanonical .hyc document]
-    ST -. fallback .-> PN[Penpot / Shotluma-derived editor\nChromium HTML-SVG fallback]
+    ST --> CV[Canva native editable design\nID + captured export]
 
-    HY --> QC[Hard QA + independent visual judge]
-    PN --> QC
+    CV --> QC[Hard QA + independent visual judge]
     QC --> RV[Human review in Hawa Desk]
     RV -->|revise| RS
     RV -->|approve| PUB[Idempotent publisher]
@@ -79,9 +77,9 @@ flowchart LR
 | Durable execution | **Restate 1.7.x**, self-hosted, TypeScript SDK | Journals external calls and timers, survives restarts, supports manual pause/resume/restart and fine-grained flow control without a separate queue stack. |
 | Operational database | **PostgreSQL 18 + pgvector 0.8.6** | One ACID boundary for tasks, rules, audit, full-text search, vectors, outbox, permissions, and point-in-time recovery. |
 | SQL access | **Kysely + versioned SQL migrations** | Type-safe SQL while preserving visible database design, RLS, constraints, and hand-auditable migrations. |
-| Editable studio | **HyCanvas v0.3.9**, pinned, behind `DesignStudioAdapter` | Open `.hyc` JSON, real editable nodes, exports, brand kits, APIs/MCP, a Go backend, Postgres, and a single self-hostable binary. It must pass the proof sprint before live use. |
+| Editable studio | **Canva only**, through the active import/capture/export adapter | The native design is the working editable master; Hawa pins source IDs, inputs and real export hashes for review and recovery. Admission remains evidence-gated. |
 | Design method | **Editable-Design reconstruction method**, adapted—not embedded as the platform | Its “visual prior, pixels never ship, semantic reconstruction, deterministic verification” method is stronger than flat generation. |
-| Studio fallback | **Penpot**, then a Shotluma-derived focused editor; Chromium HTML/SVG renderer for exact RTL | Prevents HyCanvas from becoming a single point of architectural lock-in. |
+| Studio outage | **Pause and preserve Hawa state**; route to an operator | ADR 025 retired other editor providers. A recovery package can aid reconstruction, but cannot guarantee lossless restoration of later manual Canva edits. |
 | Asset graph | **ComfyUI**, pinned workflows and allowlisted nodes only | Lets the office combine local and hosted image generation/editing in reproducible JSON graphs. It is an asset worker, not the workflow engine. |
 | Model access | **Direct provider adapters** plus local workers | Avoids gateway lock-in and preserves full provider features, snapshots, safety settings, images, caching, and error semantics. |
 | Fast reasoning | **Gemini 3.8 Flash** provisional | Newly GA, multimodal, long context, structured outputs and tool calling; final selection depends on office evaluation. |
@@ -110,10 +108,10 @@ flowchart LR
 8. The Design Router selects routine template fill, generated-asset composition, novel Creative Director run, or human design.
 9. For novel work, a private composition reference supplies art direction. Its pixels and generated lettering never ship.
 10. Visual ingredients are produced through pinned ComfyUI graphs or direct image-provider adapters.
-11. The system reconstructs the graphic into editable nodes in HyCanvas through the studio adapter.
+11. The studio adapter imports editable elements into Canva and captures the real native design ID and export; unsupported elements are disclosed.
 12. Hard QA validates data, copy, assets, glyphs, direction, layout, dimensions, source integrity, and delivery package.
 13. A different model family performs advisory visual review. At most two bounded automatic repair cycles are allowed.
-14. A person reviews the full-size editable design in Hawa Desk/HyCanvas and approves or requests a structured revision.
+14. A person reviews the captured Canva design in Hawa Desk and approves its pinned revision or requests a structured revision.
 15. Publication uses content hashes and durable idempotency to upload once to the correct Shared Drive folder and upsert one Sheet row.
 16. Approved work becomes positive retrieval evidence. Rejected work remains negative-only. Repeated feedback proposes rules for human promotion.
 
@@ -123,7 +121,7 @@ flowchart LR
 |---|---|
 | Task identity and workflow state | PostgreSQL business ledger; Restate execution journal for in-flight steps |
 | Client rules, mappings, approvals, permissions | PostgreSQL Client DNA |
-| Editable design | Versioned `.hyc` file plus immutable artifact manifest |
+| Editable design | Native Canva design ID and URL as the working master; Hawa's immutable revision, source package and captured export manifest |
 | Generated and source assets | Local content-addressed staging until approval; Google Shared Drive after publication |
 | Human-readable reporting | Google Sheets mirror only |
 | AI traces, datasets, experiments | Phoenix |
@@ -139,9 +137,7 @@ The configuration names roles, not vendors: `fast_router`, `brief_builder`, `cre
 
 ## 9. Editable-studio philosophy
 
-HyCanvas v0.3.9 is the current candidate because its actual repository includes an open schema, editable generation tools, export, brand kits, PostgreSQL-backed self-hosting, APIs/MCP, releases, and active CI. It remains behind `DesignStudioAdapter`, and the office does not modify business state directly inside HyCanvas.
-
-The `.hyc` document is canonical for creative structure only. Hawa Core owns tasks, clients, permissions, approvals, revisions, and publication. A sidecar manifest binds `.hyc` content hashes to that operational history.
+Canva is the only selected editor/export studio under ADR 025. Hawa Core owns tasks, clients, permissions, approvals, revisions, and publication. The Canva ID and captured export are bound to those records, but a Canva URL alone is not an independently restorable source. The exact editable and recovery boundaries are specified in [docs/30_CURRENT_STUDIO_CONTRACT.md](docs/30_CURRENT_STUDIO_CONTRACT.md).
 
 ## 10. Security boundary
 

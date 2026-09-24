@@ -1,4 +1,4 @@
-> Current studio decision: Canva only (ADR 025, 2026-09-13). HyCanvas passages below are historical and must not be implemented or re-enabled.
+> Current studio decision: Canva only ([ADR 025](../adrs/025_canva_only_archive.md), 2026-09-13). [The current source and recovery contract](30_CURRENT_STUDIO_CONTRACT.md) supersedes the 2026-09-03 HyCanvas and fallback proposal. The earlier text remains in Git history and archived editor records; it must not be re-enabled without a new ADR.
 
 # Editable Document Strategy
 
@@ -8,13 +8,13 @@ Every automatically produced graphic must have a valid editable source. PNG/JPEG
 
 ## 2. Canonical source
 
-For the first implementation, the creative source is a pinned HyCanvas `.hyc` document. It is readable JSON and should contain real text, images, vectors, groups, masks, fills, effects, charts, tables, artboards/pages, and document metadata.
+The working creative master is the native Canva design. Hawa records the real Canva design ID and edit URL, a pinned captured export, the approved copy, source assets, import recipe and an immutable semantic/revision manifest. Interchange files used for import do not automatically contain later human edits.
 
 Hawa Creative OS does not store only a foreign document ID. It stores:
 
-- the exact `.hyc` bytes;
-- source hash;
-- HyCanvas release/commit and schema version;
+- the real Canva ID, workspace, capture time and export hash;
+- exact input/asset/recipe hashes and captured semantic source where the API supports it;
+- Canva adapter/API versions and any unavailable inspection capability;
 - an immutable neutral sidecar manifest;
 - standard preview/export files;
 - font and asset references/checksums;
@@ -84,7 +84,8 @@ Destructive commands—delete page, replace full design, detach official asset, 
 Approved tasks normally produce:
 
 ```text
-source/design.hyc
+source/canva-design-and-revision.json
+source/import-recipe.json
 source/manifest.json
 source/assets/*
 source/fonts-manifest.json
@@ -114,36 +115,27 @@ A studio is eligible only when it can prove:
 - image/vector/group/mask manipulation;
 - script/API or safe automation surface;
 - revision conflict handling or adapter-enforced locking;
-- backup/export without vendor cloud dependence;
+- explicit measurement of reconstruction from Hawa's package without Canva, including any lost manual edits;
 - reasonable performance on office hardware.
 
-## 9. HyCanvas-specific cautions
+## 9. Canva-specific cautions
 
-- Pin exact release/commit; no automatic upstream pulls.
-- Preserve Elastic License notices and do not expose the system as a managed third-party service.
-- Treat its UAX #9 implementation as a tested subset, not complete Unicode bidi support.
-- Do not rely on roadmap features.
-- Verify every export path independently.
-- Maintain the neutral sidecar and standard exports.
-- Keep the adapter small enough to replace.
+- Pin adapter/API behavior and test every import, edit, export and capture path independently.
+- Verify native live text and required assets in the working design; inspect exported text and glyphs where available.
+- Treat unsupported Canva elements or unavailable source inspection as unknown, not as evidence of full editability.
+- Maintain the Hawa source package and standard exports, while stating that arbitrary manual edits may be lost in reconstruction.
 
-## 10. Fallback hierarchy
+## 10. Outage and recovery
 
-1. **HyCanvas** after Phase 0 pass.
-2. **Penpot adapter** for collaborative/vector-heavy work if HyCanvas fails critical needs.
-3. **Focused editor assembled from Shotluma/Tela/Fabric/Konva concepts** only for the subset needed by the office.
-4. **Chromium HTML/SVG reconstruction** for exact copy/RTL and emergency source preservation.
-5. Human designer in an external native tool with a source-ingestion/export contract.
-
-No fallback may publish flat-only output as complete.
+Canva outage pauses new editing/export. Hawa retains task, approval, source assets, recipe and prior verified exports so an operator can recover or complete work after service restoration. Retired editor providers are not automatic fallbacks. A human may use a separate tool only through a newly approved source-ingestion/export workflow; it cannot silently satisfy this contract.
 
 ## 11. Migration drill
 
 Quarterly, export selected designs and verify:
 
-- source opens on a clean pinned studio installation;
+- the native Canva design opens in the authorized workspace and its captured revision matches the retained export;
 - all linked assets/fonts resolve;
 - live text is extractable;
 - standard outputs match golden tolerances;
 - neutral manifest matches document semantics;
-- at least one representative design can be reconstructed in the fallback path.
+- representative designs are reconstructed from Hawa's package, with every lost or partial element reported.

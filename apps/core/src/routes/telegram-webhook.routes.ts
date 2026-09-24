@@ -144,8 +144,8 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     const groupChat = ['group', 'supergroup'].includes(String(msg.chat?.type || ''));
     const groupText = String(msg.text || msg.caption || json.text || '').trim();
     const normalizedGroupText = groupText.replace(/^\/(task|brief|design|campaign|new)@\w+(?=\s|$)/i, '/$1');
-    const groupIntent = groupChat ? evaluateIngressIntent({ text: normalizedGroupText, channel: 'telegram' }) : null;
-    const explicitTaskPromotion = groupIntent?.action === 'promote';
+    const ingressIntent = evaluateIngressIntent({ text: normalizedGroupText, channel: 'telegram' });
+    const explicitTaskPromotion = ingressIntent.action === 'promote';
     const replyContext = String(msg.reply_to_message?.caption || msg.reply_to_message?.text || '') +
       ' ' + JSON.stringify(msg.reply_to_message?.reply_markup || '');
     const replyNamesTask = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(replyContext);

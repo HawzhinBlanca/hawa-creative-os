@@ -51,7 +51,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         update_id: Math.floor(Math.random() * 1000000),
         message: {
-          text: `Annual Gala Invitation Campaign for ${clientName}`,
+          text: `/task Annual Gala Invitation Campaign for ${clientName}`,
           chat: { id: 888123 },
         },
       }),

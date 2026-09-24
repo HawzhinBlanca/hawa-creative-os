@@ -28,7 +28,7 @@ A design passes only when every required hard gate passes.
 
 ### Source/editability
 
-- valid `.hyc` schema and supported schema version;
+- real Canva design ID, captured source metadata and export bound to the pinned revision;
 - every required factual element is live text/vector/official asset;
 - source round-trip succeeds;
 - required assets/fonts available and hashed;
@@ -77,7 +77,7 @@ Golden tests include:
 - copied text versus typed text;
 - explicit direction versus auto direction.
 
-HyCanvas’s current bidi implementation explicitly omits full handling of isolate controls and the paired-bracket algorithm. Those cases are therefore mandatory proof tests and may trigger a Chromium/native-text fallback or upstream patch.
+Canva's actual native edit and final export are the subject of these proof tests. Isolate controls, paired brackets, mixed style runs, glyph fallback and Sorani punctuation must be inspected in the captured export and by a native reader. If inspection is unavailable, the result is unknown and requires operator review; another renderer's success does not establish Canva export fidelity.
 
 ## 4. Spelling and terminology
 

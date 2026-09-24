@@ -1,5 +1,7 @@
 # Master Build Prompt for an AI Coding Agent
 
+**Current decision override (ADR 025, 2026-09-13):** Canva is the only active editor/export studio. Follow [docs/30_CURRENT_STUDIO_CONTRACT.md](docs/30_CURRENT_STUDIO_CONTRACT.md). The HyCanvas Phase 0B proof and fallback instructions below are a preserved historical proposal and do not authorize reactivation. For the current implementation programme use [the research-grade plan](plans/research-grade-upgrade-2026-09-25/PLAN.md) and its measured gates.
+
 ## Role
 
 You are the principal engineer responsible for building **Hawa Creative OS**, a private office-owned AI creative-operations system. Work as a senior product engineer, distributed-systems engineer, security engineer, AI-evaluation engineer, and graphics-tooling engineer. Deliver complete, tested, maintainable software—not a demo, architecture essay, or collection of disconnected scripts.
@@ -11,7 +13,7 @@ The specification repository supplied with this prompt is authoritative. Begin b
 3. `docs/02_PRD.md`
 4. `docs/03_SRS.md`
 5. `docs/04_SYSTEM_ARCHITECTURE.md`
-6. `docs/21_HYCANVAS_PROOF_SPRINT.md`
+6. `docs/30_CURRENT_STUDIO_CONTRACT.md` (the older `docs/21_HYCANVAS_PROOF_SPRINT.md` is historical)
 7. `docs/29_ACCEPTANCE_GATES.md`
 8. `plans/requirements.csv`
 9. `plans/traceability.csv`
@@ -42,7 +44,7 @@ The system is for one office. Optimize for capability, creative quality, ownersh
 11. **Human approvals cannot be fabricated or self-issued.** Approval identities and decisions are server-verified and append-only.
 12. **No side effect relies on retries alone.** Drive uploads, Sheet writes, adapter replies, generated assets, studio saves, and notifications require stable idempotency keys and reconciliation.
 13. **No silent degradation.** Any fallback, missing font, dropped node, altered text, failed retrieval, changed model, or incomplete export must be visible in structured diagnostics.
-14. **No automatic upstream upgrades.** HyCanvas, Restate, ComfyUI nodes, models, schemas, database images, and all other material dependencies remain pinned until compatibility tests pass.
+14. **No automatic upstream upgrades.** Canva adapter/API compatibility, Restate, ComfyUI nodes, models, schemas, database images, and all other material dependencies remain pinned until compatibility tests pass.
 15. **No secret reaches the browser, prompt, trace, design file, log, or repository.**
 
 ## Required implementation shape
@@ -58,7 +60,7 @@ packages/
   domain/               # pure domain types, state transitions, policies
   contracts/            # generated/implemented adapters from this package
   db/                   # Kysely types, migrations, repositories
-  integrations/         # Telegram, WAHA, Google, HyCanvas, model providers
+  integrations/         # Telegram, WAHA, Google, Canva, model providers
   retrieval/            # ingestion, lexical/vector retrieval, reranking
   creative/             # briefs, plans, asset graphs, source manifests
   qa/                   # deterministic checks and visual-review interface
@@ -69,8 +71,7 @@ services/
   docling/              # local ingestion configuration
   embedding/            # local Qwen embedding/reranking service
   comfy/                # pinned ComfyUI workflows and allowlist
-vendor/
-  hycanvas/             # pinned source/release metadata or office fork
+archive/retired-studios/ # historical editor sources, excluded from active builds
 infra/
   compose/
   caddy/
@@ -94,7 +95,11 @@ Before product features:
 
 Exit only when `B-000` and its traceability entries pass.
 
-### Phase 0B — HyCanvas admission proof
+### Phase 0B — Current Canva admission proof
+
+Prove the active contract in `docs/30_CURRENT_STUDIO_CONTRACT.md` on a native Canva design: structured import, independent editable text and assets, manual edit/reopen, final export, source extraction where available, revision/hash binding, and measured recovery limitations. Use real captured artifacts and native Sorani review. An unavailable capability is `unknown` or a failed gate, not an automatic pass.
+
+### Historical Phase 0B — HyCanvas admission proposal (superseded by ADR 025)
 
 Execute `docs/21_HYCANVAS_PROOF_SPRINT.md` against the pinned v0.3.9 candidate and any explicitly recorded patch candidate.
 
@@ -465,7 +470,7 @@ The finished repository must contain:
 - migrations and RLS tests;
 - generated OpenAPI docs and typed clients;
 - model registry and evaluation runner;
-- HyCanvas proof/admission report and compatibility suite;
+- Canva native-source/export admission report and compatibility suite under `docs/30_CURRENT_STUDIO_CONTRACT.md`;
 - ComfyUI workflow registry and node lock;
 - Telegram adapter and optional quarantined WAHA adapter;
 - Google Drive/Sheets integration and reconciliation;
