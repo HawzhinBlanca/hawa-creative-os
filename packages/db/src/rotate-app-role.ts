@@ -345,18 +345,31 @@ export async function verifyLoginRole(admin: pg.Client, conn: Connection, appRol
       const snapshot = (await admin.query(`SELECT pg_export_snapshot() AS s`)).rows[0].s as string;
       await login.query(`SET TRANSACTION SNAPSHOT '${snapshot.replace(/'/g, '')}'`);
       await admin.query(`SET LOCAL ROLE ${assertRoleName(appRole)}`);
+      // 30 s a statement, and a context's counts are one statement: the limit covers every table of a
+      // context together (it was 30 s a table). With no context RLS hides every row, so LIMIT does not
+      // stop that pass and it reads each table in full; at the office's volumes that is well under it.
       for (const side of [admin, login]) await side.query(`SET LOCAL statement_timeout = '30s'`);
       const names = ['app.tenant_id', 'hawa.current_tenant_id', 'app.client_id', 'hawa.current_client_id', 'app.user_id', 'hawa.current_user_id', 'app.role', 'hawa.current_role'];
+      // One statement sets a context and one counts every table, on each side, both sides at once.
+      // They were a statement a setting and a statement a table: over a thousand round trips a
+      // rotation, which a loaded server made take minutes. The counts are the same statements, under
+      // the same settings and snapshot.
+      const setAll = `SELECT ${names.map((_, i) => `set_config($${2 * i + 1}, $${2 * i + 2}, true)`).join(', ')}`;
+      const countAll = readable.length
+        ? `SELECT ${readable.map((table, i) => `(SELECT count(*)::int FROM (SELECT 1 FROM ${table} LIMIT ${RLS_SAMPLE_LIMIT}) s) AS c${i}`).join(', ')}`
+        : '';
+      const counts = async (side: pg.Client, params: string[]): Promise<number[]> => {
+        await side.query(setAll, params);
+        if (!countAll) return [];
+        const row = (await side.query(countAll)).rows[0] as Record<string, number>;
+        return readable.map((_, i) => row[`c${i}`]);
+      };
       for (const context of contexts) {
-        for (const side of [admin, login]) {
-          for (const name of names) await side.query(`SELECT set_config($1, $2, true)`, [name, context.settings[name] ?? '']);
-        }
-        const count = async (side: pg.Client, table: string) =>
-          (await side.query(`SELECT count(*)::int AS n FROM (SELECT 1 FROM ${table} LIMIT ${RLS_SAMPLE_LIMIT}) s`)).rows[0].n as number;
-        for (const table of readable) {
-          const [g, l] = [await count(admin, table), await count(login, table)];
-          if (g !== l) problems.push(`${table} under ${context.label}: ${appRole} sees ${g} rows, ${role} sees ${l}`);
-        }
+        const params = names.flatMap((name) => [name, context.settings[name] ?? '']);
+        const [group, own] = await Promise.all([counts(admin, params), counts(login, params)]);
+        readable.forEach((table, i) => {
+          if (group[i] !== own[i]) problems.push(`${table} under ${context.label}: ${appRole} sees ${group[i]} rows, ${role} sees ${own[i]}`);
+        });
         contextsCompared += 1;
       }
     } finally {
@@ -379,8 +392,13 @@ export interface RotationResult {
   steps: string;
 }
 
+/**
+ * A file-name stamp that two files written in the same second do not share: the files are created
+ * with 'wx', and a rotation that takes under a second after another (retire, then rotate again) was
+ * refused for a secret file that already existed. Milliseconds and a random suffix.
+ */
 function stamp(): string {
-  return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  return `${new Date().toISOString().replace(/[-:]/g, '').replace('.', '')}-${randomBytes(2).toString('hex')}`;
 }
 
 /**

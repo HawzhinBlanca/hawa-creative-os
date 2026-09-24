@@ -107,12 +107,19 @@ describe('Kurdish WebFont Inspector (B-040, FR-037)', () => {
     view.setUint32(60, 0x00FFFFFF);
     view.setUint32(64, 0);
 
-    const start = performance.now();
+    // Measured in CPU time of this thread, which a busy machine does not add to (waiting for a core
+    // is not counted): wall clock under the suite's parallel load measures the machine, not the parse.
+    // Walking the 16 million code points, even without keeping them, costs far more than 50 ms of CPU.
+    const threadMs = () => {
+      const usage = (process as unknown as { threadCpuUsage?: () => NodeJS.CpuUsage }).threadCpuUsage?.() ?? process.cpuUsage();
+      return (usage.user + usage.system) / 1000;
+    };
+    const start = threadMs();
     const extracted = extractGlyphSetFromBuffer(buf);
-    const elapsed = performance.now() - start;
+    const cpuMs = threadMs() - start;
 
-    // Should reject the huge range and complete in < 5ms without allocating millions of elements
-    expect(elapsed).toBeLessThan(50);
+    // Rejects the huge range without allocating millions of elements, or walking them.
+    expect(cpuMs).toBeLessThan(50);
     expect(extracted.supportedCodePoints.size).toBeLessThan(65536);
   });
 });

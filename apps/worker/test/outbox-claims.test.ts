@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { OutboxConsumer } from '../src/outbox-consumer.js';
+import { OutboxConsumer, type OutboxHandlerScope } from '../src/outbox-consumer.js';
 import { writeSendMark, type TelegramSender } from '../src/delivery-notification.js';
 
 /**
@@ -73,6 +73,27 @@ async function enqueue(commandType: string, payload: Record<string, unknown>) {
 }
 const record = (idempotencyKey: string) => asTenant((trx) => repo.findByIdempotencyKey(tenantId, idempotencyKey, trx));
 
+/**
+ * Waits until `check` holds. The tests below wait for what a step needs (a send made, a lease run
+ * out) instead of sleeping for how long it usually takes: under the suite's parallel load a fixed
+ * sleep was sometimes too short, and a second consumer found a lease that had not run out yet. The
+ * deadline only stops a wait for something that never happens: it is 10 s (the waits take 1 to 2 s),
+ * so that two waits in one test end within the test's 30 s and a hang is reported as the wait that
+ * never ended, not as the test's timeout.
+ */
+async function until(what: string, check: () => boolean | Promise<boolean>, deadlineMs = 10_000): Promise<void> {
+  const deadline = Date.now() + deadlineMs;
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error(`gave up waiting until ${what}`);
+    await sleep(50);
+  }
+}
+
+/** Whether the command's lease has run out by the database's clock, the clock a claim is decided by. */
+const leaseRunOut = async (id: string) =>
+  (await asTenant((trx) => sql<{ out: boolean }>`SELECT leased_until < now() AS out FROM hawa.outbox_commands WHERE id = ${id}::uuid`.execute(trx)))
+    .rows[0]?.out === true;
+
 describe('the outbox consumer holds no transaction while a handler acts', () => {
   it('completes a 2 s handler once although its sessions are killed after 1 s idle in a transaction', async () => {
     const consumerDb = shortIdleDb();
@@ -95,30 +116,91 @@ describe('the outbox consumer holds no transaction while a handler acts', () => 
     }
   });
 
-  it('never lets two consumers act on one row, even when a handler outlasts the lease', async () => {
-    const ids = await Promise.all([1, 2, 3].map((n) => enqueue('test.long_send', { n })));
-    const handled = new Map<string, number>();
-    const handler = async (cmd: { id: string }) => {
-      handled.set(cmd.id, (handled.get(cmd.id) || 0) + 1);
-      await sleep(1500);
+  /*
+   * "Never two consumers on one row, even when a handler outlasts the lease" used to be one test: a
+   * one-second lease, handlers that slept 1.5 s, and two consumers polling. It passed only while every
+   * renewal landed within 0.67 s, which the suite's parallel load did not always allow; and a renewal
+   * that comes late is allowed to lose the command (the fence in whileHeld, not the renewal, is what
+   * keeps two consumers from both acting). It is three tests now, each true whatever the timing.
+   */
+  it('renews the lease while a handler outlasts it, and the command stays its own', async () => {
+    const { id, idempotencyKey } = await enqueue('test.outlasts_lease', { note: 'acts past its first lease' });
+    let calls = 0;
+    const consumer = new OutboxConsumer(db, {
+      tenantId, userId, batchSize: 1, leaseSeconds: 1,
+      handlers: {
+        'test.outlasts_lease': async (cmd) => {
+          calls++;
+          // Acts until the lease it was claimed with has run out by the database's clock, and a
+          // renewal has moved the lease on past it.
+          const claimedUntil = cmd.claim_token;
+          await until('the first lease has run out and been renewed', async () => {
+            const row = (await asTenant((trx) => sql<{ past: boolean; moved: boolean }>`
+              SELECT now() > ${claimedUntil}::timestamptz AS past, leased_until > ${claimedUntil}::timestamptz AS moved
+              FROM hawa.outbox_commands WHERE id = ${id}::uuid`.execute(trx))).rows[0];
+            return Boolean(row?.past && row?.moved);
+          });
+        },
+      },
+    });
+    const summary = await consumer.processBatch(1);
+    const row = await record(idempotencyKey);
+    expect({ calls, succeeded: summary.succeeded, lost: summary.lostClaims, state: row?.state, attempts: row?.attempts })
+      .toEqual({ calls: 1, succeeded: 1, lost: 0, state: 'delivered', attempts: 0 });
+  });
+
+  it('does not take a command another consumer holds on a lease that has not run out', async () => {
+    const { id, idempotencyKey } = await enqueue('test.held_elsewhere', { note: 'held by a live consumer' });
+    await asTenant((trx) => sql`UPDATE hawa.outbox_commands SET state = 'leased', leased_until = now() + interval '1 hour'
+      WHERE id = ${id}::uuid`.execute(trx));
+    let calls = 0;
+    const consumer = new OutboxConsumer(db, { tenantId, userId, batchSize: 5, leaseSeconds: 1, handlers: { 'test.held_elsewhere': async () => { calls++; } } });
+    const summary = await consumer.processBatch(5);
+    const row = await record(idempotencyKey);
+    expect({ leased: summary.leased, calls, state: row?.state, attempts: row?.attempts }).toEqual({ leased: 0, calls: 0, state: 'leased', attempts: 0 });
+  });
+
+  it('lets two consumers polling one queue act on each command once, one at a time', async () => {
+    // What this checks is the claim: a command one consumer holds is not handed to the other. The
+    // lease is the default minute, so no lease runs out here whatever the load; a holder that loses
+    // its lease while it acts is the takeover test's (review of phase 0.2, below).
+    const ids = await Promise.all([1, 2, 3].map((n) => enqueue('test.guarded_send', { n })));
+    const inside = new Map<string, number>();
+    const acted = new Map<string, number>();
+    let overlap = 0;
+    // Every side effect goes through whileHeld, as the delivery handlers' do; the effect takes a while.
+    // Before it, the handler prepares (a delivery reads the export's bytes) holding no row lock, so
+    // only the lease keeps the other consumer off the command then: inside whileHeld the row lock
+    // alone would (claims skip locked rows).
+    const handler = async (cmd: { id: string }, _db: unknown, scope: OutboxHandlerScope) => {
+      await sleep(150);
+      await scope.whileHeld!(async () => {
+        const now = (inside.get(cmd.id) || 0) + 1;
+        inside.set(cmd.id, now);
+        overlap = Math.max(overlap, now);
+        await sleep(100);
+        inside.set(cmd.id, now - 1);
+        acted.set(cmd.id, (acted.get(cmd.id) || 0) + 1);
+      });
     };
-    // A one-second lease: a consumer that stopped renewing would lose the row before it finished.
-    const make = () => new OutboxConsumer(db, { tenantId, userId, batchSize: 10, leaseSeconds: 1, handlers: { 'test.long_send': handler } });
+    const make = () => new OutboxConsumer(db, { tenantId, userId, batchSize: 10, handlers: { 'test.guarded_send': handler } });
     const [a, b] = [make(), make()];
-    const deadline = Date.now() + 7000;
+    let allDelivered = false;
     const drain = async (consumer: OutboxConsumer) => {
-      while (Date.now() < deadline) {
+      await until('every command is delivered', async () => {
+        if (allDelivered) return true;
         await consumer.processBatch(10);
         const rows = await Promise.all(ids.map((c) => record(c.idempotencyKey)));
-        if (rows.every((r) => r?.state === 'delivered')) return;
-        await sleep(100);
-      }
+        allDelivered = rows.every((r) => r?.state === 'delivered');
+        return allDelivered;
+      });
     };
     await Promise.all([drain(a), drain(b)]);
     const rows = await Promise.all(ids.map((c) => record(c.idempotencyKey)));
-    expect(ids.map((c) => handled.get(c.id) || 0)).toEqual([1, 1, 1]);
+    expect(overlap).toBe(1);
+    expect(ids.map((c) => acted.get(c.id) || 0)).toEqual([1, 1, 1]);
     expect(rows.map((r) => [r?.state, r?.attempts])).toEqual([['delivered', 0], ['delivered', 0], ['delivered', 0]]);
-  }, 15000);
+  });
 
   it('records a result only while the claim is still its own', async () => {
     // An operator redrives the command while its handler is still acting: the operator's decision
@@ -207,10 +289,11 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
   /**
    * Stands in for a worker that dies at a given send: the send reaches Telegram, then the process
    * is gone. Its database pool closes, so it can neither renew its lease nor record anything, and
-   * the send's promise never settles.
+   * the send's promise never settles. `gone.closed` settles once the pool has closed: a renewal
+   * already running when the worker died may still move the lease on until then.
    */
-  function dyingSender(log: { documents: string[]; notices: string[] }, dieAt: 'document' | 'notice', consumerDb: Kysely<Database>): TelegramSender {
-    const die = () => { void consumerDb.destroy().catch(() => {}); return new Promise<never>(() => {}); };
+  function dyingSender(log: { documents: string[]; notices: string[] }, dieAt: 'document' | 'notice', consumerDb: Kysely<Database>, gone: { closed?: Promise<void> }): TelegramSender {
+    const die = () => { gone.closed ??= consumerDb.destroy().catch(() => {}); return new Promise<never>(() => {}); };
     return {
       async dispatchOutboundDocument(chatId) {
         log.documents.push(String(chatId));
@@ -242,20 +325,22 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
       const png = new Uint8Array(Array.from({ length: 32 }, (_, i) => i * 5));
       const artifactId = randomUUID();
       const chat = String(7100 + Math.floor(Math.random() * 800));
-      const { idempotencyKey } = await enqueue('notify.published', deliveryPayload(chat, artifactId, png));
-      const readExportBytes = async (_d: unknown, _t: string, _task: string, id: string) => (id === artifactId ? png : null);
+      const { id, idempotencyKey } = await enqueue('notify.published', deliveryPayload(chat, artifactId, png));
+      const readExportBytes = async (_d: unknown, _t: string, _task: string, artifact: string) => (artifact === artifactId ? png : null);
 
       const first = { documents: [] as string[], notices: [] as string[] };
       const firstDb = createDb(url);
+      const gone: { closed?: Promise<void> } = {};
       const dying = new OutboxConsumer(firstDb, {
         tenantId, userId, batchSize: 5, leaseSeconds: 1, telegramBotToken: botToken, officeAlertChatId: office,
-        telegramSender: () => dyingSender(first, dieAt, firstDb), readExportBytes,
+        telegramSender: () => dyingSender(first, dieAt, firstDb, gone), readExportBytes,
       });
       void dying.processBatch(5);
-      // Wait until the first worker has made the send it dies at, then until its lease has run out.
-      const until = Date.now() + 5000;
-      while ((dieAt === 'document' ? first.documents : first.notices).length === 0 && Date.now() < until) await sleep(50);
-      await sleep(1600);
+      // Wait until the first worker has made the send it dies at and is gone, then until its lease
+      // has run out. A fixed 1.6 s was sometimes too short under load.
+      await until('the first worker has made the send it dies at', () => (dieAt === 'document' ? first.documents : first.notices).length > 0);
+      await gone.closed;
+      await until("the first worker's lease has run out", () => leaseRunOut(id));
 
       const second = { documents: [] as string[], notices: [] as string[], office: [] as string[] };
       const reclaiming = new OutboxConsumer(db, {
@@ -275,13 +360,14 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
       expect(row?.last_error).toMatch(/^DELIVERY_UNCERTAIN: /);
       expect(row?.last_error).toContain(dieAt === 'document' ? 'reclaim.png' : 'delivery notice');
       expect(second.office).toHaveLength(1);
-    }, 15000);
+    });
   }
 
   it('does not resend a notify.telegram message the first worker sent, and resends it after an administrator confirms a replay', async () => {
     const chat = String(7950 + Math.floor(Math.random() * 40));
     const { id, idempotencyKey } = await enqueue('notify.telegram', { chatId: chat, message: { text: 'Your Canva draft is ready' }, taskId: randomUUID() });
     const firstDb = createDb(url);
+    let closed: Promise<void> | undefined;
     const sent: string[] = [];
     const dying = new OutboxConsumer(firstDb, {
       tenantId, userId, leaseSeconds: 1, telegramBotToken: botToken, officeAlertChatId: office,
@@ -290,15 +376,15 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
         async dispatchOutboundMessage(chatId) {
           if (String(chatId) === office) return { success: true };
           sent.push(String(chatId));
-          void firstDb.destroy().catch(() => {});
+          closed ??= firstDb.destroy().catch(() => {});
           return new Promise<never>(() => {});
         },
       }),
     });
     void dying.processBatch(5);
-    const until = Date.now() + 5000;
-    while (sent.length === 0 && Date.now() < until) await sleep(50);
-    await sleep(1600);
+    await until('the first worker has sent the message', () => sent.length > 0);
+    await closed;
+    await until("the first worker's lease has run out", () => leaseRunOut(id));
 
     const office2: string[] = [];
     const again = () => new OutboxConsumer(db, {
@@ -328,7 +414,7 @@ describe('a consumer that stops mid-send is not repeated by the one that reclaim
     await again().processBatch(5);
     expect(sent).toEqual([chat, chat]);
     expect((await record(idempotencyKey))?.state).toBe('delivered');
-  }, 15000);
+  });
 });
 
 /**
@@ -358,13 +444,17 @@ describe('review of phase 0.2: sends that must not be repeated', () => {
   it('a holder whose lease was taken over while it is still alive sends nothing the new holder also sends', async () => {
     const one = { id: randomUUID(), png: new Uint8Array([1, 2, 3]), name: 'one.png' };
     const two = { id: randomUUID(), png: new Uint8Array([4, 5, 6]), name: 'two.png' };
-    await enqueue('notify.published', twoFilePayload('7123001', [one, two]));
+    const { id } = await enqueue('notify.published', twoFilePayload('7123001', [one, two]));
     const readExportBytes = bytesOf(one, two);
     const sends: string[] = [];
+    // A's upload of one.png lasts until B has finished with the command: a fixed 3.5 s upload and a
+    // fixed 2.3 s wait for A's lease once let B come before the lease had run out, under load.
+    let uploadDone!: () => void;
+    const uploading = new Promise<void>((resolve) => { uploadDone = resolve; });
     const sender = (who: string, slowFile?: string): TelegramSender => ({
       async dispatchOutboundDocument(_chat, _bytes, filename) {
         sends.push(`${who}:${filename}`);
-        if (filename === slowFile) await sleep(3500);
+        if (filename === slowFile) await uploading;
         return { success: true, messageId: '1' };
       },
       async dispatchOutboundMessage(chat) {
@@ -377,13 +467,21 @@ describe('review of phase 0.2: sends that must not be repeated', () => {
     (a as unknown as { outboxRepo: { renewClaim: () => Promise<never> } }).outboxRepo.renewClaim = async () => { throw new Error('connection timeout'); };
     const b = new OutboxConsumer(db, { tenantId, userId, leaseSeconds: 2, telegramBotToken: botToken, officeAlertChatId: office, telegramSender: () => sender('B'), readExportBytes });
     const running = a.processBatch(5);
-    await sleep(2300); // A's lease has run out while it is still uploading one.png
-    await b.processBatch(5);
+    void running.catch(() => {});
+    try {
+      // A's lease runs out while it is still uploading one.png; then B takes the command over.
+      await until('A is uploading one.png', () => sends.includes('A:one.png'));
+      await until("A's lease has run out", () => leaseRunOut(id));
+      await b.processBatch(5);
+    } finally {
+      // Whatever happened to B, A's upload ends: the test then fails with B's error, not a hang.
+      uploadDone();
+    }
     const summaryA = await running;
     const count = (what: string) => sends.filter((s) => s.endsWith(`:${what}`)).length;
     expect({ one: count('one.png'), two: count('two.png'), notice: count('notice') }).toEqual({ one: 1, two: 1, notice: 1 });
     expect(summaryA.lostClaims).toBe(1);
-  }, 15000);
+  });
 
   it('never resends a file Telegram did not confirm when the command is later requeued without confirmUncertainReplay', async () => {
     const first = { id: randomUUID(), png: new Uint8Array([7, 8, 9]), name: 'first.png' };

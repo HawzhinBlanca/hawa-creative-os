@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkScreen } from '../src/screens/WorkScreen.js';
 import { App } from '../src/App.js';
 import { DeskProviders, createDeskRuntime, type DeskRuntime } from '../src/DeskProviders.js';
@@ -94,15 +94,49 @@ function fakeCore(initial: FakeTask[], opts: { role?: string } = {}) {
 async function renderWork(stream: FakeStream, doc = { hidden: false }) {
   const runtime = createDeskRuntime({ stream, doc });
   const view = await mount(h(DeskProviders, { runtime, children: h(WorkScreen, {}) }));
+  mounted.push({ view, runtime });
   await advance(500);
   const queue = () => view.container.querySelector('[aria-label="Tasks List"]')?.textContent || '';
   return { runtime, view, queue };
 }
 
-const mounted: Array<{ unmount(): Promise<void> }> = [];
+const mounted: Array<{ view: { unmount(): Promise<void> }; runtime: DeskRuntime }> = [];
 
-afterAll(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 100));
+/**
+ * An event or a status change from the stream updates the screens (a toast, the connection state),
+ * so it is delivered inside act, as the harness's clicks and timers are. Outside it React logged
+ * "not wrapped in act" for each one.
+ */
+const live = (deliver: () => void) =>
+  React.act(async () => {
+    deliver();
+  });
+
+/**
+ * Nothing these screens do may write to the console. React wrote a warning whenever a lazily loaded
+ * screen (App.tsx) arrived: its module import finished at no fixed time, often after the test that
+ * rendered it, and sometimes after the file, when vitest failed the run on the pending console call
+ * ('onUserConsoleLog pending', about one run in four). Waits of 20 ms after each test and 100 ms
+ * after the file hid that on a quiet machine. Now those screens are loaded before any test renders
+ * them, so each arrives inside the test's own act; every console call is kept here for the whole
+ * file, never sent on to vitest, and fails the test it happened in.
+ */
+const consoleCalls: string[] = [];
+const consoleSpies: Array<{ mockRestore(): void }> = [];
+
+beforeAll(async () => {
+  await Promise.all([
+    import('../src/screens/ClientsScreen.js'),
+    import('../src/screens/SettingsScreen.js'),
+    import('../src/screens/OpsScreen.js'),
+    import('../src/screens/EvalScreen.js'),
+    import('../src/screens/ComparisonScreen.js'),
+  ]);
+  for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+    consoleSpies.push(vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+      consoleCalls.push(`console.${level}: ${args.map(String).join(' ')}`);
+    }));
+  }
 });
 
 beforeEach(() => {
@@ -111,15 +145,29 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  while (mounted.length) await mounted.pop()!.unmount();
+  while (mounted.length) {
+    const { view, runtime } = mounted.pop()!;
+    await view.unmount();
+    // Queries of the unmounted screens (a refetch in flight, a retry waiting) are dropped here, on
+    // fake time: nothing of this test runs after it.
+    await runtime.queryClient.cancelQueries();
+    runtime.queryClient.clear();
+  }
+  await flush();
   vi.useRealTimers();
-  // Work an unmounted screen started (a refetch, a stream close) may still log; let it finish
-  // before the file tears down, or vitest reports the pending console call as an unhandled error.
-  await new Promise((resolve) => setTimeout(resolve, 20));
   vi.unstubAllGlobals();
   clearAuthToken();
   apiClient.auth.setUnauthorizedHint(null);
   window.location.hash = '';
+  // Emptied as it is checked: a call that comes in after this check fails the next test's.
+  expect(consoleCalls.splice(0)).toEqual([]);
+});
+
+afterAll(() => {
+  // Given back to vitest once the file is done: a call that still came after it is then reported
+  // (and fails the run), not swallowed here.
+  for (const spy of consoleSpies.splice(0)) spy.mockRestore();
+  expect(consoleCalls).toEqual([]);
 });
 
 describe('the Work queue follows the event stream', () => {
@@ -127,19 +175,18 @@ describe('the Work queue follows the event stream', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view, queue } = await renderWork(stream);
-    mounted.push(view);
     expect(queue()).toContain('Members evening poster');
 
     // A new request arrives.
     core.tasks.unshift(approvable('t2', 'Graduation ceremony draft'));
-    stream.emit('task:created', { id: 't2', taskId: 't2', title: 'Graduation ceremony draft' });
+    await live(() => stream.emit('task:created', { id: 't2', taskId: 't2', title: 'Graduation ceremony draft' }));
     await advance(2_000);
     expect(queue()).toContain('Graduation ceremony draft');
 
     // A new draft of the task on screen: its detail (the preview) is read again.
     const detailReads = core.reads('/v1/tasks/t1');
     core.tasks.find((t) => t.id === 't1')!.revision = 2;
-    stream.emit('task:revision_created', { taskId: 't1' });
+    await live(() => stream.emit('task:revision_created', { taskId: 't1' }));
     await advance(2_000);
     expect(core.reads('/v1/tasks/t1')).toBe(detailReads + 1);
     expect(view.container.querySelector('.revision-badge')?.textContent).toContain('Revision v2');
@@ -149,7 +196,6 @@ describe('the Work queue follows the event stream', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view } = await renderWork(stream);
-    mounted.push(view);
     const first = core.listReads();
     expect(first).toBe(1);
 
@@ -158,13 +204,13 @@ describe('the Work queue follows the event stream', () => {
 
     // The stream drops: the list is polled every 30 s until it is back.
     await flush();
-    stream.setStatus('connecting');
+    await live(() => stream.setStatus('connecting'));
     await flush();
     await advance(61_000);
     expect(core.listReads()).toBe(first + 2);
 
     // Back: one read for what it missed, then nothing again.
-    stream.setStatus('connected');
+    await live(() => stream.setStatus('connected'));
     await advance(1_000);
     expect(core.listReads()).toBe(first + 3);
     await advance(5 * 60_000);
@@ -175,12 +221,11 @@ describe('the Work queue follows the event stream', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view } = await renderWork(stream);
-    mounted.push(view);
     const lists = core.listReads();
     const details = core.reads('/v1/tasks/t1');
 
     for (let i = 0; i < 20; i++) {
-      stream.emit(TASK_EVENTS[i % TASK_EVENTS.length], { taskId: 't1' });
+      await live(() => stream.emit(TASK_EVENTS[i % TASK_EVENTS.length], { taskId: 't1' }));
       await advance(10);
     }
     await advance(2_000);
@@ -193,13 +238,12 @@ describe('the Work queue follows the event stream', () => {
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const doc = { hidden: false };
     const { view } = await renderWork(stream, doc);
-    mounted.push(view);
     const lists = core.listReads();
 
     doc.hidden = true;
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
-    for (let i = 0; i < 5; i++) stream.emit('task:transitioned', taskTransitioned({ taskId: 't1', from: 'human_review', to: 'human_review', version: i + 2 }));
+    for (let i = 0; i < 5; i++) await live(() => stream.emit('task:transitioned', taskTransitioned({ taskId: 't1', from: 'human_review', to: 'human_review', version: i + 2 })));
     await advance(5_000);
     expect(core.listReads()).toBe(lists);
 
@@ -217,7 +261,6 @@ describe('approve and request revision are mutations', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { runtime, view } = await renderWork(stream);
-    mounted.push(view);
     const status = () => view.container.querySelector('[data-testid="task-status"]')?.textContent;
     expect(status()).toBe('NEEDS APPROVAL');
 
@@ -253,7 +296,6 @@ describe('approve and request revision are mutations', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view } = await renderWork(stream);
-    mounted.push(view);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
     await click(byText(view.container, 'button', 'Confirm Approval & Release'));
@@ -271,7 +313,6 @@ describe('approve and request revision are mutations', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view } = await renderWork(stream);
-    mounted.push(view);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
     await click(byText(view.container, 'button', 'Confirm Approval & Release'));
@@ -294,7 +335,6 @@ describe('approve and request revision are mutations', () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
     const { view } = await renderWork(stream);
-    mounted.push(view);
     const status = () => view.container.querySelector('[data-testid="task-status"]')?.textContent;
 
     await click(view.container.querySelector('#btn-request-revision'));
@@ -330,7 +370,7 @@ describe('an expired session reaches sign-in from any screen, once', () => {
     const stream = new FakeStream('connected');
     const runtime = createDeskRuntime({ stream, doc: { hidden: false } });
     const view = await mount(h(DeskProviders, { runtime, children: h(App) }));
-    mounted.push(view);
+    mounted.push({ view, runtime });
     return { runtime, stream, view };
   }
 
