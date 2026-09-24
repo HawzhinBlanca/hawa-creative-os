@@ -7,6 +7,7 @@ import { WahaIngressHandler, verifyActionSignature } from '@hawa/integrations';
 import { secretsEqual } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
  * WhatsApp (WAHA) intake, its health and kill switch, and the signed approve/revise links sent in
@@ -15,6 +16,7 @@ import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 export function registerWhatsappRoutes(ctx: RouteContext): void {
   const {
     broadcastTransition,
+    channelKillSwitches,
     db,
     events,
     isProduction,
@@ -32,8 +34,9 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
   const wahaIngress = new WahaIngressHandler(process.env.WAHA_WEBHOOK_SECRET);
 
   registerRoute('post', '/webhooks/whatsapp', async (c: any) => {
-    // 1. Office Kill Switch Check (CV-08, FR-071, FR-072)
-    if (process.env.WAHA_KILL_SWITCH === 'true') {
+    // 1. Office Kill Switch Check (CV-08, FR-071, FR-072). The environment's switch, or the office's
+    // switch kept in Postgres, which a restart does not forget.
+    if (process.env.WAHA_KILL_SWITCH === 'true' || channelKillSwitches.waha) {
       return problem(c, 503, 'Service Unavailable', 'WAHA adapter is currently disabled by office kill switch. Fallback to Hawa Desk intake at /desk.');
     }
 
@@ -96,7 +99,7 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
 
   // WAHA Session Health Probe (CV-08, FR-072)
   registerRoute('get', '/waha/health', async (c: any) => {
-    const isKillSwitchActive = process.env.WAHA_KILL_SWITCH === 'true';
+    const isKillSwitchActive = process.env.WAHA_KILL_SWITCH === 'true' || channelKillSwitches.waha;
     const allowedGroupsEnv = process.env.WAHA_ALLOWED_GROUPS;
     const allowedGroups = allowedGroupsEnv ? allowedGroupsEnv.split(',').map((s) => s.trim()).filter(Boolean) : [];
     const dedicatedAccount = process.env.WAHA_OFFICE_SESSION || 'office_waha_session';
@@ -212,6 +215,14 @@ export function registerWhatsappRoutes(ctx: RouteContext): void {
       // default
     }
     const enabled = body.enabled === true;
+    // Saved first: the environment variable alone was forgotten by a restart, so a WhatsApp kill
+    // switch thrown here was released by the next deploy.
+    try {
+      await setKillSwitch(channelKillSwitches, 'waha', !enabled, auth.actorId);
+    } catch (err: unknown) {
+      log.error('[core:kill_switch] the WhatsApp kill switch could not be saved:', err instanceof Error ? err.message : err);
+      return problem(c, 503, 'Kill switch not saved', 'The WhatsApp kill switch could not be saved to the database; it is unchanged. Try again.');
+    }
     process.env.WAHA_KILL_SWITCH = enabled ? 'false' : 'true';
     return c.json({
       ok: true,

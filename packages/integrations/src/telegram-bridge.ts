@@ -234,6 +234,15 @@ export class TelegramBridgeDaemon {
     this.intakePaused = paused;
   }
 
+  /**
+   * Polls (the loop's and "poll now"'s) wait until `ready` settles before they check the pause. Core
+   * reads the kill switch from Postgres when it starts; a poll taken before that read would not know
+   * whether the office switched intake off, and would only be refused by the pause.
+   */
+  waitBeforePolling(ready: Promise<unknown>): void {
+    this.pollQueue = this.pollQueue.then(() => ready).catch(() => undefined);
+  }
+
   start(): void {
     if (this.active) return;
     this.active = true;

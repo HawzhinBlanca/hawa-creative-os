@@ -195,6 +195,7 @@ import { registerTaskPipelineRoutes } from './routes/task-pipeline.routes.js';
 import { registerSearchRoutes } from './routes/search.routes.js';
 import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChatCampaignIntake } from './services/chat-campaign-intake.js';
+import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from './services/canva-status-message.js';
 import {
@@ -388,17 +389,20 @@ export function createApp(options?: CreateAppOptions) {
       actionTokenService: telegramActionTokenService,
       allowedUserIds: telegramAllowedUsers,
     });
-  // One app's switches. They were module-level, so every createApp() in a process shared them and
-  // switching Telegram off in one app switched it off in all of them. They still live in memory and
-  // are lost on a restart; persisting them is WhatsApp/ingress work (architecture programme 1.3, G8).
-  const channelKillSwitches = {
-    telegram: false,
-    waha: false,
-  };
+  // The office's switches, kept in Postgres so a restart keeps a thrown one (architecture programme
+  // 1.3, G8; services/channel-kill-switches.ts). Without a database they are this app's alone.
+  const channelKillSwitchStore = createChannelKillSwitchStore(db);
+  const channelKillSwitches = channelKillSwitchStore.switches;
   // The office's Telegram kill switch stops intake at the source: while it is on, the poller asks
   // Telegram for nothing (the webhook route refuses with 503 below). It used to change only the
-  // health report, and messages kept being read and designs kept being started.
-  telegramBridge.pauseIntakeWhen?.(() => channelKillSwitches.telegram);
+  // health report, and messages kept being read and designs kept being started. Until Postgres has
+  // been read the poller waits too: it cannot know yet whether the office switched intake off. Polls
+  // queue behind the first read (for at most 10 s, so "poll now" answers while Postgres is down) and
+  // stay paused while it has not succeeded.
+  telegramBridge.pauseIntakeWhen?.(() => !channelKillSwitchStore.isLoaded() || channelKillSwitches.telegram);
+  telegramBridge.waitBeforePolling?.(
+    Promise.race([channelKillSwitchStore.loaded, new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref?.())])
+  );
 
   // Local instance-scoped data structures
   const tasks = new Map<string, any>();

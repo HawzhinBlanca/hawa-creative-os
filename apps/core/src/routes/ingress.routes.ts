@@ -3,12 +3,20 @@ import crypto from 'node:crypto';
 import { withRlsContext } from '@hawa/db';
 import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
+import { log } from '../logging.js';
+import { refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
 
 export function registerIngressRoutes(ctx: RouteContext) {
   const { registerRoute, unifiedIngress, channelKillSwitches, problem } = ctx;
 
-  // Ingress Health & Channel Status
-  registerRoute('get', '/ingress/status', (c: any) => {
+  // Ingress Health & Channel Status. The switches are read from Postgres first: another Core may
+  // have thrown one since this process last looked.
+  registerRoute('get', '/ingress/status', async (c: any) => {
+    try {
+      await refreshKillSwitches(channelKillSwitches);
+    } catch (err: unknown) {
+      log.warn('[core:kill_switch] /ingress/status answers from this process\'s copy; PostgreSQL could not be read:', err instanceof Error ? err.message : err);
+    }
     return c.json({
       status: 'active',
       channels: {
@@ -27,7 +35,13 @@ export function registerIngressRoutes(ctx: RouteContext) {
     }
     const body = await c.req.json().catch(() => ({}));
     const enabled = body.enabled !== undefined ? Boolean(body.enabled) : channelKillSwitches[channel];
-    channelKillSwitches[channel] = !enabled;
+    // Answered only once Postgres has it, so the switch the office sees thrown survives a restart.
+    try {
+      await setKillSwitch(channelKillSwitches, channel, !enabled, ctx.verifyRequestAuth(c).actorId);
+    } catch (err: unknown) {
+      log.error(`[core:kill_switch] the ${channel} kill switch could not be saved:`, err instanceof Error ? err.message : err);
+      return problem(c, 503, 'Kill switch not saved', `The ${channel} kill switch could not be saved to the database; it is unchanged. Try again.`);
+    }
     return c.json({ channel, enabled, killSwitchActive: channelKillSwitches[channel] }, 200);
   });
 
