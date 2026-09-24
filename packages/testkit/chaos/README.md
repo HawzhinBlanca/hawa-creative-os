@@ -124,9 +124,10 @@ Placed today, in the worker only:
 | `worker.sender.after-telegram` (`detail.commandType` = `lifecycle`, `kind`, `key`) | `lifecycle/telegram-sender.ts` `sendAttempt`, after the Telegram send, before its mark | the same, for the TelegramSender object (slice 2.2) |
 | `worker.delivery.between-files` | `lifecycle/delivery.ts`, before the second and later files | some files sent, the rest not yet |
 | `core.delivery.after-drive` (`detail.mode`) | `services/omnichannel-delivery.ts`, after the Drive upload, before anything of it is recorded | Drive holds the files; a retry must adopt them, not upload again |
+| `core.project.after-commit` (`detail.requestId`, `rev`, `key`) | `routes/lifecycle-projection.routes.ts`, after a projection committed, before the answer | the worker asks again under the same key; Core answers from its record and writes nothing twice |
+| `worker.rl.after-project` (`detail.requestId`, `key`, `rev`) | `lifecycle/request-lifecycle.ts`, inside the `project:<rev>` step, after Core answered, before it is journalled | the step runs again; Core replays the projection |
 
-**Follow-ups.** The design also names `core.project.after-commit`, `core.outcome.after-bridge`,
-`core.delivery.after-drive` and `worker.rl.after-project`, which belong to later Phase 2 slices. Until then Core, Postgres and Restate are killed time-based:
+**Follow-ups.** The design also names `core.outcome.after-bridge`, which belongs to the Core side of slice 2.3. Until then Core, Postgres and Restate are killed time-based:
 while a worker point is held (`killWhileHeld`), or a fixed time into a request.
 
 ## Scenarios (`chaos.test.ts`)
@@ -204,6 +205,32 @@ L2.K14 21 s (the task was complete right after Core came back, without a second 
 legacy R1.K14 stays in `publishing`); L2.K15 19 s; L2.K16 17 s; L2.K17 20 s (the `sent` mark is written
 once Postgres is back, so nothing is uncertain and the office hears nothing); L2.K18 17 s; L2.K12 17 s
 (one office alert naming the task, the file shown once); L2.429 16 s (the second file 3,032 ms after the 429).
+
+**Slice 2.3 part B (the worker side: `RequestLifecycle` and `DesignRun`).** ChatInbox does not route to
+the lifecycle yet, and this Core does not yet project a design outcome (`recordOutcome` answers 422
+`OP_NOT_AVAILABLE` until the Core side of 2.3), so these open a request on `RequestLifecycle` through
+Restate's ingress, as ChatInbox will, and follow it until its design outcome has reached the lifecycle.
+The lifecycle then waits for a Core that can project it; the driver kills that waiting invocation so the
+project quiesces. Checks: one `hawa.requests` row owned by `restate`, designing at revision 1; one task
+for it, whose `task.created` row is recorded (`OWNED_BY_LIFECYCLE`) and never dispatched; one
+projection (`<request>:1:open`); no `TaskWorkflow`; one `DesignRun`, completed; one Canva import; one
+`open` invocation, completed; the outcome sent to the lifecycle once; the lifecycle's `get` shows the
+first round designing; nothing sent to the requester; nothing paused; no RT0016.
+
+| Name | What |
+|---|---|
+| L3.0 | the request opened, designed once, its outcome at the lifecycle; no faults |
+| L3.K7b | worker killed at `worker.rl.after-project` (Core committed the open projection, the journal has not got the answer) |
+| L3.K6 | Core killed at `core.project.after-commit` (the projection committed, the answer never sent) |
+| L3.K8 | worker killed inside the `DesignRun` after `canva-create-draft` ran, before it was journalled |
+
+The design's 2.3 subset (R1 S1–S6, R2 reminders, R3 question and answer, R5 rollback) needs ChatInbox's
+decide mode and Core's outcome, reminder and requester projections; it is not run yet.
+
+First run (2026-09-25, `--only L3.0,L3.K7b,L3.K6,L3.K8,R1.0,L2.0`, 110 s after a cached build, peak 513
+MiB): every invariant held. L3.0 5 s; L3.K7b 9 s; L3.K6 10 s; L3.K8 10 s (in each, the `designFinished`
+invocation was found waiting on Core's 422 `OP_NOT_AVAILABLE` and killed by the driver); R1.0 (legacy)
+13 s; L2.0 13 s.
 
 Not yet: R1 kill points that need Phase 2 code (poller, `ChatInbox`, `RequestLifecycle`); the design's
 K9 with a *patched* worker build (R1.D1 deploys the same build, so it proves the drain and the pinning

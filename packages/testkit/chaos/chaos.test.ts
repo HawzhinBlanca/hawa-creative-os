@@ -527,6 +527,36 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { flagged: true });
 
+  // Slice 2.3 part B (the worker side; PHASE2_DESIGN.md 2.3, 2.4): RequestLifecycle and DesignRun on
+  // the real Restate. ChatInbox does not route to the lifecycle yet and this Core does not yet project
+  // a design outcome (OP_NOT_AVAILABLE until the Core side of 2.3), so each request is opened through
+  // ingress and followed until its outcome reaches the lifecycle; that waiting invocation is then
+  // killed. The design's R1 S3-S6, R2, R3 and R5 need both of those and are not run here.
+  scenario('L3.0', 'RequestLifecycle.open through ingress: Core records the request, DesignRun designs it once, the outcome reaches the lifecycle', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.0', events);
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K7b', 'worker killed after Core projected the open, before the lifecycle journaled the answer', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K7b', events, async (requestId) => {
+      const armed = await killAtPoint('worker.rl.after-project', { requestId });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K6', 'Core killed after committing the open projection, before answering the worker', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K6', events, async (requestId) => {
+      const armed = await killAtPoint('core.project.after-commit', { requestId });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K8', 'worker killed inside the DesignRun after Core planned and imported the draft, before the step was journalled', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K8', events, async () => {
+      const armed = await killAtPoint('worker.step.after-action', { step: 'canva-create-draft' });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();
     const chatB = newChat();
@@ -593,4 +623,85 @@ async function outboxOpen(taskId: string): Promise<boolean> {
   const { query, sql } = await import('./driver/stack.js');
   const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND state IN ('pending', 'leased')`);
   return Number(row?.n ?? 0) > 0;
+}
+
+/**
+ * Slice 2.3 part B: a request opened on RequestLifecycle through Restate's ingress, as ChatInbox will
+ * send it, followed until its design outcome has reached the lifecycle. `arm` may arm a kill before the
+ * open is sent; it answers what happened, once it has.
+ */
+async function lifecycleOpen(chat: string, tag: string, events: string[], arm?: (requestId: string) => Promise<{ done: Promise<string> }>): Promise<Expectation> {
+  const { query, sql } = await import('./driver/stack.js');
+  const { TENANT_ID, KAAE_CLIENT_ID } = await import('./driver/provision.js');
+  const { requestIdFor } = await import('../../domain/src/request-lifecycle.js');
+  const { briefText } = await import('./driver/scenario.js');
+  const updateId = 800_000 + Math.floor(Math.random() * 100_000);
+  const requestId = requestIdFor(chat, updateId);
+  const brief = briefText(tag);
+  const killed = arm ? await arm(requestId) : null;
+  const open = {
+    v: 1, eventId: `open:${requestId}`, requestId, tenantId: TENANT_ID, chatId: chat,
+    origin: { kind: 'telegram', chatId: chat, updateId },
+    draft: { title: `KAAE invitation ${tag}`, rawText: brief, clientId: KAAE_CLIENT_ID, designInstructions: '', exactCopy: [], autoGenerate: true },
+  };
+  const res = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/open/send`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `open:${requestId}` }, body: JSON.stringify(open),
+  });
+  events.push(`open sent: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Restate refused the open: HTTP ${res.status} ${await res.text()}`);
+  if (killed) events.push(await killed.done);
+
+  const [task] = await waitUntil(`the request's task`, async () => {
+    const rows = await query<{ id: string }>(sql`SELECT id::text AS id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
+    return rows.length ? rows : null;
+  }, 120_000);
+  events.push(`task ${task.id}`);
+  const runKey = `dr-${task.id}`;
+  await waitUntil('the design run to finish', async () => {
+    const rows = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = '${runKey}'`);
+    return rows.length > 0 && rows.every((r) => r.status === 'completed');
+  }, 300_000, 2000);
+  // The outcome reached the lifecycle, whose projection this Core refuses (OP_NOT_AVAILABLE): it waits.
+  const waiting = await waitUntil('the lifecycle to take the design outcome', async () => {
+    const rows = await restateQuery<{ id: string; status: string; last_failure: string | null }>(
+      `SELECT id, status, last_failure FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'designFinished'`);
+    return rows.find((r) => /OP_NOT_AVAILABLE/.test(r.last_failure ?? '')) ?? null;
+  }, 120_000, 2000);
+  events.push(`designFinished ${waiting.id} waits: ${String(waiting.last_failure).slice(0, 120)}`);
+  const view = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/get`, { method: 'POST' })
+    .then((r) => r.json()).catch((e) => ({ error: String(e) })) as Record<string, unknown>;
+  events.push(`lifecycle view: ${JSON.stringify(view)}`);
+  // Stop the waiting invocation, so the project can quiesce (it would give up after 30 minutes).
+  const stop = await fetch(`http://127.0.0.1:${PORTS.restateAdmin}/invocations/${encodeURIComponent(waiting.id)}/kill`, { method: 'PATCH' });
+  const stopped = stop.ok ? stop.status : (await fetch(`http://127.0.0.1:${PORTS.restateAdmin}/invocations/${encodeURIComponent(waiting.id)}?mode=kill`, { method: 'DELETE' })).status;
+  events.push(`waiting invocation killed: HTTP ${stopped}`);
+
+  const extra: InvariantResult[] = [];
+  const add = (name: string, ok: boolean, detail: string) => extra.push({ name, ok, detail });
+  const requests = await query<{ owner: string; stage: string; rev: string; root_task_id: string }>(sql`SELECT owner, stage, rev::text AS rev, root_task_id::text AS root_task_id FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
+  add('one request row, owned by restate, designing at revision 1', requests.length === 1 && requests[0].owner === 'restate' && requests[0].stage === 'designing' && requests[0].rev === '1' && requests[0].root_task_id === task.id, JSON.stringify(requests));
+  const tasks = await query<{ id: string }>(sql`SELECT id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
+  add('one task for the request', tasks.length === 1, `tasks=${tasks.length}`);
+  const created = await query<{ state: string; last_error: string | null }>(sql`SELECT state::text AS state, last_error FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'task.created'`);
+  add('its task.created row is recorded, never dispatched', created.length === 1 && created[0].state === 'delivered' && created[0].last_error === 'OWNED_BY_LIFECYCLE', JSON.stringify(created));
+  const projections = await query<{ idempotency_key: string }>(sql`SELECT idempotency_key FROM hawa.lifecycle_projections WHERE request_id = ${requestId}::uuid`);
+  add('one projection: the open', projections.length === 1 && projections[0].idempotency_key === `${requestId}:1:open`, JSON.stringify(projections.map((p) => p.idempotency_key)));
+  const legacy = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key LIKE 'task-wf-${task.id}%'`);
+  add('no TaskWorkflow for a lifecycle task', Number(legacy[0]?.n ?? 0) === 0, `TaskWorkflow=${legacy[0]?.n ?? 0}`);
+  const runs = await restateQuery<{ status: string; last_failure_error_code: string | null }>(`SELECT status, last_failure_error_code FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key LIKE 'dr-${task.id}%'`);
+  add('one DesignRun, completed', runs.length === 1 && runs[0].status === 'completed', JSON.stringify(runs));
+  const [ops] = await query<{ imports: string }>(sql`SELECT count(*) FILTER (WHERE kind = 'create') AS imports FROM hawa.canva_remote_operations WHERE task_id = ${task.id}::uuid`);
+  add('one Canva import', Number(ops.imports) === 1, `imports=${ops.imports}`);
+  const opens = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'open'`);
+  add('one open invocation, completed', opens.length === 1 && opens[0].status === 'completed', JSON.stringify(opens));
+  const outcomes = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'designFinished'`);
+  add('the outcome was sent to the lifecycle once', Number(outcomes[0]?.n ?? 0) === 1, `designFinished invocations=${outcomes[0]?.n ?? 0}`);
+  add('the lifecycle shows the request designing its first round', view?.stage === 'designing' && view?.rev === 1 && view?.currentTaskId === task.id && view?.round === 0, JSON.stringify(view));
+  const sends = (await sentTo(chat)).length;
+  add('nothing was sent to the requester (Core composes no message for an open yet)', sends === 0, `sends=${sends}`);
+  const [paused] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status = 'paused'`);
+  add('no paused invocation', Number(paused?.n ?? 0) === 0, `paused=${paused?.n ?? 0}`);
+  const [rt16] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE last_failure_error_code = 'RT0016'`);
+  add('no journal mismatch (RT0016)', Number(rt16?.n ?? 0) === 0, `RT0016=${rt16?.n ?? 0}`);
+  return { delivered: false, skipRequestChecks: true, extra };
 }

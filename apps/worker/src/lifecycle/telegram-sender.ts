@@ -24,7 +24,7 @@
  * ever travels through Restate's journal.
  */
 import * as restate from '@restatedev/restate-sdk';
-import type { OutboundMessage, SendResult } from '@hawa/contracts';
+import type { LifecycleMessage, MessageSentEvent, OutboundMessage, SendResult, SentHook } from '@hawa/contracts';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { TelegramBridge } from '@hawa/integrations';
@@ -74,6 +74,11 @@ export interface SenderContext {
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
   /** A one-way send to another chat's TelegramSender, deduplicated by the message's key. */
   sendTo(message: OutboundMessage): void;
+  /**
+   * Slice 2.3: tells the request's RequestLifecycle that a message it asked to hear about (`onSent`)
+   * went out (messageSent, a one-way send keyed `sent:<key>`).
+   */
+  reportSent?(hook: SentHook, event: Omit<MessageSentEvent, 'at'>): Promise<void>;
 }
 
 /** The step every message is fenced under: `lc:<key>:send`. */
@@ -93,6 +98,7 @@ const stepKind = (m: OutboundMessage): SendStepKind => (m.kind === 'document' ? 
  * error Restate retries (a RetryableError carrying Telegram's retry_after on a 429).
  */
 export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage): Promise<SendResult> {
+  if (m.kind === 'callback_answer') return answerCallback(deps, m);
   const critical = m.class === 'critical';
   const tenantId = tenantOf(m);
   const markId = markIdOf(m.key);
@@ -139,7 +145,12 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
           caption: m.caption,
           ...(m.parseMode ? { parseMode: m.parseMode } : {}),
         })
-      : await bridge.dispatchOutboundMessage(m.chatId, { text: m.text || '', ...(m.parseMode ? { parse_mode: m.parseMode } : {}) });
+      : await bridge.dispatchOutboundMessage(m.chatId, {
+          text: m.text || '',
+          ...(m.parseMode ? { parse_mode: m.parseMode } : {}),
+          // The requester's buttons under a draft or a question (slice 2.3).
+          ...((m as LifecycleMessage).replyMarkup ? { reply_markup: (m as LifecycleMessage).replyMarkup } : {}),
+        });
   } catch (err) {
     // The bridge answers with a result; a throw is unexpected, and whether anything left is unknown.
     res = { success: false, error: `TELEGRAM_DELIVERY_UNCERTAIN: ${err instanceof Error ? err.message : String(err)}` };
@@ -191,6 +202,20 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   throw new Error(`${error}: Telegram refused ${m.key} for a reason this sender does not know; asked again`);
 }
 
+/**
+ * The answer to a tapped button (slice 2.3): a courtesy, never retried and never fenced. Telegram
+ * refuses an answer that comes too late, which is harmless: the button only stops spinning later.
+ */
+async function answerCallback(deps: TelegramSenderDeps, m: OutboundMessage): Promise<SendResult> {
+  if (!m.callbackQueryId) return { outcome: 'refused', error: 'CALLBACK_WITHOUT_QUERY: a callback answer names the tapped button' };
+  const botToken = deps.botToken();
+  if (!botToken) throw new Error('TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set; the message waits for it');
+  const bridge = deps.bridge(botToken);
+  if (!bridge.answerCallbackQuery) return { outcome: 'refused', error: 'CALLBACK_ANSWER_UNSUPPORTED' };
+  const answered = await bridge.answerCallbackQuery(m.callbackQueryId, m.text).catch(() => false);
+  return answered ? { outcome: 'sent' } : { outcome: 'refused', error: 'CALLBACK_ANSWER_FAILED' };
+}
+
 /** The office's alert for a critical message that may not have arrived. */
 export function uncertainAlertFor(m: OutboundMessage, error: string, officeChatId: string): OutboundMessage {
   const taskId = m.taskId || 'unknown';
@@ -226,12 +251,28 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
     }
   }
   if (result.outcome === 'refused') log.warn(`[TelegramSender] Telegram refused ${m.key} for chat ${m.chatId}: ${result.error}`);
+  // A draft or question that went out (or may have) starts its reminders; one Telegram refused did not go out.
+  const hook = (m as LifecycleMessage).onSent;
+  if (hook && ctx.reportSent && result.outcome !== 'refused') {
+    await ctx.reportSent(hook, {
+      v: 1,
+      eventId: `sent:${m.key}`,
+      key: m.key,
+      what: hook.what,
+      taskId: hook.taskId,
+      ...(result.outcome === 'sent' && result.messageId ? { messageId: result.messageId } : {}),
+      ...(result.outcome === 'uncertain' ? { uncertain: true } : {}),
+    });
+  }
   return result;
 }
 
 export type TelegramSenderHandlers = {
   send: (ctx: restate.ObjectContext, m: OutboundMessage) => Promise<SendResult>;
 };
+/** RequestLifecycle's messageSent, named here (not imported) because RequestLifecycle sends to this object. */
+const RequestLifecycleSent: restate.VirtualObjectDefinition<'RequestLifecycle', { messageSent: (ctx: restate.ObjectContext, e: MessageSentEvent) => Promise<unknown> }> = { name: 'RequestLifecycle' };
+
 /** How other services name it (objectClient / objectSendClient). */
 export const TelegramSenderApi: restate.VirtualObjectDefinition<'TelegramSender', TelegramSenderHandlers> = { name: 'TelegramSender' };
 
@@ -245,6 +286,10 @@ export function createTelegramSender(deps: TelegramSenderDeps) {
             run: (name, action) => ctx.run(name, action),
             sendTo: (message) => {
               ctx.objectSendClient(TelegramSenderApi, message.chatId).send(message, restate.rpc.sendOpts({ idempotencyKey: message.key }));
+            },
+            reportSent: async (hook, event) => {
+              const at = await ctx.date.now();
+              ctx.objectSendClient(RequestLifecycleSent, hook.requestId).messageSent({ ...event, at }, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
             },
           }, deps, m)),
     },

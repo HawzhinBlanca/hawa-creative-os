@@ -37,8 +37,14 @@ export interface OutboundMessage {
   /** Deterministic: the same logical message always has the same key (PHASE2_DESIGN.md 2.9). */
   key: string;
   chatId: string;
-  kind: 'text' | 'document';
+  /**
+   * 'callback_answer' (slice 2.3): the answer to a tapped button, `text` shown as its toast. Always
+   * courtesy: Telegram refuses a late answer, which is harmless.
+   */
+  kind: 'text' | 'document' | 'callback_answer';
   text?: string;
+  /** For 'callback_answer': the tapped button's callback query. */
+  callbackQueryId?: string;
   parseMode?: 'HTML';
   exportRef?: ExportRef;
   filename?: string;

@@ -1,16 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../../../apps/core/src/app.js';
 import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../../../apps/core/src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../../../apps/core/src/services/canva-connect-service.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.resolve(__dirname, '../../..');
+import { workerServices } from '../../../apps/worker/src/worker-services.js';
+import { FakeObjectContext } from '../src/fake-restate-context.js';
 
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
@@ -125,11 +121,24 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
     expect(approveRes.status).not.toBe(202);
   });
 
-  it('proves Restate TaskWorkflow in apps/worker/src/index.ts directly runs runCanvaDraft', () => {
-    const workerIndexPath = path.resolve(rootDir, 'apps/worker/src/index.ts');
-    const workerIndexContent = fs.readFileSync(workerIndexPath, 'utf8');
-
-    // The TaskWorkflow handler in Restate index.ts must reference runCanvaDraft
-    expect(workerIndexContent).toContain('runCanvaDraft');
+  it('proves the Restate TaskWorkflow the worker binds runs runCanvaDraft for a Canva request', async () => {
+    // The services the worker binds (apps/worker/src/worker-services.ts, used by index.ts), run on a
+    // fake context: a Canva request without a client ends as runCanvaDraft ends it, reported to Core.
+    const workflow = workerServices().find((s) => s.name === 'TaskWorkflow') as unknown as { workflow: { run: (ctx: unknown, input: unknown) => Promise<{ status: string }> } };
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => { calls.push(String(url)); return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }); });
+    const saved = process.env.HAWA_BEARER_TOKEN;
+    process.env.HAWA_BEARER_TOKEN = ['duplicate', 'paths', 'bearer'].join('_');
+    try {
+      const taskId = randomUUID();
+      const out = await workflow.workflow.run(new FakeObjectContext({ key: `task-wf-${taskId}` }), {
+        taskId, tenantId, rawText: 'x', sourcePlatform: 'telegram', idempotencyKey: `k-${taskId}`, canvaAutoGenerate: true,
+      });
+      expect(out.status).toBe('CLIENT_REQUIRED');
+      expect(calls.filter((u) => u.endsWith(`/v1/tasks/${taskId}/notifications/canva-status`))).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      if (saved === undefined) delete process.env.HAWA_BEARER_TOKEN; else process.env.HAWA_BEARER_TOKEN = saved;
+    }
   });
 });

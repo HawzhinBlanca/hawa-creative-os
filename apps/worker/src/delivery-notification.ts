@@ -18,7 +18,9 @@ export interface TelegramSendResult {
 
 /** The part of the Telegram bridge the outbox handlers use; a test supplies its own. */
 export interface TelegramSender {
-  dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string }): Promise<TelegramSendResult>;
+  dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string; reply_markup?: unknown }): Promise<TelegramSendResult>;
+  /** The answer to a tapped button (TelegramSender, slice 2.3). */
+  answerCallbackQuery?(callbackQueryId: string, text?: string, showAlert?: boolean): Promise<boolean>;
   dispatchOutboundDocument(
     chatId: string | number,
     fileBytes: Uint8Array,
