@@ -88,6 +88,15 @@ describe.skipIf(!ownerUrl || !appUrl)('migration 020: one inbox row per source e
     });
   });
 
+  it('leaves row-level security on for the migrations after it: the runner applies them all in one transaction', async () => {
+    await rolledBack(async () => {
+      await owner.query('DROP INDEX hawa.inbox_events_source_event_uidx');
+      await owner.query(migration);
+      // 021 and later run in this same transaction, and must not inherit 020's row_security = off.
+      expect((await owner.query('SHOW row_security')).rows[0].row_security).toBe('on');
+    });
+  });
+
   it('refuses a second row for a source event from then on, ON CONFLICT DO NOTHING keeps the first, and send marks still append', async () => {
     const event = `9002:${randomUUID()}`;
     await rolledBack(async () => {

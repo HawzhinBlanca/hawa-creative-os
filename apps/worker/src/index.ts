@@ -8,6 +8,7 @@ import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import { LiveColourGate, runWhileLive, backgroundLoopsFromEnv, type LoopHandle } from './live-colour.js';
 import { log, withInvocationLogContext } from './logging.js';
+import { automationMembershipGaps, servedTenantIds } from './automation-identity.js';
 
 const SERVICE_NAME = 'hawa-worker';
 // A long-running service that dies without saying why is the hardest kind of outage to diagnose,
@@ -130,6 +131,20 @@ const liveGate = backgroundMode.mode === 'live-colour'
   ? new LiveColourGate({ adminUrl: backgroundMode.adminUrl, selfUri: backgroundMode.selfUri, takeoverMs: backgroundMode.takeoverMs, refreshMs: backgroundMode.refreshMs })
   : null;
 let gatedLoop: LoopHandle | null = null;
+/**
+ * Served tenants where System Automation, the worker's database identity, has no operator
+ * membership: RLS hides every row there, so the outbox would sit idle without a word. null until
+ * the startup check has answered.
+ */
+let automationGaps: string[] | null = null;
+if (sharedDb) {
+  automationMembershipGaps(sharedDb, servedTenantIds()).then((gaps) => {
+    automationGaps = gaps;
+    for (const tenant of gaps) {
+      log.error(`[Worker] System Automation has no active operator membership in tenant ${tenant}: the worker can see none of its rows. Add the membership (as migration 012 does) and restart.`);
+    }
+  }, (err) => log.error('[Worker] Could not check System Automation\'s tenant memberships:', err));
+}
 if (backgroundMode.mode === 'misconfigured') log.error(`[Worker] Outbox not started: ${backgroundMode.reason}`);
 if (sharedDb && backgroundMode.mode !== 'misconfigured') {
   try {
@@ -137,8 +152,7 @@ if (sharedDb && backgroundMode.mode !== 'misconfigured') {
       restateIngressUrl: process.env.RESTATE_INGRESS_URL,
       db: sharedDb,
     });
-    const tenantIdsEnv = process.env.TENANT_IDS || process.env.HAWA_TENANT_IDS;
-    const tenantIds = tenantIdsEnv ? tenantIdsEnv.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+    const tenantIds = servedTenantIds();
     outboxConsumer = new OutboxConsumer(sharedDb, {
       batchSize: Number(process.env.OUTBOX_BATCH_SIZE || 20),
       pollIntervalMs: Number(process.env.OUTBOX_POLL_INTERVAL_MS || 1000),
@@ -176,7 +190,8 @@ const server = http.createServer((req, res) => {
     probe.then(({ postgres, outbox }) => {
       const healthy = postgres !== 'disconnected';
       // Backlog or dead letters degrade the worker without failing the container health check.
-      const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured';
+      const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured'
+        || Boolean(automationGaps?.length);
       res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
@@ -192,6 +207,8 @@ const server = http.createServer((req, res) => {
         background: backgroundMode.mode === 'always' ? 'always' : backgroundMode.mode === 'misconfigured' ? 'misconfigured' : liveGate!.state(),
         dependencies: { postgres },
         outbox,
+        // Served tenants where the worker's own database user has no membership (see automationGaps).
+        tenantsWithoutAutomationMembership: automationGaps,
         timestamp: new Date().toISOString(),
       }));
     });

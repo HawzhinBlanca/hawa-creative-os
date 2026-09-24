@@ -28,6 +28,8 @@
 BEGIN;
 -- inbox_events forces row-level security; the upgrade runs as the schema owner, which must see
 -- every tenant's rows. A role that cannot bypass RLS fails here instead of deduplicating a subset.
+-- The upgrade runner applies every pending migration in one transaction, so SET LOCAL would last
+-- into 021 and later ones: it is switched back on at the end of this file.
 SET LOCAL row_security = off;
 
 CREATE TABLE IF NOT EXISTS hawa.inbox_event_duplicates (
@@ -37,6 +39,9 @@ CREATE TABLE IF NOT EXISTS hawa.inbox_event_duplicates (
   removed_by text NOT NULL DEFAULT '020_inbox_event_dedupe.sql',
   PRIMARY KEY (id)
 );
+-- Removed receipts are for the schema owner to read back, so the table has no row-level security.
+-- It carries tenant_id and payloads of every tenant: a later blanket GRANT on hawa's tables must
+-- leave it out, or give it RLS first.
 REVOKE ALL ON hawa.inbox_event_duplicates FROM PUBLIC;
 REVOKE ALL ON hawa.inbox_event_duplicates FROM hawa_app;
 
@@ -75,4 +80,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS inbox_events_source_event_uidx
   WHERE source_account_id <> 'telegram_delivery';
 
 GRANT SELECT ON hawa.schema_upgrades TO hawa_app;
+SET LOCAL row_security = on;
 COMMIT;

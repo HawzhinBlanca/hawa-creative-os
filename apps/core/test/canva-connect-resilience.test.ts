@@ -30,6 +30,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
   let exportCreateHttp: number;
   /** Refusals Canva answers to POST /exports before exportCreateHttp applies (chaos R1.K9). */
   let exportCreateFaults: number[];
+  /** What Canva answers POST /imports with; 200 creates the import job. */
+  let importCreateHttp: number;
   let service: CanvaConnectService;
   const remote = vi.fn(async (input: any, init: any = {}) => {
     const u = String(input);
@@ -44,6 +46,7 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     }
     if (u.endsWith('/imports') && init.method === 'POST') {
       importCreates++;
+      if (importCreateHttp !== 200) return new Response('{"code":"internal_error"}', { status: importCreateHttp });
       return Response.json({ job: { id: 'import_' + taskId + '_' + importCreates, status: 'in_progress' } });
     }
     if (u.includes('/imports/')) {
@@ -87,6 +90,7 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     exportCreates = 0;
     exportCreateHttp = 200;
     exportCreateFaults = [];
+    importCreateHttp = 200;
     await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES (${taskId}::uuid,${tenant}::uuid,${clientId}::uuid,'Hunt Canva task')`.execute(db);
     service = new CanvaConnectService(db, options);
     const auth = await service.startAuthorization(scope);
@@ -163,6 +167,24 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     exportCreateFaults = [503, 503, 503, 429];
     const preview = await service.startExport(scope, taskId, 'workflow-preview-k9', 'png', 1);
     expect({ status: preview.status, faultsLeft: exportCreateFaults.length, jobsCreated: exportCreates }).toEqual({ status: 'submitted', faultsLeft: 0, jobsCreated: 1 });
+  });
+
+  it('a Canva 5xx on POST /imports leaves the import uncertain: a gateway may answer after Canva made the design', async () => {
+    importCreateHttp = 502;
+    const first = await service.importEditableDesign(scope, taskId, 'studio-plan-ffff', source());
+    // The client does not repeat a 5xx on an import (a duplicate is a second design in the owner's
+    // account), so the service must not tell the operator that nothing was created either.
+    importCreateHttp = 200;
+    const again = await service.importEditableDesign(scope, taskId, 'studio-plan-gggg', source()).then((r) => r.status, (e) => String(e?.code));
+    expect({ first: first.status, again, importsSentToCanva: importCreates }).toEqual({ first: 'uncertain', again: 'CANVA_CREATE_CONFLICT', importsSentToCanva: 1 });
+  });
+
+  it('a Canva 4xx on POST /imports is a refusal: nothing was created, and it may be sent again', async () => {
+    importCreateHttp = 400;
+    const first = await service.importEditableDesign(scope, taskId, 'studio-plan-hhhh', source());
+    importCreateHttp = 200;
+    const again = await service.importEditableDesign(scope, taskId, 'studio-plan-iiii', source());
+    expect({ first: first.status, again: again.status, importsSentToCanva: importCreates }).toEqual({ first: 'failed', again: 'submitted', importsSentToCanva: 2 });
   });
 
   it('a second Canva call during a token refresh is served, not refused as CANVA_RECONNECT_REQUIRED', async () => {

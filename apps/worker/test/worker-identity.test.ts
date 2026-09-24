@@ -7,6 +7,7 @@ import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Ky
 import { ART_DIRECTOR_USER_ID, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { outcomeRecorder } from '../src/outcome-without-core.js';
+import { automationMembershipGaps, servedTenantIds } from '../src/automation-identity.js';
 
 /**
  * The worker's database identity (PHASE2_DESIGN.md section 1.2, finding 2). The worker wrote as the
@@ -20,6 +21,7 @@ import { outcomeRecorder } from '../src/outcome-without-core.js';
 const tenantId = '00000000-0000-4000-a000-000000000007';
 const adminId = '00000000-0000-4000-b000-000000000007';
 const url = process.env.TEST_DATABASE_URL;
+const ownerUrl = process.env.TEST_DATABASE_OWNER_URL;
 
 describe.skipIf(!url)('the worker acts as System Automation', () => {
   let db: Kysely<Database>;
@@ -74,6 +76,26 @@ describe.skipIf(!url)('the worker acts as System Automation', () => {
       tenantId, taskId, report: { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId: 'DAidentity1', runId: 'identity-run' },
     } as Parameters<ReturnType<typeof outcomeRecorder>>[0]);
     expect(recorded).toMatchObject({ requesterMessage: 'written', report: 'written' });
+  });
+
+  it.skipIf(!ownerUrl)('names a served tenant created after migration 012, where System Automation has no membership', async () => {
+    // A tenant made the way an administrator would make one today: no service memberships follow.
+    const owner = createDb(ownerUrl!);
+    const lateTenant = randomUUID();
+    try {
+      await sql`INSERT INTO hawa.tenants (id, name, slug) VALUES (${lateTenant}::uuid, 'Late tenant', ${`late-${lateTenant.slice(0, 8)}`})`.execute(owner);
+      expect(await automationMembershipGaps(db, [tenantId, lateTenant])).toEqual([lateTenant]);
+    } finally {
+      await sql`DELETE FROM hawa.tenants WHERE id = ${lateTenant}::uuid`.execute(owner);
+      await owner.destroy();
+    }
+  });
+
+  it('checks the tenants its outbox serves: the TENANT_IDS list, or else the default tenant', () => {
+    expect(servedTenantIds({ TENANT_IDS: ' a , b ,' })).toEqual(['a', 'b']);
+    expect(servedTenantIds({ HAWA_TENANT_IDS: 'c' })).toEqual(['c']);
+    // HAWA_TENANT_ID picks the tenant /health reads; the outbox consumer is never given it.
+    expect(servedTenantIds({ HAWA_TENANT_ID: 'c' })).toEqual(['00000000-0000-4000-a000-000000000001']);
   });
 
   it('names no person as its database user anywhere in its source', () => {

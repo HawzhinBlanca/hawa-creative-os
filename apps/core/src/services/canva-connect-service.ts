@@ -16,12 +16,17 @@ const hash = (v: string | Buffer) => createHash('sha256').update(v).digest('hex'
 const OVERRIDE_ROLES = ['administrator', 'art_director'];
 const overrides = (s: Scope) => OVERRIDE_ROLES.includes(s.role || '');
 /**
- * A failed create call that certainly created nothing: Canva answered with an error, or the request
- * never left. Only a loss after the request was sent leaves the outcome unknown ('uncertain'). A 429
- * on POST /exports was recorded as uncertain and then blocked every later export of the format with
- * CANVA_EXPORT_PENDING (2026-09-24).
+ * A failed create call that certainly created nothing: Canva refused it with a 4xx, or the request
+ * never left. A 429 on POST /exports was recorded as uncertain and then blocked every later export
+ * of the format with CANVA_EXPORT_PENDING (2026-09-24).
+ * A 5xx is different: it may come from a gateway after Canva made the job, the same reasoning the
+ * client uses when it declines to repeat one. On an export that does not matter (a duplicate job only
+ * reads the design), so `serverErrorCreatedNothing` says so there; on an import it would be a second
+ * design in the owner's account, so a 5xx leaves the import 'uncertain' for the sweeper to settle.
+ * Imports told the operator "nothing was created, and it may be sent again" on a 5xx until 2026-09-24.
  */
-const createdNothing = (err: unknown) => err instanceof CanvaHttpError || canvaRequestNeverSent(err);
+const createdNothing = (err: unknown, serverErrorCreatedNothing: boolean) =>
+  canvaRequestNeverSent(err) || (err instanceof CanvaHttpError && (err.status < 500 || serverErrorCreatedNothing));
 /** A Canva connection row as the token refresh reads it. */
 type ConnectionRow = { status: string; generation: string; encrypted_tokens: string; expires_at: Date; claimedRefresh?: boolean; refresh_abandoned?: boolean };
 export class CanvaTokenCipher {
@@ -335,7 +340,7 @@ export class CanvaConnectService {
       const result=await client.createImportJob(source.bytes,task.title);
       await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET remote_job_id=${result.job.id},status='submitted',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
     } catch (err) {
-      if(createdNothing(err)){
+      if(createdNothing(err,false)){
         await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
         return {operationId:claimed.id,status:'failed',message:`Canva did not accept the import (${(err as Error)?.message || 'not sent'}); nothing was created, and it may be sent again.`};
       }
@@ -469,7 +474,7 @@ export class CanvaConnectService {
       const job = await client.createExportJob(design.id,format);
       await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='submitted',remote_job_id=${job.job.id},updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
     } catch (err) {
-      if (createdNothing(err)) {
+      if (createdNothing(err, true)) {
         await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
         return { operationId:id,status:'failed',message:`Canva did not accept the export (${(err as Error)?.message || 'not sent'}); request it again.`,qaStatus:'not_run' };
       }
