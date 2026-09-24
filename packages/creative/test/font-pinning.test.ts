@@ -171,6 +171,73 @@ describe('the rasteriser sees only the pinned font files', () => {
   });
 });
 
+describe('the generated fontconfig folder', () => {
+  /** Runs `fn` with the temp folder pointed at a scratch folder of its own, as a temp cleaner would see it. */
+  function withTmpdir<T>(fn: (tmp: string) => T): T {
+    const tmp = tempDir('hawa-tmpdir-');
+    const saved = process.env.TMPDIR;
+    process.env.TMPDIR = tmp;
+    try {
+      return fn(tmp);
+    } finally {
+      if (saved === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = saved;
+    }
+  }
+  /** A fonts folder of its own, so the generated config is keyed apart from every other test's. */
+  function fontsFolder(): string {
+    const dir = tempDir('hawa-fonts-');
+    fs.copyFileSync(path.join(FONTS, 'Vazirmatn-Regular.ttf'), path.join(dir, 'Vazirmatn-Regular.ttf'));
+    return dir;
+  }
+
+  it('rebuilds a folder a temp cleaner left without its fonts.conf instead of failing every render', () => {
+    withTmpdir((tmp) => {
+      const fonts = fontsFolder();
+      const conf = pinnedFontconfigFile(fonts);
+      expect(conf.startsWith(tmp)).toBe(true);
+      const folder = path.dirname(conf);
+      fs.mkdirSync(path.join(folder, 'cache'), { recursive: true });
+      fs.writeFileSync(path.join(folder, 'cache', 'left-behind'), 'x');
+      fs.unlinkSync(conf);
+      expect(pinnedFontconfigFile(fonts)).toBe(conf);
+      expect(fs.readFileSync(conf, 'utf8')).toContain(`<dir>${path.resolve(fonts)}</dir>`);
+    });
+  });
+
+  it('never generates into a folder another user could have planted (a link, or writable by others)', () => {
+    withTmpdir((tmp) => {
+      const planted = tempDir('hawa-planted-');
+      fs.chmodSync(planted, 0o777);
+      const uid = process.getuid ? process.getuid() : undefined;
+      for (const name of ['hawa-fontconfig', uid === undefined ? 'hawa-fontconfig' : `hawa-fontconfig-${uid}`]) {
+        if (!fs.existsSync(path.join(tmp, name))) fs.symlinkSync(planted, path.join(tmp, name));
+      }
+      const conf = pinnedFontconfigFile(fontsFolder());
+      expect(conf.startsWith(tmp)).toBe(true);
+      const root = path.dirname(path.dirname(conf));
+      const st = fs.lstatSync(root);
+      expect(st.isSymbolicLink()).toBe(false);
+      expect(st.mode & 0o022).toBe(0);
+      if (uid !== undefined) expect(st.uid).toBe(uid);
+      expect(fs.readdirSync(planted)).toEqual([]);
+    });
+  });
+
+  it('links two system files that share a file name without colliding', () => {
+    withTmpdir(() => {
+      const a = tempDir('hawa-sys-a-');
+      const b = tempDir('hawa-sys-b-');
+      for (const d of [a, b]) fs.copyFileSync(path.join(FONTS, 'Vazirmatn-Regular.ttf'), path.join(d, 'Vazirmatn-Regular.ttf'));
+      const files = [path.join(a, 'Vazirmatn-Regular.ttf'), path.join(b, 'Vazirmatn-Regular.ttf')];
+      const conf = pinnedFontconfigFile(fontsFolder(), files);
+      const system = path.join(path.dirname(conf), 'system');
+      const linked = fs.readdirSync(system).map((f) => fs.readlinkSync(path.join(system, f)));
+      expect(linked.sort()).toEqual([...files].sort());
+    });
+  });
+});
+
 describe('font fidelity per script', () => {
   it('reports each script by what the rasteriser draws for it', () => {
     const vazirmatn = probeFontScripts('Vazirmatn');
@@ -205,6 +272,21 @@ describe('font fidelity per script', () => {
     });
     expect(missing.sameAsSentinel, missing.message).toBe(true);
     expect(missing.ok, missing.message).toBe(false);
+  });
+
+  it('rasterises one shared sentinel per sample and size, not one per family', () => {
+    const dir = tempDir('hawa-count-rsvg-');
+    const log = path.join(dir, 'calls.log');
+    const pngFile = path.join(dir, 'out.png');
+    const img = new PNG({ width: 64, height: 64 });
+    for (let i = 0; i < img.data.length; i++) img.data[i] = (i * 7919) % 251;
+    fs.writeFileSync(pngFile, PNG.sync.write(img));
+    const fake = path.join(dir, 'rsvg-convert');
+    fs.writeFileSync(fake, `#!/bin/sh\necho call >> '${log}'\ncat '${pngFile}'\n`, { mode: 0o755 });
+    const families = ['Inter', 'Cinzel', 'Playfair Display'];
+    for (const family of families) probeFontInkWidth(family, { rsvgConvertPath: fake, script: 'latin', sizePx: 41 });
+    // One probe per family and one sentinel for all three (the canvas no longer depends on the family).
+    expect(fs.readFileSync(log, 'utf8').trim().split('\n')).toHaveLength(families.length + 1);
   });
 
   it('draws a Kurdish Vazirmatn block in Vazirmatn instead of replacing it with Noto Sans Arabic', () => {

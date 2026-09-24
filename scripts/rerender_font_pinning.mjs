@@ -118,7 +118,11 @@ function storedDesigns(runs) {
   return out;
 }
 
-/** What the stored runs never draw: Inter at text and display sizes, and a Kurdish Vazirmatn block. */
+/**
+ * What the stored runs never draw: Inter at text and display sizes, a Kurdish Vazirmatn block, and
+ * contact and list lines with the symbols the copy gate admits (☎ ✉ ✈ ✔ ➤ …), which the image drew
+ * from fonts-dejavu-core and the pinned set draws from the HawaSymbols faces.
+ */
 function builtDesigns() {
   const block = (copyIndex, y, fontSize, fontFamily, align, extra = {}) => ({
     copyIndex, role: 'body', x: 90, y, width: 900, height: fontSize * 1.6, fontSize, lineHeight: 1.2,
@@ -154,6 +158,22 @@ function builtDesigns() {
     layout: base([
       block(0, 200, 64, 'Vazirmatn', 'right', { rtl: true }),
       block(1, 500, 40, 'Vazirmatn', 'center', { rtl: true }),
+    ]),
+  });
+  const symbols = {
+    0: '☎ 0750 123 4567  ✉ info@example.org',
+    1: '✈ Erbil  ➤ Hall B  ✔ Registered',
+    2: '✓ ★ → ☎ ♥ ① ✉ ⚑ ✪ ❶',
+    3: '☎ ٠٧٥٠ ١٢٣ ٤٥٦٧  ✉ هەولێر',
+  };
+  out.push({
+    id: 'built__symbols',
+    text: symbols,
+    layout: base([
+      block(0, 90, 48, 'Verdana', 'left'),
+      block(1, 300, 48, 'Inter', 'left', { bold: true }),
+      block(2, 510, 60, 'Cinzel', 'center'),
+      block(3, 760, 48, 'Noto Sans Arabic', 'right', { rtl: true }),
     ]),
   });
   return out;

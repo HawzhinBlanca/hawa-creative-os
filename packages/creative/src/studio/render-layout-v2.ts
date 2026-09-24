@@ -332,10 +332,18 @@ interface InkFont {
   layout(text: string): { advanceWidth: number; bbox: { minX: number; maxX: number }; glyphs: Array<{ id: number }> };
 }
 
-function inkProbeSvg(family: string, sample: string, sizePx: number, advancePx: number): string {
-  // Centred on a canvas twice the run's width, so the ink lands inside it whichever way the
-  // rasteriser decides the paragraph runs.
-  const width = Math.ceil(advancePx * 2 + 200);
+/**
+ * The probe canvas for a sample at a size: the same for every family, so one sentinel rasterisation
+ * serves them all. Twice the widest run the sample could plausibly make (an em per character) plus a
+ * margin, with the run centred, so the ink lands inside it whichever way the rasteriser decides the
+ * paragraph runs.
+ */
+function inkProbeCanvasWidth(sample: string, sizePx: number): number {
+  return Math.ceil(Array.from(sample).length * sizePx * 2 + 200);
+}
+
+function inkProbeSvg(family: string, sample: string, sizePx: number): string {
+  const width = inkProbeCanvasWidth(sample, sizePx);
   const height = Math.ceil(sizePx * 2);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
@@ -420,13 +428,14 @@ export function probeFontInkWidth(
   const scale = sizePx / font.unitsPerEm;
   const expectedAdvancePx = run.advanceWidth * scale;
   const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
-  const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx, expectedAdvancePx), rsvg, fontconfigFile);
+  const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx), rsvg, fontconfigFile);
   if (!png) return unmeasured('no-rasteriser', 'the rasteriser is unavailable', sample, script);
 
   // The same sample, canvas and size in a family that cannot exist: what the fallback face draws.
-  const sentinelKey = `${rsvg}|${fontconfigFile}|${script}|${sizePx}|${Math.ceil(expectedAdvancePx * 2 + 200)}`;
+  // The canvas depends only on the sample and the size, so every family shares this rasterisation.
+  const sentinelKey = `${rsvg}|${fontconfigFile}|${sizePx}|${sample}`;
   if (!sentinelHashCache.has(sentinelKey)) {
-    const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx, expectedAdvancePx), rsvg, fontconfigFile);
+    const sentinel = rasteriseProbe(inkProbeSvg(FONT_PROBE_SENTINEL, sample, sizePx), rsvg, fontconfigFile);
     sentinelHashCache.set(sentinelKey, sentinel ? createHash('sha256').update(sentinel).digest('hex') : null);
   }
   const sameAsSentinel = sentinelHashCache.get(sentinelKey) === createHash('sha256').update(png).digest('hex');
