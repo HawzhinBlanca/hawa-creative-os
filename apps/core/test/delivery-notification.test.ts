@@ -58,7 +58,7 @@ async function setup() {
   const created = await (await app.request('/api/webhooks/telegram', {
     method: 'POST',
     headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Delivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
+    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nDelivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
   })).json();
   const taskId: string = created.id || created.task?.id;
   const routed = await app.request(`/tasks/${taskId}/route`, { method: 'POST', headers: auth, body: JSON.stringify({ clientId: NO_SHEET_CLIENT, reason: 'Client assigned' }) });

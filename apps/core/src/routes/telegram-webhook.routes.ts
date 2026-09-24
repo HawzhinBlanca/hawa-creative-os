@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { escapeTelegramHtml, evaluateIngressIntent } from '@hawa/integrations';
 import { cutText, secretsEqual } from '../core-helpers.js';
 import { log, bindLogContext } from '../logging.js';
 import { splitBilingualRequest } from '../services/chat-intake.js';
@@ -30,7 +30,7 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
   const acknowledgedAlbums = new Set<string>();
   // A message the bot asked about ("revise the last design, or a new one?"), kept until answered.
   const pendingClarifications: PendingClarifications = new Map();
-  const { telegramUpdateHandled } = createTelegramUpdateState(ctx);
+  const { telegramUpdateHandled, markTelegramUpdateHandled } = createTelegramUpdateState(ctx);
   const { handleRequesterAction } = createTelegramRequesterActions(ctx);
   const { handleCallbackQuery, handleCommand } = createTelegramCallbacksAndCommands(ctx);
   const { readMedia } = createTelegramMedia(ctx, acknowledgedAlbums);
@@ -139,14 +139,46 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
         return c.json({ ok: true, duplicate: true, updateId: sourceEventId, ...(handledBefore.taskId ? { task: saved || { id: handledBefore.taskId } } : {}) }, 200);
       }
     }
+    // Group conversation is imported as an inbox event, not a task. Check before downloading media
+    // or asking a model. An explicit command/prefix or a reply naming an existing task may proceed.
+    const groupChat = ['group', 'supergroup'].includes(String(msg.chat?.type || ''));
+    const groupText = String(msg.text || msg.caption || json.text || '').trim();
+    const normalizedGroupText = groupText.replace(/^\/(task|brief|design|campaign|new)@\w+(?=\s|$)/i, '/$1');
+    const groupIntent = groupChat ? evaluateIngressIntent({ text: normalizedGroupText, channel: 'telegram' }) : null;
+    const explicitTaskPromotion = groupIntent?.action === 'promote';
+    const replyContext = String(msg.reply_to_message?.caption || msg.reply_to_message?.text || '') +
+      ' ' + JSON.stringify(msg.reply_to_message?.reply_markup || '');
+    const replyNamesTask = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(replyContext);
+    const namesTaskForChange = /^(?:please\s+)?(?:revise|change|fix|update|remove|add|replace|make|adjust|correct)\b/i.test(groupText) &&
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(groupText);
+    const messageOnly = async () => {
+      try {
+        await markTelegramUpdateHandled(updateChat, sourceEventId, 'telegram_message_only', json, true);
+      } catch {
+        return problem(c, 503, 'Inbox not committed', 'The passive message was not saved and will be retried');
+      }
+      return c.json({ ok: true, status: 'MESSAGE_ONLY', updateId: sourceEventId }, 200);
+    };
+    if (groupChat && !explicitTaskPromotion && !replyNamesTask && !namesTaskForChange && !groupText.startsWith('/')) {
+      return messageOnly();
+    }
     const media = await readMedia(c, { json, msg, sourceEventId, verifiedSender });
     if (media instanceof Response) return media;
 
     const commandAnswer = await handleCommand(c, media);
     if (commandAnswer) return commandAnswer;
 
-    const reply = await readReply(c, media);
+    if (explicitTaskPromotion) {
+      media.rawText = media.rawText.trim().replace(/^\/(?:task|brief|design|campaign|new)(?:@\w+)?\s*/i, '')
+        .replace(/^(?:task|brief|design|campaign|داواکاری|دیزاین|کەمپین)\s*:\s*/iu, '').trim();
+      if (!media.rawText) return problem(c, 422, 'Brief required', 'Add the task title or exact copy after the command');
+    }
+
+    const reply = await readReply(c, media, explicitTaskPromotion);
     if (reply instanceof Response) return reply;
+    // A UUID in quoted group text is only a hint. If it resolved to no task in this chat, it must
+    // not become a fresh paid brief through the classifier's fallback.
+    if (groupChat && !explicitTaskPromotion && !reply.feedbackTargetTask) return messageOnly();
     const changeAnswer = await makeChange(c, reply);
     if (changeAnswer) return changeAnswer;
 

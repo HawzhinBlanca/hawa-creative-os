@@ -12,7 +12,7 @@ import { cutText, isValidUuid } from '../../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
 import { log } from '../../logging.js';
 import { persistChatIntake } from '../chat-intake.js';
-import { classifyInboundTelegramMessage } from '../telegram-classifier.js';
+import { classifyInboundTelegramMessage, classifyWithHeuristics } from '../telegram-classifier.js';
 import { saveChatRule, ruleClientById } from '../telegram-rules-intake.js';
 import { isStandingRule } from '../standing-rules-chat.js';
 import { createTelegramUpdateState } from './update-state.js';
@@ -43,7 +43,7 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
    * A standing rule, a picture with a remark, thanks and questions are answered here. The answer when
    * the message ends here; otherwise the reading, with the design a change is for.
    */
-  async function readReply(c: Context, media: TelegramMediaReading) {
+  async function readReply(c: Context, media: TelegramMediaReading, explicitTaskPromotion = false) {
     let { rawText, referenceImageBase64 } = media;
     const { json, msg, sourceEventId, sourceChannelId, rulesDeps, albumId, firstOfAlbum } = media;
     const senderName =
@@ -361,6 +361,14 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
             isInstructionOnly: false,
             directive: rawText,
             reason: 'The sender answered the clarification question',
+          }
+        : explicitTaskPromotion
+        ? {
+            kind: 'new_brief' as const,
+            intent: 'new_brief' as const,
+            confidence: 1,
+            isInstructionOnly: classifyWithHeuristics(rawText, false).isInstructionOnly,
+            reason: 'Explicit task promotion in group chat',
           }
         : await classifyInboundTelegramMessage({
             messageText: rawText,

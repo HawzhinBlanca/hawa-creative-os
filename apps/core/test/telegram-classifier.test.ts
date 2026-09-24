@@ -14,6 +14,10 @@ describe('telegram-classifier: Intent & Instruction-Only Detection', () => {
   };
 
   describe('classifyWithHeuristics', () => {
+    it('does not turn short unrelated chatter into a brief', () => {
+      expect(classifyWithHeuristics('Duplicate test', false).kind).toBe('other');
+      expect(classifyWithHeuristics('New poster request', false).kind).toBe('new_brief');
+    });
     it('correctly classifies "the background is simple and solid, i want some kind of gradient or texture" as revision_feedback', () => {
       const res = classifyWithHeuristics(
         'the background is simple and solid, i want some kind of gradient or texture',
@@ -248,7 +252,7 @@ By Invitation Only`;
 
       const res = await classifyInboundTelegramMessage(
         {
-          messageText: 'hawa',
+          messageText: 'new design please',
           recentTask: activeTask,
         },
         { apiKey: 'test-key', fetcher: mockFetch }

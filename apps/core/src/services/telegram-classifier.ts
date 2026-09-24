@@ -205,7 +205,8 @@ export function classifyWithHeuristics(
 
   // Detect whether the incoming message is a full structured brief with event body copy
   const hasMultipleParagraphs = trimmed.split(/\n\s*\n/).filter(Boolean).length >= 2;
-  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?)\b/i.test(trimmed) || /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(trimmed);
+  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?|week)\b/i.test(trimmed) || /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(trimmed);
+  const namesClient = /\b(kaae|fastpay|drustee|aster|nova|rona)\b/i.test(trimmed) || /(کەی ئەی|باوەڕپێدان|فاستپەی|ئاستەر|ئاستێر|دروستی|نۆڤا|ڕۆنا)/u.test(trimmed);
   const hasDivider = /\n\s*([_\-=\*]{3,})\s*\n/.test(trimmed);
   const hasSectionHeader = /\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i.test(trimmed);
   const isFullStructuredBrief = hasDivider || hasSectionHeader || (hasMultipleParagraphs && (hasEventIndicators || trimmed.length > 200));
@@ -322,6 +323,19 @@ export function classifyWithHeuristics(
     };
   }
 
+  // A couple of unstructured words are not enough evidence to spend money or create client work.
+  // Decide this before a model call too: the model can otherwise promote the same chatter on one
+  // delivery and ignore it on another. Explicit design words and structured copy still pass.
+  if (!hasReplyTo && wordCount <= 3 && !hasDesignKeyword && !hasEventIndicators && !namesClient &&
+      !hasDivider && !hasSectionHeader && !hasMultipleParagraphs &&
+      !matchesInstructionPattern && !hasRevisionKeyword) {
+    return {
+      kind: 'other', intent: 'question_or_other', confidence: 0.9,
+      isInstructionOnly: false, reason: 'Short message without design or event details', documentKind,
+      needsClarification: false,
+    };
+  }
+
   // 5. Revision directives on recent active task
   if (hasRecentTask && !hasNewBriefIndicator && (isExplicitRevision || (hasRevisionAction && looksLikeDirective) || (hasRevisionKeyword && matchesInstructionPattern))) {
     return {
@@ -395,6 +409,8 @@ export async function classifyInboundTelegramMessage(
   }
   // Thanks and OKs are answered without a paid model call.
   if (isAcknowledgement(messageText)) return acknowledgement(detectDocumentKind(messageText.trim()));
+  const sparseReading = classifyWithHeuristics(messageText, Boolean(recentTask), Boolean(hasReplyTo));
+  if (sparseReading.reason === 'Short message without design or event details') return sparseReading;
 
   try {
     const previewImg = recentTask?.previewImageUrl || recentTask?.previewImageBase64;

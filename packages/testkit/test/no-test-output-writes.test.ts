@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../..');
 
 /**
- * The state of output/ as git sees it: each changed path with a hash of its bytes. This test used to
+ * The state of tracked output/ files as git sees it: each changed path with a hash of its bytes. This test used to
  * begin with `git checkout -- output`, which threw away every uncommitted edit under output/ each time
  * the suite ran (a plan's status table was lost twice on 2026-09-23). It now compares before and after
  * and never touches the files.
@@ -17,7 +17,9 @@ const rootDir = path.resolve(__dirname, '../../..');
 function outputState(): Record<string, string> {
   // -z: paths come raw and NUL-separated. Without it git quotes a path holding a space or a non-ASCII
   // character, and the quoted name matched no file, so a change to that file went unseen.
-  const status = execSync('git status --porcelain -z --untracked-files=all output/', { cwd: rootDir, encoding: 'utf8' });
+  // Other test files may create and remove untracked temporary art in parallel. They are outside
+  // this test's claim; including them made this independent test fail at random on a full-suite run.
+  const status = execSync('git status --porcelain -z --untracked-files=no output/', { cwd: rootDir, encoding: 'utf8' });
   const state: Record<string, string> = {};
   const entries = status.split('\0');
   for (let i = 0; i < entries.length; i++) {
@@ -42,7 +44,7 @@ describe('Task 6: Stop tests writing into tracked files under output/', () => {
       stdio: 'pipe',
     });
 
-    // Nothing under output/ changed: no new, changed or removed file, and no edit already there rewritten.
+    // No tracked output/ file changed or was removed by this test.
     expect(outputState()).toEqual(before);
   });
 

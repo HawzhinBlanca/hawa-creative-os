@@ -110,7 +110,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   it('deduplicates identical incoming event', async () => {
     const payload = JSON.stringify({
       update_id: 102,
-      message: { text: 'Duplicate test', chat: { id: 777 } },
+      message: { text: 'Please create a new KAAE poster\n---\nDUPLICATE TEST', chat: { id: 777 } },
     });
     const res1 = await app.request('/api/webhooks/telegram', {
       method: 'POST',
@@ -133,6 +133,80 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(res2.status).toBe(200);
     const json = await res2.json();
     expect(json.duplicate).toBe(true);
+  });
+
+  it('keeps passive chat text out of the production task pipeline', async () => {
+    const res = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'expected_office_secret',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        update_id: 103,
+        message: { text: 'Duplicate test', chat: { id: 777 } },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.task).toBeUndefined();
+  });
+
+  it('keeps even a complete passive group brief in the inbox until explicitly promoted', async () => {
+    const message = 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel';
+    const passive = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: 104, message: { text: message, chat: { id: -777, type: 'supergroup' } } }),
+    });
+    expect(passive.status).toBe(200);
+    expect(await passive.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
+
+    const promoted = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: 105, message: { text: `/task ${message}`, chat: { id: -777, type: 'supergroup' } } }),
+    });
+    expect(promoted.status).toBe(201);
+    const json = await promoted.json();
+    expect(json.task).toBeDefined();
+    expect(json.task.title).toContain('KAAE');
+  });
+
+  it('records passive group updates durably so a webhook replay cannot promote them', async () => {
+    const payload = JSON.stringify({
+      update_id: 106,
+      message: { text: 'KAAE Ceremony\n---\nOctober 28, 2026\nErbil Hotel', chat: { id: -778, type: 'group' } },
+    });
+    const request = () => dbApp.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    const first = await request();
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
+    const replay = await request();
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ ok: true, duplicate: true, updateId: '106' });
+  });
+
+  it('does not treat a group reply quoting an unknown task ID as a new brief', async () => {
+    const res = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        update_id: 107,
+        message: {
+          text: 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel',
+          chat: { id: -779, type: 'group' },
+          reply_to_message: { text: 'Unknown task 11111111-1111-4111-8111-111111111111' },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
   });
 
   it('creates task via Desk API with Idempotency-Key', async () => {
@@ -1038,5 +1112,3 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(dna.fonts[0].family).toContain('Cinzel');
   });
 });
-
-

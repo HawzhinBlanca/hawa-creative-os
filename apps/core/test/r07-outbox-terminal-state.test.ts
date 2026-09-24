@@ -78,7 +78,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     const intake = await app.request('/api/webhooks/telegram', {
       method: 'POST',
       headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Terminal Workflow Task', chat: { id: 7007 } } }),
+      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nTerminal Workflow Task', chat: { id: 7007 } } }),
     });
     const created = await intake.json();
     const task = { id: (created.id || created.task?.id) as string };

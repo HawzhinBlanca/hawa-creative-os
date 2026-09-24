@@ -102,7 +102,7 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
         message_id: 502,
         from: { id: 991133, first_name: 'Soran', username: 'soran_pay' },
         chat: { id: 7002, type: 'group' },
-        text: 'فاستپەی: گواستنەوەی پارە بەبێ هیچ کرێیەک، داشکاندنی لەسەدا پەنجا و ٥٬٠٠٠ دینار کاشباک بۆ کڕیاران',
+        text: '/task فاستپەی: گواستنەوەی پارە بەبێ هیچ کرێیەک، داشکاندنی لەسەدا پەنجا و ٥٬٠٠٠ دینار کاشباک بۆ کڕیاران',
       },
     };
 
