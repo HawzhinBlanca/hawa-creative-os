@@ -2,10 +2,21 @@
 // Provides zero-flicker Kurdish font precaching (Vazirmatn & Noto Sans Arabic)
 // and resilient offline app shell caching.
 
-const CACHE_VERSION = 'v2';
+// v3 (ADR-035): the API cache held pictures and task JSON with inline previews; a new version drops it.
+const CACHE_VERSION = 'v3';
 const FONTS_CACHE = `hawa-fonts-${CACHE_VERSION}`;
 const SHELL_CACHE = `hawa-shell-${CACHE_VERSION}`;
 const API_CACHE = `hawa-api-cache-${CACHE_VERSION}`;
+
+/**
+ * A Core address that answers with a file, not JSON: never put in Cache Storage (see the fetch
+ * handler). /v1/tasks/:id/exports/:exportId/content, /v1/tasks/:id/files/:sha256, and any .png under
+ * /v1/ (studio candidates, comparison pairs).
+ */
+function isBinaryApiPath(pathname) {
+  if (!pathname.startsWith('/v1/') && !pathname.startsWith('/api/v1/')) return false;
+  return /\/content$/.test(pathname) || /\/tasks\/[^/]+\/files\/[^/]+$/.test(pathname) || /\.png$/i.test(pathname);
+}
 
 const PRECACHE_URLS = [
   '/',
@@ -109,6 +120,14 @@ self.addEventListener('fetch', (event) => {
         });
       })
     );
+    return;
+  }
+
+  // Pictures and files Core serves (ADR-035): an export's content, a task's reference photo, a studio
+  // candidate's or a comparison's PNG. They are private to the session that asked, can be megabytes,
+  // and the browser's own HTTP cache already keeps them (Cache-Control: private, immutable). Cache
+  // Storage would keep every one for good, readable after sign-out, so they are left to the network.
+  if (url.origin === self.location.origin && isBinaryApiPath(url.pathname)) {
     return;
   }
 
