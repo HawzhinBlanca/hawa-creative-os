@@ -6,6 +6,7 @@ import { splitBilingualRequest } from '../services/chat-intake.js';
 import { parseRequesterAction } from '../services/requester-actions.js';
 import { classifyInboundTelegramMessage } from '../services/telegram-classifier.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { intakeRefused } from '../services/channel-kill-switches.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { createTelegramRequesterActions } from '../services/telegram-intake/requester-actions.js';
 import { createTelegramCallbacksAndCommands } from '../services/telegram-intake/callbacks-and-commands.js';
@@ -46,7 +47,9 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     }
     // The same answer the WhatsApp kill switch gives. Telegram keeps a refused webhook update and
     // sends it again, so nothing is lost while intake is off; nothing is read or started either.
-    if (channelKillSwitches.telegram) {
+    // Refused too while this process has not yet read the switch from Postgres: until then its copy
+    // says "on" whatever the office set, and a Core started with Postgres down took Telegram intake.
+    if (await intakeRefused(channelKillSwitches, 'telegram')) {
       return problem(c, 503, 'Service Unavailable', 'Telegram intake is disabled by the office kill switch. Fall back to Hawa Desk intake at /desk.');
     }
 
