@@ -6,6 +6,7 @@
  *   DATABASE_URL=<owner> HAWA_BLOB_DIR=<store> npx tsx scripts/blob_backfill.ts \
  *     --phase reference_photos|plan_sources|candidates|cutouts|comparisons|all \
  *     --mode copy|verify|strip [--batch 25] [--limit N] [--dry-run] [--log <file.ndjson>] [--measure]
+ *     [--write-receipt [--receipt <file>]]   (verify on a hawa_restore_* copy: the rehearsal receipt)
  *
  * Modes:
  *   copy    puts each row's bytes to the store and links them: a hash column the row lacks
@@ -413,6 +414,18 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
   return reports;
 }
 
+/**
+ * The receipt a production copy asks for (assertTargetAllowed), from a verify run on a restored copy:
+ * written by `--mode verify --write-receipt` against a hawa_restore_* database. Its verifyFailures
+ * counts every problem and every row not yet copied, so only a clean rehearsal lets production run.
+ */
+export function rehearsalReceipt(database: string, migrations: Record<string, string>, reports: PhaseReport[]) {
+  if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(database)) throw new Error(`A rehearsal receipt comes from a hawa_restore_* database, not ${database}`);
+  if (reports.some((r) => r.mode !== 'verify')) throw new Error('A rehearsal receipt is written by a verify run');
+  const verifyFailures = reports.reduce((n, r) => n + r.problems.length + r.notCopied, 0);
+  return { database, migrations, verifyFailures, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
+}
+
 /** Database and table sizes, for the evidence (FILESTORE_DESIGN.md section 5, --measure). */
 export async function measure(db: Kysely<Database>): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
@@ -475,7 +488,13 @@ async function main(args: string[]): Promise<number> {
       shouldStop: () => stopping,
     });
     const after = before ? await measure(db) : undefined;
-    const summary = { database, mode, phases, reports, ...(before ? { measureBefore: before, measureAfter: after } : {}), log: logFile };
+    let receipt: string | undefined;
+    if (args.includes('--write-receipt')) {
+      receipt = option(args, '--receipt') ?? path.join(os.homedir(), '.hawa/logs/blob_backfill_rehearsal.json');
+      fs.mkdirSync(path.dirname(receipt), { recursive: true });
+      fs.writeFileSync(receipt, `${JSON.stringify(rehearsalReceipt(String(database), await migrationChecksums(db), reports), null, 2)}\n`, { mode: 0o600 });
+    }
+    const summary = { database, mode, phases, reports, ...(before ? { measureBefore: before, measureAfter: after } : {}), ...(receipt ? { receipt } : {}), log: logFile };
     process.stdout.write(`${JSON.stringify(summary)}\n`);
     return reports.some((r) => r.problems.length) ? 1 : 0;
   } finally {

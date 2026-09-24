@@ -13,6 +13,7 @@ import {
   assertTargetAllowed,
   isProductionTarget,
   runBackfill,
+  rehearsalReceipt,
   PHASES,
   type PhaseReport,
 } from '../../../scripts/blob_backfill.js';
@@ -276,6 +277,18 @@ describe.skipIf(!ownerUrl)('scripts/blob_backfill.ts', () => {
       expect(() => assertTargetAllowed({ databaseUrl: prodName, mode: 'copy', production: true, receiptPath: receipt, migrations: { ...migrations, '020_x.sql': 'b'.repeat(64) } })).toThrow(/migration checksums differ/);
       expect(() => assertTargetAllowed({ databaseUrl: prodName, mode: 'copy', production: true, receiptPath: receipt, migrations })).not.toThrow();
       expect(() => assertTargetAllowed({ databaseUrl: ownerUrl!, mode: 'strip', production: false })).not.toThrow();
+    });
+
+    it('a rehearsal receipt comes only from a verify run on a hawa_restore_* copy, and counts what is left as failures', async () => {
+      const verify = await runBackfill({ db, store, phases: ['candidates'], mode: 'verify' });
+      expect(() => rehearsalReceipt(database, migrations, verify)).toThrow(/hawa_restore_/);
+      const copy = await runBackfill({ db, store, phases: ['candidates'], mode: 'copy' });
+      expect(() => rehearsalReceipt('hawa_restore_x', migrations, copy)).toThrow(/verify run/);
+      const receipt = rehearsalReceipt('hawa_restore_x', migrations, verify);
+      // The candidate whose file went missing (strip test above) is one failure: production stays refused.
+      expect(receipt).toMatchObject({ database: 'hawa_restore_x', migrations, verifyFailures: 1, phases: ['candidates'] });
+      const clean = rehearsalReceipt('hawa_restore_x', migrations, [{ ...verify[0], problems: [], notCopied: 0 }]);
+      expect(clean.verifyFailures).toBe(0);
     });
 
     it('the CLI refuses a production strip before it connects', () => {
