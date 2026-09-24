@@ -1,7 +1,7 @@
 # ADR-037: The Desk Keeps Server State in TanStack Query
 
 **Date:** 2026-09-24
-**Status:** Proposed (architecture programme, Phase 1.5).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 1.5).
 **Adds:** `@tanstack/react-query` v5 to `apps/desk` (its runtime dependencies today are react, react-dom and dompurify).
 
 ## 1. Context: the measured need

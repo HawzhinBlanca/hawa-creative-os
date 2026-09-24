@@ -1,7 +1,7 @@
 # ADR-036: Renderer-Neutral SVG, Raster Outlines, and a Gate Before Any Renderer Change
 
 **Date:** 2026-09-24
-**Status:** Proposed (architecture programme, Phases 0.5, 3.2 and 3.3).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phases 0.5, 3.2 and 3.3).
 **Amends:** ADR-032's outline and glow treatments (drawn as rasters instead of SVG filters); the text markup in `render-layout-v2.ts`.
 
 ## 1. Context

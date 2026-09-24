@@ -1,7 +1,7 @@
 # ADR-034: The Request Lifecycle Runs on Restate; No Handler Waits for a Person
 
 **Date:** 2026-09-24
-**Status:** Proposed (architecture programme, `output/plans/2026-09-24-architecture-programme/PLAN.md`, Phase 0.1 and Phase 2).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, `output/plans/2026-09-24-architecture-programme/PLAN.md`, Phase 0.1 and Phase 2).
 **Amends:** ADR-020's "one place produces the automatic draft: the Restate worker" (extended to the whole request); the worker deploy step in `infra/docker/deploy.sh`.
 
 ## 1. Context

@@ -1,7 +1,7 @@
 # ADR-035: Pictures and Design Sources Live in a Content-Addressed File Store
 
 **Date:** 2026-09-24
-**Status:** Proposed (architecture programme, Phase 3.1).
+**Status:** Accepted 2026-09-24 by the owner ("yes, do all"); implementation in progress (architecture programme, Phase 3.1).
 **Amends:** the storage of reference photos (`studioOptions.referenceImageBase64`), studio candidate PNGs, Canva plan sources, cut-out PNGs and comparison images. Canva export bytes (`canva_export_bytes`) are unchanged.
 
 ## 1. Context
