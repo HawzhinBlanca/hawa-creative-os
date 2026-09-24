@@ -84,9 +84,11 @@ function focusedPicture(box: Box, pixels: { width: number; height: number }, cro
 /**
  * A treated photo's fragment rasterised alone, by the renderer's own rsvg-convert, at
  * `photoBakePixelSize`: the same markup the preview inlined, so the same pixels, on a transparent
- * ground that Canva keeps on import.
+ * ground that Canva keeps on import. An outline or a glow is already that picture (the preview
+ * embeds the same bytes), so it is placed as it is.
  */
 async function bakePhotoFragment(fragment: PhotoFragment, rsvgConvertPath: string | undefined): Promise<Buffer> {
+  if (fragment.raster) return fragment.raster;
   const size = photoBakePixelSize(fragment);
   return svgToPngAsync(photoFragmentDocument(fragment, size), size.width, size.height, rsvgConvertPath ? { rsvgConvertPath } : {});
 }

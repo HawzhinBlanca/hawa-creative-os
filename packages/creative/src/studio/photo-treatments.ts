@@ -14,6 +14,7 @@ import {
 } from './layout-v2.js';
 import { coverCrop, pngPixelSize, type CoverCropRect } from './photo-crop.js';
 import { hexToRgb } from './color-science.js';
+import { cutoutEffectRasterCached, type FadeRamp } from './cutout-effect-raster.js';
 
 /**
  * Designer treatments of a client's photo: a circle or arch mask, a fade into the background, a
@@ -25,7 +26,9 @@ import { hexToRgb } from './color-science.js';
  * photo; the preview inlines that fragment, and the Canva transfer rasterises the same fragment,
  * alone, through the same rsvg-convert the preview uses, and places the PNG at the fragment's rect
  * with no further crop. Canva keeps a PNG's alpha on PPTX import, so the mask and the fade survive,
- * and the design the judge scored and the design the client edits show the same pixels.
+ * and the design the judge scored and the design the client edits show the same pixels. An outline
+ * or a glow is already a picture (cutout-effect-raster.ts, ADR-036): the preview embeds it and the
+ * deck places the same PNG.
  *
  * A photo with none of these treatments is not drawn from here at all: the preview and the deck
  * draw it exactly as before (the deck natively cropped, so the client can re-crop it in Canva).
@@ -41,17 +44,9 @@ const LUMA_B = 0.0722;
 
 /**
  * An outline's region reaches this many layout pixels past its width, so the anti-aliased rim of the
- * grown silhouette is not cut by the filter's edge.
+ * grown silhouette is not cut by the picture's edge.
  */
 const OUTLINE_REGION_MARGIN_PX = 1;
-
-/**
- * The largest single feMorphology step, in layout pixels. librsvg (2.62, measured 2026-09-23) rounds
- * a morphology radius to whole device pixels and caps it at 10: an outline 12px wide drew 10px wide
- * in the preview and 5px wide in a deck baked at 2x. Dilations by squares add up, so a wider outline
- * is several steps, each at most 10 device pixels at PHOTO_BAKE_SCALE_MAX.
- */
-const OUTLINE_MORPHOLOGY_STEP_PX = 5;
 
 /**
  * A glow is the silhouette blurred by a Gaussian whose standard deviation is half the glow's radius,
@@ -62,19 +57,9 @@ const GLOW_SIGMA_PER_RADIUS = 0.5;
 const GLOW_REGION_SIGMAS = 3;
 
 /**
- * The person's opaque core, which an outline or a glow leaves out, is where their alpha is above
- * 98%: alpha * CORE_SLOPE + CORE_INTERCEPT, held to 0..1, is 1 at full opacity and 0 below 98%.
- * Under the soft edge of the matte (hair) the effect is whole, so person and outline meet with no
- * gap; under the opaque person it is absent, so a faded person fades into the background.
- */
-const CORE_SLOPE = 50;
-const CORE_INTERCEPT = 1 - CORE_SLOPE;
-
-/**
  * The deck bakes a treated photo at twice the layout's pixels at most, as a retina screen shows it.
- * The scale is always a whole number: librsvg rounds a morphology radius to whole device pixels, so
- * only at a whole multiple of the preview's pixels is the baked outline exactly as wide as the one
- * the judge scored.
+ * The scale is always a whole number, so a baked layer's pixels fall on the preview's pixel grid and
+ * an outline's hard rim is not smeared by resampling.
  */
 export const PHOTO_BAKE_SCALE_MAX = 2;
 /**
@@ -92,10 +77,9 @@ export const PHOTO_BAKE_MAX_PIXELS = 6_000_000;
 /** A treated photo's SVG, and the part of the layout it draws into. */
 export interface PhotoFragment {
   /**
-   * Definitions the markup uses and does not draw: a cut-out's picture, which the person, their
-   * outline and their glow all `<use>`. The preview puts each one in its defs once, however many
-   * fragments use it; the deck's document for a fragment carries the ones it uses. Empty for a
-   * framed photo.
+   * Definitions the markup uses and does not draw: a treated cut-out person's picture, which they
+   * `<use>`. The preview puts each one in its defs once, however many fragments use it; the deck's
+   * document for a fragment carries the ones it uses. Empty for a framed photo, an outline and a glow.
    *
    * librsvg 2.62's parser gives up ("Premature end of data") once somewhere between 10 and 24 MB
    * of large data URIs have gone through it, depending on their sizes (measured 2026-09-23), and a
@@ -114,6 +98,11 @@ export interface PhotoFragment {
    * this, since pixels past the photograph's own would be upsampling, not detail.
    */
   sourceScale?: number;
+  /**
+   * The fragment as a finished picture at `rect`, `photoBakePixelSize` pixels: an outline or a glow,
+   * which `svg` embeds. The deck places these bytes as they are, with no rasterising.
+   */
+  raster?: Buffer;
 }
 
 /** The two things drawn around a cut-out person, under them. */
@@ -197,14 +186,10 @@ function framedClipShape(box: Box, radius: number | undefined, mask: PhotoMask |
 }
 
 /**
- * A fade as a mask: a white ramp whose opacity runs from 1 to 0 over the last `length` of `over`
- * toward the edge. White's luminance is 1 however a renderer computes it, so the mask's value is the
- * ramp's opacity, which a gradient interpolates linearly. Before the ramp the gradient pads opaque;
- * past the edge it pads clear, which is what an outline reaching beyond the person needs.
- *
- * `region` is the area the mask covers: the drawn rect, or an effect's larger one.
+ * Where a fade runs over `over`: opaque at (x1, y1), clear at (x2, y2), along the last `length` of it
+ * toward the edge.
  */
-function fadeMaskDefs(id: string, fade: PhotoFade, over: Box, region: Box): string {
+function fadeRamp(fade: PhotoFade, over: Box): FadeRamp {
   const length = clampTo(fade.length, PHOTO_FADE_LENGTH_MIN, PHOTO_FADE_LENGTH_MAX);
   const { x, y, width, height } = over;
   const [x1, y1, x2, y2] =
@@ -215,6 +200,19 @@ function fadeMaskDefs(id: string, fade: PhotoFade, over: Box, region: Box): stri
         : fade.edge === 'right'
           ? [x + width * (1 - length), y, x + width, y]
           : [x + width * length, y, x, y];
+  return { x1, y1, x2, y2 };
+}
+
+/**
+ * A fade as a mask: a white ramp whose opacity runs from 1 to 0 over the last `length` of `over`
+ * toward the edge. White's luminance is 1 however a renderer computes it, so the mask's value is the
+ * ramp's opacity, which a gradient interpolates linearly. Before the ramp the gradient pads opaque;
+ * past the edge it pads clear, which is what an outline reaching beyond the person needs.
+ *
+ * `region` is the area the mask covers: the drawn rect, or an effect's larger one.
+ */
+function fadeMaskDefs(id: string, fade: PhotoFade, over: Box, region: Box): string {
+  const { x1, y1, x2, y2 } = fadeRamp(fade, over);
   const ramp = `${id}-ramp`;
   return (
     `<linearGradient id="${ramp}" gradientUnits="userSpaceOnUse" x1="${n(x1)}" y1="${n(y1)}" x2="${n(x2)}" y2="${n(y2)}">` +
@@ -330,8 +328,8 @@ export function framedPhotoFragment(
 }
 
 /**
- * The cut-out's picture at the person's rect, as a definition the person, their outline and their
- * glow each `<use>` (id `photo-source-<index>`), and its source pixels per layout pixel.
+ * The cut-out's picture at the person's rect, as a definition the treated person `<use>`s (id
+ * `photo-source-<index>`), and its source pixels per layout pixel.
  */
 function cutoutSource(index: number, png: Buffer, rect: Box): { id: string; defs: string; sourceScale?: number } {
   const id = `photo-source-${index}`;
@@ -344,13 +342,12 @@ function cutoutSource(index: number, png: Buffer, rect: Box): { id: string; defs
 }
 
 /**
- * Whether the preview draws a cut-out person from `cutoutPersonFragment`, which it does whenever the
- * photo has a treatment of its own or around it. With an outline or a glow the person uses the same
- * picture definition as the effects, so the preview carries the PNG once; with none, the person is
- * drawn exactly as before.
+ * Whether the preview draws a cut-out person from `cutoutPersonFragment`: when their own pixels
+ * change. An outline or a glow no longer reads the person's picture in the SVG (it is a picture of
+ * its own), so a person with only those is drawn exactly as one with none.
  */
 export function cutoutPhotoTreated(photo: PhotoElement): boolean {
-  return cutoutPersonTreated(photo) || Boolean(photo.outline || photo.glow);
+  return cutoutPersonTreated(photo);
 }
 
 /**
@@ -376,50 +373,26 @@ export function cutoutPersonFragment(photo: PhotoElement, png: Buffer, rect: Box
   return { defs: source.defs, svg, rect: region, ...(source.sourceScale !== undefined ? { sourceScale: source.sourceScale } : {}) };
 }
 
-/**
- * An outline's width as drawn: held to its range and rounded to a whole layout pixel, which
- * librsvg's whole-device-pixel morphology draws exactly at any whole bake scale. A fraction of a
- * pixel of outline is below what anyone sees.
- */
+/** An outline's width as drawn, in layout pixels, held to its range. */
 function outlineWidthPx(outline: PhotoOutline | undefined): number {
-  return Math.round(clampTo(outline?.width ?? 0, PHOTO_OUTLINE_WIDTH_MIN, PHOTO_OUTLINE_WIDTH_MAX));
+  return clampTo(outline?.width ?? 0, PHOTO_OUTLINE_WIDTH_MIN, PHOTO_OUTLINE_WIDTH_MAX);
 }
 
-/**
- * The feMorphology steps that dilate by `width` whole pixels: as few as OUTLINE_MORPHOLOGY_STEP_PX
- * allows, whole pixels each, the larger ones first.
- */
-export function outlineMorphologySteps(width: number): number[] {
-  const count = Math.max(1, Math.ceil(width / OUTLINE_MORPHOLOGY_STEP_PX));
-  const small = Math.floor(width / count);
-  const larger = width - small * count;
-  return Array.from({ length: count }, (_, i) => (i < larger ? small + 1 : small));
+/** A glow's Gaussian standard deviation, in layout pixels. */
+function glowSigmaPx(glow: PhotoGlow | undefined): number {
+  return clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX) * GLOW_SIGMA_PER_RADIUS;
 }
 
-/** How far an effect reaches beyond the person's rect, in layout pixels. A glow around an outline starts at its outer edge. */
+/** How far an effect reaches beyond the person's rect, in whole layout pixels. A glow around an outline starts at its outer edge. */
 function effectReach(kind: CutoutEffectKind, outline: PhotoOutline | undefined, glow: PhotoGlow | undefined): number {
-  if (kind === 'outline') return outlineWidthPx(outline) + OUTLINE_REGION_MARGIN_PX;
-  const radius = clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX);
-  return (outline ? outlineWidthPx(outline) : 0) + Math.ceil(radius * GLOW_SIGMA_PER_RADIUS * GLOW_REGION_SIGMAS);
+  const around = outline ? Math.ceil(outlineWidthPx(outline)) : 0;
+  if (kind === 'outline') return around + OUTLINE_REGION_MARGIN_PX;
+  return around + Math.ceil(glowSigmaPx(glow) * GLOW_REGION_SIGMAS);
 }
 
-/**
- * Filter primitives that dilate SourceAlpha by `width` whole pixels into `result`. A square dilation
- * is a row pass then a column pass: the same pixels (checked on librsvg 2.54 and 2.62, 2026-09-24) at
- * a fraction of the cost. As one square pass per step, a 24 px outline baked at 2x took 23 s and the
- * Canva deck timed out at 20 s.
- */
-function dilateAlpha(width: number, result: string): string {
-  return outlineMorphologySteps(width)
-    .map((step, i, steps) => {
-      const input = i === 0 ? 'SourceAlpha' : `${result}-${i - 1}`;
-      const out = i === steps.length - 1 ? result : `${result}-${i}`;
-      return (
-        `<feMorphology in="${input}" operator="dilate" radius="${step} 0" result="${out}-rows"/>` +
-        `<feMorphology in="${out}-rows" operator="dilate" radius="0 ${step}" result="${out}"/>`
-      );
-    })
-    .join('');
+/** The person's rect grown by `reach` to the left, the right and above, on whole layout pixels. */
+function grownPersonRect(personRect: Box, reach: number): Box {
+  return wholePixelRect({ x: personRect.x - reach, y: personRect.y - reach, width: personRect.width + 2 * reach, height: personRect.height + reach });
 }
 
 /**
@@ -438,8 +411,7 @@ export function cutoutEffectRect(
   personRect: Box,
   canvas: { width: number; height: number }
 ): Box | undefined {
-  const reach = effectReach(kind, photo.outline, photo.glow);
-  const grown = wholePixelRect({ x: personRect.x - reach, y: personRect.y - reach, width: personRect.width + 2 * reach, height: personRect.height + reach });
+  const grown = grownPersonRect(personRect, effectReach(kind, photo.outline, photo.glow));
   const left = Math.max(0, grown.x);
   const top = Math.max(0, grown.y);
   const right = Math.min(canvas.width, grown.x + grown.width);
@@ -449,22 +421,42 @@ export function cutoutEffectRect(
 }
 
 /**
- * An outline or a glow around a cut-out person, as its own layer drawn under them.
+ * The rect an effect is computed over: the drawn rect grown by the reach again, within the grown
+ * person, so a part of the person off the canvas still draws its outline onto it.
+ */
+function effectGridRect(region: Box, grown: Box, reach: number): Box {
+  const left = Math.max(grown.x, region.x - reach);
+  const top = Math.max(grown.y, region.y - reach);
+  const right = Math.min(grown.x + grown.width, region.x + region.width + reach);
+  const bottom = Math.min(grown.y + grown.height, region.y + region.height + reach);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * An outline or a glow around a cut-out person, as its own layer drawn under them: a PNG computed
+ * from the person's alpha (cutout-effect-raster.ts), which the preview embeds as an `<image>` at the
+ * layer's rect and the deck places as it is, so the two show the same picture.
  *
- *   outline  the person's alpha dilated by the outline's width (feMorphology), filled with its colour;
- *   glow     the person's alpha blurred (feGaussianBlur, sigma half the radius), filled with its colour;
- *            with an outline too, the alpha is first grown by the outline's width, so the glow lights
- *            the outline's outer edge (drawn from the person alone, a 24 px outline covered a 30 px
- *            glow entirely: proof render in Core, 2026-09-24);
+ *   outline  every pixel within the outline's width of the person's silhouette (an exact Euclidean
+ *            distance transform), filled with its colour;
+ *   glow     the silhouette blurred as feGaussianBlur blurs (sigma half the radius), in its colour;
+ *            with an outline too, the silhouette is first grown by the outline's width, so the glow
+ *            lights the outline's outer edge (drawn from the person alone, a 24 px outline covered a
+ *            30 px glow entirely: proof render in Core, 2026-09-24);
  *
- * each less the person's opaque core (feComposite "out"; see CORE_SLOPE), so none of it lies under
- * the opaque person. The first proof sheet (2026-09-23) drew the whole grown silhouette, and a person
- * with a fade faded into the outline's gold instead of the design's background. Leaving out the
- * person's whole alpha instead would let the background through the soft edge of the matte, a dark
- * fringe between person and outline; under that edge the effect stays whole.
+ * each less the person's opaque core, so none of it lies under the opaque person. The first proof
+ * sheet (2026-09-23) drew the whole grown silhouette, and a person with a fade faded into the
+ * outline's gold instead of the design's background. Leaving out the person's whole alpha instead
+ * would let the background through the soft edge of the matte, a dark fringe between person and
+ * outline; under that edge the effect stays whole.
  *
  * A person with a fade has it on the effect too, over the person's rect, so the outline fades out
  * with them instead of standing alone where they have faded.
+ *
+ * The picture is at the scale the deck bakes the layer at (`photoBakeScale`), so the deck's layer is
+ * exactly these pixels and the preview draws them at its own size. There is no SVG filter: librsvg's
+ * feMorphology took 23 s for a 24 px outline at 2x (the Canva deck timed out), capped a step at 10
+ * device pixels and drew a square's corners; resvg draws it wrongly (ADR-036).
  *
  * Undefined when the photo has no such effect or none of it falls on the canvas.
  */
@@ -478,31 +470,31 @@ export function cutoutEffectFragment(
   const outline = kind === 'outline' ? photo.outline : undefined;
   const glow = kind === 'glow' ? photo.glow : undefined;
   if (!outline && !glow) return undefined;
-  const glowAround = glow && photo.outline ? outlineWidthPx(photo.outline) : 0;
   const region = cutoutEffectRect(kind, photo, personRect, canvas);
   if (!region) return undefined;
-  const index = photo.photoIndex;
-  const layerId = `photo-${kind}-${index}`;
-  const filterId = `photo-${kind}-filter-${index}`;
-  const fadeId = `photo-${kind}-fade-${index}`;
-  const colour = outline?.color ?? glow?.color;
-  const spread = outline
-    ? dilateAlpha(outlineWidthPx(outline), 'silhouette')
-    : (glowAround ? dilateAlpha(glowAround, 'outlined') : '') +
-      `<feGaussianBlur in="${glowAround ? 'outlined' : 'SourceAlpha'}" stdDeviation="${n(clampTo(glow?.radius ?? 0, PHOTO_GLOW_RADIUS_MIN, PHOTO_GLOW_RADIUS_MAX) * GLOW_SIGMA_PER_RADIUS)}" result="silhouette"/>`;
-  const filter =
-    `<filter id="${filterId}" filterUnits="userSpaceOnUse" x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" color-interpolation-filters="sRGB">` +
-    spread +
-    `<feFlood flood-color="${colour}" flood-opacity="1" result="colour"/>` +
-    `<feComposite in="colour" in2="silhouette" operator="in" result="filled"/>` +
-    `<feComponentTransfer in="SourceAlpha" result="core"><feFuncA type="linear" slope="${CORE_SLOPE}" intercept="${CORE_INTERCEPT}"/></feComponentTransfer>` +
-    `<feComposite in="filled" in2="core" operator="out"/>` +
-    `</filter>`;
-  const source = cutoutSource(index, png, personRect);
-  const defs = filter + (photo.fade ? fadeMaskDefs(fadeId, photo.fade, personRect, region) : '');
-  const silhouette = `<use xlink:href="#${source.id}" filter="url(#${filterId})"/>`;
-  const svg = `<g id="${layerId}"${photo.fade ? ` mask="url(#${fadeId})"` : ''}><defs>${defs}</defs>${silhouette}</g>`;
-  return { defs: source.defs, svg, rect: region, ...(source.sourceScale !== undefined ? { sourceScale: source.sourceScale } : {}) };
+  const pixels = pngPixelSize(png);
+  const sourceScale = pixels && personRect.width > 0 ? pixels.width / personRect.width : undefined;
+  const placed: PhotoFragment = { defs: '', svg: '', rect: region, ...(sourceScale !== undefined ? { sourceScale } : {}) };
+  const scale = photoBakeScale(placed);
+  const reach = effectReach(kind, photo.outline, photo.glow);
+  const gridRect = effectGridRect(region, grownPersonRect(personRect, reach), reach);
+  const fade = photo.fade ? fadeRamp(photo.fade, personRect) : undefined;
+  const raster = cutoutEffectRasterCached({
+    png,
+    personRect,
+    grid: { x: gridRect.x, y: gridRect.y, width: gridRect.width * scale, height: gridRect.height * scale, scale },
+    crop: region,
+    color: (outline?.color ?? glow?.color) as Hex,
+    // A glow lights the outline's outer edge when the photo has both.
+    outlineWidth: photo.outline ? outlineWidthPx(photo.outline) : 0,
+    ...(glow ? { glowSigma: glowSigmaPx(glow) } : {}),
+    // As the person's fade mask writes the ramp, to a thousandth of a pixel.
+    ...(fade ? { fade: { x1: n(fade.x1), y1: n(fade.y1), x2: n(fade.x2), y2: n(fade.y2) } } : {}),
+  });
+  const svg =
+    `<image id="photo-${kind}-${photo.photoIndex}" xlink:href="data:image/png;base64,${raster.toString('base64')}" ` +
+    `x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" preserveAspectRatio="none"/>`;
+  return { ...placed, svg, raster };
 }
 
 /**
