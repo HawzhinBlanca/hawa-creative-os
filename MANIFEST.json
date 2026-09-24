@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T12:48:08Z",
+  "generatedAt": "2026-09-24T15:18:56Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -344,8 +344,8 @@
     },
     {
       "path": "db/03-grants.sql",
-      "sha256": "308386476fd7f4f87a82b8950e7ffc4a2df54fca6b8db1039ec57348ce8d142a",
-      "bytes": 2301
+      "sha256": "9ea7593f0f40af5fc046ecc92c52e0a37e4329d294454ca1cba2fcf58be524ec",
+      "bytes": 3534
     },
     {
       "path": "db/rls.sql",
@@ -354,8 +354,8 @@
     },
     {
       "path": "db/schema.sql",
-      "sha256": "88a2fa3a554b7f4edb1db5257cc6128a46b0a79f718301fecd6083c313d6976c",
-      "bytes": 42880
+      "sha256": "28a1bf47f792b7450b7a329f0ae3b689f256591024913e2d8c88e7d9d9eeb4db",
+      "bytes": 43617
     },
     {
       "path": "db/seed.sql",
@@ -694,8 +694,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "f05ef72b20536cc1f3b6696126ed1429595f0ac76d69a27195ff573b9434fcaf",
-      "bytes": 69301
+      "sha256": "01a70432874bd2ae0940644dc86ff52f75c03ff5f0fac2078f41899958d3a815",
+      "bytes": 70116
     },
     {
       "path": "plans/user-stories.csv",
