@@ -85,13 +85,15 @@ describe('CV-23: Complete Decommissioning of Figma Bridge and Legacy Editor Runt
     expect(body.activeStudio).toBe('canva_native');
   });
 
-  it('6. Integrations health reports Canva Native Studio healthy and zero active Figma bridge instances', async () => {
+  it('6. Integrations health identifies Canva without claiming an unrun verification or active Figma bridge', async () => {
     const res = await app.request('/integrations/health');
     expect(res.status).toBe(200);
     const body = await res.json();
     const canvaIntegration = body.items.find((i: any) => i.integrationId === 'int_canva_studio');
     expect(canvaIntegration).toBeDefined();
-    expect(['healthy', 'unverified']).toContain(canvaIntegration.state);
+    expect(['unknown', 'degraded']).toContain(canvaIntegration.state);
+    expect(canvaIntegration.reachability).toBe('unknown');
+    expect(canvaIntegration.paidVerification).toBe('not_run');
     expect(canvaIntegration.kind).toBe('canva_native_studio');
 
     const figmaIntegration = body.items.find((i: any) => i.integrationId === 'int_figma_bridge');

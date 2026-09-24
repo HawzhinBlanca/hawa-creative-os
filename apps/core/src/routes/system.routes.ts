@@ -63,15 +63,16 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
   // Production Funnel Health & Stall Detection (Step 5 of Engineering Rank Audit)
   registerRoute('get', '/system/funnel/health', async (c: any) => {
-    const windowHours = Number(c.req.query('windowHours')) || 48;
+    const requestedWindow = Number(c.req.query('windowHours'));
+    const windowHours = Number.isInteger(requestedWindow) && requestedWindow >= 1 && requestedWindow <= 168 ? requestedWindow : 48;
     const auth = verifyRequestAuth(c);
     const metrics = await checkProductionFunnelHealth(db, {
       tenantId: auth.tenantId,
       windowHours,
-      telegramBridge,
-      opsChannelId: process.env.TELEGRAM_OPS_CHANNEL_ID,
     });
-    return c.json({ ok: true, ...metrics }, metrics.status === 'stalled' ? 424 : 200);
+    // A stalled funnel is a successfully read operational fact. Keep this GET readable by the
+    // Desk; the status field, not an HTTP error, carries the alert. Unknown still fails closed.
+    return c.json({ ok: metrics.status !== 'unknown', ...metrics }, metrics.status === 'unknown' ? 503 : 200);
   });
 
   const requireAdministrator = (c: any): Response | null => {
@@ -381,18 +382,33 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL);
 
     const canvaBreaker = globalCanvaCircuitBreaker?.getSnapshot();
-    const canvaState = canvaBreaker?.state === 'OPEN' ? 'degraded' : 'unverified';
-    const telegramState = channelKillSwitches?.telegram ? 'kill_switch_active' : (hasTelegram ? 'healthy' : 'unconfigured');
-    const wahaState = channelKillSwitches?.waha ? 'quarantined' : (hasWaha ? 'healthy' : 'unconfigured');
+    const observedAt = new Date().toISOString();
+    // This endpoint reads configuration and local switches only. It does not call the providers,
+    // inspect a real export, or perform a paid probe; those facts must remain unknown here.
+    const reported = (integrationId: string, kind: string, configured: boolean | null, blocked?: string) => ({
+      integrationId,
+      kind,
+      state: blocked || (configured === null ? 'unknown' : configured ? 'configured' : 'unconfigured'),
+      configured,
+      reachability: 'unknown',
+      paidVerification: 'not_run',
+      lastVerifiedAt: null,
+      checkedAt: observedAt,
+      nextAction: blocked
+        ? 'Review the local switch or failure before using this adapter.'
+        : configured === false
+          ? 'Complete server setup before using this adapter.'
+          : 'Verify this adapter with a scoped real operation before relying on it.',
+    });
 
     return c.json({
       items: [
-        { integrationId: 'int_canva_studio', kind: 'canva_native_studio', state: canvaState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_telegram', kind: 'telegram', state: telegramState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_waha', kind: 'waha', state: wahaState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_google_drive', kind: 'google_drive', state: hasDrive ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
-        { integrationId: 'int_google_sheets', kind: 'google_sheets', state: hasSheets ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
-        { integrationId: 'int_phoenix', kind: 'phoenix', state: hasPhoenix ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
+        reported('int_canva_studio', 'canva_native_studio', null, canvaBreaker?.state === 'OPEN' ? 'degraded' : undefined),
+        reported('int_telegram', 'telegram', hasTelegram, channelKillSwitches?.telegram ? 'kill_switch_active' : undefined),
+        reported('int_waha', 'waha', hasWaha, channelKillSwitches?.waha ? 'quarantined' : undefined),
+        reported('int_google_drive', 'google_drive', hasDrive),
+        reported('int_google_sheets', 'google_sheets', hasSheets),
+        reported('int_phoenix', 'phoenix', hasPhoenix),
       ],
     });
   });

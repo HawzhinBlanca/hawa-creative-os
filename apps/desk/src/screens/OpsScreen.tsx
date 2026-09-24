@@ -6,8 +6,25 @@ import { read, reasonOf } from '../services/statusReport.js';
 interface IntegrationHealth {
   integrationId: string;
   kind: string;
-  state: 'healthy' | 'degraded' | 'unhealthy';
+  state: 'configured' | 'unconfigured' | 'unknown' | 'degraded' | 'kill_switch_active' | 'quarantined' | 'stale' | 'paid_verified';
+  configured: boolean | null;
+  reachability: 'unknown' | 'reachable' | 'unreachable';
+  paidVerification: 'not_run' | 'verified' | 'failed' | 'stale';
+  lastVerifiedAt: string | null;
   checkedAt: string;
+  nextAction: string;
+}
+
+interface FunnelHealth {
+  status: 'healthy' | 'idle' | 'in_progress' | 'stalled' | 'unknown';
+  windowHours: number;
+  briefsCount: number | null;
+  draftsCount: number | null;
+  stalledTaskCount: number | null;
+  oldestStalledTaskId?: string | null;
+  oldestStalledTaskHours?: number | null;
+  nextAction?: string | null;
+  stageDurations?: Record<string, { samples: number; p50Hours: number | null; p95Hours: number | null }> | null;
 }
 
 interface FailureItem {
@@ -93,6 +110,7 @@ export interface ClientBudgetReport {
 
 export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
+  const [funnel, setFunnel] = useState<FunnelHealth | null>(null);
   const [failures, setFailures] = useState<FailureItem[]>([]);
   const [sloSummary, setSloSummary] = useState<SloSummary | null>(null);
   const [recentProbes, setRecentProbes] = useState<SloProbeResult[]>([]);
@@ -117,8 +135,9 @@ export const OpsScreen: React.FC = () => {
 
   const fetchOpsData = async () => {
     setLoading(true);
-    const [healthRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
+    const [healthRes, funnelRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
       read(() => apiClient.operations.integrationsHealth()),
+      read(() => apiClient.operations.funnelHealth()),
       read(() => apiClient.operations.failures()),
       read(() => apiClient.operations.slo()),
       read(() => apiClient.operations.reconciliation()),
@@ -129,6 +148,7 @@ export const OpsScreen: React.FC = () => {
       if (r.state === 'unknown') gaps[name] = r.reason || 'unknown error';
     };
     note('integrations', healthRes);
+    note('design funnel', funnelRes);
     note('failures', failRes);
     note('slo', sloRes);
     note('reconciliation', reconRes);
@@ -136,6 +156,7 @@ export const OpsScreen: React.FC = () => {
     setUnreadable(gaps);
 
     setIntegrations(healthRes.state === 'known' && Array.isArray(healthRes.value?.items) ? healthRes.value.items : []);
+    setFunnel(funnelRes.state === 'known' && funnelRes.value?.status ? funnelRes.value as FunnelHealth : null);
     setFailures(failRes.state === 'known' && Array.isArray(failRes.value?.items) ? failRes.value.items : []);
     if (sloRes.state === 'known' && sloRes.value?.summary) {
       setSloSummary(sloRes.value.summary);
@@ -218,7 +239,7 @@ export const OpsScreen: React.FC = () => {
     }
   };
 
-  const degradedCount = integrations.filter((i) => i.state !== 'healthy').length;
+  const degradedCount = integrations.filter((i) => i.state !== 'paid_verified').length;
   const criticalCount = failures.filter((f) => f.status === 'OPERATOR_REQUIRED').length;
   const recoverableCount = failures.length;
   const failuresKnown = Boolean(lastCheck) && !unreadable.failures;
@@ -264,8 +285,21 @@ export const OpsScreen: React.FC = () => {
         {/* A count Core could not supply is shown as —, never as 0. */}
         <div className="stat"><b>{failuresKnown ? criticalCount : '—'}</b><span>critical incidents</span></div>
         <div className="stat"><b>{failuresKnown ? recoverableCount : '—'}</b><span>recoverable failures</span></div>
-        <div className="stat"><b>{integrationsKnown ? degradedCount : '—'}</b><span>adapter degraded</span></div>
+        <div className="stat"><b>{integrationsKnown ? degradedCount : '—'}</b><span>adapters not verified</span></div>
         <div className="stat"><b>—</b><span>last backup age (not reported to the Desk)</span></div>
+      </div>
+
+      <div className="panel" style={{ padding: 16, marginTop: 16 }}>
+        <h2>Design request progress</h2>
+        {funnel ? (
+          <>
+            <p>Last {funnel.windowHours} hours: {funnel.briefsCount} requests · {funnel.draftsCount} Canva drafts · {funnel.stalledTaskCount} overdue automatic requests · {funnel.status.replace('_', ' ')}</p>
+            {funnel.oldestStalledTaskId && <p>Oldest overdue task: {funnel.oldestStalledTaskId} ({funnel.oldestStalledTaskHours} hours). {funnel.nextAction}</p>}
+            {funnel.stageDurations && Object.entries(funnel.stageDurations).map(([stage, timing]) => (
+              <p key={stage}>{stage.replace(/([A-Z])/g, ' $1')}: {timing.samples} completed · p50 {timing.p50Hours === null ? '—' : `${timing.p50Hours}h`} · p95 {timing.p95Hours === null ? '—' : `${timing.p95Hours}h`}</p>
+            ))}
+          </>
+        ) : <p>Design progress unknown. {unreadable['design funnel'] || 'No result has been read yet.'}</p>}
       </div>
 
       {/* SLO Latency & Synthetic Heartbeat Dashboard */}
@@ -587,9 +621,10 @@ export const OpsScreen: React.FC = () => {
           {integrations.length > 0 ? (
             integrations.map((item) => (
               <div key={item.integrationId} className="rule">
-                <span className={`dot ${item.state === 'healthy' ? '' : item.state === 'degraded' ? 'warn' : 'bad'}`}></span>
+                <span className={`dot ${item.state === 'paid_verified' ? '' : 'warn'}`}></span>
                 <b>{item.kind.toUpperCase().replace('_', ' ')} ({item.integrationId})</b>
-                <p>Status: {item.state} · Checked {item.checkedAt.substring(11, 19)} UTC</p>
+                <p>Setup: {item.configured === null ? 'unknown' : item.configured ? 'configured' : 'missing'} · Reachability: {item.reachability} · Paid verification: {item.paidVerification.replace('_', ' ')} · Local state: {item.state}</p>
+                <p>Next: {item.nextAction} · Configuration observed {item.checkedAt.substring(11, 19)} UTC{item.lastVerifiedAt ? ` · Last verified ${item.lastVerifiedAt}` : ''}</p>
               </div>
             ))
           ) : (

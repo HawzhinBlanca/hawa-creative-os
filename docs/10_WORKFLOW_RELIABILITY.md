@@ -137,6 +137,12 @@ Hawa Desk exposes:
 
 Every control requires a reason and emits an audit event.
 
+### Health observations (2026-09-25 R02 slice)
+
+An adapter's configuration, recent reachability, and successful paid operation are separate facts. Configuration or a closed local circuit breaker alone cannot establish `connected` or `paid_verified`. A disabled or never-run paid probe reports `unverified`; its last result becomes `stale` after twice the scheduled interval. Provider observations include their measurement time and the operator's next safe action. An unavailable measurement reports `unknown` and null counts, never zero activity.
+
+The design funnel is evaluated per automatic task. A successful draft in the same period cannot hide an overdue task without its Canva binding. Recent or manual-only requests without drafts are still in progress. The monitor reports the oldest overdue task and task-weighted p50/p95 durations for each completed stage, with sample counts and nulls when no stage has completed. Reading health is side-effect-free; any operator paging must use a separate deduplicated sender.
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:

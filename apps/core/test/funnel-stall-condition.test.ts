@@ -29,15 +29,10 @@ const source = fs.readFileSync(path.join(here, '../src/services/funnel-monitor.t
  * permanently. Health therefore read `degraded` permanently, which means a real outage looked
  * exactly like a normal day. A monitor that always alarms is worse than none.
  *
- * These assertions read the source rather than run a query because the condition is the thing worth
- * protecting, and reproducing it needs a populated database the unit suite does not have.
+ * The task-level stall behavior is exercised against PostgreSQL in funnel-monitor.test.ts.
+ * These older checks only guard the unused approval-stage regression.
  */
-describe('the funnel alarms on no designs, not on an unused approval stage', () => {
-  it('stalls when briefs arrive and no draft is produced', () => {
-    expect(source).toMatch(/else if \(draftsCount === 0\)/);
-    expect(source).toContain('and no design was produced');
-  });
-
+describe('the funnel does not alarm on an unused approval stage', () => {
   it('no longer treats zero approvals or zero deliveries as a stall', () => {
     // The exact condition that kept production red: `approvalsCount === 0 || deliveriesCount === 0`.
     expect(source).not.toMatch(/approvalsCount === 0 \|\| deliveriesCount === 0/);

@@ -23,6 +23,21 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(json.status).toBe('healthy');
   });
 
+  it('does not call an unrun paid model probe connected', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'configured-but-unverified-test-key';
+    try {
+      const res = await app.request('/health');
+      const json = await res.json();
+      expect(json.dependencies.modelProvider).toBe('unverified');
+      expect(json.lastPaidProbe.status).toBe('unverified');
+      expect(json.lastPaidProbe.at).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+    }
+  });
+
   it('rejects unauthenticated telegram webhook', async () => {
     const res = await app.request('/api/webhooks/telegram', {
       method: 'POST',
@@ -399,11 +414,39 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(healthRes.status).toBe(200);
     const health = await healthRes.json();
     expect(health.items.length).toBe(6);
+    for (const item of health.items) {
+      expect(item.state).not.toBe('healthy');
+      expect(item.reachability).toBe('unknown');
+      expect(item.paidVerification).toBe('not_run');
+      expect(item.lastVerifiedAt).toBeNull();
+      expect(item.nextAction).toBeTruthy();
+    }
 
     // Operations Failures are the failed tasks Postgres holds
     const failRes = await dbApp.request('/v1/operations/failures');
     expect(failRes.status).toBe(200);
     expect((await app.request('/v1/operations/failures')).status).toBe(503);
+  });
+
+  it('reports a configured Drive adapter without claiming it is reachable or paid-verified', async () => {
+    const previous = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    process.env.GOOGLE_DRIVE_FOLDER_ID = 'fixture-folder';
+    try {
+      const response = await app.request('/v1/integrations/health');
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      const drive = body.items.find((item: any) => item.integrationId === 'int_google_drive');
+      expect(drive).toMatchObject({
+        configured: true,
+        state: 'configured',
+        reachability: 'unknown',
+        paidVerification: 'not_run',
+        lastVerifiedAt: null,
+      });
+    } finally {
+      if (previous === undefined) delete process.env.GOOGLE_DRIVE_FOLDER_ID;
+      else process.env.GOOGLE_DRIVE_FOLDER_ID = previous;
+    }
   });
 
   it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {

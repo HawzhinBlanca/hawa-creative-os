@@ -112,6 +112,7 @@ const CALLS: Array<{ name: string; call: () => Promise<unknown>; method: string;
   },
   // Ops
   { name: 'Ops: integrations health', call: () => apiClient.operations.integrationsHealth(), method: 'GET', path: '/v1/integrations/health' },
+  { name: 'Ops: design funnel', call: () => apiClient.operations.funnelHealth(), method: 'GET', path: '/v1/system/funnel/health' },
   { name: 'Ops: failures', call: () => apiClient.operations.failures(), method: 'GET', path: '/v1/operations/failures' },
   { name: 'Ops: SLO summary', call: () => apiClient.operations.slo(), method: 'GET', path: '/v1/operations/slo' },
   { name: 'Ops: last reconciliation', call: () => apiClient.operations.reconciliation(), method: 'GET', path: '/v1/operations/reconciliation' },

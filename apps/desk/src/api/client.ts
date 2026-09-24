@@ -279,6 +279,7 @@ class HawaApiClient {
 
   public readonly operations = {
     integrationsHealth: () => this.request<any>('/integrations/health'),
+    funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),
     slo: () => this.request<any>('/operations/slo'),
     reconciliation: () => this.request<any>('/operations/reconciliation'),

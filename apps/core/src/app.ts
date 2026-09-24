@@ -555,7 +555,7 @@ export function createApp(options?: CreateAppOptions) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { status: 'unconfigured' };
     if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return { status: lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected' };
+      return { status: 'unverified' };
     }
 
     try {
@@ -639,11 +639,12 @@ export function createApp(options?: CreateAppOptions) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return 'unconfigured';
     if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected';
+      return 'unverified';
     }
 
     // Health reports the scheduled probe's last result and never pays for one itself: Docker checks
     // /health every 10 s, and an inline probe on a stale result made the 3-minute schedule a floor.
+    if (lastPaidProbe.at && Date.now() - lastPaidProbe.at > 2 * billingProbeMs) return 'stale';
     return lastPaidProbe.status;
   };
 
@@ -652,7 +653,7 @@ export function createApp(options?: CreateAppOptions) {
   // 480 paid calls a day, up to ~$2.40, recorded nowhere. A design that hits exhausted credit
   // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
   const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
-  if (options?.enableBillingProbeSchedule) {
+  if (options?.enableBillingProbeSchedule && !options?.skipPaidModelProbe) {
     setTimeout(async () => {
       try {
         const res = await executePaidModelProbe();
@@ -694,12 +695,12 @@ export function createApp(options?: CreateAppOptions) {
     const dbStatus = await probeDatabase(db);
 
     const canvaBreakerState = globalCanvaCircuitBreaker.getSnapshot();
-    let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'connected');
+    let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'unverified');
     // The breaker only counts failed calls. An expired authorization fails every design at the Canva
     // transfer while the breaker stays closed: from 2026-09-17 to 2026-09-18 health said "connected"
     // while the connection needed reconnecting. Designs transfer as the Primary Operator, so that is
     // the connection that counts.
-    if (canvaStatus === 'connected' && db) {
+    if (canvaStatus === 'unverified' && db) {
       try {
         const connection = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, async (trx) =>
           (await sql<{ status: string }>`SELECT status FROM hawa.canva_connections
@@ -742,7 +743,8 @@ export function createApp(options?: CreateAppOptions) {
         funnelMetrics = await checkProductionFunnelHealth(db, { windowHours: 48 });
         funnelStatus = funnelMetrics.status;
       } catch {
-        // DB error already reported under postgres dependency probe
+        // A failed funnel read is unknown even when the simple database ping succeeded.
+        funnelStatus = 'unknown';
       }
     }
 
@@ -765,11 +767,12 @@ export function createApp(options?: CreateAppOptions) {
     // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
     const cutoutStatus = await healthCutouts.health();
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
+      || (isProduction && (modelProviderStatus === 'unverified' || modelProviderStatus === 'stale'))
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
-      || funnelStatus === 'stalled'
+      || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
       || parkedUpdates > 0
       || (restateWork.paused ?? 0) > 0;
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
