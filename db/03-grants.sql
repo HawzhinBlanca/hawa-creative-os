@@ -42,9 +42,25 @@ DO $$ BEGIN
   IF to_regclass('hawa.blob_references') IS NOT NULL THEN
     REVOKE ALL ON hawa.blob_references FROM hawa_app;
   END IF;
+  -- Duplicates migration 020 moved aside: read by the owner only (the grant above covered it).
+  IF to_regclass('hawa.inbox_event_duplicates') IS NOT NULL THEN
+    REVOKE ALL ON hawa.inbox_event_duplicates FROM hawa_app;
+  END IF;
 END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.publications FROM hawa_app;
+
+-- Three of the tables above are not append-only in use: a row moves through states. The REVOKEs
+-- took UPDATE away entirely, so a database built from an empty data directory (this file is its
+-- init script) left the worker unable to claim a command ("permission denied for table
+-- outbox_commands", chaos harness 2026-09-24), approvals unable to mark their revision and
+-- deliveries unable to finish. The test databases never run this file, so no test saw it. Only the
+-- columns the code moves are granted; what a row says it is (payload, key, hashes) stays fixed.
+-- apps/worker/test/fresh-production-init.test.ts builds a database from these scripts and runs
+-- the worker's outbox on it as this role.
+GRANT UPDATE (state, available_at, leased_until, attempts, last_error, delivered_at) ON hawa.outbox_commands TO hawa_app;
+GRANT UPDATE (status) ON hawa.design_revisions TO hawa_app;
+GRANT UPDATE (state, error_class, error_detail, updated_at, completed_at) ON hawa.publications TO hawa_app;
 
 COMMIT;
