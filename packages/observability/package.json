@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hawa/contracts": "workspace:*"
+    "@hawa/contracts": "workspace:*",
+    "pino": "10.3.1"
   }
 }

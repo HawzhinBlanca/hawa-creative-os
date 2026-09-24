@@ -1,6 +1,7 @@
 import type { WorkflowDurableContext } from './durable-context.js';
 import type { WorkflowInput, WorkflowOutput } from './workflow.js';
 import type { OutcomeRecorder } from './outcome-without-core.js';
+import { log, requestIdHeaders } from './logging.js';
 
 /**
  * A failure that retrying can never fix (rejected request, scope mismatch). The Restate
@@ -121,7 +122,8 @@ function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch)
   return async (path: string, body?: unknown, key?: string) => {
     const res = await fetcher(base + '/v1/tasks/' + encodeURIComponent(input.taskId) + path, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
+      // Core logs the call under the request this invocation belongs to (logging.ts).
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}), ...requestIdHeaders() },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(300000),
     });
@@ -233,7 +235,7 @@ export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurab
       detail: 'Dispatched without an automatic Canva job; nothing was generated or spent.',
     });
   } catch (err) {
-    console.warn(`[worker] Task ${input.taskId}: the refusal could not be reported to Core: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`[worker] Task ${input.taskId}: the refusal could not be reported to Core: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -282,7 +284,7 @@ export async function runCanvaDraft(
       });
     } catch (err) {
       if (!stepGaveUp(err)) throw err;
-      console.warn(`[worker] Task ${input.taskId}: studio run ${runId} could not be abandoned: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`[worker] Task ${input.taskId}: studio run ${runId} could not be abandoned: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -294,17 +296,17 @@ export async function runCanvaDraft(
    */
   const recordWithoutCore = async (status: string, report: Record<string, unknown>) => {
     if (!recordOutcome) {
-      console.error(`[worker] Task ${input.taskId}: outcome ${status} could not be reported to Core, and there is no database to record it in.`);
+      log.error(`[worker] Task ${input.taskId}: outcome ${status} could not be reported to Core, and there is no database to record it in.`);
       return;
     }
     try {
       const recorded = await ctx.run('canva-outcome-without-core-' + status.toLowerCase(), () =>
         recordOutcome({ tenantId: input.tenantId, taskId: input.taskId, report })
       );
-      console.error(`[worker] Task ${input.taskId}: Core did not take outcome ${status}; recorded in the outbox instead: ${JSON.stringify(recorded)}`);
+      log.error(`[worker] Task ${input.taskId}: Core did not take outcome ${status}; recorded in the outbox instead: ${JSON.stringify(recorded)}`);
     } catch (err) {
       if (!stepGaveUp(err)) throw err;
-      console.error(`[worker] Task ${input.taskId}: outcome ${status} was recorded neither by Core nor in the outbox: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`[worker] Task ${input.taskId}: outcome ${status} was recorded neither by Core nor in the outbox: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

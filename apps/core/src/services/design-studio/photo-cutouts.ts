@@ -3,6 +3,7 @@ import { sql, type Database, type Kysely } from '@hawa/db';
 import { cutoutPlacement, coverCrop, PHOTO_ZOOM_MAX, type PhotoCutoutAsset, type PhotoElement, type StudioLayoutV2 } from '@hawa/creative';
 import type { ContentPhoto } from './types.js';
 import { SOFT_PHOTO_SCALE } from './studio-status-note.js';
+import { log } from '../../logging.js';
 
 /**
  * People cut out of the client's photos (ADR-032), made by the cut-out service (services/cutout) and
@@ -137,7 +138,7 @@ export class PhotoCutouts {
           row = await this.make(tx, tenantId, photo, sourceSha256);
         } catch (err) {
           const message = (err as Error)?.message || String(err);
-          console.warn(`[cutouts] photo ${photoIndex} could not be cut out: ${message}`);
+          log.warn(`[cutouts] photo ${photoIndex} could not be cut out: ${message}`);
           // Any failure used to mean "the service is down": one photo it refused stopped every later
           // photo from being sent, and each was said to have no cut-out because the service was not
           // available (2026-09-24). Only no answer, or 503 (the model loading), means that now.
@@ -281,7 +282,7 @@ export class PhotoCutouts {
           ${row.shadow_png}, ${row.shadow ? JSON.stringify(row.shadow) : null}::jsonb, ${JSON.stringify(report)}::jsonb)
         ON CONFLICT (tenant_id, source_sha256, model_sha256) DO NOTHING`.execute(db)
     );
-    console.log(`[cutouts] ${sourceSha256.slice(0, 12)}: ${row.passed ? 'passed' : `failed ${failed.join(', ')}`} (${reply.timings?.matte ?? '?'} s)`);
+    log.info(`[cutouts] ${sourceSha256.slice(0, 12)}: ${row.passed ? 'passed' : `failed ${failed.join(', ')}`} (${reply.timings?.matte ?? '?'} s)`);
     return row;
   }
 }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { StageContext, CandidateState } from '../types.js';
 import { renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
+import { log } from '../../../logging.js';
 
 export async function runRenderStage(
   ctx: StageContext,
@@ -40,7 +41,7 @@ export async function runRenderStage(
       } catch (err: any) {
         // Falling back from measured contrast to the declared background colour can let text that is
         // genuinely illegible over its actual backdrop pass the legibility gate, so say when it happens.
-        console.warn(
+        log.warn(
           `[render.stage] Composite contrast could not be measured (${err?.message || err}); ` +
             `falling back to the declared background colour for legibility scoring.`
         );

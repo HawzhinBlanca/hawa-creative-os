@@ -1,6 +1,7 @@
 import { Kysely } from 'kysely';
 import crypto from 'node:crypto';
 import type { Database } from '../types.js';
+import { currentTraceId } from '../trace-context.js';
 
 export interface CreateRevisionParams {
   id?: string;
@@ -210,7 +211,7 @@ export class RevisionRepository {
             actor_id: params.authorId || null,
             correlation_id: params.correlationId || crypto.randomUUID(),
             causation_id: null,
-            trace_id: null,
+            trace_id: currentTraceId(),
             data: {
               invalidatedApprovalId: priorApproval.id,
               priorRevisionId: priorApproval.design_revision_id,
@@ -234,7 +235,7 @@ export class RevisionRepository {
           actor_id: params.authorId || null,
           correlation_id: params.correlationId || crypto.randomUUID(),
           causation_id: null,
-          trace_id: null,
+          trace_id: currentTraceId(),
           data: {
             revisionId: revision.id,
             revisionNumber: revision.revision,
@@ -449,7 +450,7 @@ export class RevisionRepository {
           actor_id: params.decidedBy,
           correlation_id: params.correlationId || crypto.randomUUID(),
           causation_id: null,
-          trace_id: null,
+          trace_id: currentTraceId(),
           data: {
             approvalId: approval.id,
             revisionId: params.revisionId,

@@ -6,6 +6,7 @@ import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from 
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import { LiveColourGate, runWhileLive, backgroundLoopsFromEnv, type LoopHandle } from './live-colour.js';
+import { log, withInvocationLogContext } from './logging.js';
 
 const SERVICE_NAME = 'hawa-worker';
 // A long-running service that dies without saying why is the hardest kind of outage to diagnose,
@@ -13,12 +14,12 @@ const SERVICE_NAME = 'hawa-worker';
 // process on an unhandled rejection by default; these handlers make the reason survive the exit.
 process.on('unhandledRejection', (reason: unknown) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
-  console.error(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err.stack);
+  log.fatal(`[${SERVICE_NAME}] FATAL unhandledRejection: ${err.message}`, err);
   process.exit(1);
 });
 
 process.on('uncaughtException', (err: Error) => {
-  console.error(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err.stack);
+  log.fatal(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err);
   process.exit(1);
 });
 import { runCanvaDraft } from './canva-draft-workflow.js';
@@ -88,28 +89,28 @@ function durableContext(ctx: restate.Context | restate.WorkflowContext): Workflo
 const taskService = restate.service({
   name: 'TaskService',
   handlers: {
-    runTask: async (ctx: restate.Context, input: WorkflowInput) => {
+    runTask: async (ctx: restate.Context, input: WorkflowInput) => withInvocationLogContext(ctx, input, async () => {
       if (input.canvaAutoGenerate) {
         return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       try { return await runner.run(input, durableContext(ctx)); }
       catch (error) { throw asTerminalIfNotRunnable(error); }
-    },
+    }),
   },
 });
 
 const taskWorkflow = restate.workflow({
   name: 'TaskWorkflow',
   handlers: {
-    run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => {
+    run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => withInvocationLogContext(ctx, input, async () => {
       if (input.canvaAutoGenerate) {
         return await runCanvaDraft(input, durableContext(ctx), fetch, recordOutcome);
       }
       const runner = new TaskWorkflowRunner({ db: sharedDb });
       try { return await runner.run(input, durableContext(ctx)); }
       catch (error) { throw asTerminalIfNotRunnable(error); }
-    },
+    }),
   },
 });
 
@@ -127,7 +128,7 @@ const liveGate = backgroundMode.mode === 'live-colour'
   ? new LiveColourGate({ adminUrl: backgroundMode.adminUrl, selfUri: backgroundMode.selfUri, takeoverMs: backgroundMode.takeoverMs, refreshMs: backgroundMode.refreshMs })
   : null;
 let gatedLoop: LoopHandle | null = null;
-if (backgroundMode.mode === 'misconfigured') console.error(`[Worker] Outbox not started: ${backgroundMode.reason}`);
+if (backgroundMode.mode === 'misconfigured') log.error(`[Worker] Outbox not started: ${backgroundMode.reason}`);
 if (sharedDb && backgroundMode.mode !== 'misconfigured') {
   try {
     const dispatcher = new TaskWorkflowDispatcher({
@@ -145,13 +146,13 @@ if (sharedDb && backgroundMode.mode !== 'misconfigured') {
     if (liveGate) {
       const consumer = outboxConsumer;
       gatedLoop = runWhileLive({ gate: liveGate, tick: () => consumer.processBatch(), intervalMs: Number(process.env.OUTBOX_POLL_INTERVAL_MS || 1000) });
-      console.log(`[Worker] OutboxConsumer runs while ${process.env.HAWA_WORKER_SELF_URI} is the live colour`);
+      log.info(`[Worker] OutboxConsumer runs while ${process.env.HAWA_WORKER_SELF_URI} is the live colour`);
     } else {
       outboxConsumer.start();
-      console.log('[Worker] OutboxConsumer background processor started');
+      log.info('[Worker] OutboxConsumer background processor started');
     }
   } catch (err) {
-    console.error('[Worker] Failed to start OutboxConsumer:', err);
+    log.error('[Worker] Failed to start OutboxConsumer:', err);
   }
 }
 
@@ -207,7 +208,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`Hawa Worker listening on port ${port} with Restate services [TaskService, TaskWorkflow]`);
+  log.info(`Hawa Worker listening on port ${port} with Restate services [TaskService, TaskWorkflow]`);
 });
 
 const shutdown = () => {

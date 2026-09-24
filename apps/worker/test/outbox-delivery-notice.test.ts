@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, OutboxRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { captureLogs } from '@hawa/observability';
 import { OutboxConsumer } from '../src/outbox-consumer.js';
 import { composeDeliveredMessage, readStoredExportBytes, type TelegramSender } from '../src/delivery-notification.js';
 
@@ -214,14 +215,14 @@ describe('notify.published', () => {
     });
 
     it('logs the task and the reason when there is no office chat to alert', async () => {
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const logged = captureLogs();
       try {
         const { taskId, row } = await deliverRefused('TELEGRAM_DOCUMENT_REJECTED_400', null);
         expect(row?.state).toBe('failed');
-        const lines = logged.mock.calls.map((args) => String(args[0]));
+        const lines = logged.lines.filter((l) => l.level === 'error').map((l) => l.msg);
         expect(lines.some((l) => l.includes(taskId) && l.includes('TELEGRAM_DOCUMENT_REJECTED_400') && l.includes('no office chat'))).toBe(true);
       } finally {
-        logged.mockRestore();
+        logged.restore();
       }
     });
 

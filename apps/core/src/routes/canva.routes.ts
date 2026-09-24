@@ -4,6 +4,7 @@ import { CanvaConnectService, CanvaFlowError, type CanvaServiceOptions } from '.
 import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned, toApiTaskStatus } from '@hawa/contracts';
+import { log } from '../logging.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -90,11 +91,11 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
         try {
           ctx.broadcastEvent(TASK_TRANSITIONED_EVENT, taskTransitioned({ taskId, from: fromState, to: toState, version }));
         } catch (err) {
-          console.error(`[canva] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
+          log.error(`[canva] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
         }
       }
     } catch (err) {
-      console.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
+      log.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
     }
   };
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{

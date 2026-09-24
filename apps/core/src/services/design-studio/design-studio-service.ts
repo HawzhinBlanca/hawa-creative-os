@@ -29,13 +29,14 @@ import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoData
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
+import { log } from '../../logging.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
   try {
     return resolveOrnamentSettings();
   } catch (err) {
-    console.error('[studio] ornament settings invalid, using the defaults:', err instanceof Error ? err.message : err);
+    log.error('[studio] ornament settings invalid, using the defaults:', err instanceof Error ? err.message : err);
     return resolveOrnamentSettings({});
   }
 };
@@ -1033,7 +1034,7 @@ export class DesignStudioService {
       // "Keep title clear and centered..." instead of the client's colour rules. A run that cannot
       // read the client's pack must stop rather than design to defaults nobody approved.
       const detail = err?.message || String(err);
-      console.error(`[design-studio] Reference pack could not be read; this run is stopping. ${detail}`);
+      log.error(`[design-studio] Reference pack could not be read; this run is stopping. ${detail}`);
       throw new CanvaFlowError(
         500,
         'REFERENCE_PACK_UNREADABLE',
@@ -1068,7 +1069,7 @@ export class DesignStudioService {
         }
       }
     } catch (err: any) {
-      console.error(
+      log.error(
         `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
           `this design is being generated without exemplar conditioning.`
       );
@@ -1076,7 +1077,7 @@ export class DesignStudioService {
     if (!exemplars.length) {
       // In production this was silent: the layout model was conditioned on nothing and no one
       // could tell from the logs that the run had seen no exemplar at all.
-      console.error(
+      log.error(
         `[design-studio] No exemplar image resolved under ${creativeAssetPath('exemplars', { optional: true }) || 'packages/creative/assets/exemplars'}; ` +
           `run ${run.id} is being conditioned on no exemplar.`
       );
@@ -1329,7 +1330,7 @@ export class DesignStudioService {
               return { runId, status: 'laying_out', stage: 'concepts', spentUsd: budget.spentUsd };
             }
             await this.refuseWhileParentRuns(s, directedRequest.parentTaskId);
-            console.warn(`[studio] run ${run.id}: no finished design found for parent task ${directedRequest.parentTaskId}; the revision is designed afresh.`);
+            log.warn(`[studio] run ${run.id}: no finished design found for parent task ${directedRequest.parentTaskId}; the revision is designed afresh.`);
           }
           // A v3 run's layout call invents its own three archetypes and never reads these
           // concepts, so it spends nothing here: it reserves a row per layout the generator
@@ -1435,7 +1436,7 @@ export class DesignStudioService {
               }
               // The change could not be made to the design as it stands: the revision is designed
               // afresh with the change in its instructions, which is how every revision used to run.
-              console.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
+              log.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
               stages.directedFailed = err?.message || String(err);
               for (let i = 1; i < V3_CANDIDATE_SLOTS; i++) {
                 await this.repo.insertCandidate({ id: randomUUID(), runId: run.id, tenantId: s.tenantId, ordinal: i, concept: pendingV3Concept(i) as unknown as Record<string, unknown>, status: 'draft' });
@@ -2128,7 +2129,7 @@ export class DesignStudioService {
       const note =
         `The client's reference image reached this run at '${run.status}', after its layouts were generated, ` +
         `so its style values were not enforced on them; the design follows the image only through the brief's notes.`;
-      console.warn(`[studio] run ${run.id}: ${note}`);
+      log.warn(`[studio] run ${run.id}: ${note}`);
       const noted: LateReferenceBrief = { ...stored, referenceRebrief: 'too_late' };
       stages.brief = noted;
       // Whatever the run already reported still matters; this note is written once, so it is added.
@@ -2143,7 +2144,7 @@ export class DesignStudioService {
     } catch (err: any) {
       // The stored brief still designs the request, so an extra call that failed must not fail the
       // run. Nothing is recorded, which leaves one more attempt at the next stage before layouts.
-      console.error(
+      log.error(
         `[studio] run ${run.id}: the brief could not be re-read with the reference image that arrived after it: ${err?.message || err}`
       );
       return stored;
@@ -2156,7 +2157,7 @@ export class DesignStudioService {
     ctx.style = brief.styleSpec;
     ctx.requestedBackground = requestedBackgroundFor(brief, ctx.referencePack.palette);
     await this.repo.updateRunStatus(run.id, s.tenantId, run.status, { stages, budget });
-    console.warn(
+    log.warn(
       `[studio] run ${run.id}: brief re-read at '${run.status}' with the reference image that arrived after it (referenceRole ${brief.referenceRole}).`
     );
     return brief;

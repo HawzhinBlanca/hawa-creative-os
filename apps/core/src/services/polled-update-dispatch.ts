@@ -23,6 +23,7 @@
  */
 import crypto from 'node:crypto';
 import { sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
+import { log as coreLog } from '../logging.js';
 
 export interface PolledUpdate { update_id: number }
 
@@ -51,7 +52,7 @@ const retryable = (status: number) => status >= 500 || status === 429 || status 
 
 export function createPolledUpdateHandler<U extends PolledUpdate>(deps: PolledUpdateDispatchDeps<U>) {
   const maxAttempts = Math.max(1, deps.maxAttempts ?? POLLED_UPDATE_MAX_ATTEMPTS);
-  const log = deps.log ?? console;
+  const log = deps.log ?? coreLog;
   const attempts = new Map<number, number>();
   const countFailure = async (update: U, reason: string): Promise<number> => {
     if (deps.recordFailure) return deps.recordFailure(update, reason);

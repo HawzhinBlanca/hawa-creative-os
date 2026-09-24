@@ -1,4 +1,5 @@
 import { sql, withRlsContext, type Kysely, type Database } from '@hawa/db';
+import { log } from '../logging.js';
 
 export interface FunnelHealthMetrics {
   windowHours: number;
@@ -121,7 +122,7 @@ export async function checkProductionFunnelHealth(
       if (options?.telegramBridge && options?.opsChannelId) {
         options.telegramBridge.dispatchOutboundMessage(options.opsChannelId, {
           text: `🚨 [FUNNEL ALERT] ${alert}`,
-        }).catch((err) => console.error('[funnel-monitor] Failed to dispatch funnel alert:', err));
+        }).catch((err) => log.error('[funnel-monitor] Failed to dispatch funnel alert:', err));
       }
     }
 
@@ -137,7 +138,7 @@ export async function checkProductionFunnelHealth(
       measuredAt,
     };
   } catch (err: any) {
-    console.error('[funnel-monitor] Funnel check failed:', err);
+    log.error('[funnel-monitor] Funnel check failed:', err);
     return {
       windowHours,
       briefsCount: 0,

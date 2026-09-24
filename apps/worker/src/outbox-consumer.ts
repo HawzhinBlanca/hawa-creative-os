@@ -12,6 +12,7 @@ import {
 import { OfficeTracer } from '@hawa/observability';
 import { TelegramBridge } from '@hawa/integrations';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
+import { log, outboxLogContext, requestIdHeaders, runWithLogContext } from './logging.js';
 import {
   composeDeliveredMessage,
   composeDeliveryFailedAlert,
@@ -208,7 +209,7 @@ export class OutboxConsumer {
       const chatId = intakeChatOf(payload);
       const botToken = this.telegramBotToken();
       if (!chatId || !botToken) {
-        console.error(
+        log.error(
           `[OutboxConsumer] Request ${cmd.aggregate_id} was dead-lettered and its requester could not be told (${!chatId ? 'no Telegram chat in the command' : 'TELEGRAM_BOT_TOKEN is not set'}).`
         );
         return;
@@ -216,17 +217,17 @@ export class OutboxConsumer {
       const sender = this.telegramSender(botToken);
       const told = await sender.dispatchOutboundMessage(chatId, { text: composeIntakeFailedMessage(cmd.aggregate_id) });
       if (!told.success) {
-        console.error(`[OutboxConsumer] Could not tell chat ${chatId} that request ${cmd.aggregate_id} failed: ${told.error}`);
+        log.error(`[OutboxConsumer] Could not tell chat ${chatId} that request ${cmd.aggregate_id} failed: ${told.error}`);
       }
       const office = this.officeAlertChatId();
       if (office && office !== chatId) {
         const alerted = await sender.dispatchOutboundMessage(office, {
           text: composeIntakeFailedAlert(cmd.aggregate_id, chatId, attempts, error),
         });
-        if (!alerted.success) console.error(`[OutboxConsumer] Office alert for request ${cmd.aggregate_id} failed: ${alerted.error}`);
+        if (!alerted.success) log.error(`[OutboxConsumer] Office alert for request ${cmd.aggregate_id} failed: ${alerted.error}`);
       }
     } catch (notifyErr) {
-      console.error(`[OutboxConsumer] Could not notify about dead-lettered request ${cmd.aggregate_id}:`, notifyErr);
+      log.error(`[OutboxConsumer] Could not notify about dead-lettered request ${cmd.aggregate_id}:`, notifyErr);
     }
   }
 
@@ -251,17 +252,17 @@ export class OutboxConsumer {
       const office = this.officeAlertChatId();
       if (!botToken || !office || office === requesterChat) {
         const why = !botToken ? 'TELEGRAM_BOT_TOKEN is not set' : !office ? 'no office chat is configured' : "the office chat is the requester's own";
-        console.error(`[OutboxConsumer] Delivery of task ${taskId} failed after ${attempts} attempts (${error}); the office was not alerted: ${why}.`);
+        log.error(`[OutboxConsumer] Delivery of task ${taskId} failed after ${attempts} attempts (${error}); the office was not alerted: ${why}.`);
         return;
       }
       const alerted = await this.telegramSender(botToken).dispatchOutboundMessage(office, {
         text: uncertain ? composeDeliveryUncertainAlert(taskId, requesterChat, error) : composeDeliveryFailedAlert(taskId, requesterChat, attempts, error),
       });
       if (!alerted.success) {
-        console.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}), and so did the office alert: ${alerted.error}`);
+        log.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}), and so did the office alert: ${alerted.error}`);
       }
     } catch (alertErr) {
-      console.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}); the office could not be alerted:`, alertErr);
+      log.error(`[OutboxConsumer] Delivery of task ${taskId} failed (${error}); the office could not be alerted:`, alertErr);
     }
   }
 
@@ -281,13 +282,13 @@ export class OutboxConsumer {
       const office = this.officeAlertChatId();
       if (!botToken || !office || office === chat) {
         const why = !botToken ? 'TELEGRAM_BOT_TOKEN is not set' : !office ? 'no office chat is configured' : 'the message was to the office chat';
-        console.error(`[OutboxConsumer] A message for task ${taskId} may not have reached chat ${chat || 'unknown'} (${error}); the office was not alerted: ${why}.`);
+        log.error(`[OutboxConsumer] A message for task ${taskId} may not have reached chat ${chat || 'unknown'} (${error}); the office was not alerted: ${why}.`);
         return;
       }
       const alerted = await this.telegramSender(botToken).dispatchOutboundMessage(office, { text: composeMessageUncertainAlert(taskId, chat || 'unknown', error) });
-      if (!alerted.success) console.error(`[OutboxConsumer] A message for task ${taskId} may not have arrived (${error}), and the office alert failed: ${alerted.error}`);
+      if (!alerted.success) log.error(`[OutboxConsumer] A message for task ${taskId} may not have arrived (${error}), and the office alert failed: ${alerted.error}`);
     } catch (alertErr) {
-      console.error(`[OutboxConsumer] A message for task ${taskId} may not have arrived (${error}); the office could not be alerted:`, alertErr);
+      log.error(`[OutboxConsumer] A message for task ${taskId} may not have arrived (${error}); the office could not be alerted:`, alertErr);
     }
   }
 
@@ -350,7 +351,7 @@ export class OutboxConsumer {
     if (before === 'uncertain') return 'uncertain';
     const mark = (outcome: SendMarkOutcome) => scope.inTenant((trx) => writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, outcome));
     const unrecorded = (outcome: SendMarkOutcome) => (err: unknown) =>
-      console.warn(
+      log.warn(
         `[OutboxConsumer] Could not record the ${kind} ${step} of command ${cmd.id} as ${outcome}; a later attempt will treat it as uncertain and not send it again:`,
         err instanceof Error ? err.message : err
       );
@@ -453,7 +454,7 @@ export class OutboxConsumer {
         const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
         const res = await (this.options.coreFetcher || fetch)(`${base}/v1/tasks/${encodeURIComponent(taskId)}/notifications/canva-status`, {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...requestIdHeaders() },
           body: JSON.stringify(payload?.report || {}),
           signal: AbortSignal.timeout(60000),
         });
@@ -500,7 +501,7 @@ export class OutboxConsumer {
               }
             }
           } catch (e) {
-            console.warn('[outbox:notify.published] Could not lookup task intake:', e);
+            log.warn('[outbox:notify.published] Could not lookup task intake:', e);
           }
         }
 
@@ -612,7 +613,7 @@ export class OutboxConsumer {
         if (next) token = next;
         else lost = true;
       })
-        .catch((err: unknown) => console.warn(`[OutboxConsumer] Could not renew the claim of command ${claim.id}:`, err instanceof Error ? err.message : err))
+        .catch((err: unknown) => log.warn(`[OutboxConsumer] Could not renew the claim of command ${claim.id}:`, err instanceof Error ? err.message : err))
         .finally(() => {
           renewing = false;
         });
@@ -684,7 +685,10 @@ export class OutboxConsumer {
         if (!claim) break;
         seen.push(claim.id);
         aggregateSummary.leased++;
-        await this.processClaim(claim, scope, { leaseSeconds, maxAttempts, backoffBase }, aggregateSummary);
+        // Each command is handled, and logs, under the request that wrote it (logging.ts).
+        await runWithLogContext(outboxLogContext(claim), () =>
+          this.processClaim(claim, scope, { leaseSeconds, maxAttempts, backoffBase }, aggregateSummary)
+        );
       }
     }
 
@@ -705,7 +709,7 @@ export class OutboxConsumer {
       const error = 'LEASE_EXPIRED: every worker that took this command stopped before recording a result';
       summary.deadLettered++;
       summary.errors.push({ id: claim.id, commandType: claim.command_type, error });
-      console.error(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) UNCERTAIN after ${claim.attempts} attempts: ${error}`);
+      log.error(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) UNCERTAIN after ${claim.attempts} attempts: ${error}`);
       await this.reportEnded(cmd, claim.attempts, error, true);
       return;
     }
@@ -736,14 +740,14 @@ export class OutboxConsumer {
           summary.succeeded++;
         } else {
           summary.lostClaims++;
-          console.warn(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) was done, but its claim had passed to another consumer or an operator before that was recorded; the new holder decides.`);
+          log.warn(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) was done, but its claim had passed to another consumer or an operator before that was recorded; the new holder decides.`);
         }
       } catch (recordErr) {
         // Left leased: its lease runs out and it is claimed again, and the handler's own checks keep
         // what it already did from being done twice.
         const detail = recordErr instanceof Error ? recordErr.message : String(recordErr);
         summary.errors.push({ id: claim.id, commandType: claim.command_type, error: `RESULT_NOT_RECORDED: ${detail}` });
-        console.error(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) was done but could not be recorded as delivered:`, recordErr);
+        log.error(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) was done but could not be recorded as delivered:`, recordErr);
       }
       return;
     }
@@ -773,23 +777,23 @@ export class OutboxConsumer {
       );
       if (!updated) {
         summary.lostClaims++;
-        console.warn(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) failed (${errorMessage}), but its claim had passed to another consumer or an operator before that was recorded; the new holder decides.`);
+        log.warn(`[OutboxConsumer] Command ${claim.id} (${claim.command_type}) failed (${errorMessage}), but its claim had passed to another consumer or an operator before that was recorded; the new holder decides.`);
         return;
       }
       if (updated.state === 'failed') {
         summary.deadLettered++;
-        console.error(
+        log.error(
           `[OutboxConsumer] Command ${claim.id} (${claim.command_type}) ${isUncertain ? 'UNCERTAIN' : isPermanent ? 'PERMANENT FAILURE' : 'DEAD-LETTERED'} after ${updated.attempts} attempts: ${errorMessage}`
         );
         await this.reportEnded(cmd, Number(updated.attempts) || 0, errorMessage, isUncertain);
       } else {
         summary.retried++;
-        console.warn(
+        log.warn(
           `[OutboxConsumer] Command ${claim.id} (${claim.command_type}) scheduled for retry (attempt ${updated.attempts}): ${errorMessage}`
         );
       }
     } catch (retryErr) {
-      console.error(
+      log.error(
         `[OutboxConsumer] Failed to update retry status for command ${claim.id}:`,
         retryErr
       );
@@ -809,12 +813,12 @@ export class OutboxConsumer {
       try {
         const res = await this.processBatch();
         if (res.leased > 0) {
-          console.log(
+          log.info(
             `[OutboxConsumer] Batch completed: ${res.succeeded}/${res.leased} succeeded, ${res.retried} retried, ${res.deadLettered} dead-lettered`
           );
         }
       } catch (err) {
-        console.error('[OutboxConsumer] Error during poll cycle:', err);
+        log.error('[OutboxConsumer] Error during poll cycle:', err);
       } finally {
         if (this.isRunning) {
           this.timer = setTimeout(poll, interval);
@@ -832,6 +836,6 @@ export class OutboxConsumer {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    console.log('[OutboxConsumer] Stopped');
+    log.info('[OutboxConsumer] Stopped');
   }
 }

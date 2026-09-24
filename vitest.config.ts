@@ -79,6 +79,8 @@ export default defineConfig({
       HAWA_RETRY_DELAY_MS: '10',
       HISTORICAL_DESIGNS_ARCHIVE_ROOT: resolve(import.meta.dirname, 'node_modules/.cache/historical-designs-test'),
       HAWA_EMULATE_PUBLISHER: 'true',
+      // Core logs a line per request (apps/core/src/logging.ts); thousands of them would bury failures.
+      LOG_LEVEL: 'warn',
       ...databaseEnv,
     },
   },

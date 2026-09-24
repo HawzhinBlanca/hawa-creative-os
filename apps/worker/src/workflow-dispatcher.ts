@@ -12,6 +12,7 @@ import type { Database, Kysely } from '@hawa/db';
 import { TaskWorkflowRunner, type WorkflowInput, type WorkflowOutput } from './workflow.js';
 import { DurableStepJournal } from './durable-context.js';
 import type { OutboxCommandRecord } from './outbox-consumer.js';
+import { requestIdHeaders } from './logging.js';
 
 export interface WorkflowSubmissionReceipt {
   workflowId: string;
@@ -59,6 +60,8 @@ export class TaskWorkflowDispatcher {
     // in its acknowledgement (daily cap, no client, instruction only, reference image). The worker
     // still reports the outcome for the task's state; this keeps Core from sending a second message.
     const requesterToldAtIntake = cmd.payload?.autoGenerate !== true;
+    // The request that wrote the command, also in the input for a handler whose headers lack it.
+    const requestId = typeof cmd.payload?.requestId === 'string' ? cmd.payload.requestId : undefined;
 
     // 1. Idempotency / Duplicate-Dispatch Check:
     // If already dispatched in this runtime session with confirmed receipt, return immediately.
@@ -82,6 +85,9 @@ export class TaskWorkflowDispatcher {
             'Content-Type': 'application/json',
             // Restate workflows are idempotent by their workflow key; this
             // endpoint rejects an additional idempotency-key header.
+            // Restate hands the invocation the headers it was started with: the handler logs under
+            // the request id Core wrote with the command (logging.ts).
+            ...requestIdHeaders(),
           },
           signal: AbortSignal.timeout(10000),
           body: JSON.stringify({
@@ -97,6 +103,7 @@ export class TaskWorkflowDispatcher {
             idempotencyKey,
             ...(redriveAttempt ? { redriveAttempt } : {}),
             requesterToldAtIntake,
+            ...(requestId ? { requestId } : {}),
           }),
         });
 
@@ -154,6 +161,7 @@ export class TaskWorkflowDispatcher {
       idempotencyKey,
       ...(redriveAttempt ? { redriveAttempt } : {}),
       requesterToldAtIntake,
+      ...(requestId ? { requestId } : {}),
     };
 
     const output: WorkflowOutput = await runner.run(input, journal);

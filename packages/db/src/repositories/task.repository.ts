@@ -3,6 +3,7 @@ import { sql, type Kysely, type RawBuilder } from 'kysely';
 import { API_STATUS_OF_DB_STATE, CHANNEL_INGRESS_USER_ID, TASK_DB_STATES, toApiTaskStatus, toDbTaskState } from '@hawa/contracts';
 import type { Database, TasksTable, TaskEventsTable, TaskState } from '../types.js';
 import { withRlsContext, type RlsContext } from '../client.js';
+import { currentTraceId, withRequestId } from '../trace-context.js';
 
 export class IdempotencyConflictError extends Error {
   constructor(message: string = 'Idempotency conflict: key already used with different payload') {
@@ -490,7 +491,7 @@ export class TaskRepository {
           actor_id: params.actorId || params.userId,
           correlation_id: correlationId,
           causation_id: null,
-          trace_id: params.traceId || null,
+          trace_id: params.traceId || currentTraceId(),
           data: {
             title: task.title,
             clientId: task.client_id,
@@ -513,7 +514,7 @@ export class TaskRepository {
             aggregate_id: task.id,
             command_type: 'task.created',
             idempotency_key: params.idempotencyKey,
-            payload: {
+            payload: withRequestId({
               ...(params.payload || {}),
               taskId: task.id,
               tenantId: params.tenantId,
@@ -521,7 +522,7 @@ export class TaskRepository {
               clientId: task.client_id,
               priority: task.priority,
               requestHash: incomingHash,
-            },
+            }),
             state: 'pending',
           })
           .execute();
@@ -612,7 +613,7 @@ export class TaskRepository {
           actor_id: params.actorId || null,
           correlation_id: correlationId,
           causation_id: params.causationId || null,
-          trace_id: params.traceId || null,
+          trace_id: params.traceId || currentTraceId(),
           data: {
             fromState: params.fromState,
             toState: params.toState,
@@ -632,7 +633,7 @@ export class TaskRepository {
             aggregate_id: params.taskId,
             command_type: params.command.type,
             idempotency_key: params.command.idempotencyKey,
-            payload: params.command.payload,
+            payload: withRequestId(params.command.payload),
             state: 'pending',
           })
           .execute();

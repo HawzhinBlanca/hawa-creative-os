@@ -1,6 +1,7 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { sql, withRlsContext, type Database, type Kysely, type OutboxRepository } from '@hawa/db';
 import { requesterButtons, questionButtons, type InlineButton } from './requester-actions.js';
+import { log } from '../logging.js';
 
 /**
  * A draft the requester has not answered is asked about once a day after it was sent, and once more
@@ -209,6 +210,6 @@ export async function remindUnansweredDrafts(input: {
       // Already written for this question and day.
     }
   }
-  if (written) console.log(`[draft-reminders] ${written} reminder(s) written`);
+  if (written) log.info(`[draft-reminders] ${written} reminder(s) written`);
   return written;
 }

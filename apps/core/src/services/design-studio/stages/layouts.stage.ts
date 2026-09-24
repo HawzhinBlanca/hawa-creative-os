@@ -12,6 +12,7 @@ import {
 } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
 import { copyForStageV3, conceptFromV3Candidate } from './v3.stage.js';
+import { log } from '../../../logging.js';
 
 export const LAYOUT_SCHEMA = {
   type: 'object',
@@ -309,7 +310,7 @@ export async function runLayoutsStage(
 
     // If validation fails, attempt 1 repair call
     if (!validation.ok) {
-      console.warn(`[LayoutsStage] Candidate ${ordinal} failed initial validation: [${validation.code}] ${validation.message}`);
+      log.warn(`[LayoutsStage] Candidate ${ordinal} failed initial validation: [${validation.code}] ${validation.message}`);
       const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nReturn a corrected StudioLayoutV2 adhering to all constraints.`;
 
       layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
@@ -322,7 +323,7 @@ export async function runLayoutsStage(
       layout = normalizeCandidateLayout(layoutResponse.data.layout, ctx.width, ctx.height, logoAspect);
       validation = validateLayoutV2(layout, validationContext);
       if (!validation.ok) {
-        console.warn(`[LayoutsStage] Candidate ${ordinal} failed repair validation: [${validation.code}] ${validation.message}`);
+        log.warn(`[LayoutsStage] Candidate ${ordinal} failed repair validation: [${validation.code}] ${validation.message}`);
       }
     }
 

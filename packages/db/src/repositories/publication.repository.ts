@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { Database, PublicationsTable, DriveRefsTable, SheetSyncsTable } from '../types.js';
+import { currentTraceId } from '../trace-context.js';
 
 export interface CreatePublicationParams {
   tenantId: string;
@@ -148,6 +149,7 @@ export class PublicationRepository {
           aggregate_version: nextVer,
           actor_type: 'workflow',
           actor_id: 'publisher',
+          trace_id: currentTraceId(),
           data: {
             publicationId: pub.id,
             publicationKey: params.publicationKey,
@@ -319,6 +321,7 @@ export class PublicationRepository {
           aggregate_version: Number(task.version) + 1,
           actor_type: 'workflow',
           actor_id: 'publisher',
+          trace_id: currentTraceId(),
           data: {
             publicationId: params.publicationId,
             completedAt: now.toISOString(),
@@ -393,6 +396,7 @@ export class PublicationRepository {
           aggregate_version: nextVer,
           actor_type: 'workflow',
           actor_id: 'publisher',
+          trace_id: currentTraceId(),
           data: {
             publicationId: params.publicationId,
             errorClass: params.errorClass,
