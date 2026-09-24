@@ -1,7 +1,8 @@
 {
-  "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-24T23:05:32.562Z",
-  "environment": "production",
+  "manifestVersion": "2.0.0",
+  "evidenceKind": "source_candidate",
+  "generatedAt": "2026-09-25T02:19:31+03:00",
+  "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
     "description": "Canonical production multi-service container topology (Core, Desk UI, Worker, PostgreSQL, Nginx)",
@@ -19,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "e981e59f1c2f12346224952a10b4e947276fa8ca",
+    "commit": "eda9e8de8114df1ce704acd090940151a95022b0",
     "treeClean": true,
-    "commitTimestamp": "2026-09-25T02:05:01+03:00",
+    "commitTimestamp": "2026-09-25T02:19:31+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -36,7 +37,7 @@
   "components": {
     "core": {
       "service": "core",
-      "image": "hawa-core:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
         "apps/core/src/app.ts": "b453b0ba02861471c49bcb7439aab19c451e024de3e66a74bacdd8b679497d22",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
@@ -45,7 +46,7 @@
     },
     "desk": {
       "service": "desk",
-      "image": "hawa-desk:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
         "apps/desk/src/App.tsx": "5c46787943bb301f6819770a5592c5a90f90e3575aade7ff812ad7d0f77f7c88",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
@@ -53,43 +54,41 @@
     },
     "worker": {
       "service": "worker",
-      "image": "hawa-worker:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
         "apps/worker/src/index.ts": "45427dd03f7955e55a90900110258c7c5befea9be56c9a72ccb003378e18f61a"
       }
     }
   },
   "models": {
-    "registryVersion": "2026-09-18.1",
-    "pinnedModels": {
-      "intake_router": {
-        "provider": "google",
-        "model": "gemini-3.8-flash"
-      },
-      "brief_builder": {
-        "provider": "google",
-        "model": "gemini-3.8-flash"
-      },
-      "creative_director": {
-        "provider": "anthropic",
-        "model": "claude-3-5-sonnet"
-      },
-      "visual_judge": {
-        "provider": "openai",
-        "model": "gpt-6-astra"
-      }
+    "policySourceSha256": "8fa49cfb9fcea11703b9435b6cbfa17429e6b108acaaff7d6d7ed60a30f41f27",
+    "productionDefaults": {
+      "layout": "gpt-6-astra",
+      "critique": "gpt-6-astra",
+      "judge": "gpt-4.1-mini",
+      "text": "gpt-6-astra",
+      "image": "gpt-image-2.5-sunburst"
     },
-    "promptVersions": {
-      "intake_router": "1.0",
-      "brief_builder": "1.0",
-      "creative_director": "2.0",
-      "visual_judge": "2.0"
+    "runtimeOverrides": "unobserved",
+    "promptVersion": "2026-09-14.1",
+    "promptSourcesSha256": {
+      "apps/core/src/services/design-studio/prompts.ts": "a5652b45d144d76168605d458885c1357fba61e3d204e6d6a1b0286db4d2f9d8",
+      "apps/core/src/services/canva-design-planner.ts": "9e3e36874b309c3f10421b418b4912f210f169d4d2f207dc7b2a0f0e39b9bfdf",
+      "packages/creative/src/studio/layout-generator-v3.ts": "ef2013df266d4fe7c387fc9c182695031517d192ba750a9b3624c01d7f4054a2",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
+      "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
     }
   },
   "qa": {
-    "engineVersion": "2.0.0",
-    "rulesVersion": "kaae-ka-2026-09",
-    "rubricVersion": "visual-rubric-v2"
+    "versionStatus": "unobserved",
+    "sourceHashes": {
+      "packages/qa/src/engine.ts": "e9cb28d14f14396b6696fc2862f3fb9d2607396e55d38479ae408d24c7eea7f7",
+      "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
+      "packages/qa/src/canva-pptx-check.ts": "3dfaa56755c8b9190db1380c4809ab79e323728447700d348b4a356aeaebf8c7",
+      "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
+      "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
+      "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
+    }
   },
-  "sha256": "19954327879de74fdad5b0ea57bfcd47136975242dd5b3fff6f7ff287bf8b9a6"
+  "sha256": "9f5e21dc44b1fc5e882edb41fca89d65da7f2288c2781fef578f094e7ce51c3e"
 }
