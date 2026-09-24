@@ -35,6 +35,14 @@ rb="$HOME/.hawa/restate-backup.state"; rb_pid="$(sed -nE 's/^pid=([0-9]+)$/\1/p'
 if [[ -n "$rb_pid" && -n "$(find "$rb" -mmin -30 2>/dev/null || true)" ]] && ps -p "$rb_pid" -o command= 2>/dev/null | grep -q restate-nightly; then
   echo "the nightly Restate backup is running (pid $rb_pid); this pass is skipped"; exit 0
 fi
+# A backup killed outright (launchd's SIGKILL after its SIGTERM timeout, a reboot) cannot put things
+# back itself: its record says whether it had stopped Restate or thrown the Telegram kill switch. Undo
+# that now rather than at the next night's run, 24 hours of intake later.
+if [[ -n "$rb_pid" && "$MODE" != "--status" ]] && ! ps -p "$rb_pid" -o command= 2>/dev/null | grep -q restate-nightly \
+  && grep -qE '^(switch|restate)=1$' "$rb" 2>/dev/null; then
+  echo "the nightly Restate backup (pid $rb_pid) was cut off; undoing what it left"
+  bash "$ROOT/infra/backup/restate-nightly.sh" --recover || true
+fi
 
 problems=()
 # 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)

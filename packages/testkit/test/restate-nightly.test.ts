@@ -433,6 +433,36 @@ describe('restate-nightly.sh: every failure leaves the switch released and Resta
     expect(read(d, 'alerts')).toMatch(/cut off/);
   });
 
+  it('--recover (the watchdog, minutes after a run was killed outright): puts back what it left and archives nothing', () => {
+    const d = setup({ thrown: true, restateRunning: false });
+    fs.mkdirSync(path.dirname(d.backupState), { recursive: true });
+    const dead = spawnSync('bash', ['-c', 'echo $$'], { encoding: 'utf8' }).stdout.trim();
+    fs.writeFileSync(d.backupState, `pid=${dead}\nstamp=20260924T013000Z\nswitch=1\nrestate=1\ncontainer=stubproj-restate-1\n`);
+    const res = spawnSync(BASH, [script, '--recover'], { cwd: repo, env: env(d), encoding: 'utf8', timeout: 60_000 });
+    expect(res.status, `${res.stdout}\n${res.stderr}`).toBe(0);
+    expectServiceRestored(d);
+    expect(archived(d)).toEqual([]);
+    expect(calls(d).some((c) => /^docker stop/.test(c))).toBe(false);
+    expect(logLines(d).join('\n')).toMatch(/RESTATE RECOVERED 20260925T013000Z: restate,kill_switch/);
+    expect(read(d, 'alerts')).toMatch(/the watchdog put back/);
+    expect(fs.existsSync(d.backupState)).toBe(false);
+  });
+
+  it('--recover with no record left does nothing', () => {
+    const d = setup();
+    const res = spawnSync(BASH, [script, '--recover'], { cwd: repo, env: env(d), encoding: 'utf8', timeout: 60_000 });
+    expect(res.status).toBe(0);
+    expect(calls(d).some((c) => /^docker (stop|start)/.test(c))).toBe(false);
+    expect(read(d, 'toggles')).toBe('');
+    expect(archived(d)).toEqual([]);
+  });
+
+  it('the watchdog runs --recover once a run with switch=1 or restate=1 in its record is no longer alive', () => {
+    const watchdog = fs.readFileSync(path.join(repo, 'infra/ops/watchdog.sh'), 'utf8');
+    expect(watchdog).toMatch(/grep -qE '\^\(switch\|restate\)=1\$'/);
+    expect(watchdog).toMatch(/restate-nightly\.sh" --recover/);
+  });
+
   it('refuses an unreadable passphrase file before touching anything', () => {
     const d = setup();
     const r = run(d, { HAWA_BACKUP_ARCHIVE_KEYFILE: path.join(d.t, 'missing') });

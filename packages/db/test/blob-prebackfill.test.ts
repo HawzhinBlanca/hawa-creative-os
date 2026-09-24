@@ -187,7 +187,7 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
     expect(r.out).not.toMatch(/stopped unexpectedly/);
     const lines = fs.readFileSync(path.join(dirs.snapshots, 'backup.log'), 'utf8').trim().split('\n');
     const stamp = / OK (\d{8}T\d{6}Z) /.exec(lines[lines.length - 1])?.[1];
-    expect(lines[lines.length - 1]).toMatch(/ gc_deleted=failed$/);
+    expect(lines[lines.length - 1]).toMatch(/ gc_deleted=failed( |$)/);
     expect(lines.filter((l) => l.includes(`${stamp}`) && / FAIL /.test(l))).toEqual([]);
     expect(lines.filter((l) => l.includes(`GC-FAIL ${stamp}: collector broke`))).toHaveLength(1);
   }, 180_000);
@@ -212,6 +212,6 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
     expect(recorded).toMatch(/^gsutil cp /m);
     expect(recorded).not.toMatch(/^ran$/m);
     const ok = fs.readFileSync(path.join(dirs.snapshots, 'backup.log'), 'utf8').trim().split('\n').pop() ?? '';
-    expect(ok).toMatch(/ OK .* gc_deleted=skipped_unarchived$/);
+    expect(ok).toMatch(/ OK .* gc_deleted=skipped_unarchived( |$)/);
   }, 180_000);
 });

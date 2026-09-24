@@ -4,6 +4,7 @@
 # reminders, idempotency keys, the worker registrations) and is as important as Postgres.
 #
 #   bash infra/backup/restate-nightly.sh     # one backup; nightly_backup.sh runs it first when HAWA_RESTATE_BACKUP=on
+#   bash infra/backup/restate-nightly.sh --recover   # only undo what a cut-off run left (the watchdog runs it)
 #
 # What it does, in order:
 #   1. Throws the office's Telegram kill switch through Core's API (POST /v1/ingress/channels/telegram/toggle,
@@ -31,8 +32,9 @@
 # starts Restate if this run stopped it and releases the switch if this run threw it. If Restate does
 # not come back, or the switch cannot be released, it says so loudly (stderr, backup.log, the
 # operator's Telegram chat) and exits 3; any other failure exits 1 with the service as it was. A run
-# killed outright (SIGKILL) leaves HAWA_RESTATE_BACKUP_STATE behind; the next run undoes what it had
-# done before it starts, and the watchdog leaves Restate alone while a run is alive (infra/ops/watchdog.sh).
+# killed outright (SIGKILL) leaves HAWA_RESTATE_BACKUP_STATE behind; the watchdog leaves Restate alone
+# while a run is alive, and once its process is gone runs --recover within 5 minutes, which undoes what
+# it had done (infra/ops/watchdog.sh). Without that the office's intake would stay off until the next night.
 #
 # Every name, port and path can be pointed elsewhere, which the chaos restore drill does (it backs up
 # the hawa-chaos stack with this script) and packages/testkit/test/restate-nightly.test.ts does with
@@ -59,6 +61,7 @@ ARCHIVE_DEST="${HAWA_BACKUP_ARCHIVE_DEST:-$HOME/.hawa/snapshots_archive}"
 ARCHIVE_KEEP="${HAWA_BACKUP_ARCHIVE_KEEP:-14}"
 ARCHIVE_KEYFILE="${HAWA_BACKUP_ARCHIVE_KEYFILE:-}"
 STAMP="${HAWA_BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+MODE="${1:-}"; [[ -z "$MODE" || "$MODE" == --recover ]] || { echo "usage: restate-nightly.sh [--recover]" >&2; exit 2; }
 PROJECT="${HAWA_RESTATE_PROJECT:-hawa-production}"
 RESTATE="${HAWA_RESTATE_CONTAINER:-${PROJECT}-restate-1}"
 CORE="${HAWA_RESTATE_CORE_CONTAINER:-${PROJECT}-core-1}"
@@ -237,8 +240,13 @@ if [[ -f "$STATE" ]]; then
     log_line "RESTATE RECOVER ${STAMP}: the run of ${prev_stamp:-?} was cut off; putting back: ${RECOVERED}"
     if [[ "$RESTATE_OURS" == 1 ]]; then ensure_restate || fail "Restate, stopped by the cut-off run of ${prev_stamp:-?}, did not come back"; fi
     if [[ "$SWITCH_OURS" == 1 ]]; then ensure_released || fail "the kill switch thrown by the cut-off run of ${prev_stamp:-?} could not be released"; fi
-    notify "🟠 The Restate backup of ${prev_stamp:-?} was cut off before it finished; tonight's run put back: ${RECOVERED}."
+    notify "🟠 The Restate backup of ${prev_stamp:-?} was cut off before it finished; $([[ "$MODE" == --recover ]] && echo "the watchdog" || echo "tonight's run") put back: ${RECOVERED}."
   fi
+fi
+if [[ "$MODE" == --recover ]]; then
+  FINISHED=1
+  [[ -n "$RECOVERED" ]] && log_line "RESTATE RECOVERED ${STAMP}: ${RECOVERED}"
+  exit 0
 fi
 
 # 1. Before touching anything: the passphrase, Restate, its volume, and Core's answer about the switch.
