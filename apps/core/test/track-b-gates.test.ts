@@ -206,101 +206,27 @@ describe('Track B Acceptance Gates: Search, Vision Rubric, Durable Workflows & A
   });
 
   describe('Horizon 3: Worker Durable Execution Recovery Controller (FR-060, FR-061, Gate C & H)', () => {
-    it('manages workflow pause, crash, resume, checkpointing, and replay with idempotency', async () => {
+    // The in-memory controller these routes kept per task lost every pause, checkpoint and replay on a
+    // restart and never reached Postgres (architecture programme 1.3, SPLIT_PLAN.md G6). The controller's
+    // own pause, crash, resume, checkpoint and replay rules are packages/domain/test/workflow-recovery.test.ts;
+    // the routes, which now read the task's state from Postgres, are workflow-state-from-postgres.test.ts.
+    it('reports the task\'s state and sends every action to its durable route', async () => {
       const task = await createFixtureTask('Recovery Workflow');
       const taskId = task.taskId;
 
-      // 1. Initial State
-      const stateRes1 = await app.request(`/tasks/${taskId}/workflow/state`);
-      expect(stateRes1.status).toBe(200);
-      const state1 = await stateRes1.json();
-      expect(state1.executionState).toBe('RUNNING');
-      expect(state1.checkpoints.length).toBe(1);
+      const stateRes = await app.request(`/tasks/${taskId}/workflow/state`);
+      expect(stateRes.status).toBe(200);
+      expect(await stateRes.json()).toMatchObject({ taskId, executionState: 'RUNNING' });
 
-      // 2. Pause
-      const pauseRes = await app.request(`/tasks/${taskId}/workflow/pause`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Legal team reviewing disclaimer copy' }),
-      });
-      expect(pauseRes.status).toBe(200);
-      const pauseJson = await pauseRes.json();
-      expect(pauseJson.state.executionState).toBe('PAUSED');
-
-      // 3. Simulate Crash
-      const crashRes = await app.request(`/tasks/${taskId}/workflow/crash`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'SIGKILL during image composite' }),
-      });
-      expect(crashRes.status).toBe(200);
-      const crashJson = await crashRes.json();
-      expect(crashJson.state.executionState).toBe('CRASHED');
-
-      // 4. Resume from Crash
-      const resumeRes = await app.request(`/tasks/${taskId}/workflow/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Worker restarted on node-2' }),
-      });
-      expect(resumeRes.status).toBe(200);
-      const resumeJson = await resumeRes.json();
-      expect(resumeJson.state.executionState).toBe('RUNNING');
-
-      // 5. Record Checkpoint with Side-Effects
-      const chkRes = await app.request(`/tasks/${taskId}/workflow/checkpoint`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stage: 'DELIVERABLE_PUBLISHED',
-          status: 'COMPOSING',
-          idempotencyKey: 'idemp_side_effect_alpha',
-          completedSideEffects: [
-            {
-              type: 'drive_upload',
-              key: 'drive_asset_1080_feed',
-              receiptId: 'rcpt_drive_001',
-              completedAt: new Date().toISOString(),
-            },
-            {
-              type: 'sheet_sync',
-              key: 'sheet_row_task_77',
-              receiptId: 'rcpt_sheet_001',
-              completedAt: new Date().toISOString(),
-            },
-          ],
-        }),
-      });
-      expect(chkRes.status).toBe(201);
-      const chkJson = await chkRes.json();
-      expect(chkJson.checkpoint.checkpointId).toBeDefined();
-
-      // 6. Replay from Checkpoint (Verifying Invariant #10 & #12: skipped duplicate side-effects)
-      const replayRes = await app.request(`/tasks/${taskId}/workflow/replay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: 'Recovering after temporary network partition',
-          targetCheckpointId: chkJson.checkpoint.checkpointId,
-        }),
-      });
-      expect(replayRes.status).toBe(200);
-      const replayJson = await replayRes.json();
-      expect(replayJson.replayResult.success).toBe(true);
-      expect(replayJson.replayResult.skippedSideEffects).toEqual([
-        'drive_upload:drive_asset_1080_feed',
-        'sheet_sync:sheet_row_task_77',
-      ]);
-
-      // 7. Cancel
-      const cancelRes = await app.request(`/tasks/${taskId}/workflow/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Client requested campaign hold' }),
-      });
-      expect(cancelRes.status).toBe(200);
-      const cancelJson = await cancelRes.json();
-      expect(cancelJson.state.executionState).toBe('CANCELLED');
+      for (const [action, route] of [['pause', 'pause'], ['resume', 'resume'], ['cancel', 'cancel'], ['crash', 'redrive'], ['checkpoint', 'redrive'], ['replay', 'redrive']]) {
+        const res = await app.request(`/tasks/${taskId}/workflow/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Legal team reviewing disclaimer copy' }),
+        });
+        expect(res.status).toBe(410);
+        expect((await res.json()).detail).toContain(`POST /tasks/${taskId}/${route}`);
+      }
     });
   });
 
