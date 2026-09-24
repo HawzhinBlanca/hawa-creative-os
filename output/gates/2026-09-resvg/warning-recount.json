@@ -1,0 +1,665 @@
+{
+ "canvases": 108,
+ "pngIdenticalToGateRun": 108,
+ "truncatedInGateRun": 9,
+ "canvasesWithMissingCharacter": 108,
+ "canvasesWithFallbackOnly": 0,
+ "catalogue": {
+  "resvg: Warning (in usvg::text::layout:N): No fonts with a <char> character were found.": 1246,
+  "resvg: Warning (in usvg::text:N): Fallback from Noto Sans Arabic to Verdana.": 107,
+  "resvg: Warning (in usvg::text:N): Fallback from Cairo to Noto Sans Arabic.": 30,
+  "resvg: Warning (in usvg::text:N): Fallback from Verdana to Noto Sans Arabic.": 12,
+  "resvg: Warning (in usvg::text:N): Fallback from Cinzel to Noto Sans Arabic.": 6,
+  "resvg: Warning (in usvg::text:N): Fallback from Playfair Display to Noto Sans Arabic.": 6
+ },
+ "perCanvas": [
+  {
+   "job": "stored-fixture-reference-ckb-0-plain",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-0-ornament",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-0-style-k12-89c242f2",
+   "missingCharacter": 13,
+   "fallback": 3,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-1-plain",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-1-ornament",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-1-style-k12-89c242f2",
+   "missingCharacter": 13,
+   "fallback": 3,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-2-plain",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-2-ornament",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-reference-ckb-2-style-k12-89c242f2",
+   "missingCharacter": 13,
+   "fallback": 3,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-dead-band-8fb76534-plain",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-dead-band-8fb76534-ornament",
+   "missingCharacter": 3,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-dead-band-8fb76534-style-k12-89c242f2",
+   "missingCharacter": 13,
+   "fallback": 3,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-stroke-slab-brief-08-plain",
+   "missingCharacter": 2,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-stroke-slab-brief-08-ornament",
+   "missingCharacter": 2,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-fixture-cheap-tier-stroke-slab-brief-08-style-k12-89c242f2",
+   "missingCharacter": 2,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-03-plain",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-03-ornament",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-03-style-k12-89c242f2",
+   "missingCharacter": 12,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run3-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run4-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run5-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run6-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run7-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-run8-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-cheap-tier-shared-pipeline-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-dev-tier-pipeline-run-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-04-plain",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-04-ornament",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "stored-production-qualification-2-brief-04-style-k12-89c242f2",
+   "missingCharacter": 5,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-regular-right",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-regular-center",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-regular-left",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-bold-right",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-bold-center",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Noto-Sans-Arabic-bold-left",
+   "missingCharacter": 31,
+   "fallback": 4,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Cairo-regular-right",
+   "missingCharacter": 20,
+   "fallback": 10,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Cairo-regular-center",
+   "missingCharacter": 20,
+   "fallback": 10,
+   "other": 0
+  },
+  {
+   "job": "kurdish-Cairo-regular-left",
+   "missingCharacter": 20,
+   "fallback": 10,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-italic-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-italic-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-regular-italic-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-italic-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-italic-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Verdana-bold-italic-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-regular-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-regular-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-regular-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-bold-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-bold-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Cinzel-bold-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-bold-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-bold-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-bold-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-regular-italic-right",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-regular-italic-center",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  },
+  {
+   "job": "latin-Playfair-Display-regular-italic-left",
+   "missingCharacter": 17,
+   "fallback": 1,
+   "other": 0
+  }
+ ]
+}
