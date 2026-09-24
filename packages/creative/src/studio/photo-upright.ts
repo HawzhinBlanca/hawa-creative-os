@@ -38,18 +38,34 @@ function orientationMatrix(orientation: number, w: number, h: number): string | 
   }
 }
 
-export async function uprightPhotoDataUrl(dataUrl: string, options?: RenderLayoutOptions): Promise<string> {
+/** The length of the base64 data URL of `size` bytes labelled `mediaType`: what the 7 MB rule measured. */
+export function dataUrlLength(size: number, mediaType: string): number {
+  return `data:${mediaType};base64,`.length + 4 * Math.ceil(size / 3);
+}
+
+/**
+ * The photo upright and small enough to render, as bytes (ADR-035: the renderer reads it as a file
+ * beside the SVG). The decisions are the ones the data-URL form made: the 7 MB rule is measured on
+ * the length the photo's data URL would have (`dataUrlLength`, or `declaredLength` when the caller
+ * holds the data URL itself), so moving to files changes no pixels. Dropping that rule belongs to the
+ * ADR-036 gate. `changed` is false, and the bytes are the ones given, when nothing needed doing.
+ */
+export async function uprightPhoto(
+  bytes: Buffer,
+  options?: RenderLayoutOptions,
+  declaredLength?: number
+): Promise<{ bytes: Buffer; mediaType: string; changed: boolean }> {
   // What the photo is comes from its bytes, not the type the sender declared: a JPEG declared as a
   // PNG kept its sideways EXIF turn, and its sibling file was named for the wrong decoder (ADR-036).
-  const bytes = dataUriBytes(dataUrl);
-  const type = bytes ? sniffImageType(bytes) : undefined;
-  if (!bytes || (type !== 'image/jpeg' && type !== 'image/png')) return dataUrl;
+  const type = sniffImageType(bytes);
+  const unchanged = { bytes, mediaType: type ?? 'application/octet-stream', changed: false };
+  if (type !== 'image/jpeg' && type !== 'image/png') return unchanged;
   const isJpeg = type === 'image/jpeg';
   const size = imagePixelSize(bytes);
-  if (!size) return dataUrl;
+  if (!size) return unchanged;
   const orientation = isJpeg ? jpegOrientation(bytes) : 1;
   const matrix = orientationMatrix(orientation, size.width, size.height);
-  if (!matrix && dataUrl.length <= PHOTO_DATA_URL_MAX) return dataUrl;
+  if (!matrix && (declaredLength ?? dataUrlLength(bytes.length, type)) <= PHOTO_DATA_URL_MAX) return unchanged;
   const turned = orientation >= 5;
   const width = turned ? size.height : size.width;
   const height = turned ? size.width : size.height;
@@ -63,9 +79,16 @@ export async function uprightPhotoDataUrl(dataUrl: string, options?: RenderLayou
       `<image xlink:href="${file}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="none"${matrix ? ` transform="${matrix}"` : ''}/>` +
       `</svg>`;
     const png = await svgToPngAsync(svg, w, h, options, { [file]: bytes });
-    const out = `data:image/png;base64,${png.toString('base64')}`;
-    if (out.length <= PHOTO_DATA_URL_MAX) return out;
+    if (dataUrlLength(png.length, 'image/png') <= PHOTO_DATA_URL_MAX) return { bytes: png, mediaType: 'image/png', changed: true };
   }
   // Nothing small enough: the photo as it came, which renders unless it is itself too large.
-  return dataUrl;
+  return unchanged;
+}
+
+/** uprightPhoto for a caller holding a data URL (the studio keeps them for model calls). */
+export async function uprightPhotoDataUrl(dataUrl: string, options?: RenderLayoutOptions): Promise<string> {
+  const bytes = dataUriBytes(dataUrl);
+  if (!bytes) return dataUrl;
+  const out = await uprightPhoto(bytes, options, dataUrl.length);
+  return out.changed ? `data:${out.mediaType};base64,${out.bytes.toString('base64')}` : dataUrl;
 }

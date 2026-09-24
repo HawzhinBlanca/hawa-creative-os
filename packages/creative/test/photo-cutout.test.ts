@@ -11,6 +11,16 @@ import { settlePhotos } from '../src/studio/pipeline-v3.js';
 import { layoutDefectCount } from '../src/studio/style-spec.js';
 import { scaleNormalizedLayoutToV2, type NormalizedLayoutCandidate } from '../src/studio/layout-generator-v3.js';
 
+import { inlineSvgFiles } from '../src/studio/svg-files.js';
+/**
+ * The render's markup with its picture files put back inline: pictures are files beside the SVG
+ * (ADR-035), and these assertions read the markup as the one document it used to be.
+ */
+const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
+  const r = renderLayoutV2ToSvg(...args);
+  return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
+};
+
 /**
  * Cut-out people: the person matted out of their photo's background and standing on the design's
  * own background, as panelists do on requesters' reference posters. The preview and the Canva deck
@@ -196,7 +206,7 @@ describe('the preview draws a cut-out person', () => {
   it('as its shadow then the person, at the helper\'s rects, with no clip-path and no corner radius', () => {
     const asset = withShadow();
     const placed = cutoutPlacement(box, asset);
-    const { svg, noTextSvg } = renderLayoutV2ToSvg(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [asset] });
+    const { svg, noTextSvg } = inlinedSvgOf(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [asset] });
     const person = svg.match(/<image id="photo-0"[^>]*\/>/)?.[0] ?? '';
     const shadow = svg.match(/<image id="photo-shadow-0"[^>]*\/>/)?.[0] ?? '';
     expect(person).toContain(`xlink:href="data:image/png;base64,${asset.png.toString('base64')}"`);
@@ -233,26 +243,26 @@ describe('the preview draws a cut-out person', () => {
   });
 
   it('falls back to framed, exactly, when the cut-out is missing', () => {
-    const framed = renderLayoutV2ToSvg(framedLayout(), { copyText, photoDataUris: [photoUri] }).svg;
-    expect(renderLayoutV2ToSvg(cutoutLayout(), { copyText, photoDataUris: [photoUri] }).svg).toBe(framed);
-    expect(renderLayoutV2ToSvg(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [] }).svg).toBe(framed);
-    expect(renderLayoutV2ToSvg(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [undefined, halfPerson()] }).svg).toBe(framed);
+    const framed = inlinedSvgOf(framedLayout(), { copyText, photoDataUris: [photoUri] }).svg;
+    expect(inlinedSvgOf(cutoutLayout(), { copyText, photoDataUris: [photoUri] }).svg).toBe(framed);
+    expect(inlinedSvgOf(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [] }).svg).toBe(framed);
+    expect(inlinedSvgOf(cutoutLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [undefined, halfPerson()] }).svg).toBe(framed);
   });
 
   it('keeps a neighbour\'s shadow off an overlapping person in a group', () => {
-    const { svg } = renderLayoutV2ToSvg(pair(120, 'cutout'), { copyText, photoCutouts: [withShadow(), withShadow()] });
+    const { svg } = inlinedSvgOf(pair(120, 'cutout'), { copyText, photoCutouts: [withShadow(), withShadow()] });
     const order = ['id="photo-shadow-0"', 'id="photo-shadow-1"', 'id="photo-0"', 'id="photo-1"'].map((id) => svg.indexOf(id));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   it('leaves framed photos exactly as they were drawn before, cut-outs supplied or not', () => {
-    const without = renderLayoutV2ToSvg(framedLayout(), { copyText, photoDataUris: [photoUri] }).svg;
+    const without = inlinedSvgOf(framedLayout(), { copyText, photoDataUris: [photoUri] }).svg;
     expect(without).toContain('<clipPath id="photo-clip-0"><rect x="86" y="420" width="440" height="600" rx="24" ry="24"/></clipPath>');
     expect(without).toContain(`<image id="photo-0" xlink:href="${photoUri}" x="86" y="420" width="440" height="600" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo-clip-0)"/>`);
     const explicit = withPhotos({ photoIndex: 0, role: 'portrait', ...box, radius: 24, treatment: 'framed' });
-    expect(renderLayoutV2ToSvg(explicit, { copyText, photoDataUris: [photoUri], photoCutouts: [withShadow()] }).svg).toBe(without);
-    expect(renderLayoutV2ToSvg(framedLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [withShadow()] }).svg).toBe(without);
+    expect(inlinedSvgOf(explicit, { copyText, photoDataUris: [photoUri], photoCutouts: [withShadow()] }).svg).toBe(without);
+    expect(inlinedSvgOf(framedLayout(), { copyText, photoDataUris: [photoUri], photoCutouts: [withShadow()] }).svg).toBe(without);
   });
 });
 

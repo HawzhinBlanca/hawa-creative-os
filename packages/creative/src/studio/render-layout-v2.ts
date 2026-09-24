@@ -21,6 +21,7 @@ import {
   type PhotoFragment,
 } from './photo-treatments.js';
 import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
+import { SvgFiles, checkInlineDataUris } from './svg-files.js';
 import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
 export { PNG };
@@ -56,7 +57,15 @@ export interface RenderLayoutOptions {
   artImagePath?: string; // local file path or data URI
   logoPath?: string;
   logoDataUri?: string;
-  /** Content photos as data: URIs, by photoIndex. A placed photo with no data draws as a labelled slot. */
+  /**
+   * Content photos' bytes, by photoIndex, drawn from files beside the SVG (ADR-035). A placed photo
+   * with neither these nor a data URI draws as a labelled slot.
+   */
+  photoFiles?: Array<{ bytes: Buffer; mediaType?: string } | undefined>;
+  /**
+   * @deprecated Pass photoFiles. Content photos as data: URIs, by photoIndex, used where photoFiles
+   * has none; their bytes are written beside the SVG as files all the same.
+   */
   photoDataUris?: string[];
   /**
    * The person cut out of each content photo, by photoIndex. Used only for a photo placed with
@@ -69,10 +78,13 @@ export interface RenderLayoutOptions {
 }
 
 export interface RenderLayoutV2Result {
+  /** Reads `files` by name: to open it alone, inline them with `inlineSvgFiles` (svg-files.ts). */
   svg: string;
   png: Buffer;
   noTextSvg: string;
   noTextPng: Buffer;
+  /** The pictures both SVGs read, by file name, written beside them when they are rasterised. */
+  files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
   fontFidelity: Record<string, 'exact' | 'stand-in'>;
 }
@@ -1502,8 +1514,8 @@ function renderTextElementToSvg(
  * transfer places the same rect, so neither side crops or fits anything itself. No clip-path and no
  * corner radius: the person's own transparency is the edge, and the shadow may reach beyond the box.
  */
-function cutoutImageSvg(id: string, png: Buffer, r: Box): string {
-  return `<image id="${id}" xlink:href="data:image/png;base64,${png.toString('base64')}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" preserveAspectRatio="none"/>`;
+function cutoutImageSvg(id: string, href: string, r: Box): string {
+  return `<image id="${id}" xlink:href="${href}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" preserveAspectRatio="none"/>`;
 }
 
 /**
@@ -1662,10 +1674,14 @@ export function renderLayoutV2ToSvg(
 ): {
   svg: string;
   noTextSvg: string;
+  /** The pictures the SVGs read by name; see RenderLayoutV2Result.files. */
+  files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
   fontFidelity: Record<string, 'exact' | 'stand-in'>;
 } {
   const fontsDir = resolveFontsDir(options);
+  // Every picture is a file beside the SVG, never a data URI in it (ADR-035; svg-files.ts).
+  const svgFiles = new SvgFiles();
   const fontconfigFile = resolveFontconfigFile(options);
   const fontFidelity = getFontFidelityManifest(fontsDir, options);
 
@@ -1700,9 +1716,11 @@ export function renderLayoutV2ToSvg(
     // Typed from the bytes (image-type.ts): the file name and the declared type are not evidence.
     let artHref = options.artImagePath;
     if (artHref && !artHref.startsWith('data:') && fs.existsSync(artHref)) {
-      artHref = imageDataUri(fs.readFileSync(artHref), `art image ${artHref}`);
+      const bytes = fs.readFileSync(artHref);
+      if (!sniffImageType(bytes)) imageDataUri(bytes, `art image ${artHref}`); // throws, naming the file
+      artHref = svgFiles.add(bytes, 'art');
     } else if (artHref) {
-      artHref = relabelDataUri(artHref);
+      artHref = svgFiles.hrefFor(artHref, 'art');
     }
 
     if (artHref) {
@@ -1762,6 +1780,7 @@ export function renderLayoutV2ToSvg(
   // definition its person, outline and glow share, written into the defs once.
   const fragmentDefs = new Set<string>();
   const drawFragment = (fragment: PhotoFragment) => {
+    svgFiles.merge(fragment.files);
     if (fragment.defs && !fragmentDefs.has(fragment.defs)) {
       fragmentDefs.add(fragment.defs);
       defsParts.push(fragment.defs);
@@ -1781,13 +1800,17 @@ export function renderLayoutV2ToSvg(
     }
     if (layer.kind !== 'framed') {
       const id = layer.kind === 'cutout-shadow' ? `photo-shadow-${p.photoIndex}` : `photo-${p.photoIndex}`;
-      bodyPartsNoText.push(cutoutImageSvg(id, layer.png, layer.rect));
+      bodyPartsNoText.push(cutoutImageSvg(id, svgFiles.add(layer.png, layer.kind === 'cutout-shadow' ? 'shadow' : 'cutout'), layer.rect));
       continue;
     }
-    const declaredHref = options.photoDataUris?.[p.photoIndex];
-    const href = declaredHref ? relabelDataUri(declaredHref) : declaredHref;
+    // The photo's bytes, from photoFiles or else a (legacy) data URI; its pixel size is read from them.
+    const given = options.photoFiles?.[p.photoIndex]?.bytes;
+    const declaredHref = given ? undefined : options.photoDataUris?.[p.photoIndex];
+    const bytes = given ?? (declaredHref ? dataUriBytes(declaredHref) : undefined);
+    const href = bytes && bytes.length ? svgFiles.add(bytes, 'photo') : declaredHref ? relabelDataUri(declaredHref) : undefined;
+    const photoPixels = () => (bytes && bytes.length ? imagePixelSize(bytes) : href ? dataUriPixelSize(href) : null);
     if (href && framedPhotoTreated(p)) {
-      drawFragment(framedPhotoFragment(p, href, dataUriPixelSize(href)));
+      drawFragment(framedPhotoFragment(p, href, photoPixels()));
       continue;
     }
     const clipId = `photo-clip-${p.photoIndex}`;
@@ -1798,7 +1821,7 @@ export function renderLayoutV2ToSvg(
     // A focus point or a zoom moves the crop to keep that part of the photo in view; a photo with
     // neither, or whose size cannot be read from its data (WebP), is the centred slice it always was.
     const cropped = Boolean(p.focus) || photoZoomFactor(p.zoom) > 1;
-    const pixels = href && cropped ? dataUriPixelSize(href) : null;
+    const pixels = href && cropped ? photoPixels() : null;
     if (href && pixels && cropped) {
       bodyPartsNoText.push(focusedPhotoSvg(`photo-${p.photoIndex}`, clipId, href, p, pixels, coverCrop(p, pixels, p.focus, p.zoom)));
     } else if (href) {
@@ -1821,11 +1844,11 @@ export function renderLayoutV2ToSvg(
     if (prescaled) {
       // Already fitted into exactly this box ("meet" applied when it was scaled), so drawn 1:1.
       bodyPartsNoText.push(
-        `<image id="logo" xlink:href="${prescaled}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="none"/>`
+        `<image id="logo" xlink:href="${svgFiles.hrefFor(prescaled, 'logo')}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="none"/>`
       );
     } else if (logoHref) {
       bodyPartsNoText.push(
-        `<image id="logo" xlink:href="${logoHref}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
+        `<image id="logo" xlink:href="${svgFiles.hrefFor(logoHref, 'logo')}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
     } else {
       // Vector fallback logo box
@@ -1863,9 +1886,16 @@ export function renderLayoutV2ToSvg(
   return {
     svg: fullSvg,
     noTextSvg,
+    files: svgFiles.files,
     wrappedLines,
     fontFidelity,
   };
+}
+
+/** A name the SVG reads a sibling file by: one plain file name, so nothing is written outside the folder. */
+function safeSiblingName(name: string): string {
+  if (!/^[a-z0-9-]+\.[a-z]+$/i.test(name)) throw new Error(`svgToPng: unsafe file name ${name}`);
+  return name;
 }
 
 /**
@@ -1875,8 +1905,11 @@ function svgToPng(
   svgString: string,
   width: number,
   height: number,
-  options?: RenderLayoutOptions
+  options?: RenderLayoutOptions,
+  /** Files written beside the SVG, which it reads by name (see svgToPngAsync). */
+  files?: Record<string, Buffer>
 ): Buffer {
+  checkInlineDataUris(svgString, 'svgToPng');
   const fontconfigFile = resolveFontconfigFile(options);
   const rsvgBinary = resolveRsvgConvert(options);
 
@@ -1885,6 +1918,9 @@ function svgToPng(
 
   try {
     fs.writeFileSync(svgFile, svgString, { mode: 0o600 });
+    for (const [name, bytes] of Object.entries(files || {})) {
+      fs.writeFileSync(path.join(tempDir, safeSiblingName(name)), bytes, { mode: 0o600 });
+    }
     const result = spawnSync(
       rsvgBinary,
       ['-w', String(width), '-h', String(height), '-f', 'png', svgFile],
@@ -1915,16 +1951,17 @@ export function renderLayoutV2(
   layout: StudioLayoutV2,
   options: RenderLayoutOptions = {}
 ): RenderLayoutV2Result {
-  const { svg, noTextSvg, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
+  const { svg, noTextSvg, files, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
 
-  const png = svgToPng(svg, layout.width, layout.height, options);
-  const noTextPng = svgToPng(noTextSvg, layout.width, layout.height, options);
+  const png = svgToPng(svg, layout.width, layout.height, options, files);
+  const noTextPng = svgToPng(noTextSvg, layout.width, layout.height, options, files);
 
   return {
     svg,
     png,
     noTextSvg,
     noTextPng,
+    files,
     wrappedLines,
     fontFidelity,
   };
@@ -1946,6 +1983,7 @@ export async function svgToPngAsync(
   /** Files written beside the SVG, which it can reference by name (rsvg reads files in its own folder). */
   files?: Record<string, Buffer>
 ): Promise<Buffer> {
+  checkInlineDataUris(svgString, 'svgToPngAsync');
   const fontconfigFile = resolveFontconfigFile(options);
   const rsvgBinary = resolveRsvgConvert(options);
   const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'hawa-studio-render-'));
@@ -1953,8 +1991,7 @@ export async function svgToPngAsync(
   try {
     await fs.promises.writeFile(svgFile, svgString, { mode: 0o600 });
     for (const [name, bytes] of Object.entries(files || {})) {
-      if (!/^[a-z0-9-]+\.[a-z]+$/i.test(name)) throw new Error(`svgToPngAsync: unsafe file name ${name}`);
-      await fs.promises.writeFile(path.join(tempDir, name), bytes, { mode: 0o600 });
+      await fs.promises.writeFile(path.join(tempDir, safeSiblingName(name)), bytes, { mode: 0o600 });
     }
     return await new Promise<Buffer>((resolve, reject) => {
       execFile(
@@ -1982,12 +2019,12 @@ export async function svgToPngAsync(
  */
 export async function renderLayoutV2Async(layout: StudioLayoutV2, options: RenderLayoutOptions = {}): Promise<RenderLayoutV2Result> {
   await warmPrescaledLogo(layout, options);
-  const { svg, noTextSvg, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
+  const { svg, noTextSvg, files, wrappedLines, fontFidelity } = renderLayoutV2ToSvg(layout, options);
   const [png, noTextPng] = await Promise.all([
-    svgToPngAsync(svg, layout.width, layout.height, options),
-    svgToPngAsync(noTextSvg, layout.width, layout.height, options),
+    svgToPngAsync(svg, layout.width, layout.height, options, files),
+    svgToPngAsync(noTextSvg, layout.width, layout.height, options, files),
   ]);
-  return { svg, png, noTextSvg, noTextPng, wrappedLines, fontFidelity };
+  return { svg, png, noTextSvg, noTextPng, files, wrappedLines, fontFidelity };
 }
 
 export interface ElementBoxAnnotation {
@@ -2049,7 +2086,7 @@ export function renderAnnotatedLayoutV2(
   layout: StudioLayoutV2,
   options: RenderLayoutOptions = {}
 ): RenderAnnotatedLayoutResult {
-  const { svg } = renderLayoutV2ToSvg(layout, options);
+  const { svg, files } = renderLayoutV2ToSvg(layout, options);
   const annotations = getLayoutBoxAnnotations(layout);
 
   const overlayParts: string[] = [];
@@ -2085,7 +2122,7 @@ export function renderAnnotatedLayoutV2(
   overlayParts.push('</g>');
 
   const annotatedSvg = svg.replace('</svg>', `  ${overlayParts.join('\n  ')}\n</svg>`);
-  const png = svgToPng(annotatedSvg, layout.width, layout.height, options);
+  const png = svgToPng(annotatedSvg, layout.width, layout.height, options, files);
 
   return {
     svg: annotatedSvg,
