@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T23:27:55Z",
+  "generatedAt": "2026-09-24T23:36:31Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 278,
+  "fileCount": 280,
   "files": [
     {
       "path": ".dockerignore",
@@ -704,8 +704,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EVALUATION_PROTOCOL.md",
-      "sha256": "fd6d1211c6d50f6fe969fd7594341dc1431b3257bcdf9c06f337c63a57281804",
-      "bytes": 11505
+      "sha256": "80323c81425e18f87ddaf5635874e5fec5d5243da733a70c08da3ee9cd172c76",
+      "bytes": 11995
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -733,9 +733,14 @@
       "bytes": 4196
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R04_EVIDENCE.md",
+      "sha256": "c60607c3450228dab158f11d3cda83afc89edce4946e444517b88fe038744989",
+      "bytes": 3377
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
-      "sha256": "70160799f511eabab9fcb20d02f764ea1e590dc04bf625a940d521300380d456",
-      "bytes": 9337
+      "sha256": "a3febf8f35f1faeb6f83e4be71e0cc53f2396acfea1b4e5e13150ef64f0af6d2",
+      "bytes": 9341
     },
     {
       "path": "plans/risk-register.csv",
@@ -744,8 +749,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "a4a34e7a40219b0e8a4bba1f78c6f1637af817bdc4536efc98ec25c669bb043f",
-      "bytes": 76626
+      "sha256": "cae8a56d37afc5ab676544c76b7bc5d60037832e305c82b23d287ec8322aa9d4",
+      "bytes": 78311
     },
     {
       "path": "plans/user-stories.csv",
@@ -906,6 +911,11 @@
       "path": "scripts/blob_backfill.ts",
       "sha256": "31b39437d65c9e493fc1b40fe67b69229ca70ad284a536e9b21f7037b07814af",
       "bytes": 28568
+    },
+    {
+      "path": "scripts/build_eval_corpus.ts",
+      "sha256": "ae86c977afe00561f1debb9ddca40e06088abbcd85b09d41552682702f52a8e1",
+      "bytes": 4926
     },
     {
       "path": "scripts/build_proof_manifest.ts",
