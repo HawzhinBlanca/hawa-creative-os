@@ -12,35 +12,33 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — source `f25ebf1`)
+## Current result (2026-09-26 — source `1902c32`)
 
-The multi-round request lifecycle journey is now integration-proved from end to end:
+**ChatInbox per-chat mode cutover is now fully implemented and tested:**
 
-- **Revision lifecycle generalized**: `DesignRunInput.round` accepts any ≥0 value; `RequestLifecycle` accepts
-  arbitrary revision rounds instead of just a first-review-only path.
-- **Requester revision implemented**: `projectLifecycleRequesterRevision` (Core projection) and the
-  `/internal/lifecycle/:id/requester-revision` route (HTTP) advance `manual(rev3) → designing(rev4)` while
-  claiming the new task atomically under the request; idempotency-key replay returns the same result.
-- **`recordRequesterDecision` (Restate VO)**: handler wired, starts a second design run with the new round.
-- **Full journey E2E integration test** (`lifecycle-full-journey.test.ts`, 8 tests):
-  `open(1) → design-outcome(2, in_review) → office-revise(3, manual) → requester-revision(4, designing)
-  → design2-outcome(5, in_review) → office-approve(6, approved)`
-  Covers happy path, idempotent replay, stale-rev, wrong-priorTask, already-owned-task, bad-payload,
-  office-approve after revision round, and monotonic `lifecycle_projections` revisions.
-- **57/57 lifecycle tests** pass across all lifecycle test files; **75/75 broader lifecycle+delivery
-  regression** pass; source suite **421 files / 3,237 tests** pass (3 release-gate files expected unsealed).
+- **Per-chat mode flag (`ChatInboxView.mode`)**: once a chat is switched to `'lifecycle'`, the exclusive
+  `setMode` handler stores the flag on the inbox object and it never reverts. Existing inbox fields are
+  preserved on upgrade from legacy.
+- **`handleUpdate` reads mode from state**: the mode is read inside a journaled `ctx.run('mode', ...)` step,
+  so any Restate replay — across all colour shifts — sees the same value that was recorded on the first run.
+- **`RequestLifecycle.open` wires the cutover**: both `openManualRequest` and `openAutomaticRequest` call
+  `ctx.setChatMode?(chatId, requestId)` after persisting the lifecycle state, using an idempotent
+  fire-and-forget `objectSendClient(chatInbox, chatId).setMode(requestId, ...)` with a stable key.
+- **Bug fix: `recordDesignFinished` replay detection**: the generalized `prior.rev >= nextRev` check was
+  always false (prior.rev = nextRev - 1). Fixed to `prior.outcome?.eventId === event.eventId`, which
+  correctly detects a crash-after-set replay at any revision round.
+- **16/16 chat-inbox tests pass** (12 existing + 4 new `setMode` tests covering: fresh chat, idempotency,
+  field preservation on legacy upgrade, and `handleUpdate` reading `'lifecycle'` from state).
+- **233/233 worker tests pass**; `tsc --noEmit` clean.
 
-Delivery-start and delivery-finished routes are fully implemented and covered in `lifecycle-office-desk-bridge.test.ts`
-(approval → delivery-start → delivery-finish multi-run with receipt verification, ARCHIVE_UNCONFIRMED handling,
-and Drive reservation atomicity). ChatInbox still routes legacy; no lifecycle flag is enabled in production.
+Prior milestones still hold: multi-round journey integration-proved (8 tests, commit `f25ebf1`); delivery
+routes implemented and covered; full suite 421 files / 3,237 tests green.
 
 ## Next useful milestone
 
-Complete the ChatInbox cutover path: implement the per-chat lifecycle flag read in `handleUpdate` so the
-poller can switch individual chats from legacy mode to request-lifecycle mode. Then close the question/answer
-loop (clarifying questions from the design studio back to the requester). Then run the full canary deployment
-and blind human admission acceptance.
+1. **Q/A loop**: route clarifying questions from the design studio back to the requester via the lifecycle chat.
+2. **Canary & admission**: full canary deployment and blind human admission acceptance tests.
+3. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
 
-Then qualify client-general final exports (R11–R19), finish the remaining provider boundaries (R20–R23), and
-run the canary, recovery and blind human admission work (R24–R27). All original acceptance criteria stay in
-force. The deployed build and new design flags have not changed.
+
+
