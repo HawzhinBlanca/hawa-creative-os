@@ -215,7 +215,7 @@ export function registerDesignStudioRoutes(
           ? null : calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
         knownUsdEstimate: calls.filter((call) => call.status !== 'uncertain')
           .reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
-        // Which model answered each call, as the provider reported it (the ledger's `model`).
+        // `model` is the requested deployment; `servedModel` is provider-reported when known.
         calls: calls.map((call) => ({
           id: call.id,
           callOrdinal: call.call_ordinal,
@@ -223,7 +223,12 @@ export function registerDesignStudioRoutes(
           stage: call.stage,
           provider: call.provider,
           model: call.model,
+          servedModel: call.served_model,
           responseId: call.response_id,
+          providerRequestId: call.provider_request_id,
+          responseSha256: call.response_sha256,
+          latencyMs: call.latency_ms,
+          attempts: call.attempts,
           status: call.status,
           errorCode: call.error_code,
           startedAt: call.started_at,

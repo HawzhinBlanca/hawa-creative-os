@@ -531,24 +531,28 @@ export class OpenAiStudioClient {
             : (typeof data.content === 'string' ? data.content : '{}'));
         const cleanContent = rawContent.replace(/```(?:json)?\s*([\s\S]*?)\s*```/i, '$1').trim();
 
+        // The accepted answer may arrive as a tool payload while message.content is null. The
+        // receipt hash must name the answer actually parsed, not the empty-content fallback.
+        const answerText = toolUsePart && typeof toolUsePart === 'object'
+          ? JSON.stringify(toolUsePart)
+          : toolCallArg ? String(toolCallArg) : cleanContent;
         let parsed: any;
         if (toolUsePart && typeof toolUsePart === 'object') {
           parsed = toolUsePart;
         } else {
           // A reply that is not JSON used to become {} (no braces at all) or a retry (braces that
           // did not parse). Neither is an answer: it is reported, once.
-          const replyText = toolCallArg ? String(toolCallArg) : cleanContent;
-          parsed = parseJsonReply(replyText);
+          parsed = parseJsonReply(answerText);
           if (parsed === undefined) {
-            throw new OpenAiModelParseError(model, replyText.length, { responseId, costUsd });
+            throw new OpenAiModelParseError(model, answerText.length, { responseId, costUsd });
           }
         }
 
-        const sha256 = createHash('sha256').update(cleanContent).digest('hex');
+        const sha256 = createHash('sha256').update(answerText).digest('hex');
 
         return {
           data: parsed,
-          rawText: cleanContent,
+          rawText: answerText,
           receipt: {
             id: responseId,
             responseId,

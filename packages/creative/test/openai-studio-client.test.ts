@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
   OpenAiStudioClient,
   OpenAiModelHttpError,
@@ -114,6 +115,26 @@ describe('OpenAiStudioClient (ADR-030, G01, G02)', () => {
         body: expect.stringContaining('"model":"gpt-6-astra"'),
       })
     );
+  });
+
+  it('hashes the actual tool-call answer used for structured output', async () => {
+    const args = '{"headline":"Tool answer","rating":9}';
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true, status: 200, headers: new Headers(),
+      json: async () => ({
+        id: 'chatcmpl_tool_answer', model: 'gpt-6-astra',
+        choices: [{ message: { content: null, tool_calls: [{ function: { arguments: args } }] } }],
+        usage: { prompt_tokens: 100, completion_tokens: 20 },
+      }),
+    });
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as any });
+    const result = await client.createStructuredCompletion({
+      model: 'gpt-6-astra', messages: [{ role: 'user', content: 'Use the tool answer' }],
+      jsonSchema: TEST_SCHEMA,
+    });
+    expect(result.data).toEqual({ headline: 'Tool answer', rating: 9 });
+    expect(result.rawText).toBe(args);
+    expect(result.receipt.sha256).toBe(createHash('sha256').update(args).digest('hex'));
   });
 
   it('successfully generates image with gpt-image-2.5-sunburst and records receipt', async () => {

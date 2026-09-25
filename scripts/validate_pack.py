@@ -133,7 +133,13 @@ def validate_requirements() -> None:
     trace_ids = unique_ids(trace, "requirement_id", "traceability")
     require(trace_ids == req_ids, "traceability covers exactly every requirement")
     require(all((ROOT / row["source_document"]).is_file() for row in trace), "every traceability source document exists")
-    require(all(row.get("test_id", "").startswith("TEST-") for row in trace), "every requirement has a stable test ID")
+    mismatched_test_ids = [
+        row.get("requirement_id", "") for row in trace
+        if row.get("test_id", "") != f"TEST-{row.get('requirement_id', '')}"
+    ]
+    require(not mismatched_test_ids,
+            "every requirement has its exact stable test ID"
+            + (f"; bad={mismatched_test_ids[:10]}" if mismatched_test_ids else ""))
     require(all(row.get("acceptance_evidence", "").strip() for row in trace), "every requirement defines acceptance evidence")
 
     stories = read_csv(ROOT / "plans/user-stories.csv")

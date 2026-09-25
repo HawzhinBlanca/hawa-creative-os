@@ -100,6 +100,8 @@ Indexes:
 
 Sensitive prompt/response content may be encrypted, redacted, or omitted according to client retention policy while preserving hashes and metrics.
 
+The Studio call ledger (`design_studio_calls`) holds a pre-dispatch logical identity and non-content provider receipt facts under tenant RLS. `model` remains the requested model; `served_model`, `provider_request_id`, `response_sha256`, `latency_ms`, and `attempts` are nullable facts written with final status/cost. A digest or request ID does not substitute for a retained response body or provider billing reconciliation (ADR-050).
+
 ## 9. Editable designs
 
 - `design_documents`: stable logical document for a task/direction.

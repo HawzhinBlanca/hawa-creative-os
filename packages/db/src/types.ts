@@ -610,6 +610,13 @@ export interface DesignStudioCallsTable {
   /** SHA-256 of the logical call identity; null only on historical rows. */
   logical_call_sha256: string | null;
   response_id: string | null;
+  /** Provider-reported model and request metadata; historical rows remain null. */
+  served_model: string | null;
+  provider_request_id: string | null;
+  /** Digest only: no prompt, response text, or image bytes in the call ledger. */
+  response_sha256: string | null;
+  latency_ms: number | null;
+  attempts: number | null;
   input_tokens: Generated<number>;
   cached_input_tokens: Generated<number>;
   output_tokens: Generated<number>;

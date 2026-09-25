@@ -311,6 +311,26 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       });
     });
 
+    it('shows provider receipt metadata separately from the requested model without response content', async () => {
+      const digest = 'a'.repeat(64);
+      await sql`INSERT INTO hawa.design_studio_calls
+        (id, run_id, tenant_id, stage, provider, model, requested_model, status,
+          response_id, served_model, provider_request_id, response_sha256, latency_ms, attempts)
+        VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
+          'briefing', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'ok',
+          'resp_route', 'gpt-6-astra-snapshot', 'req_route', ${digest}, 42, 1)`.execute(db);
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      const call = data.calls.find((item: any) => item.responseId === 'resp_route');
+      expect(call).toMatchObject({
+        model: 'gpt-6-astra', servedModel: 'gpt-6-astra-snapshot',
+        providerRequestId: 'req_route', responseSha256: digest,
+        latencyMs: 42, attempts: 1,
+      });
+      expect(JSON.stringify(call)).not.toContain('EXACT TITLE');
+    });
+
     it('GET /v1/tasks/:taskId/canva/studio/:runId returns 404 for unknown run', async () => {
       const unknownRunId = randomUUID();
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${unknownRunId}`, {

@@ -57,6 +57,8 @@ A Restate durable call wraps only operations with stable serialization and repla
 | Sheet row | immutable task ID |
 | Notification | task event + destination + notification type |
 
+For new Studio calls, PostgreSQL admits a per-run ordinal and request digest before transport. A lost answer remains uncertain and cannot trigger a second paid request. On a completed call, the tenant-scoped ledger preserves the requested model separately from the provider-reported served model, provider request ID, response-content SHA-256, latency and attempt count when the adapter supplies them. Historical or absent receipt facts remain null. These fields support reconciliation but do not establish billing or permit response replay; raw prompt and response content are not kept in this ledger (ADRs 048–050).
+
 ## 5. Retry classes
 
 An uncertain request-owned Telegram send is never an automatic retry. Under ADR-046, an office administrator may record that every approved file and notice is visible in the immutable requester chat, using one message ID per item and an expected request revision. Core verifies the local marks and archived Drive/Sheet receipts and commits one audited settlement; inconclusive cases remain open. This is staff observation, not a requester read receipt or proof of exactly-once Telegram transport.

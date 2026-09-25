@@ -88,6 +88,11 @@ export interface FinalizeCallParams {
   id: string;
   tenantId: string;
   responseId?: string | null;
+  servedModel?: string | null;
+  providerRequestId?: string | null;
+  responseSha256?: string | null;
+  latencyMs?: number | null;
+  attempts?: number | null;
   inputTokens: number;
   cachedInputTokens?: number;
   outputTokens: number;
@@ -550,11 +555,25 @@ export class DesignStudioRepository {
    * Finalizes the call in the ledger with exact tokens and USD spend.
    */
   async finalizeCall(params: FinalizeCallParams, trx?: Kysely<Database>) {
+    if (params.responseSha256 != null && !/^[0-9a-f]{64}$/.test(params.responseSha256)) {
+      throw new TypeError('Studio response identity must be a SHA-256 digest.');
+    }
+    if (params.latencyMs != null && (!Number.isSafeInteger(params.latencyMs) || params.latencyMs < 0)) {
+      throw new TypeError('Studio call latency must be a nonnegative integer.');
+    }
+    if (params.attempts != null && (!Number.isSafeInteger(params.attempts) || params.attempts < 1)) {
+      throw new TypeError('Studio call attempts must be a positive integer.');
+    }
     return this.withClient(trx, params.tenantId, async (client) => {
       const [row] = await client
         .updateTable('design_studio_calls')
         .set({
           response_id: params.responseId || null,
+          served_model: params.servedModel || null,
+          provider_request_id: params.providerRequestId || null,
+          response_sha256: params.responseSha256 || null,
+          latency_ms: params.latencyMs ?? null,
+          attempts: params.attempts ?? null,
           input_tokens: params.inputTokens,
           cached_input_tokens: params.cachedInputTokens || 0,
           output_tokens: params.outputTokens,

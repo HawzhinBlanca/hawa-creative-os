@@ -260,12 +260,18 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       const pendingCall = (await repoTrx.getCallsForRun(runId, tenantA))[0];
       expect(pendingCall.status).toBe('uncertain');
       expect(pendingCall.input_tokens).toBe(0);
+      expect(pendingCall.served_model).toBeNull();
 
       // 2. Finalize call after network response
       await repoTrx.finalizeCall({
         id: callId,
         tenantId: tenantA,
         responseId: 'msg_12345',
+        servedModel: 'claude-fable-5-1-snapshot',
+        providerRequestId: 'provider_req_12345',
+        responseSha256: 'b'.repeat(64),
+        latencyMs: 42,
+        attempts: 1,
         inputTokens: 1500,
         cachedInputTokens: 1200,
         outputTokens: 450,
@@ -277,6 +283,11 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       const completedCall = (await repoTrx.getCallsForRun(runId, tenantA))[0];
       expect(completedCall.status).toBe('ok');
       expect(Number(completedCall.usd_estimate)).toBeCloseTo(0.0125, 4);
+      expect(completedCall).toMatchObject({
+        model: 'claude-fable-5-1', served_model: 'claude-fable-5-1-snapshot',
+        provider_request_id: 'provider_req_12345', response_sha256: 'b'.repeat(64),
+        latency_ms: 42, attempts: 1,
+      });
     });
 
     // 3. Immutability: completed call cannot be updated again!

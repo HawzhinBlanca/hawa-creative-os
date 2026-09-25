@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -151,20 +151,21 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
     await locked;
 
     let acceptedCount = 0;
+    const replyContent = JSON.stringify({
+      occasion: 'Announcement', audience: 'Public', formality: 4,
+      toneWords: ['clear'], readingOrder: [0, 1],
+      roles: [{ copyIndex: 0, role: 'title', importance: 5 }, { copyIndex: 1, role: 'body', importance: 3 }],
+      must: [], mustNot: [], imageryStrategy: 'none', imageryRationale: 'Typography only',
+      kurdishLeads: false, riskFlags: [],
+    });
     const provider = createServer((request, response) => {
       void (async () => {
         for await (const _chunk of request) { /* Wait for complete request before answering. */ }
         acceptedCount++;
-        response.writeHead(200, { 'content-type': 'application/json' });
+        response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': 'req_paid_reply_kill' });
         response.end(JSON.stringify({
-          id: 'resp_paid_reply_kill', model: 'gpt-6-astra', stop_reason: 'end_turn',
-          choices: [{ message: { content: JSON.stringify({
-            occasion: 'Announcement', audience: 'Public', formality: 4,
-            toneWords: ['clear'], readingOrder: [0, 1],
-            roles: [{ copyIndex: 0, role: 'title', importance: 5 }, { copyIndex: 1, role: 'body', importance: 3 }],
-            must: [], mustNot: [], imageryStrategy: 'none', imageryRationale: 'Typography only',
-            kurdishLeads: false, riskFlags: [],
-          }) } }],
+          id: 'resp_paid_reply_kill', model: 'gpt-6-astra-snapshot', stop_reason: 'end_turn',
+          choices: [{ message: { content: replyContent } }],
           usage: { prompt_tokens: 500, completion_tokens: 300, input_tokens: 500, output_tokens: 300 },
         }));
       })().catch(() => response.destroy());
@@ -196,10 +197,17 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
 
     try {
       const deadline = Date.now() + 20_000;
-      let call: { status: string; usd_estimate: string } | undefined;
+      type CallRow = {
+        status: string; usd_estimate: string; model: string; served_model: string | null;
+        response_id: string | null; provider_request_id: string | null;
+        response_sha256: string | null; latency_ms: number | null; attempts: number | null;
+      };
+      let call: CallRow | undefined;
       while (Date.now() < deadline) {
         const rows = await withRlsContext(db, scope, (tx) =>
-          sql<{ status: string; usd_estimate: string }>`SELECT status,usd_estimate
+          sql<CallRow>`
+            SELECT status,usd_estimate,model,served_model,response_id,provider_request_id,
+              response_sha256,latency_ms,attempts
             FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid`.execute(tx));
         call = rows.rows[0];
         if (call?.status === 'ok') break;
@@ -210,6 +218,14 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
       }
       expect(call?.status).toBe('ok');
       expect(Number(call?.usd_estimate)).toBeGreaterThan(0);
+      expect(call).toMatchObject({
+        response_id: 'resp_paid_reply_kill',
+        served_model: 'gpt-6-astra-snapshot',
+        provider_request_id: 'req_paid_reply_kill',
+        response_sha256: createHash('sha256').update(replyContent).digest('hex'),
+        attempts: 1,
+      });
+      expect(call?.latency_ms).toBeGreaterThanOrEqual(0);
       expect(acceptedCount).toBe(1);
       child.kill('SIGKILL');
       expect((await exited).signal).toBe('SIGKILL');
