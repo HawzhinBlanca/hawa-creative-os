@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { StageContext, CreativeBrief, Concept, CandidateState } from '../types.js';
 import {
   validateLayoutV2,
+  checkCandidateSetDegeneracy,
   type LayoutValidationContext,
   type StudioLayoutV2,
   generateLayoutCandidatesV3,
@@ -219,7 +220,7 @@ export async function runLayoutsStage(
       reference: ctx.reference,
     });
 
-    return v3Result.layouts.map((rawLayout, i) => {
+    const prepared = v3Result.layouts.map((rawLayout, i) => {
       const layout = prepareGeneratedLayoutV3(rawLayout, copy, {
         width: ctx.width,
         height: ctx.height,
@@ -240,6 +241,18 @@ export async function runLayoutsStage(
         status: 'draft' as const,
       };
     });
+    const distinct: CandidateState[] = [];
+    for (const candidate of prepared) {
+      if (distinct.some((earlier) => checkCandidateSetDegeneracy([earlier.currentLayout, candidate.currentLayout]).isDegenerate)) {
+        log.warn(`[LayoutsStage] Prepared v3 candidate ${candidate.ordinal} repeats an earlier composition; dropping it`);
+        continue;
+      }
+      distinct.push(candidate);
+    }
+    if (distinct.length < 2) {
+      throw new Error(`Only ${distinct.length} structurally distinct prepared v3 layout survived; at least 2 are required`);
+    }
+    return distinct;
   }
 
   const systemPrompt = buildP0SystemPrompt({
@@ -334,6 +347,13 @@ export async function runLayoutsStage(
     }
 
     if (validation.ok) {
+      const duplicate = candidates.some((candidate) =>
+        checkCandidateSetDegeneracy([candidate.currentLayout, layout]).isDegenerate
+      );
+      if (duplicate) {
+        log.warn(`[LayoutsStage] Candidate ${ordinal} repeats an earlier validated composition; dropping it`);
+        continue;
+      }
       const existing = existingCandidates?.find((c) => c.ordinal === ordinal);
       candidates.push({
         id: existing?.id || randomUUID(),

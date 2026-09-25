@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   computeCapacitySlot,
   verifySlotCapacity,
@@ -7,11 +7,63 @@ import {
   LAYOUT_V3_JSON_SCHEMA,
   type NormalizedLayoutCandidate,
   type CopyBlockSlotInput,
+  generateLayoutCandidatesV3,
 } from '../src/studio/layout-generator-v3.js';
 import { studioLayoutV2Schema, type StudioLayoutV2 } from '../src/studio/layout-v2.js';
 import { checkCandidateSetDegeneracy, evaluateDesignMetrics } from '../src/studio/design-metrics.js';
 
 describe('P03 — Layout-First Candidate Generation (PosterLLaVa & PosterMELD)', () => {
+  it('drops same-geometry candidates even when the model gives them different archetype names', async () => {
+    const base: NormalizedLayoutCandidate = {
+      id: 'one', conceptTitle: 'First', compositionArchetype: 'monolith_centered',
+      typeScale: { base: 14, ratio: 1.25 },
+      grid: { margin: 0.07, columns: 6, gutter: 0.02, baseline: 0.01 },
+      background: { color: '#0A1628' },
+      logo: { x: 0.4, y: 0.06, width: 0.2, height: 0.08 },
+      art: null, shapes: [],
+      text: [{ copyIndex: 0, role: 'title', x: 0.1, y: 0.3, width: 0.8, height: 0.12,
+        fontSize: 0.04, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Verdana',
+        color: '#FFFFFF', align: 'center', bold: true, italic: false, rtl: false }],
+    };
+    const twin = { ...base, id: 'two', conceptTitle: 'Second', compositionArchetype: 'minimal_framed' as const,
+      background: { color: '#FFFFFF' } };
+    const different = { ...base, id: 'three', conceptTitle: 'Third', compositionArchetype: 'asymmetric_editorial' as const,
+      logo: { ...base.logo, x: 0.08 }, text: [{ ...base.text[0], x: 0.25, width: 0.65 }] };
+    const createStructuredCompletion = vi.fn().mockResolvedValue({
+      data: { layouts: [base, twin, different] },
+      receipt: { responseId: 'r13', xRequestId: null, inputTokens: 1, outputTokens: 1,
+        cacheReadTokens: 0, costUsd: 0, latencyMs: 1 },
+    });
+    const result = await generateLayoutCandidatesV3({
+      client: { createStructuredCompletion } as any,
+      brief: 'One approved title', copyBlocks: [{ index: 0, text: 'Approved title', role: 'title', script: 'latin' }],
+      palette: ['#0A1628', '#FFFFFF'], canvasWidth: 1080, canvasHeight: 1350,
+    });
+    expect(createStructuredCompletion).toHaveBeenCalledTimes(1);
+    expect(result.rawCandidates.map((candidate) => candidate.id)).toEqual(['one', 'three']);
+    expect(result.layouts).toHaveLength(2);
+    expect(result.degeneracyCheck.isDegenerate).toBe(false);
+  });
+
+  it('refuses a candidate set that collapses to one composition', async () => {
+    const first: NormalizedLayoutCandidate = {
+      id: 'one', conceptTitle: 'One', compositionArchetype: 'monolith_centered',
+      typeScale: { base: 14, ratio: 1.25 },
+      grid: { margin: 0.07, columns: 6, gutter: 0.02, baseline: 0.01 },
+      background: { color: '#0A1628' }, logo: { x: 0.4, y: 0.06, width: 0.2, height: 0.08 },
+      art: null, shapes: [], text: [{ copyIndex: 0, role: 'title', x: 0.1, y: 0.3, width: 0.8, height: 0.12,
+        fontSize: 0.04, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF',
+        align: 'center', bold: true, italic: false, rtl: false }],
+    };
+    const client = { createStructuredCompletion: vi.fn().mockResolvedValue({
+      data: { layouts: [first, { ...first, id: 'two' }, { ...first, id: 'three' }] }, receipt: {},
+    }) } as any;
+    await expect(generateLayoutCandidatesV3({ client, brief: 'Title',
+      copyBlocks: [{ index: 0, text: 'Title', role: 'title', script: 'latin' }],
+      palette: ['#0A1628', '#FFFFFF'], canvasWidth: 1080, canvasHeight: 1350,
+    })).rejects.toThrow('at least 2 are required');
+  });
+
   const sampleCopyBlocks: CopyBlockSlotInput[] = [
     {
       index: 0,

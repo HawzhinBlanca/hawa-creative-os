@@ -318,6 +318,27 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(candidates[0].currentLayout.width).toBe(1080);
   });
 
+  it('3a. layouts stage drops a second concept whose validated geometry repeats the first', async () => {
+    const layout = createMockLayout(1080, 1350);
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ id: 'same-layout', model: 'test', usage: { input_tokens: 1, output_tokens: 1 },
+        content: [{ type: 'text', text: JSON.stringify({ layout }) }] }),
+    } as any);
+    const ctx = createMockContext(mockFetch);
+    const concept: Concept = {
+      id: 'one', name: 'First', archetype: 'editorial-centered', artStrategy: 'none',
+      typographicScale: { ratio: 1.4, titleSize: 48, bodySize: 20 },
+      colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FDF8F3', accent: '#F7B500', rule: '#4770A3' },
+      layoutIdea: 'Centered', whyDifferent: 'First',
+    };
+    const candidates = await runLayoutsStage(ctx,
+      { roles: [0, 1, 2, 3].map((i) => ({ copyIndex: i, role: 'body', importance: 3 })) } as any,
+      [concept, { ...concept, id: 'two', archetype: 'asymmetric-grid', whyDifferent: 'Different label' }]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(candidates.map((candidate) => candidate.concept.id)).toEqual(['one']);
+  });
+
   it('4. art stage: renders procedural motif fallback and records provenance', async () => {
     const ctx = createMockContext(vi.fn());
     const layout = createMockLayout(1080, 1350);

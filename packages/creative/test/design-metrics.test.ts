@@ -80,6 +80,33 @@ describe('P01 — Deterministic Design Metrics (arXiv 2402.06945 & LaySPA)', () 
     expect(setCheck.reason).toContain('near-identical');
   });
 
+  it('uses visible geometry despite changed labels, colours and model element order', () => {
+    const first = SIX_CONFIRMED_EXEMPLARS[0];
+    const relabelled = {
+      ...first,
+      background: { color: '#123456' },
+      text: [...first.text].reverse().map((t) => ({ ...t, color: '#abcdef' })),
+    };
+    const duplicate = checkCandidateSetDegeneracy([first, relabelled]);
+    expect(duplicate.isDegenerate).toBe(true);
+    expect(duplicate.duplicatePairs).toEqual([[0, 1]]);
+
+    const movedLogo = { ...relabelled, logo: { ...first.logo, x: first.logo.x + first.width * 0.15 } };
+    expect(checkCandidateSetDegeneracy([first, movedLogo]).isDegenerate).toBe(false);
+  });
+
+  it('treats a changed client photo placement as a structural difference', () => {
+    const first = {
+      ...SIX_CONFIRMED_EXEMPLARS[0],
+      photos: [{ photoIndex: 0, role: 'hero' as const, x: 100, y: 600, width: 400, height: 400 }],
+    };
+    const changed = {
+      ...first,
+      photos: [{ ...first.photos[0], x: 500 }],
+    };
+    expect(checkCandidateSetDegeneracy([first, changed]).isDegenerate).toBe(false);
+  });
+
   it('verifies non-degenerate candidate set passes degeneracy check', () => {
     const nonDegenerateSet = [SIX_CONFIRMED_EXEMPLARS[0], SIX_CONFIRMED_EXEMPLARS[1], SIX_CONFIRMED_EXEMPLARS[2]];
     const setCheck = checkCandidateSetDegeneracy(nonDegenerateSet);

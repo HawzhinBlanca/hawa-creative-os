@@ -37,6 +37,8 @@ export interface CandidateSetDegeneracyResult {
   isDegenerate: boolean;
   reason?: string;
   pairwiseDistances: number[];
+  /** Indices into the supplied candidate array, before any duplicate is removed. */
+  duplicatePairs?: Array<[number, number]>;
 }
 
 const ADMITTED_DISPLAY_FONTS = new Set([
@@ -902,45 +904,56 @@ export function checkCandidateSetDegeneracy(candidates: StudioLayoutV2[]): Candi
   }
 
   const pairwiseDistances: number[] = [];
+  const duplicatePairs: Array<[number, number]> = [];
+
+  // Compare visible structure by semantic copy slot, not the order in which a model listed nodes.
+  // Colours, archetype names and image prompts cannot establish independent composition. Scale
+  // coordinates to a common 1000px canvas so the threshold does not depend on export size.
+  const elements = (layout: StudioLayoutV2) => {
+    const box = (kind: string, key: string, item: { x: number; y: number; width: number; height: number }) => ({
+      kind, key,
+      coords: [item.x / layout.width, item.y / layout.height, item.width / layout.width, item.height / layout.height],
+    });
+    return [
+      ...layout.text.map((t) => box('text', `${t.copyIndex}:${t.role}`, t)),
+      box('logo', 'official', layout.logo),
+      ...(layout.photos || []).map((p) => box('photo', `${p.photoIndex}:${p.treatment || 'framed'}`, p)),
+      ...(layout.art ? [box('art', `${layout.art.source}:${layout.art.motif || ''}`, layout.art.box)] : []),
+      ...(layout.shapes || [])
+        .filter((s) => s.role !== 'rule' && s.width * s.height >= layout.width * layout.height * 0.001)
+        .map((s) => box('shape', `${s.role}:${s.kind}`, s)),
+    ].sort((a, b) => a.kind.localeCompare(b.kind) || a.key.localeCompare(b.key)
+      || a.coords[0] - b.coords[0] || a.coords[1] - b.coords[1]);
+  };
 
   for (let i = 0; i < candidates.length; i++) {
     for (let j = i + 1; j < candidates.length; j++) {
-      const a = candidates[i];
-      const b = candidates[j];
-
-      let distSum = 0;
-      let count = 0;
-
-      const maxLen = Math.max(a.text.length, b.text.length);
-      for (let k = 0; k < maxLen; k++) {
-        const at = a.text[k];
-        const bt = b.text[k];
-        if (at && bt) {
-          const dx = at.x - bt.x;
-          const dy = at.y - bt.y;
-          const dw = at.width - bt.width;
-          const dh = at.height - bt.height;
-          distSum += Math.sqrt(dx * dx + dy * dy + dw * dw + dh * dh);
-          count++;
-        } else {
-          distSum += 200; // Large difference for mismatched element counts
-          count++;
+      const a = elements(candidates[i]);
+      const b = elements(candidates[j]);
+      const count = Math.max(a.length, b.length);
+      let squared = 0;
+      for (let k = 0; k < count; k++) {
+        if (!a[k] || !b[k] || a[k].kind !== b[k].kind || a[k].key !== b[k].key) {
+          squared += 200 * 200;
+          continue;
         }
+        squared += a[k].coords.reduce((sum, value, axis) => sum + ((value - b[k].coords[axis]) * 1000) ** 2, 0);
       }
-
-      const avgDist = count > 0 ? distSum / count : 0;
-      pairwiseDistances.push(parseFloat(avgDist.toFixed(2)));
+      const distance = count ? Math.sqrt(squared / count) : 0;
+      pairwiseDistances.push(parseFloat(distance.toFixed(2)));
+      if (distance < 15) duplicatePairs.push([i, j]);
     }
   }
 
-  // If any pair distance is extremely small (< 15px average geometric difference), they are near-identical
+  // This is a conservative structural screen, not a perceptual image-similarity measurement.
   const minDistance = Math.min(...pairwiseDistances);
-  const isDegenerate = minDistance < 15;
+  const isDegenerate = duplicatePairs.length > 0;
 
   return {
     isDegenerate,
-    reason: isDegenerate ? `Pairwise geometric distance (${minDistance.toFixed(1)}px) indicates near-identical candidates` : undefined,
-    pairwiseDistances
+    reason: isDegenerate ? `Pairwise structural distance (${minDistance.toFixed(1)} on a 1000px canvas) indicates near-identical candidates` : undefined,
+    pairwiseDistances,
+    duplicatePairs,
   };
 }
 

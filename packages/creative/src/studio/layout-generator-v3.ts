@@ -1567,7 +1567,6 @@ export async function generateLayoutCandidatesV3(
     );
   }
   const validLayouts = validIndices.map((i) => scaledLayouts[i]);
-  const validRaw = validIndices.map((i) => rawCandidates[i]);
   if (validLayouts.length < 2) {
     throw new Error(
       `Only ${validLayouts.length} of ${scaledLayouts.length} layout candidates passed ` +
@@ -1575,27 +1574,27 @@ export async function generateLayoutCandidatesV3(
     );
   }
 
-  // Degeneracy check across the surviving layouts. Its result used to be returned and never read
-  // by any caller — the check ran and its answer was discarded — so a near-identical candidate set
-  // proceeded in silence. It is reported here, and the distances go out with the result so the
-  // threshold can eventually be calibrated from real runs instead of guessed.
-  const degeneracy = checkCandidateSetDegeneracy(validLayouts);
-  if (degeneracy.isDegenerate) {
-    console.warn(
-      `[LayoutGeneratorV3] Candidate set is degenerate: ${degeneracy.reason}. ` +
-        `The tournament cannot separate candidates this similar, and a judge asked to will decide ` +
-        `by presentation order.`
-    );
-  } else {
-    const spread = degeneracy.pairwiseDistances.length
-      ? Math.min(...degeneracy.pairwiseDistances).toFixed(1)
-      : 'n/a';
-    console.log(`[LayoutGeneratorV3] Candidate spread: closest pair ${spread}px apart.`);
+  // Do not pass repeated compositions to the tournament. Preserve the first valid candidate of
+  // each structural cluster and keep raw metadata aligned with the layout that survives.
+  const initialDegeneracy = checkCandidateSetDegeneracy(validLayouts);
+  const kept: number[] = [];
+  for (let i = 0; i < validLayouts.length; i++) {
+    if (kept.some((j) => initialDegeneracy.duplicatePairs?.some(([a, b]) => a === j && b === i))) continue;
+    kept.push(i);
   }
+  if (kept.length < 2) {
+    throw new Error(`Only ${kept.length} structurally distinct layout candidate survived; at least 2 are required`);
+  }
+  if (kept.length < validLayouts.length) {
+    console.warn(`[LayoutGeneratorV3] Dropped ${validLayouts.length - kept.length} near-duplicate candidate(s)`);
+  }
+  const distinctLayouts = kept.map((i) => validLayouts[i]);
+  const distinctRaw = kept.map((i) => rawCandidates[validIndices[i]]);
+  const degeneracy = checkCandidateSetDegeneracy(distinctLayouts);
 
   return {
-    layouts: validLayouts,
-    rawCandidates: validRaw,
+    layouts: distinctLayouts,
+    rawCandidates: distinctRaw,
     responseId: response.receipt.responseId,
     xRequestId: response.receipt.xRequestId || null,
     inputTokens: response.receipt.inputTokens,
