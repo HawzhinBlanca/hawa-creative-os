@@ -13,12 +13,14 @@ const CORE_STEP_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2,
 
 export interface DesignRunInput extends WorkflowInput {
   v: 1;
-  lifecycle: { requestId: string; round: 0; runId: string };
+  /** round: 0 for the original design; ≥ 1 for requester revision rounds. */
+  lifecycle: { requestId: string; round: number; runId: string };
 }
 
 export function validDesignRun(input: DesignRunInput, key: string): boolean {
   return input?.v === 1 && UUID.test(input.taskId) && UUID.test(input.lifecycle?.requestId) &&
-    input.lifecycle.round === 0 && input.lifecycle.runId === key && key === `dr-${input.taskId}` &&
+    Number.isInteger(input.lifecycle.round) && input.lifecycle.round >= 0 &&
+    input.lifecycle.runId === key && key === `dr-${input.taskId}` &&
     input.tenantId === DEFAULT_TENANT_ID && Boolean(input.clientId && UUID.test(input.clientId)) &&
     input.canvaAutoGenerate === true && input.idempotencyKey === `lifecycle:${input.lifecycle.requestId}:${input.taskId}`;
 }
@@ -66,7 +68,7 @@ export const DesignRunApi = restate.workflow({
           const event: DesignFinishedEvent = {
             v: 1, eventId: `dr-finished:${input.lifecycle.runId}`,
             requestId: input.lifecycle.requestId, runId: input.lifecycle.runId,
-            round: 0, taskId: input.taskId, report,
+            round: input.lifecycle.round, taskId: input.taskId, report,
           };
           ctx.objectSendClient(RequestLifecycleApi, event.requestId).designFinished(
             event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }),
