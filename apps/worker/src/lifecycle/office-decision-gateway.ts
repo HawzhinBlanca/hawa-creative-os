@@ -1,6 +1,6 @@
 import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
-import { parseCompleteRevisionRequest } from '@hawa/domain';
+import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { RequestLifecycleApi, type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
 
@@ -12,10 +12,10 @@ export interface SignedOfficeDecision {
   signature: string;
 }
 
-/** Only this one Desk operation is exposed; the request object itself remains ingress-private. */
+/** Only signed review decisions are exposed; the request object itself remains ingress-private. */
 export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string): 'ok' | 'invalid' | 'unauthorized' {
   if (input?.v !== 1 || !input.event || typeof input.event !== 'object' || Array.isArray(input.event) ||
-      input.event.v !== 1 || input.event.kind !== 'revise' || input.event.expectedRev !== 2 ||
+      input.event.v !== 1 || !['revise', 'approve'].includes(input.event.kind) || input.event.expectedRev !== 2 ||
       !UUID.test(input.event.requestId) || !UUID.test(input.event.taskId) ||
       !UUID.test(input.event.revisionId) || !UUID.test(input.event.actionId) ||
       input.event.eventId !== `desk:${input.event.actionId}` ||
@@ -24,7 +24,11 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
       !input.event.reason.trim() || input.event.reason.length > 2000 ||
       (input.event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(input.event.revisionRequest) ||
-          input.event.revisionRequest.comment.trim() !== input.event.reason.trim()))) return 'invalid';
+          input.event.revisionRequest.comment.trim() !== input.event.reason.trim())) ||
+      (input.event.kind === 'approve' && (!parseOfficeApprovalProof(input.event.approvalProof) ||
+        !/^[a-f0-9]{64}$/.test(input.event.deskRequestFingerprint || '') || input.event.revisionRequest !== undefined)) ||
+      (input.event.kind === 'revise' && (input.event.approvalProof !== undefined ||
+        input.event.deskRequestFingerprint !== undefined))) return 'invalid';
   return verifyLifecycleOfficeEvent(secret, input.event, input.signature) ? 'ok' : 'unauthorized';
 }
 

@@ -32,6 +32,9 @@ export interface RecordApprovalParams {
   nonce?: string;
   correlationId?: string;
   expectedTaskVersion?: number;
+  /** An approval from a signed lifecycle action must use the QA the reviewer actually saw. */
+  expectedQcRunId?: string;
+  expectedQcReportHash?: string;
   /** Internal RequestLifecycle projection only; ordinary Desk decisions must leave this unset. */
   lifecycleRequestId?: string;
 }
@@ -361,7 +364,24 @@ export class RevisionRepository {
             `Precondition failed: Revision ${params.revisionId} cannot be approved without a verified, passing critical QA run`
           );
         }
+        if (params.lifecycleRequestId && (!params.expectedQcRunId || !params.expectedQcReportHash)) {
+          throw new Error('Request-owned approval requires the exact QA run and report hash');
+        }
+        if ((params.expectedQcRunId && qcRun.id !== params.expectedQcRunId) ||
+            (params.expectedQcReportHash && qcRun.report_sha256 !== params.expectedQcReportHash)) {
+          throw new Error('QA evidence changed after the reviewer inspected this revision');
+        }
         const report = qcRun.report as Record<string, unknown> | null;
+        if (report?.rtlVisualReviewRequired === true) {
+          const visual = params.decisionPayload?.rtlVisualReview as Record<string, unknown> | undefined;
+          const pins = params.decisionPayload?.pinnedExports;
+          if (visual?.confirmed !== true || visual.qcRunId !== qcRun.id ||
+              visual.exportSha256 !== report.exportSha256 ||
+              !Array.isArray(pins) || !pins.some((pin) =>
+                pin && typeof pin === 'object' && pin.format === 'png')) {
+            throw new Error('RTL visual review of the checked export is required before approval');
+          }
+        }
         if (revision.studio === 'canva' && (report?.exportArtifactId || params.decisionPayload?.captureEvidenceRequired === true)) {
           // The approval and its evidence are checked while the task row is locked. A pin from an
           // older export of this same design and binding is not evidence for the latest QC run.

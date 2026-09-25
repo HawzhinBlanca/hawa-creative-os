@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
-import { parseCompleteRevisionRequest, type StructuredRevisionRequest } from '@hawa/domain';
+import { parseCompleteRevisionRequest, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { bridgeCanvaDraftRevision, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
@@ -32,30 +32,37 @@ export interface OpenLifecycleResult {
 }
 
 export class LifecycleProjectionConflict extends Error {
-  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR', message: string) {
+  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED', message: string) {
     super(message);
   }
 }
 
-export interface OfficeRevisionProjection {
+export interface OfficeDecisionProjection {
   requestId: string; tenantId: string; taskId: string; revisionId: string;
   actionId: string; actor: { userId: string; role: string }; reason: string;
   revisionRequest?: StructuredRevisionRequest;
+  decision?: 'revision_requested' | 'approved';
+  approvalProof?: OfficeApprovalProof;
+  deskRequestFingerprint?: string;
   expectedRev: 2; rev: 3; key: string;
 }
 
-export interface OfficeRevisionResult {
+export interface OfficeDecisionResult {
   requestId: string; taskId: string; revisionId: string; actionId: string;
-  approvalId: string; taskState: string; rev: 3; stage: 'manual';
+  approvalId: string; taskState: string; rev: 3; stage: 'manual' | 'approved';
 }
 
 const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const OFFICE_APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
 /** First request-owned office decision. The request and approval/audit rows commit as one revision. */
-export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input: OfficeRevisionProjection): Promise<OfficeRevisionResult> {
+export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input: OfficeDecisionProjection): Promise<OfficeDecisionResult> {
   const { requestId, tenantId, taskId, revisionId, actionId, actor, reason, key } = input;
+  const decision = input.decision || 'revision_requested';
   const revisionRequest = input.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(input.revisionRequest);
-  if (input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) {
+  if ((input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) ||
+      (decision === 'approved' && (!input.approvalProof || !/^[a-f0-9]{64}$/.test(input.deskRequestFingerprint || '') || revisionRequest)) ||
+      (decision === 'revision_requested' && input.approvalProof)) {
     throw new LifecycleProjectionConflict('WRONG_STAGE', 'Structured revision feedback is invalid or differs from the reason');
   }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
@@ -67,7 +74,7 @@ export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input
       if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This office revision has different content or action identity');
       }
-      return receipt.result as unknown as OfficeRevisionResult;
+      return receipt.result as unknown as OfficeDecisionResult;
     }
     const request = await trx.selectFrom('requests').selectAll()
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
@@ -88,24 +95,44 @@ export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input
     if (task.state !== 'human_review') {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current draft is no longer awaiting office review');
     }
-    if (!OFFICE_REVISION_ROLES.has(actor.role)) {
+    if (!(decision === 'approved' ? OFFICE_APPROVAL_ROLES : OFFICE_REVISION_ROLES).has(actor.role)) {
       throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'An authorized office reviewer must request this revision');
     }
-    const approval = await new RevisionRepository(trx).recordApproval({
-      tenantId, taskId, revisionId, decision: 'revision_requested', decidedBy: actor.userId,
+    let approval: Awaited<ReturnType<RevisionRepository['recordApproval']>>;
+    try {
+      approval = await new RevisionRepository(trx).recordApproval({
+      tenantId, taskId, revisionId, decision, decidedBy: actor.userId,
       reason, nonce: `desk:${actionId}`, lifecycleRequestId: requestId,
       expectedTaskVersion: Number(task.version),
       decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
-        actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}) },
-    }, trx);
-    const changed = await trx.updateTable('requests').set({ stage: 'manual', rev: 3, updated_at: new Date() })
+        actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}),
+        ...(input.approvalProof ? { officeApprovalProof: input.approvalProof,
+          deskRequestFingerprint: input.deskRequestFingerprint,
+          qcRunId: input.approvalProof.qcRunId, qcReportHash: input.approvalProof.qcReportHash,
+          pinnedExports: input.approvalProof.pinnedExports, captureEvidenceRequired: true,
+          ...(input.approvalProof.rtlVisualReview ? { rtlVisualReview: {
+            ...input.approvalProof.rtlVisualReview, reviewerId: actor.userId,
+            qcRunId: input.approvalProof.qcRunId, confirmedAt: new Date().toISOString(),
+          } } : {}) } : {}) },
+      ...(input.approvalProof ? { expectedQcRunId: input.approvalProof.qcRunId,
+        expectedQcReportHash: input.approvalProof.qcReportHash } : {}),
+      }, trx);
+    } catch (error) {
+      if (decision === 'approved' && error instanceof Error &&
+          /QA evidence changed|QA run|Canva approval|Canva QA|RTL visual review|Precondition failed/.test(error.message)) {
+        throw new LifecycleProjectionConflict('APPROVAL_EVIDENCE_CHANGED', error.message);
+      }
+      throw error;
+    }
+    const stage = decision === 'approved' ? 'approved' : 'manual';
+    const changed = await trx.updateTable('requests').set({ stage, rev: 3, updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 2)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during office revision');
     const taskState = (await trx.selectFrom('tasks').select('state')
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirstOrThrow()).state;
-    const result: OfficeRevisionResult = { requestId, taskId, revisionId, actionId,
-      approvalId: approval.id, taskState, rev: 3, stage: 'manual' };
+    const result: OfficeDecisionResult = { requestId, taskId, revisionId, actionId,
+      approvalId: approval.id, taskState, rev: 3, stage };
     await trx.insertInto('lifecycle_projections').values({
       tenant_id: tenantId, request_id: requestId, rev: 3, idempotency_key: key,
       payload_sha256: hash, result: result as unknown as Record<string, unknown>,

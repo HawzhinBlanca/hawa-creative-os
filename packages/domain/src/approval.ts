@@ -93,6 +93,50 @@ export interface PinnedExport {
   byteSize: number;
 }
 
+/** Evidence Core derived from stored bytes for one request-owned office approval. */
+export interface OfficeApprovalProof {
+  qcRunId: UUID;
+  qcReportHash: SHA256;
+  pinnedExports: PinnedExport[];
+  rtlVisualReview?: { confirmed: true; exportSha256: SHA256 };
+}
+
+const OFFICE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OFFICE_SHA256 = /^[a-f0-9]{64}$/;
+
+/** Reject browser-shaped, unbounded or ambiguous evidence before a signed object invocation. */
+export function parseOfficeApprovalProof(input: unknown): OfficeApprovalProof | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = input as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !['qcRunId', 'qcReportHash', 'pinnedExports', 'rtlVisualReview'].includes(key)) ||
+      typeof value.qcRunId !== 'string' || !OFFICE_UUID.test(value.qcRunId) ||
+      typeof value.qcReportHash !== 'string' || !OFFICE_SHA256.test(value.qcReportHash) ||
+      !Array.isArray(value.pinnedExports) || value.pinnedExports.length < 1 || value.pinnedExports.length > 20) return null;
+  const seen = new Set<string>();
+  const pins: PinnedExport[] = [];
+  for (const raw of value.pinnedExports) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const pin = raw as Record<string, unknown>;
+    if (Object.keys(pin).some((key) => !['artifactId', 'format', 'sha256', 'byteSize'].includes(key)) ||
+        typeof pin.artifactId !== 'string' || !OFFICE_UUID.test(pin.artifactId) ||
+        !['png', 'pdf', 'pptx'].includes(String(pin.format)) ||
+        typeof pin.sha256 !== 'string' || !OFFICE_SHA256.test(pin.sha256) ||
+        typeof pin.byteSize !== 'number' || !Number.isSafeInteger(pin.byteSize) || pin.byteSize < 1) return null;
+    const id = pin.artifactId.toLowerCase();
+    if (seen.has(id)) return null;
+    seen.add(id);
+    pins.push({ artifactId: id, format: pin.format as PinnedExport['format'], sha256: pin.sha256, byteSize: pin.byteSize });
+  }
+  const visual = value.rtlVisualReview;
+  if (visual !== undefined && (!visual || typeof visual !== 'object' || Array.isArray(visual) ||
+      Object.keys(visual).some((key) => !['confirmed', 'exportSha256'].includes(key)) ||
+      (visual as Record<string, unknown>).confirmed !== true ||
+      typeof (visual as Record<string, unknown>).exportSha256 !== 'string' ||
+      !OFFICE_SHA256.test((visual as Record<string, unknown>).exportSha256 as string))) return null;
+  return { qcRunId: value.qcRunId.toLowerCase(), qcReportHash: value.qcReportHash,
+    pinnedExports: pins, ...(visual ? { rtlVisualReview: visual as OfficeApprovalProof['rtlVisualReview'] } : {}) };
+}
+
 export interface ApprovalBindingRecord {
   id: UUID;
   tenantId: UUID;

@@ -1,13 +1,13 @@
 /**
  * RequestLifecycle's first three revisions (ADR-034, Phase 2.3): open, terminal design outcome,
- * and a first office revision request.
+ * and a first office review decision.
  * ChatInbox does not route here yet; the cutover remains closed until decisions and delivery exist.
  * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage } from '@hawa/contracts';
-import { parseCompleteRevisionRequest, type StructuredRevisionRequest } from '@hawa/domain';
+import { parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -64,26 +64,29 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 }
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
-  stage: 'designing' | 'in_review' | 'manual';
+  stage: 'designing' | 'in_review' | 'manual' | 'approved';
   rev: 1 | 2 | 3;
   runId: string;
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
-  officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string };
+  officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
+    kind?: 'revise' | 'approve' };
 }
 
 export interface OfficeRevisionEvent {
   v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
-  actionId: string; expectedRev: 2; kind: 'revise';
+  actionId: string; expectedRev: 2; kind: 'revise' | 'approve';
   actor: { userId: string; role: string }; reason: string;
   /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
   revisionRequest?: StructuredRevisionRequest;
+  approvalProof?: OfficeApprovalProof;
+  deskRequestFingerprint?: string;
 }
 
 export type OfficeRevisionReply =
   | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
-      approvalId: string; stage: 'manual'; rev: 3 }
+      approvalId: string; stage: 'manual' | 'approved'; rev: 3 }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 export interface AutomaticOpenContext {
@@ -279,18 +282,22 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
 }
 
 const OFFICE_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
-/** The first request-owned office action: a reviewer's revision request for the current draft. */
+/** The first request-owned office action: revision request or proof-bound approval. */
 export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       !UUID.test(event.taskId) || !UUID.test(event.revisionId) || !UUID.test(event.actionId) ||
-      event.eventId !== `desk:${event.actionId}` || event.kind !== 'revise' ||
+      event.eventId !== `desk:${event.actionId}` || !['revise', 'approve'].includes(event.kind) ||
       event.expectedRev !== 2 || !event.actor || !UUID.test(event.actor.userId) ||
-      !OFFICE_ROLES.has(event.actor.role) || typeof event.reason !== 'string' ||
+      !(event.kind === 'approve' ? APPROVAL_ROLES : OFFICE_ROLES).has(event.actor.role) || typeof event.reason !== 'string' ||
       !event.reason.trim() || event.reason.length > 2000 ||
       (event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(event.revisionRequest) ||
-          event.revisionRequest.comment.trim() !== event.reason.trim()))) {
+          event.revisionRequest.comment.trim() !== event.reason.trim())) ||
+      (event.kind === 'approve' && (!parseOfficeApprovalProof(event.approvalProof) ||
+        !/^[a-f0-9]{64}$/.test(event.deskRequestFingerprint || '') || event.revisionRequest !== undefined)) ||
+      (event.kind === 'revise' && (event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined))) {
     throw invalid('invalid office revision identity, reviewer or audit reason');
   }
   const fingerprint = hashOf(event);
@@ -302,7 +309,7 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     }
     return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
       revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
-      approvalId: prior.officeRevision.approvalId, stage: 'manual', rev: 3 };
+      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved', rev: 3 };
   }
   if (prior.rev !== 2 || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
@@ -310,26 +317,30 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
   }
   const projected = await ctx.run('project:3', () => core.post<{
     v: 1; requestId: string; taskId: string; revisionId: string; actionId: string;
-    approvalId: string; taskState: string; rev: 3; stage: 'manual';
+    approvalId: string; taskState: string; rev: 3; stage: 'manual' | 'approved';
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-decision`, {
     v: 1, expectedRev: 2, rev: 3,
     key: `${event.requestId}:3:officeDecision:${event.eventId}`,
-    ops: [{ kind: 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
+    ops: [{ kind: event.kind === 'approve' ? 'recordOfficeApproval' : 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
       actionId: event.actionId, actor: event.actor, reason: event.reason.trim(),
-      ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}) }],
+      ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}),
+      ...(event.approvalProof ? { approvalProof: parseOfficeApprovalProof(event.approvalProof),
+        deskRequestFingerprint: event.deskRequestFingerprint } : {}) }],
   }));
+  const expectedStage = event.kind === 'approve' ? 'approved' : 'manual';
+  const expectedTaskState = event.kind === 'approve' ? 'approved' : 'revision_requested';
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||
-      !UUID.test(projected.approvalId) || projected.taskState !== 'revision_requested' ||
-      projected.rev !== 3 || projected.stage !== 'manual') {
+      !UUID.test(projected.approvalId) || projected.taskState !== expectedTaskState ||
+      projected.rev !== 3 || projected.stage !== expectedStage) {
     throw new Error('Core did not return a valid office revision projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: 'manual', rev: 3,
+  const next: AutomaticLifecycleState = { ...prior, stage: expectedStage, rev: 3,
     officeRevision: { eventId: event.eventId, sha256: fingerprint,
-      actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId } };
+      actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind } };
   ctx.set('lc', next);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
-    actionId: event.actionId, approvalId: projected.approvalId, stage: 'manual', rev: 3 };
+    actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: 3 };
 }
 
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {

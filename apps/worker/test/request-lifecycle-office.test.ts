@@ -103,4 +103,39 @@ describe('RequestLifecycle office revision', () => {
       actor: { userId: event.actor.userId, role: 'operator' } })).rejects.toThrow('invalid office revision');
     expect(core.post).not.toHaveBeenCalled();
   });
+
+  it('binds a signed approval to its QA/export proof and replays after the object state save', async () => {
+    const { ctx, event: revision } = setup();
+    const proof = { qcRunId: randomUUID(), qcReportHash: 'a'.repeat(64),
+      pinnedExports: [{ artifactId: randomUUID(), format: 'pptx' as const,
+        sha256: 'b'.repeat(64), byteSize: 72 }] };
+    const event: OfficeRevisionEvent = { ...revision, kind: 'approve', revisionRequest: undefined,
+      reason: 'Approved after checking the export', approvalProof: proof,
+      deskRequestFingerprint: 'c'.repeat(64) };
+    const secret = ['office', 'approval', 'fixture'].join('-');
+    const signed = { v: 1 as const, event, signature: signLifecycleOfficeEvent(secret, event) };
+    expect(checkSignedOfficeDecision(signed, secret)).toBe('ok');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event,
+      approvalProof: { ...proof, pinnedExports: [{ ...proof.pinnedExports[0], sha256: 'd'.repeat(64) }] } } }, secret))
+      .toBe('unauthorized');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event,
+      approvalProof: { ...proof, pinnedExports: [] } } }, secret)).toBe('invalid');
+    const approvalId = randomUUID();
+    const result = { v: 1, requestId: event.requestId, taskId: event.taskId,
+      revisionId: event.revisionId, actionId: event.actionId, approvalId,
+      taskState: 'approved', rev: 3, stage: 'approved' };
+    const core = { post: vi.fn().mockResolvedValue(result) };
+    ctx.crashAfterSet = true;
+    await expect(recordOfficeRevision(ctx, core, event)).rejects.toThrow('worker stopped');
+    expect(ctx.state).toMatchObject({ stage: 'approved', rev: 3,
+      officeRevision: { approvalId, actionId: event.actionId, kind: 'approve' } });
+    expect(await recordOfficeRevision(ctx, core, event)).toMatchObject({
+      accepted: true, approvalId, stage: 'approved', rev: 3 });
+    expect(core.post).toHaveBeenCalledTimes(1);
+    expect(core.post.mock.calls[0][1]).toMatchObject({ ops: [{ kind: 'recordOfficeApproval',
+      approvalProof: proof, deskRequestFingerprint: event.deskRequestFingerprint }] });
+    await expect(recordOfficeRevision(ctx, core, { ...event, approvalProof: {
+      ...proof, pinnedExports: [{ ...proof.pinnedExports[0], sha256: 'd'.repeat(64) }],
+    } })).rejects.toThrow('different content');
+  });
 });

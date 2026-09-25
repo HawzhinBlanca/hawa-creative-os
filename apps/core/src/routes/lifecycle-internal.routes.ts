@@ -22,12 +22,12 @@ import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { parseCompleteRevisionRequest } from '@hawa/domain';
+import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeRevision, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen } from '../services/lifecycle-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 
@@ -269,8 +269,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
   });
 
-  // The first versioned office transition is a revision request for the current round-zero draft.
-  // It records the reviewer, task transition, request revision and replay receipt in one transaction.
+  // The first versioned office transition records the decision, task transition, request revision
+  // and replay receipt in one transaction. Approval also carries exact checked-export proof.
   internal('/lifecycle/:requestId/office-decision', async (c) => {
     const requestId = c.req.param('requestId') ?? '';
     const body = await readBody(c);
@@ -279,25 +279,31 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       ? op.actor as Record<string, unknown> : null;
     const actionId = op?.actionId;
     const revisionRequest = op?.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(op.revisionRequest);
+    const approvalProof = op?.approvalProof === undefined ? undefined : parseOfficeApprovalProof(op.approvalProof);
+    const isApproval = op?.kind === 'recordOfficeApproval';
     if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 2 || body.rev !== 3 ||
-        op?.kind !== 'recordOfficeRevision' || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
+        (!isApproval && op?.kind !== 'recordOfficeRevision') || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
         typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
         typeof actionId !== 'string' || !UUID.test(actionId) ||
         body.key !== `${requestId}:3:officeDecision:desk:${actionId}` ||
         !actor || typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||
         typeof actor.role !== 'string' || actor.role.length > 60 ||
         typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000 ||
-        (op.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== op.reason.trim()))) {
-      return problem(c, 400, 'Invalid office decision', 'Expected one versioned revision request for the current draft and an attributed office actor');
+        (op.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== op.reason.trim())) ||
+        (isApproval && (!approvalProof || revisionRequest || !/^[a-f0-9]{64}$/.test(String(op.deskRequestFingerprint || '')))) ||
+        (!isApproval && (op.approvalProof !== undefined || op.deskRequestFingerprint !== undefined))) {
+      return problem(c, 400, 'Invalid office decision', 'Expected one versioned attributed review decision for the current draft');
     }
     if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
     try {
-      const result = await projectLifecycleOfficeRevision(db, {
+      const result = await projectLifecycleOfficeDecision(db, {
         requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
         revisionId: op.revisionId as string, actionId: actionId as string,
         actor: { userId: actor.userId as string, role: actor.role as string },
         reason: (op.reason as string).trim(), expectedRev: 2, rev: 3, key: body.key as string,
         ...(revisionRequest ? { revisionRequest } : {}),
+        ...(approvalProof ? { decision: 'approved', approvalProof,
+          deskRequestFingerprint: op.deskRequestFingerprint as string } : {}),
       });
       return c.json({ v: 1, ...result }, 200);
     } catch (error) {

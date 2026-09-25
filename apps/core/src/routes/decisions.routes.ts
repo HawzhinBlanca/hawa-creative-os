@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, type PinnedExport } from '@hawa/domain';
+import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type PinnedExport } from '@hawa/domain';
 import { withRlsContext, sql } from '@hawa/db';
 import { HumanApprovalManager, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -67,19 +67,23 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
     if (dbTask?.request_id) {
-      // A signed-in Desk reviewer can request a change through the one public gateway. The gateway
-      // calls the private RequestLifecycle object; Core never writes the owned approval directly.
+      // A signed-in Desk reviewer sends the first review decision through the public signed gateway.
+      // The private RequestLifecycle object owns the state; Core never writes an owned decision here.
       const actionId = c.req.header('Idempotency-Key');
       if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
         'A request-owned office decision needs a UUID Idempotency-Key for safe retry');
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-      const revisionRequest = parseCompleteRevisionRequest(body?.revisionRequest);
-      if (!body || Array.isArray(body) || body.action !== 'revision_requested' ||
-          Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') ||
-          !revisionRequest) {
+      const isOwnedApproval = body?.action === 'approve';
+      const revisionRequest = isOwnedApproval ? null : parseCompleteRevisionRequest(body?.revisionRequest);
+      const parsedPins = isOwnedApproval ? parsePinnedExportIds(body?.pinnedExportIds) : null;
+      if (!body || Array.isArray(body) || !['revision_requested', 'approve'].includes(String(body.action)) ||
+          (isOwnedApproval && (Object.keys(body).some((key) => !['action', 'reason', 'pinnedExportIds', 'rtlVisualReview'].includes(key)) ||
+            typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 2000 || !parsedPins?.ok || parsedPins.ids.length === 0)) ||
+          (!isOwnedApproval && (Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') || !revisionRequest))) {
         return problem(c, 422, 'Unsupported Lifecycle Decision',
-          'This request needs scope, category, target nodes, priority, reuse choice and a comment');
+          'Use a complete structured revision request, or approve with a reason and selected stored exports');
       }
+      const pinIds = parsedPins?.ok ? parsedPins.ids : [];
       const officeRole = (auth.role || '').toLowerCase().trim();
       if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
         return problem(c, 403, 'Forbidden', 'This lifecycle revision needs an authorized office reviewer');
@@ -92,6 +96,80 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         return problem(c, 409, 'Lifecycle Owner Mismatch',
           'This task does not have an active request owner');
       }
+      const deskRequestFingerprint = crypto.createHash('sha256')
+        .update(JSON.stringify({ taskId, revisionId, actorUserId: auth.userId, body })).digest('hex');
+      let approvalProof: OfficeApprovalProof | null = null;
+      let eventRole = officeRole;
+      let eventReason = isOwnedApproval ? (body.reason as string).trim() : revisionRequest!.comment;
+      if (isOwnedApproval) {
+        const prior = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, (trx) =>
+          trx.selectFrom('approvals').selectAll().where('tenant_id', '=', tenantId)
+            .where('task_id', '=', taskId).where('nonce', '=', `desk:${actionId}`).executeTakeFirst());
+        if (prior) {
+          const saved = prior.decision_payload as Record<string, unknown>;
+          if (prior.decision !== 'approved' || prior.design_revision_id !== revisionId ||
+              prior.decided_by !== auth.userId || saved.deskRequestFingerprint !== deskRequestFingerprint) {
+            return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for a different decision');
+          }
+          approvalProof = parseOfficeApprovalProof(saved.officeApprovalProof);
+          if (!approvalProof || typeof saved.approverRole !== 'string' || typeof prior.reason !== 'string') {
+            return problem(c, 503, 'Decision Receipt Incomplete', 'The committed decision lacks its replay proof; reconcile it before retrying');
+          }
+          eventRole = saved.approverRole;
+          eventReason = prior.reason;
+        } else {
+          const rev = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, (trx) =>
+            trx.selectFrom('design_revisions').select(['task_id', 'neutral_manifest'])
+              .where('tenant_id', '=', tenantId).where('id', '=', revisionId).executeTakeFirst());
+          const manifest = rev?.neutral_manifest as Record<string, unknown> | null;
+          if (!rev || rev.task_id !== taskId || !Array.isArray(manifest?.nodes) || manifest.nodes.length === 0) {
+            return problem(c, 422, 'Cannot Approve Empty Design', 'The current revision has no editable design nodes');
+          }
+          const latestQc = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, (trx) =>
+            trx.selectFrom('qc_runs').selectAll().where('tenant_id', '=', tenantId)
+              .where('task_id', '=', taskId).where('design_revision_id', '=', revisionId)
+              .orderBy('started_at', 'desc').executeTakeFirst());
+          if (!latestQc || latestQc.status !== 'passed' || !latestQc.critical_pass) {
+            return problem(c, 412, 'QA Verification Required', 'The latest critical QA run must pass before approval');
+          }
+          let pins: PinnedExport[];
+          try {
+            const found = await deliverableStore.find(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pinIds);
+            const byId = new Map(found.map((item) => [item.artifactId.toLowerCase(), item]));
+            if (pinIds.some((id) => !byId.has(id))) {
+              return problem(c, 422, 'Export Not Found', 'Every selected export must be stored for this task');
+            }
+            pins = pinIds.map((id) => byId.get(id)!);
+            for (const pin of pins) {
+              const bytes = await deliverableStore.read(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pin.artifactId);
+              if (!bytes || bytes.length !== pin.byteSize ||
+                  crypto.createHash('sha256').update(bytes).digest('hex') !== pin.sha256) {
+                return problem(c, 422, 'Export Changed', 'A selected export no longer matches its stored bytes');
+              }
+            }
+          } catch (error) {
+            log.warn('[core:approval] Could not read stored exports for lifecycle approval:', error);
+            return problem(c, 503, 'Export Store Unavailable', 'Selected export bytes could not be verified; retry the same action');
+          }
+          const report = latestQc.report as Record<string, unknown> | null;
+          let rtlVisualReview: OfficeApprovalProof['rtlVisualReview'];
+          if (report?.rtlVisualReviewRequired === true) {
+            const visual = body.rtlVisualReview as Record<string, unknown> | undefined;
+            if (visual?.confirmed !== true || visual.exportSha256 !== report.exportSha256 ||
+                !pins.some((pin) => pin.format === 'png')) {
+              return problem(c, 412, 'RTL Visual Review Required',
+                'Inspect and select the final PNG, then confirm visual review of the checked export');
+            }
+            rtlVisualReview = { confirmed: true, exportSha256: String(visual.exportSha256) };
+          } else if (body.rtlVisualReview !== undefined) {
+            return problem(c, 422, 'Unexpected Visual Review', 'This QA run does not require an RTL visual sign-off');
+          }
+          approvalProof = parseOfficeApprovalProof({ qcRunId: latestQc.id,
+            qcReportHash: latestQc.report_sha256, pinnedExports: pins,
+            ...(rtlVisualReview ? { rtlVisualReview } : {}) });
+          if (!approvalProof) return problem(c, 422, 'Invalid Approval Proof', 'Stored QA or export evidence is malformed');
+        }
+      }
       // Do not pre-reject rev 3 or a later draft: a response lost after the original commit must
       // still reach RequestLifecycle, whose stored event hash decides whether this is an exact replay.
       const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
@@ -99,9 +177,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Decision Unavailable',
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
-        actionId, expectedRev: 2 as const, kind: 'revise' as const,
-        actor: { userId: auth.userId, role: officeRole }, reason: revisionRequest.comment,
-        revisionRequest };
+        actionId, expectedRev: 2 as const, kind: isOwnedApproval ? 'approve' as const : 'revise' as const,
+        actor: { userId: auth.userId, role: eventRole }, reason: eventReason,
+        ...(isOwnedApproval ? { approvalProof: approvalProof!, deskRequestFingerprint } : { revisionRequest: revisionRequest! }) };
       const signature = signLifecycleOfficeEvent(secret, event);
       try {
         const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
@@ -111,9 +189,11 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         const result = await response.json().catch(() => null) as Record<string, unknown> | null;
         if (response.ok && result?.accepted === true && result.requestId === requestId &&
             result.taskId === taskId && result.revisionId === revisionId && result.actionId === actionId &&
-            isValidUuid(result.approvalId as string) && result.rev === 3 && result.stage === 'manual') {
+            isValidUuid(result.approvalId as string) && result.rev === 3 &&
+            result.stage === (isOwnedApproval ? 'approved' : 'manual')) {
           return c.json({ decisionId: result.approvalId, taskId, designRevisionId: revisionId,
-            decision: 'revision_requested', actor: { userId: auth.userId, role: officeRole, verifiedServerSide: true },
+            decision: isOwnedApproval ? 'approved' : 'revision_requested',
+            actor: { userId: auth.userId, role: eventRole, verifiedServerSide: true },
             requestId, requestRev: 3 }, 201);
         }
         if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Decision',
