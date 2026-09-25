@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-25T05:20:43+03:00",
+  "generatedAt": "2026-09-25T05:37:34+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "ae071c2b69459081526594fa799e870744622068",
+    "commit": "7cedba380fd489d71642e3afeb4d3f770843c62a",
     "treeClean": true,
-    "commitTimestamp": "2026-09-25T05:20:43+03:00",
+    "commitTimestamp": "2026-09-25T05:37:34+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -70,9 +70,9 @@
       "image": "gpt-image-2.5-sunburst"
     },
     "runtimeOverrides": "unobserved",
-    "promptVersion": "2026-09-25.1",
+    "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
-      "apps/core/src/services/design-studio/prompts.ts": "6109f52af109cd132a8c12a3b9a4f665ca14efabff5a8e9a21503c8fd34c25d7",
+      "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
       "apps/core/src/services/canva-design-planner.ts": "bb8c8270b73df615a724ca3758e0c01f95cc936989f9d3669a21a970f6299a43",
       "packages/creative/src/studio/layout-generator-v3.ts": "ef2013df266d4fe7c387fc9c182695031517d192ba750a9b3624c01d7f4054a2",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "7243faba0375f2e0d8758279a845dfba1c526dbb7e5d5f36c2c2cee868cdb19d"
+  "sha256": "891743d0c2f9de7a3653c1e9c069a8f77ea77e5c36a9af56afe5cb59b3610c43"
 }
