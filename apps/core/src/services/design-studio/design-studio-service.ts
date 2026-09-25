@@ -1198,11 +1198,21 @@ export class DesignStudioService {
     // A previous worker may have died after the provider accepted a call but before it saved the
     // answer. Its pre-dispatch row survives the restart. Never pay for that logical stage again
     // until an operator reconciles the unknown provider outcome.
-    const unresolvedCall = (await this.repo.getCallsForRun(runId, s.tenantId))
-      .find((call) => call.status === 'uncertain');
+    const priorCalls = await this.repo.getCallsForRun(runId, s.tenantId);
+    const unresolvedCall = priorCalls.find((call) => call.status === 'uncertain');
     if (unresolvedCall) {
       throw new CanvaFlowError(409, 'MODEL_CALL_UNCERTAIN',
         `The ${unresolvedCall.stage} model call has an unknown outcome. Reconcile its provider result before resuming this run.`);
+    }
+    // If a paid reply was recorded but this stage never advanced, the reply itself is no longer
+    // available for replay. The current-stage call is evidence of work already done, not permission
+    // to run that stage's model again. Art is recorded under its role name within laying_out.
+    const alreadyPaid = priorCalls.find((call) =>
+      (call.stage === run.status || (run.status === 'laying_out' && call.stage === 'art')) &&
+      (call.status === 'ok' || (call.status === 'error' && Number(call.usd_estimate) > 0)));
+    if (alreadyPaid) {
+      throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE',
+        `The ${run.status} stage has a recorded paid model call but no saved stage result. Review that call before starting a new run.`);
     }
 
     const stages: Record<string, any> =

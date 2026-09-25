@@ -102,4 +102,16 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     };
     await expect(svc.resume(s, taskId, runId)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
   });
+
+  it('refuses to repay a completed call after a crash before the stage result was saved', async () => {
+    const svc = new DesignStudioService({} as any);
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const taskId = randomUUID();
+    const runId = randomUUID();
+    (svc as any).repo = {
+      getRunById: async () => ({ id: runId, task_id: taskId, actor_id: s.actorId, status: 'laying_out' }),
+      getCallsForRun: async () => [{ id: randomUUID(), stage: 'art', status: 'ok', usd_estimate: '0.04' }],
+    };
+    await expect(svc.resume(s, taskId, runId)).rejects.toMatchObject({ code: 'MODEL_STAGE_REPLAY_UNSAFE' });
+  });
 });
