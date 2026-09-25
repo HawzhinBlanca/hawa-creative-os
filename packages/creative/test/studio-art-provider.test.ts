@@ -140,6 +140,20 @@ describe('Design Studio v2: Color Science & CIEDE2000 (color-science.ts)', () =>
 describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-image-provider.ts)', () => {
   const PALETTE: Hex[] = ['#0A1628', '#1E3A5F', '#4770A3', '#D4E2F0', '#F7B500'];
 
+  it('refuses an absent client palette before any image-provider request', async () => {
+    const fetchFn = vi.fn();
+    expect(() => composeArtPrompt('Botanical paper cutouts', { palette: [] })).toThrow(/MOTIF_PALETTE_REQUIRED/);
+    await expect(generateArtImage({ artPrompt: 'Botanical paper cutouts', palette: [], openaiApiKey: 'mock-key', fetchFn: fetchFn as unknown as typeof fetch })).rejects.toThrow(/MOTIF_PALETTE_REQUIRED/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('keeps another client’s palette and art direction free of house colors', () => {
+    const prompt = composeArtPrompt('Botanical paper cutouts', { palette: ['#123828', '#E5DCC3'], calmRegion: 'center third', aspect: '1:1' });
+    expect(prompt).toContain('Botanical paper cutouts');
+    expect(prompt).toContain('#123828, #E5DCC3');
+    expect(prompt).not.toMatch(/#0A1628|#F7B500|navy|academic|dark and low-detail/i);
+  });
+
   it('composes art prompt adhering to Section 5.4 / P7 specification', () => {
     const concept = 'Dramatic Kurdish mountain ridges at dawn with layered mist';
     const composed = composeArtPrompt(concept, {
@@ -149,10 +163,10 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     });
 
     expect(composed).toContain(concept);
-    expect(composed).toContain('Photographic or painterly still image, no text of any kind');
+    expect(composed).toContain('text-free visual art described above: no text of any kind');
     expect(composed).toContain('no people, faces or hands');
-    expect(composed).toContain('Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500 with soft neutrals');
-    expect(composed).toContain('Keep the region bottom third calm, dark and low-detail');
+    expect(composed).toContain('Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500');
+    expect(composed).toContain('Keep the region bottom third calm and low-detail');
     expect(composed).toContain('Aspect 4:5');
   });
 

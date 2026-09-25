@@ -8,7 +8,7 @@ import {
   type DominantColorSample,
   type PaletteVerificationResult,
 } from './color-science.js';
-import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
+import { renderMotifPng, requireClientPalette, type ProceduralMotifType } from './motifs.js';
 import {
   assertModelAllowed,
   assertImageModelAllowed,
@@ -114,14 +114,12 @@ export function composeArtPrompt(
     aspect?: string;
   }
 ): string {
-  const paletteHexList = options.palette && options.palette.length > 0
-    ? options.palette.join(', ')
-    : '#0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500';
+  const paletteHexList = requireClientPalette(options.palette).join(', ');
 
   const calmRegion = options.calmRegion || 'center and bottom region';
   const aspect = options.aspect || '4:5';
 
-  const p7Suffix = `Photographic or painterly still image, no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to ${paletteHexList} with soft neutrals. Keep the region ${calmRegion} calm, dark and low-detail so text placed there stays legible. Aspect ${aspect}. Fine grain, no watermark-like marks, no borders.`;
+  const p7Suffix = `Create only the text-free visual art described above: no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to ${paletteHexList}. Keep the region ${calmRegion} calm and low-detail so text placed there stays legible. Aspect ${aspect}. No watermark-like marks or borders.`;
 
   return `${conceptPrompt.trim()}\n\n${p7Suffix}`.trim();
 }

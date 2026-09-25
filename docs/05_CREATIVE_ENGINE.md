@@ -35,6 +35,8 @@ Rules:
 - facts, names, prices, dates, contact information, legal text, and logos may come only from locked brief/Client DNA;
 - a logo-bearing Studio render requires the task's explicit, decoded client logo bytes; an absent or invalid logo fails the render rather than borrowing a packaged brand asset (ADR-047);
 - text-free art prompts and procedural fallbacks take their colors and visual concept from the admitted client layout; a generic art path must not impose one house client's navy, gold, or institutional style;
+- procedural motif generation refuses an absent or invalid client palette, including in provider-failure fallbacks;
+- the production image-art provider checks the palette before any model call and does not substitute house colors or a house visual style in its prompt;
 - the reference model is encouraged to be visually ambitious rather than safe and generic;
 - every reference prompt and output hash is retained in the design replay.
 

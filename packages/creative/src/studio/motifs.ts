@@ -16,16 +16,6 @@ export interface MotifOptions {
   opacity?: number;
 }
 
-const DEFAULT_PALETTE: Hex[] = [
-  '#0A1628', // Midnight Navy
-  '#1E3A5F', // Royal Navy
-  '#4770A3', // KAAE Primary Blue
-  '#D4E2F0', // Sky Ice Blue
-  '#F7B500', // Kurdistan Sun Gold
-  '#FDF8F3', // Academic Cream
-  '#FFFFFF', // Pure White
-];
-
 /**
  * Deterministic pseudo-random number generator (Mulberry32).
  */
@@ -39,8 +29,11 @@ export function createPrng(seed = 12345678): () => number {
   };
 }
 
-function normalizePalette(palette?: Hex[]): Hex[] {
-  if (!palette || palette.length === 0) return DEFAULT_PALETTE;
+export function requireClientPalette(palette?: Hex[]): Hex[] {
+  if (!palette || palette.length === 0) throw new Error('MOTIF_PALETTE_REQUIRED: supply this client’s approved layout colors');
+  if (palette.some((color) => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) {
+    throw new Error('MOTIF_PALETTE_INVALID: colors must be six-digit hex values');
+  }
   return palette.map((c) => c.toUpperCase());
 }
 
@@ -195,9 +188,9 @@ function generateGradientWashSvg(
   globalOpacity: number
 ): string {
   const gradId = `wash-grad-${Math.floor(prng() * 100000)}`;
-  const c1 = palette[0] || '#0A1628';
-  const c2 = palette[1 % palette.length] || '#1E3A5F';
-  const c3 = palette[2 % palette.length] || '#4770A3';
+  const c1 = palette[0];
+  const c2 = palette[1 % palette.length];
+  const c3 = palette[2 % palette.length];
 
   const isRadial = prng() > 0.5;
 
@@ -252,7 +245,7 @@ function nearestTo(want: Hex, palette: Hex[]): Hex {
     const [x, y, z] = rgb(h);
     return (x - r) ** 2 + (y - g) ** 2 + (z - b) ** 2;
   };
-  return [...palette].sort((p, q) => d(p) - d(q))[0] || want;
+  return [...palette].sort((p, q) => d(p) - d(q))[0];
 }
 
 /**
@@ -261,7 +254,7 @@ function nearestTo(want: Hex, palette: Hex[]): Hex {
  */
 export function generateMotifSvg(type: ProceduralMotifType, options: MotifOptions): string {
   const prng = createPrng(options.seed ?? 42);
-  const palette = normalizePalette(options.palette);
+  const palette = requireClientPalette(options.palette);
   const opacity = options.opacity ?? 1.0;
   const width = options.width;
   const height = options.height;
