@@ -17,6 +17,8 @@ Core writes an `uncertain` call outcome to the existing pre-dispatch ledger. An 
 
 An active run also refuses to repeat its current stage when its ledger already contains a completed call from that stage and no stage transition was saved. This covers a worker death after a recorded reply but before the stage result commit. Generated art is associated with the `laying_out` stage for this check. A completed call from an earlier stage does not block the current stage.
 
+The handler that classifies provider failures encloses only the provider request. A successful paid reply is finalized before the run's budget write; failure of that later accounting write must not reclassify the ledger row as a free provider error. If finalization itself fails, the pre-dispatch row remains unresolved and resume stays held. This favors truthful cost and a manual hold over automatic replay.
+
 ## Consequences and limits
 
 - A dropped transport can reduce automatic availability. It cannot silently cause a second Studio OpenAI charge.

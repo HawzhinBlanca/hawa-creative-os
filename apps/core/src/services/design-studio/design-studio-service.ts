@@ -880,26 +880,9 @@ export class DesignStudioService {
         });
         currentBudget.calls++;
 
+        let result: Awaited<ReturnType<typeof baseClient.completeJson<T>>>;
         try {
-          const result = await baseClient.completeJson<T>(params);
-          const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-            input_tokens: result.receipt.inputTokens,
-            output_tokens: result.receipt.outputTokens,
-          });
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt.id,
-            inputTokens: result.receipt.inputTokens,
-            cachedInputTokens: result.receipt.cacheReadTokens || 0,
-            outputTokens: result.receipt.outputTokens,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
+          result = await baseClient.completeJson<T>(params);
         } catch (err: any) {
           // A reply cut off at the token cap or not JSON was answered and billed: the error carries
           // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
@@ -918,6 +901,22 @@ export class DesignStudioService {
           if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
         }
+        const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
+          input_tokens: result.receipt.inputTokens,
+          output_tokens: result.receipt.outputTokens,
+        });
+        await this.repo.finalizeCall({
+          id: callId,
+          tenantId: s.tenantId,
+          responseId: result.receipt.id,
+          inputTokens: result.receipt.inputTokens,
+          cachedInputTokens: result.receipt.cacheReadTokens || 0,
+          outputTokens: result.receipt.outputTokens,
+          usdEstimate: cost,
+          status: 'ok',
+        });
+        await onSpendUpdate(cost);
+        return result;
       },
       createStructuredCompletion: async <T>(params: any): Promise<any> => {
         if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
@@ -938,26 +937,9 @@ export class DesignStudioService {
         });
         currentBudget.calls++;
 
+        let result: Awaited<ReturnType<typeof baseClient.createStructuredCompletion<T>>>;
         try {
-          const result = await baseClient.createStructuredCompletion<T>(params);
-          const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-            input_tokens: result.receipt.inputTokens,
-            output_tokens: result.receipt.outputTokens,
-          });
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt.id || result.receipt.responseId,
-            inputTokens: result.receipt.inputTokens,
-            cachedInputTokens: result.receipt.cacheReadTokens || 0,
-            outputTokens: result.receipt.outputTokens,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
+          result = await baseClient.createStructuredCompletion<T>(params);
         } catch (err: any) {
           // Billed failures carry their cost, as in completeJson above.
           const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
@@ -975,6 +957,22 @@ export class DesignStudioService {
           if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
         }
+        const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
+          input_tokens: result.receipt.inputTokens,
+          output_tokens: result.receipt.outputTokens,
+        });
+        await this.repo.finalizeCall({
+          id: callId,
+          tenantId: s.tenantId,
+          responseId: result.receipt.id || result.receipt.responseId,
+          inputTokens: result.receipt.inputTokens,
+          cachedInputTokens: result.receipt.cacheReadTokens || 0,
+          outputTokens: result.receipt.outputTokens,
+          usdEstimate: cost,
+          status: 'ok',
+        });
+        await onSpendUpdate(cost);
+        return result;
       },
     };
 
@@ -999,24 +997,9 @@ export class DesignStudioService {
         });
         currentBudget.calls++;
 
+        let result: Awaited<ReturnType<typeof baseArtProvider.generateArt>>;
         try {
-          const result = await baseArtProvider.generateArt({ ...params, settings });
-          // What the provider billed, across every attempt; never a made-up figure.
-          const cost = Number(result.receipt?.costUsd ?? 0);
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt?.responseId || `${result.receipt?.provider || settings.provider}_art`,
-            inputTokens: 0,
-            outputTokens: 0,
-            images: 1,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
+          result = await baseArtProvider.generateArt({ ...params, settings });
         } catch (err: any) {
           const uncertain = err?.isUncertain === true;
           const knownUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
@@ -1032,6 +1015,20 @@ export class DesignStudioService {
           if (knownUsd > 0) await onSpendUpdate(knownUsd);
           throw err;
         }
+        // What the provider billed, across every attempt; never a made-up figure.
+        const cost = Number(result.receipt?.costUsd ?? 0);
+        await this.repo.finalizeCall({
+          id: callId,
+          tenantId: s.tenantId,
+          responseId: result.receipt?.responseId || `${result.receipt?.provider || settings.provider}_art`,
+          inputTokens: 0,
+          outputTokens: 0,
+          images: 1,
+          usdEstimate: cost,
+          status: 'ok',
+        });
+        await onSpendUpdate(cost);
+        return result;
       },
     };
 

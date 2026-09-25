@@ -91,6 +91,38 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     expect(finalized[0]).toMatchObject({ status: 'uncertain', errorCode: 'UNCERTAIN_ACCEPTANCE' });
   });
 
+  it('does not rewrite a paid success as a free error when saving the run budget fails', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true, status: 200, headers: new Headers(),
+      json: async () => ({ id: 'chatcmpl_paid', model: 'gpt-6-astra',
+        choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 1000, completion_tokens: 100 } }),
+    });
+    const svc = new DesignStudioService({} as any, undefined, { fetcher: fetcher as any, apiKey: 'test-key' });
+    const finalized: any[] = [];
+    (svc as any).repo = {
+      recordCallStart: async () => undefined,
+      finalizeCall: async (p: any) => { finalized.push(p); },
+      updateRunStatus: async () => undefined,
+    };
+    const clientId = 'c1000000-0000-4000-8000-000000000002';
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const { reference, logo } = await resolveClientDesignReference({} as any, s, clientId);
+    const run = { id: randomUUID(), task_id: randomUUID(), client_id: clientId, tier: 'premium',
+      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x',
+        clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+        logoSha256: createHash('sha256').update(logo).digest('hex') }), stages: {} };
+    const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
+    const ctx = await (svc as any).createStageContext(s, run, 'laying_out', budget,
+      async () => { throw new Error('budget write failed'); });
+    await expect(ctx.client.completeJson({ prompt: 'paid call', schema: { type: 'object' }, model: 'gpt-6-astra' }))
+      .rejects.toThrow('budget write failed');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]).toMatchObject({ status: 'ok', responseId: 'chatcmpl_paid' });
+    expect(finalized[0].usdEstimate).toBeGreaterThan(0);
+  });
+
   it('refuses to resume a run with an unresolved model call', async () => {
     const svc = new DesignStudioService({} as any);
     const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
