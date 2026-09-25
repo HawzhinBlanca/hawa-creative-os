@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 
 /**
  * Bug hunt 2026-09-24. The studio's ledger wrapper (createStageContext) records every failed model
@@ -33,16 +34,21 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     };
     const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
     const spent: number[] = [];
+    const clientId = 'c1000000-0000-4000-8000-000000000002';
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const { reference, logo } = await resolveClientDesignReference({} as any, s, clientId);
     const run = {
       id: randomUUID(),
       task_id: randomUUID(),
-      client_id: randomUUID(),
+      client_id: clientId,
       tier: 'premium',
-      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x' }),
+      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x',
+        clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+        logoSha256: createHash('sha256').update(logo).digest('hex') }),
       stages: {},
     };
-    const ctx = (svc as any).createStageContext(
-      { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' },
+    const ctx = await (svc as any).createStageContext(
+      s,
       run,
       'laying_out',
       budget,

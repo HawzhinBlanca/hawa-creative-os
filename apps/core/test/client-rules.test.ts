@@ -1,7 +1,8 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, ClientRulesRepository, formatClientRulesForPrompt } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 import { handleGuidelinesPdf, handleRulesCommand, resolveRuleClient, saveChatRule, type RulesIntakeDeps } from '../src/services/telegram-rules-intake.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
@@ -47,6 +48,7 @@ describe.skipIf(!url)('standing client rules', () => {
     const saved = await repo((r) => r.save({ tenantId, clientId, humanRule: words, category: 'typography', source: { kind: 'telegram_message', id: randomUUID() } }));
     try {
       const service = new DesignStudioService(db, undefined, { apiKey: 'test-key' });
+      const { reference, logo } = await resolveClientDesignReference(db, { tenantId, actorId }, clientId);
       const run = {
         id: randomUUID(),
         task_id: randomUUID(),
@@ -54,10 +56,12 @@ describe.skipIf(!url)('standing client rules', () => {
         tier: 'standard',
         status: 'brief',
         stages: '{}',
-        request: JSON.stringify({ width: 1080, height: 1350, instructions: 'x', copyBlocks: [{ text: 'X', script: 'latin' }], logoAspect: 1 }),
+        request: JSON.stringify({ width: 1080, height: 1350, instructions: 'x', copyBlocks: [{ text: 'X', script: 'latin' }], logoAspect: 1,
+          clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+          logoSha256: createHash('sha256').update(logo).digest('hex') }),
       };
       const s = { tenantId, actorId };
-      const base = (service as any).createStageContext(s, run, 'brief', { maxUsd: 1, maxCalls: 4, spentUsd: 0, calls: 0 }, async () => {});
+      const base = await (service as any).createStageContext(s, run, 'brief', { maxUsd: 1, maxCalls: 4, spentUsd: 0, calls: 0 }, async () => {});
       const ctx = await (service as any).withClientRules(s, base);
       expect(ctx.promotedRules).toContain(words);
       expect(ctx.promotedRules.startsWith('For dark institutional invitations')).toBe(true);
