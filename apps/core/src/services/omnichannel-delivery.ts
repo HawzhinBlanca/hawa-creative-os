@@ -174,8 +174,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       const row: any = await withRlsContext(
         db,
         { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-        async (trx) =>
-          await trx
+        async (trx) => {
+          const approval = await trx
             .selectFrom('approvals' as any)
             .selectAll()
             .where('task_id', '=', taskId)
@@ -183,7 +183,16 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             .where('decision', '=', 'approved')
             .$if(Boolean(opts.approvalId && isValidUuid(opts.approvalId)), (q: any) => q.where('id', '=', opts.approvalId))
             .orderBy('created_at', 'desc')
-            .executeTakeFirst()
+            .executeTakeFirst();
+          if (!approval) return null;
+          // The export can be committed before its QC callback records the next revision. A later
+          // capture therefore revokes delivery permission immediately, including the explicit
+          // stored-approval policy. Both Core and the Delivery workflow use this lookup.
+          const newer = (await sql<{ present: number }>`SELECT 1 AS present FROM hawa.canva_export_bytes
+            WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
+              AND created_at > ${approval.created_at}::timestamptz LIMIT 1`.execute(trx)).rows[0];
+          return newer ? null : approval;
+        }
       );
       if (!row) return null;
       if (!opts.allowInvalidated && row.decision_payload?.invalidated === true) {

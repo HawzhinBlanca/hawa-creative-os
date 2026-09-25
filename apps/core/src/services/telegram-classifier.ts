@@ -411,6 +411,11 @@ export async function classifyInboundTelegramMessage(
   if (isAcknowledgement(messageText)) return acknowledgement(detectDocumentKind(messageText.trim()));
   const sparseReading = classifyWithHeuristics(messageText, Boolean(recentTask), Boolean(hasReplyTo));
   if (sparseReading.reason === 'Short message without design or event details') return sparseReading;
+  // A sender with no earlier design who opens an explicit copy section is starting a task. The
+  // section can be empty: intake will ask for the missing copy. A model call used to occasionally
+  // label the same message "instruction only" and erase that task's empty-copy fields.
+  const explicitCopySection = /\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i.test(messageText);
+  if (!recentTask && !hasReplyTo && explicitCopySection && sparseReading.kind === 'new_brief') return sparseReading;
 
   try {
     const previewImg = recentTask?.previewImageUrl || recentTask?.previewImageBase64;

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
@@ -140,6 +140,35 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
       method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
     });
     expect(publish.status).toBe(409);
+  });
+
+  it('refuses delivery if a new export was stored after approval but its QC callback did not finish', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(app, taskId);
+    const revisionId = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+
+    // Simulate the crash window after the export bytes commit and before the route can record QC.
+    const bytes = Buffer.from('new captured image bytes after approval, before QC callback');
+    const operationId = randomUUID();
+    await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.canva_remote_operations
+        (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+        VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'later-' + randomUUID()},
+          'later-capture', 'export', 'retrieved', ${designId}, 1, '{"format":"png"}'::jsonb, clock_timestamp(), clock_timestamp())`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes
+        (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, created_at)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+          'png', ${createHash('sha256').update(bytes).digest('hex')}, ${bytes}, clock_timestamp())`.execute(trx);
+    });
+
+    for (const policy of ['current_task', 'deliver_approved_stored']) {
+      const response = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy }),
+      });
+      expect(response.status).toBe(422);
+      expect((await response.json()).title).toBe('Nothing Approved To Deliver');
+    }
   });
 
   it('after "Request Revision", a capture whose check fails is recorded as the new revision but cannot be approved', async () => {

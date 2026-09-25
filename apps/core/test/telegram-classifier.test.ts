@@ -128,6 +128,16 @@ By Invitation Only`;
   });
 
   describe('classifyInboundTelegramMessage with model & fallback', () => {
+    it('keeps an empty explicit copy section as a new task without a paid model call', async () => {
+      const fetcher = vi.fn(async () => { throw new Error('The classifier must not call a provider'); });
+      const classified = await classifyInboundTelegramMessage(
+        { messageText: 'تکایە پۆستێک بۆ فاستپەی دروست بکە\nدەق:', recentTask: null },
+        { apiKey: 'test-key', fetcher },
+      );
+      expect(classified).toMatchObject({ kind: 'new_brief', isInstructionOnly: false });
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
     it('uses gpt-6-astra when available to classify feedback with max_completion_tokens', async () => {
       let passedBody: any;
       const mockFetch = vi.fn(async (_url: any, init: any) => {
