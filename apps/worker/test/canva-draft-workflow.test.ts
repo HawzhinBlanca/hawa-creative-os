@@ -52,6 +52,21 @@ describe('native Canva workflow',()=>{
     expect(body).toMatchObject({status:'DESIGN_BLOCKED',code:'SCOPE_MISMATCH'});
     expect(body.detail).toMatch(/mismatch/);
   });
+  it('refuses a direct legacy invocation for a request-owned task before any paid or outcome call', async () => {
+    vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    const remote = vi.fn(async () => Response.json({ tenantId: 'tenant', clientId: 'client', requestId: 'request-owned-by-restate' }));
+    const ctx = new DurableStepJournal();
+    const result = await runCanvaDraft(input, ctx, remote);
+    expect(result.status).toBe('LIFECYCLE_OWNED');
+    expect(remote).toHaveBeenCalledTimes(1);
+    expect(String(remote.mock.calls[0][0])).toContain(`/v1/tasks/${input.taskId}`);
+    expect(remote.mock.calls[0][1].method).toBe('GET');
+    expect((await runCanvaDraft(input, ctx, remote)).status).toBe('LIFECYCLE_OWNED');
+    expect(remote).toHaveBeenCalledTimes(1);
+    const malformed = await runCanvaDraft({ ...input, clientId: 'wrong-client' }, new DurableStepJournal(), remote);
+    expect(malformed.status).toBe('LIFECYCLE_OWNED');
+    expect(remote).toHaveBeenCalledTimes(2);
+  });
   it('never turns an uncertain generation into an approval or new request',async()=>{
     vi.stubEnv('HAWA_BEARER_TOKEN','test-only');const responses=[{tenantId:'tenant',clientId:'client'},{status:'uncertain',planId:'plan'}];
     const remote=vi.fn(async()=>Response.json(responses.shift() ?? { ok: true }));const result=await runCanvaDraft(input,new DurableStepJournal(),remote);
@@ -529,5 +544,3 @@ describe('native Canva workflow',()=>{
     expect(ctx.hasStep('canva-notify-canva_draft_ready_for_visual_review')).toBe(true);
   });
 });
-
-

@@ -361,6 +361,15 @@ export async function runCanvaDraft(
   } catch (error) {
     return await handleBoundaryError(error, 'DESIGN_REJECTED');
   }
+  // The task read above is already a durable workflow step. Use its persisted request owner to
+  // refuse a direct TaskWorkflow/TaskService invocation before Studio or Canva can spend money.
+  // A future DesignRun needs an owner-aware report path; the legacy status endpoint cannot record
+  // this outcome, and retrying the invocation cannot change the owner. Check before the scope
+  // mismatch handler so even a malformed direct invocation sends no legacy outcome.
+  if (task.requestId) {
+    log.warn(`[worker] Task ${input.taskId}: direct legacy workflow refused; RequestLifecycle owns ${task.requestId}.`);
+    return output('LIFECYCLE_OWNED');
+  }
   // A mismatch is final: retrying replays the same journalled answer. It used to be thrown outside
   // any step, as an ordinary error, so Restate retried the invocation without end and the requester,
   // promised "the link or an explanation", heard nothing. It now ends the run and is reported.
@@ -568,4 +577,3 @@ export async function runCanvaDraft(
     parity
   );
 }
-

@@ -547,6 +547,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             id: dbTask.id,
             tenantId: dbTask.tenant_id,
             clientId: dbTask.client_id,
+            requestId: dbTask.request_id || null,
             projectId: dbTask.project_id,
             status: toApiTaskStatus(dbTask.state || 'received'),
             state: dbTask.state,

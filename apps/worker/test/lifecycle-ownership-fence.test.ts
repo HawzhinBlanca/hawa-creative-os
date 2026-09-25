@@ -39,6 +39,9 @@ describe('one executor per lifecycle task', () => {
       commands: await trx.selectFrom('outbox_commands').select('id').where('aggregate_id', '=', taskId).execute(),
     }));
     const app = createApp({ db, testAuth: { principal: { role: 'operator', userId } } });
+    const taskRead = await app.request(`/v1/tasks/${taskId}`);
+    expect(taskRead.status).toBe(200);
+    expect(await taskRead.json()).toMatchObject({ requestId });
     for (const alias of ['canva-status', 'canva-ready']) {
       const response = await app.request(`/v1/tasks/${taskId}/notifications/${alias}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -88,6 +91,9 @@ describe('one executor per lifecycle task', () => {
   it('continues to accept an outcome for a legacy task', async () => {
     const legacy = await persistChatIntake(db, { ...draft(randomUUID()), sourceEventId: randomUUID() });
     const app = createApp({ db, testAuth: { principal: { role: 'operator', userId } } });
+    const taskRead = await app.request(`/v1/tasks/${legacy.task.id}`);
+    expect(taskRead.status).toBe(200);
+    expect(await taskRead.json()).toMatchObject({ requestId: null });
     const response = await app.request(`/v1/tasks/${legacy.task.id}/notifications/canva-status`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'MANUAL_DESIGN_REQUIRED', notifyRequester: false }),
