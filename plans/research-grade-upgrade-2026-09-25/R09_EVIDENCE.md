@@ -1,6 +1,6 @@
 # R09 — delivery truth and reconciliation evidence
 
-**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`. **Decision:** ADR-043.
+**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`, `0cce7a4`. **Decision:** ADR-043.
 
 ## First pass — require requester-send proof
 
@@ -26,6 +26,18 @@ Source `87b7328` maps a request-owned publication's latest `SHEET_UNCONFIRMED` r
 
 An isolated PostgreSQL test records an archived, requester-confirmed but Sheet-unconfirmed result at revision 5, reads the actionable task/queue status, excludes it from the ordinary publishing filter, and verifies a second run advances revisions 6→7 to delivered. A rendered Desk test exposes the retry button only for the reconciliation status. The migration and affected suites passed **5 files / 46 tests**; the Desk wording rerun passed **1 file / 20 tests**. The full source suite excluding the unsealed release gate passed **419 files / 3,135 tests**, with **4 files / 48 tests skipped**. TypeScript, lint, Desk build and blueprint **755 pass / 0 warning / 0 failure** passed. The first broad run found two fixed migration inventory expectations; both passed before the green rerun.
 
-## Current limits
+## Third-pass limits
 
 The Sheet retry is locally actionable but has no live Google row read-back or killed-process replay. The direct second-run test checks state and idempotency keys; it does not observe a real Telegram deduplication after a Sheet failure. Uncertain requester sends still need a separate, evidence-based office resolution path. The completion projection relies on the worker's reported archive/Sheet result rather than independently rechecking every stored Drive and Sheet receipt in its final transaction; that is the next integrity repair. R17's uncaptured Canva edit and provider race, clean-host restore, and production cutover remain open. Flags remain off; R09 is **in progress**.
+
+## Fourth pass — check stored receipts before final state
+
+Source `0cce7a4` makes the request-owned completion projection compare the claimed package's SHA-256 and byte-size multiset with the publication's verified PostgreSQL Drive references, then require a synced Sheet row for the same task and package hash. This check occurs in the final request/publication transaction. A missing or mismatched receipt returns a retryable failure before the request revision, task state, or finished-run number advances. The test proves that the same report can finish only after the missing evidence is corrected. Drive filenames are deliberately excluded from identity because Core's approved-package label and the configured client destination label differ; hashes and sizes bind the bytes.
+
+The same source blocks a fresh delivery run when a requester file was sent before an archive failure, even if the worker labels its outcome `chat_only`. A missing archive with zero requester files can still return to approved for an explicit new action. This closes a duplicate-send opening in the earlier local path. ADR-043 records the reason and revised transition rule.
+
+The focused PostgreSQL/Desk lifecycle suite passed **1 file / 9 tests**. It rejects missing and mismatched Drive receipts, missing and wrong-hash Sheet receipts, and a second run after partial requester send. The existing local path still completes when matching receipts are present. The full source suite excluding only the unsealed release gate passed **419 files / 3,137 tests**, with **4 files / 48 tests skipped**. TypeScript, lint and blueprint **755 pass / 0 warning / 0 failure** passed. An earlier test run exposed a synthetic publisher fixture with a fabricated Sheet hash and a different destination filename; the fixture now uses the package hash and the guard compares byte identity rather than labels. No live provider result was used in this pass.
+
+## Current limits
+
+The final projection now cross-checks stored receipts, but those receipts are written from the publisher's locally reported, read-back-verified result. Real Drive byte read-back, real Sheet row read-back, requester delivery confirmation, a Restate/PostgreSQL kill-and-replay, and clean-host restore remain admission work. A permanently missing receipt leaves the same workflow report retrying and needs an operator resolution path; an uncertain requester send still cannot be resolved safely in Desk. R17's Canva edit race and the full creative-quality gates remain open. Flags stay off; R09 is **in progress**.
